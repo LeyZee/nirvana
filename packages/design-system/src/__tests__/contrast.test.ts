@@ -74,12 +74,8 @@ function contrast(a: Rgba, b: Rgba): number {
   return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
 }
 
-interface Grounds {
-  readonly void: Rgba;
-  readonly abyss: Rgba;
-  readonly surfaceRaised: Rgba;
-  readonly glassOverAura: Rgba;
-}
+// A Record, not an interface, so that Object.entries() keeps the Rgba value type.
+type Grounds = Readonly<Record<'void' | 'abyss' | 'surfaceRaised' | 'glassOverAura', Rgba>>;
 
 function grounds(theme: Theme): Grounds {
   const t = (name: string): Rgba => token(theme, name);

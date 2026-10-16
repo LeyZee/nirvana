@@ -57,8 +57,8 @@ export function attachGlassLight(element: HTMLElement): () => void {
 export function playLiquid(element: HTMLElement): void {
   if (prefersReducedMotion()) return;
   element.classList.remove('is-liquid');
-  // Reading layout restarts the CSS animation on the next class add.
-  void element.offsetWidth;
+  // Forcing a layout restarts the CSS animation on the next class add.
+  element.getBoundingClientRect();
   element.classList.add('is-liquid');
 }
 
@@ -90,7 +90,7 @@ export function placeSegmentThumb(
 /** Shrinks a `.nv-island` into its capsule. */
 export function collapseIsland(island: HTMLElement): void {
   island.style.height = `${String(island.offsetHeight)}px`;
-  void island.offsetWidth;
+  island.getBoundingClientRect();
   island.classList.add('is-collapsed');
   island.style.removeProperty('height');
 }
@@ -100,7 +100,7 @@ export function expandIsland(island: HTMLElement): void {
   island.classList.remove('is-collapsed');
   const height = island.offsetHeight;
   island.classList.add('is-collapsed');
-  void island.offsetWidth;
+  island.getBoundingClientRect();
   island.classList.remove('is-collapsed');
   island.style.height = `${String(height)}px`;
   window.setTimeout(() => {

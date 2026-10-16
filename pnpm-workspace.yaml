@@ -2,3 +2,14 @@ packages:
   - apps/*
   - packages/*
   - evals
+
+# Security fixes for transitive dev dependencies (security.md §5). Remove an entry once the parent ships the fix.
+overrides:
+  # eslint-plugin-boundaries pins handlebars 4.7.9 (GHSA-8r5x-fm3f-whwj, GHSA-p8wg-vrv2-v86f, ...). 4.7.10 is a patch release.
+  handlebars: 4.7.10
+
+auditConfig:
+  ignoreGhsas:
+    # braces (via micromatch, in eslint-plugin-boundaries and knip): no patched version exists. Denial of service
+    # on deeply nested brace patterns; only our own lint and knip globs reach it, never untrusted input.
+    - GHSA-vfj7-8cjw-p6xm

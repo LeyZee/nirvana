@@ -38,7 +38,7 @@ Ce qu'on protège, par ordre d'importance : (1) les médias et conversations int
 
 ## 5. Chaîne d'approvisionnement
 
-- `pnpm` avec lockfile commité, `pnpm install --frozen-lockfile` en CI, scripts d'installation désactivés par défaut (comportement pnpm 10), `pnpm audit --audit-level=high` en CI (échec sur high et critique), Dependabot en PR hebdomadaires groupées (`.github/dependabot.yml`).
+- `pnpm` avec lockfile commité, `pnpm install --frozen-lockfile` en CI, scripts d'installation désactivés par défaut (comportement pnpm 10), `pnpm audit --audit-level=high` en CI (échec sur high et critique ; correctifs transitifs par `overrides` et exceptions justifiées une par une dans `pnpm-workspace.yaml`, revues à chaque session d'hygiène), Dependabot en PR hebdomadaires groupées (`.github/dependabot.yml`).
 - Peu de dépendances, bien connues, maintenues. Toute dépendance nouvelle de poids = ligne dans la PR qui justifie.
 - Versions épinglées : dépendances npm en versions exactes dans les `package.json` (pas de `^`, on monte avec `pnpm up`), Node (`.nvmrc`), images Docker par digest, modèles LLM par identifiant daté.
 - L'extension : `host_permissions` limitées au domaine Reveal, aucun code distant, build reproductible, pas de `eval`.
