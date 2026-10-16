@@ -39,3 +39,4 @@ Date : AAAA-MM-JJ
 | 0012 | `identity_policy` configurable, défaut `stay_in_character` | accepted |
 | 0013 | Code en anglais, documentation, UI et persona en français | accepted |
 | 0014 | Politique d'hygiène du dépôt | accepted |
+| 0015 | Design system partagé dans `packages/design-system` | proposed |
