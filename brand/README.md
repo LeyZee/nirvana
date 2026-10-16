@@ -9,8 +9,8 @@ Le logo est une flamme à l'auréole : une flamme pleine, cambrée, qui brûle s
 | `brand/nirvana-mark.svg` | Le symbole seul, en couleur (dégradé verre + auréole) | Partout où le symbole est affiché à 48 px ou plus : en-têtes, écrans de connexion, cartes |
 | `brand/nirvana-mark-mono.svg` | Le symbole en une couleur (`currentColor`, néon par défaut) | Petites tailles, impression, incrustation sur photo, icône dans une barre d'outils |
 | `brand/favicon.svg` | Le symbole mono avec une auréole épaissie, cadré serré | Favicon et icônes d'app (lisible dès 16 px) ; à copier dans `public/` des apps par la fiche qui les crée |
-| `brand/nirvana-lockup.svg` | Symbole + nom « Nirvana » (Instrument Serif italique, vectorisé), encre claire | Sur fond Nuit (`void`, `abyss`, verre) |
-| `brand/nirvana-lockup-jour.svg` | Même lockup, encre sombre | Sur fond Jour |
+| `brand/nirvana-lockup.svg` | Symbole + nom « Nirvana » dans la matière de la flamme, auréole à la place du point du i | Sur fond Nuit (`void`, `abyss`, verre) |
+| `brand/nirvana-lockup-jour.svg` | Même lockup, dégradé du nom plus foncé pour rester lisible | Sur fond Jour |
 | `brand/nirvana-lockup-mono.svg` | Lockup en une couleur | Signatures, documents, partenaires |
 | `brand/banner.svg` | La bannière du README (nuit, aura, lockup) | En-tête du README, pages d'accueil de dépôt |
 
@@ -28,4 +28,4 @@ Le nom dans les lockups est un tracé vectorisé d'Instrument Serif italique (Go
 
 - `nirvana-mark.svg` : le dessin de Charles, recadré au carré sur le contenu (viewBox `144 54 440 440` environ), identifiants de dégradés préfixés `nv-`, `<title>` et `aria-label` ajoutés.
 - `nirvana-mark-mono.svg` et `favicon.svg` : même flamme en aplat `currentColor`, auréole en trait plein (10 puis 22 d'épaisseur), sans reflet.
-- Lockups et bannière : symbole à 150 d'ancre, nom en Instrument Serif italique 118, hauteur de capitale centrée sur le corps de la flamme, glyphes vectorisés avec fontTools + HarfBuzz (crénage inclus). Rien à régénérer en routine : pour modifier le nom ou l'espacement, repartir du `.ttf` de Google Fonts avec les mêmes outils.
+- Lockups et bannière : symbole à 150 de haut, nom en Instrument Serif italique 118, hauteur de capitale centrée sur le corps de la flamme, glyphes vectorisés avec fontTools + HarfBuzz (crénage inclus). Le point du i est remplacé par une petite auréole inclinée à −19°, comme celle du symbole. Le nom est rempli du dégradé de la flamme (rose `#ffb4bb` vers rouge `#ea123b` sur Nuit ; `#ff6b80` vers `#b8002a` sur Jour), avec son liseré, et épaissi d'un trait de 1,6 pour tenir à côté d'elle. Rien à régénérer en routine : pour modifier le nom ou l'espacement, repartir du `.ttf` de Google Fonts avec les mêmes outils.
