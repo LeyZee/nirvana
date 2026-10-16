@@ -236,7 +236,7 @@ pnpm install            # dépendances + hooks git (lefthook)
 docker compose up -d    # Postgres de dev
 cp .env.example .env    # puis remplir
 pnpm db:migrate
-pnpm dev                # api + worker + web
+pnpm dev                # api + web (le worker arrive en P0-04)
 pnpm check && pnpm test     # statique + unitaire ; pnpm test:integration lance Testcontainers (Docker)
 ```
 

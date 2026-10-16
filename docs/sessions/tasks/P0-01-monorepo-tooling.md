@@ -1,6 +1,6 @@
 # P0-01 Outillage du monorepo
 
-Statut : in_progress
+Statut : done
 Phase : 0
 Dépend de : —
 Branche : task/p0-01-monorepo-tooling
@@ -37,3 +37,18 @@ Rendre `pnpm install`, `pnpm check`, `pnpm test`, `pnpm dev` fonctionnels sur un
 Toute logique métier, schéma de base, routes réelles, Docker (P0-03).
 
 ## Notes de session
+
+2026-10-16/17 (Opus 5.5). Ce qui a été retenu, et les écarts :
+
+- **Versions** : dernières stables publiées depuis au moins 14 jours (`minimumReleaseAge`), en versions exactes : ESLint 10, typescript-eslint 8.71, eslint-plugin-boundaries 7.2, knip 6, lefthook 2, Vite 8, WXT 0.21, Vitest 4.1.11 (la 4.1.12 a un jour ; la 4.1.11 contient déjà le correctif de sécurité). Écarts : TypeScript 6.0.3 (typescript-eslint refuse TS 7) ; `@types/node` 22 (types du Node d'exécution) ; tsup 8.5.1 (la 9 a deux jours). Node : `.nvmrc` 22.22.0, `engines >=22.13` (Vite 8 exige 22.12).
+- **boundaries 7** : migration faite vers la règle unique `boundaries/dependencies` (sélecteurs `{ element: … }`, `policies`, éléments en dossiers avec `partialMatch: false`, `fileInternalPath: 'index.ts'` pour la porte d'entrée d'un module, `checkAllOrigins` à la place de `boundaries/external`, plus de `no-private` séparé : les politiques par couche le couvrent). Aucun avertissement de dépréciation. Vérifié sur 20 imports connus, puis par le test de frontières.
+- **Correctifs de config** : un package est un seul élément (`packages/*/src`), sinon son `index.ts` était « privé » et `apps/web` ne pouvait pas importer `@nirvana/design-system` ; `.wxt/` et les fixtures ignorés par ESLint ; le résolveur couvre `evals/`.
+- **Test de frontières** : mini-arbre réel dans `fixtures/boundaries/modules/`, éléments redéclarés avec `boundaryElements` (exporté par `eslint.config.js`, typé par `eslint.config.d.ts`), `ignore: false`, six cas dont un cycle (`import-x/no-cycle`). Échoue si la règle est affaiblie.
+- **Résolution** : `moduleResolution: Bundler` et `module: ESNext` dans `tsconfig.base.json`, `exports` sur `./src/index.ts`, `tsx` en dev (`--env-file-if-exists=../../.env`), tsup pour le build de l'API (packages `@nirvana/*` embarqués ; `node dist/index.js` répond 200). `turbo.json` : `typecheck` et `test` ne dépendent plus de `^build`.
+- **Config** : `apps/api/src/config.ts` valide `NODE_ENV`, `LOG_LEVEL`, `PORT` ; les autres variables de `.env.example` arrivent avec leurs fiches. Le composition root porte la config.
+- **Install** : `onlyBuiltDependencies` = `esbuild` seul (lefthook s'installe par `prepare`, `unrs-resolver` fonctionne sans son script) ; `prepare` tolère l'absence de dépôt git (`lefthook install || echo …`). Exception de quarantaine `handlebars` 4.7.10 (correctif de sécurité), faille `braces` ignorée (sans correctif) : `pnpm-workspace.yaml`, `security.md`.
+- **Hooks et scripts** : `commit-msg` déplacé dans `.lefthook/commit-msg/conventional.sh` (le `sh` de lefthook sous Windows ne lisait pas la commande multiligne) ; `--no-warn-ignored` sur le lint de pré-commit ; `scripts/check-repo.mjs` normalise ses chemins en `/` (sous Windows il ne s'excluait pas lui-même).
+- **Formatage** : `.gitattributes` force LF (sinon `prettier --check` échoue sous Windows) ; `personas/` exclu de Prettier (donnée versionnée, ADR 0010).
+- **`pnpm dev`** : api + web seulement (`wxt dev` ouvre un navigateur). **`pnpm evals`** : `pnpm --filter @nirvana/evals run run` (avec un seul `run`, pnpm liste les scripts au lieu d'exécuter `run`).
+- **turbo** : `"agentGuidance": false`, sinon turbo écrit un `AGENTS.md` à chaque commande lancée par un agent.
+- Favicon de `brand/` copié dans `apps/web/public/` ; l'extension attend des icônes PNG (non générées).
