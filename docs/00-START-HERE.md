@@ -21,6 +21,7 @@ Ce dépôt est conçu pour être travaillé par des sessions d'agents codeurs (C
 | La persona | `docs/reference/persona-schema.md`, ADR 0010, `docs/playbooks/edit-the-persona.md` |
 | La qualité conversationnelle, les évals | `docs/playbooks/write-an-eval.md`, `evals/README.md` |
 | Le dashboard, la PWA | `apps/web/README.md`, `docs/architecture/message-flow.md` (mode copilote) |
+| Le design, un composant d'interface | `docs/design/README.md`, `packages/design-system/README.md`, ADR 0015 |
 | L'extension | `apps/extension/README.md`, `docs/architecture/connectors.md` |
 | La future plateforme propre | `docs/architecture/own-platform.md`, ADR 0003 |
 | La sécurité (auth, secrets, données, injection) | `docs/conventions/security.md`, `docs/architecture/threat-model.md` |

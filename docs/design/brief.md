@@ -27,6 +27,8 @@ Référence visuelle de départ : `docs/assets/banner.svg` (fond profond, halos 
 
 ## Questions ouvertes
 
+Tranchées par Charles le 2026-10-16 : voir `docs/design/README.md` (identité propre, néon rouge sur nuit, en code).
+
 - Le design system **IMPERA** (tokens `colors_and_type.css`, utilisé par OnlyScript) existe. Nirvana le reprend-il (cohérence agence) ou crée-t-il sa propre identité Liquid Glass ? Proposition : identité propre pour Nirvana, avec la typographie et les accents sémantiques alignés sur IMPERA si possible.
 - Nom et logo : « Nirvana » est le nom de code ; le logo du banner (deux vagues) est un placeholder.
 - Outil : maquettes Figma, ou directement en code dans `apps/web` avec un Storybook léger ? Proposition : en code, c'est ce que les sessions Opus savent faire et ça évite la double maintenance.

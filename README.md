@@ -145,18 +145,19 @@ Projet Nirvana/
 ├── packages/
 │   ├── contracts/            identifiants typés, argent, événements, jobs, persona, médias (Zod)
 │   ├── db/                   schéma Drizzle, migrations, RLS, chiffrement
+│   ├── design-system/        tokens Liquid Glass, pont Tailwind v4, classes nv-* (web + extension)
 │   └── llm/                  LlmGateway, fournisseurs, prompts versionnés
 ├── personas/                 schéma + placeholder (la vraie persona est hors dépôt)
 ├── evals/                    scénarios Promptfoo : comportement, adversarial, régression
 └── docs/
     ├── 00-START-HERE.md      quoi lire selon la tâche
     ├── architecture/         vue d'ensemble, modules, données, flux, connecteurs, IA, plateforme propre, menaces, ops
-    ├── adr/                  14 décisions figées
+    ├── adr/                  14 décisions figées, 1 proposée
     ├── conventions/          code, tests, git, sécurité, hygiène
     ├── playbooks/            ajouter un module, un connecteur, un fournisseur ; persona ; évals
     ├── runbooks/             incident, secrets, restauration, session expirée
     ├── reference/            OnlyChat, projets antérieurs, vocabulaire média, schéma persona, API Reveal, fournisseurs
-    ├── design/               brief de l'interface (Liquid Glass)
+    ├── design/               brief et guide de l'interface (Liquid Glass)
     ├── sessions/             protocole, LOG, fiches de tâches
     └── roadmap.md
 ```
@@ -214,7 +215,7 @@ Détail : [`docs/conventions/security.md`](docs/conventions/security.md), [`docs
 
 ## Design
 
-L'interface n'existe pas encore. Elle sera **moderne, épurée, inspirée du Liquid Glass d'iOS 26 et 27** : surfaces translucides, flous, bords lumineux, profondeur, animations fluides, le tout sans jamais ralentir l'approbation au clavier. Le brief est dans [`docs/design/brief.md`](docs/design/brief.md) ; la bannière de ce README en donne la direction.
+Les écrans n'existent pas encore, le design system oui : **Liquid Glass d'iOS 26 et 27 sur une nuit chaude, avec un seul accent néon rouge**. Surfaces translucides, flous, bords lumineux, animations à ressort, le tout sans jamais ralentir l'approbation au clavier, et un test qui garantit le contraste AA dans les deux thèmes. Code : [`packages/design-system`](packages/design-system) ; règles : [`docs/design/README.md`](docs/design/README.md) ; intention d'origine : [`docs/design/brief.md`](docs/design/brief.md).
 
 ## Qui
 
