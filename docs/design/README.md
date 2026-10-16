@@ -6,9 +6,9 @@ Dernière revue : 2026-10-16. Fiche : D-01. Code : `packages/design-system` (ADR
 
 Réponses aux questions ouvertes de `brief.md` :
 
-- **Identité propre à Nirvana**, pas les tokens IMPERA. Direction : le Liquid Glass d'iOS 26/27 sur une nuit chaude, avec **un seul accent, un néon rouge**. La palette violet/cyan de `docs/assets/banner.svg` n'est plus la référence de couleur.
+- **Identité propre à Nirvana**, pas les tokens IMPERA. Direction : le Liquid Glass d'iOS 26/27 sur une nuit chaude, avec **un seul accent, un néon rouge**. L'ancienne bannière violette du README n'est plus la référence de couleur ; la bannière actuelle est `brand/banner.svg`.
 - **En code, sans Figma.** La référence visuelle vivante est l'artifact « Nirvana » (design system publié par Claude, privé au compte de Charles : https://claude.ai/artifact/Aw5XKd8jae4xSNevjge2Ci). Le dépôt fait foi : si l'artifact et `packages/design-system` divergent, c'est le dépôt qui a raison.
-- Nom et logo : pas de logo pour l'instant. Le nom s'écrit en Instrument Serif italique (`.nv-wordmark`).
+- Nom et logo : la flamme à l'auréole dessinée par Charles (16/10), déclinée dans `brand/` (règles d'usage dans `brand/README.md`). Le nom s'écrit en Instrument Serif italique (`.nv-wordmark`) ; les lockups de `brand/` en portent le tracé vectorisé.
 
 ## Où vivent les choses
 

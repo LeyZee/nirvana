@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Nirvana" width="100%">
+  <img src="brand/banner.svg" alt="Nirvana" width="100%">
 </p>
 
 <p align="center">
@@ -152,6 +152,7 @@ Projet Nirvana/
 │   └── llm/                  LlmGateway, fournisseurs, prompts versionnés
 ├── personas/                 schéma + placeholder (la vraie persona est hors dépôt)
 ├── evals/                    scénarios Promptfoo : comportement, adversarial, régression
+├── brand/                    logo, bannière, favicon (règles dans brand/README.md)
 └── docs/
     ├── 00-START-HERE.md      quoi lire selon la tâche
     ├── architecture/         vue d'ensemble, modules, données, flux, connecteurs, IA, plateforme propre, menaces, ops

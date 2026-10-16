@@ -6,7 +6,7 @@ Statut : brief, design à produire avant la phase 4 (dashboard). Demande de Char
 
 Une interface **moderne, épurée, très belle**, inspirée du **Liquid Glass d'iOS 26 et 27** : surfaces translucides qui laissent passer et déforment légèrement ce qui est derrière, flou de fond, reflets et bords lumineux, profondeur par couches, animations fluides et physiques (ressort, inertie), typographie SF-like, grands rayons, contenu qui respire. Pas de dashboard « admin Bootstrap ». Pas de dégradés criards : la couleur vient des fonds, les surfaces restent neutres et vitrées.
 
-Référence visuelle de départ : `docs/assets/banner.svg` (fond profond, halos flous, carte vitrée, bord lumineux).
+Référence visuelle de départ : l'ancienne bannière violette du README (fond profond, halos flous, carte vitrée, bord lumineux), remplacée depuis par `brand/banner.svg`.
 
 ## Contraintes à respecter (non négociables)
 

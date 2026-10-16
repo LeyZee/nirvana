@@ -37,7 +37,7 @@ Les trois sont corrigées. Le reste était de l'alignement de détails entre doc
 - **P0-01** : tout ce que cette fiche liste, en particulier le lockfile et le retour de `cache: pnpm` dans la CI. Tant qu'elle n'est pas livrée, `pnpm check` est rouge et c'est attendu.
 - **Charles** : révoquer les secrets commités dans Imperium ; lire les clauses d'automatisation des CGU Reveal ; fusionner la PR #1 (D-01) ou la laisser se fermer d'elle-même, ses commits étant déjà sur `main` ; décider du logo (planche v8).
 - **D-01 (suite)** : composants shadcn/ui restylés, playground, test axe-core, bloqués par P0-01.
-- **Bannière du README** : la palette violet/cyan de `docs/assets/banner.svg` n'est plus la direction ; à refaire avec le logo validé.
+- **Bannière du README** : refaite le soir même avec le logo de Charles (`brand/banner.svg`).
 - **Question ouverte** : fournisseur LLM par défaut (Grok 4.3 candidat, Mistral challenger), tranchée par les évals en P3.
 
 ## Constats de la revue non retenus

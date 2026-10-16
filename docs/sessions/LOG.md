@@ -7,6 +7,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | Date | Fiche | Statut | Entrée |
 |---|---|---|---|
 | 2026-10-16 | Revue des fondations (Fable) | done | `log/2026-10-16-fondations-revue.md` |
+| 2026-10-16 | Logo et marque (Fable) | done | `log/2026-10-16-logo.md` |
 
 ## Incidents (liste vivante)
 
@@ -30,7 +31,7 @@ Vérifié : relecture des docs ✓. Pas de code à tester.
 ## 2026-10-16 (soir) — Dépôt à la racine du projet, README visuel, brief design — Fable (architecture)
 
 - Le dépôt git est désormais la racine de `Projet Nirvana/` (demande de Charles) ; le sous-dossier `nirvana/` a été supprimé. `brainstorm/` et le cahier des charges sont suivis par git comme historique, protégés par `hygiene.md`.
-- README réécrit (bannière `docs/assets/banner.svg`, badges, diagrammes Mermaid, structure, méthode, pile, sécurité, roadmap, qui).
+- README réécrit (bannière, badges, diagrammes Mermaid, structure, méthode, pile, sécurité, roadmap, qui).
 - Brief design `docs/design/brief.md` (Liquid Glass iOS 26/27) et fiche `D-01`.
 - Dépôt GitHub `LeyZee/nirvana` créé (privé, branche `main`) depuis le PC de Charles avec son compte, et rattaché au projet. GitHub est désormais la source de vérité ; le dossier du projet et le dossier local de Charles en sont deux clones.
 
@@ -39,7 +40,7 @@ Vérifié : relecture des docs ✓. Pas de code à tester.
 Fait : `packages/design-system` (tokens Nuit/Jour, pont Tailwind v4, classes `nv-*`, aides d'animation, test de contraste AA), guide `docs/design/README.md`, renvois mis à jour (README, CLAUDE.md, START-HERE, apps/web, apps/extension, brief).
 Pas fait : composants shadcn/ui restylés, `_playground.tsx`, test axe-core : bloqués par P0-01 (apps non initialisées).
 Décisions : réponses de Charles au brief (identité propre, néon rouge sur nuit, en code) ; ADR 0015 proposée (package partagé web + extension) ; règle de frontière `app → package design-system` ajoutée dans `eslint.config.js`.
-Découvertes : la palette de `docs/assets/banner.svg` (violet, cyan) ne correspond plus à la direction choisie ; la bannière est à refaire quand un logo existera.
+Découvertes : la palette de l'ancienne bannière (violet, cyan) ne correspond plus à la direction choisie ; la bannière est à refaire quand un logo existera.
 Candidats à suppression : aucun.
 Vérifié : typecheck strict ✓ et tests Vitest ✓ (27) via un outillage jetable dans `.scratch/` ; rendu des deux thèmes vérifié dans le navigateur. `pnpm check` non exécutable avant P0-01 (pas de `pnpm install`).
 Suite : l'artifact de référence (lien dans `docs/design/README.md`) est aligné sur le dépôt (tokens, vocabulaire du glossaire, DraftPanel et ExtensionPopup à la place du panneau d'extension) ; `.nv-aura` reçoit `contain: paint` pour que ses halos ne débordent pas du `body`.

@@ -4,5 +4,5 @@ Fait : revue complète de l'architecture et de l'organisation (30 constats, dét
 Pas fait : la bannière du README (palette périmée, attend le logo) ; `pnpm install` et `pnpm check` (pas avant P0-01).
 Décisions : `Result` maison (pas de `neverthrow`) ; files série Graphile à la place d'un verrou advisory ; table `approvals` supprimée ; journal de session par fichier ; `.scratch/` par fiche et `.scratch/inbox/` réservé à Charles ; statut `proposed` pour les fiches écrites par une session.
 Découvertes : les commits locaux de la session D-01 (PC de Charles) n'étaient pas sur `main` distant ; intégrés ici tels quels (mêmes hashes), la PR #1 se retrouve contenue dans `main`. Le `LOG.md` local de Charles avait des modifications non commitées au moment de la revue.
-Candidats à suppression : `docs/assets/banner.svg` (à remplacer, pas à supprimer, quand le logo existera).
+Candidats à suppression : l'ancienne bannière violette du README (remplacée le soir même par `brand/banner.svg`).
 Vérifié : `node scripts/check-repo.mjs` ✓ (zéro erreur), `node --check eslint.config.js` ✓. Pas de code à tester.
