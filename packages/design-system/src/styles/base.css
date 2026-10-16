@@ -1,0 +1,34 @@
+/*
+ * Page-level defaults for Nirvana's own documents (web app, extension popup).
+ * Never load this inside a third-party page: it styles `body`.
+ */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  font-family: var(--nv-font-sans);
+  font-size: var(--nv-text-body);
+  line-height: var(--nv-text-body-leading);
+  letter-spacing: -0.005em;
+  color: var(--nv-ink);
+  background: var(--nv-void);
+}
+
+/* A themed subtree re-resolves the inherited text color against its own tokens. */
+[data-theme] {
+  color: var(--nv-ink);
+}
+
+::selection {
+  background: var(--nv-neon-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 3px;
+}

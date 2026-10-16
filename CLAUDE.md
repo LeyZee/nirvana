@@ -28,6 +28,7 @@ apps/extension   Extension Chrome WXT : enregistreur réseau, capture de session
 packages/contracts   Schémas Zod partagés : événements, DTO, protocole extension, vocabulaire média, persona
 packages/db          Schéma Drizzle, migrations, helpers RLS (withTenant)
 packages/llm         LlmGateway, providers, prompts, schémas de sortie, journal llm_calls
+packages/design-system  Tokens CSS, pont Tailwind v4, classes nv-*, aides d'animation (web + extension)
 personas/            Données versionnées (YAML). Pas de code.
 evals/               Promptfoo : scénarios, rubriques, datasets
 docs/                START-HERE, architecture, ADR, conventions, playbooks, référence, sessions

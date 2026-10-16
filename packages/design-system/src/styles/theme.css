@@ -1,0 +1,91 @@
+/*
+ * Tailwind v4 bridge: exposes the Nirvana tokens as Tailwind utilities.
+ * Import after `tailwindcss` and `tokens.css`. `inline` keeps the `var(--nv-*)` reference in each
+ * utility, so utilities follow the active theme without needing a variant.
+ *
+ * Examples: bg-void text-ink text-ink-muted bg-neon-solid text-on-neon rounded-lg shadow-glass
+ *           backdrop-blur-regular ease-spring font-serif text-body
+ */
+
+/* Night is the default: `dark:` matches everywhere except under data-theme="light". */
+@custom-variant dark (&:where(:not([data-theme='light'], [data-theme='light'] *)));
+
+@theme inline {
+  --color-void: var(--nv-void);
+  --color-abyss: var(--nv-abyss);
+  --color-surface-raised: var(--nv-surface-raised);
+  --color-ink: var(--nv-ink);
+  --color-ink-muted: var(--nv-ink-muted);
+  --color-ink-faint: var(--nv-ink-faint);
+  --color-neon: var(--nv-neon);
+  --color-neon-solid: var(--nv-neon-solid);
+  --color-on-neon: var(--nv-on-neon);
+  --color-neon-ink: var(--nv-neon-ink);
+  --color-neon-soft: var(--nv-neon-soft);
+  --color-focus: var(--nv-focus);
+  --color-glass-veil: var(--nv-glass-veil);
+  --color-glass-fill: var(--nv-glass-fill);
+  --color-glass-fill-strong: var(--nv-glass-fill-strong);
+  --color-glass-thick: var(--nv-glass-thick);
+  --color-glass-edge: var(--nv-glass-edge);
+  --color-hairline: var(--nv-hairline);
+  --color-fill-track: var(--nv-fill-track);
+  --color-success: var(--nv-success);
+  --color-warning: var(--nv-warning);
+  --color-danger: var(--nv-danger);
+  --color-sale: var(--nv-sale);
+
+  --radius-xs: var(--nv-radius-xs);
+  --radius-sm: var(--nv-radius-sm);
+  --radius-md: var(--nv-radius-md);
+  --radius-lg: var(--nv-radius-lg);
+  --radius-xl: var(--nv-radius-xl);
+
+  --shadow-glass: var(--nv-shadow-glass);
+  --shadow-neon: var(--nv-shadow-neon);
+  --shadow-neon-strong: var(--nv-shadow-neon-strong);
+  --shadow-neon-soft: var(--nv-shadow-neon-soft);
+
+  --blur-thin: var(--nv-blur-thin);
+  --blur-regular: var(--nv-blur-regular);
+  --blur-thick: var(--nv-blur-thick);
+
+  --ease-out: var(--nv-ease-out);
+  --ease-in-out: var(--nv-ease-in-out);
+  --ease-spring: var(--nv-ease-spring);
+  --ease-spring-bouncy: var(--nv-ease-spring-bouncy);
+
+  --font-sans: var(--nv-font-sans);
+  --font-display: var(--nv-font-display);
+  --font-serif: var(--nv-font-serif);
+  --font-mono: var(--nv-font-mono);
+
+  --text-hero: var(--nv-text-hero);
+  --text-hero--line-height: var(--nv-text-hero-leading);
+  --text-hero--letter-spacing: var(--nv-text-hero-tracking);
+  --text-large-title: var(--nv-text-large-title);
+  --text-large-title--line-height: var(--nv-text-large-title-leading);
+  --text-large-title--letter-spacing: var(--nv-text-large-title-tracking);
+  --text-title-1: var(--nv-text-title-1);
+  --text-title-1--line-height: var(--nv-text-title-1-leading);
+  --text-title-1--letter-spacing: var(--nv-text-title-1-tracking);
+  --text-title-2: var(--nv-text-title-2);
+  --text-title-2--line-height: var(--nv-text-title-2-leading);
+  --text-title-2--letter-spacing: var(--nv-text-title-2-tracking);
+  --text-headline: var(--nv-text-headline);
+  --text-headline--line-height: var(--nv-text-headline-leading);
+  --text-headline--letter-spacing: var(--nv-text-headline-tracking);
+  --text-body: var(--nv-text-body);
+  --text-body--line-height: var(--nv-text-body-leading);
+  --text-callout: var(--nv-text-callout);
+  --text-callout--line-height: var(--nv-text-callout-leading);
+  --text-footnote: var(--nv-text-footnote);
+  --text-footnote--line-height: var(--nv-text-footnote-leading);
+  --text-caption: var(--nv-text-caption);
+  --text-caption--line-height: var(--nv-text-caption-leading);
+  --text-caption--letter-spacing: var(--nv-text-caption-tracking);
+  --text-whisper: var(--nv-text-whisper);
+  --text-whisper--line-height: var(--nv-text-whisper-leading);
+  --text-metric: var(--nv-text-metric);
+  --text-metric--line-height: var(--nv-text-metric-leading);
+}

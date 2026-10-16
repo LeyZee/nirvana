@@ -1,0 +1,217 @@
+/*
+ * Nirvana design tokens: the single source of every visual value.
+ * Framework-free CSS custom properties, prefixed `--nv-` so they never collide with Tailwind's
+ * theme namespaces or shadcn/ui's semantic variables. `theme.css` maps them to Tailwind utilities.
+ *
+ * Night (dark) is the default theme. Day (light) applies under `data-theme="light"` on any ancestor.
+ * `:host` makes the tokens available inside a shadow root (extension UI).
+ */
+
+:root,
+:host,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Grounds */
+  --nv-void: #07060a;
+  --nv-abyss: #100c13;
+  --nv-surface-raised: #1a1419;
+
+  /* Text */
+  --nv-ink: #f6eef1;
+  --nv-ink-muted: #c2b7bc;
+  --nv-ink-faint: #9d9399;
+
+  /* Neon: the brand's single accent */
+  --nv-neon: #ff2a4d;
+  --nv-neon-solid: #e0103a;
+  --nv-on-neon: #ffffff;
+  --nv-neon-ink: #ff8a9b;
+  --nv-neon-soft: rgba(255, 42, 77, 0.12);
+  --nv-focus: #ff7a90;
+
+  /* Liquid glass */
+  --nv-glass-veil: rgba(7, 6, 10, 0.6);
+  --nv-glass-fill: rgba(255, 255, 255, 0.05);
+  --nv-glass-fill-strong: rgba(255, 255, 255, 0.09);
+  --nv-glass-thick: rgba(14, 10, 14, 0.78);
+  --nv-glass-edge: rgba(255, 255, 255, 0.16);
+  --nv-glass-specular: rgba(255, 255, 255, 0.55);
+  --nv-glass-sheen: rgba(255, 255, 255, 0.1);
+  --nv-hairline: rgba(255, 255, 255, 0.08);
+  --nv-fill-track: rgba(255, 255, 255, 0.16);
+  --nv-thumb: #ffffff;
+
+  /* Aura: the light behind the glass */
+  --nv-aura-neon: rgba(255, 42, 77, 0.4);
+  --nv-aura-wine: rgba(128, 6, 42, 0.85);
+  --nv-aura-rose: rgba(255, 122, 150, 0.22);
+
+  /* Semantic */
+  --nv-success: #5fd4ff;
+  --nv-warning: #ffa340;
+  --nv-danger: #ff5a45;
+  --nv-sale: #e8c37a;
+
+  /* Shadows */
+  --nv-shadow-glass:
+    inset 0 1px 1px rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 24px 48px -16px rgba(0, 0, 0, 0.7);
+  --nv-shadow-neon:
+    0 0 0 1px rgba(255, 42, 77, 0.55), 0 8px 24px -6px rgba(255, 42, 77, 0.6),
+    0 0 48px -12px rgba(255, 42, 77, 0.5);
+  --nv-shadow-neon-strong:
+    0 0 0 1px rgba(255, 42, 77, 0.8), 0 10px 32px -6px rgba(255, 42, 77, 0.8),
+    0 0 72px -8px rgba(255, 42, 77, 0.65);
+  --nv-shadow-neon-soft: 0 6px 20px -8px rgba(255, 42, 77, 0.55);
+  --nv-shadow-thumb: 0 3px 8px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.16);
+  --nv-shadow-focus: 0 0 0 2px var(--nv-focus);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --nv-void: #f6f1f3;
+  --nv-abyss: #efe7ea;
+  --nv-surface-raised: #ffffff;
+
+  --nv-ink: #1b1016;
+  --nv-ink-muted: #5e5157;
+  --nv-ink-faint: #6e6268;
+
+  --nv-neon: #cc0029;
+  --nv-neon-solid: #d0002c;
+  --nv-neon-ink: #b0002a;
+  --nv-neon-soft: rgba(208, 0, 44, 0.09);
+  --nv-focus: #b3002a;
+
+  --nv-glass-veil: rgba(255, 255, 255, 0.22);
+  --nv-glass-fill: rgba(255, 255, 255, 0.46);
+  --nv-glass-fill-strong: rgba(255, 255, 255, 0.78);
+  --nv-glass-thick: rgba(255, 250, 252, 0.88);
+  --nv-glass-edge: rgba(255, 255, 255, 0.9);
+  --nv-glass-specular: rgba(255, 255, 255, 1);
+  --nv-glass-sheen: rgba(255, 255, 255, 0.7);
+  --nv-hairline: rgba(60, 10, 30, 0.09);
+  --nv-fill-track: rgba(60, 10, 30, 0.14);
+
+  --nv-aura-neon: rgba(255, 92, 122, 0.34);
+  --nv-aura-wine: rgba(255, 168, 190, 0.6);
+  --nv-aura-rose: rgba(255, 206, 218, 0.7);
+
+  --nv-success: #006c99;
+  --nv-warning: #9a4a00;
+  --nv-danger: #c42a12;
+  --nv-sale: #7a5a12;
+
+  --nv-shadow-glass:
+    inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(80, 10, 30, 0.07),
+    0 24px 48px -20px rgba(80, 10, 30, 0.22);
+  --nv-shadow-neon: 0 0 0 1px rgba(208, 0, 44, 0.35), 0 8px 22px -8px rgba(208, 0, 44, 0.45);
+  --nv-shadow-neon-strong: 0 0 0 1px rgba(208, 0, 44, 0.5), 0 10px 30px -8px rgba(208, 0, 44, 0.6);
+  --nv-shadow-neon-soft: 0 6px 18px -8px rgba(208, 0, 44, 0.35);
+  --nv-shadow-thumb: 0 3px 8px rgba(40, 0, 15, 0.18), 0 1px 1px rgba(40, 0, 15, 0.1);
+}
+
+:root,
+:host {
+  /* Spacing: 4px grid */
+  --nv-space-1: 4px;
+  --nv-space-2: 8px;
+  --nv-space-3: 12px;
+  --nv-space-4: 16px;
+  --nv-space-5: 20px;
+  --nv-space-6: 24px;
+  --nv-space-8: 32px;
+  --nv-space-10: 40px;
+  --nv-space-12: 48px;
+
+  /* Radii: everything you touch is a capsule */
+  --nv-radius-xs: 8px;
+  --nv-radius-sm: 12px;
+  --nv-radius-md: 18px;
+  --nv-radius-lg: 26px;
+  --nv-radius-xl: 34px;
+  --nv-radius-full: 999px;
+
+  /* Glass blur radii, always combined with saturate(180%) */
+  --nv-blur-thin: 10px;
+  --nv-blur-regular: 22px;
+  --nv-blur-thick: 40px;
+
+  /* Motion */
+  --nv-dur-instant: 90ms;
+  --nv-dur-fast: 160ms;
+  --nv-dur-base: 280ms;
+  --nv-dur-slow: 520ms;
+  --nv-dur-ambient: 18s;
+  --nv-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --nv-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Springs: slight overshoot then rest, like UIKit */
+  --nv-ease-spring: linear(
+    0,
+    0.035 2%,
+    0.14 4.4%,
+    0.72 12.9%,
+    0.94 16.7%,
+    1.02 20.3%,
+    1.06 24.4%,
+    1.067 27.2%,
+    1.05 31.6%,
+    1.012 41%,
+    0.998 51%,
+    1
+  );
+  --nv-ease-spring-bouncy: linear(
+    0,
+    0.06 2%,
+    0.25 5%,
+    0.84 13%,
+    1.08 19%,
+    1.14 24%,
+    1.1 30%,
+    0.98 42%,
+    0.99 52%,
+    1.01 62%,
+    1
+  );
+
+  /* Type families (faces loaded by fonts.css) */
+  --nv-font-sans: 'Geist', -apple-system, 'SF Pro Text', system-ui, sans-serif;
+  --nv-font-display: 'Geist', -apple-system, 'SF Pro Display', system-ui, sans-serif;
+  --nv-font-serif: 'Instrument Serif', 'New York', Georgia, serif;
+  --nv-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale: size / line height / tracking. caption is the floor. */
+  --nv-text-hero: 56px;
+  --nv-text-hero-leading: 58px;
+  --nv-text-hero-tracking: -0.035em;
+  --nv-text-large-title: 34px;
+  --nv-text-large-title-leading: 40px;
+  --nv-text-large-title-tracking: -0.025em;
+  --nv-text-title-1: 28px;
+  --nv-text-title-1-leading: 34px;
+  --nv-text-title-1-tracking: -0.02em;
+  --nv-text-title-2: 22px;
+  --nv-text-title-2-leading: 28px;
+  --nv-text-title-2-tracking: -0.015em;
+  --nv-text-headline: 17px;
+  --nv-text-headline-leading: 22px;
+  --nv-text-headline-tracking: -0.01em;
+  --nv-text-body: 15px;
+  --nv-text-body-leading: 21px;
+  --nv-text-callout: 14px;
+  --nv-text-callout-leading: 20px;
+  --nv-text-footnote: 13px;
+  --nv-text-footnote-leading: 18px;
+  --nv-text-caption: 11px;
+  --nv-text-caption-leading: 14px;
+  --nv-text-caption-tracking: 0.02em;
+  --nv-text-whisper: 28px;
+  --nv-text-whisper-leading: 32px;
+  --nv-text-metric: 28px;
+  --nv-text-metric-leading: 32px;
+
+  /* Minimum touch target (brief: >= 44px) */
+  --nv-target-min: 44px;
+}

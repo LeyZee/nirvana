@@ -1,0 +1,6 @@
+/*
+ * Font faces: Geist (UI), Geist Mono (data), Instrument Serif (wordmark and empty states).
+ * Loaded from Google Fonts; every family in tokens.css falls back to the system stack (SF Pro on Apple).
+ * Must be the first import of the consuming stylesheet (CSS requires @import before other rules).
+ */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap');

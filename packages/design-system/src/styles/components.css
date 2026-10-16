@@ -1,0 +1,1117 @@
+/*
+ * Nirvana component classes (`nv-*`). Framework-free: shadcn/ui components in apps/web apply them
+ * through className, the extension popup uses them directly. No color literal lives here: every
+ * value comes from tokens.css. Rules for where glass goes: docs/design/README.md.
+ */
+
+.nv-wordmark {
+  font-family: var(--nv-font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.nv-num {
+  font-family: var(--nv-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────────── Aura: the light behind the glass ───────────── */
+
+.nv-aura {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Clips the drifting orbs even on <body>, whose overflow would otherwise move to the viewport. */
+  contain: paint;
+  background: radial-gradient(42% 60% at 78% 12%, var(--nv-aura-rose), transparent 70%), var(--nv-void);
+}
+.nv-aura::before,
+.nv-aura::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.nv-aura::before {
+  width: max(70%, 320px);
+  left: -18%;
+  top: -40%;
+  background: radial-gradient(circle, var(--nv-aura-neon) 0%, transparent 62%);
+  animation: nv-drift-a var(--nv-dur-ambient) var(--nv-ease-in-out) infinite alternate;
+}
+.nv-aura::after {
+  width: max(64%, 300px);
+  right: -22%;
+  bottom: -46%;
+  background: radial-gradient(circle, var(--nv-aura-wine) 0%, transparent 64%);
+  animation: nv-drift-b var(--nv-dur-ambient) var(--nv-ease-in-out) infinite alternate;
+}
+@keyframes nv-drift-a {
+  to {
+    transform: translate(16%, 20%) scale(1.14);
+  }
+}
+@keyframes nv-drift-b {
+  to {
+    transform: translate(-14%, -16%) scale(1.1);
+  }
+}
+
+/* ───────────── Liquid glass ───────────── */
+
+.nv-glass {
+  --_radius: var(--nv-radius-lg);
+  --_blur: var(--nv-blur-regular);
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--_radius);
+  /* The veil under the fill keeps text at AA contrast over a bright aura. */
+  background:
+    linear-gradient(165deg, var(--nv-glass-fill-strong) 0%, var(--nv-glass-fill) 62%),
+    linear-gradient(var(--nv-glass-veil), var(--nv-glass-veil));
+  -webkit-backdrop-filter: blur(var(--_blur)) saturate(180%);
+  backdrop-filter: blur(var(--_blur)) saturate(180%);
+  box-shadow: var(--nv-shadow-glass);
+}
+/* Specular rim: bright top-left, soft elsewhere. */
+.nv-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    140deg,
+    var(--nv-glass-specular) 0%,
+    var(--nv-glass-edge) 20%,
+    transparent 44%,
+    transparent 64%,
+    var(--nv-glass-edge) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+/* Inner light that follows the pointer (attachGlassLight writes --nv-light-x / --nv-light-y). */
+.nv-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    200px circle at var(--nv-light-x, 24%) var(--nv-light-y, -30%),
+    var(--nv-glass-sheen),
+    transparent 70%
+  );
+}
+.nv-glass--thin {
+  --_blur: var(--nv-blur-thin);
+}
+.nv-glass--thick {
+  --_blur: var(--nv-blur-thick);
+  background: var(--nv-glass-thick);
+}
+.nv-glass--neon {
+  background:
+    linear-gradient(165deg, var(--nv-neon-soft) 0%, var(--nv-glass-fill) 70%),
+    linear-gradient(var(--nv-glass-veil), var(--nv-glass-veil));
+}
+.nv-glass--pad {
+  padding: var(--nv-space-4);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .nv-glass,
+  .nv-glass--thick,
+  .nv-glass--neon {
+    background: var(--nv-surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .nv-glass::after {
+    display: none;
+  }
+}
+
+/* ───────────── Buttons ───────────── */
+
+.nv-btn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  font: inherit;
+  font-size: var(--nv-text-body);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  height: var(--nv-target-min);
+  padding: 0 var(--nv-space-5);
+  border-radius: var(--nv-radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nv-space-2);
+  position: relative;
+  isolation: isolate;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--nv-ink);
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--nv-dur-slow) var(--nv-ease-spring),
+    box-shadow var(--nv-dur-base) var(--nv-ease-out),
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    opacity var(--nv-dur-fast) var(--nv-ease-out);
+}
+.nv-btn.nv-glass {
+  --_radius: var(--nv-radius-full);
+  --_blur: var(--nv-blur-thin);
+}
+.nv-btn:active {
+  transform: scale(0.96);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-btn:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 3px;
+}
+.nv-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.nv-btn--neon {
+  background: var(--nv-neon-solid);
+  color: var(--nv-on-neon);
+  box-shadow: var(--nv-shadow-neon);
+}
+.nv-btn--neon::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 1px 1px 52% 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--nv-glass-sheen), transparent);
+}
+.nv-btn--neon:hover {
+  box-shadow: var(--nv-shadow-neon-strong);
+}
+.nv-btn--plain {
+  color: var(--nv-neon-ink);
+  padding: 0 var(--nv-space-3);
+}
+.nv-btn--plain:hover {
+  background: var(--nv-neon-soft);
+}
+.nv-btn--destructive {
+  color: var(--nv-danger);
+}
+.nv-btn--sm {
+  height: 34px;
+  font-size: var(--nv-text-footnote);
+  padding: 0 var(--nv-space-4);
+}
+.nv-btn--lg {
+  height: 52px;
+  font-size: var(--nv-text-headline);
+  padding: 0 var(--nv-space-6);
+}
+.nv-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.nv-iconbtn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  cursor: pointer;
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nv-radius-full);
+  display: grid;
+  place-items: center;
+  background: var(--nv-neon-solid);
+  color: var(--nv-on-neon);
+  box-shadow: var(--nv-shadow-neon-soft);
+  transition:
+    transform var(--nv-dur-slow) var(--nv-ease-spring-bouncy),
+    background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.nv-iconbtn svg {
+  width: 18px;
+  height: 18px;
+}
+.nv-iconbtn:active {
+  transform: scale(0.88);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-iconbtn:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 3px;
+}
+.nv-iconbtn:disabled {
+  background: var(--nv-fill-track);
+  color: var(--nv-ink-faint);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Compact controls keep a 44px hit area around a smaller visual. */
+.nv-btn--sm::after,
+.nv-iconbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--nv-target-min) - 34px) / -2);
+}
+
+/* Keyboard hint inside a button or a help line: <kbd class="nv-kbd">a</kbd> */
+.nv-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  font-family: var(--nv-font-mono);
+  font-size: var(--nv-text-caption);
+  line-height: 1;
+  font-weight: 500;
+  color: inherit;
+  background: var(--nv-glass-fill-strong);
+  box-shadow: inset 0 -1px 0 var(--nv-hairline);
+  opacity: 0.85;
+}
+
+/* ───────────── Segmented control ───────────── */
+
+.nv-seg {
+  --_radius: var(--nv-radius-full);
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  padding: 3px;
+}
+.nv-seg__thumb {
+  --_radius: var(--nv-radius-full);
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--nv-seg-count, 2));
+  transform: translateX(calc(var(--nv-seg-index, 0) * 100%));
+  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-seg__opt {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  height: 38px;
+  padding: 0 var(--nv-space-4);
+  border-radius: var(--nv-radius-full);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--nv-ink-muted);
+  transition: color var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-seg__opt[aria-checked='true'],
+.nv-seg__opt[data-state='on'] {
+  color: var(--nv-ink);
+}
+.nv-seg__opt:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: -2px;
+}
+
+/* Squash-and-release while a thumb or lens travels (playLiquid). */
+.is-liquid {
+  animation: nv-liquid var(--nv-dur-slow) var(--nv-ease-out);
+}
+@keyframes nv-liquid {
+  0% {
+    scale: 1 1;
+  }
+  28% {
+    scale: 1.14 0.84;
+  }
+  60% {
+    scale: 0.97 1.04;
+  }
+  100% {
+    scale: 1 1;
+  }
+}
+
+/* ───────────── Switch (kill switch, settings) ───────────── */
+
+.nv-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  flex: none;
+  cursor: pointer;
+  position: relative;
+  width: 52px;
+  height: 32px;
+  border: 0;
+  padding: 0;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-fill-track);
+  transition:
+    background-color var(--nv-dur-base) var(--nv-ease-out),
+    box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-thumb);
+  box-shadow: var(--nv-shadow-thumb);
+  transition:
+    width var(--nv-dur-base) var(--nv-ease-spring),
+    transform var(--nv-dur-slow) var(--nv-ease-spring-bouncy),
+    background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.nv-switch::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
+/* While pressed, the thumb stretches and turns into a glass lens. */
+.nv-switch:active::before {
+  width: 36px;
+  background: var(--nv-glass-fill-strong);
+  -webkit-backdrop-filter: blur(var(--nv-blur-thin));
+  backdrop-filter: blur(var(--nv-blur-thin));
+}
+.nv-switch:checked,
+.nv-switch[data-state='checked'] {
+  background: var(--nv-neon-solid);
+  box-shadow: var(--nv-shadow-neon-soft);
+}
+.nv-switch:checked::before,
+.nv-switch[data-state='checked']::before {
+  transform: translateX(20px);
+}
+.nv-switch:checked:active::before,
+.nv-switch[data-state='checked']:active::before {
+  transform: translateX(12px);
+}
+.nv-switch:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 3px;
+}
+.nv-switch:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nv-list {
+  display: flex;
+  flex-direction: column;
+}
+.nv-list > * + * {
+  border-top: 1px solid var(--nv-hairline);
+}
+.nv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-4);
+  padding: var(--nv-space-3) var(--nv-space-4);
+  min-height: 28px;
+}
+.nv-row__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nv-row__title {
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  font-weight: 500;
+}
+.nv-row__sub {
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+
+/* ───────────── Tab bar (mobile / PWA) ───────────── */
+
+.nv-tabbar {
+  --_radius: var(--nv-radius-full);
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+}
+.nv-tabbar__lens {
+  --_radius: var(--nv-radius-full);
+  position: absolute;
+  z-index: 0;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: var(--nv-lens-width, 0px);
+  transform: translateX(var(--nv-lens-x, 0px));
+  background: var(--nv-neon-soft);
+  transition:
+    transform var(--nv-dur-slow) var(--nv-ease-spring),
+    width var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-tabbar__item {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 66px;
+  min-height: var(--nv-target-min);
+  padding: 7px 12px 6px;
+  border-radius: var(--nv-radius-full);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--nv-ink-muted);
+  transition:
+    color var(--nv-dur-base) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-tabbar__item svg {
+  width: 22px;
+  height: 22px;
+}
+.nv-tabbar__item:active {
+  transform: scale(0.92);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-tabbar__item[aria-selected='true'],
+.nv-tabbar__item[aria-current='page'] {
+  color: var(--nv-neon-ink);
+}
+.nv-tabbar__item:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: -2px;
+}
+
+/* ───────────── Avatar and conversation card ───────────── */
+
+.nv-avatar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--nv-radius-full);
+  display: grid;
+  place-items: center;
+  font-size: var(--nv-text-body);
+  font-weight: 650;
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill-strong);
+}
+/* Unread: a neon ring. */
+.nv-avatar--ring {
+  box-shadow:
+    0 0 0 2px var(--nv-void),
+    0 0 0 4px var(--nv-neon);
+}
+.nv-avatar--sm {
+  width: 32px;
+  height: 32px;
+  font-size: var(--nv-text-footnote);
+}
+
+/* A list row: no backdrop-filter here, the list container carries the glass. */
+.nv-convo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--nv-space-3);
+  align-items: center;
+  padding: var(--nv-space-3) var(--nv-space-4);
+  border-radius: var(--nv-radius-lg);
+  cursor: pointer;
+  position: relative;
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-convo:hover {
+  background: var(--nv-glass-fill);
+}
+.nv-convo:active {
+  transform: scale(0.985);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-convo[aria-current='true'],
+.nv-convo[aria-selected='true'] {
+  background: var(--nv-neon-soft);
+}
+.nv-convo:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: -2px;
+}
+.nv-convo__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nv-convo__name {
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.nv-convo__preview {
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nv-convo__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.nv-convo__time {
+  font-family: var(--nv-font-mono);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────────── Status pill: one modifier per conversation state ───────────── */
+
+.nv-status {
+  --_c: var(--nv-ink-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--nv-radius-full);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--nv-ink);
+  background: color-mix(in srgb, var(--_c) 15%, transparent);
+}
+.nv-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--_c);
+  position: relative;
+  flex: none;
+}
+.nv-status--idle,
+.nv-status--paused {
+  --_c: var(--nv-ink-faint);
+}
+.nv-status--pending {
+  --_c: var(--nv-ink-muted);
+}
+.nv-status--drafting {
+  --_c: var(--nv-neon);
+}
+.nv-status--awaiting-approval {
+  --_c: var(--nv-warning);
+}
+.nv-status--sending,
+.nv-status--sent {
+  --_c: var(--nv-success);
+}
+.nv-status--human {
+  --_c: var(--nv-ink);
+}
+.nv-status--error {
+  --_c: var(--nv-danger);
+}
+.nv-status--sale {
+  --_c: var(--nv-sale);
+}
+/* States where the agent is working breathe. */
+.nv-status--drafting .nv-status__dot::after,
+.nv-status--sending .nv-status__dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--_c);
+  animation: nv-ping 1.8s var(--nv-ease-out) infinite;
+}
+@keyframes nv-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  80%,
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* ───────────── Message bubbles ───────────── */
+
+.nv-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+}
+.nv-bubble {
+  max-width: 80%;
+  width: fit-content;
+  padding: 9px 14px;
+  border-radius: var(--nv-radius-md);
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  animation: nv-bubble-in var(--nv-dur-slow) var(--nv-ease-spring) both;
+}
+/* Frosted look without backdrop-filter: a thread can hold hundreds of bubbles. */
+.nv-bubble--fan {
+  align-self: flex-start;
+  border-bottom-left-radius: var(--nv-radius-xs);
+  background:
+    linear-gradient(var(--nv-glass-fill-strong), var(--nv-glass-fill-strong)),
+    linear-gradient(var(--nv-glass-veil), var(--nv-glass-veil));
+  box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+}
+.nv-bubble--creator {
+  align-self: flex-end;
+  border-bottom-right-radius: var(--nv-radius-xs);
+  background: var(--nv-neon-solid);
+  color: var(--nv-on-neon);
+  box-shadow: var(--nv-shadow-neon-soft);
+}
+.nv-bubble--draft {
+  align-self: flex-end;
+  border-bottom-right-radius: var(--nv-radius-xs);
+  color: var(--nv-ink);
+  background: var(--nv-neon-soft);
+  outline: 1px dashed var(--nv-neon);
+  outline-offset: -1px;
+}
+.nv-bubble--draft.is-writing {
+  background: linear-gradient(
+      100deg,
+      var(--nv-neon-soft) 30%,
+      var(--nv-glass-sheen) 50%,
+      var(--nv-neon-soft) 70%
+    )
+    0 0 / 300% 100%;
+  animation:
+    nv-bubble-in var(--nv-dur-slow) var(--nv-ease-spring) both,
+    nv-sheen 1.6s linear infinite;
+}
+@keyframes nv-sheen {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@keyframes nv-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+.nv-draft-label {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--nv-neon-ink);
+}
+.nv-draft-label svg {
+  width: 12px;
+  height: 12px;
+}
+.nv-meta {
+  font-family: var(--nv-font-mono);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-faint);
+}
+.nv-meta--end {
+  align-self: flex-end;
+}
+.nv-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 2px;
+}
+.nv-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nv-ink-muted);
+  animation: nv-typing 1.2s var(--nv-ease-in-out) infinite;
+}
+.nv-typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.nv-typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes nv-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* ───────────── Draft panel (copilot inbox) ───────────── */
+
+.nv-draft-panel {
+  --_radius: var(--nv-radius-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+  padding: var(--nv-space-4);
+}
+.nv-draft-panel__brief {
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+.nv-draft-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nv-space-2);
+}
+.nv-draft-panel__actions > .nv-btn {
+  flex: 1 1 auto;
+}
+
+/* ───────────── Composer and fields ───────────── */
+
+.nv-composer {
+  --_radius: var(--nv-radius-full);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nv-space-2);
+  padding: 5px 5px 5px var(--nv-space-4);
+  transition: box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-composer:focus-within {
+  box-shadow: var(--nv-shadow-glass), var(--nv-shadow-focus);
+}
+.nv-composer__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 7px 0;
+  background: transparent;
+  outline: none;
+  resize: none;
+  font: inherit;
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  color: var(--nv-ink);
+  caret-color: var(--nv-neon);
+}
+.nv-composer__input::placeholder {
+  color: var(--nv-ink-faint);
+}
+
+.nv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nv-field__label {
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  font-weight: 600;
+  color: var(--nv-ink-muted);
+}
+.nv-field__control.nv-glass {
+  --_radius: var(--nv-radius-sm);
+  --_blur: var(--nv-blur-thin);
+}
+.nv-field__control {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--nv-target-min);
+  border: 0;
+  margin: 0;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: var(--nv-text-body);
+  color: var(--nv-ink);
+  outline: none;
+  caret-color: var(--nv-neon);
+  transition: box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-field__control:focus {
+  box-shadow: var(--nv-shadow-glass), var(--nv-shadow-focus);
+}
+.nv-field__control::placeholder {
+  color: var(--nv-ink-faint);
+}
+
+/* ───────────── Fan facts (memory) ───────────── */
+
+.nv-fact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--nv-space-3);
+  padding: var(--nv-space-3) var(--nv-space-4);
+  align-items: center;
+}
+.nv-fact__key {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--nv-ink-muted);
+}
+.nv-fact__value {
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  color: var(--nv-ink);
+  grid-column: 1;
+}
+.nv-fact__src {
+  font-family: var(--nv-font-mono);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-faint);
+  grid-column: 1;
+}
+.nv-fact__aside {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.nv-fact--inferred .nv-fact__value {
+  font-style: italic;
+  color: var(--nv-ink-muted);
+}
+
+.nv-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--nv-radius-full);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.nv-tag--declared {
+  background: var(--nv-neon-soft);
+  color: var(--nv-neon-ink);
+}
+.nv-tag--inferred {
+  outline: 1px dashed var(--nv-ink-faint);
+  outline-offset: -1px;
+  color: var(--nv-ink-muted);
+}
+
+.nv-conf {
+  width: 44px;
+  height: 4px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-fill-track);
+  overflow: hidden;
+}
+.nv-conf > i {
+  display: block;
+  height: 100%;
+  width: var(--nv-conf, 50%);
+  border-radius: inherit;
+  background: var(--nv-ink-muted);
+}
+.nv-fact:not(.nv-fact--inferred) .nv-conf > i {
+  background: var(--nv-neon);
+}
+
+/* ───────────── Island (notification / toast) ───────────── */
+
+.nv-island {
+  --_radius: var(--nv-radius-xl);
+  width: min(380px, 100%);
+  box-sizing: border-box;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nv-space-3);
+  padding: var(--nv-space-4);
+  transition:
+    width var(--nv-dur-slow) var(--nv-ease-spring-bouncy),
+    height var(--nv-dur-slow) var(--nv-ease-spring-bouncy),
+    padding var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-island > * {
+  transition:
+    opacity var(--nv-dur-base) var(--nv-ease-out) 120ms,
+    filter var(--nv-dur-base) var(--nv-ease-out) 120ms;
+}
+.nv-island.is-collapsed {
+  width: 126px;
+  height: 36px;
+  padding: 0;
+}
+.nv-island.is-collapsed > * {
+  opacity: 0;
+  filter: blur(6px);
+  transition-delay: 0ms;
+}
+.nv-island__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nv-radius-full);
+  display: grid;
+  place-items: center;
+  background: var(--nv-neon-solid);
+  color: var(--nv-on-neon);
+  box-shadow: var(--nv-shadow-neon);
+}
+.nv-island__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.nv-island__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nv-island__title {
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.nv-island__text {
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+.nv-island__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--nv-space-2);
+  justify-content: flex-end;
+}
+
+/* ───────────── Extension popup ───────────── */
+
+.nv-popup {
+  --_radius: 0px;
+  width: 340px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+  padding: var(--nv-space-4);
+}
+.nv-popup__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-3);
+}
+.nv-popup__brand {
+  font-family: var(--nv-font-serif);
+  font-style: italic;
+  font-size: 26px;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+
+/* ───────────── Reduced motion ───────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-aura::before,
+  .nv-aura::after,
+  .nv-status__dot::after,
+  .nv-typing i,
+  .nv-bubble,
+  .nv-bubble--draft.is-writing,
+  .is-liquid {
+    animation: none;
+  }
+  .nv-btn,
+  .nv-iconbtn,
+  .nv-seg__thumb,
+  .nv-tabbar__lens,
+  .nv-switch::before,
+  .nv-island,
+  .nv-island > *,
+  .nv-convo,
+  .nv-tabbar__item {
+    transition-duration: 1ms;
+  }
+}

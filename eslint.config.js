@@ -80,7 +80,8 @@ export default tseslint.config(
             { from: 'api-root', allow: ['module-index', 'package'] },
             { from: 'api-test', allow: ['module-index', 'package', 'api-root', 'api-test'] },
             { from: 'package', allow: ['package'] },
-            { from: 'app', allow: [['package', { package: 'contracts' }], 'app'] },
+            // design-system : ADR 0015 (proposed).
+            { from: 'app', allow: [['package', { package: 'contracts' }], ['package', { package: 'design-system' }], 'app'] },
           ],
         },
       ],
