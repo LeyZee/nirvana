@@ -1,0 +1,1 @@
+Mini-arbre de modules lu par `../../boundaries.test.ts` : le test redéclare les éléments boundaries sur `modules/` et vérifie que chaque fichier enfreint exactement les règles attendues. Ces fichiers sont exclus du lint courant (`eslint.config.js`) et de knip, pas du typecheck.

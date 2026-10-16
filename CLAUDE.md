@@ -46,7 +46,7 @@ pnpm check              # statique : typecheck + lint (frontières) + prettier +
 pnpm test               # tests unitaires
 pnpm test:integration   # Testcontainers Postgres (Docker requis)
 pnpm test:all           # les deux
-pnpm dev                # api + worker + web en watch
+pnpm dev                # api + web en watch (le worker arrive en P0-04 ; l'extension : pnpm --filter @nirvana/extension dev)
 pnpm db:migrate         # migrations Drizzle
 pnpm evals              # Promptfoo (clés API requises)
 ```

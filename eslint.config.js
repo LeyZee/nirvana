@@ -25,44 +25,151 @@ const MODULE_DEPENDENCIES = {
 
 const moduleNames = Object.keys(MODULE_DEPENDENCIES);
 
-/** For each module: its own layers plus the index.ts of the modules it may depend on. */
-const moduleRules = moduleNames.flatMap((name) => {
-  const own = (type) => [type, { module: name }];
-  const allowedIndexes =
-    MODULE_DEPENDENCIES[name].length > 0 ? [['module-index', { module: MODULE_DEPENDENCIES[name] }]] : [];
+/** Selects the `index.ts` of the given modules: the only file of a module that another module may import. */
+const moduleIndexes = (modules) => ({
+  element: { type: 'module', captured: { module: modules }, fileInternalPath: 'index.ts' },
+});
+const ownLayer = (type, module) => ({ element: { type, captured: { module } } });
+const packages = (...names) => ({ element: { type: 'package', captured: { package: names } } });
+const element = (type) => ({ element: { type } });
+
+/** For each module: its own layers, plus the index.ts of the modules it may depend on (MODULE_DEPENDENCIES). */
+const modulePolicies = moduleNames.flatMap((module) => {
+  const own = (type) => ownLayer(type, module);
+  const dependencies = MODULE_DEPENDENCIES[module];
+  const indexes = dependencies.length > 0 ? [moduleIndexes(dependencies)] : [];
   return [
-    { from: [own('module-domain')], allow: [own('module-domain'), ['package', { package: 'contracts' }]] },
+    { from: own('module-domain'), allow: { to: [own('module-domain'), packages('contracts')] } },
     {
-      from: [own('module-application')],
-      allow: [
-        own('module-domain'),
-        own('module-application'),
-        ['package', { package: 'contracts' }],
-        ...allowedIndexes,
-      ],
+      from: own('module-application'),
+      allow: { to: [own('module-domain'), own('module-application'), packages('contracts'), ...indexes] },
     },
     {
-      from: [own('module-infra')],
-      allow: [
-        own('module-domain'),
-        own('module-application'),
-        own('module-infra'),
-        'package',
-        ...allowedIndexes,
-      ],
+      from: own('module-infra'),
+      allow: {
+        to: [
+          own('module-domain'),
+          own('module-application'),
+          own('module-infra'),
+          element('package'),
+          ...indexes,
+        ],
+      },
     },
     {
-      from: [own('module-index')],
-      allow: [
-        own('module-domain'),
-        own('module-application'),
-        own('module-infra'),
-        'package',
-        ...allowedIndexes,
-      ],
+      from: own('module'),
+      allow: {
+        to: [
+          own('module-domain'),
+          own('module-application'),
+          own('module-infra'),
+          element('package'),
+          ...indexes,
+        ],
+      },
     },
   ];
 });
+
+/** LLM SDKs never leave packages/llm (ADR 0009). */
+const LLM_SDKS = ['ai', '@ai-sdk/*', 'openai', '@anthropic-ai/sdk', '@mistralai/mistralai'];
+
+/**
+ * Element descriptors. `modulesRoot` is where the business modules live; the boundaries test points it at a fixture tree.
+ * Order matters: the first descriptor that matches a file wins, so the most specific folders come first.
+ */
+function boundaryElements(modulesRoot = 'apps/api/src/modules') {
+  const layer = (type, folder) => ({
+    type,
+    pattern: `${modulesRoot}/*/${folder}`,
+    capture: ['module'],
+    partialMatch: false,
+  });
+  return [
+    layer('module-domain', 'domain'),
+    layer('module-application', 'application'),
+    layer('module-infra', 'infra'),
+    { type: 'module', pattern: `${modulesRoot}/*`, capture: ['module'], partialMatch: false },
+    { type: 'api-tests', pattern: 'apps/api/src/__tests__', partialMatch: false },
+    { type: 'api-scripts', pattern: 'apps/api/src/scripts', partialMatch: false },
+    { type: 'api-root', pattern: 'apps/api/src', partialMatch: false },
+    { type: 'api-test', pattern: 'apps/api/test', partialMatch: false },
+    // The whole src/ folder of a package is one element: apps import its index.ts through the package name.
+    { type: 'package', pattern: 'packages/*/src', capture: ['package'], partialMatch: false },
+    { type: 'web', pattern: 'apps/web/src', partialMatch: false },
+    { type: 'extension', pattern: 'apps/extension/src', partialMatch: false },
+    { type: 'evals', pattern: 'evals', partialMatch: false },
+  ];
+}
+
+/**
+ * The single boundaries rule (eslint-plugin-boundaries 7). Default: disallow. The last matching policy wins, so the
+ * general external allowance comes first and the targeted bans after it.
+ */
+const BOUNDARIES_POLICIES = [
+  // External packages and Node built-ins are allowed by default; the policies at the end narrow this.
+  { allow: { to: { module: { origin: ['external', 'core'] } } } },
+  ...modulePolicies,
+  { from: element('api-root'), allow: { to: [moduleIndexes('*'), element('package'), element('api-root')] } },
+  {
+    from: element('api-scripts'),
+    allow: { to: [moduleIndexes('*'), element('package'), element('api-root')] },
+  },
+  {
+    from: element('api-tests'),
+    allow: {
+      to: [
+        moduleIndexes('*'),
+        element('package'),
+        element('api-root'),
+        element('api-test'),
+        element('api-tests'),
+      ],
+    },
+  },
+  {
+    from: element('api-test'),
+    allow: { to: [moduleIndexes('*'), element('package'), element('api-root'), element('api-test')] },
+  },
+  { from: element('package'), allow: { to: element('package') } },
+  // design-system: ADR 0015. Apps may import it next to contracts.
+  { from: element('web'), allow: { to: [packages('contracts', 'design-system'), element('web')] } },
+  {
+    from: element('extension'),
+    allow: { to: [packages('contracts', 'design-system'), element('extension')] },
+  },
+  { from: element('evals'), allow: { to: [packages('contracts', 'llm'), element('evals')] } },
+  // The domain does no I/O: no driver, framework or SDK, and no Node built-in but node:crypto (UUIDs).
+  {
+    from: element('module-domain'),
+    disallow: {
+      to: [
+        {
+          module: {
+            origin: 'external',
+            source: ['drizzle-orm', 'fastify', 'graphile-worker', 'pg', 'undici', ...LLM_SDKS],
+          },
+        },
+        { module: { origin: 'core', source: '!node:crypto' } },
+      ],
+    },
+  },
+  {
+    from: [
+      packages('contracts', 'db'),
+      element('module-domain'),
+      element('module-application'),
+      element('module-infra'),
+      element('module'),
+      element('web'),
+      element('extension'),
+      element('api-root'),
+      element('api-scripts'),
+      element('evals'),
+    ],
+    disallow: { to: { module: { origin: 'external', source: LLM_SDKS } } },
+  },
+];
 
 export default tseslint.config(
   {
@@ -73,7 +180,9 @@ export default tseslint.config(
       '.scratch/**',
       '**/coverage/**',
       '**/*.config.*',
+      '**/.wxt/**',
       'scripts/**',
+      'apps/api/src/__tests__/fixtures/**',
     ],
   },
   js.configs.recommended,
@@ -90,7 +199,11 @@ export default tseslint.config(
       'boundaries/root-path': import.meta.dirname,
       // boundaries resolves imports through the eslint-plugin-import setting, import-x through its own.
       'import/resolver': {
-        typescript: { alwaysTryTypes: true, project: ['apps/*/tsconfig.json', 'packages/*/tsconfig.json'] },
+        typescript: {
+          alwaysTryTypes: true,
+          project: ['apps/*/tsconfig.json', 'packages/*/tsconfig.json', 'evals/tsconfig.json'],
+          noWarnOnMultipleProjects: true,
+        },
       },
       // import-x parses the imported files itself (needed by no-cycle): TypeScript sources need the TS parser.
       'import-x/parsers': { '@typescript-eslint/parser': ['.ts', '.tsx'] },
@@ -98,122 +211,19 @@ export default tseslint.config(
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
           alwaysTryTypes: true,
-          project: ['apps/*/tsconfig.json', 'packages/*/tsconfig.json'],
+          project: ['apps/*/tsconfig.json', 'packages/*/tsconfig.json', 'evals/tsconfig.json'],
+          noWarnOnMultipleProjects: true,
         }),
       ],
-      'boundaries/elements': [
-        {
-          type: 'module-domain',
-          pattern: 'apps/api/src/modules/*/domain/**',
-          capture: ['module'],
-          mode: 'full',
-        },
-        {
-          type: 'module-application',
-          pattern: 'apps/api/src/modules/*/application/**',
-          capture: ['module'],
-          mode: 'full',
-        },
-        {
-          type: 'module-infra',
-          pattern: 'apps/api/src/modules/*/infra/**',
-          capture: ['module'],
-          mode: 'full',
-        },
-        {
-          type: 'module-index',
-          pattern: 'apps/api/src/modules/*/index.ts',
-          capture: ['module'],
-          mode: 'full',
-        },
-        { type: 'api-tests', pattern: 'apps/api/src/__tests__/**', mode: 'full' },
-        { type: 'api-scripts', pattern: 'apps/api/src/scripts/**', mode: 'full' },
-        { type: 'api-root', pattern: 'apps/api/src/*.ts', mode: 'full' },
-        { type: 'api-test', pattern: 'apps/api/test/**', mode: 'full' },
-        { type: 'package', pattern: 'packages/*/src/**', capture: ['package'], mode: 'full' },
-        { type: 'web', pattern: 'apps/web/src/**', mode: 'full' },
-        { type: 'extension', pattern: 'apps/extension/src/**', mode: 'full' },
-        { type: 'evals', pattern: 'evals/**', mode: 'full' },
-      ],
+      'boundaries/elements': boundaryElements(),
       // Test files next to the code may import anything inside their own package.
       'boundaries/ignore': ['**/*.test.ts', '**/*.spec.ts'],
     },
     rules: {
-      // Layer purity inside a module, and the dependency graph between modules.
-      'boundaries/element-types': [
+      // Layer purity inside a module, the module graph, and the external packages each layer may use.
+      'boundaries/dependencies': [
         'error',
-        {
-          default: 'disallow',
-          rules: [
-            ...moduleRules,
-            { from: 'api-root', allow: ['module-index', 'package', 'api-root'] },
-            { from: 'api-scripts', allow: ['module-index', 'package', 'api-root'] },
-            { from: 'api-tests', allow: ['module-index', 'package', 'api-root', 'api-test', 'api-tests'] },
-            { from: 'api-test', allow: ['module-index', 'package', 'api-root', 'api-test'] },
-            { from: 'package', allow: ['package'] },
-            // design-system: ADR 0015 (proposed). Apps may import it next to contracts.
-            {
-              from: 'web',
-              allow: [
-                ['package', { package: 'contracts' }],
-                ['package', { package: 'design-system' }],
-                'web',
-              ],
-            },
-            {
-              from: 'extension',
-              allow: [
-                ['package', { package: 'contracts' }],
-                ['package', { package: 'design-system' }],
-                'extension',
-              ],
-            },
-            {
-              from: 'evals',
-              allow: [['package', { package: 'contracts' }], ['package', { package: 'llm' }], 'evals'],
-            },
-          ],
-        },
-      ],
-      // Importing a module through anything but its index.ts (for example `modules/fans/infra/...`) is an error.
-      'boundaries/no-private': ['error', { allowUncles: false }],
-      'boundaries/external': [
-        'error',
-        {
-          default: 'allow',
-          rules: [
-            // The domain does no I/O.
-            {
-              from: 'module-domain',
-              disallow: [
-                'drizzle-orm',
-                'fastify',
-                'graphile-worker',
-                'pg',
-                'undici',
-                'ai',
-                '@ai-sdk/*',
-                'node:!(crypto)',
-              ],
-            },
-            // LLM SDKs never leave packages/llm (ADR 0009).
-            {
-              from: [
-                ['package', { package: 'contracts' }],
-                ['package', { package: 'db' }],
-                'module-domain',
-                'module-application',
-                'module-infra',
-                'web',
-                'extension',
-                'api-root',
-                'api-scripts',
-                'evals',
-              ],
-              disallow: ['ai', '@ai-sdk/*', 'openai', '@anthropic-ai/sdk', '@mistralai/mistralai'],
-            },
-          ],
-        },
+        { default: 'disallow', checkAllOrigins: true, policies: BOUNDARIES_POLICIES },
       ],
       'import-x/order': ['error', { 'newlines-between': 'always', alphabetize: { order: 'asc' } }],
       'import-x/no-cycle': 'error',
@@ -240,4 +250,4 @@ export default tseslint.config(
   prettier,
 );
 
-export { MODULE_DEPENDENCIES, moduleNames };
+export { MODULE_DEPENDENCIES, boundaryElements, moduleNames };

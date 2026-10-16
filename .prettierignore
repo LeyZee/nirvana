@@ -6,3 +6,5 @@ pnpm-lock.yaml
 packages/db/migrations/*.sql
 # Markdown is written by people and agents; no formatter rewrites it.
 *.md
+# Versioned persona data (ADR 0010): written by hand, validated by its Zod schema, never reformatted.
+personas/

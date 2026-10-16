@@ -41,6 +41,8 @@ Ce qu'on protège, par ordre d'importance : (1) les médias et conversations int
 - `pnpm` avec lockfile commité, `pnpm install --frozen-lockfile` en CI, scripts d'installation désactivés par défaut (comportement pnpm 10), `pnpm audit --audit-level=high` en CI (échec sur high et critique ; correctifs transitifs par `overrides` et exceptions justifiées une par une dans `pnpm-workspace.yaml`, revues à chaque session d'hygiène), Dependabot en PR hebdomadaires groupées (`.github/dependabot.yml`).
 - Peu de dépendances, bien connues, maintenues. Toute dépendance nouvelle de poids = ligne dans la PR qui justifie.
 - Versions épinglées : dépendances npm en versions exactes dans les `package.json` (pas de `^`, on monte avec `pnpm up`), Node (`.nvmrc`), images Docker par digest, modèles LLM par identifiant daté.
+- **Quarantaine de 14 jours** : `minimumReleaseAge` (`pnpm-workspace.yaml`) refuse toute version publiée depuis moins de 14 jours ; la plupart des paquets compromis sont retirés avant. Exception possible seulement pour un correctif de sécurité, nommée dans `minimumReleaseAgeExclude` avec sa raison et retirée dès que la version a 14 jours.
+- **Faille sans correctif** : ignorée (`auditConfig.ignoreGhsas`) seulement si elle ne touche qu'un outil de développement et n'est jamais atteinte par une donnée externe ; la justification est écrite à côté et revue à chaque session d'hygiène (`H-xx`).
 - L'extension : `host_permissions` limitées au domaine Reveal, aucun code distant, build reproductible, pas de `eval`.
 
 ## 6. Application web et API

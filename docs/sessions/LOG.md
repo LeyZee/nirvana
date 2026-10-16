@@ -9,6 +9,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-16 | Revue des fondations (Fable) | done | `log/2026-10-16-fondations-revue.md` |
 | 2026-10-16 | Logo et marque (Fable) | done | `log/2026-10-16-logo.md` |
 | 2026-10-16 | Revue indépendante (Opus) | done | `log/2026-10-16-revue-independante.md` |
+| 2026-10-16 | P0-01 Outillage du monorepo | done | `log/2026-10-16-p0-01.md` |
 
 ## Incidents (liste vivante)
 

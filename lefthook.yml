@@ -10,7 +10,7 @@ pre-commit:
       run: pnpm prettier --check {staged_files}
     lint:
       glob: '*.{ts,tsx}'
-      run: pnpm eslint {staged_files}
+      run: pnpm eslint --no-warn-ignored {staged_files}
     repo:
       run: node scripts/check-repo.mjs --staged
 
@@ -21,9 +21,8 @@ pre-push:
     test:
       run: pnpm test
 
+# The check lives in a script file: lefthook's sh on Windows cannot parse an inline multi-line command.
 commit-msg:
-  commands:
-    conventional:
-      run: |
-        head -1 "{1}" | grep -Eq '^(Merge |(feat|fix|docs|style|chore|refactor|test|perf|build|ci|revert)(\([a-z0-9-]+\))?!?: .{1,72}$)' \
-          || { echo "Commit message does not follow Conventional Commits (see docs/conventions/git-and-pr.md)"; exit 1; }
+  scripts:
+    conventional.sh:
+      runner: sh

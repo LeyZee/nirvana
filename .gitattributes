@@ -1,0 +1,2 @@
+# Every text file is stored and checked out with LF (.editorconfig, Prettier), on Windows too.
+* text=auto eol=lf
