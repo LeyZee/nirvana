@@ -3,6 +3,17 @@ packages:
   - packages/*
   - evals
 
+# Supply chain (security.md §5): a version must be published for 14 days before it can be installed.
+minimumReleaseAge: 20160
+
+# pnpm 10 runs no dependency lifecycle script unless listed here (esbuild: Vite and tsup).
+onlyBuiltDependencies:
+  - esbuild
+
+# Security fixes newer than minimumReleaseAge, pinned in `overrides`. Remove an entry once its version is 14 days old.
+minimumReleaseAgeExclude:
+  - handlebars
+
 # Security fixes for transitive dev dependencies (security.md §5). Remove an entry once the parent ships the fix.
 overrides:
   # eslint-plugin-boundaries pins handlebars 4.7.9 (GHSA-8r5x-fm3f-whwj, GHSA-p8wg-vrv2-v86f, ...). 4.7.10 is a patch release.

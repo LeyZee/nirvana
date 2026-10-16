@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "agentGuidance": false,
   "globalEnv": ["NODE_ENV", "CI"],
   "globalDependencies": ["tsconfig.base.json", "eslint.config.js", ".prettierrc"],
   "tasks": {
@@ -9,14 +10,12 @@
       "outputs": ["dist/**", ".output/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
     "test:integration": {
