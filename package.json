@@ -35,7 +35,7 @@
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
   },
   "devDependencies": {
-    "@eslint/js": "^9.30.0",
+    "@eslint/js": "^10.0.1",
     "eslint": "^9.30.0",
     "eslint-config-prettier": "^10.1.0",
     "eslint-plugin-boundaries": "^5.0.1",
