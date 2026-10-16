@@ -1,0 +1,17 @@
+# Configuration gitleaks : règles par défaut + motifs propres au projet.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "nirvana-session-keys"
+description = "Clé de chiffrement des sessions"
+regex = '''SESSION_ENCRYPTION_KEYS\s*=\s*v\d+:[A-Za-z0-9+/=]{40,}'''
+
+[[rules]]
+id = "nirvana-llm-keys"
+description = "Clé API LLM"
+regex = '''LLM_[A-Z]+_API_KEY\s*=\s*[A-Za-z0-9_\-]{20,}'''
+
+[allowlist]
+paths = ['''\.env\.example$''', '''docs/.*\.md$''']
+regexes = ['''replace-with-openssl-rand-base64-32''', '''replace-me''', '''change-me''']

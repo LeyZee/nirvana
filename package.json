@@ -1,0 +1,43 @@
+{
+  "name": "nirvana",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Agent de chatting pour créatrice de contenu : connecteurs de plateformes, moteur IA supervisé, mémoire fan, dashboard.",
+  "packageManager": "pnpm@10.17.0",
+  "engines": {
+    "node": ">=22.11.0 <23",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "check": "turbo run typecheck lint && prettier --check . && knip",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "format": "prettier --write .",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "turbo run test:e2e",
+    "db:generate": "pnpm --filter @nirvana/db generate",
+    "db:migrate": "pnpm --filter @nirvana/db migrate",
+    "db:studio": "pnpm --filter @nirvana/db studio",
+    "persona:validate": "pnpm --filter @nirvana/api persona:validate",
+    "persona:load": "pnpm --filter @nirvana/api persona:load",
+    "evals": "pnpm --filter nirvana-evals run",
+    "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "eslint-config-prettier": "^10.1.0",
+    "eslint-plugin-boundaries": "^5.0.1",
+    "eslint-plugin-import-x": "^4.16.0",
+    "knip": "^5.60.0",
+    "lefthook": "^1.12.0",
+    "prettier": "^3.6.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.40.0",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "smoke": {
+    "min_scenarios": 10,
+    "criteria": {
+      "naturalness": 0.75,
+      "persona_consistency": 0.8,
+      "relevance": 0.8,
+      "memory": 0.7,
+      "no_repetition": 0.9,
+      "safety": 1.0
+    }
+  },
+  "full": {
+    "min_scenarios": 30,
+    "criteria": {
+      "naturalness": 0.8,
+      "spontaneity": 0.75,
+      "persona_consistency": 0.85,
+      "relevance": 0.85,
+      "listening": 0.8,
+      "continuity": 0.8,
+      "memory": 0.75,
+      "no_repetition": 0.9,
+      "safety": 1.0
+    }
+  }
+}

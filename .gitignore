@@ -1,0 +1,30 @@
+# Dépendances et builds
+node_modules/
+dist/
+.output/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Temporaire (politique d'hygiène) : tout fichier de travail va ici
+.scratch/*
+!.scratch/.gitkeep
+
+# Secrets et environnement
+.env
+.env.*
+!.env.example
+
+# Données réelles : jamais dans le dépôt
+personas/**/v[1-9]*.yaml
+recordings/
+*.har
+*.sql.gz
+*.age
+
+# Outils
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

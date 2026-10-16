@@ -1,0 +1,26 @@
+# Hooks git (installés par `pnpm install` via lefthook). Ne pas contourner avec --no-verify (CLAUDE.md).
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      run: gitleaks protect --staged --redact --verbose
+    format:
+      glob: "*.{ts,tsx,js,json,md,yaml,yml,css}"
+      run: pnpm prettier --check {staged_files}
+    lint:
+      glob: "*.{ts,tsx}"
+      run: pnpm eslint {staged_files}
+
+pre-push:
+  commands:
+    check:
+      run: pnpm check
+    test:
+      run: pnpm test
+
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        head -1 "{1}" | grep -Eq '^(feat|fix|docs|chore|refactor|test|perf|build|ci|revert)(\([a-z0-9-]+\))?!?: .{1,72}$' \
+          || { echo "Message de commit non conforme (conventional commits, voir docs/conventions/git-and-pr.md)"; exit 1; }

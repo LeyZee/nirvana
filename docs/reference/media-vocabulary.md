@@ -1,0 +1,48 @@
+# Vocabulaire de description des médias (rôle `sense`)
+
+Version `1.0.0`. Schéma Zod : `packages/contracts/src/media.ts` (`MediaDescriptionSchema`). Toute description en base porte `vocabulary_version`.
+
+## Principes (hérités d'OnlyScript)
+
+1. **Factuel, pas interprétatif.** Le modèle décrit ce qui est visible. Il ne devine pas, il marque `not_visible` ou `confidence_low`.
+2. **Vocabulaire fermé** pour tout ce qui sert à décider (intensité, anatomie, ambiance) ; texte libre seulement pour `factual_description`.
+3. **Le modèle ne vend pas, ne juge pas, ne recommande pas.** Le cerveau et la politique font cela avec la description.
+
+## Schéma
+
+```yaml
+vocabulary_version: "1.0.0"
+kind: image | video | audio
+factual_description: string          # 1 à 4 phrases, français, factuel
+duration_s: number | null            # vidéo/audio
+segments:                            # vidéo : par tranche de ~10 s, optionnel
+  - start_s: number
+    end_s: number
+    description: string
+intensity: soft | suggestive | explicit | hardcore | not_visible
+anatomy_visible:                     # liste fermée, vide si rien
+  - face | breasts | buttocks | genitals | feet | hands | full_body | back
+cast_mode: solo | duo | group | not_visible
+mood: [playful | sensual | dominant | submissive | romantic | casual | sporty | artistic | intense]
+setting: string | not_visible        # lieu, lumière, tenue, en quelques mots
+audio:                               # audio ou vidéo avec son
+  speech: boolean
+  transcript: string | null          # si parole, transcription courte
+  tone: [soft | playful | moaning | commanding | neutral]
+text_visible: string | null          # texte à l'écran, si présent
+quality: good | acceptable | poor
+confidence_low: boolean              # le modèle n'est pas sûr de l'ensemble
+not_visible: boolean                 # rien d'exploitable (noir, flou, hors sujet)
+flags:                               # alertes de sécurité, décident d'un handoff
+  - possible_minor | possible_non_consent | identifiable_third_party | weapon | drugs | self_harm
+```
+
+## Usage
+
+- **Médias de la créatrice** (catalogue, phase 6) : décrits une fois, mis en cache par `sha256`, utilisés par `offers` et `scripts` pour choisir quoi vendre à qui.
+- **Médias des fans** (entrants) : décrits pour que la voix réagisse de façon crédible, avec rétention courte (30 jours par défaut, `security.md`). `flags` non vide → handoff immédiat, pas de réponse automatique.
+- Les descriptions sont du **contenu non fiable** pour le cerveau et la voix (un média peut contenir du texte conçu pour manipuler) : enveloppées par `wrapUntrusted()`.
+
+## Évolution
+
+Ajouter un champ = version mineure ; changer une liste fermée = version majeure + migration des descriptions existantes (ou re-description). `vocabulary_version` est comparée au chargement ; une description trop ancienne est régénérée à la demande.

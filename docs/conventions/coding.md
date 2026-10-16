@@ -1,0 +1,47 @@
+# Conventions de code
+
+## Langage et typage
+
+- TypeScript strict (`tsconfig.base.json` : `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `verbatimModuleSyntax`). ESM partout (`"type": "module"`).
+- Pas de `any`. Pas de `as X` pour contourner le typage ; un `as const` ou un garde de type (`is`) sont les seules formes acceptées. `unknown` aux frontières, puis Zod.
+- Pas de classes pour le domaine sauf machines d'état et erreurs. Fonctions pures + types. Les services d'infra peuvent être des classes ou des fabriques `createX(deps)`.
+- Injection de dépendances **manuelle** : chaque module exporte `createXModule(deps)` ; la composition se fait dans `apps/api/src/composition-root.ts`. Pas de conteneur DI.
+- Erreurs : une classe de base `DomainError` (code, message, `cause`), des sous-classes par module (`ConversationNotFound`, `SendRejected`), jamais de `throw "string"`. Les résultats attendus (validation, refus) sont des valeurs (`Result<T, E>` via `neverthrow` ou un type maison dans `packages/contracts`), les imprévus sont des exceptions.
+- Identifiants : UUID v7 (`uuidv7`), générés par l'application, typés par marque (`type ConversationId = Brand<string, 'ConversationId'>`).
+- Argent : entiers en centimes + code devise ISO (`{ amountMinor: number; currency: 'EUR' }`). Jamais de nombre à virgule.
+- Dates : `Date` en mémoire, `timestamptz` en base, ISO 8601 UTC sur le fil. Voir `operations.md` pour les fuseaux.
+
+## Organisation
+
+- Un module = un dossier `apps/api/src/modules/<name>/` avec `domain/`, `application/`, `infra/`, `index.ts`, `README.md`, `__tests__/` à côté du code testé (`*.test.ts`).
+- Export public uniquement via `index.ts`. Nommage des exports : `createConversationsModule`, types `Conversation`, commandes `IngestMessageCommand`, handlers `ingestMessage`.
+- Un fichier = une responsabilité ; au-delà de ~300 lignes, on découpe.
+- Les schémas Zod partagés vivent dans `packages/contracts` et sont la source des types (`z.infer`). On ne duplique pas un type à la main.
+- Les requêtes SQL vivent dans `infra/*.repository.ts` ; le domaine ne connaît pas Drizzle.
+
+## Style
+
+- Prettier décide de la forme (`.prettierrc`). Pas de débat.
+- ESLint : `typescript-eslint` strict + `eslint-plugin-boundaries` + `eslint-plugin-import` (ordre, pas de cycles). Une règle désactivée localement demande un commentaire `// eslint-disable-next-line <règle> -- <raison>`. Les règles de frontière ne se désactivent jamais.
+- Noms : anglais, explicites, pas d'abréviation sauf `id`, `db`, `llm`. Booléens en `is/has/can`. Fonctions en verbe. Événements au passé (`MessageReceived`), commandes à l'impératif (`IngestMessage`).
+- Commentaires : pourquoi, pas quoi. Un `TODO` porte un identifiant de fiche (`// TODO(P2-03): …`) sinon il est refusé.
+- Logs : `logger.info({ conversationId, jobId }, 'draft created')`. Objet d'abord, message court en anglais, jamais de contenu de message.
+
+## Asynchrone et robustesse
+
+- Tout appel externe a un timeout et une politique de retry explicites (`p-retry` ou équivalent), bornés.
+- Les jobs sont idempotents : relancer un job terminé ne refait rien de visible.
+- Les transactions sont courtes ; jamais d'appel LLM ou HTTP dans une transaction.
+- Pas d'état en mémoire entre deux requêtes/jobs (le worker peut redémarrer à tout moment).
+
+## Prompts
+
+- Les prompts sont des fichiers dans `packages/llm/prompts/<role>/<name>.md` avec en-tête YAML (`version`, `role`, `model_hint`, `output_schema`). Ils sont chargés et hachés ; le hash est stocké dans `llm_calls` et sur le draft.
+- Un prompt ne contient pas de logique métier (prix, règles) : il reçoit des faits déjà décidés.
+- Les variables sont injectées par un template strict (pas de concaténation de chaînes), et le contenu non fiable passe par `wrapUntrusted()`.
+
+## Front (apps/web)
+
+- Composants fonctionnels, hooks, TanStack Query pour les données, TanStack Router pour les routes typées, Tailwind + shadcn/ui pour l'UI.
+- L'inbox copilote est faite pour la vitesse : raccourcis clavier (approuver, éditer, rejeter, suivant), focus géré, pas de modale pour les actions fréquentes.
+- Pas d'état global sauf session utilisateur et préférences.

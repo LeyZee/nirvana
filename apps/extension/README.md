@@ -1,0 +1,11 @@
+# apps/extension
+
+Extension Chrome (WXT, Manifest V3) à trois fonctions, livrées dans cet ordre :
+
+1. **Enregistreur** (P1-01) : intercepte les appels réseau du client web Reveal, anonymise, exporte un JSON pour l'analyse de l'API.
+2. **Capture de session** (P2) : bouton Sync qui envoie la session courante, chiffrée, au backend (`POST /connector/sessions`, jeton d'appareil).
+3. **Relais d'actions** (optionnel) : joue depuis l'onglet des actions que le backend ne peut pas faire seul.
+
+Contraintes : `host_permissions` limitées à `*://*.reveal.me/*` ; service worker éphémère (`chrome.alarms`, pas de `setInterval`) ; aucun secret stocké dans l'extension (`chrome.storage.session` au plus) ; aucun appel LLM depuis l'extension.
+
+Chargement en dev : `pnpm --filter @nirvana/extension dev`, puis `chrome://extensions` → mode développeur → charger `.output/chrome-mv3`.

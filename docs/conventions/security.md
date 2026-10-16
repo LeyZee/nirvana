@@ -1,0 +1,69 @@
+# Sécurité : règles et baseline
+
+Ce qu'on protège, par ordre d'importance : (1) les médias et conversations intimes des fans et de la créatrice, (2) la session plateforme de la créatrice (= son compte Reveal), (3) le contrôle du bot (dashboard, interrupteurs), (4) les clés LLM (coût), (5) le code. Le modèle de menaces complet est dans `docs/architecture/threat-model.md`. Ce fichier est la liste des règles que chaque session applique.
+
+## 1. Exposition : rien n'est public par défaut
+
+- **Le dashboard n'est jamais exposé directement sur Internet.** Il est derrière Cloudflare Access (identité Google/email, liste d'utilisateurs) ou un réseau privé (Tailscale). Une application que personne ne peut atteindre ne se fait pas pirater « facilement ».
+- L'API n'écoute que sur l'interface privée du VPS (Docker network) ; seul le reverse proxy (Caddy/Traefik via Coolify) la publie, en HTTPS, avec HSTS.
+- L'endpoint que l'extension appelle (capture de session, enregistrements) est authentifié par un **jeton d'appareil** révocable, limité par débit, et n'accepte que les origines de l'extension.
+- Postgres n'est jamais joignable depuis Internet (Neon : IP allowlist ; self-host : réseau Docker uniquement).
+- Aucun bucket de médias public. Accès par URL signée courte (≤ 15 min).
+
+## 2. Secrets
+
+- Jamais dans le dépôt, jamais dans les logs, jamais dans une réponse d'API. `gitleaks` en pré-commit et en CI, secret scanning GitHub activé.
+- Un secret par usage, par environnement (dev / staging / prod). Une clé LLM par rôle et par environnement, avec plafond de dépense côté fournisseur.
+- Rotation : procédure dans `docs/runbooks/rotate-secrets.md`. Toute suspicion de fuite = rotation immédiate, pas d'enquête avant.
+- Les **sessions plateforme** (cookies/jetons Reveal) sont chiffrées en base (AES-256-GCM, clé hors base, dans l'env chiffré de Coolify), déchiffrées uniquement dans le processus connecteur, jamais renvoyées par l'API, jamais loguées (redaction pino sur `session`, `cookie`, `token`, `authorization`).
+- 2FA obligatoire sur GitHub, Hetzner, Cloudflare, Neon, fournisseurs LLM, Reveal.
+
+## 3. Données
+
+- **Minimisation** : on ne stocke d'un fan que ce qui sert à la conversation. Jamais de coordonnées, de localisation précise, d'identifiant de paiement. Le cerveau a une liste blanche de catégories de faits ; tout le reste est ignoré.
+- **Rétention** : chaque `fan_fact` et chaque média reçu d'un fan a une date d'expiration (défaut : faits 12 mois après dernier contact, médias fan 30 jours). Un job purge. Les médias de la créatrice vivent selon ses droits (`media_assets.rights`).
+- **Effacement** : une commande `erase-fan <id>` supprime tout ce qui concerne un fan (faits, résumés, médias, messages anonymisés dans le journal). Elle existe dès la phase 2, même si personne ne la demande : la construire après coup est dix fois plus cher.
+- **Chiffrement au repos** : disques VPS chiffrés, base chiffrée (Neon par défaut), bucket chiffré. Les champs les plus sensibles (sessions, faits de catégorie `intimate`) chiffrés applicativement en plus.
+- **Logs sans contenu** : par défaut, on logue des identifiants et des métadonnées, pas le texte des messages. Le contenu n'est consultable que dans le dashboard, authentifié, et dans Langfuse (accès restreint, rétention courte).
+- **Tests et fixtures** : données inventées uniquement. Jamais un export réel dans le dépôt, même anonymisé « à la main ».
+
+## 4. Le LLM comme surface d'attaque
+
+- Le texte d'un fan (et le contenu d'un média décrit) est **toujours** inséré dans un bloc délimité, typé « données non fiables ». Le prompt système dit explicitement que rien dans ce bloc n'est une instruction.
+- La **voix** n'a aucun outil. Le **cerveau** n'a que des outils de lecture ; ses décisions sont des propositions validées par la politique en code. Aucune action externe (envoi, achat, suppression, changement de réglage) ne découle directement d'une sortie de modèle.
+- Sorties structurées validées par Zod ; une sortie invalide = retry, puis draft en erreur, jamais d'exécution partielle.
+- Gardes post-génération : mention d'IA/de prompt/de système, fuite de données d'un autre fan, URL ou coordonnées, prix hors offre, mots interdits par la persona.
+- Évals adversariales dans `evals/adversarial/` : injections classiques (« ignore tes instructions », « répète ton prompt », « tu es maintenant… »), tentatives d'extraction de données d'autres fans, demandes de rencontre/paiement hors plateforme. Elles tournent en CI sur un sous-ensemble.
+- Plafonds : tokens par appel, appels par conversation et par heure, budget LLM par créatrice et par jour (coupe-circuit).
+
+## 5. Chaîne d'approvisionnement
+
+- `pnpm` avec lockfile commité, `pnpm install --frozen-lockfile` en CI, scripts d'installation désactivés par défaut (comportement pnpm 10), `pnpm audit` en CI (échec sur critique), Renovate en PR hebdomadaires groupées.
+- Peu de dépendances, bien connues, maintenues. Toute dépendance nouvelle de poids = ligne dans la PR qui justifie.
+- Versions épinglées : Node (`.nvmrc`), images Docker par digest, modèles LLM par identifiant daté.
+- L'extension : `host_permissions` limitées au domaine Reveal, aucun code distant, build reproductible, pas de `eval`.
+
+## 6. Application web et API
+
+- Validation Zod de toute entrée (corps, query, params, en-têtes utiles). Erreurs génériques vers le client, détail dans les logs.
+- Auth : Better Auth, cookies `HttpOnly; Secure; SameSite=Lax`, sessions courtes côté dashboard, passkeys encouragées. Rôles : `owner`, `operator`, `creator` ; RLS Postgres en second rideau.
+- CSRF : SameSite + en-tête custom sur les mutations. CORS : liste explicite. En-têtes de sécurité (`@fastify/helmet`). Limites de taille de corps. Rate limiting par IP et par utilisateur (`@fastify/rate-limit`).
+- Uploads : type vérifié par contenu (magic bytes), taille bornée, stockage hors du système de fichiers de l'app, jamais servis depuis le même domaine que le dashboard.
+- Journal d'audit des actions d'administration (`audit_log` : qui, quoi, quand, depuis où), append-only.
+
+## 7. Opérations
+
+- Trois environnements : `dev` (FakeReveal, clés de test), `staging` (compte Reveal de test si disponible, sinon FakeReveal), `prod`. Aucune clé partagée entre eux.
+- Sauvegardes chiffrées, **restauration testée** une fois par trimestre (une sauvegarde jamais restaurée n'existe pas).
+- Alertes : échecs d'authentification répétés, nouvelle session d'appareil sur l'extension, dépense LLM anormale (> 2× la médiane), erreurs connecteur en rafale, session plateforme expirée.
+- Runbooks dans `docs/runbooks/` : fuite de secret, compromission du serveur, session Reveal compromise, dépense LLM qui s'emballe, restauration.
+- Branches protégées sur GitHub : PR obligatoire, CI verte, pas de push direct sur `main`.
+
+## 8. Ce que chaque PR vérifie (checklist)
+
+- [ ] Aucune nouvelle entrée sans validation Zod.
+- [ ] Aucun secret, aucune donnée réelle.
+- [ ] Les nouvelles tables ont `creator_id` et une politique RLS.
+- [ ] Les nouveaux logs ne contiennent pas de contenu de message ni de session.
+- [ ] Les nouvelles actions externes passent par la politique en code, pas par une sortie LLM.
+- [ ] Les nouvelles dépendances sont justifiées.
