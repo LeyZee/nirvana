@@ -5,10 +5,10 @@
  */
 
 .nv-wordmark {
-  font-family: var(--nv-font-serif);
+  font-family: var(--nv-font-wordmark);
   font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .nv-num {
@@ -1084,8 +1084,9 @@
   gap: var(--nv-space-3);
 }
 .nv-popup__brand {
-  font-family: var(--nv-font-serif);
+  font-family: var(--nv-font-wordmark);
   font-style: italic;
+  font-weight: 600;
   font-size: 26px;
   line-height: 28px;
   letter-spacing: -0.01em;

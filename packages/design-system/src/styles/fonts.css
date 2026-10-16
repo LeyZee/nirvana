@@ -1,6 +1,6 @@
 /*
- * Font faces: Geist (UI), Geist Mono (data), Instrument Serif (wordmark and empty states).
+ * Font faces: Geist (UI), Geist Mono (data), Instrument Serif (empty states), Playfair Display italic 600 (the name, as in the logo).
  * Loaded from Google Fonts; every family in tokens.css falls back to the system stack (SF Pro on Apple).
  * Must be the first import of the consuming stylesheet (CSS requires @import before other rules).
  */
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&family=Playfair+Display:ital,wght@1,600&display=swap');

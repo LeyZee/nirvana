@@ -58,6 +58,7 @@
   --font-sans: var(--nv-font-sans);
   --font-display: var(--nv-font-display);
   --font-serif: var(--nv-font-serif);
+  --font-wordmark: var(--nv-font-wordmark);
   --font-mono: var(--nv-font-mono);
 
   --text-hero: var(--nv-text-hero);
