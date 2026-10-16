@@ -17,7 +17,7 @@ La phase 0 est acceptée : CI complète, authentification du dashboard, protecti
 - `apps/web` : page de connexion, garde de route, appel `GET /v1/conversations` affiché en liste brute (le design system existe, D-01, mais aucun écran n'est dessiné ici).
 - CSRF par vérification de l'en-tête `Origin` sur toute mutation contre la liste des origines autorisées (`security.md` §6, pas de jeton séparé), CORS strict sur la même liste, en-têtes helmet vérifiés par test, rate limit sur `/v1/auth/*` et `/v1/connector/sessions`.
 - Scripts `pnpm ops:kill-switch`, `pnpm ops:revoke-sessions` (minimaux).
-- Test e2e (Vitest + supertest ou Playwright API) : démarrer api + worker inline + `FakeConnector`, injecter un message → attendre `draft_created` → l'API retourne la conversation avec son événement et son draft vide. Retirer `demo.echo` (P0-04).
+- Test e2e (Vitest + supertest ou Playwright API) : démarrer api + worker inline + `FakeConnector`, injecter un message → attendre `draft_created` → l'API retourne la conversation avec son événement et son draft vide. Vérifier qu'il ne reste rien de `demo.echo` (retiré en P0-05).
 - Mettre à jour `docs/sessions/LOG.md` avec le bilan de la phase 0 et créer les fiches P2 manquantes en `proposed` si des besoins sont apparus.
 
 ## Critères d'acceptation

@@ -180,7 +180,8 @@
   --nv-font-sans: 'Geist', -apple-system, 'SF Pro Text', system-ui, sans-serif;
   --nv-font-display: 'Geist', -apple-system, 'SF Pro Display', system-ui, sans-serif;
   --nv-font-serif: 'Instrument Serif', 'New York', Georgia, serif;
-  --nv-font-wordmark: 'Playfair Display', 'Didot', Georgia, serif; /* the name only, same face as the logo (brand/) */
+  --nv-font-wordmark:
+    'Playfair Display', 'Didot', Georgia, serif; /* the name only, same face as the logo (brand/) */
   --nv-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Type scale: size / line height / tracking. caption is the floor. */

@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 3 * * *" # nightly: e2e and evals smoke
+    - cron: '0 3 * * *' # nightly: e2e and evals smoke
   workflow_dispatch:
 
 concurrency:
@@ -53,7 +53,7 @@ jobs:
       - run: pnpm test
       - run: pnpm test:integration
         env:
-          TESTCONTAINERS_RYUK_DISABLED: "true"
+          TESTCONTAINERS_RYUK_DISABLED: 'true'
 
   audit:
     name: Dependency audit

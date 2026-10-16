@@ -9,7 +9,7 @@ Branche : task/p0-06-connectors-module
 Le port `PlatformConnector` est codé, un `FakeConnector` à scénarios l'implémente, une suite de contrat le vérifie, et un poller alimente `conversations.ingestMessage` depuis n'importe quel connecteur, avec gestion de la session et du coupe-circuit.
 
 ## Contexte à lire
-`modules/connectors/README.md`, `docs/architecture/connectors.md`, `docs/architecture/modules.md` (inversion `OutboundSender`), ADR 0004 (files série), 0008, `security.md` §2 (sessions chiffrées), `docs/conventions/api.md`.
+`modules/connectors/README.md`, `docs/architecture/connectors.md`, `docs/architecture/modules.md` (inversion `OutboundSender`), ADR 0006 (files série), 0008, `security.md` §2 (sessions chiffrées), `docs/conventions/api.md`.
 
 ## À faire
 - `domain/platform-connector.ts` : l'interface, `ConnectorError` typées, `ConnectorCapabilities`.
