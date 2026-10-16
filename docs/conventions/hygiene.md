@@ -39,7 +39,7 @@ En cas de doute : on ne supprime pas, on écrit une ligne dans `docs/sessions/LO
 - `personas/**` (toute version, même inactive)
 - `evals/**` datasets et enregistrements `FakeReveal` (`apps/api/test/fake-reveal/recordings/**`)
 - `docs/reference/reveal-api-observed.md`
-- `.github/**`
+- `.github/**` ; `brainstorm/` et `Contexte et cahier des charges — Agent IA Reveal.md` (historique du raisonnement, à la racine).
 
 ## Session de nettoyage périodique
 

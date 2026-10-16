@@ -4,3 +4,5 @@ node_modules
 .scratch
 pnpm-lock.yaml
 packages/db/migrations/*.sql
+brainstorm/
+Contexte et cahier des charges — Agent IA Reveal.md

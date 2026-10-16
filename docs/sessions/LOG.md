@@ -16,3 +16,10 @@ Décisions : voir `docs/adr/`.
 Découvertes : le dépôt Imperium contient des secrets committés (signalé à Charles le 16/10).
 Candidats à suppression : aucun.
 Vérifié : relecture des docs ✓. Pas de code à tester.
+
+## 2026-10-16 (soir) — Dépôt à la racine du projet, README visuel, brief design — Fable (architecture)
+
+- Le dépôt git est désormais la racine de `Projet Nirvana/` (demande de Charles) ; le sous-dossier `nirvana/` a été supprimé. `brainstorm/` et le cahier des charges sont suivis par git comme historique, protégés par `hygiene.md`.
+- README réécrit (bannière `docs/assets/banner.svg`, badges, diagrammes Mermaid, structure, méthode, pile, sécurité, roadmap, qui).
+- Brief design `docs/design/brief.md` (Liquid Glass iOS 26/27) et fiche `D-01`.
+- Dépôt GitHub `LeyZee/nirvana` : à créer par Charles (cette session ne peut pas créer de dépôt) ; push dès qu'il existe.

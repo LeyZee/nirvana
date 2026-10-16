@@ -31,7 +31,7 @@ Ce dépôt est conçu pour être travaillé par des sessions d'agents codeurs (C
 
 - **Décisions** : `docs/adr/`. Un ADR accepté s'applique. Pour le contredire, on écrit un nouvel ADR qui remplace l'ancien, après accord de Charles.
 - **Architecture courante** : `docs/architecture/`. Si le code et la doc divergent, la doc est à corriger dans la même PR que le code.
-- **Historique du raisonnement** : le dossier `brainstorm/` du projet (hors dépôt) contient les échanges d'origine. Utile pour comprendre le pourquoi, pas une source de règles.
+- **Historique du raisonnement** : `brainstorm/` et le cahier des charges, à la racine du dépôt, contiennent les échanges d'origine. Utile pour comprendre le pourquoi, pas une source de règles : les ADR et `docs/architecture/` priment.
 - **Roadmap** : `docs/roadmap.md`. Les fiches de tâches en découlent.
 
 ## Ce que ce dépôt n'est pas

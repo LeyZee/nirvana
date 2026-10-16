@@ -41,3 +41,4 @@ Branche : task/<id>-<slug>
 | P1-02 | Analyse de l'API Reveal et FakeReveal | 1 | blocked (accès Reveal) | P1-01 |
 | P1-03 | Décision B/C et spécification du connecteur Reveal | 1 | todo | P1-02 |
 | H-01 | Première session d'hygiène | 0 | todo | P0-07 |
+| D-01 | Design system « Liquid Glass » | 4 | todo | P0-01 |
