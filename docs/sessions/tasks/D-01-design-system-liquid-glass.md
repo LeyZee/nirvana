@@ -1,6 +1,6 @@
 # D-01 Design system « Liquid Glass »
 
-Statut : todo
+Statut : in_progress
 Phase : 4 (à livrer avant le premier écran du dashboard, après P0-07)
 Dépend de : P0-01
 Branche : task/d-01-design-system
@@ -28,3 +28,9 @@ Donner à Nirvana une identité visuelle moderne et épurée inspirée du Liquid
 Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent en phase 4 et consomment ce design.
 
 ## Notes de session
+
+2026-10-16 (Opus 5.5, à la demande de Charles, avant P0-01) :
+- Questions du brief tranchées par Charles : identité propre, néon rouge sur nuit, en code. Consigné dans `docs/design/README.md`.
+- Le design system sert aussi le popup de l'extension : tokens et classes dans `packages/design-system` au lieu de `apps/web/src/styles/` (ADR 0015 proposed). `apps/web` importera `tokens.css` et `theme.css` depuis le package.
+- Fait : tokens (Nuit, Jour), pont Tailwind v4, classes de composants (verre, boutons, segments, interrupteur, barre d'onglets, carte de conversation, pastilles d'état, bulles, panneau de brouillon, champ, faits, Island, popup), aides d'animation, test de contraste AA dans les deux thèmes, guide.
+- Reste, bloqué par P0-01 : restyler les composants shadcn/ui, `apps/web/src/routes/_playground.tsx`, test axe-core en CI. `pnpm check` non exécuté (pas de `pnpm install` avant P0-01) ; typecheck strict et tests (27) vérifiés à part.
