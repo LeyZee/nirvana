@@ -15,9 +15,8 @@ coverage/
 .env.*
 !.env.example
 
-# Données réelles : jamais dans le dépôt
+# Données réelles : jamais dans le dépôt (les enregistrements FakeReveal anonymisés, eux, sont suivis)
 personas/**/v[1-9]*.yaml
-recordings/
 *.har
 *.sql.gz
 *.age

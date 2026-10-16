@@ -6,10 +6,12 @@
 - Pas de `any`. Pas de `as X` pour contourner le typage ; un `as const` ou un garde de type (`is`) sont les seules formes acceptées. `unknown` aux frontières, puis Zod.
 - Pas de classes pour le domaine sauf machines d'état et erreurs. Fonctions pures + types. Les services d'infra peuvent être des classes ou des fabriques `createX(deps)`.
 - Injection de dépendances **manuelle** : chaque module exporte `createXModule(deps)` ; la composition se fait dans `apps/api/src/composition-root.ts`. Pas de conteneur DI.
-- Erreurs : une classe de base `DomainError` (code, message, `cause`), des sous-classes par module (`ConversationNotFound`, `SendRejected`), jamais de `throw "string"`. Les résultats attendus (validation, refus) sont des valeurs (`Result<T, E>` via `neverthrow` ou un type maison dans `packages/contracts`), les imprévus sont des exceptions.
-- Identifiants : UUID v7 (`uuidv7`), générés par l'application, typés par marque (`type ConversationId = Brand<string, 'ConversationId'>`).
+- Erreurs : une classe de base `DomainError` (code, message, `cause`), des sous-classes par module (`ConversationNotFound`, `SendRejected`), jamais de `throw "string"`. Les résultats attendus (validation, refus) sont des valeurs : un type `Result<T, E>` maison dans `packages/contracts` (pas de `neverthrow`), les imprévus sont des exceptions.
+- Identifiants : UUID v7 (`v7()` de la bibliothèque `uuid`), générés par l'application, typés par marque (`type ConversationId = Brand<string, 'ConversationId'>`).
 - Argent : entiers en centimes + code devise ISO (`{ amountMinor: number; currency: 'EUR' }`). Jamais de nombre à virgule.
 - Dates : `Date` en mémoire, `timestamptz` en base, ISO 8601 UTC sur le fil. Voir `operations.md` pour les fuseaux.
+- Pas d'`enum` TypeScript : des unions de littéraux dérivées de `z.enum` (ESLint le refuse).
+- Nommage des données : camelCase dans le JSON des API et dans les colonnes `jsonb`, snake_case pour les tables et colonnes SQL ; Drizzle fait la correspondance.
 
 ## Organisation
 
@@ -22,10 +24,11 @@
 ## Style
 
 - Prettier décide de la forme (`.prettierrc`). Pas de débat.
-- ESLint : `typescript-eslint` strict + `eslint-plugin-boundaries` + `eslint-plugin-import` (ordre, pas de cycles). Une règle désactivée localement demande un commentaire `// eslint-disable-next-line <règle> -- <raison>`. Les règles de frontière ne se désactivent jamais.
+- ESLint : `typescript-eslint` strict + `eslint-plugin-boundaries` (règles générées depuis `MODULE_DEPENDENCIES` dans `eslint.config.js`, voir `docs/architecture/modules.md`) + `eslint-plugin-import-x` (ordre, pas de cycles). Une règle désactivée localement demande un commentaire `// eslint-disable-next-line <règle> -- <raison>`. Les règles de frontière ne se désactivent jamais.
 - Noms : anglais, explicites, pas d'abréviation sauf `id`, `db`, `llm`. Booléens en `is/has/can`. Fonctions en verbe. Événements au passé (`MessageReceived`), commandes à l'impératif (`IngestMessage`).
-- Commentaires : pourquoi, pas quoi. Un `TODO` porte un identifiant de fiche (`// TODO(P2-03): …`) sinon il est refusé.
+- Commentaires : pourquoi, pas quoi. Un `TODO` porte un identifiant de fiche (`// TODO(P2-03): …`), sinon `scripts/check-repo.mjs` le refuse dans `pnpm check`.
 - Logs : `logger.info({ conversationId, jobId }, 'draft created')`. Objet d'abord, message court en anglais, jamais de contenu de message.
+- Corrélation : chaque requête HTTP porte un `x-request-id` (généré s'il manque) ; il devient `correlationId` dans les jobs et les appels LLM qu'elle déclenche et figure dans chaque ligne de log (`requestId`, `correlationId`). Détail dans `docs/architecture/operations.md`.
 
 ## Asynchrone et robustesse
 

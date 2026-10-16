@@ -44,6 +44,13 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Interrupteur d'arrêt | `kill_switch` | Arrêt global, par créatrice ou par conversation. |
 | Chatteur | `operator` | Humain qui chatte ou supervise (vocabulaire Imperium : chatteur). |
 | Fiche de tâche | `task card` | Une unité de travail pour une session (`docs/sessions/tasks/`). |
+| Fiche proposée | `proposed` | Fiche écrite par une session, sans ID, en attente de l'accord de Charles. |
+| Bulle | `bubble` | Un message envoyé d'un coup ; un draft est une liste de bulles. |
+| Projection | `projection` | Colonne d'état dérivée du journal d'événements, reconstructible (ADR 0007). |
+| Outbox | `domain_events` | Table append-only des événements qu'un autre module consomme (ex. `draft_created` lu par `supervision`). |
+| Racine de composition | `composition root` | `apps/api/src/composition-root.ts` : le seul endroit qui construit les modules et les branche entre eux. |
+| Battement | `heartbeat` | Ligne écrite par le worker toutes les 30 s (`worker_heartbeats`), lue par `/ready`. |
+| Identifiant de corrélation | `correlationId` | Le `x-request-id` d'une requête, propagé aux jobs, appels LLM et logs qu'elle déclenche. |
 
 ## Noms à ne pas utiliser
 

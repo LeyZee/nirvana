@@ -20,7 +20,7 @@ Transversal : sessions d'hygiène `H-xx` toutes les ~10 tâches ; revue du modè
 
 - Accès créatrice Reveal (phase 1).
 - Lecture des CGU Reveal sur l'automatisation (phase 1, décision B/C).
-- Création du dépôt GitHub privé `LeyZee/nirvana` et rotation des secrets Imperium (maintenant).
+- Dépôt GitHub privé `LeyZee/nirvana` créé le 16/10/2026 ; rotation des secrets Imperium en attente de Charles.
 - Clés API xAI, Mistral (phase 3).
 - Persona réelle de Messalina hors dépôt (phase 3).
 - Compte Neon, VPS Hetzner, Cloudflare (phase 2).

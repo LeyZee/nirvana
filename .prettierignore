@@ -4,5 +4,5 @@ node_modules
 .scratch
 pnpm-lock.yaml
 packages/db/migrations/*.sql
-brainstorm/
-Contexte et cahier des charges — Agent IA Reveal.md
+# Markdown is written by people and agents; no formatter rewrites it.
+*.md

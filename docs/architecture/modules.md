@@ -15,7 +15,7 @@ apps/api/src/modules/<name>/
 ```
 
 - `domain/` importe : `packages/contracts`, d'autres fichiers de `domain/`. Rien d'autre. Pas de `node:` non plus sauf `node:crypto` pour les UUID.
-- `application/` importe : `domain/`, les **ports** (interfaces) définis dans `domain/` ou `application/ports.ts`, `packages/contracts`, l'`index.ts` d'autres modules autorisés.
+- `application/` importe : `domain/`, les **ports** (interfaces) définis dans `domain/ports.ts`, `packages/contracts`, l'`index.ts` des modules autorisés par le graphe ci-dessous (et seulement ceux-là : ESLint génère la règle depuis `MODULE_DEPENDENCIES`).
 - `infra/` importe : tout ce qui précède, `packages/db`, `packages/llm`, Fastify, Graphile, clients HTTP.
 - Un autre module n'importe que `modules/<name>` (son `index.ts`). Jamais `modules/<name>/infra/...`.
 
@@ -23,7 +23,7 @@ apps/api/src/modules/<name>/
 
 ```
 connectors ──▶ conversations (événements entrants : IngestMessage, SessionStateChanged, SaleDetected)
-conversations ──▶ fans, persona, agent, supervision, connectors (port d'envoi), media
+conversations ──▶ fans, persona, agent, media
 agent ──▶ fans, persona, media, packages/llm
 supervision ──▶ conversations, fans
 media ──▶ packages/llm
@@ -31,6 +31,11 @@ sales ──▶ conversations, media            (phase 6)
 scripts ──▶ sales, media, conversations   (phase 6)
 fans, persona ──▶ (feuilles)
 ```
+
+Ce graphe est **sans cycle**, et `import-x/no-cycle` le vérifie. Deux inversions le rendent possible :
+
+- **Envoi** : `conversations` ne dépend pas de `connectors`. Il définit le port `OutboundSender` (`sendText`, `sendMedia`, `verifySent`) dans `conversations/domain/ports.ts` ; `connectors` l'implémente et le composition root l'injecte dans `createConversationsModule(deps)`.
+- **Supervision** : `conversations` ne dépend pas de `supervision`. `supervision` apprend qu'un draft existe par l'événement `draft_created` (outbox), et agit sur les conversations par leur `index.ts` (`approveDraft`, `takeover`, …).
 
 Un cycle est une erreur de conception, pas un cas à autoriser. Si `fans` a besoin de `conversations`, c'est que la responsabilité est au mauvais endroit, ou qu'il faut un événement.
 
@@ -46,9 +51,10 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 
 ## Application des règles
 
-- `eslint.config.js` : `boundaries/element-types` et `boundaries/no-private` avec les éléments `module-domain`, `module-application`, `module-infra`, `module-index`, `package`. Une violation = erreur de lint = CI rouge.
+- `eslint.config.js` : la constante `MODULE_DEPENDENCIES` reproduit le graphe ci-dessus et **génère** les règles `boundaries/element-types` (un module n'importe que l'`index.ts` des modules listés) ; `boundaries/no-private` interdit d'entrer dans un module autrement que par son `index.ts` ; `boundaries/external` interdit l'I/O dans `domain/` et les SDK LLM hors `packages/llm`. Éléments : `module-domain`, `module-application`, `module-infra`, `module-index`, `api-root`, `api-scripts`, `api-tests`, `api-test`, `package`, `web`, `extension`, `evals`. Une violation = erreur de lint = CI rouge.
+- Modifier le graphe = modifier `MODULE_DEPENDENCIES` **et** ce document **et** le README des modules concernés, dans la même PR.
 - `pnpm lint` fait partie de `pnpm check`.
-- Un test `apps/api/src/__tests__/boundaries.test.ts` vérifie que la config boundaries refuse bien un import interdit connu (pour ne pas désactiver la règle par accident).
+- Un test `apps/api/src/__tests__/boundaries.test.ts` lint des fixtures permanentes (`apps/api/src/__tests__/fixtures/boundaries/`, incluses dans le tsconfig) et vérifie le `ruleId` exact : `conversations` → `fans/infra/...` refusé, `fans` → `conversations/index.ts` refusé (hors graphe), `conversations` → `fans/index.ts` accepté.
 
 ## Modules et phases
 

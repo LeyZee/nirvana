@@ -1,6 +1,6 @@
 # Schéma de la persona
 
-Schéma Zod : `packages/contracts/src/persona.ts` (`PersonaSchema`). Fichier : `personas/<creator>/vX.Y.Z.yaml`. Exemple vide : `personas/messalina/v0.yaml`. ADR 0010.
+Schéma Zod : `packages/contracts/src/persona.ts` (`PersonaSchema`). Fichier : `personas/<creator>/vX.Y.Z.yaml`. Exemple vide : `personas/messalina/v0.0.0.yaml`. ADR 0010.
 
 | Section | Champs | Rôle |
 |---|---|---|
@@ -18,4 +18,4 @@ Schéma Zod : `packages/contracts/src/persona.ts` (`PersonaSchema`). Fichier : `
 Règles :
 - Tout champ texte est en français.
 - `boundaries.disgusts` et `hard_limits` sont **aussi** chargés par `guards.ts` : ce sont des données de sécurité, pas seulement du style.
-- Aucune donnée réelle dans le dépôt public. `v0.yaml` contient des placeholders `<à remplir>`.
+- Aucune donnée réelle dans le dépôt public. `v0.0.0.yaml` contient des placeholders `<à remplir>`.

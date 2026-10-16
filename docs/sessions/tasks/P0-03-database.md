@@ -9,15 +9,16 @@ Branche : task/p0-03-database
 `packages/db` fournit le schéma Drizzle du noyau, les migrations, la connexion, `withTenant`, le chiffrement des secrets, et la preuve par test que la RLS isole les créatrices.
 
 ## Contexte à lire
-`docs/architecture/data-model.md`, ADR 0005, 0007, 0011, `docs/conventions/security.md` §2 et §3, `docs/conventions/testing.md` (Testcontainers).
+`docs/architecture/data-model.md` (dont les sections Better Auth, RLS et Système), ADR 0005, 0007, 0011, `docs/conventions/security.md` §2 et §3, `docs/conventions/testing.md` (Testcontainers), `docker-compose.yml` et `packages/db/docker/init.sql` (Postgres de dev, rôles).
 
 ## À faire
-- `src/schema/` : `creators`, `platform_accounts`, `users` (compatible Better Auth, à confirmer avec sa doc), `audit_log`, `fans`, `fan_facts`, `fan_summaries`, `conversations`, `messages`, `conversation_events`, `drafts`, `persona_versions`, `media_assets`, `media_descriptions`, `media_sends`, `llm_calls`, `notifications`, `kill_switches`. Colonnes et contraintes de `data-model.md`, enums en `text` + `check`.
-- Migrations : `drizzle-kit generate`, puis relecture et ajout manuel dans la même migration : `ENABLE ROW LEVEL SECURITY` + politiques sur toute table `creator_id`, rôles `nirvana_app` (non superuser, `BYPASSRLS` absent) et `nirvana_admin`, index de départ.
+- `src/schema/` : `creators`, `platform_accounts`, `audit_log`, `fans` (avec `platform_meta` jsonb), `fan_facts`, `fan_summaries`, `conversations`, `messages`, `conversation_events`, `domain_events`, `drafts`, `persona_versions`, `media_assets`, `media_descriptions`, `media_sends`, `llm_calls`, `notifications`, `kill_switches`, `worker_heartbeats`. Colonnes et contraintes de `data-model.md`, enums en `text` + `check`, colonnes SQL en snake_case et clés `jsonb` en camelCase.
+- `src/schema/auth.ts` : les tables Better Auth (`user`, `session`, `account`, `verification`) générées par sa CLI (`npx @better-auth/cli generate`), plus les champs `role` et `creator_ids` sur `user` ; hors RLS, documentées dans `data-model.md`.
+- Migrations : `drizzle-kit generate`, puis relecture et ajout manuel dans la même migration : `ENABLE` et `FORCE ROW LEVEL SECURITY` + politiques `USING` et `WITH CHECK` (`creator_id = NULLIF(current_setting('app.creator_id', true), '')::uuid`) sur toute table `creator_id` ; tables possédées par `nirvana_admin`, `nirvana_app` (`NOBYPASSRLS`) n'a que des droits DML ; liste des tables hors RLS telle que `data-model.md` la fixe ; index de départ (dont l'unique `(platform_account_id, platform_message_id)` sur `messages`). Les rôles sont créés par `packages/db/docker/init.sql` en dev et par le runbook en prod.
 - `src/client.ts` : pool `pg`, `db` Drizzle, `withTenant(creatorId, fn)` (transaction + `SET LOCAL app.creator_id`), `withAdmin(fn)` pour les `*Unscoped`.
 - `src/crypto.ts` : `encryptSecret` / `decryptSecret` AES-256-GCM avec `SESSION_ENCRYPTION_KEYS` versionnées (format `v2:…,v1:…`), testés.
-- `src/test/` : helper Testcontainers (`startTestDb()`), applique les migrations, fournit un `db` par test avec rollback.
-- Scripts : `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:studio` (dev seulement).
+- `src/test/` : helper Testcontainers (`startTestDb()`), applique les migrations, une base par fichier de test, un `db` par test avec rollback (`testing.md`).
+- Scripts : `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:studio` (dev seulement), déjà déclarés à la racine. Dev local : `docker compose up -d` (Postgres 16, `init.sql`), `DATABASE_URL` de `.env.example`.
 
 ## Critères d'acceptation
 - Test d'intégration : deux créatrices, des lignes dans chaque table ; `withTenant(A)` ne voit jamais les lignes de B ; un `select` hors `withTenant` sur `nirvana_app` retourne zéro ligne (pas d'erreur silencieuse : le test vérifie aussi `current_setting` absent → politique refuse).

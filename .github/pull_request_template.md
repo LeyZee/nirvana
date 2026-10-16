@@ -12,6 +12,6 @@
 - [ ] Tests ajoutés pour le comportement nouveau (unit / intégration / contrat / éval selon le cas)
 - [ ] Docs mises à jour (README du module, architecture, glossaire, ADR si décision)
 - [ ] Fiche de tâche et `docs/sessions/LOG.md` mis à jour
-- [ ] `.scratch/` vide, `git status` propre, aucun fichier parasite
+- [ ] mes fichiers de `.scratch/` supprimés, `git status` propre, aucun fichier parasite
 - [ ] Aucun secret, aucune donnée réelle (fan, persona, session)
 - [ ] Sécurité : entrées validées, `withTenant` sur chaque accès base, contenu fan traité comme non fiable

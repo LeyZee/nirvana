@@ -2,7 +2,7 @@
 
 **Rôle.** Ingestion idempotente des messages, machine d'état de la conversation, journal d'événements, files par conversation, drafts et envoi vérifié.
 
-**Peut dépendre de.** fans, persona, agent, supervision, connectors (port)
+**Peut dépendre de.** fans, persona, agent, media. L'envoi passe par le port `OutboundSender` (`domain/ports.ts`), implémenté par `connectors` ; `supervision` réagit aux événements de l'outbox `domain_events` (`draft_created`) et n'est jamais importé ici.
 
 **Règles propres.** Propriétaire des tables `conversations`, `messages`, `conversation_events`, `drafts`.
 

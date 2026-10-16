@@ -1,8 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
-    ".": { "entry": ["eslint.config.js"], "project": ["*.{js,ts}"] },
-    "apps/api": { "entry": ["src/index.ts", "src/worker.ts", "src/scripts/*.ts", "test/**/*.ts"], "project": ["src/**/*.ts", "test/**/*.ts"] },
+    ".": { "entry": ["eslint.config.js", "scripts/*.mjs"], "project": ["*.{js,ts}", "scripts/**/*.mjs"] },
+    "apps/api": { "entry": ["src/index.ts", "src/worker.ts", "src/scripts/*.ts", "src/__tests__/**/*.ts", "test/**/*.ts"], "project": ["src/**/*.ts", "test/**/*.ts"] },
     "apps/web": { "entry": ["src/main.tsx"], "project": ["src/**/*.{ts,tsx}"] },
     "apps/extension": { "entry": ["src/entrypoints/*.ts", "src/entrypoints/**/index.ts"], "project": ["src/**/*.ts"] },
     "packages/*": { "entry": ["src/index.ts"], "project": ["src/**/*.ts"] },

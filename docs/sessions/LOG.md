@@ -1,6 +1,16 @@
 # Journal des sessions
 
-Append-only. Une entrée par session, en bas. Format dans `docs/sessions/README.md`.
+Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entrée dans son propre fichier `docs/sessions/log/<date>-<id>.md` (format dans `docs/sessions/README.md`) et ajoute une ligne au tableau ci-dessous ; les entrées plus anciennes restent en bas de ce fichier, figées.
+
+## Index
+
+| Date | Fiche | Statut | Entrée |
+|---|---|---|---|
+| 2026-10-16 | Revue des fondations (Fable) | done | `log/2026-10-16-fondations-revue.md` |
+
+## Incidents (liste vivante)
+
+_Aucun pour l'instant._
 
 ## Candidats à suppression (liste vivante)
 

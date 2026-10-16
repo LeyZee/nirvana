@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 3 * * *" # nightly: e2e and evals smoke
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -11,11 +14,13 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read # gitleaks-action lists the PR commits
 
 jobs:
   secrets:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -24,24 +29,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   check:
-    name: Typecheck, lint, format, knip
+    name: Typecheck, lint, format, knip, repo
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version-file: .nvmrc, cache: pnpm }
+        with: { node-version-file: .nvmrc } # P0-01: add `cache: pnpm` once pnpm-lock.yaml exists
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
 
   test:
     name: Tests (unit + integration)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version-file: .nvmrc, cache: pnpm }
+        with: { node-version-file: .nvmrc } # P0-01: add `cache: pnpm` once pnpm-lock.yaml exists
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm test:integration
@@ -51,22 +58,42 @@ jobs:
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version-file: .nvmrc, cache: pnpm }
+        with: { node-version-file: .nvmrc } # P0-01: add `cache: pnpm` once pnpm-lock.yaml exists
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high
 
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [check, test]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version-file: .nvmrc, cache: pnpm }
+        with: { node-version-file: .nvmrc } # P0-01: add `cache: pnpm` once pnpm-lock.yaml exists
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  nightly:
+    name: Nightly e2e and evals smoke
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc } # P0-01: add `cache: pnpm` once pnpm-lock.yaml exists
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:e2e
+      - run: pnpm evals
+        env:
+          LLM_XAI_API_KEY: ${{ secrets.LLM_XAI_API_KEY }}
+          LLM_MISTRAL_API_KEY: ${{ secrets.LLM_MISTRAL_API_KEY }}

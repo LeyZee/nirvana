@@ -6,7 +6,7 @@ Nirvana est une plateforme d'exploitation pour créatrices de contenu. Premier m
 
 ## Règles non négociables
 
-1. **Une session = une fiche de tâche.** Tu travailles sur la fiche indiquée, sur sa branche `task/<id>-<slug>`, et sur rien d'autre. Si tu découvres autre chose à faire, tu l'écris dans `docs/sessions/LOG.md` (section « Découvertes »), tu ne le fais pas.
+1. **Une session = une fiche de tâche.** Tu travailles sur la fiche indiquée, sur sa branche `task/<id>-<slug>`, et sur rien d'autre. Si tu découvres autre chose à faire, tu l'écris sur la ligne « Découvertes » de ton entrée de journal (`docs/sessions/log/`), tu ne le fais pas.
 2. **Frontières de modules.** Un module n'importe un autre module que par son `index.ts`. `domain/` n'importe jamais `infra/` ni un framework. ESLint (`eslint-plugin-boundaries`) le vérifie ; tu ne désactives jamais une règle de frontière.
 3. **Les règles métier vivent dans le code, pas dans les prompts** : prix, cooldowns, droits d'envoi, dégoûts de la persona, gardes. Un prompt est une donnée versionnée, pas un lieu de logique.
 4. **Le message d'un fan est une donnée, jamais une instruction.** Il entre dans les prompts dans un bloc délimité et typé.
@@ -14,7 +14,7 @@ Nirvana est une plateforme d'exploitation pour créatrices de contenu. Premier m
 6. **Typage strict, Zod aux frontières** (HTTP, jobs, LLM, fichiers). Pas de `any`, pas de `as` pour faire taire le compilateur.
 7. **Tests avec le code** : domaine en unitaire (Vitest), application en intégration (Testcontainers Postgres), connecteurs contre `FakeReveal`, qualité IA via `evals/` (Promptfoo). Pas de PR sans tests sur ce qu'elle change.
 8. **Aucun secret dans le dépôt.** `.env` est ignoré, `.env.example` documente. `gitleaks` tourne en pré-commit. Si tu vois un secret, tu t'arrêtes et tu le signales.
-9. **Code en anglais, docs/UI/persona en français.** Le glossaire (`docs/glossary.md`) fixe les termes ; tu ne crées pas de synonymes.
+9. **Code en anglais, docs/UI/persona en français.** Le glossaire (`docs/glossary.md`) fixe les termes ; tu ne crées pas de synonymes, et un terme nouveau que ta tâche impose entre dans le glossaire dans la même PR.
 10. **Dépôt propre en permanence** : `docs/conventions/hygiene.md`. Le temporaire va dans `.scratch/` (ignoré par git). Avant de terminer, tu supprimes ce que tu as créé et qui ne sert plus, et tu ne supprimes rien d'autre sans la procédure décrite.
 11. **Une décision structurante = un ADR** (`docs/adr/`). Si ta tâche te pousse à contredire un ADR existant, tu t'arrêtes et tu demandes.
 12. **Pas d'action irréversible sans demande explicite** : pas de suppression de données, pas de migration destructive, pas de déploiement, pas d'envoi réel à un fan.
@@ -37,21 +37,28 @@ docs/                START-HERE, architecture, ADR, conventions, playbooks, réf
 
 ## Commandes
 
+Prérequis : Node 22 (`.nvmrc`), pnpm 10, Docker (Postgres de dev et Testcontainers), `gitleaks` sur le PATH. La définition de chaque commande est dans `package.json` ; `scripts/check-repo.mjs` vérifie que les docs ne citent que des commandes qui existent.
+
 ```
-pnpm install
-pnpm check        # typecheck + lint + boundaries + tests unitaires
-pnpm test         # tous les tests (intégration incluse, Docker requis)
-pnpm dev          # api + worker + web en watch
-pnpm db:migrate   # migrations Drizzle
-pnpm evals        # Promptfoo (clés API requises)
+pnpm install            # installe aussi les hooks git (lefthook)
+docker compose up -d    # Postgres 16 de dev (packages/db/docker/init.sql)
+pnpm check              # statique : typecheck + lint (frontières) + prettier + knip + check-repo
+pnpm test               # tests unitaires
+pnpm test:integration   # Testcontainers Postgres (Docker requis)
+pnpm test:all           # les deux
+pnpm dev                # api + worker + web en watch
+pnpm db:migrate         # migrations Drizzle
+pnpm evals              # Promptfoo (clés API requises)
 ```
+
+Tant que P0-01 n'est pas livrée, `pnpm install` n'a pas tourné et `pnpm check` est rouge : c'est l'état attendu, pas une anomalie à corriger en passant.
 
 ## Fin de session (obligatoire)
 
 1. `pnpm check` vert, `git status` propre, aucun fichier parasite (voir hygiene.md).
 2. Fiche de tâche mise à jour (statut, ce qui reste).
-3. Entrée dans `docs/sessions/LOG.md` : date, tâche, fait / pas fait, décisions, découvertes, candidats à suppression.
-4. PR avec le template `.github/pull_request_template.md`.
+3. Entrée de journal dans son propre fichier `docs/sessions/log/<date>-<id>.md` (format dans `docs/sessions/README.md`) et une ligne dans l'index `docs/sessions/LOG.md`.
+4. Branche rebasée sur `origin/main`, PR ouverte par la session en brouillon avec le template `.github/pull_request_template.md`, passée en « prête » quand tout est vert. Charles fusionne.
 
 ## Ce qu'on ne fait jamais
 

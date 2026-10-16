@@ -1,10 +1,10 @@
 # Module `supervision`
 
-**Rôle.** Approbation des drafts, prise en main humaine, notifications (dashboard SSE, Telegram, push), interrupteurs d'arrêt, journal des décisions.
+**Rôle.** Approbation des drafts, prise en main humaine, notifications (dashboard SSE, Web Push), interrupteurs d'arrêt, journal des décisions.
 
 **Peut dépendre de.** conversations, fans
 
-**Règles propres.** Propriétaire de `approvals`, `notifications`, `kill_switches`.
+**Règles propres.** Propriétaire de `notifications` et `kill_switches`. Les décisions d'approbation sont des événements du journal des conversations (`draft_approved`, `draft_rejected`), pas une table. Réagit aux événements de l'outbox `domain_events` (`draft_created`) au lieu d'être appelé par `conversations`.
 
 ## Structure
 

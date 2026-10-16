@@ -6,14 +6,16 @@ Le projet avance par sessions. Une session = un agent (Claude Opus 5.5 dans Clau
 
 ### 1. Démarrage (10 min)
 
-- Lire `CLAUDE.md`, `docs/00-START-HERE.md`, ta fiche dans `docs/sessions/tasks/`, les docs qu'elle liste, et les 5 dernières entrées de `docs/sessions/LOG.md`.
-- Vérifier l'état : `git status` propre sur `main` à jour, `pnpm install`, `pnpm check` vert. Si ce n'est pas vert avant de commencer, tu le notes dans le LOG et tu t'arrêtes : ce n'est pas à toi de réparer en passant, sauf si ta fiche le dit.
-- Créer la branche : `task/<id>-<slug>` (ex. `task/P0-03-api-bootstrap`).
-- Passer la fiche en `in_progress` (champ `status` en tête de fiche) et commiter ce seul changement.
+- Lire `CLAUDE.md`, `docs/00-START-HERE.md`, ta fiche dans `docs/sessions/tasks/`, les docs qu'elle liste, et les 5 dernières entrées de journal (`docs/sessions/LOG.md` les indexe, le détail est dans `docs/sessions/log/`).
+- Prérequis sur la machine : Node 22 (`.nvmrc`), pnpm 10, Docker, `gitleaks` sur le PATH.
+- Vérifier l'état : `git status` propre sur `main` à jour (`git fetch origin main`), `pnpm install` (installe les hooks), `docker compose up -d`, `pnpm check` vert. Si ce n'est pas vert avant de commencer, tu le notes dans ton entrée de journal et tu t'arrêtes : ce n'est pas à toi de réparer en passant, sauf si ta fiche le dit. Exception connue : avant P0-01, `pnpm check` est rouge par construction.
+- Créer la branche, en minuscules : `task/<id>-<slug>` (ex. `task/p0-03-database`, le nom exact est dans la fiche).
+- Passer la fiche en `in_progress` (champ `Statut :` en tête de fiche, et la ligne de l'index `docs/sessions/tasks/README.md`) et commiter ce seul changement.
 
 ### 2. Pendant
 
-- **Périmètre** : la fiche, rien que la fiche. Ce qui dépasse va dans le LOG (« Découvertes ») ou dans une nouvelle fiche proposée (`docs/sessions/tasks/PROPOSED-<slug>.md`), jamais dans la PR.
+- **Périmètre** : la fiche, rien que la fiche. Ce qui dépasse va dans ton entrée de journal (« Découvertes ») ou dans une nouvelle fiche en statut `proposed` (`docs/sessions/tasks/PROPOSED-<slug>.md`, sans ID tant que Charles ne l'a pas acceptée), jamais dans la PR.
+- **Sessions en parallèle** : d'autres fiches avancent peut-être en même temps sur d'autres branches. Avant la PR : `git fetch origin main && git rebase origin/main`, jamais de commit de fusion. Deux sessions ne prennent jamais la même fiche : Charles les attribue.
 - **Ordre** : contrats (Zod) → domaine (pur, testé) → application → infra → UI. On écrit le test du domaine avant ou avec le code.
 - **Frontières** : `pnpm lint` à chaque étape ; une erreur de frontière se résout en déplaçant le code, pas en désactivant la règle.
 - **Décision structurante** (nouvelle dépendance de poids, nouveau pattern, changement de contrat partagé, choix qui engage plusieurs modules) : tu écris un ADR en statut `proposed` et tu t'arrêtes là-dessus en le signalant dans la PR. Tu n'implémentes pas une décision non acceptée si elle contredit un ADR existant.
@@ -26,13 +28,15 @@ Le projet avance par sessions. Une session = un agent (Claude Opus 5.5 dans Clau
 2. Nettoyage selon `docs/conventions/hygiene.md`.
 3. Docs touchées par la tâche mises à jour (architecture, README de module, playbook).
 4. Fiche mise à jour : `status: done` ou `blocked` avec ce qui manque, et la section « Résultat ».
-5. Entrée dans `docs/sessions/LOG.md` (format ci-dessous).
-6. PR ouverte avec le template, titre = id + titre de la fiche. La PR décrit « avant / après » en français simple.
+5. Entrée de journal (format ci-dessous) dans son propre fichier, plus une ligne dans l'index.
+6. Branche rebasée sur `origin/main`, PR ouverte par la session (en brouillon dès que ça compile, « prête » quand tout est vert) avec le template, titre = id + titre de la fiche. La PR décrit « avant / après » en français simple. Charles fusionne.
 
-## Format d'une entrée de LOG
+## Format d'une entrée de journal
+
+Une entrée = un fichier `docs/sessions/log/<AAAA-MM-JJ>-<id-en-minuscules>.md` (ex. `2026-10-20-p0-03.md`), jamais modifié par une autre session, plus une ligne dans le tableau d'index de `docs/sessions/LOG.md`. Un fichier par session : deux sessions en parallèle ne se marchent pas dessus.
 
 ```
-## 2026-10-20 — P0-03 Bootstrap de l'API — done
+# 2026-10-20 — P0-03 Bootstrap de l'API — done
 Fait : app factory Fastify, config Zod, runner Graphile, module connectors avec FakeConnector, ingestion idempotente.
 Pas fait : SSE (hors périmètre, voir P0-06).
 Décisions : ADR 0015 proposé (choix de la lib de config).
@@ -41,13 +45,21 @@ Candidats à suppression : aucun.
 Vérifié : pnpm check ✓, pnpm test ✓ (41 tests), hygiène ✓.
 ```
 
-Le LOG est append-only : on ajoute en bas, on ne réécrit pas les entrées précédentes.
+Les entrées sont figées : on n'en réécrit jamais une ancienne. `docs/sessions/LOG.md` porte en plus deux listes vivantes, « Candidats à suppression » et « Incidents », que toute session peut compléter d'une ligne.
 
 ## Rôles
 
 - **Charles** : décide, lance les sessions, valide les PR et les ADR. Donne l'accès aux comptes (Reveal, fournisseurs LLM).
 - **Fable 5.1 (architecte)** : écrit et met à jour les fiches, les ADR, l'architecture ; revoit les PR structurantes ; arbitre les candidats à suppression.
 - **Opus 5.5 (sessions)** : exécute les fiches dans ce protocole.
+
+## Lancer une session (pour Charles)
+
+Message de départ d'une session Opus 5.5 dans Claude Code, à la racine du dépôt :
+
+```
+Tu es une session de code Nirvana. Lis CLAUDE.md puis docs/00-START-HERE.md, puis ta fiche docs/sessions/tasks/<ID>-<slug>.md. Suis le protocole de docs/sessions/README.md du début à la fin. Fiche : <ID>.
+```
 
 ## Quand s'arrêter et demander
 
@@ -56,4 +68,4 @@ Le LOG est append-only : on ajoute en bas, on ne réécrit pas les entrées pré
 - Un ADR existant bloque la solution évidente.
 - Un secret, une donnée réelle ou un comportement suspect apparaît.
 
-Dans ces cas : on écrit la question dans la PR ou le LOG, on passe la fiche en `blocked`, et on s'arrête proprement (étape 3 complète quand même).
+Dans ces cas : on écrit la question dans la PR ou dans son entrée de journal, on passe la fiche en `blocked`, et on s'arrête proprement (étape 3 complète quand même).

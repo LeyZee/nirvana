@@ -10,7 +10,7 @@ Charles demande un nettoyage permanent : un dépôt aussi propre que possible, s
 ## Décision
 
 - La politique complète est `docs/conventions/hygiene.md` ; cette ADR en fixe les principes :
-  1. **Rien de temporaire hors `.scratch/`** (ignoré par git). Tout fichier de travail, script jetable, export, note intermédiaire y va. `.scratch/` est vidé en fin de session.
+  1. **Rien de temporaire hors `.scratch/`** (ignoré par git). Tout fichier de travail, script jetable, export, note intermédiaire y va. Chaque session y travaille dans un sous-dossier à son nom de fiche et supprime ses propres fichiers en fin de session ; `.scratch/inbox/` est réservé à Charles.
   2. **Chaque session nettoie ce qu'elle a créé** avant de terminer (checklist de `docs/sessions/README.md`).
   3. **Supprimer ce qu'on n'a pas créé suit une procédure** : liste protégée → recherche de références → historique git → commit séparé `chore(cleanup)` avec justification. En cas de doute, on inscrit le fichier dans « Candidats à suppression » du LOG et on ne supprime pas.
   4. **Liste protégée** (jamais supprimée sans décision de Charles) : ADR, LOG, fiches de tâches, migrations appliquées, personas, jeux de données d'évals et enregistrements FakeReveal, `reveal-api-observed.md`, `.github/`.

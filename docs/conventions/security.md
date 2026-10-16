@@ -38,16 +38,16 @@ Ce qu'on protège, par ordre d'importance : (1) les médias et conversations int
 
 ## 5. Chaîne d'approvisionnement
 
-- `pnpm` avec lockfile commité, `pnpm install --frozen-lockfile` en CI, scripts d'installation désactivés par défaut (comportement pnpm 10), `pnpm audit` en CI (échec sur critique), Renovate en PR hebdomadaires groupées.
+- `pnpm` avec lockfile commité, `pnpm install --frozen-lockfile` en CI, scripts d'installation désactivés par défaut (comportement pnpm 10), `pnpm audit --audit-level=high` en CI (échec sur high et critique), Dependabot en PR hebdomadaires groupées (`.github/dependabot.yml`).
 - Peu de dépendances, bien connues, maintenues. Toute dépendance nouvelle de poids = ligne dans la PR qui justifie.
-- Versions épinglées : Node (`.nvmrc`), images Docker par digest, modèles LLM par identifiant daté.
+- Versions épinglées : dépendances npm en versions exactes dans les `package.json` (pas de `^`, on monte avec `pnpm up`), Node (`.nvmrc`), images Docker par digest, modèles LLM par identifiant daté.
 - L'extension : `host_permissions` limitées au domaine Reveal, aucun code distant, build reproductible, pas de `eval`.
 
 ## 6. Application web et API
 
 - Validation Zod de toute entrée (corps, query, params, en-têtes utiles). Erreurs génériques vers le client, détail dans les logs.
 - Auth : Better Auth, cookies `HttpOnly; Secure; SameSite=Lax`, sessions courtes côté dashboard, passkeys encouragées. Rôles : `owner`, `operator`, `creator` ; RLS Postgres en second rideau.
-- CSRF : SameSite + en-tête custom sur les mutations. CORS : liste explicite. En-têtes de sécurité (`@fastify/helmet`). Limites de taille de corps. Rate limiting par IP et par utilisateur (`@fastify/rate-limit`).
+- CSRF : `SameSite=Lax` et vérification de l'en-tête `Origin` sur chaque mutation contre la liste des origines autorisées (pas de jeton CSRF séparé). CORS : la même liste explicite. En-têtes de sécurité (`@fastify/helmet`). Limites de taille de corps. Rate limiting par IP et par utilisateur (`@fastify/rate-limit`).
 - Uploads : type vérifié par contenu (magic bytes), taille bornée, stockage hors du système de fichiers de l'app, jamais servis depuis le même domaine que le dashboard.
 - Journal d'audit des actions d'administration (`audit_log` : qui, quoi, quand, depuis où), append-only.
 

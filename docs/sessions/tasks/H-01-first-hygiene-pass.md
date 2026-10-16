@@ -12,7 +12,7 @@ Appliquer `docs/conventions/hygiene.md` une première fois sur le dépôt réel,
 `docs/conventions/hygiene.md`, ADR 0014, `docs/sessions/LOG.md` (Candidats à suppression).
 
 ## À faire
-- `knip`, `pnpm audit`, taille du dépôt (`git count-objects -vH`), fichiers > 500 Ko.
+- `knip`, `pnpm audit`, `node scripts/check-repo.mjs --strict` (chemins cités, noms interdits, fichiers > 500 Ko, `TODO` sans fiche), taille du dépôt (`git count-objects -vH`).
 - Traiter chaque « Candidat à suppression » du LOG selon la procédure en 4 étapes (dont `demo.echo` si encore présent).
 - Vérifier que chaque fiche `done` a sa PR fusionnée et son entrée LOG ; que chaque doc d'architecture a une date de revue ; que les READMEs des modules reflètent le code.
 - Vérifier que les docs ne contredisent pas le code (ex. noms de jobs, routes) ; corriger les docs, pas le code, sauf bug.

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img alt="Phase" src="https://img.shields.io/badge/phase-0_·_fondations-8b5cf6?style=flat-square">
+  <img alt="Phase" src="https://img.shields.io/badge/phase-0_·_fondations-ff2a4d?style=flat-square">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white">
   <img alt="Node" src="https://img.shields.io/badge/Node-22_LTS-5fa04e?style=flat-square&logo=node.js&logoColor=white">
   <img alt="Fastify" src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white">
@@ -137,7 +137,10 @@ Projet Nirvana/
 ├── README.md                 ce fichier
 ├── CLAUDE.md                 règles pour les sessions de code
 ├── Contexte et cahier des charges — Agent IA Reveal.md   la demande d'origine
-├── brainstorm/               01 premier échange · 02 architecture et stack · 03 bilan et réponses
+├── brainstorm/               01 premier échange · 02 architecture et stack · 03 bilan · 04 revue des fondations
+├── docker-compose.yml        Postgres 16 de dev (rôles créés par packages/db/docker/init.sql)
+├── scripts/check-repo.mjs    vérifie les docs, les noms, les TODO, les commandes citées (dans pnpm check)
+├── .scratch/                 brouillons, ignoré par git (un sous-dossier par fiche, inbox/ pour Charles)
 ├── apps/
 │   ├── api/                  Fastify + Graphile Worker ; src/modules/<module>/{domain,application,infra,index.ts}
 │   ├── web/                  Vite · React 19 · Tailwind v4 · shadcn/ui · PWA
@@ -153,12 +156,12 @@ Projet Nirvana/
     ├── 00-START-HERE.md      quoi lire selon la tâche
     ├── architecture/         vue d'ensemble, modules, données, flux, connecteurs, IA, plateforme propre, menaces, ops
     ├── adr/                  14 décisions figées, 1 proposée
-    ├── conventions/          code, tests, git, sécurité, hygiène
+    ├── conventions/          code, API, tests, git, sécurité, hygiène
     ├── playbooks/            ajouter un module, un connecteur, un fournisseur ; persona ; évals
     ├── runbooks/             incident, secrets, restauration, session expirée
     ├── reference/            OnlyChat, projets antérieurs, vocabulaire média, schéma persona, API Reveal, fournisseurs
     ├── design/               brief et guide de l'interface (Liquid Glass)
-    ├── sessions/             protocole, LOG, fiches de tâches
+    ├── sessions/             protocole, index LOG.md + journal par session (log/), fiches de tâches
     └── roadmap.md
 ```
 
@@ -229,10 +232,11 @@ Les écrans n'existent pas encore, le design system oui : **Liquid Glass d'iOS 2
 
 ```bash
 pnpm install            # dépendances + hooks git (lefthook)
+docker compose up -d    # Postgres de dev
 cp .env.example .env    # puis remplir
 pnpm db:migrate
 pnpm dev                # api + worker + web
-pnpm check && pnpm test
+pnpm check && pnpm test     # statique + unitaire ; pnpm test:integration lance Testcontainers (Docker)
 ```
 
 ## Licence

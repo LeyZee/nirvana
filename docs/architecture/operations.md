@@ -1,20 +1,23 @@
 # Opérations : environnements, déploiement, données, observabilité, coûts
 
+Dernière revue : 2026-10-16.
+
 ## Environnements
 
 | Env | Où | Connecteur | LLM | Base |
 |---|---|---|---|---|
-| `dev` | laptop | `FakeConnector` / `FakeReveal` | clés de test, plafonds bas, ou mock | Postgres local (Docker) ou branche Neon |
+| `dev` | laptop | `FakeConnector` / `FakeReveal` | clés de test, plafonds bas, ou mock | Postgres local (`docker compose up -d`, rôles créés par `packages/db/docker/init.sql`) ou branche Neon |
 | `staging` | VPS, Compose séparé | `FakeReveal` par défaut ; compte Reveal de test si disponible | clés de test | branche Neon `staging` |
 | `prod` | VPS | `RevealApiConnector` | clés prod, plafonds | Neon `main` |
 
-Règle : le code ne connaît l'environnement que par la config (`packages/config`, schéma Zod, chargée au démarrage, validée, immuable). Aucune condition `if (env === 'prod')` dans le domaine.
+Règle : le code ne connaît l'environnement que par la config (`apps/api/src/config.ts` : schéma Zod sur `process.env`, chargé par le composition root au démarrage, validé, immuable, échec explicite si une variable manque). Un seul `.env.example` à la racine. Aucune condition `if (env === 'prod')` dans le domaine.
 
 ## Déploiement
 
 - Coolify sur le VPS : une application par processus (`api`, `worker`, `web` statique, `langfuse`), déploiement sur push de `main` après CI verte, image Docker construite par Coolify, rollback = redéployer l'image précédente.
 - **Migrations** : exécutées par un job dédié avant le démarrage de la nouvelle version, jamais au boot de l'API. Pattern expand/contract : on ajoute (colonne nullable, nouvelle table), on déploie le code qui écrit les deux, on migre les données, on retire l'ancien dans une version suivante. Jamais de `DROP`/`ALTER ... NOT NULL` dans la même version que le code qui en dépend.
-- **Arrêt gracieux des workers** : `SIGTERM` → on finit le job en cours (borné à 60 s), on ne prend plus de job, on sort. Graphile Worker gère les jobs orphelins par verrou expirant.
+- **Arrêt gracieux des workers** : `SIGTERM` → on ne prend plus de job, on finit le job en cours (borné à 25 s, sous le délai de 30 s avant `SIGKILL` de Docker/Coolify), on ferme le pool, on sort avec le code 0. Graphile Worker gère les jobs orphelins par verrou expirant.
+- **Image Docker de l'API/worker** : Node 22 + `ffmpeg` (extraction de frames et transcription pour `media`, phase 3).
 - **Santé** : `/health` (vivant), `/ready` (base joignable, migrations à jour, worker vu récemment). Coolify redémarre sur échec.
 
 ## Données
@@ -22,13 +25,13 @@ Règle : le code ne connaît l'environnement que par la config (`packages/config
 - Sauvegardes : Neon PITR (7 j minimum) + export logique quotidien chiffré vers un bucket (Hetzner Object Storage / R2), rétention 30 j. Médias : bucket avec versioning.
 - **Restauration testée** une fois par trimestre sur `staging` (fiche `H-xx`). Procédure dans `docs/runbooks/restore.md`.
 - Rétention et purge : jobs quotidiens (faits expirés, médias fan expirés, traces Langfuse > 30 j, `llm_calls` > 90 j agrégés).
-- Croissance : `conversation_events` et `messages` partitionnés par mois quand on dépasse ~10 M de lignes (pas avant). Index prévus dès le départ : `(conversation_id, created_at)`, `(platform_account_id, platform_message_id)` unique.
+- Croissance : `conversation_events` et `messages` partitionnés par mois quand on dépasse ~10 M de lignes (pas avant). Index de départ : liste dans `data-model.md` (§ Index de départ), qui fait foi.
 
 ## Observabilité
 
 Trois outils, pas plus :
 
-1. **pino** → stdout → logs Coolify (rétention courte). Structuré, avec `creator_id`, `conversation_id`, `job_id`, `trace_id`. Jamais de contenu de message, jamais de session.
+1. **pino** → stdout → logs Coolify (rétention courte). Structuré, avec `requestId` (= `correlationId`, propagation décrite dans `docs/conventions/coding.md` § Logs), `creatorId`, `conversationId`, `jobId`, `traceId`. Jamais de contenu de message, jamais de session.
 2. **Sentry** : erreurs et performance API/worker, avec release = SHA du commit.
 3. **Langfuse** : chaque appel LLM (rôle, modèle, version du prompt, tokens, coût, latence, lien vers la conversation), datasets d'éval, scores.
 

@@ -1,12 +1,12 @@
 # Fiches de tâches
 
-Une fiche = une session Opus 5.5 = une branche `task/<id>-<slug>` = une PR. Une session ne touche pas à ce qui n'est pas dans sa fiche ; si elle découvre un besoin, elle crée une nouvelle fiche `proposed` et le note dans le LOG.
+Une fiche = une session Opus 5.5 = une branche `task/<id>-<slug>` = une PR. Une session ne touche pas à ce qui n'est pas dans sa fiche ; si elle découvre un besoin, elle crée une nouvelle fiche `proposed` (`PROPOSED-<slug>.md`) et le note dans son entrée de journal.
 
 ## Format
 
 ```
 # <ID> <Titre>
-Statut : todo | in_progress | blocked | done
+Statut : proposed | todo | in_progress | blocked | done
 Phase : n
 Dépend de : <IDs>
 Branche : task/<id>-<slug>
@@ -21,6 +21,7 @@ Branche : task/<id>-<slug>
 
 ## Statuts
 
+- `proposed` : écrite par une session, pas encore acceptée par Charles ; pas d'ID, pas dans l'index.
 - `todo` : prête à être prise.
 - `in_progress` : une session y travaille (une seule à la fois ; le nom de la branche est dans la fiche).
 - `blocked` : attend Charles ou une autre fiche ; la raison est dans la fiche.

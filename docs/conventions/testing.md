@@ -4,24 +4,26 @@ Cinq couches, chacune avec un outil et un but. Une PR touche la couche qui corre
 
 | Couche | Outil | Quoi | Vitesse | Quand |
 |---|---|---|---|---|
-| Unitaire domaine | Vitest | Règles pures, machines d'état, politiques, gardes, schémas Zod | ms | `pnpm check`, à chaque commit |
-| Intégration | Vitest + Testcontainers (Postgres) | Repositories, RLS, jobs Graphile, cas d'usage de bout en bout sur une base réelle | s | `pnpm test`, CI |
+| Unitaire domaine | Vitest | Règles pures, machines d'état, politiques, gardes, schémas Zod | ms | `pnpm test`, à chaque push (hook) |
+| Intégration | Vitest + Testcontainers (Postgres) | Repositories, RLS, jobs Graphile, cas d'usage de bout en bout sur une base réelle | s | `pnpm test:integration` (Docker requis), CI |
 | Contrat connecteur | Vitest | La **même suite** tourne contre `FakeConnector`, `FakeReveal` (serveur mock) et, à la main, contre Reveal réel en lecture | s | CI (Fake) ; manuel (réel) |
-| E2E | Playwright | Dashboard (inbox copilote), extension contre `FakeReveal` | min | CI nightly + avant release |
-| Qualité IA | Promptfoo | Scénarios, rubriques, adversarial, régression de prompts et de modèles | min, coûte des tokens | Sous-ensemble en CI ; complet avant changement de persona/modèle |
+| E2E | Playwright | Dashboard (inbox copilote), extension contre `FakeReveal` | min | `pnpm test:e2e`, CI nightly + avant release |
+| Qualité IA | Promptfoo | Scénarios, rubriques, adversarial, régression de prompts et de modèles | min, coûte des tokens | `pnpm evals` : sous-ensemble en CI nightly ; complet avant changement de persona/modèle |
+
+`pnpm check` est statique (typecheck, lint, format, knip, `check-repo`) et ne lance aucun test ; `pnpm test:all` enchaîne unitaire et intégration.
 
 ## Règles
 
 - Les tests du domaine ne touchent ni base, ni réseau, ni horloge réelle (horloge injectée : `clock.now()`).
-- Les tests d'intégration créent leur schéma via les migrations réelles (pas de `sync`), dans une base jetable par fichier de test.
+- Les tests d'intégration créent leur schéma via les migrations réelles (pas de `sync`) : un conteneur Postgres par exécution (Testcontainers), une base par fichier de test, une transaction annulée à la fin de chaque test. Le Postgres de dev (`docker compose up -d`) sert au `pnpm dev`, pas aux tests.
 - Chaque bug corrigé commence par un test qui le reproduit.
-- Les fixtures sont inventées, courtes, nommées (`fixtures/fans.ts: theQuietFan`). Jamais de donnée réelle.
+- Les fixtures sont inventées, courtes, nommées (`fixtures/fans.ts: theQuietFan`), avec des fabriques (`makeFan(overrides)`) plutôt que des objets copiés. Jamais de donnée réelle.
 - Les tests de politique et de gardes couvrent systématiquement : le cas nominal, le cas limite, le cas adversarial.
 - Un test flaky est corrigé ou supprimé dans la journée, jamais mis en `retry`.
 
 ## FakeReveal
 
-Un serveur HTTP (Fastify, dans `apps/api/test/fake-reveal/`) qui imite l'API de Reveal telle qu'observée (phase 1), piloté par des scénarios (`scenarios/*.json` : messages qui arrivent à t+X, session qui expire, erreur 500, rate limit). C'est contre lui que tourne le connecteur en CI et en dev. Il est mis à jour à chaque changement observé de Reveal (voir `docs/reference/reveal-api-observed.md`), et ses enregistrements anonymisés sont protégés (hygiene.md).
+Un serveur HTTP (Fastify, dans `apps/api/test/fake-reveal/`) qui imite l'API de Reveal telle qu'observée (phase 1), piloté par des scénarios (`scenarios/*.json` : messages qui arrivent à t+X, session qui expire, erreur 500, rate limit). C'est contre lui que tourne le connecteur en CI et en dev. Il est mis à jour à chaque changement observé de Reveal (voir `docs/reference/reveal-api-observed.md`), et ses enregistrements anonymisés sont versionnés dans le dépôt (`apps/api/test/fake-reveal/recordings/`, sans secret ni donnée réelle) et protégés (hygiene.md).
 
 ## Évals (résumé, détail dans `docs/playbooks/write-an-eval.md`)
 

@@ -34,7 +34,7 @@ Version 1, 2026-10-16. À revoir à chaque phase. Format : actif → qui l'attaq
 | Session Reveal volée depuis la base ou les logs | A2 | Chiffrement applicatif, redaction des logs, jamais renvoyée par l'API | Détection de nouvelle IP côté Reveal, re-sync, rotation |
 | Extension malveillante clonée / endpoint de capture abusé | A2 | Jeton d'appareil, rate limit, origine vérifiée | Révocation, alerte nouvelle session |
 | Clé LLM fuitée (commit, log) | A4 | gitleaks, scanning GitHub, plafonds fournisseur | Rotation, une clé par rôle |
-| Dépendance npm compromise | tout | Lockfile, scripts désactivés, audit, Renovate revu | Réseau sortant du serveur limité aux hôtes nécessaires |
+| Dépendance npm compromise | tout | Lockfile, scripts désactivés, audit, Dependabot revu | Réseau sortant du serveur limité aux hôtes nécessaires |
 | Ex-chatteur avec un vieil accès | A1, A3 | Comptes nominatifs, révocation immédiate, pas d'accès partagé | Audit log, sessions courtes |
 | Serveur compromis | tout | Durcissement VPS (SSH clés, fail2ban, mises à jour auto), Docker non-root, secrets chiffrés | Runbook compromission, sauvegardes hors serveur |
 | Fuite via les traces LLM (Langfuse) | A1, A5 | Auto-hébergé derrière Access, rétention 30 j, pas de médias dans les traces | Accès nominatif |

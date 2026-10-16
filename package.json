@@ -2,6 +2,7 @@
   "name": "nirvana",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "description": "Agent de chatting pour créatrice de contenu : connecteurs de plateformes, moteur IA supervisé, mémoire fan, dashboard.",
   "packageManager": "pnpm@10.17.0",
   "engines": {
@@ -9,21 +10,28 @@
     "pnpm": ">=10"
   },
   "scripts": {
+    "prepare": "lefthook install",
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
-    "check": "turbo run typecheck lint && prettier --check . && knip",
+    "check": "turbo run typecheck lint && prettier --check . && knip && node scripts/check-repo.mjs",
+    "check:repo": "node scripts/check-repo.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "prettier --write .",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
     "test:e2e": "turbo run test:e2e",
+    "test:all": "pnpm test && pnpm test:integration",
     "db:generate": "pnpm --filter @nirvana/db generate",
     "db:migrate": "pnpm --filter @nirvana/db migrate",
     "db:studio": "pnpm --filter @nirvana/db studio",
+    "db:rebuild-projections": "pnpm --filter @nirvana/api rebuild-projections",
     "persona:validate": "pnpm --filter @nirvana/api persona:validate",
     "persona:load": "pnpm --filter @nirvana/api persona:load",
-    "evals": "pnpm --filter nirvana-evals run",
+    "ops:kill-switch": "pnpm --filter @nirvana/api ops:kill-switch",
+    "ops:revoke-sessions": "pnpm --filter @nirvana/api ops:revoke-sessions",
+    "ops:reencrypt-sessions": "pnpm --filter @nirvana/api ops:reencrypt-sessions",
+    "evals": "pnpm --filter @nirvana/evals run",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
   },
   "devDependencies": {

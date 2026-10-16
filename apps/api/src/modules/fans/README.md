@@ -4,7 +4,7 @@
 
 **Peut dépendre de.** aucun module métier (feuille)
 
-**Règles propres.** Propriétaire de `fans`, `fan_facts`, `fan_summaries`. Ne connaît pas les plateformes au-delà de `platform_account_id`.
+**Règles propres.** Propriétaire de `fans`, `fan_facts`, `fan_summaries`. Ne connaît pas les plateformes au-delà de `platform_account_id` ; `fans.platform_meta` garde les métadonnées brutes de la plateforme. Expose `upsertFanByPlatformId` (utilisé par `conversations.ingestMessage`, créé en P0-05) et `getFan`.
 
 ## Structure
 

@@ -11,7 +11,7 @@ Il faut pouvoir répondre à « pourquoi le bot a dit ça ? », rejouer l'histor
 
 - Table **`conversation_events`** append-only (`conversation_id`, `seq`, `type`, `payload`, `actor`, `correlation_id`), liste fermée de types dans `packages/contracts`.
 - **Toute** modification de `conversations`, `drafts`, `messages` passe par une fonction de `conversations/application` qui écrit l'événement correspondant **dans la même transaction**. Pas d'`UPDATE` nu.
-- Les tables d'état (`conversations.state`, `drafts.status`, `fans.kyc_state`, etc.) sont des **projections** : pratiques pour les requêtes, reconstructibles depuis le journal (`pnpm db:rebuild-projections <conversation_id>`, outil de P2).
+- Les tables d'état (`conversations.state`, `drafts.status`, `fans.kyc_state`, etc.) sont des **projections** : pratiques pour les requêtes, reconstructibles depuis le journal (`pnpm db:rebuild-projections <conversation_id>`, outil livré en P0-05).
 - Un module tiers qui doit réagir (supervision, fans, sales) s'abonne aux événements via un job de distribution (outbox), pas par couplage direct.
 - Les événements ne contiennent pas de secrets ni de contenu média, seulement des identifiants et du texte de message.
 

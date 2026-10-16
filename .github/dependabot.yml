@@ -1,0 +1,21 @@
+# Mises à jour automatiques des dépendances (hygiène et sécurité, security.md §5).
+# Les mineures et correctifs sont groupés en une PR hebdomadaire ; les majeures arrivent séparément.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies]

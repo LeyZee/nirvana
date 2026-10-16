@@ -13,7 +13,7 @@ La persona de Messalina (identité, style, limites, kinks, dégoûts, exemples, 
 - Elle est **chargée en base** (`persona_versions`, contenu + hash) par la commande `pnpm persona:load` ; une seule version `is_active` par créatrice ; l'activation est un événement audité.
 - Chaque draft référence `persona_version_id`.
 - Les prompts (`packages/llm/prompts/`) sont des gabarits qui **reçoivent** la persona ; ils ne contiennent aucune donnée de Messalina.
-- Le dépôt ne contient **pas** la vraie persona : seulement `v0.yaml` avec des placeholders et le schéma. La vraie vit dans un dépôt privé ou un coffre, chargée par la commande.
+- Le dépôt ne contient **pas** la vraie persona : seulement `v0.0.0.yaml` avec des placeholders et le schéma. La vraie vit dans un dépôt privé ou un coffre, chargée par la commande.
 - Éditeur de persona dans le dashboard : phase 5 (lecture/édition avec validation, historique).
 
 ## Conséquences
