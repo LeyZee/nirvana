@@ -3,7 +3,7 @@
 Extension Chrome (WXT, Manifest V3) à trois fonctions, livrées dans cet ordre :
 
 1. **Enregistreur** (P1-01) : intercepte les appels réseau du client web Reveal, anonymise, exporte un JSON pour l'analyse de l'API.
-2. **Capture de session** (P2) : bouton Sync qui envoie la session courante, chiffrée, au backend (`POST /connector/sessions`, jeton d'appareil).
+2. **Capture de session** (P2) : bouton Sync qui envoie la session courante, chiffrée, au backend (`POST /v1/connector/sessions`, jeton d'appareil).
 3. **Relais d'actions** (optionnel) : joue depuis l'onglet des actions que le backend ne peut pas faire seul.
 
 Interface : le popup utilise `@nirvana/design-system/styles.css` (`docs/design/README.md`, section Extension) ; aucun style injecté dans la page Reveal.

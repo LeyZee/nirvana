@@ -78,7 +78,7 @@ Décision : **B**. L'extension garde deux rôles : **enregistreur** (découverte
 Trois fonctions, dans cet ordre de livraison :
 
 1. **Enregistreur** (phase 1) : script en main world qui intercepte `fetch`/XHR/WebSocket sur le domaine Reveal, anonymise à la volée (identifiants hachés, contenus tronqués) et exporte un fichier JSON que la phase 1 analyse. Désactivé par défaut, activé manuellement.
-2. **Capture de session** (phase 2) : bouton « Sync » qui lit les cookies/jetons de la session courante et les envoie, chiffrés, à l'endpoint `/connector/sessions` du backend (jeton d'appareil). Jamais stockés dans l'extension.
+2. **Capture de session** (phase 2) : bouton « Sync » qui lit les cookies/jetons de la session courante et les envoie, chiffrés, à l'endpoint `/v1/connector/sessions` du backend (jeton d'appareil). Jamais stockés dans l'extension.
 3. **Relais d'actions** (optionnel, si B ne peut pas tout faire) : le backend met une action en file, l'extension la joue depuis l'onglet ouvert.
 
 Contraintes MV3 à connaître : le service worker meurt après ~30 s d'inactivité (utiliser `chrome.alarms`, pas de `setInterval`) ; `webRequest` ne lit pas les corps de réponse (d'où le script main world) ; `host_permissions` limitées à `*://*.reveal.me/*`.

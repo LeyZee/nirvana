@@ -8,7 +8,7 @@ Le projet avance par sessions. Une session = un agent (Claude Opus 5.5 dans Clau
 
 - Lire `CLAUDE.md`, `docs/00-START-HERE.md`, ta fiche dans `docs/sessions/tasks/`, les docs qu'elle liste, et les 5 dernières entrées de journal (`docs/sessions/LOG.md` les indexe, le détail est dans `docs/sessions/log/`).
 - Prérequis sur la machine : Node 22 (`.nvmrc`), pnpm 10, Docker, `gitleaks` sur le PATH.
-- Vérifier l'état : `git status` propre sur `main` à jour (`git fetch origin main`), `pnpm install` (installe les hooks), `docker compose up -d`, `pnpm check` vert. Si ce n'est pas vert avant de commencer, tu le notes dans ton entrée de journal et tu t'arrêtes : ce n'est pas à toi de réparer en passant, sauf si ta fiche le dit. Exception connue : avant P0-01, `pnpm check` est rouge par construction.
+- Vérifier l'état : `git status` propre sur `main` à jour (`git fetch origin main`), `pnpm install` (installe les hooks), `docker compose up -d`, `pnpm check` vert. Si ce n'est pas vert avant de commencer, tu le notes dans ton entrée de journal et tu t'arrêtes : ce n'est pas à toi de réparer en passant, sauf si ta fiche le dit. Depuis le 16/10, `pnpm check`, `pnpm test` et la CI sont verts sur le squelette (seul `packages/design-system` a du code).
 - Créer la branche, en minuscules : `task/<id>-<slug>` (ex. `task/p0-03-database`, le nom exact est dans la fiche).
 - Passer la fiche en `in_progress` (champ `Statut :` en tête de fiche, et la ligne de l'index `docs/sessions/tasks/README.md`) et commiter ce seul changement.
 
@@ -24,7 +24,7 @@ Le projet avance par sessions. Une session = un agent (Claude Opus 5.5 dans Clau
 
 ### 3. Fin (15 min, obligatoire)
 
-1. `pnpm check` vert, `pnpm test` vert (Docker lancé pour Testcontainers).
+1. `pnpm check` vert, `pnpm test:all` vert (unitaire + intégration, Docker lancé pour Testcontainers).
 2. Nettoyage selon `docs/conventions/hygiene.md`.
 3. Docs touchées par la tâche mises à jour (architecture, README de module, playbook).
 4. Fiche mise à jour : `status: done` ou `blocked` avec ce qui manque, et la section « Résultat ».
@@ -36,10 +36,10 @@ Le projet avance par sessions. Une session = un agent (Claude Opus 5.5 dans Clau
 Une entrée = un fichier `docs/sessions/log/<AAAA-MM-JJ>-<id-en-minuscules>.md` (ex. `2026-10-20-p0-03.md`), jamais modifié par une autre session, plus une ligne dans le tableau d'index de `docs/sessions/LOG.md`. Un fichier par session : deux sessions en parallèle ne se marchent pas dessus.
 
 ```
-# 2026-10-20 — P0-03 Bootstrap de l'API — done
-Fait : app factory Fastify, config Zod, runner Graphile, module connectors avec FakeConnector, ingestion idempotente.
-Pas fait : SSE (hors périmètre, voir P0-06).
-Décisions : ADR 0015 proposé (choix de la lib de config).
+# 2026-10-20 — P0-03 Base de données — done
+Fait : schéma Drizzle du noyau, migrations avec RLS, withTenant/withAdmin, chiffrement des sessions, test d'isolation RLS.
+Pas fait : tables de la phase 6 (hors périmètre).
+Décisions : ADR 00NN proposée (exemple : stratégie de numérotation de `seq`).
 Découvertes : le schéma `messages` manque un index sur (conversation_id, platform_created_at).
 Candidats à suppression : aucun.
 Vérifié : pnpm check ✓, pnpm test ✓ (41 tests), hygiène ✓.

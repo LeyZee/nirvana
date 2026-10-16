@@ -51,7 +51,7 @@ pnpm db:migrate         # migrations Drizzle
 pnpm evals              # Promptfoo (clés API requises)
 ```
 
-Tant que P0-01 n'est pas livrée, `pnpm install` n'a pas tourné et `pnpm check` est rouge : c'est l'état attendu, pas une anomalie à corriger en passant.
+`pnpm-lock.yaml` est commité et `pnpm check`, `pnpm test` et la CI sont verts depuis le 16/10 (seul `packages/design-system` a du code). Un rouge sur `main` est donc une anomalie à signaler.
 
 ## Fin de session (obligatoire)
 

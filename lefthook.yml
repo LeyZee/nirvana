@@ -6,10 +6,10 @@ pre-commit:
     gitleaks:
       run: gitleaks git --pre-commit --staged --redact --verbose
     format:
-      glob: "*.{ts,tsx,js,mjs,json,yaml,yml,css}"
+      glob: '*.{ts,tsx,js,mjs,json,yaml,yml,css}'
       run: pnpm prettier --check {staged_files}
     lint:
-      glob: "*.{ts,tsx}"
+      glob: '*.{ts,tsx}'
       run: pnpm eslint {staged_files}
     repo:
       run: node scripts/check-repo.mjs --staged
