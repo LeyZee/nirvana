@@ -28,3 +28,5 @@ personas/**/v[1-9]*.yaml
 .vscode/*
 !.vscode/extensions.json
 *.log
+# Copies de travail temporaires des agents (Claude Code)
+.claude/worktrees/
