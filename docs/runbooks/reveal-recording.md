@@ -12,6 +12,8 @@ Cette méthode utilise les outils de développement de Chrome (fichier HAR). L'e
 
 ## 1. Préparer (5 min)
 
+0. **Compte du chatteur bot** (décision du 17/10) : crée une adresse mail dédiée que tu contrôles, ajoute un chatteur à ce nom dans l'équipe Reveal, et connecte-le dans un **profil Chrome séparé**. La capture se fait dans ce profil, connecté en tant que bot : elle montre exactement ce qu'un chatteur peut voir et faire, et c'est ce que l'agent pourra faire. Si une page manque à ce chatteur (statistiques, revenus), refais seulement cette étape avec ton compte et note-le. Le mot de passe reste dans ton gestionnaire de mots de passe, jamais dans le chat ni dans un fichier.
+
 1. Dans le dossier du dépôt (`C:\Users\USER\Downloads\Projet Nirvana`), récupère la dernière version : `git pull`. Vérifie `node -v` (22.13 ou plus).
 2. Ouvre Chrome avec le profil connecté au compte créatrice de Messalina sur Reveal.
 3. Ouvre les outils de développement (`F12`), onglet **Network** (Réseau). Coche **Preserve log** (Conserver le journal). Laisse le filtre sur **All** (Tout), pour garder les WebSocket.
