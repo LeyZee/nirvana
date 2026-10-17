@@ -32,6 +32,9 @@ export interface LlmCallRecord {
   readonly outputTokens?: number;
   readonly costUsd?: number;
   readonly errorMessage?: string;
+  /** Which conversation and draft paid for it: the real cost per conversation (llm_calls). */
+  readonly conversationId?: string;
+  readonly draftId?: string;
 }
 
 /** Journal of calls; the llm_calls table implements it once the database exists (P0-03). */

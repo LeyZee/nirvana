@@ -368,7 +368,7 @@ for (;;) {
     const report = gateway.health();
     console.log(
       dim(
-        `  état ${report.state} · aujourd’hui ${report.costTodayUsd.toFixed(4)} $ / ${String(report.dailyBudgetUsd)} $`,
+        `  état ${report.state} · aujourd’hui ${report.budget.spentEur.toFixed(4)} € / ${String(report.budget.capEur)} € (${report.budget.state})`,
       ),
     );
     for (const r of report.roles)

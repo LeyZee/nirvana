@@ -2,9 +2,10 @@ import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 
+import type { BudgetEvent } from './budget';
 import { createInMemoryCallLog } from './call-log';
 import { DEFAULT_LLM_CONFIG, type ModelRef, type ProviderCredentials } from './config';
-import { createLlmGateway, type KeyRefusal, type VoiceInput } from './gateway';
+import { createLlmGateway, type KeyRefusal, type LlmGatewayDeps, type VoiceInput } from './gateway';
 import type { ModelResolver } from './providers';
 
 type Step = { text: string; finish?: 'stop' | 'content-filter' } | { status: number };
@@ -68,6 +69,7 @@ function setup(
   models: { xai?: MockLanguageModelV4; mistral?: MockLanguageModelV4 },
   credentials = ALL_KEYS,
   onKeyRefused?: (refusal: KeyRefusal) => void,
+  budget: Pick<LlmGatewayDeps, 'dailyCapEur' | 'onBudget'> = {},
 ) {
   const log = createInMemoryCallLog();
   const resolveModel: ModelResolver = (ref: ModelRef) =>
@@ -80,6 +82,7 @@ function setup(
     log,
     now: () => new Date((clock.t += 10)),
     ...(onKeyRefused !== undefined && { onKeyRefused }),
+    ...budget,
   });
   return { gateway, log };
 }
@@ -247,6 +250,44 @@ describe('failures and connection tests', () => {
   });
 });
 
+describe('daily budget', () => {
+  it('alerts at 80 %, stops every call at the cap, and records what each call was for', async () => {
+    const events: BudgetEvent[] = [];
+    const xai = scripted([{ text: BUBBLES }]);
+    // One call costs 0.0026 $, about 0.0024 € at 1.1 $/€: the second one crosses a 0.004 € cap.
+    const { gateway, log } = setup({ xai }, ALL_KEYS, undefined, {
+      dailyCapEur: () => 0.004,
+      onBudget: (event) => events.push(event),
+    });
+    const traced = { ...INPUT, trace: { conversationId: 'c-1', draftId: 'd-1' } };
+
+    expect((await gateway.voice(traced)).ok).toBe(true);
+    expect(events).toEqual([]);
+    expect((await gateway.voice(traced)).ok).toBe(true);
+    expect(events.map((e) => e.kind)).toEqual(['alert', 'reached']);
+
+    const third = await gateway.voice(traced);
+
+    expect(!third.ok && third.error.code).toBe('budget_reached');
+    expect(xai.doGenerateCalls).toHaveLength(2);
+    expect(events).toHaveLength(2);
+    expect(gateway.health().budget.state).toBe('reached');
+    expect(log.since(new Date(0))[0]).toMatchObject({ conversationId: 'c-1', draftId: 'd-1' });
+  });
+
+  it('keeps enforcing the cap when the listener fails', async () => {
+    const { gateway } = setup({ xai: scripted([{ text: BUBBLES }]) }, ALL_KEYS, undefined, {
+      dailyCapEur: () => 0.001,
+      onBudget: () => {
+        throw new Error('crm down');
+      },
+    });
+    await gateway.voice(INPUT);
+    const second = await gateway.voice(INPUT);
+    expect(!second.ok && second.error.code).toBe('budget_reached');
+  });
+});
+
 describe('health', () => {
   it('is degraded while the fallback serves, with the cost of the day', async () => {
     const { gateway } = setup({ xai: scripted([{ status: 401 }]), mistral: scripted([{ text: BUBBLES }]) });
@@ -259,7 +300,7 @@ describe('health', () => {
     expect(voice).toMatchObject({ state: 'degraded', isOnFallback: true, hasKey: true, callsLastHour: 2 });
     expect(voice?.lastError?.outcome).toBe('auth');
     expect(report.costTodayUsd).toBeGreaterThan(0);
-    expect(report.dailyBudgetUsd).toBe(15);
+    expect(report.budget).toMatchObject({ capEur: 20, alertAtEur: 16, state: 'ok' });
   });
 
   it('is down without any key, and never exposes a key', () => {

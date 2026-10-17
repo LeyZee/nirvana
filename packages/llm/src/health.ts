@@ -1,3 +1,4 @@
+import { startOfLocalDay, type BudgetStatus } from './budget';
 import type { CallOutcome, LlmCallLog, LlmCallRecord } from './call-log';
 import { findModel, MODELS, PROVIDERS, type InputKind } from './catalog';
 import { apiKeyFor, type ApiKeys, type LlmConfig, type LlmRole, type ModelRef } from './config';
@@ -39,8 +40,9 @@ export interface HealthReport {
   readonly at: Date;
   readonly roles: readonly RoleHealth[];
   readonly providers: readonly ProviderHealth[];
+  /** Since her midnight (budget time zone), in USD as journaled. */
   readonly costTodayUsd: number;
-  readonly dailyBudgetUsd: number;
+  readonly budget: BudgetStatus;
 }
 
 const HOUR_MS = 3_600_000;
@@ -49,10 +51,6 @@ const FALLBACK_WINDOW_MS = 15 * 60_000;
 function percentile(sorted: readonly number[], p: number): number | undefined {
   if (sorted.length === 0) return undefined;
   return sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)];
-}
-
-function startOfUtcDay(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 function label(ref: ModelRef): string {
@@ -132,8 +130,9 @@ export function computeHealth(
   credentials: ApiKeys,
   log: LlmCallLog,
   now: Date,
+  budget: BudgetStatus,
 ): HealthReport {
-  const today = log.since(startOfUtcDay(now));
+  const today = log.since(startOfLocalDay(now, config.dailyBudget.timeZone));
   const roles = (['voice', 'brain', 'sense', 'judge'] as const).map((role) =>
     roleHealth(role, config, credentials, today, now),
   );
@@ -160,6 +159,6 @@ export function computeHealth(
       })),
     })),
     costTodayUsd: today.reduce((sum, r) => sum + (r.costUsd ?? 0), 0),
-    dailyBudgetUsd: config.dailyBudgetUsd,
+    budget,
   };
 }

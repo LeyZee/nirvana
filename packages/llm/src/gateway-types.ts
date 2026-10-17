@@ -1,6 +1,7 @@
 import type { MediaDescription, Result } from '@nirvana/contracts';
 import type { TranscriptionModel } from 'ai';
 
+import type { BudgetEvent } from './budget';
 import type { CallOutcome, LlmCallLog } from './call-log';
 import type { ApiKeys, LlmConfig, ProviderId } from './config';
 import type { HealthReport } from './health';
@@ -49,10 +50,17 @@ export interface VideoKeyframes {
   readonly transcript?: string;
 }
 
+/** Ties a call to what it was for, so the journal can sum the cost per conversation. */
+export interface CallTrace {
+  readonly conversationId?: string;
+  readonly draftId?: string;
+}
+
 export interface SenseInput {
   /** A fan's media is described to react to it; one of hers, to talk about it and make him want it. */
   readonly origin: 'fan' | 'creator';
   readonly media: SenseMedia;
+  readonly trace?: CallTrace;
 }
 
 export interface ConversationInput {
@@ -64,6 +72,7 @@ export interface ConversationInput {
   /** Her local time, day or night, how long they have known each other: written by code, trusted. */
   readonly situation?: string;
   readonly history: readonly ConversationTurn[];
+  readonly trace?: CallTrace;
 }
 
 export interface VoiceInput extends ConversationInput {
@@ -85,7 +94,8 @@ export interface LlmSuccess<T> {
 }
 
 export interface LlmFailure {
-  readonly code: 'all_models_failed';
+  /** `budget_reached`: the daily cap is spent, nothing was called; the chatters take over until midnight. */
+  readonly code: 'all_models_failed' | 'budget_reached';
   readonly attempts: readonly {
     readonly provider: ProviderId;
     readonly model: string;
@@ -113,6 +123,7 @@ export interface LlmGateway {
     readonly mediaType: string;
     /** From ffprobe: prices the call when the provider gives no duration. */
     readonly durationS?: number;
+    readonly trace?: CallTrace;
   }): Promise<Result<Transcript, LlmFailure>>;
 }
 
@@ -137,6 +148,10 @@ export interface LlmGatewayDeps {
    * marks the service « à reconnecter » (ADR 0016). Called once per refused attempt; never throws into a call.
    */
   readonly onKeyRefused?: (refusal: KeyRefusal) => void;
+  /** The cap in euros set in Réglages (later); `config.dailyBudget.capEur` otherwise. Read before each call. */
+  readonly dailyCapEur?: () => number;
+  /** Once per day and kind: alert at 80 %, then cap reached. Never throws into a call. */
+  readonly onBudget?: (event: BudgetEvent) => void;
 }
 
 export interface KeyRefusal {
