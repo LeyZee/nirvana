@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { connectKey, fetchOverview } from './api';
+import { confirmPassword, connectKey, disconnect, fetchOverview, ReauthRequired } from './api';
 
 const status = {
   provider: 'xai',
@@ -41,5 +41,37 @@ describe('Services API client', () => {
     await expect(fetchOverview()).rejects.toThrow();
     answer(403, { error: 'forbidden' });
     await expect(fetchOverview()).rejects.toThrow('GET : 403');
+  });
+
+  it('asks for the password when the sign-in is too old for a key, and only then', async () => {
+    answer(403, { error: { code: 'reauthentication_forbidden', message: 'x', details: {}, requestId: 'r' } });
+    await expect(connectKey('xai', 'xai-FAKE')).rejects.toBeInstanceOf(ReauthRequired);
+    await expect(disconnect('xai')).rejects.toBeInstanceOf(ReauthRequired);
+    answer(403, { error: { code: 'role_forbidden', message: 'x', details: {}, requestId: 'r' } });
+    const other = await disconnect('xai').catch((error: unknown) => error);
+    expect(other).toBeInstanceOf(Error);
+    expect(other).not.toBeInstanceOf(ReauthRequired);
+  });
+
+  it('confirms the password by signing in again as the current user', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push(
+          `${init?.method ?? 'GET'} ${url} ${typeof init?.body === 'string' ? init.body : ''}`.trim(),
+        );
+        const body =
+          url === '/v1/me'
+            ? { id: 'u1', email: 'owner@example.test', name: 'Owner', role: 'owner', creatorIds: [] }
+            : { user: {} };
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+      }),
+    );
+    expect(await confirmPassword('correct horse battery')).toBe('ok');
+    expect(calls).toEqual([
+      'GET /v1/me',
+      'POST /v1/auth/sign-in/email {"email":"owner@example.test","password":"correct horse battery"}',
+    ]);
   });
 });

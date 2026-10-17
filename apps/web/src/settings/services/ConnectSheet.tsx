@@ -1,12 +1,17 @@
 import type { ProviderStatus, ProviderVoice } from '@nirvana/contracts';
 import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 
-import { connectKey, saveSettings } from './api';
+import { PasswordPrompt } from './PasswordPrompt';
+import { connectKey, ReauthRequired, saveSettings } from './api';
 import { GUIDES, type DashboardProvider } from './guide';
 import { nextAfter } from './view';
 
 type Phase =
-  { kind: 'edit'; error: string | null } | { kind: 'busy' } | { kind: 'done'; status: ProviderStatus };
+  | { kind: 'edit'; error: string | null }
+  | { kind: 'busy' }
+  /** The sign-in is too old for a key (ADR 0016): the password first, then the same key again. */
+  | { kind: 'reauth'; key: string }
+  | { kind: 'done'; status: ProviderStatus };
 
 interface ConnectSheetProps {
   readonly provider: DashboardProvider;
@@ -124,8 +129,12 @@ export function ConnectSheet({
       setVoices(result.status.voices);
       setPhase({ kind: 'done', status: result.status });
       onChanged(result.status);
-    } catch {
-      setPhase({ kind: 'edit', error: 'Nirvana ne répond pas. Réessaie dans un instant.' });
+    } catch (error) {
+      setPhase(
+        error instanceof ReauthRequired
+          ? { kind: 'reauth', key }
+          : { kind: 'edit', error: 'Nirvana ne répond pas. Réessaie dans un instant.' },
+      );
     }
   }
 
@@ -300,7 +309,15 @@ export function ConnectSheet({
         <li className="sv-step" data-state={hasOpenedConsole ? 'now' : 'later'}>
           <span className="sv-num">2</span>
           <div className="sv-step__head">Colle-la ici</div>
-          {hasOpenedConsole ? (
+          {phase.kind === 'reauth' ? (
+            <div className="sv-step__body">
+              <PasswordPrompt
+                onConfirmed={() => {
+                  void submit(phase.key);
+                }}
+              />
+            </div>
+          ) : hasOpenedConsole ? (
             <div className="sv-step__body">
               <form
                 className="sv-key"

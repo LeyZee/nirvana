@@ -2,7 +2,8 @@ import type { ProviderNextAction, ProviderOverview, ProviderStatus } from '@nirv
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { ConnectSheet } from './ConnectSheet';
-import { disconnect, fetchOverview, verifyNow } from './api';
+import { PasswordPrompt } from './PasswordPrompt';
+import { disconnect, fetchOverview, ReauthRequired, verifyNow } from './api';
 import { GUIDES, isDashboardProvider, type DashboardProvider } from './guide';
 import { checkedAgo, dotOf, dotOfNext, segments } from './view';
 import './services.css';
@@ -22,6 +23,8 @@ export function ServicesSection(): JSX.Element {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [menu, setMenu] = useState<DashboardProvider | null>(null);
   const [confirming, setConfirming] = useState<DashboardProvider | null>(null);
+  /** A removal waiting for the password (ADR 0016). */
+  const [reauthFor, setReauthFor] = useState<DashboardProvider | null>(null);
   const [verifying, setVerifying] = useState<DashboardProvider | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [notice, setNotice] = useState<string | null>(null);
@@ -47,12 +50,12 @@ export function ServicesSection(): JSX.Element {
   }, [refresh]);
 
   useEffect(() => {
-    if (sheet !== null || menu !== null || confirming !== null) return undefined;
+    if (sheet !== null || menu !== null || confirming !== null || reauthFor !== null) return undefined;
     const timer = window.setInterval(() => void refresh(), REFRESH_MS);
     return () => {
       window.clearInterval(timer);
     };
-  }, [refresh, sheet, menu, confirming]);
+  }, [refresh, sheet, menu, confirming, reauthFor]);
 
   useEffect(() => {
     if (menu === null) return undefined;
@@ -64,6 +67,20 @@ export function ServicesSection(): JSX.Element {
       window.removeEventListener('click', close);
     };
   }, [menu]);
+
+  /** Removes a key; a sign-in too old for it (ADR 0016) asks for the password, then removes it. */
+  const remove = (provider: DashboardProvider): void => {
+    disconnect(provider).then(
+      () => refresh(),
+      (error: unknown) => {
+        if (error instanceof ReauthRequired) {
+          setReauthFor(provider);
+          return;
+        }
+        setNotice(`${GUIDES[provider].name} n’a pas été déconnecté. Réessaie dans un instant.`);
+      },
+    );
+  };
 
   const open = (provider: DashboardProvider, isReplace: boolean): void => {
     setMenu(null);
@@ -215,6 +232,16 @@ export function ServicesSection(): JSX.Element {
                   }}
                 />
               ) : null}
+              {reauthFor === provider ? (
+                <div className="nv-confirm sv-confirm">
+                  <PasswordPrompt
+                    onConfirmed={() => {
+                      setReauthFor(null);
+                      remove(provider);
+                    }}
+                  />
+                </div>
+              ) : null}
               {confirming === provider ? (
                 <div className="nv-confirm sv-confirm">
                   <p>
@@ -228,12 +255,7 @@ export function ServicesSection(): JSX.Element {
                       onClick={() => {
                         setConfirming(null);
                         setNotice(null);
-                        disconnect(provider).then(
-                          () => refresh(),
-                          () => {
-                            setNotice(`${guide.name} n’a pas été déconnecté. Réessaie dans un instant.`);
-                          },
-                        );
+                        remove(provider);
                       }}
                     >
                       Déconnecter
