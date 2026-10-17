@@ -62,6 +62,12 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Racine de composition | `composition root` | `apps/api/src/composition-root.ts` : le seul endroit qui construit les modules et les branche entre eux. |
 | Battement | `heartbeat` | Ligne écrite par le worker toutes les 30 s (`worker_heartbeats`), lue par `/ready`. |
 | Identifiant de corrélation | `correlationId` | Le `x-request-id` d'une requête, propagé aux jobs, appels LLM et logs qu'elle déclenche. |
+| Playground | `playground` | Bac à sable de conversation : on parle au bot (soi-même, fan simulé ou rejeu) par le même chemin que la production, sans rien envoyer sur une plateforme. Proposé dans `brainstorm/06`. |
+| Vitrine | `showcase` | Page de démonstration des composants du design system (dev seulement). Ne pas confondre avec le playground. |
+| Fan simulé | `simulated_fan` | Fan joué par une IA d'après un profil, dans le playground. |
+| Compte fan de test | `test_fan_account` | Vrai compte fan sur une plateforme, tenu par nous, pour tester envois et ventes sans toucher un vrai fan. |
+| Liste blanche d'envoi | `send_allowlist` | Fans vers lesquels le connecteur accepte d'envoyer tant qu'elle n'est pas vide (phase 2). |
+| Enregistreur | `recorder` | Fonction de l'extension qui note les échanges réseau du site d'une plateforme, anonymisés. |
 
 ## Noms à ne pas utiliser
 

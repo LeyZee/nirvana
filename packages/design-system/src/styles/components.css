@@ -218,6 +218,16 @@
 .nv-btn--destructive {
   color: var(--nv-danger);
 }
+/* Secondary action placed ON glass: a tint, never a second glass (two specular rims read as a double button). */
+.nv-btn--soft {
+  background: var(--nv-glass-fill-strong);
+}
+.nv-btn--soft:hover {
+  background: var(--nv-fill-track);
+}
+.nv-btn--soft.nv-btn--destructive {
+  background: color-mix(in srgb, var(--nv-danger) 12%, transparent);
+}
 .nv-btn--sm {
   height: 34px;
   font-size: var(--nv-text-footnote);
@@ -997,6 +1007,144 @@
   background: var(--nv-neon);
 }
 
+/* ───────────── Stat card and delta (dashboard) ───────────── */
+
+.nv-stat {
+  --_radius: var(--nv-radius-xl);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  min-height: 168px;
+  padding: var(--nv-space-5) var(--nv-space-5) 0;
+}
+.nv-stat__label {
+  font-size: var(--nv-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nv-ink-muted);
+}
+.nv-stat__value {
+  font-size: var(--nv-text-title-1);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Sparkline pinned to the bottom edge; the line draws in (pathLength="1"), the area fades in. */
+.nv-stat__spark {
+  position: absolute;
+  inset: auto 0 0;
+  width: 100%;
+  height: 62px;
+}
+.nv-stat__spark .nv-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: nv-draw 1100ms var(--nv-ease-out) forwards;
+}
+/* The one stat that matters most on the screen: lit by the neon, like the single neon button. */
+.nv-stat--hero {
+  box-shadow:
+    var(--nv-shadow-glass),
+    0 0 0 1px color-mix(in srgb, var(--nv-neon) 55%, transparent),
+    0 18px 60px -20px color-mix(in srgb, var(--nv-neon) 60%, transparent);
+}
+.nv-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--nv-radius-xs);
+  font-size: var(--nv-text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* --better / --worse, not up / down: a response time that drops is good news. */
+.nv-delta--better {
+  color: var(--nv-success);
+  background: color-mix(in srgb, var(--nv-success) 14%, transparent);
+}
+.nv-delta--worse {
+  color: var(--nv-danger);
+  background: color-mix(in srgb, var(--nv-danger) 14%, transparent);
+}
+@keyframes nv-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ───────────── Gauge (spend against a budget) ───────────── */
+
+/* Neutral under 70 %, amber from 70 to 90 %, neon above: neon only means "over". */
+.nv-gauge {
+  --_g: var(--nv-ink-muted);
+  position: relative;
+  height: 6px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-glass-fill);
+}
+.nv-gauge--amber {
+  --_g: var(--nv-warning);
+}
+.nv-gauge--neon {
+  --_g: var(--nv-neon);
+}
+.nv-gauge__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--nv-gauge-value, 0%);
+  border-radius: inherit;
+  background: var(--_g);
+  transition:
+    width var(--nv-dur-slow) var(--nv-ease-spring),
+    background-color var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-gauge--neon .nv-gauge__fill {
+  box-shadow: 0 0 12px var(--nv-neon);
+}
+/* Projected end-of-day spend. */
+.nv-gauge__mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--nv-gauge-mark, 0%);
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--nv-ink-faint);
+  transition: left var(--nv-dur-slow) var(--nv-ease-spring);
+}
+
+/* ───────────── Inline confirmation (destructive) ───────────── */
+
+/* Viewers never get confirm(): a destructive action arms this block, which says what
+   happens, and, for anything live, asks for the name typed before the button unlocks. */
+.nv-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--nv-radius-md);
+  background: color-mix(in srgb, var(--nv-danger) 8%, var(--nv-glass-fill));
+  animation: nv-rise var(--nv-dur-base) var(--nv-ease-spring) both;
+}
+.nv-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@keyframes nv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 /* ───────────── Island (notification / toast) ───────────── */
 
 .nv-island {
@@ -1101,8 +1249,14 @@
   .nv-typing i,
   .nv-bubble,
   .nv-bubble--draft.is-writing,
-  .is-liquid {
+  .nv-stat__spark .nv-draw,
+  .is-liquid,
+  .is-playing,
+  .nv-confirm {
     animation: none;
+  }
+  .nv-stat__spark .nv-draw {
+    stroke-dashoffset: 0;
   }
   .nv-btn,
   .nv-iconbtn,
@@ -1112,7 +1266,9 @@
   .nv-island,
   .nv-island > *,
   .nv-convo,
-  .nv-tabbar__item {
+  .nv-tabbar__item,
+  .nv-gauge__fill,
+  .nv-gauge__mark {
     transition-duration: 1ms;
   }
 }
