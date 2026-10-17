@@ -40,6 +40,11 @@ export function App(): JSX.Element {
   if (session.user.role === 'owner') {
     return (
       <main className="nv-aura min-h-dvh px-4 py-6">
+        <div className="mx-auto flex max-w-[680px] justify-end">
+          <button className="nv-btn nv-btn--plain" type="button" onClick={() => void signOut().then(refresh)}>
+            Se déconnecter
+          </button>
+        </div>
         <ServicesSection />
       </main>
     );

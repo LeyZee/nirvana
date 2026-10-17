@@ -36,14 +36,22 @@ export interface ProvidersDeps {
   readonly environmentKeys: ((provider: AiProvider) => string | undefined) | null;
   /** Called after each change, for the live stream of the Services section (SSE, fiche P3-03 point 5). */
   readonly onChange?: (provider: AiProvider) => void;
+  /**
+   * The API and the worker are separate processes in production: each reloads the saved keys this often, so a key
+   * pasted in the dashboard or turned red by the job reaches the other one. Off when absent (tests).
+   */
+  readonly reloadEveryMs?: number;
+  readonly onReloadError?: (error: unknown) => void;
 }
 
 export interface ProvidersModule extends ProvidersApi {
   readonly name: 'providers';
   /** The `ApiKeySource` handed to the LLM gateway and the speech client. */
   readonly apiKeySource: (provider: AiProvider) => string | undefined;
-  /** Loads the saved keys into memory; call once at start-up. */
+  /** Loads the saved keys into memory, then keeps reloading them; call once at start-up. */
   readonly start: () => Promise<void>;
+  /** Stops the periodic reload, before the database closes. */
+  readonly stop: () => void;
   /** `/v1/settings/providers`, behind the guard given here. */
   readonly routes: (options: ProvidersRoutesOptions) => FastifyPluginAsyncZod;
 }
@@ -73,11 +81,25 @@ export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
     updateSettings: (provider, settings) => updateProviderSettings(connections, provider, settings),
     disconnect: (provider) => disconnectProvider(connections, provider),
   };
+  let timer: ReturnType<typeof setInterval> | undefined;
   return {
     ...api,
     name: 'providers',
     apiKeySource: (provider) => cache.lookup(provider),
-    start: () => cache.reload(),
+    async start() {
+      const { reloadEveryMs } = deps;
+      if (reloadEveryMs !== undefined && timer === undefined) {
+        timer = setInterval(() => {
+          cache.reload().catch((error: unknown) => deps.onReloadError?.(error));
+        }, reloadEveryMs);
+        timer.unref();
+      }
+      await cache.reload();
+    },
+    stop() {
+      clearInterval(timer);
+      timer = undefined;
+    },
     routes: (options) => createProvidersRoutes(api, options),
   };
 }
@@ -92,9 +114,11 @@ export interface ProvidersStartOptions {
   readonly encryptionKeys: string | undefined;
   /** Development keys from the environment, null in production (ADR 0016). */
   readonly environmentKeys: Partial<Record<AiProvider, string | undefined>> | null;
-  /** The saved keys could not be loaded at start-up: the environment keys still apply, the next change reloads. */
+  /** The saved keys could not be loaded: the environment keys still apply, the next reload tries again. */
   readonly onLoadError: (error: unknown) => void;
 }
+
+const KEY_RELOAD_MS = 30_000;
 
 /** The module as the composition root builds it: Postgres store when there is an encryption key, keys loaded. */
 export async function startProvidersModule(options: ProvidersStartOptions): Promise<ProvidersModule> {
@@ -109,6 +133,8 @@ export async function startProvidersModule(options: ProvidersStartOptions): Prom
           }),
     fetch,
     environmentKeys: environment === null ? null : (provider) => environment[provider],
+    reloadEveryMs: KEY_RELOAD_MS,
+    onReloadError: options.onLoadError,
   });
   await module.start().catch(options.onLoadError);
   return module;

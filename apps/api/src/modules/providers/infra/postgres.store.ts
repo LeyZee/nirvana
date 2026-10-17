@@ -7,6 +7,7 @@ import {
   ProviderVoiceSchema,
 } from '@nirvana/contracts';
 import {
+  and,
   decryptSecret,
   encryptSecret,
   eq,
@@ -45,16 +46,18 @@ export interface PostgresStoreDeps {
 
 /**
  * Keys sealed with AES-256-GCM, the provider bound as associated data so a ciphertext copied to another row does
- * not open. A row whose key no longer decrypts (an encryption key dropped too early) reads as a key to replace.
+ * not open. A row whose key no longer decrypts (an encryption key dropped too early) reads as a key to replace, and
+ * its ciphertext is left untouched so that putting the old encryption key back recovers it. The row's version is
+ * `updated_at` in milliseconds, always written from here so it round-trips exactly.
  */
 export function createPostgresCredentialStore(deps: PostgresStoreDeps): CredentialStore {
   function toCredential(row: Row): StoredCredential {
     const parsed = RowSchema.parse(row);
-    let key: string;
+    let key: string | null;
     try {
       key = decryptSecret(row.keyCiphertext, deps.keys, parsed.provider);
     } catch {
-      key = '';
+      key = null;
     }
     return {
       provider: parsed.provider,
@@ -64,10 +67,11 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
       facts: parsed.facts,
       settings: parsed.settings,
       voices: parsed.voices,
-      state: key === '' ? 'needs_reconnect' : parsed.state,
+      state: key === null ? 'needs_reconnect' : parsed.state,
       verifiedAt: row.verifiedAt,
       charactersLeft: row.charactersLeft,
-      lastErrorKind: key === '' ? 'unauthorized' : parsed.lastErrorKind,
+      lastErrorKind: key === null ? 'unauthorized' : parsed.lastErrorKind,
+      revision: row.updatedAt.getTime(),
     };
   }
 
@@ -105,6 +109,30 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
           .values({ provider: credential.provider, ...values })
           .onConflictDoUpdate({ target: table.provider, set: values }),
       );
+    },
+    async update(credential) {
+      const updated = await withAdmin(deps.adminDb, (tx) =>
+        tx
+          .update(table)
+          .set({
+            keyLabel: credential.keyLabel,
+            state: credential.state,
+            summary: credential.summary,
+            facts: credential.facts,
+            settings: credential.settings,
+            voices: credential.voices,
+            charactersLeft: credential.charactersLeft,
+            lastErrorKind: credential.lastErrorKind,
+            verifiedAt: credential.verifiedAt,
+            // Strictly later than the version read, even within the same millisecond.
+            updatedAt: new Date(Math.max(Date.now(), credential.revision + 1)),
+          })
+          .where(
+            and(eq(table.provider, credential.provider), eq(table.updatedAt, new Date(credential.revision))),
+          )
+          .returning({ provider: table.provider }),
+      );
+      return updated.length === 1;
     },
     async remove(provider) {
       await withAdmin(deps.adminDb, (tx) => tx.delete(table).where(eq(table.provider, provider)));

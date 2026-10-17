@@ -15,7 +15,11 @@ import type { VerificationOutcome, VerifiedKey } from './verification';
 /** A saved key with what its last verification found. The key itself never leaves the module. */
 export interface StoredCredential {
   readonly provider: AiProvider;
-  readonly key: string;
+  /**
+   * `null` when the row no longer decrypts (its encryption key was dropped from CREDENTIALS_ENCRYPTION_KEYS too
+   * early). Such a row is never verified nor rewritten: putting the old encryption key back recovers it.
+   */
+  readonly key: string | null;
   readonly keyLabel: string | null;
   readonly summary: string;
   readonly facts: readonly ProviderFact[];
@@ -25,6 +29,27 @@ export interface StoredCredential {
   readonly verifiedAt: Date;
   readonly charactersLeft: number | null;
   readonly lastErrorKind: ProviderErrorKind | null;
+  /** The row's version as read; a status write only lands if the row is still at this version (store `update`). */
+  readonly revision: number;
+}
+
+/** A credential about to be saved by a connection: its key is known. */
+export type NewCredential = StoredCredential & { readonly key: string };
+
+/** What a verification says about a key, everything but the key, its settings and its version. */
+type VerifiedFields = Omit<StoredCredential, 'provider' | 'key' | 'settings' | 'revision'>;
+
+function verifiedFields(verified: VerifiedKey, now: Date): VerifiedFields {
+  return {
+    keyLabel: verified.keyLabel,
+    summary: verified.summary,
+    facts: verified.facts,
+    voices: verified.voices,
+    state: verified.isLowCredit ? 'low_credit' : 'connected',
+    verifiedAt: now,
+    charactersLeft: verified.charactersLeft,
+    lastErrorKind: null,
+  };
 }
 
 export function credentialFromVerification(
@@ -32,20 +57,8 @@ export function credentialFromVerification(
   key: string,
   verified: VerifiedKey,
   now: Date,
-): StoredCredential {
-  return {
-    provider,
-    key,
-    keyLabel: verified.keyLabel,
-    summary: verified.summary,
-    facts: verified.facts,
-    settings: verified.settings,
-    voices: verified.voices,
-    state: verified.isLowCredit ? 'low_credit' : 'connected',
-    verifiedAt: now,
-    charactersLeft: verified.charactersLeft,
-    lastErrorKind: null,
-  };
+): NewCredential {
+  return { provider, key, settings: verified.settings, revision: 0, ...verifiedFields(verified, now) };
 }
 
 /**
@@ -57,12 +70,7 @@ export function applyReverification(
   outcome: VerificationOutcome,
   now: Date,
 ): StoredCredential {
-  if (outcome.ok) {
-    return {
-      ...credentialFromVerification(stored.provider, stored.key, outcome, now),
-      settings: stored.settings,
-    };
-  }
+  if (outcome.ok) return { ...stored, ...verifiedFields(outcome, now) };
   if (outcome.kind === 'unreachable') return stored;
   return { ...stored, state: 'needs_reconnect', lastErrorKind: outcome.kind };
 }

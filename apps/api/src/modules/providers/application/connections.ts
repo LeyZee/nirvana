@@ -35,6 +35,21 @@ export class ProviderNotConnected extends DomainError {
   }
 }
 
+class VoiceNotOnAccount extends DomainError {
+  constructor() {
+    super('provider_voice_invalid', 'Cette voix n’existe pas sur le compte ElevenLabs');
+  }
+}
+
+class ProviderBusy extends DomainError {
+  constructor(provider: AiProvider) {
+    super('provider_conflict', `La clé de ${provider} vient de changer, réessaie`);
+  }
+}
+
+/** A status write that lost to a concurrent change is re-read and re-applied this many times at most. */
+const UPDATE_ATTEMPTS = 3;
+
 export interface ConnectionsDeps {
   readonly store: CredentialStore;
   readonly verifiers: readonly ProviderVerifier[];
@@ -90,17 +105,23 @@ export async function connectProvider(
   return ok(toStatus(provider, credential, 'dashboard'));
 }
 
-/** « Vérifier maintenant » and the 15-minute job. Only a real refusal turns the service red. */
+/**
+ * « Vérifier maintenant » and the 15-minute job. Only a real refusal turns the service red. The check takes
+ * seconds: if the key was replaced or disconnected meanwhile, that change wins and the result is dropped.
+ */
 export async function reverifyProvider(deps: ConnectionsDeps, provider: AiProvider): Promise<ProviderStatus> {
   const stored = await deps.store.find(provider);
   if (stored === null) return statusOf(deps, provider, null);
+  if (stored.key === null) return toStatus(provider, stored, 'dashboard');
   const outcome = await verifierFor(deps, provider).verify(stored.key, stored.settings);
   const next = applyReverification(stored, outcome, deps.clock.now());
-  if (next !== stored) {
-    await deps.store.save(next);
+  if (next === stored) return toStatus(provider, stored, 'dashboard');
+  if (await deps.store.update(next)) {
     await changed(deps, provider);
+    return toStatus(provider, next, 'dashboard');
   }
-  return toStatus(provider, next, 'dashboard');
+  const current = await deps.store.find(provider);
+  return current === null ? statusOf(deps, provider, null) : toStatus(provider, current, 'dashboard');
 }
 
 export async function reverifyAll(deps: ConnectionsDeps): Promise<readonly ProviderStatus[]> {
@@ -114,10 +135,14 @@ export async function reportRefusedKey(
   provider: AiProvider,
   kind: ProviderErrorKind,
 ): Promise<void> {
-  const stored = await deps.store.find(provider);
-  if (stored === null || stored.state === 'needs_reconnect') return;
-  await deps.store.save(markRefusedInProduction(stored, kind));
-  await changed(deps, provider);
+  for (let attempt = 0; attempt < UPDATE_ATTEMPTS; attempt += 1) {
+    const stored = await deps.store.find(provider);
+    if (stored === null || stored.state === 'needs_reconnect') return;
+    if (await deps.store.update(markRefusedInProduction(stored, kind))) {
+      await changed(deps, provider);
+      return;
+    }
+  }
 }
 
 export async function disconnectProvider(
@@ -135,12 +160,18 @@ export async function updateProviderSettings(
   provider: AiProvider,
   settings: ProviderSettings,
 ): Promise<ProviderStatus> {
-  const stored = await deps.store.find(provider);
-  if (stored === null) throw new ProviderNotConnected(provider);
-  const next = { ...stored, settings: ProviderSettingsSchema.parse({ ...stored.settings, ...settings }) };
-  await deps.store.save(next);
-  await changed(deps, provider);
-  return toStatus(provider, next, 'dashboard');
+  for (let attempt = 0; attempt < UPDATE_ATTEMPTS; attempt += 1) {
+    const stored = await deps.store.find(provider);
+    if (stored === null) throw new ProviderNotConnected(provider);
+    const voice = settings.voice;
+    if (voice !== undefined && !stored.voices.some((v) => v.id === voice.id)) throw new VoiceNotOnAccount();
+    const next = { ...stored, settings: ProviderSettingsSchema.parse({ ...stored.settings, ...settings }) };
+    if (await deps.store.update(next)) {
+      await changed(deps, provider);
+      return toStatus(provider, next, 'dashboard');
+    }
+  }
+  throw new ProviderBusy(provider);
 }
 
 function statusOf(deps: ConnectionsDeps, provider: AiProvider, stored: null): ProviderStatus {

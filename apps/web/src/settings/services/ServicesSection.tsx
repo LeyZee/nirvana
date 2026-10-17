@@ -1,5 +1,5 @@
 import type { ProviderNextAction, ProviderOverview, ProviderStatus } from '@nirvana/contracts';
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { ConnectSheet } from './ConnectSheet';
 import { disconnect, fetchOverview, verifyNow } from './api';
@@ -24,12 +24,20 @@ export function ServicesSection(): JSX.Element {
   const [confirming, setConfirming] = useState<DashboardProvider | null>(null);
   const [verifying, setVerifying] = useState<DashboardProvider | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Only the latest refresh may land: an older answer arriving late would show a stale state. */
+  const latest = useRef(0);
 
   const refresh = useCallback(async (): Promise<void> => {
+    latest.current += 1;
+    const ticket = latest.current;
     try {
-      setLoad({ kind: 'ready', overview: await fetchOverview() });
+      const overview = await fetchOverview();
+      if (ticket !== latest.current) return;
+      setLoad({ kind: 'ready', overview });
       setNow(new Date());
     } catch {
+      if (ticket !== latest.current) return;
       setLoad((current) => (current.kind === 'ready' ? current : { kind: 'failed' }));
     }
   }, []);
@@ -146,9 +154,10 @@ export function ServicesSection(): JSX.Element {
                 <small>{guide.brand}</small>
               </div>
               <div className="sv-row__act">
-                {isSaved && status.state !== 'needs_reconnect' ? (
+                {isSaved ? (
                   <button
                     type="button"
+                    id={`sv-more-${provider}`}
                     className="sv-more"
                     aria-label={`Options de ${guide.name}`}
                     aria-haspopup="menu"
@@ -166,10 +175,10 @@ export function ServicesSection(): JSX.Element {
                     type="button"
                     className="nv-btn nv-btn--soft nv-btn--sm"
                     onClick={() => {
-                      open(provider, status.state === 'needs_reconnect');
+                      open(provider, false);
                     }}
                   >
-                    {status.state === 'needs_reconnect' ? 'Remplacer' : 'Connecter'}
+                    Connecter
                   </button>
                 )}
               </div>
@@ -177,43 +186,36 @@ export function ServicesSection(): JSX.Element {
                 {line}
               </p>
               {menu === provider ? (
-                <div className="sv-menu nv-glass nv-glass--thick" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(null);
-                      setVerifying(provider);
-                      void verifyNow(provider)
-                        .then(() => refresh())
-                        .finally(() => {
-                          setVerifying(null);
-                        });
-                    }}
-                  >
-                    Vérifier maintenant
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      open(provider, true);
-                    }}
-                  >
-                    Remplacer la clé
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="sv-danger"
-                    onClick={() => {
-                      setMenu(null);
-                      setConfirming(provider);
-                    }}
-                  >
-                    Déconnecter
-                  </button>
-                </div>
+                <RowMenu
+                  provider={provider}
+                  onClose={() => {
+                    setMenu(null);
+                  }}
+                  onVerify={() => {
+                    setMenu(null);
+                    setNotice(null);
+                    setVerifying(provider);
+                    verifyNow(provider)
+                      .then(
+                        () => refresh(),
+                        () => {
+                          setNotice(
+                            `La vérification de ${guide.name} n’a pas abouti. Réessaie dans un instant.`,
+                          );
+                        },
+                      )
+                      .finally(() => {
+                        setVerifying(null);
+                      });
+                  }}
+                  onReplace={() => {
+                    open(provider, true);
+                  }}
+                  onDisconnect={() => {
+                    setMenu(null);
+                    setConfirming(provider);
+                  }}
+                />
               ) : null}
               {confirming === provider ? (
                 <div className="nv-confirm sv-confirm">
@@ -227,7 +229,13 @@ export function ServicesSection(): JSX.Element {
                       className="nv-btn nv-btn--soft nv-btn--destructive"
                       onClick={() => {
                         setConfirming(null);
-                        void disconnect(provider).then(() => refresh());
+                        setNotice(null);
+                        disconnect(provider).then(
+                          () => refresh(),
+                          () => {
+                            setNotice(`${guide.name} n’a pas été déconnecté. Réessaie dans un instant.`);
+                          },
+                        );
                       }}
                     >
                       Déconnecter
@@ -249,6 +257,12 @@ export function ServicesSection(): JSX.Element {
         })}
       </div>
 
+      {notice === null ? null : (
+        <p className="sv-notice" role="alert">
+          {notice}
+        </p>
+      )}
+
       {sheet === null ? null : (
         <ConnectSheet
           key={sheet.provider}
@@ -260,6 +274,64 @@ export function ServicesSection(): JSX.Element {
         />
       )}
     </section>
+  );
+}
+
+/**
+ * The ⋯ menu of a saved service. Focus goes to its first item; arrows move, Escape and Tab close it and give focus
+ * back to the ⋯ button.
+ */
+function RowMenu({
+  provider,
+  onClose,
+  onVerify,
+  onReplace,
+  onDisconnect,
+}: {
+  provider: DashboardProvider;
+  onClose: () => void;
+  onVerify: () => void;
+  onReplace: () => void;
+  onDisconnect: () => void;
+}): JSX.Element {
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    menu.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
+  }, []);
+  const backToButton = (): void => {
+    onClose();
+    document.getElementById(`sv-more-${provider}`)?.focus();
+  };
+  return (
+    <div
+      ref={menu}
+      className="sv-menu nv-glass nv-glass--thick"
+      role="menu"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' || event.key === 'Tab') {
+          event.preventDefault();
+          event.stopPropagation();
+          backToButton();
+          return;
+        }
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault();
+        const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];
+        const at = items.findIndex((item) => item === document.activeElement);
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        items[(at + step + items.length) % items.length]?.focus();
+      }}
+    >
+      <button type="button" role="menuitem" onClick={onVerify}>
+        Vérifier maintenant
+      </button>
+      <button type="button" role="menuitem" onClick={onReplace}>
+        Remplacer la clé
+      </button>
+      <button type="button" role="menuitem" className="sv-danger" onClick={onDisconnect}>
+        Déconnecter
+      </button>
+    </div>
   );
 }
 

@@ -96,14 +96,66 @@ describe('after the connection', () => {
     expect((await listProviderStatuses(deps))[0]?.state).toBe('needs_reconnect');
   });
 
-  it('keeps the chosen voice and forgets everything on disconnect', async () => {
-    const { deps, store } = setup({ current: works });
+  it('keeps a voice of the account, refuses any other, and forgets everything on disconnect', async () => {
+    const { deps, store } = setup({ current: { ...works, voices: [{ id: 'v1', name: 'Messa' }] } });
     await connectProvider(deps, 'xai', OLD_KEY);
     const updated = await updateProviderSettings(deps, 'xai', { voice: { id: 'v1', name: 'Messa' } });
     expect(updated.settings.voice).toEqual({ id: 'v1', name: 'Messa' });
+    await expect(updateProviderSettings(deps, 'xai', { voice: { id: 'v9', name: 'Autre' } })).rejects.toThrow(
+      /n’existe pas/,
+    );
     const status = await disconnectProvider(deps, 'xai');
     expect(status.state).toBe('not_connected');
     expect(await store.find('xai')).toBeNull();
+  });
+});
+
+describe('a check running while the key changes', () => {
+  /** xAI answers at once for a new key, and only when the test says so for the old one (a slow provider). */
+  async function slowCheck() {
+    const { deps, store } = setup({ current: works });
+    await connectProvider(deps, 'xai', OLD_KEY);
+    let answerOldKey: (outcome: VerificationOutcome) => void = () => undefined;
+    const slow: ConnectionsDeps = {
+      ...deps,
+      verifiers: [
+        {
+          provider: 'xai',
+          verify: (key) =>
+            key === OLD_KEY
+              ? new Promise<VerificationOutcome>((resolve) => {
+                  answerOldKey = resolve;
+                })
+              : Promise.resolve(works),
+        },
+      ],
+    };
+    const check = reverifyProvider(slow, 'xai');
+    await Promise.resolve();
+    return {
+      deps: slow,
+      store,
+      check,
+      answerOldKey: (outcome: VerificationOutcome) => {
+        answerOldKey(outcome);
+      },
+    };
+  }
+
+  it('does not bring back a key disconnected meanwhile', async () => {
+    const { deps, store, check, answerOldKey } = await slowCheck();
+    await disconnectProvider(deps, 'xai');
+    answerOldKey({ ok: false, kind: 'unauthorized' });
+    expect((await check).state).toBe('not_connected');
+    expect(await store.find('xai')).toBeNull();
+  });
+
+  it('does not overwrite a key replaced meanwhile', async () => {
+    const { deps, store, check, answerOldKey } = await slowCheck();
+    await connectProvider(deps, 'xai', NEW_KEY);
+    answerOldKey({ ok: false, kind: 'unauthorized' });
+    expect((await check).state).toBe('connected');
+    expect(await store.find('xai')).toMatchObject({ key: NEW_KEY, state: 'connected' });
   });
 });
 

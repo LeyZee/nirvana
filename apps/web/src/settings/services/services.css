@@ -598,6 +598,14 @@
   color: var(--nv-ink-faint);
   text-align: center;
 }
+.sv-hint[data-error='true'],
+.sv-notice {
+  color: var(--nv-danger);
+}
+.sv-notice {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+}
 
 .sv-page :is(button, a, select):focus-visible {
   outline: 2px solid var(--nv-focus);

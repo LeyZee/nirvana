@@ -161,6 +161,7 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
     async shutdown() {
+      modules.providers.stop();
       await jobs.close();
       await Promise.all([db.close(), adminDb.close()]);
     },

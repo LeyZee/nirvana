@@ -34,6 +34,15 @@ const CHECK = (
 
 function CopyChip({ value }: { value: string }): JSX.Element {
   const [isCopied, setIsCopied] = useState(false);
+  useEffect(() => {
+    if (!isCopied) return undefined;
+    const timer = window.setTimeout(() => {
+      setIsCopied(false);
+    }, 1400);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isCopied]);
   return (
     <button
       type="button"
@@ -42,9 +51,6 @@ function CopyChip({ value }: { value: string }): JSX.Element {
       onClick={() => {
         const done = (): void => {
           setIsCopied(true);
-          window.setTimeout(() => {
-            setIsCopied(false);
-          }, 1400);
         };
         void navigator.clipboard.writeText(value).then(done, done);
       }}
@@ -68,6 +74,9 @@ export function ConnectSheet({
   const [isStepOneOpen, setIsStepOneOpen] = useState(!isReplace);
   const [phase, setPhase] = useState<Phase>({ kind: 'edit', error: null });
   const [voices, setVoices] = useState<readonly ProviderVoice[]>([]);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  /** Opening the console folds step one a beat later, once the new tab has taken focus. */
+  const [isConsoleOpening, setIsConsoleOpening] = useState(false);
   const keyInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
 
@@ -78,6 +87,18 @@ export function ConnectSheet({
   useEffect(() => {
     if (hasOpenedConsole && phase.kind === 'edit') keyInput.current?.focus();
   }, [hasOpenedConsole, phase]);
+
+  useEffect(() => {
+    if (!isConsoleOpening) return undefined;
+    const timer = window.setTimeout(() => {
+      setHasOpenedConsole(true);
+      setIsStepOneOpen(false);
+      setIsConsoleOpening(false);
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isConsoleOpening]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -111,9 +132,14 @@ export function ConnectSheet({
   async function pickVoice(id: string): Promise<void> {
     const voice = voices.find((v) => v.id === id);
     if (voice === undefined) return;
-    const status = await saveSettings(provider, { voice });
-    if (phase.kind === 'done') setPhase({ kind: 'done', status });
-    onChanged(status);
+    try {
+      const status = await saveSettings(provider, { voice });
+      setVoiceError(null);
+      setPhase({ kind: 'done', status });
+      onChanged(status);
+    } catch {
+      setVoiceError('La voix n’a pas été enregistrée. Réessaie dans un instant.');
+    }
   }
 
   const closeLabel = (
@@ -179,7 +205,9 @@ export function ConnectSheet({
                 ))}
               </select>
             </label>
-            <p className="sv-hint">Chaque vocal passe par toi avant d’être envoyé.</p>
+            <p className="sv-hint" data-error={voiceError !== null} aria-live="polite">
+              {voiceError ?? 'Chaque vocal passe par toi avant d’être envoyé.'}
+            </p>
           </>
         ) : null}
         {isReplace ? (
@@ -261,10 +289,7 @@ export function ConnectSheet({
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => {
-                  window.setTimeout(() => {
-                    setHasOpenedConsole(true);
-                    setIsStepOneOpen(false);
-                  }, 150);
+                  setIsConsoleOpening(true);
                 }}
               >
                 {guide.console.label} ↗
@@ -354,7 +379,21 @@ export function ConnectSheet({
   );
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])';
+
+/**
+ * A modal sheet: Tab stays inside it, and closing it gives focus back to whatever opened it (a row's button, the
+ * next-action button), when that is still on the page.
+ */
 function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void }): JSX.Element {
+  const sheet = useRef<HTMLDivElement>(null);
+  const [opener] = useState(() => document.activeElement);
+  useEffect(
+    () => () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    },
+    [opener],
+  );
   return (
     <div
       className="sv-scrim"
@@ -363,10 +402,25 @@ function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void
       }}
     >
       <div
+        ref={sheet}
         className="sv-sheet nv-glass nv-glass--thick"
         role="dialog"
         aria-modal="true"
         aria-labelledby="sv-sheet-title"
+        onKeyDown={(event) => {
+          if (event.key !== 'Tab' || sheet.current === null) return;
+          const items = [...sheet.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
+          const first = items[0];
+          const last = items[items.length - 1];
+          if (first === undefined || last === undefined) return;
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }}
       >
         {children}
       </div>
