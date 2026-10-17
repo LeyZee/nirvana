@@ -1,4 +1,4 @@
-/** Shared Zod schemas and types: auth, conversations, creators, ids, money, enums, errors, events, jobs, connector port data, media, settings, persona. */
+/** Shared Zod schemas and types: auth, conversations, creators, ids, money, enums, errors, events, jobs, connector port data, media, settings, persona, telegram. */
 export const CONTRACTS_PACKAGE = '@nirvana/contracts';
 
 export * from './auth';
@@ -17,3 +17,4 @@ export * from './playground';
 export * from './providers';
 export * from './result';
 export * from './settings';
+export * from './telegram';

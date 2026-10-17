@@ -10,3 +10,4 @@ Procédures d'exploitation, écrites pour être suivies sous stress, par quelqu'
 | `restore.md` | Restaurer la base de données |
 | `reveal-recording.md` | Capturer une session Reveal (HAR) et l'anonymiser avant de la partager (phase 1) |
 | `session-expired.md` | La session Reveal est expirée ou invalide |
+| `telegram.md` | Une notification Telegram arrive, ou n'arrive plus |

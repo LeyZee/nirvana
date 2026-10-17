@@ -1,0 +1,114 @@
+import {
+  ConversationIdSchema,
+  CreatorIdSchema,
+  HandoffCauseSchema,
+  KillSwitchScopeSchema,
+} from '@nirvana/contracts';
+import { z } from 'zod';
+
+import type { ScannedEvent, Signal } from '../domain/signals';
+
+/**
+ * Reads a `domain_events` row into a signal (ADR 0020 §3). Local, tolerant schemas: the module reads the facts it
+ * needs and nothing else, accepts rows written before a field existed, and skips a row it cannot read rather than
+ * blocking the scan behind it. Types without a producer yet (sales, keywords, validations) give `null` here until
+ * their payload enters the contract.
+ */
+
+const HandoffSchema = z.object({
+  conversationId: ConversationIdSchema.optional().catch(undefined),
+  cause: HandoffCauseSchema.optional().catch(undefined),
+});
+
+// TODO(P3-07): `takeover_started` reaches the outbox without its conversation (controlPayload, #54); until the
+// contract carries `conversationId`, a takeover closes nothing.
+const TakeoverSchema = z.object({
+  conversationId: ConversationIdSchema.optional().catch(undefined),
+  userId: z.string().min(1).optional().catch(undefined),
+});
+
+const BudgetSchema = z.object({
+  kind: z.enum(['alert', 'reached']),
+  spentMinor: z.number().int().min(0),
+  capMinor: z.number().int().min(0),
+});
+
+const SessionSchema = z.object({
+  platformAccountId: z.string().min(1),
+  from: z.string(),
+  to: z.string(),
+});
+
+const KillSwitchSchema = z.object({
+  scope: KillSwitchScopeSchema,
+  scopeId: z.string().nullable(),
+  active: z.boolean(),
+  reason: z.string(),
+});
+
+function signalOf(type: string, payload: unknown): Signal | null {
+  switch (type) {
+    case 'handoff_requested': {
+      const parsed = HandoffSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return {
+        kind: 'handoff',
+        conversationId: parsed.data.conversationId ?? null,
+        cause: parsed.data.cause ?? null,
+      };
+    }
+    case 'takeover_started': {
+      const parsed = TakeoverSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return {
+        kind: 'takeover',
+        conversationId: parsed.data.conversationId ?? null,
+        userId: parsed.data.userId ?? null,
+      };
+    }
+    case 'budget_threshold_crossed': {
+      const parsed = BudgetSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return {
+        kind: 'budget',
+        threshold: parsed.data.kind,
+        spentMinor: parsed.data.spentMinor,
+        capMinor: parsed.data.capMinor,
+      };
+    }
+    case 'session_state_changed': {
+      const parsed = SessionSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      const { platformAccountId, from, to } = parsed.data;
+      if (to === 'expired' && from !== 'expired') return { kind: 'session_expired', platformAccountId };
+      if (to === 'valid' && from === 'expired') return { kind: 'session_back', platformAccountId };
+      return null;
+    }
+    case 'kill_switch_toggled': {
+      const parsed = KillSwitchSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return { kind: 'kill_switch', ...parsed.data };
+    }
+    default:
+      return null;
+  }
+}
+
+export interface EventRow {
+  readonly id: string;
+  readonly creatorId: string | null;
+  readonly type: string;
+  readonly payload: unknown;
+  readonly createdAt: Date;
+}
+
+/** Null for a row the module has nothing to say about. */
+export function toScannedEvent(row: EventRow): ScannedEvent | null {
+  const signal = signalOf(row.type, row.payload);
+  if (signal === null) return null;
+  if (row.creatorId === null) return { id: row.id, creatorId: null, createdAt: row.createdAt, signal };
+  const creatorId = CreatorIdSchema.safeParse(row.creatorId);
+  return creatorId.success
+    ? { id: row.id, creatorId: creatorId.data, createdAt: row.createdAt, signal }
+    : null;
+}

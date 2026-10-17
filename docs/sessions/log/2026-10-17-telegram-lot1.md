@@ -1,0 +1,7 @@
+# 2026-10-17 — P3-07 lot 1 : moteur des notifications Telegram — done
+Fait : module `telegram` (domaine pur, scan de l'outbox, livraison par groupe à la cadence de Telegram, lecture des groupes par `getUpdates`, réglages des bots et du routage, journal, bilan du matin, purge, `nightCounts` pour le Dashboard), contrat `telegram.ts`, schéma et migration 0006 avec le déclencheur sur `domain_events`, routes `/v1/settings/telegram`, README, glossaire, runbook `telegram.md`, note dans `rotate-secrets.md`. ADR 0020 aligné sur #54 et #56.
+Pas fait : le branchement (noms de jobs dans `JOB_NAMES`, composition root, worker, crontab) revient à Bilan, sur le patch de la PR ; l'écran (lot 2).
+Décisions : le déclencheur avale toute erreur d'`enqueue_job` (avertissement, le cron rattrape) ; le module rescelle les jetons au démarrage plutôt qu'un script d'exploitation ; `keyword` est une cause importante ; un message groupé n'est jamais réécrit, sa fermeture part en réponse ; `telegram_state` remplace le curseur seul pour porter aussi la version du routage.
+Découvertes : `takeover_started` arrive à l'outbox sans `conversationId` (controlPayload) : sans lui, « Pris en main par … » ne peut pas fermer le message (demandé à Bilan, `TODO(P3-07)` dans `infra/events.ts`). Le test « l'agent n'envoie plus rien pendant l'attente d'un humain » de la fiche porte sur `conversations` : demandé à Bilan.
+Candidats à suppression : aucun.
+Vérifié : `pnpm check` ✓, tests unitaires du module (23) ✓, intégration Postgres du module (13) ✓.

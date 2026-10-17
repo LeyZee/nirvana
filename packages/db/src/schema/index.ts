@@ -11,3 +11,4 @@ export * from './persona';
 export * from './supervision';
 export * from './system';
 export * from './tenancy';
+export * from './telegram';
