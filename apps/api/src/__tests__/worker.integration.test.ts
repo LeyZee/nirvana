@@ -129,7 +129,7 @@ describe('worker (Graphile, ADR 0006)', () => {
   });
 
   it('is ready with a fresh heartbeat, not ready once it is 90 s old or gone', async () => {
-    expect(await app.readiness()).toEqual({
+    expect(await app.readiness()).toMatchObject({
       isReady: true,
       checks: { database: true, migrations: true, worker: true },
     });
@@ -149,6 +149,18 @@ describe('worker (Graphile, ADR 0006)', () => {
     expect(await heartbeatAged(91)).toBe(false);
   });
 
+  it('counts the jobs Graphile gave up on, without making the API unready', async () => {
+    const before = (await app.readiness()).deadJobs ?? 0;
+    await test.admin.db.execute(sql`
+      select graphile_worker.add_job('conversation.respond', '{}'::json, max_attempts => 1, run_at => now() + interval '1 day')`);
+    await test.admin.db.execute(sql`
+      update graphile_worker._private_jobs set attempts = max_attempts, last_error = 'test'
+      where id = (select max(id) from graphile_worker._private_jobs)`);
+    const readiness = await app.readiness();
+    expect(readiness.deadJobs).toBe(before + 1);
+    expect(readiness.checks.database).toBe(true);
+  });
+
   it('reports the database as down when it cannot be reached', async () => {
     const unreachable = createDbClient('postgres://nirvana_app:x@127.0.0.1:1/none', {
       connectionTimeoutMillis: 500,
@@ -158,6 +170,7 @@ describe('worker (Graphile, ADR 0006)', () => {
     expect(readiness).toEqual({
       isReady: false,
       checks: { database: false, migrations: false, worker: false },
+      deadJobs: null,
     });
     await unreachable.close();
   });

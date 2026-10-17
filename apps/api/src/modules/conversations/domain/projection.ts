@@ -39,7 +39,9 @@ export function commandFor(event: EventBody): ConversationCommand | null {
     return event.payload.direction === 'inbound' ? 'receive_inbound' : null;
   }
   if (event.type === 'send_failed') {
-    return event.payload.attempt >= MAX_SEND_ATTEMPTS ? 'send_failed_final' : null;
+    // `isFinal` is absent from events written before it existed: the attempt count decides for them.
+    const isFinal = event.payload.isFinal ?? event.payload.attempt >= MAX_SEND_ATTEMPTS;
+    return isFinal ? 'send_failed_final' : null;
   }
   return COMMANDS[event.type] ?? null;
 }

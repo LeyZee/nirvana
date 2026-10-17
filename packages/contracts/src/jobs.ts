@@ -60,6 +60,23 @@ export const JOB_PAYLOADS = {
 
 export type JobPayload<J extends JobName> = z.infer<(typeof JOB_PAYLOADS)[J]>;
 
+/**
+ * Attempts before Graphile gives a job up (it then stays in its table, counted by `/ready` as dead). Graphile's own
+ * default is 25: a rerun of `respond` pays the LLM again, a broken payload would loop for a day. A cron job runs
+ * once; the next tick is its retry.
+ */
+export const JOB_MAX_ATTEMPTS = {
+  'conversation.respond': 3,
+  'conversation.send': 3,
+  'conversation.follow_up': 3,
+  'connector.dispatch': 1,
+  'connector.poll': 3,
+  'connector.reconcile': 3,
+  'fans.refresh_summary': 3,
+  'media.describe': 3,
+  'providers.check_credentials': 1,
+} as const satisfies Record<JobName, number>;
+
 /** Jobs debounced per conversation: a new one replaces the pending one (`jobKeyMode: 'replace'`). */
 export const DEBOUNCED_JOBS = [
   'conversation.respond',

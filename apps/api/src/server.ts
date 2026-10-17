@@ -156,9 +156,11 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   server.get('/health', { config: { rateLimit: false } }, () => ({ status: 'ok' }));
   server.get('/ready', { config: { rateLimit: false } }, async (_request, reply) => {
     const readiness = await deps.readiness();
-    return reply
-      .code(readiness.isReady ? 200 : 503)
-      .send({ status: readiness.isReady ? 'ready' : 'not_ready', checks: readiness.checks });
+    return reply.code(readiness.isReady ? 200 : 503).send({
+      status: readiness.isReady ? 'ready' : 'not_ready',
+      checks: readiness.checks,
+      deadJobs: readiness.deadJobs ?? null,
+    });
   });
 
   await server.register(

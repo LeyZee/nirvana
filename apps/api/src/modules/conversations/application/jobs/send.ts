@@ -147,7 +147,7 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
             sendable.conversation,
             {
               type: 'send_failed',
-              payload: { draftId: payload.draftId, idempotencyKey, attempt, error: code },
+              payload: { draftId: payload.draftId, idempotencyKey, attempt, error: code, isFinal },
             },
             meta(payload),
           );
