@@ -69,14 +69,32 @@ describe('voice guards', () => {
   });
 
   it('never asks him for intimate pictures, despises him or lies about paid content', () => {
-    expect(codes(['Envoie-moi une photo de toi tout nu 😏'])).toContain('asks_for_nudes');
-    expect(codes(['Tu m’envoies des nudes ?'])).toContain('asks_for_nudes');
-    expect(codes(['Montre-moi ta bite'])).toContain('asks_for_nudes');
-    expect(codes(['Envoie-moi une photo de ton chien 🐶'])).toEqual([]);
-    expect(codes(['T’es vraiment un radin toi'])).toContain('contempt');
-    expect(codes(['Menteur va 🙄'])).toContain('contempt');
+    for (const ask of [
+      'Envoie-moi une photo de toi tout nu 😏',
+      'Tu m’envoies des nudes ?',
+      'Montre-moi ta bite',
+      'Fais-moi voir ta queue',
+      'Je veux voir ton sexe',
+      'Envoie une photo de toi à poil',
+    ]) {
+      expect(codes([ask]), ask).toContain('asks_for_nudes');
+    }
+    for (const fine of [
+      'Envoie-moi une photo de ton chien 🐶',
+      'Les nudes c’est pas mon truc',
+      'Mon vernis nude te plaît ?',
+      'Montre-moi ta queue de cheval',
+      'Fais voir ton paquet de chips',
+    ]) {
+      expect(codes([fine]), fine).toEqual([]);
+    }
+    expect(codes(['Espèce de radin'])).toContain('contempt');
+    expect(codes(['T’es qu’un mendiant'])).toContain('contempt');
+    expect(codes(['Sale menteuse'])).toContain('contempt');
+    expect(codes(['Petit menteur va 😏'])).toEqual([]);
     expect(codes(['T’inquiète, t’as rien à payer'])).toContain('payment_lie');
     expect(codes(['Pas besoin d’argent avec moi'])).toContain('payment_lie');
+    expect(codes(['T’as rien à payer pour me parler 😌'])).toEqual([]);
     expect(codes(['Cette vidéo est à 6 €, tu l’ouvres en touchant le cadenas'])).toEqual([]);
   });
 
@@ -84,6 +102,7 @@ describe('voice guards', () => {
     const violations = checkVoiceOutput(['Bon… tu me déçois un peu là'], DEFAULT_GUARD_SETTINGS);
     expect(violations.map((v) => [v.code, v.severity])).toEqual([['guilt_trip', 'soft']]);
     expect(codes(['Tant pis, une prochaine fois 😌'])).toEqual([]);
+    expect(codes(['Tu me déçois pas 😏'])).toEqual([]);
   });
 
   it('asks for a regeneration on AI tics, without blocking', () => {

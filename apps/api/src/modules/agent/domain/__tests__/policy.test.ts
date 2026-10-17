@@ -4,7 +4,14 @@ import { offerDecision, type OfferContext, type PastOffer } from '../policy';
 
 const NOW = new Date('2026-10-17T20:00:00Z'); // 22:00 in Paris
 const at = (iso: string): Date => new Date(iso);
-const base: OfferContext = { now: NOW, timeZone: 'Europe/Paris', offers: [], hasNoBudget: false, risks: [] };
+const base: OfferContext = {
+  now: NOW,
+  timeZone: 'Europe/Paris',
+  offers: [],
+  hasNoBudget: false,
+  risks: [],
+  fanAsksForPaid: false,
+};
 const offer = (iso: string, outcome: PastOffer['outcome']): PastOffer => ({ at: at(iso), outcome });
 
 describe('offerDecision', () => {
@@ -24,6 +31,26 @@ describe('offerDecision', () => {
     expect(offerDecision({ ...base, offers: refused })).toEqual({ allowed: false, reason: 'refused_today' });
     expect(offerDecision({ ...base, offers: refused, now: at('2026-10-18T09:00:00Z') })).toEqual({
       allowed: true,
+    });
+  });
+
+  it('sells again the same day when he bought after refusing', () => {
+    const offers = [offer('2026-10-17T18:00:00Z', 'refused'), offer('2026-10-17T19:00:00Z', 'purchased')];
+    expect(offerDecision({ ...base, offers })).toEqual({ allowed: true });
+  });
+
+  it('lifts the stops that wait for him when he asks for paid content himself, never the daily ceiling', () => {
+    const days = ['10', '11', '12', '13', '14'].map((d) => offer(`2026-10-${d}T19:00:00Z`, 'pending'));
+    expect(offerDecision({ ...base, offers: days, fanAsksForPaid: true })).toEqual({ allowed: true });
+    expect(offerDecision({ ...base, hasNoBudget: true, fanAsksForPaid: true })).toEqual({ allowed: true });
+    expect(offerDecision({ ...base, risks: ['money_trouble'], fanAsksForPaid: true })).toEqual({
+      allowed: false,
+      reason: 'risk',
+    });
+    const three = ['17', '18', '19'].map((h) => offer(`2026-10-17T${h}:00:00Z`, 'purchased'));
+    expect(offerDecision({ ...base, offers: three, fanAsksForPaid: true })).toEqual({
+      allowed: false,
+      reason: 'daily_limit',
     });
   });
 

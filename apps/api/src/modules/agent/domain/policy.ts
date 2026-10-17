@@ -27,6 +27,8 @@ export interface OfferContext {
   /** Set by code when he says he cannot pay; lifted only when he comes back to paid content himself. */
   readonly hasNoBudget: boolean;
   readonly risks: readonly string[];
+  /** He asks for paid content himself (« tu as des vidéos ? »): the stops that wait for him are lifted. */
+  readonly fanAsksForPaid: boolean;
   readonly limits?: OfferLimits;
 }
 
@@ -57,14 +59,18 @@ function localDay(date: Date, timeZone: string): string {
 export function offerDecision(context: OfferContext): OfferDecision {
   const limits = context.limits ?? DEFAULT_OFFER_LIMITS;
   if (context.risks.some((risk) => NO_SALE_RISKS.includes(risk))) return { allowed: false, reason: 'risk' };
-  if (context.hasNoBudget) return { allowed: false, reason: 'no_budget' };
+  const offers = [...context.offers].sort((a, b) => a.at.getTime() - b.at.getTime());
   const today = localDay(context.now, context.timeZone);
-  const offersToday = context.offers.filter((o) => localDay(o.at, context.timeZone) === today);
-  // A refusal ends the day's selling: no second try the same day, and a light hand the next.
-  if (offersToday.some((o) => o.outcome === 'refused')) return { allowed: false, reason: 'refused_today' };
+  const offersToday = offers.filter((o) => localDay(o.at, context.timeZone) === today);
+  // The day's ceiling holds even when he asks: the corpus sells within one warm session, then stops.
   if (offersToday.length >= limits.maxPerDay) return { allowed: false, reason: 'daily_limit' };
-  const lastPurchase = context.offers.findLastIndex((o) => o.outcome === 'purchased');
-  if (context.offers.length - (lastPurchase + 1) >= limits.maxWithoutPurchase) {
+  // He came back to paid content himself: no budget, a refusal or a long run without purchase no longer stop her.
+  if (context.fanAsksForPaid) return { allowed: true };
+  if (context.hasNoBudget) return { allowed: false, reason: 'no_budget' };
+  // A refusal ends the day's selling, unless he bought afterwards.
+  if (offersToday.at(-1)?.outcome === 'refused') return { allowed: false, reason: 'refused_today' };
+  const lastPurchase = offers.findLastIndex((o) => o.outcome === 'purchased');
+  if (offers.length - (lastPurchase + 1) >= limits.maxWithoutPurchase) {
     return { allowed: false, reason: 'too_many_without_purchase' };
   }
   return { allowed: true };
