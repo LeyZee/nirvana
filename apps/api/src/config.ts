@@ -14,8 +14,8 @@ export function secretOrNull(value: string | undefined): string | null {
   return value === undefined || value.trim() === '' || value.includes('replace-') ? null : value;
 }
 
-/** A path left empty in `.env` counts as unset, like a secret (`secretOrNull`). */
-const optionalPath = z.preprocess(
+/** A value left empty in `.env` (a path, a key) counts as unset, like a secret (`secretOrNull`). */
+const optionalValue = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.string().min(1).optional(),
 );
@@ -49,18 +49,18 @@ const configSchema = z
     NIRVANA_INLINE_WORKER: flag,
     /** AI service keys pasted in the dashboard are sealed with these (ADR 0016), `v2:<base64>,v1:<base64>`. */
     CREDENTIALS_ENCRYPTION_KEYS: z.string().min(1).optional(),
-    /** Development only: AI service keys read from the environment, ignored in production (ADR 0016). */
-    LLM_XAI_API_KEY: z.string().min(1).optional(),
-    LLM_GOOGLE_API_KEY: z.string().min(1).optional(),
-    SPEECH_ELEVENLABS_API_KEY: z.string().min(1).optional(),
+    /** Development only: AI service keys read from the environment, ignored in production (ADR 0016). Empty = unset. */
+    LLM_XAI_API_KEY: optionalValue,
+    LLM_GOOGLE_API_KEY: optionalValue,
+    SPEECH_ELEVENLABS_API_KEY: optionalValue,
     /** AES-256-GCM keys of the platform sessions, `v2:<base64>,v1:<base64>` newest first (security.md). */
     SESSION_ENCRYPTION_KEYS: z.string().optional(),
     /** Device token of the extension's « Sync » (`POST /v1/connector/sessions`); `openssl rand -base64 32`. */
     EXTENSION_DEVICE_TOKEN: z.string().optional(),
     /** Entraîner > Playground: the persona YAML to train on; the fictional demo persona when absent (ADR 0010). */
-    PLAYGROUND_PERSONA_PATH: optionalPath,
+    PLAYGROUND_PERSONA_PATH: optionalValue,
     /** Where the playground ratings are kept, out of the repository; `.scratch/training` when absent. */
-    NIRVANA_TRAINING_DIR: optionalPath,
+    NIRVANA_TRAINING_DIR: optionalValue,
   })
   .refine(
     // `.env.example` placeholders are long enough to pass `min(32)`; production must not start with one.

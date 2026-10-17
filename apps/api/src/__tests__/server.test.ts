@@ -260,6 +260,12 @@ describe('loadConfig', () => {
     expect(() => testConfig({ ...placeholder, NODE_ENV: 'production' })).toThrow(/AUTH_SECRET/);
   });
 
+  it('takes an AI key left empty in .env as unset', () => {
+    const config = testConfig({ LLM_XAI_API_KEY: '', LLM_GOOGLE_API_KEY: '', SPEECH_ELEVENLABS_API_KEY: '' });
+    expect(config.LLM_XAI_API_KEY).toBeUndefined();
+    expect(config.SPEECH_ELEVENLABS_API_KEY).toBeUndefined();
+  });
+
   it('reads the inline-worker flag', () => {
     expect(testConfig().NIRVANA_INLINE_WORKER).toBe(false);
     expect(testConfig({ NIRVANA_INLINE_WORKER: '1' }).NIRVANA_INLINE_WORKER).toBe(true);

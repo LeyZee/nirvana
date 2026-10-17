@@ -4,7 +4,7 @@ Pour essayer le dashboard sur son PC (Windows, macOS ou Linux), avec une base Po
 
 ## Une fois
 
-1. Installer **Node 22.13 ou plus** (`.nvmrc`), **Docker Desktop**, puis activer pnpm :
+1. Installer **Node 22** (22.13 ou plus, mais pas 23 ni au-delà : `.nvmrc`), **Docker Desktop**, puis activer pnpm :
 
    ```powershell
    corepack enable
@@ -29,6 +29,8 @@ Pour essayer le dashboard sur son PC (Windows, macOS ou Linux), avec une base Po
    - `CREDENTIALS_ENCRYPTION_KEYS` chiffre les clés d'IA collées dans Réglages › Modèles IA › Services. Sans elle, ces clés restent en mémoire et disparaissent à chaque redémarrage.
    - `SESSION_ENCRYPTION_KEYS` chiffre la session Reveal que l'extension déposera.
    - Ces clés ne se changent plus ensuite : une clé perdue rend illisible ce qu'elle a chiffré.
+
+   Les clés d'IA (`LLM_XAI_API_KEY`, `LLM_GOOGLE_API_KEY`, `SPEECH_ELEVENLABS_API_KEY`) peuvent rester vides : le service correspondant est alors simplement non configuré, et on peut coller sa clé plus tard dans Réglages › Modèles IA › Services.
 
    Les autres valeurs de l'exemple conviennent en local. Les mots de passe `change-me` sont ceux de la base Docker. `WEB_ORIGIN` et `AUTH_BASE_URL` pointent sur le dashboard (`http://localhost:5173`). `EXTENSION_DEVICE_TOKEN` attend l'extension et peut rester tel quel.
 
@@ -84,7 +86,8 @@ pnpm ops:reencrypt-sessions                                 # après une rotatio
 
 | Symptôme | Cause probable | Geste |
 |---|---|---|
-| `pnpm install` refuse la version de Node | Node trop ancien | Installer Node 22.13 ou plus |
+| `pnpm install` refuse la version de Node | Node ni 22.13 ni plus récent en 22 (un Node 23, 24 ou 25 est refusé aussi) | Installer Node 22 LTS : sur nodejs.org, ou `nvm install 22` puis `nvm use 22` avec nvm-windows |
+| `db:migrate` ou `creator:create` : `ECONNREFUSED` alors que Docker est installé | Docker Desktop n'est pas lancé | Ouvrir Docker Desktop, attendre « Engine running », puis `docker compose up -d` |
 | `db:migrate` : `ECONNREFUSED` | Postgres pas démarré | `docker compose up -d`, attendre 10 s |
 | `db:migrate` : `password authentication failed` | `.env` modifié ou ancien volume Docker | Remettre `change-me` dans les deux URL, ou repartir d'une base vide (ci-dessous) |
 | L'API s'arrête au démarrage avec une erreur de configuration | Variable manquante ou invalide dans `.env` | Lire le nom de la variable dans le message, comparer avec `.env.example` |
