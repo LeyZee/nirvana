@@ -1,9 +1,9 @@
 /**
  * Creates a dashboard `owner` account; there is no public sign-up (P0-07a).
  * Usage: `pnpm owner:create --email <email> --name <name>`, then type the password (12 characters minimum).
- * The password is read from the terminal, never from an argument, so it stays out of the shell history.
+ * The password is read from the terminal without echo, twice, never from an argument: it stays off the screen and out
+ * of the shell history.
  */
-import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
 import { createOwner } from '../auth';
@@ -11,15 +11,19 @@ import { createApp } from '../composition-root';
 import { loadConfig } from '../config';
 import { createLogger } from '../logger';
 
+import { readSecret } from './read-secret';
+
 const { values } = parseArgs({ options: { email: { type: 'string' }, name: { type: 'string' } } });
 if (values.email === undefined || values.name === undefined) {
   console.error('Usage: pnpm owner:create --email <email> --name <name>');
   process.exit(1);
 }
 
-const terminal = createInterface({ input: process.stdin, output: process.stdout });
-const password = await terminal.question('Mot de passe (12 caractères minimum) : ');
-terminal.close();
+const password = await readSecret('Mot de passe (12 caractères minimum) : ');
+if ((await readSecret('Confirme le mot de passe : ')) !== password) {
+  console.error('Les deux mots de passe ne sont pas identiques. Rien n’a été créé.');
+  process.exit(1);
+}
 
 const config = loadConfig();
 const app = await createApp(config, createLogger(config));

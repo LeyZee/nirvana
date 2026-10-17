@@ -43,7 +43,7 @@ Pour essayer le dashboard sur son PC (Windows, macOS ou Linux), avec une base Po
 
    `db:migrate` doit finir par `Migrations applied.`
 
-5. Créer son compte (il n'y a pas d'inscription publique) ; le mot de passe est demandé ensuite, 12 caractères minimum :
+5. Créer son compte (il n'y a pas d'inscription publique) ; le mot de passe est demandé ensuite deux fois, sans s'afficher pendant la frappe, 12 caractères minimum :
 
    ```powershell
    pnpm owner:create --email charles@example.com --name Charles
