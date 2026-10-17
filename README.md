@@ -43,7 +43,7 @@
 | ✅ **Sur `main`** | **Premier agent, en terminal** : passerelle LLM multi-fournisseurs (`packages/llm`, Grok 4.7 par défaut, repli Mistral, coût de chaque appel, journal sans contenu), prompts voix et cerveau versionnés, message du fan isolé comme donnée (`wrapUntrusted`), gardes de sortie en code (aveu d'IA, « je t'aime », rencontre promise, coordonnées, tics d'IA, termes interdits de la persona, longueur), playground terminal et test express. | P3-01 · #16 |
 | ✅ **Sur `main`** | **Persona** : un seul schéma Zod calqué sur la fiche créatrice d'OnlyChat (Détails, Infos en plus, Comportement, Stratégies, Relances, Notifications) et un placeholder qui le valide. | P0-08 · #17 |
 | ✅ **Sur `main`** | **Design system** « Liquid Glass » (`packages/design-system`), logo et déclinaisons (`brand/`). | D-01 |
-| ✅ **Sur `main`** | **Fiches validées** : mémoire du fan sur les notes Reveal (P3-02), catalogue de vente = index des scripts, étapes et bundles (P6-01). Fiche proposée : vocaux avec la voix clonée. | #18, #20, #21 |
+| ✅ **Sur `main`** | **Fiches validées** : mémoire du fan sur les notes Reveal (P3-02), catalogue de vente = index des scripts, étapes et bundles (P6-01). Connexion des services IA depuis le dashboard (P3-03, ADR 0016). Fiche proposée : vocaux avec la voix clonée. | #18, #20, #21, #22 |
 | ✅ **Sur `main`** | **Connexion Reveal préparée** : inventaire de ce que Reveal expose, runbook de capture réseau, anonymiseur testé, spécification de `FakeReveal`. Aucune capture faite à ce jour : elle attend le chatteur « bot » dans Reveal. | #15 |
 | 🔶 **PR ouverte** | **Vision et anti-injection** : médias des fans décrits par Gemini 3.8 Flash avec bascule automatique vers Grok, fiche média par vidéo de bundle, pièges texte, image, vocal et caractères invisibles. | P3-04 · #19 (brouillon) |
 | ⏳ **Pas commencé** | Base de données et RLS, journal de conversation, worker, connecteur Reveal, dashboard, extension (seul le squelette du popup existe). | P0-02 → P0-07, P1 |
@@ -99,7 +99,7 @@ Une seule passerelle (`LlmGateway`), un modèle par rôle, changeable sans touch
 | Vision (photos, vidéos, vocaux des fans et des bundles) | **Gemini 3.8 Flash** | Grok 4.7, bascule automatique | PR #19 |
 | Vocaux avec la voix clonée de la créatrice | **ElevenLabs v4**, en copilote obligatoire | banque de vrais vocaux | fiche proposée |
 
-Aujourd'hui les clés passent par les variables d'environnement (`.env.example`). Prévu : brancher Grok, Gemini et ElevenLabs depuis Réglages › Modèles IA, avec des clés chiffrées côté serveur (ADR en préparation). L'extension ne porte jamais de clé.
+Aujourd'hui les clés passent par les variables d'environnement (`.env.example`). Décidé, pas encore codé : on colle les clés de Grok, Gemini et ElevenLabs dans Réglages › Modèles IA, elles sont vérifiées puis chiffrées en base et ne ressortent jamais ; les variables d'environnement restent le repli de dev ([ADR 0016](docs/adr/0016-provider-keys-entered-in-dashboard.md), fiche P3-03). L'extension ne porte jamais de clé.
 
 ## Architecture
 
@@ -198,7 +198,7 @@ Les écrans de l'application n'existent pas encore ; le design system, si. **Liq
 └── docs/
     ├── 00-START-HERE.md      quoi lire selon la tâche
     ├── architecture/         vue d'ensemble, modules, données, connecteurs, moteur IA, menaces
-    ├── adr/                  15 décisions (14 acceptées, 1 proposée)
+    ├── adr/                  16 décisions (15 acceptées, 1 proposée)
     ├── conventions/          code, tests, git, sécurité, hygiène
     ├── design/               guide du design system et ses images
     ├── reference/            OnlyChat, schéma persona, fournisseurs LLM, Reveal

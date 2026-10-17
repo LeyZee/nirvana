@@ -40,3 +40,4 @@ Date : AAAA-MM-JJ
 | 0013 | Code en anglais, documentation, UI et persona en français | accepted |
 | 0014 | Politique d'hygiène du dépôt | accepted |
 | 0015 | Design system partagé dans `packages/design-system` | proposed |
+| 0016 | Clés des fournisseurs IA saisies dans le dashboard, chiffrées en base | accepted |
