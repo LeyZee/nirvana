@@ -7,6 +7,24 @@ export {
   type GuardViolation,
 } from './domain/guards';
 export { assessTrap, screenMedia, type TrapAssessment } from './domain/traps';
+export { describeSituation, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
+export {
+  parseRejection,
+  rateReport,
+  REJECT_REASON_LABELS,
+  REJECT_REASONS,
+  suggestDestination,
+  VALIDATION_TARGET,
+  versionLabel,
+  type Verdict,
+} from './domain/calibration';
+export {
+  replayableTests,
+  voiceExamples,
+  type CalibrationRecord,
+  type RatedMoment,
+} from './infra/calibration-record';
+export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 
 export interface AgentModule {
   readonly name: 'agent';

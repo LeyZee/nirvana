@@ -21,6 +21,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P0-02 Contrats partagés | done | `log/2026-10-17-p0-02.md` |
 | 2026-10-17 | P0-03 Base de données | done | `log/2026-10-17-p0-03.md` |
 | 2026-10-17 | P0-04 Serveur et worker | done | `log/2026-10-17-p0-04.md` |
+| 2026-10-17 | P3-05 Boucle de calibrage dans le playground (Opus) | in_progress | `log/2026-10-17-p3-05.md` |
 
 ## Incidents (liste vivante)
 

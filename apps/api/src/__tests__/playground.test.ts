@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import type { MediaDescription } from '@nirvana/contracts';
-import type { Brief, LlmGateway, VoiceInput, VoiceOutput } from '@nirvana/llm';
+import type { Brief, ConversationInput, LlmGateway, VoiceInput, VoiceOutput } from '@nirvana/llm';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_GUARD_SETTINGS } from '../modules/agent/index';
@@ -30,11 +30,18 @@ const META = {
   promptHash: 'h',
 } as const;
 
-function fakeGateway(voice: VoiceOutput, voiceInputs: VoiceInput[] = []): LlmGateway {
+function fakeGateway(
+  voice: VoiceOutput,
+  voiceInputs: VoiceInput[] = [],
+  brainInputs: ConversationInput[] = [],
+): LlmGateway {
   return {
     sense: () => Promise.reject(new Error('not used')),
     transcribe: () => Promise.reject(new Error('not used')),
-    brain: () => Promise.resolve({ ok: true, value: { output: BRIEF, meta: META } }),
+    brain: (input) => {
+      brainInputs.push(input);
+      return Promise.resolve({ ok: true, value: { output: BRIEF, meta: META } });
+    },
     voice: (input) => {
       voiceInputs.push(input);
       return Promise.resolve({ ok: true, value: { output: voice, meta: META } });
@@ -80,6 +87,88 @@ describe('playground session', () => {
     expect(turn.isBlocked).toBe(true);
     expect(turn.violations.map((v) => v.code)).toContain('ai_disclosure');
     expect(session.history.map((t) => t.from)).toEqual(['fan']);
+  });
+});
+
+describe('playground session, calibration', () => {
+  const make = (deps: Partial<Parameters<typeof createPlaygroundSession>[0]> = {}) =>
+    createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['Coucou toi'] }),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+      now: () => new Date('2026-10-17T10:00:00Z'),
+      ...deps,
+    });
+
+  it('gives the brain and the voice the moment, and her corrected examples', async () => {
+    const brainInputs: ConversationInput[] = [];
+    const voiceInputs: VoiceInput[] = [];
+    const session = make({
+      gateway: fakeGateway({ bubbles: ['Coucou'] }, voiceInputs, brainInputs),
+      voiceExamples: ['Okidoki toi ✨'],
+    });
+    session.setSituation({ spentCents: 3_000 });
+    session.advance(11 * 3_600_000);
+
+    await session.handleFanMessage('Salut');
+
+    expect(brainInputs[0]?.situation).toContain('23 h 00 (nuit)');
+    expect(voiceInputs[0]?.situation).toContain('30,00 $');
+    expect(voiceInputs[0]?.personaSheet).toContain('- Okidoki toi ✨');
+    expect(session.lastExchange?.moment.history).toHaveLength(1);
+    expect(session.lastExchange?.moment.brief?.replyBrief).toBe(BRIEF.replyBrief);
+  });
+
+  it('goes on from the corrected answer', async () => {
+    const session = make();
+    await session.handleFanMessage('Salut');
+    session.replaceLastAnswer('Coucou toi ✨');
+    expect(session.history.map((t) => t.text)).toEqual(['Salut', 'Coucou toi ✨']);
+  });
+
+  it('replaces her answer in place when she sent a media after it', async () => {
+    const session = make();
+    await session.handleFanMessage('Salut');
+    session.sendCreatorMedia(PHOTO, true);
+    session.replaceLastAnswer('Coucou toi ✨');
+    expect(session.history.map((t) => [t.from, t.text, t.media !== undefined])).toEqual([
+      ['fan', 'Salut', true],
+      ['creator', 'Coucou toi ✨', false],
+      ['creator', '', true],
+    ]);
+  });
+
+  it('keeps the moment as facts, so a replay writes it with the current code', async () => {
+    const session = make({ timeZone: 'America/Montreal' });
+    await session.handleFanMessage('Salut');
+    expect(session.lastExchange?.moment.situation.timeZone).toBe('America/Montreal');
+    expect(session.lastExchange?.moment.situation.now.toISOString()).toBe('2026-10-17T10:00:00.000Z');
+  });
+
+  it('replays from his n-th message on a new branch', async () => {
+    const session = make();
+    await session.handleFanMessage('Un');
+    await session.handleFanMessage('Deux');
+    await session.handleFanMessage('Trois');
+
+    const replay = session.branchAt(2);
+
+    expect(replay?.text).toBe('Deux');
+    expect(session.history.map((t) => t.text)).toEqual(['Un', 'Coucou toi']);
+    expect(session.lastExchange).toBeUndefined();
+    expect(session.branchAt(9)).toBeUndefined();
+  });
+
+  it('compares the same moment with another voice, without touching the conversation', async () => {
+    const session = make();
+    expect(await session.compareVoice(fakeGateway({ bubbles: ['x'] }))).toBeUndefined();
+    await session.handleFanMessage('Salut');
+
+    const comparison = await session.compareVoice(fakeGateway({ bubbles: ['Hey toi'] }));
+
+    expect(comparison?.bubbles).toEqual(['Hey toi']);
+    expect(session.history).toHaveLength(2);
   });
 });
 

@@ -73,6 +73,8 @@ Des fans tentent de prouver qu'ils parlent à une machine : recette de la tarte 
 5. Médias entrants décrits (description, pas le fichier).
 6. État : cooldowns, slots KYC manquants, heure locale, script actif (P6).
 
+L'heure de la créatrice (jour ou nuit, dans son fuseau), l'ancienneté de la relation et ce que le fan a dépensé arrivent dans une section « Le moment » des prompts de cerveau et de voix (1.4.0). Le code l'écrit (`describeSituation`, `modules/agent/domain/situation.ts`) : ce sont des faits de confiance, pas des données du fan, et ce qu'ils permettent (scripts de nuit, délai de sexualisation) reste décidé par la politique.
+
 ## Le Brief (sortie du cerveau)
 
 ```ts
@@ -111,6 +113,10 @@ Après la voix, sur le texte final : sortie d'assistante (recette, code, liste, 
 ## Humanisation (envoi)
 
 Délai de première réponse dans une fenêtre dépendant de l'heure et de la persona ; « temps de frappe » ≈ 40-60 mots/min avec jitter ; bulles séparées ; `setTyping` si la plateforme l'expose ; jamais deux réponses identiques à deux fans ; horaires de vie avec variations hebdomadaires.
+
+## Calibrage (playground, `modules/agent/domain/calibration.ts`)
+
+Chaque réponse du playground se note : validée telle quelle, corrigée (la version réécrite), ou rejetée avec une raison (sonne IA, hors personnage, trop long, trop tôt sexuel, vente ratée, a oublié un fait, autre). Le **taux de validation** est la part des réponses validées sans retouche parmi les 50 dernières notées, lu par version du prompt de voix et modèle, avec la tendance sur la version précédente ; objectif 80 %, mode automatique grisé en dessous. Une correction devient un exemple de voix ; un rejet pour une raison que le code doit porter (sexualisation, vente, mémoire) devient une règle à valider ; les autres deviennent des tests, rejoués après chaque changement. Les notes vivent hors dépôt (`.scratch/training/`, ou `NIRVANA_TRAINING_DIR`) jusqu'à la base. Spec complète, Coach compris : `moteur-ia/playground-entrainement.md` (dossier du projet).
 
 ## Évaluations
 
