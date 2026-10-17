@@ -136,16 +136,16 @@ Le playground n'a **pas besoin de Reveal**. Il lui faut les fondations (P0), la 
 
 ### Réglages › Persona (prototype, 17/10)
 
-Charles veut saisir la persona dans l'interface, comme dans la fiche créatrice d'OnlyChat (Détails, Infos en plus, Comportement, Stratégies). Le prototype en propose une première forme, avec un contenu fictif :
+Charles veut saisir la persona dans l'interface, et la calquer sur la fiche créatrice d'OnlyChat, sans rien ajouter (« ils sont les boss pour ça »). Le prototype reprend donc leurs onglets et leurs champs, lus par le MCP OnlyChat, avec un contenu fictif :
 
-- **Identité** et apparence : ce que les fans demandent tout le temps (une réponse fausse casse l'illusion).
-- **Infos en plus** : des fiches déclenchées par mots-clés, injectées seulement quand le fan aborde le sujet (le principe des lorebooks noté par le fil Voix).
-- **Comportement** : registre, longueur, emojis, refus, cas de passage à un humain. `identity_policy` y apparaît verrouillée (ADR 0012), pas réglable.
-- **Stratégie de vente** : étapes du parcours avec leur condition de passage, prix et rythme.
-- Ce qui est une règle métier (refus, délais, petites fautes, prix, cooldowns) porte la mention « Appliqué par le code » : la page écrit des données que le code lit, elle ne remplit pas un prompt (CLAUDE.md, règle 3).
-- Une barre de version en tête : chaque modification crée une version (ADR 0010), rejouée contre la suite de tests, validée par Messa, puis mise en ligne. Bouton « Importer depuis OnlyChat » pour démarrer depuis la fiche existante.
+- **Détails** : identité (prénom, âge, date de naissance, genre, origine, fuseau, langues), physique, centres d'intérêt, traits de personnalité.
+- **Infos en plus** : un texte libre (histoire, voix et expressions, séduction, passions, objectifs).
+- **Comportement** : style de langage, découpage en plusieurs messages, délai de réponse.
+- **Stratégies** : KYC (avec ses cibles), sexualisation (cooldown minimal), lancement des scripts (cooldown strict), négociation, suivi (délai). Chacune a un style par défaut et des instructions personnalisées.
+- **Relances** : activées, délais, type, texte personnalisé.
+- **Notifications** : ventes, IA désactivée, plus de script, limite de plateforme, alertes par mots-clés.
 
-Le contenu réel de ces champs reste hors du dépôt (ADR 0010). Le découpage exact attend la lecture des onglets OnlyChat et la documentation chatting de Charles.
+Seuls écarts, qui viennent de décisions déjà prises et pas de fonctions nouvelles : `identity_policy` affichée verrouillée (ADR 0012) ; délais et cooldowns marqués « Appliqué par le code » (CLAUDE.md, règle 3) ; une barre de version (ADR 0010, tests puis validation de Messa avant la mise en ligne) ; un bouton « Importer depuis OnlyChat ». Le contenu réel reste hors du dépôt (ADR 0010).
 
 ## 5. Ce qui touche les manques métier (en pause)
 
