@@ -7,7 +7,7 @@ import { startWorker } from './worker-runner';
 /** Worker entry point (`node dist/worker.js`): same composition root as the API, no HTTP. */
 const config = loadConfig();
 const logger = createLogger(config);
-const app = await createApp(config, logger);
+const app = await createApp(config, logger, { withPlayground: false });
 const worker = await startWorker(app, {
   logger,
   concurrency: config.WORKER_CONCURRENCY,

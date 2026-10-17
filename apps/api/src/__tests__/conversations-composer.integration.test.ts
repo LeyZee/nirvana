@@ -155,13 +155,23 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     expect(await state(id)).toBe('human');
     expect((await events(id)).at(-1)).toEqual({
       type: 'handoff_requested',
-      payload: { reason: 'guard_blocked : meeting_promise' },
+      payload: { conversationId: id, cause: 'guard', reason: 'guard_blocked : meeting_promise' },
     });
     const outbox = await test.admin.db
       .select()
       .from(schema.domainEvents)
       .where(eq(schema.domainEvents.type, 'handoff_requested'));
     expect(outbox).toHaveLength(1);
+  });
+
+  it('keeps the cause the engine gives, so alerts rank on it', async () => {
+    const id = await fanWrites('c-distress', 'Je vais pas bien');
+    composer.next = { kind: 'held', reason: 'handoff', cause: 'distress', detail: ['distress'], costUsd: 0 };
+    await respond(id);
+    expect((await events(id)).at(-1)).toMatchObject({
+      type: 'handoff_requested',
+      payload: { conversationId: id, cause: 'distress' },
+    });
   });
 
   it('goes back to idle when there is nothing to say, or when the engine fails', async () => {

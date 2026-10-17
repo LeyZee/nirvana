@@ -1,4 +1,4 @@
-import { DraftIdSchema, newId, type JobPayload } from '@nirvana/contracts';
+import { DraftIdSchema, newId, type HandoffCause, type JobPayload } from '@nirvana/contracts';
 
 import type {
   Clock,
@@ -26,6 +26,12 @@ const HISTORY_LIMIT = 40;
 
 /** Holds that give the conversation to the chatters; the others put it back to `idle`. */
 const HANDOFF_REASONS: readonly HoldReason[] = ['guard_blocked', 'handoff', 'budget_reached'];
+
+/** The cause a hold implies when the engine gives none: alerts rank on it. */
+const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
+  guard_blocked: 'guard',
+  budget_reached: 'budget',
+};
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 
@@ -116,7 +122,13 @@ export function createRespondJob({ uow, clock, composer }: RespondDeps) {
       }
       if (HANDOFF_REASONS.includes(result.reason)) {
         const reason = [result.reason, ...result.detail].join(' : ').slice(0, 500);
-        await appendEvent(tx, conversation, { type: 'handoff_requested', payload: { reason } }, meta);
+        const cause = result.cause ?? DEFAULT_CAUSES[result.reason] ?? 'other';
+        await appendEvent(
+          tx,
+          conversation,
+          { type: 'handoff_requested', payload: { conversationId: conversation.id, cause, reason } },
+          meta,
+        );
       } else {
         await appendEvent(
           tx,

@@ -59,7 +59,7 @@ drafts               id, creator_id, conversation_id, status (pending|approved|e
                      decided_by (nullable user_id), decided_at, idempotency_key, created_at
 ```
 
-Types d'événements (liste fermée dans `packages/contracts/src/events.ts`) : `message_received`, `message_sent`, `send_attempted`, `send_failed`, `send_verified`, `media_described`, `draft_created`, `draft_approved`, `draft_edited`, `draft_rejected`, `draft_expired`, `fact_proposed`, `fact_confirmed`, `fact_rejected`, `summary_refreshed`, `handoff_requested`, `takeover_started`, `takeover_ended`, `mode_changed`, `kill_switch_toggled`, `follow_up_scheduled`, `follow_up_cancelled`, `offer_made`, `sale_detected`, `script_started`, `script_step_sent`, `script_ended`, `session_state_changed`, `error`.
+Types d'événements (liste fermée dans `packages/contracts/src/events.ts`) : `message_received`, `message_sent`, `send_attempted`, `send_failed`, `send_verified`, `media_described`, `draft_created`, `draft_approved`, `draft_edited`, `draft_rejected`, `draft_expired`, `fact_proposed`, `fact_confirmed`, `fact_rejected`, `summary_refreshed`, `handoff_requested`, `takeover_started`, `takeover_ended`, `mode_changed`, `kill_switch_toggled`, `follow_up_scheduled`, `follow_up_cancelled`, `offer_made`, `sale_detected`, `script_started`, `script_step_sent`, `script_ended`, `session_state_changed`, `budget_threshold_crossed`, `error`.
 
 Payload minimal par famille d'événement (clés en camelCase, jamais de contenu média, jamais de secret) :
 
@@ -70,12 +70,14 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
-| `handoff_requested`, `takeover_started`, `takeover_ended`, `mode_changed` | `userId?`, `reason?`, `mode?` |
+| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` |
+| `takeover_started`, `takeover_ended`, `mode_changed` | `userId?`, `reason?`, `mode?` |
 | `kill_switch_toggled` | `scope`, `scopeId`, `active`, `reason` |
 | `follow_up_scheduled`, `follow_up_cancelled` | `jobKey`, `runAt?` |
 | `offer_made`, `sale_detected` | `offerId?`, `saleId?`, `amountMinor`, `currency` |
 | `script_*` | `scriptRunId`, `stepIndex?` |
 | `session_state_changed` | `platformAccountId`, `from`, `to` |
+| `budget_threshold_crossed` (outbox seulement, sans créatrice) | `kind` (`alert` \| `reached`), `spentMinor`, `capMinor`, `currency`, `day` |
 | `error` | `code`, `jobName?`, `retryable` |
 
 Les schémas Zod exacts vivent dans `packages/contracts/src/events.ts` (P0-02) ; ce tableau fixe l'intention.
