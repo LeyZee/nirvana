@@ -28,7 +28,7 @@ Réponses aux questions ouvertes de `brief.md` :
 
 Prototype cliquable : https://claude.ai/artifact/TZjCUAPFhxN4pJn978A9zz (brainstorm/06). Ce qu'il a fixé :
 
-- **Le dashboard n'a ni Inbox ni page Fans.** Navigation : Dashboard (statistiques), Créatrices, Entraîner, Suivi, Réglages. La validation en copilote passe par l'extension, dans Reveal (proposition de la note 06, à valider).
+- **Le dashboard n'a ni Inbox ni page Fans.** Navigation : Dashboard (statistiques), Créatrices, Entraîner, Suivi, Réglages. La validation en copilote passe par l'extension, dans Reveal (décision de Charles, 17/10).
 - **Un dashboard de statistiques à la manière de celui de Reveal**, animé (voir « Dashboard » plus bas).
 - **Pas de double bouton sur le verre** : un bouton secondaire posé sur une surface vitrée est une teinte (`nv-btn--soft`), pas un second verre.
 - **Chaque icône de navigation a son geste** quand on l'active, et les changements d'onglet s'animent.
