@@ -134,6 +134,19 @@ Le playground n'a **pas besoin de Reveal**. Il lui faut les fondations (P0), la 
 
 `docs/design/README.md` et D-01 appellent « playground » la page de démonstration des composants (`_playground.tsx`). Pour éviter deux sens au même mot, proposition : cette page devient la **vitrine** (`_showcase.tsx`) et « Playground » désigne seulement le bac à sable de conversation. Glossaire mis à jour dans le même commit que cette note.
 
+### Réglages › Persona (prototype, 17/10)
+
+Charles veut saisir la persona dans l'interface, comme dans la fiche créatrice d'OnlyChat (Détails, Infos en plus, Comportement, Stratégies). Le prototype en propose une première forme, avec un contenu fictif :
+
+- **Identité** et apparence : ce que les fans demandent tout le temps (une réponse fausse casse l'illusion).
+- **Infos en plus** : des fiches déclenchées par mots-clés, injectées seulement quand le fan aborde le sujet (le principe des lorebooks noté par le fil Voix).
+- **Comportement** : registre, longueur, emojis, refus, cas de passage à un humain. `identity_policy` y apparaît verrouillée (ADR 0012), pas réglable.
+- **Stratégie de vente** : étapes du parcours avec leur condition de passage, prix et rythme.
+- Ce qui est une règle métier (refus, délais, petites fautes, prix, cooldowns) porte la mention « Appliqué par le code » : la page écrit des données que le code lit, elle ne remplit pas un prompt (CLAUDE.md, règle 3).
+- Une barre de version en tête : chaque modification crée une version (ADR 0010), rejouée contre la suite de tests, validée par Messa, puis mise en ligne. Bouton « Importer depuis OnlyChat » pour démarrer depuis la fiche existante.
+
+Le contenu réel de ces champs reste hors du dépôt (ADR 0010). Le découpage exact attend la lecture des onglets OnlyChat et la documentation chatting de Charles.
+
 ## 5. Ce qui touche les manques métier (en pause)
 
 Rien ici n'est bloqué par eux, mais deux points en dépendent et attendent la documentation chatting de Charles : les profils de fans simulés (ils devraient refléter les vrais parcours fans et leur valeur), et le mode rejeu (il suppose l'import de l'historique Reveal). Les raisons de « Faux » propres à la vente seront affinées avec la même documentation.
