@@ -2,17 +2,28 @@ import type { ProviderNextAction, ProviderOverview, ProviderStatus } from '@nirv
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { ConnectSheet } from './ConnectSheet';
-import { PasswordPrompt } from './PasswordPrompt';
-import { disconnect, fetchOverview, ReauthRequired, verifyNow } from './api';
+import { PasswordPrompt, SignInAgain } from './PasswordPrompt';
+import {
+  disconnect,
+  fetchOverview,
+  isSessionExpired,
+  ReauthRequired,
+  showError,
+  verifyNow,
+  type ShownError,
+} from './api';
 import { GUIDES, isDashboardProvider, type DashboardProvider } from './guide';
-import { checkedAgo, dotOf, dotOfNext, segments } from './view';
+import { checkedAgo, dotOf, dotOfNext, segments, verifyNotice } from './view';
 import './services.css';
 
 /** The list refreshes on its own: a key revoked while the page is open turns red without a reload. */
 const REFRESH_MS = 30_000;
 
-type Load = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; overview: ProviderOverview };
+type Load =
+  { kind: 'loading' } | { kind: 'failed'; error: ShownError } | { kind: 'ready'; overview: ProviderOverview };
 type Sheet = { provider: DashboardProvider; isReplace: boolean } | null;
+/** `warning`: nothing failed in Nirvana, the provider did not answer and the last verification stands. */
+type Notice = ShownError & { tone: 'error' | 'warning' };
 
 /**
  * Réglages › Modèles IA › Services (fiche P3-03, ADR 0016): what to do now, then one line per service. Connecting
@@ -27,9 +38,17 @@ export function ServicesSection(): JSX.Element {
   const [reauthFor, setReauthFor] = useState<DashboardProvider | null>(null);
   const [verifying, setVerifying] = useState<DashboardProvider | null>(null);
   const [now, setNow] = useState(() => new Date());
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   /** Only the latest refresh may land: an older answer arriving late would show a stale state. */
   const latest = useRef(0);
+  /**
+   * One password prompt on the page at a time: a sheet carries its own, so a row's prompt never shows while a
+   * sheet is open. Read from a ref because a removal's answer can arrive after a sheet was opened.
+   */
+  const isSheetOpen = useRef(false);
+  useEffect(() => {
+    isSheetOpen.current = sheet !== null;
+  }, [sheet]);
 
   const refresh = useCallback(async (): Promise<void> => {
     latest.current += 1;
@@ -39,9 +58,12 @@ export function ServicesSection(): JSX.Element {
       if (ticket !== latest.current) return;
       setLoad({ kind: 'ready', overview });
       setNow(new Date());
-    } catch {
+    } catch (error) {
       if (ticket !== latest.current) return;
-      setLoad((current) => (current.kind === 'ready' ? current : { kind: 'failed' }));
+      const shown = showError(error);
+      setLoad((current) => (current.kind === 'ready' ? current : { kind: 'failed', error: shown }));
+      // The list already on screen stays, but an expired session must not go unnoticed.
+      if (isSessionExpired(error)) setNotice({ ...shown, tone: 'error' });
     }
   }, []);
 
@@ -73,11 +95,17 @@ export function ServicesSection(): JSX.Element {
     disconnect(provider).then(
       () => refresh(),
       (error: unknown) => {
-        if (error instanceof ReauthRequired) {
+        if (error instanceof ReauthRequired && !isSheetOpen.current) {
           setReauthFor(provider);
           return;
         }
-        setNotice(`${GUIDES[provider].name} n’a pas été déconnecté. Réessaie dans un instant.`);
+        const lead = `${GUIDES[provider].name} n’a pas été déconnecté.`;
+        setNotice({
+          ...(error instanceof ReauthRequired
+            ? { message: `${lead} Réessaie pour confirmer ton mot de passe.`, isSessionExpired: false }
+            : showError(error, lead)),
+          tone: 'error',
+        });
       },
     );
   };
@@ -85,6 +113,7 @@ export function ServicesSection(): JSX.Element {
   const open = (provider: DashboardProvider, isReplace: boolean): void => {
     setMenu(null);
     setConfirming(null);
+    setReauthFor(null);
     setSheet({ provider, isReplace });
   };
 
@@ -101,15 +130,19 @@ export function ServicesSection(): JSX.Element {
       <section className="sv-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
           <div className="nv-glass sv-next">
-            <p className="sv-lead">Les services ne répondent pas</p>
-            <p className="sv-muted">Nirvana n’a pas pu lire l’état des clés. Réessaie dans un instant.</p>
-            <button
-              type="button"
-              className="nv-btn nv-btn--soft sv-self-start"
-              onClick={() => void refresh()}
-            >
-              Réessayer
-            </button>
+            <p className="sv-lead">L’état des clés n’a pas pu être lu</p>
+            <p className="sv-muted">{load.error.message}</p>
+            {load.error.isSessionExpired ? (
+              <SignInAgain />
+            ) : (
+              <button
+                type="button"
+                className="nv-btn nv-btn--soft sv-self-start"
+                onClick={() => void refresh()}
+              >
+                Réessayer
+              </button>
+            )}
           </div>
         ) : null}
       </section>
@@ -212,11 +245,17 @@ export function ServicesSection(): JSX.Element {
                     setVerifying(provider);
                     verifyNow(provider)
                       .then(
-                        () => refresh(),
-                        () => {
-                          setNotice(
-                            `La vérification de ${guide.name} n’a pas abouti. Réessaie dans un instant.`,
-                          );
+                        (after) => {
+                          const unanswered = verifyNotice(provider, status, after);
+                          if (unanswered !== null)
+                            setNotice({ message: unanswered, isSessionExpired: false, tone: 'warning' });
+                          return refresh();
+                        },
+                        (error: unknown) => {
+                          setNotice({
+                            ...showError(error, `La vérification de ${guide.name} n’a pas abouti.`),
+                            tone: 'error',
+                          });
                         },
                       )
                       .finally(() => {
@@ -232,7 +271,7 @@ export function ServicesSection(): JSX.Element {
                   }}
                 />
               ) : null}
-              {reauthFor === provider ? (
+              {reauthFor === provider && sheet === null ? (
                 <div className="nv-confirm sv-confirm">
                   <PasswordPrompt
                     onConfirmed={() => {
@@ -281,9 +320,12 @@ export function ServicesSection(): JSX.Element {
       </div>
 
       {notice === null ? null : (
-        <p className="sv-notice" role="alert">
-          {notice}
-        </p>
+        <>
+          <p className="sv-notice" role="alert" data-tone={notice.tone}>
+            {notice.message}
+          </p>
+          {notice.isSessionExpired ? <SignInAgain /> : null}
+        </>
       )}
 
       {sheet === null ? null : (

@@ -13,9 +13,12 @@ export function detectProvider(key: string): AiProvider | undefined {
   return PROVIDER_PROFILES.find((p) => p.keyPrefix !== null && key.startsWith(p.keyPrefix))?.provider;
 }
 
-/** Checks done before any network call, so an obvious mistake gets an instant answer. */
+/**
+ * Checks done before any network call, so an obvious mistake gets an instant answer. No key of the three consoles
+ * holds a space: one copied across a line break or with a stray space still works.
+ */
 export function checkKeyShape(provider: AiProvider, key: string): Result<string, KeyShapeError> {
-  const trimmed = key.trim();
+  const trimmed = key.replace(/\s+/g, '');
   if (trimmed.length < MIN_KEY_LENGTH) return err({ kind: 'too_short' });
   const owner = detectProvider(trimmed);
   if (owner !== undefined && owner !== provider) return err({ kind: 'wrong_provider', belongsTo: owner });

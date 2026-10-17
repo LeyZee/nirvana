@@ -9,7 +9,7 @@ import type {
 } from '@nirvana/contracts';
 
 import { profileOf } from './catalog';
-import { describeLowCredit } from './messages';
+import { describeLowCredit, describeRefusedLine } from './messages';
 import type { VerificationOutcome, VerifiedKey } from './verification';
 
 /** A saved key with what its last verification found. The key itself never leaves the module. */
@@ -72,7 +72,8 @@ export function applyReverification(
 ): StoredCredential {
   if (outcome.ok) return { ...stored, ...verifiedFields(outcome, now) };
   if (outcome.kind === 'unreachable') return stored;
-  return { ...stored, state: 'needs_reconnect', lastErrorKind: outcome.kind };
+  // A refusal is an answer too: « vérifié il y a… » counts from it, and the page can tell it from no answer at all.
+  return { ...stored, state: 'needs_reconnect', lastErrorKind: outcome.kind, verifiedAt: now };
 }
 
 /** A real production call was refused (401/403): the service turns red at once, without waiting for the next check. */
@@ -103,7 +104,7 @@ export function toStatus(
   }
   const message =
     stored.state === 'needs_reconnect'
-      ? profile.revoked
+      ? describeRefusedLine(provider, stored.lastErrorKind, stored.key === null)
       : stored.state === 'low_credit' && stored.charactersLeft !== null
         ? describeLowCredit(stored.charactersLeft)
         : stored.summary;

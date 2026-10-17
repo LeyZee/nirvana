@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createElevenLabsVerifier } from '../elevenlabs.verifier';
 import { createGoogleVerifier } from '../google.verifier';
 import type { FetchLike } from '../http';
+import { createMistralVerifier } from '../mistral.verifier';
 import { createXaiVerifier } from '../xai.verifier';
 
 /**
@@ -197,6 +198,33 @@ describe('ElevenLabs', () => {
       body: { detail: { status: 'invalid_api_key', message: 'Invalid API key' } },
     });
     expect(await verifier().verify('sk_FAKE', {})).toEqual({ ok: false, kind: 'unauthorized' });
+  });
+});
+
+describe('Mistral', () => {
+  const verifier = () => createMistralVerifier({ fetch: realFetch, baseUrl });
+
+  it('accepts a key that sees Mistral Large, the writing fallback', async () => {
+    replies.set('/v1/models', {
+      status: 200,
+      body: { object: 'list', data: [{ id: 'mistral-small-latest' }, { id: 'mistral-large-latest' }] },
+    });
+    expect(await verifier().verify('FAKEmistralFAKEmistralFAKE00', {})).toMatchObject({
+      ok: true,
+      summary: 'Mistral Large prend le relais si Grok ne répond plus',
+    });
+    expect(seenHeaders[0]?.authorization).toBe('Bearer FAKEmistralFAKEmistralFAKE00');
+  });
+
+  it('tells a refused key, a missing model, an unpaid workspace and an outage apart', async () => {
+    replies.set('/v1/models', { status: 401, body: { message: 'Unauthorized' } });
+    expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'unauthorized' });
+    replies.set('/v1/models', { status: 200, body: { data: [{ id: 'mistral-small-latest' }] } });
+    expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'model_not_allowed' });
+    replies.set('/v1/models', { status: 402, body: { message: 'Payment required' } });
+    expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'no_credit' });
+    replies.set('/v1/models', { status: 429, body: { message: 'Rate limit exceeded' } });
+    expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'unreachable' });
   });
 });
 

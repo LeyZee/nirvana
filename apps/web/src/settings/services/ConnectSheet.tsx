@@ -1,13 +1,16 @@
 import type { ProviderStatus, ProviderVoice } from '@nirvana/contracts';
-import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 
-import { PasswordPrompt } from './PasswordPrompt';
-import { connectKey, ReauthRequired, saveSettings } from './api';
+import { PasswordPrompt, SignInAgain } from './PasswordPrompt';
+import { connectKey, ReauthRequired, saveSettings, showError, type ShownError } from './api';
 import { GUIDES, type DashboardProvider } from './guide';
-import { nextAfter } from './view';
+import { nextAfter, normalizeKey } from './view';
+
+/** After the password, the key field is new and empty: the message says to paste the key again. */
+const PASTE_AGAIN = 'Colle la clé à nouveau.';
 
 type Phase =
-  | { kind: 'edit'; error: string | null }
+  | { kind: 'edit'; error: ShownError | null }
   | { kind: 'busy' }
   /** The sign-in is too old for a key (ADR 0016): the password first, then the same key again. */
   | { kind: 'reauth'; key: string }
@@ -37,31 +40,49 @@ const CHECK = (
   </svg>
 );
 
+type CopyState = 'idle' | 'copied' | 'failed';
+
+const COPY_LABELS: Record<CopyState, string> = {
+  idle: 'Copier',
+  copied: 'Copié',
+  failed: 'Copie impossible',
+};
+
+/** Writes `value` to the clipboard; `false` when the browser refuses (permission, no secure context). */
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function CopyChip({ value }: { value: string }): JSX.Element {
-  const [isCopied, setIsCopied] = useState(false);
+  const [copy, setCopy] = useState<CopyState>('idle');
   useEffect(() => {
-    if (!isCopied) return undefined;
+    if (copy === 'idle') return undefined;
     const timer = window.setTimeout(() => {
-      setIsCopied(false);
+      setCopy('idle');
     }, 1400);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isCopied]);
+  }, [copy]);
   return (
     <button
       type="button"
       className="sv-copy"
-      data-copied={isCopied}
+      data-copied={copy === 'copied'}
+      data-copy={copy}
       onClick={() => {
-        const done = (): void => {
-          setIsCopied(true);
-        };
-        void navigator.clipboard.writeText(value).then(done, done);
+        void copyText(value).then((isCopied) => {
+          setCopy(isCopied ? 'copied' : 'failed');
+        });
       }}
     >
       {value}
-      <span>{isCopied ? 'Copié' : 'Copier'}</span>
+      <span aria-live="polite">{COPY_LABELS[copy]}</span>
     </button>
   );
 }
@@ -79,7 +100,7 @@ export function ConnectSheet({
   const [isStepOneOpen, setIsStepOneOpen] = useState(!isReplace);
   const [phase, setPhase] = useState<Phase>({ kind: 'edit', error: null });
   const [voices, setVoices] = useState<readonly ProviderVoice[]>([]);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<ShownError | null>(null);
   /** Opening the console folds step one a beat later, once the new tab has taken focus. */
   const [isConsoleOpening, setIsConsoleOpening] = useState(false);
   const keyInput = useRef<HTMLInputElement>(null);
@@ -105,24 +126,38 @@ export function ConnectSheet({
     };
   }, [isConsoleOpening]);
 
+  /** The password being checked before the key is sent: the sheet must not close under it (the key would go anyway). */
+  const [isReauthBusy, setIsReauthBusy] = useState(false);
+  /** While the key is being verified, the sheet stays open: closing it would hide the answer. */
+  const isBusy = phase.kind === 'busy' || (phase.kind === 'reauth' && isReauthBusy);
+  const close = useCallback(() => {
+    if (!isBusy) onFinish(null);
+  }, [isBusy, onFinish]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onFinish(null);
+      if (event.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [onFinish]);
+  }, [close]);
 
-  async function submit(raw: string): Promise<void> {
-    const key = raw.trim();
+  /** `isRetry`: sent again after the password; the field the key was pasted in is gone by then. */
+  async function submit(raw: string, isRetry = false): Promise<void> {
+    const key = normalizeKey(raw);
     if (key === '') return;
+    const failed = (shown: ShownError): Phase => ({
+      kind: 'edit',
+      error:
+        isRetry && !shown.isSessionExpired ? { ...shown, message: `${shown.message} ${PASTE_AGAIN}` } : shown,
+    });
     setPhase({ kind: 'busy' });
     try {
       const result = await connectKey(provider, key);
       if (!result.ok) {
-        setPhase({ kind: 'edit', error: result.refusal.message });
+        setPhase(failed({ message: result.refusal.message, isSessionExpired: false }));
         return;
       }
       if (keyInput.current !== null) keyInput.current.value = '';
@@ -130,11 +165,7 @@ export function ConnectSheet({
       setPhase({ kind: 'done', status: result.status });
       onChanged(result.status);
     } catch (error) {
-      setPhase(
-        error instanceof ReauthRequired
-          ? { kind: 'reauth', key }
-          : { kind: 'edit', error: 'Nirvana ne répond pas. Réessaie dans un instant.' },
-      );
+      setPhase(error instanceof ReauthRequired ? { kind: 'reauth', key } : failed(showError(error)));
     }
   }
 
@@ -146,8 +177,8 @@ export function ConnectSheet({
       setVoiceError(null);
       setPhase({ kind: 'done', status });
       onChanged(status);
-    } catch {
-      setVoiceError('La voix n’a pas été enregistrée. Réessaie dans un instant.');
+    } catch (error) {
+      setVoiceError(showError(error, 'La voix n’a pas été enregistrée.'));
     }
   }
 
@@ -157,9 +188,8 @@ export function ConnectSheet({
       type="button"
       className="sv-close"
       aria-label="Fermer"
-      onClick={() => {
-        onFinish(null);
-      }}
+      disabled={isBusy}
+      onClick={close}
     >
       ×
     </button>
@@ -170,11 +200,7 @@ export function ConnectSheet({
     const status = phase.status;
     const showVoicePicker = provider === 'elevenlabs' && voices.length > 0;
     return (
-      <Scrim
-        onClose={() => {
-          onFinish(null);
-        }}
-      >
+      <Scrim onClose={close}>
         <header className="sv-sheet__head">
           <div className="sv-sheet__title" />
           {closeLabel}
@@ -215,8 +241,9 @@ export function ConnectSheet({
               </select>
             </label>
             <p className="sv-hint" data-error={voiceError !== null} aria-live="polite">
-              {voiceError ?? 'Chaque vocal passe par toi avant d’être envoyé.'}
+              {voiceError?.message ?? 'Chaque vocal passe par toi avant d’être envoyé.'}
             </p>
+            {voiceError?.isSessionExpired === true ? <SignInAgain /> : null}
           </>
         ) : null}
         {isReplace ? (
@@ -239,15 +266,10 @@ export function ConnectSheet({
     );
   }
 
-  const isBusy = phase.kind === 'busy';
   const error = phase.kind === 'edit' ? phase.error : null;
   const showStepOne = !hasOpenedConsole || isStepOneOpen;
   return (
-    <Scrim
-      onClose={() => {
-        onFinish(null);
-      }}
-    >
+    <Scrim onClose={close}>
       <header className="sv-sheet__head">
         <div className="sv-sheet__title">
           <h3 id="sv-sheet-title">
@@ -312,8 +334,9 @@ export function ConnectSheet({
           {phase.kind === 'reauth' ? (
             <div className="sv-step__body">
               <PasswordPrompt
+                onBusyChange={setIsReauthBusy}
                 onConfirmed={() => {
-                  void submit(phase.key);
+                  void submit(phase.key, true);
                 }}
                 onCancel={() => {
                   setPhase({ kind: 'edit', error: null });
@@ -330,11 +353,23 @@ export function ConnectSheet({
                   void submit(keyInput.current?.value ?? '');
                 }}
               >
+                {/*
+                  Not `type=password`: a password manager would offer to save the key, or fill in the dashboard
+                  password, which would then go to the provider. The field is masked by CSS instead.
+                */}
                 <input
                   ref={keyInput}
-                  type="password"
+                  type="text"
+                  className="sv-key__secret"
+                  name="nv-service-key"
                   autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
                   spellCheck={false}
+                  data-1p-ignore=""
+                  data-lpignore="true"
+                  data-form-type="other"
+                  data-bwignore=""
                   aria-label={`Clé ${guide.vendor}`}
                   aria-invalid={error !== null}
                   aria-describedby="sv-key-msg"
@@ -342,7 +377,7 @@ export function ConnectSheet({
                   disabled={isBusy}
                   onPaste={(event) => {
                     event.preventDefault();
-                    const pasted = event.clipboardData.getData('text');
+                    const pasted = normalizeKey(event.clipboardData.getData('text'));
                     event.currentTarget.value = pasted;
                     void submit(pasted);
                   }}
@@ -363,9 +398,10 @@ export function ConnectSheet({
                     Vérification auprès de {guide.vendor}…
                   </>
                 ) : (
-                  error
+                  error?.message
                 )}
               </p>
+              {!isBusy && error?.isSessionExpired === true ? <SignInAgain /> : null}
             </div>
           ) : null}
         </li>
@@ -384,13 +420,7 @@ export function ConnectSheet({
           </button>
         )}
         {guide.isRequired ? null : (
-          <button
-            type="button"
-            className="nv-btn sv-btn--quiet"
-            onClick={() => {
-              onFinish(null);
-            }}
-          >
+          <button type="button" className="nv-btn sv-btn--quiet" disabled={isBusy} onClick={close}>
             Plus tard
           </button>
         )}

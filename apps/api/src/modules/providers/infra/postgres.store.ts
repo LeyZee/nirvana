@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   AiProviderSchema,
   AuditEntryIdSchema,
@@ -7,6 +9,7 @@ import {
   ProviderFactSchema,
   ProviderSettingsSchema,
   ProviderVoiceSchema,
+  type AiProvider,
 } from '@nirvana/contracts';
 import {
   and,
@@ -15,6 +18,7 @@ import {
   eq,
   keyVersionOf,
   schema,
+  sql,
   withAdmin,
   type Database,
   type EncryptionKey,
@@ -22,10 +26,20 @@ import {
 import { z } from 'zod';
 
 import type { StoredCredential } from '../domain/credential';
-import type { CredentialStore } from '../domain/ports';
+import type { CredentialStore, KeyActor } from '../domain/ports';
 
 const table = schema.providerCredentials;
 type Row = typeof table.$inferSelect;
+
+const NOBODY: KeyActor = { userId: null, ip: null };
+
+/**
+ * Enough to tell two keys apart in `audit_log` (« la clé a changé le 17 à 22 h, puis le 18 ») without keeping anything
+ * usable about either: 8 hex characters of its SHA-256.
+ */
+export function keyFingerprint(key: string): string {
+  return createHash('sha256').update(key).digest('hex').slice(0, 8);
+}
 
 const StoredStateSchema = ProviderConnectionStateSchema.exclude(['not_connected']);
 
@@ -44,6 +58,8 @@ export interface PostgresStoreDeps {
   readonly adminDb: Database;
   /** CREDENTIALS_ENCRYPTION_KEYS, newest first. */
   readonly keys: readonly EncryptionKey[];
+  /** A saved key no listed encryption key opens, for the log: once each time a service becomes unreadable. */
+  readonly onUnreadable?: (provider: AiProvider) => void;
 }
 
 /**
@@ -53,13 +69,19 @@ export interface PostgresStoreDeps {
  * `updated_at` in milliseconds, always written from here so it round-trips exactly.
  */
 export function createPostgresCredentialStore(deps: PostgresStoreDeps): CredentialStore {
+  const reported = new Set<AiProvider>();
   function toCredential(row: Row): StoredCredential {
     const parsed = RowSchema.parse(row);
     let key: string | null;
     try {
       key = decryptSecret(row.keyCiphertext, deps.keys, parsed.provider);
+      reported.delete(parsed.provider);
     } catch {
       key = null;
+      if (!reported.has(parsed.provider)) {
+        reported.add(parsed.provider);
+        deps.onUnreadable?.(parsed.provider);
+      }
     }
     return {
       provider: parsed.provider,
@@ -89,7 +111,7 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
       const rows = await withAdmin(deps.adminDb, (tx) => tx.select().from(table));
       return rows.map(toCredential);
     },
-    async save(credential) {
+    async save(credential, by = NOBODY) {
       const sealed = encryptSecret(credential.key, deps.keys, credential.provider);
       const values = {
         keyCiphertext: sealed,
@@ -105,12 +127,23 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
         verifiedAt: credential.verifiedAt,
         updatedAt: new Date(),
       };
-      await withAdmin(deps.adminDb, (tx) =>
-        tx
+      await withAdmin(deps.adminDb, async (tx) => {
+        // `xmax = 0` only on a row this statement inserted: connected or replaced, decided by the write itself.
+        const [written] = await tx
           .insert(table)
           .values({ provider: credential.provider, ...values })
-          .onConflictDoUpdate({ target: table.provider, set: values }),
-      );
+          .onConflictDoUpdate({ target: table.provider, set: values })
+          .returning({ isNew: sql<boolean>`(xmax = 0)` });
+        await tx.insert(schema.auditLog).values({
+          id: newId(AuditEntryIdSchema),
+          userId: by.userId,
+          ip: by.ip,
+          action: written?.isNew === false ? 'provider_key.replaced' : 'provider_key.connected',
+          entity: 'provider_credential',
+          entityId: credential.provider,
+          details: { provider: credential.provider, fingerprint: keyFingerprint(credential.key) },
+        });
+      });
     },
     async update(credential) {
       const updated = await withAdmin(deps.adminDb, (tx) =>
@@ -136,8 +169,23 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
       );
       return updated.length === 1;
     },
-    async remove(provider) {
-      await withAdmin(deps.adminDb, (tx) => tx.delete(table).where(eq(table.provider, provider)));
+    async remove(provider, by = NOBODY) {
+      await withAdmin(deps.adminDb, async (tx) => {
+        const removed = await tx
+          .delete(table)
+          .where(eq(table.provider, provider))
+          .returning({ provider: table.provider });
+        if (removed.length === 0) return;
+        await tx.insert(schema.auditLog).values({
+          id: newId(AuditEntryIdSchema),
+          userId: by.userId,
+          ip: by.ip,
+          action: 'provider_key.disconnected',
+          entity: 'provider_credential',
+          entityId: provider,
+          details: { provider },
+        });
+      });
     },
   };
 }

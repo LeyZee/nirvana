@@ -110,6 +110,57 @@ describe('after the connection', () => {
   });
 });
 
+describe('keys kept in memory (development without CREDENTIALS_ENCRYPTION_KEYS)', () => {
+  it('says on the line that a pasted key is lost at restart', async () => {
+    const answer: { current: VerificationOutcome } = { current: works };
+    const { deps } = setup(answer);
+    const inMemory = { ...deps, keepsKeysInMemory: true };
+    const result = await connectProvider(inMemory, 'xai', OLD_KEY);
+    expect(result).toMatchObject({
+      ok: true,
+      value: { message: 'Grok 4.7 écrit et décide · gardée en mémoire jusqu’au redémarrage' },
+    });
+    // Not on a red line: it already says what to do.
+    answer.current = { ok: false, kind: 'unauthorized' };
+    expect((await reverifyProvider(inMemory, 'xai')).message).toBe(
+      'xAI refuse la clé. Seul Mistral, s’il est branché, écrit en attendant.',
+    );
+  });
+});
+
+describe('picking another voice', () => {
+  it('rewrites the line at once with the new voice', async () => {
+    const voices = [
+      { id: 'v1', name: 'Démo' },
+      { id: 'v2', name: 'Autre démo' },
+    ];
+    const { deps } = setup({ current: works });
+    const eleven: ConnectionsDeps = {
+      ...deps,
+      verifiers: [
+        {
+          provider: 'elevenlabs',
+          verify: () =>
+            Promise.resolve({
+              ...works,
+              summary: 'Voix de Démo · 920 vocaux ce mois',
+              settings: { voice: voices[0] },
+              voices,
+              charactersLeft: 92_000,
+            }),
+        },
+      ],
+    };
+    await connectProvider(eleven, 'elevenlabs', 'sk_FAKEFAKEFAKEFAKEFAKEFAKE0000');
+    // The browser names the voice; the line takes the account's name for that id.
+    const status = await updateProviderSettings(eleven, 'elevenlabs', {
+      voice: { id: 'v2', name: 'Nom inventé' },
+    });
+    expect(status.message).toBe('Voix de Autre démo · 920 vocaux ce mois');
+    expect(status.facts).toContainEqual({ label: 'Voix', value: 'Autre démo' });
+  });
+});
+
 describe('a refusal reported for a key replaced since (recette, bug 2)', () => {
   /**
    * xAI refuses the old (leaked, revoked) key and accepts the new one; it counts the checks. The clock and the
@@ -282,12 +333,13 @@ describe('key cache', () => {
     expect(production.lookup('xai')).toBeUndefined();
   });
 
-  it('lists the three services in reading order, the environment marked as such', async () => {
+  it('lists the four services in reading order, the environment marked as such', async () => {
     const { deps } = setup({ current: works });
     const statuses = await listProviderStatuses({ ...deps, hasEnvironmentKey: (p) => p === 'google' });
     expect(statuses.map((s) => [s.provider, s.source])).toEqual([
       ['xai', null],
       ['google', 'environment'],
+      ['mistral', null],
       ['elevenlabs', null],
     ]);
   });

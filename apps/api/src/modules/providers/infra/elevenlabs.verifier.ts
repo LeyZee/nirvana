@@ -1,7 +1,7 @@
 import type { ProviderVoice } from '@nirvana/contracts';
 import { z } from 'zod';
 
-import { voiceNotesLeft } from '../domain/messages';
+import { describeVoiceAccount } from '../domain/messages';
 import type { ProviderVerifier, RefusedKey, VerificationOutcome } from '../domain/verification';
 
 import { getJson, isProviderTrouble, type FetchLike, type HttpReply } from './http';
@@ -75,23 +75,10 @@ export function createElevenLabsVerifier(options: ElevenLabsVerifierOptions): Pr
       const left = Math.max(0, limit - used);
       const voices = voiceList.data.voices.map((v) => ({ id: v.voice_id, name: v.name }));
       const voice = pickVoice(voices, settings.voice);
-      const notes = voiceNotesLeft(left).toLocaleString('fr-FR');
       return {
         ok: true,
         keyLabel: null,
-        summary:
-          voice === undefined
-            ? `${notes} vocaux ce mois · aucune voix choisie`
-            : `Voix de ${voice.name} · ${notes} vocaux ce mois`,
-        facts: [
-          { label: 'Ce mois', value: `${notes} vocaux possibles` },
-          {
-            label: 'Voix',
-            value:
-              voice?.name ??
-              'Aucune voix clonée trouvée. Crée la voix de Messa dans ElevenLabs, puis reviens.',
-          },
-        ],
+        ...describeVoiceAccount(voice, left),
         settings: voice === undefined ? {} : { voice },
         voices,
         charactersLeft: left,

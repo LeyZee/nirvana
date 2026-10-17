@@ -1,7 +1,8 @@
 import type { ProviderStatus } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { checkedAgo, dotOf, dotOfNext, nextAfter, segments } from './view';
+import { GUIDES } from './guide';
+import { checkedAgo, dotOf, dotOfNext, nextAfter, normalizeKey, segments, verifyNotice } from './view';
 
 function status(provider: ProviderStatus['provider'], state: ProviderStatus['state']): ProviderStatus {
   return {
@@ -52,5 +53,56 @@ describe('Services view rules', () => {
     expect(dotOf(status('google', 'connected'), true)).toBe('busy');
     expect(dotOfNext({ kind: 'connect', provider: 'xai', lead: 'Connecte Grok', detail: 'd' })).toBe('must');
     expect(dotOfNext({ kind: 'all_set', lead: 'Tout est connecté', detail: 'd' })).toBe('ok');
+  });
+
+  it('reads a key from the development environment as working', () => {
+    const fromEnvironment = (provider: ProviderStatus['provider']): ProviderStatus => ({
+      ...status(provider, 'not_connected'),
+      source: 'environment',
+    });
+    expect(dotOf(fromEnvironment('xai'), false)).toBe('ok');
+    expect(dotOf(fromEnvironment('xai'), true)).toBe('busy');
+    expect(segments([fromEnvironment('xai'), status('google', 'not_connected')])).toEqual(['on', 'off']);
+    expect(
+      nextAfter(
+        [status('xai', 'connected'), fromEnvironment('google'), status('elevenlabs', 'not_connected')],
+        'xai',
+      ),
+    ).toEqual({ label: 'Continuer avec ElevenLabs', provider: 'elevenlabs' });
+    expect(nextAfter([status('xai', 'connected'), fromEnvironment('google')], 'xai')).toEqual({
+      label: 'Terminé',
+      provider: null,
+    });
+  });
+
+  it('says when « Vérifier maintenant » could not reach the provider', () => {
+    const before = { ...status('xai', 'connected'), verifiedAt: '2026-10-17T19:00:00.000Z' };
+    expect(verifyNotice('xai', before, { ...before })).toBe(
+      'xAI n’a pas répondu. L’état affiché est celui de la dernière vérification.',
+    );
+    expect(verifyNotice('google', before, { ...before })).toMatch(/^Google n’a pas répondu/);
+    expect(verifyNotice('xai', before, { ...before, verifiedAt: '2026-10-17T20:00:00.000Z' })).toBeNull();
+    // A refusal is an answer: it comes with its own verification time.
+    expect(
+      verifyNotice('xai', before, {
+        ...before,
+        state: 'needs_reconnect',
+        verifiedAt: '2026-10-17T20:00:00.000Z',
+      }),
+    ).toBeNull();
+  });
+
+  it('says what really stops when a key is removed', () => {
+    expect(GUIDES.xai.offConsequence).toBe(
+      'Seul Mistral, s’il est branché, écrira tant que Grok n’est pas reconnecté.',
+    );
+    expect(GUIDES.google.offConsequence).toMatch(/Grok/);
+    expect(GUIDES.elevenlabs.offConsequence).toMatch(/vocaux/);
+    expect(GUIDES.mistral.offConsequence).toMatch(/relais/);
+  });
+
+  it('removes every space and line break from a pasted key', () => {
+    expect(normalizeKey('  xai-ABC\n  DEF\t\r\nGHI  ')).toBe('xai-ABCDEFGHI');
+    expect(normalizeKey(' \n ')).toBe('');
   });
 });

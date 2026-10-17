@@ -15,8 +15,8 @@ export function nextAction(statuses: readonly ProviderStatus[]): NextAction {
     return {
       kind: 'replace_key',
       provider: refused.provider,
-      lead: profileOf(refused.provider).revoked,
-      detail: 'Remplace la clé pour revenir à la normale.',
+      lead: refused.message,
+      detail: `Remplace la clé, ou règle le souci chez ${profileOf(refused.provider).vendor} puis « Vérifier maintenant ».`,
     };
   }
   const low = statuses.find((s) => s.state === 'low_credit');
@@ -28,12 +28,13 @@ export function nextAction(statuses: readonly ProviderStatus[]): NextAction {
       detail: low.message,
     };
   }
-  const missing = statuses.filter((s) => s.state === 'not_connected');
+  // A key read from the environment (development) works: nothing to connect.
+  const missing = statuses.filter((s) => s.state === 'not_connected' && s.source !== 'environment');
   const first = missing[0];
   if (first !== undefined) {
     const profile = profileOf(first.provider);
     const detail = profile.isRequired
-      ? 'Indispensable : l’agent est à l’arrêt tant qu’il n’est pas connecté.'
+      ? 'Indispensable : c’est lui qui écrit. Mistral ne sert que de relais.'
       : missing.length === 1
         ? 'C’est le dernier. Tu peux aussi le faire plus tard.'
         : `${profile.role}.`;

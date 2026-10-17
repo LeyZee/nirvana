@@ -13,12 +13,23 @@ export function checkedAgo(verifiedAt: string | null, now: Date): string | null 
   return `vérifié il y a ${String(Math.floor(minutes / 60))} h`;
 }
 
+/** A key read from the environment (development only) works: the page must not say the agent is stopped. */
+function isFromEnvironment(status: ProviderStatus): boolean {
+  return status.source === 'environment';
+}
+
 export type Segment = 'on' | 'bad' | 'off';
 
 /** One segment per service in the progress bar under the next action. */
 export function segments(services: readonly ProviderStatus[]): Segment[] {
   return services.map((s) =>
-    s.state === 'needs_reconnect' ? 'bad' : s.state === 'not_connected' ? 'off' : 'on',
+    isFromEnvironment(s)
+      ? 'on'
+      : s.state === 'needs_reconnect'
+        ? 'bad'
+        : s.state === 'not_connected'
+          ? 'off'
+          : 'on',
   );
 }
 
@@ -27,7 +38,9 @@ export function nextAfter(
   services: readonly ProviderStatus[],
   current: DashboardProvider,
 ): { label: string; provider: DashboardProvider | null } {
-  const next = services.find((s) => s.provider !== current && s.state === 'not_connected');
+  const next = services.find(
+    (s) => s.provider !== current && s.state === 'not_connected' && !isFromEnvironment(s),
+  );
   if (next === undefined || !isDashboardProvider(next.provider)) return { label: 'Terminé', provider: null };
   return { label: `Continuer avec ${GUIDES[next.provider].name}`, provider: next.provider };
 }
@@ -36,6 +49,7 @@ export type Dot = 'ok' | 'off' | 'must' | 'low' | 'bad' | 'busy';
 
 export function dotOf(status: ProviderStatus, isVerifying: boolean): Dot {
   if (isVerifying) return 'busy';
+  if (isFromEnvironment(status)) return 'ok';
   switch (status.state) {
     case 'connected':
       return 'ok';
@@ -59,4 +73,23 @@ export function dotOfNext(next: ProviderNextAction): Dot {
     case 'connect':
       return isDashboardProvider(next.provider) && GUIDES[next.provider].isRequired ? 'must' : 'off';
   }
+}
+
+/**
+ * « Vérifier maintenant » answers with the status as it stands. When the provider could not be reached, the
+ * server keeps the last verification: same `verifiedAt`. The page says so instead of saying nothing.
+ */
+export function verifyNotice(
+  provider: DashboardProvider,
+  before: ProviderStatus,
+  after: ProviderStatus,
+): string | null {
+  // Every answer of the provider, a refusal included, moves `verifiedAt` (domain/credential.ts on the API).
+  if (before.verifiedAt !== after.verifiedAt) return null;
+  return `${GUIDES[provider].vendor} n’a pas répondu. L’état affiché est celui de la dernière vérification.`;
+}
+
+/** A key never contains whitespace: a key pasted with a line break or spaces in it still works. */
+export function normalizeKey(raw: string): string {
+  return raw.replace(/\s+/g, '');
 }

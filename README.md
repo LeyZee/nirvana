@@ -219,7 +219,7 @@ pnpm probe              # test express : Grok 4.7 accepte-t-il le sexting en fra
 pnpm playground         # converser avec l'agent dans le terminal (clé requise)
 ```
 
-Les clés vont dans `.env` (jamais commité, documenté par `.env.example`). Pour lancer le CRM sur son PC (Postgres en Docker, `pnpm db:migrate`, `pnpm owner:create`, `pnpm dev:crm`, puis http://localhost:5173) : [`docs/runbooks/local-dev.md`](docs/runbooks/local-dev.md). Les commandes `persona:*` et `ops:*` de `package.json` sont déclarées mais n'ont pas encore de script derrière.
+Les clés des services IA se collent dans le CRM, Réglages › Modèles IA › Services : elles y sont vérifiées puis chiffrées en base ([ADR 0016](docs/adr/0016-provider-keys-entered-in-dashboard.md)). En développement, `.env` peut aussi en fournir (jamais commité, documenté par `.env.example`). Pour lancer le CRM sur son PC (Postgres en Docker, `pnpm db:migrate`, `pnpm owner:create`, `pnpm dev:crm`, puis http://localhost:5173) : [`docs/runbooks/local-dev.md`](docs/runbooks/local-dev.md). Les commandes `persona:*` de `package.json` sont déclarées mais n'ont pas encore de script derrière ; les commandes `ops:*` sont décrites dans les runbooks.
 
 ## Comment on travaille ici
 
