@@ -29,6 +29,6 @@ Le reste de P0-02 (ids, money, events, jobs, settings, media), le chargement en 
 ## Notes de session
 - Remplace la structure `identity` / `style` / `boundaries` / `kinks` / `schedule` / `kyc` / `sales` / `examples` de la première version du document de référence, jamais codée. Les horaires de vie et les exemples de voix sortent de la persona (voir la référence).
 - Décision : les relances ont une seule source, `persona.follow_ups` ; `CreatorSettings.followUp` est retiré de P0-02 et de `ai-engine.md`.
-- Conséquence : la persona ne porte plus de slots KYC (`strategies.kyc.targets` est du texte). La liste fermée `KycSlot` du brief passe dans les contrats (fiche `PROPOSED-fan-memory.md`).
-- Fiches créées : `PROPOSED-fan-memory.md` (coder la mémoire déjà conçue et combler ses manques) et `PROPOSED-media-catalog-pricing.md` (catalogue = index des scripts, étapes et bundles Reveal, à valider).
+- Conséquence : la persona ne porte plus de slots KYC (`strategies.kyc.targets` est du texte). La liste fermée `KycSlot` du brief passe dans les contrats (fiche `P3-02-fan-memory.md`).
+- Fiches créées : `P3-02-fan-memory.md` (coder la mémoire déjà conçue et combler ses manques) et `P6-01-sales-catalog.md` (catalogue = index des scripts, étapes et bundles Reveal), validées par Charles le 17/10.
 - Fusionnée le 17/10 (PR #17). Reste : chargement en base, éditeur du dashboard et import OnlyChat (hors périmètre, fiches à venir) ; corriger le prompt de voix qui cite encore les exemples de voix « dans la fiche ».
