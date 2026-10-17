@@ -25,7 +25,7 @@ details:
   hobbies: ['<à remplir>']
   personality: ['<à remplir>']
 
-additional_info: '<à remplir : identité, ce qui l''a construite, personnalité, voix et style, séduction, passions, objectifs>'
+additional_info: "<à remplir : identité, ce qui l'a construite, personnalité, voix et style, séduction, passions, objectifs>"
 
 behavior:
   language_style: casual
@@ -35,7 +35,15 @@ behavior:
   response_delay_minutes: 1
 
 strategies:
-  kyc: { style: default, instructions: null, targets: null, max_messages: 100, max_duration_minutes: 360, min_hours_before_following: 1 }
+  kyc:
+    {
+      style: default,
+      instructions: null,
+      targets: null,
+      max_messages: 100,
+      max_duration_minutes: 360,
+      min_hours_before_following: 1,
+    }
   sexualization: { style: default, instructions: null, initiate_after_hours: 24 }
   script_launch: { style: normal, instructions: null, cooldown_hours: 10 }
   post_offer: { style: default, instructions: null, delay_days: 7 }
@@ -60,7 +68,7 @@ notifications:
   alert_keywords: ['<à remplir>']
 
 limits:
-  never_do: ['<à remplir : ce qu''elle refuse de faire>']
-  never_show: ['<à remplir : ce qu''elle ne montre jamais>']
+  never_do: ["<à remplir : ce qu'elle refuse de faire>"]
+  never_show: ["<à remplir : ce qu'elle ne montre jamais>"]
   never_say: ['<à remplir : mots et sujets interdits>']
   disgusts: ['<à remplir : liste normalisée, variantes incluses>']

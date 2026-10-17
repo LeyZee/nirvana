@@ -17,6 +17,7 @@ Conçus : `media_assets`, `media_descriptions` (rôle `sense`, vocabulaire ferm�
 - `price_ladders` : `id`, `creator_id`, `name`, `currency`, `steps` (`[{ rank, label, floor_minor, list_minor }]`), `max_step_ratio` (défaut 2 : un palier ne coûte jamais plus du double du précédent ; tripler a coupé net chez l'ancien bot). Aucune remise : on ne négocie jamais (méthode de chatting, §3).
 - `offers` : `id`, `creator_id`, `kind` (`teaser` gratuit | `pack` | `single`), `media_asset_ids[]` (ex. 3 photos et 1 vidéo), `ladder_step_rank`, `caption_brief` (l'idée de la légende, la voix l'écrit), `intensity` (calculée depuis les descriptions), `moment` (`day` | `night` | `any`), `active`.
 - **Moment** (Charles, 17/10 à 17h52) : Reveal range scripts et dossiers du Vault en « Jour » ☀️ et « Nuit » 🌙, pour qu'un média corresponde à l'heure à laquelle le fan le reçoit. `moment` est porté par chaque média (`media_assets`), chaque offre et chaque script ; la politique ne propose que ce qui correspond à l'heure locale du fan (fuseau tiré du slot `location`, sinon celui de la créatrice). Les heures qui bornent le jour et la nuit sont un réglage de la créatrice.
+- **Description par média** (Charles, 17/10 à 18h01) : l'agent doit pouvoir dire ce qui se passe dans un média du catalogue quand un fan le demande, pour donner envie d'acheter. La description existe déjà (`media_descriptions`, rôle `sense` à l'import, `factual_description` en texte libre et vocabulaire fermé) ; il manque sa validation humaine : `validated_by`, `validated_at` et une correction éventuelle, par Charles ou Messa. Une offre n'est proposable que si tous ses médias ont une description validée ; la voix ne décrit un média qu'à partir de cette description, jamais de l'image elle-même ni de son imagination.
 - `sales` : `id`, `creator_id`, `fan_id`, `offer_id` (nullable si inconnue), `amount_minor`, `currency`, `platform_transaction_id` (unique), `detected_at`. Source : `listTransactions` du connecteur ou détection dans les messages.
 - `scripts` : Nirvana lit les scripts de Reveal (système natif) au lieu d'en éditer ; un script est une suite d'étapes de paliers croissants avec un teaser entre chaque. `script_runs (fan_id, script_id)` unique, pour ne jamais rejouer un script à un fan. Forme exacte après P1-02.
 - Règles en code (politique et gardes) : prix toujours lu dans l'échelle, jamais inventé par le LLM ; plancher jamais franchi ; aucune remise ; même média, même prix pour tous les fans ; un média n'est annoncé que s'il part réellement ; pas d'offre si la mémoire du fan l'interdit (drapeaux, âge non confirmé, cooldown de `persona.strategies.script_launch`).
@@ -28,10 +29,10 @@ Conçus : `media_assets`, `media_descriptions` (rôle `sense`, vocabulaire ferm�
 - Le catalogue réel de Messa (médias, paliers, prix) reste hors dépôt (ADR 0010) ; les tests utilisent un catalogue fictif.
 
 ## Critères d'acceptation
-- Tests du domaine : média de nuit refusé à 15 h chez le fan, palier ×3 refusé, contre-offre refusée au prix affiché, même prix pour deux fans, script jamais rejoué, média jamais revendu.
+- Tests du domaine : média de nuit refusé à 15 h chez le fan, offre refusée tant qu'une description n'est pas validée, palier ×3 refusé, contre-offre refusée au prix affiché, même prix pour deux fans, script jamais rejoué, média jamais revendu.
 - Évals : fan qui refuse le prix, fan qui demande « c'est ton prix le plus bas ? », fan qui a déjà tout acheté (notification « plus de script »).
 
 ## Hors périmètre
-Upload et stockage des médias, description par le rôle `sense` (déjà conçue), interface du catalogue.
+Upload et stockage des médias, génération de la description par le rôle `sense` (déjà conçue ; seule la validation entre ici), lecture des médias envoyés par les fans (rôle `sense`, autre fiche), interface du catalogue.
 
 ## Notes de session

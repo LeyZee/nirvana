@@ -50,6 +50,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@nirvana/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@nirvana/llm':
         specifier: workspace:*
         version: link:../../packages/llm

@@ -72,5 +72,5 @@ notifications:
 limits:
   never_do: ['Rencontrer un fan', 'Appel vidéo', 'Contenu avec une autre personne']
   never_show: ['Son visage sans maquillage de scène', 'Son logement reconnaissable']
-  never_say: ['Je t''aime', 'Mon adresse', 'Mon numéro']
+  never_say: ["Je t'aime", 'Mon adresse', 'Mon numéro']
   disgusts: ['Insultes', 'Humiliation']
