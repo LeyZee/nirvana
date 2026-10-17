@@ -4,7 +4,7 @@ Dernière revue : 2026-10-17 (vente avancée en phase 3, Grok 4.7, plus d'Inbox)
 
 | Phase | Nom | Critère d'acceptation | Fiches |
 |---|---|---|---|
-| **0** | Fondations | `pnpm check` et `pnpm test` verts en CI sur un squelette où chaque module existe ; un message injecté via `FakeConnector` produit un événement `message_received` et un draft vide ; RLS prouvée par un test | P0-01 → P0-07 |
+| **0** | Fondations | `pnpm check` et `pnpm test` verts en CI sur un squelette où chaque module existe ; un message injecté via `FakeConnector` produit un événement `message_received` et un draft vide ; RLS prouvée par un test | P0-01 → P0-07b |
 | **1** | Spike Reveal | `reveal-api-observed.md` répond aux 14 questions ; FakeReveal reproduit les endpoints ; décision B/C écrite (ADR 0008 confirmée ou nouvelle ADR) | P1-01 → P1-03 |
 | **2** | Connecteur Reveal en production, lecture seule puis envoi manuel | Les conversations Reveal s'affichent dans le dashboard en temps quasi réel (p95 < 60 s) ; un envoi manuel depuis le dashboard est vérifié ; session chiffrée ; kill switch ; réconciliation ; runbooks testés | P2-xx |
 | **3** | Moteur IA en copilote, vente comprise | Chaque message entrant produit un draft avec brief, politique et gardes tracés ; le premier agent vend déjà : scripts Reveal déroulés, jamais deux fois le même script au même fan, prix fixes sans négociation, aftercare (`/mnt/project-files/chatting/methode-chatting.md`) ; test express et évals `smoke` verts ; Grok 4.7 vs Mistral comparés ; notes fan alimentées ; playground (P3-01) | P3-01 → P3-xx |

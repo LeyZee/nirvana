@@ -14,5 +14,5 @@ export {
   parseEncryptionKeys,
   type EncryptionKey,
 } from './crypto';
-export { MIGRATIONS_FOLDER, runMigrations } from './migrate';
+export { MIGRATIONS_FOLDER, migrationStatus, runMigrations, type MigrationStatus } from './migrate';
 export * as schema from './schema';

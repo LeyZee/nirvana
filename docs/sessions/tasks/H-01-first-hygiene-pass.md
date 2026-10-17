@@ -1,8 +1,8 @@
 # H-01 Première session d'hygiène
 
 Statut : todo
-Phase : 0 (après P0-07)
-Dépend de : P0-07
+Phase : 0 (après P0-07b)
+Dépend de : P0-07b
 Branche : task/h-01-first-hygiene-pass
 
 ## Objectif

@@ -22,4 +22,4 @@ Commandes : `pnpm db:generate` (depuis le schéma), `pnpm db:migrate` (avec `DAT
 ## Écarts avec `data-model.md`
 
 - L'index partiel des faits actifs filtre `superseded_by is null` seulement : `now()` n'est pas permis dans un prédicat d'index ; l'expiration se filtre à la requête.
-- Les tables Better Auth (`src/schema/auth.ts`) sont écrites d'après son schéma de base ; P0-07 les compare à la sortie de sa CLI et migre si elle diffère.
+- Les tables Better Auth (`src/schema/auth.ts`) sont écrites d'après son schéma de base ; P0-07a les compare à la sortie de sa CLI et migre si elle diffère.

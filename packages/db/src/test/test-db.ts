@@ -10,6 +10,9 @@ export interface TestDb {
   readonly admin: DbClient;
   /** Connected as `nirvana_app` (RLS applies): what the application sees. */
   readonly app: DbClient;
+  /** Connection strings of the two roles, for code that builds its own pools (the API's composition root). */
+  readonly adminUrl: string;
+  readonly appUrl: string;
   close(): Promise<void>;
 }
 
@@ -32,12 +35,16 @@ export async function createTestDb(superuserUrl: string, password = 'test'): Pro
   await root.query(`create database ${database} owner nirvana_admin`);
   await root.end();
 
-  const admin = createDbClient(asRole(superuserUrl, database, 'nirvana_admin', password), { max: 2 });
+  const adminUrl = asRole(superuserUrl, database, 'nirvana_admin', password);
+  const appUrl = asRole(superuserUrl, database, 'nirvana_app', password);
+  const admin = createDbClient(adminUrl, { max: 2 });
   await runMigrations(admin.db);
-  const app = createDbClient(asRole(superuserUrl, database, 'nirvana_app', password), { max: 4 });
+  const app = createDbClient(appUrl, { max: 4 });
   return {
     admin,
     app,
+    adminUrl,
+    appUrl,
     async close() {
       await Promise.all([admin.close(), app.close()]);
     },

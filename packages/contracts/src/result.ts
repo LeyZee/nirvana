@@ -21,14 +21,3 @@ export function map<T, U, E>(result: Result<T, E>, fn: (value: T) => U): Result<
 export function unwrapOr<T, E>(result: Result<T, E>, fallback: T): T {
   return result.ok ? result.value : fallback;
 }
-
-/** Base of the errors a module throws for the unexpected; each module subclasses it (`ConversationNotFound`). */
-export class DomainError extends Error {
-  readonly code: string;
-
-  constructor(code: string, message: string, options?: { readonly cause?: unknown }) {
-    super(message, options);
-    this.name = new.target.name;
-    this.code = code;
-  }
-}

@@ -20,6 +20,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P3-04 Vision des médias et pièges (Opus) | in_progress | `log/2026-10-17-p3-04.md` |
 | 2026-10-17 | P0-02 Contrats partagés | done | `log/2026-10-17-p0-02.md` |
 | 2026-10-17 | P0-03 Base de données | done | `log/2026-10-17-p0-03.md` |
+| 2026-10-17 | P0-04 Serveur et worker | done | `log/2026-10-17-p0-04.md` |
 
 ## Incidents (liste vivante)
 
@@ -27,7 +28,7 @@ _Aucun pour l'instant._
 
 ## Candidats à suppression (liste vivante)
 
-_Aucun pour l'instant._
+- `apps/api/src/demo.ts` (`demo.echo` et `POST /v1/demo/echo`) : échafaudage de P0-04, à retirer en P0-05 ; ses tests d'intégration passent alors sur un vrai job.
 
 ---
 
