@@ -80,6 +80,8 @@ export interface ConversationInput {
   readonly personaSheet: string;
   /** What she knows about this fan; derived from the fan, so treated as untrusted. */
   readonly fanNotes: string;
+  /** Her local time, day or night, how long they have known each other: written by code, trusted. */
+  readonly situation?: string;
   readonly history: readonly ConversationTurn[];
 }
 
@@ -512,6 +514,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         creator_name: input.creatorName,
         persona_sheet: input.personaSheet,
         fan_notes: notesBlock(input.fanNotes),
+        situation: input.situation ?? 'Pas d’information sur le moment.',
         canary,
       });
       return run(
@@ -528,6 +531,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         creator_name: input.creatorName,
         persona_sheet: input.personaSheet,
         fan_notes: notesBlock(input.fanNotes),
+        situation: input.situation ?? 'Pas d’information sur le moment.',
         brief: describeBrief(input.brief),
         canary,
       });

@@ -1,5 +1,6 @@
 /**
- * Terminal playground: talk to the persona as a fan, through the production path, with nothing ever sent.
+ * Terminal playground: talk to the persona as a fan, through the production path, with nothing ever sent,
+ * and calibrate it: rate each answer, correct it, put the fan in a situation, replay, compare (P3-05).
  * Usage: `pnpm playground --persona <path to a persona YAML>` (LLM_XAI_API_KEY in the environment).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -15,10 +16,28 @@ import {
   createTranscriberResolver,
   DEFAULT_LLM_CONFIG,
   loadPrompt,
+  MODELS,
   readProviderCredentials,
+  type LlmGateway,
 } from '@nirvana/llm';
 
-import { DEFAULT_GUARD_SETTINGS } from '../modules/agent/index';
+import {
+  createJsonlCalibrationStore,
+  DEFAULT_GUARD_SETTINGS,
+  describeSituation,
+  localTime,
+  parseRejectReason,
+  rateReport,
+  REJECT_REASON_LABELS,
+  REJECT_REASONS,
+  replayableTests,
+  suggestDestination,
+  VALIDATION_TARGET,
+  versionLabel,
+  voiceExamples,
+  type CalibrationRecord,
+  type Verdict,
+} from '../modules/agent/index';
 import {
   createFfmpegMediaTools,
   createGatewaySenser,
@@ -27,15 +46,22 @@ import {
   createMediaDescriber,
 } from '../modules/media/index';
 
+import { FAN_PRESETS, findPreset } from './fan-presets';
 import { readPersonaFile } from './persona-file';
 import { createPlaygroundSession, type PlaygroundTurn } from './playground-session';
 
 const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
 const red = (s: string): string => `\x1b[31m${s}\x1b[0m`;
 const pink = (s: string): string => `\x1b[95m${s}\x1b[0m`;
+const amber = (s: string): string => `\x1b[33m${s}\x1b[0m`;
+const bold = (s: string): string => `\x1b[1m${s}\x1b[0m`;
 
 const { values } = parseArgs({
-  options: { persona: { type: 'string' }, name: { type: 'string', default: 'Messa' } },
+  options: {
+    persona: { type: 'string' },
+    name: { type: 'string', default: 'Messa' },
+    fuseau: { type: 'string', default: 'Europe/Paris' },
+  },
 });
 if (values.persona === undefined) {
   console.error('Usage: pnpm playground --persona <persona.yaml> [--name Messa]');
@@ -63,12 +89,22 @@ const gateway = createLlmGateway({
   resolveTranscriber: createTranscriberResolver(credentials),
   log,
 });
+// Ratings hold persona phrasing: kept out of the repository, in the shape the database will take (P0-03).
+const trainingDir = process.env['NIRVANA_TRAINING_DIR'] ?? resolve(repoRoot, '.scratch/training');
+const store = createJsonlCalibrationStore(resolve(trainingDir, 'ratings.jsonl'));
+const records: CalibrationRecord[] = await store.list();
+const sessionId = `playground-${String(Date.now())}`;
+const voicePromptVersion = loadPrompt('voice').header.version;
+
 const session = createPlaygroundSession({
   gateway,
   creatorName: persona.creatorName,
   personaSheet: persona.personaSheet,
   guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: persona.forbiddenTerms },
+  voiceExamples: voiceExamples(records),
+  timeZone: values.fuseau,
 });
+let isRated = true;
 
 const describer = createMediaDescriber({
   sense: createGatewaySenser(gateway),
@@ -152,12 +188,152 @@ function print(turn: PlaygroundTurn): void {
   );
 }
 
-console.log(
-  pink(`Playground ${persona.creatorName}`) +
+const HOUR_MS = 3_600_000;
+
+/** « 3h », « 2j », « 45min » as milliseconds. */
+function parseDuration(text: string): number | undefined {
+  const match = /^(\d+(?:[.,]\d+)?)\s*(min|h|j)$/.exec(text.trim().toLowerCase());
+  if (match?.[1] === undefined) return undefined;
+  const value = Number.parseFloat(match[1].replace(',', '.'));
+  const unit = match[2] === 'min' ? 60_000 : match[2] === 'h' ? HOUR_MS : 24 * HOUR_MS;
+  return value * unit;
+}
+
+/** The one line that matters, then the one thing to do. */
+function statusLine(): string {
+  const report = rateReport(records);
+  const { rate, rated } = report.current;
+  const shown = rate === undefined ? '—' : `${String(Math.round(rate * 100))} %`;
+  const paint = rate === undefined || rate >= VALIDATION_TARGET ? bold : rate >= 0.6 ? amber : red;
+  const trend =
+    report.trendPoints === undefined
+      ? ''
+      : ` · ${report.trendPoints >= 0 ? '+' : ''}${String(report.trendPoints)} pts depuis ${versionLabel(report.previousVersion ?? report.current.version ?? { voicePrompt: '?', voiceModel: '?' })}`;
+  const version = report.current.version === undefined ? '' : ` · ${versionLabel(report.current.version)}`;
+  return `${paint(`taux de validation ${shown}`)}${dim(` (${String(rated)} notées, objectif ${String(VALIDATION_TARGET * 100)} %)${version}${trend}`)}`;
+}
+
+function nextAction(): string {
+  if (session.lastExchange !== undefined && !isRated) {
+    return session.lastExchange.turn.isBlocked
+      ? 'à faire : /corrige la réponse bloquée, ou envoie un autre message'
+      : 'à faire : /ok, /corrige <texte> ou /rejet <raison>';
+  }
+  return 'à faire : écris comme le fan';
+}
+
+async function rate(verdict: Verdict): Promise<void> {
+  const exchange = session.lastExchange;
+  if (exchange === undefined || isRated) {
+    console.log(dim('  rien à noter : envoie d’abord un message'));
+    return;
+  }
+  const destination = suggestDestination(verdict);
+  const record: CalibrationRecord = {
+    id: `${sessionId}-${String(records.length + 1)}`,
+    sessionId,
+    at: new Date().toISOString(),
+    version: {
+      voicePrompt: voicePromptVersion,
+      voiceModel: exchange.turn.model ?? DEFAULT_LLM_CONFIG.roles.voice.model,
+    },
+    verdict,
+    ...(destination !== undefined && { destination }),
+    fanMessage: exchange.fanMessage,
+    bubbles: exchange.turn.bubbles,
+    moment: exchange.moment,
+  };
+  await store.append(record);
+  records.push(record);
+  isRated = true;
+  if (verdict.kind === 'corrected') session.replaceLastAnswer(verdict.text);
+  const where = {
+    voice_example: 'exemple de voix (repris à la prochaine session)',
+    rule: 'règle à valider par Charles, puis codée',
+    test: 'test rejoué à chaque changement (/tests)',
+  } as const;
+  console.log(dim(`  noté${destination === undefined ? '' : ` → ${where[destination]}`}`));
+  console.log(`  ${statusLine()}`);
+}
+
+/** The same config, another voice model: for /compare. */
+function gatewayWithVoice(model: string): LlmGateway | undefined {
+  const info = MODELS.find((m) => m.model === model);
+  if (info === undefined) return undefined;
+  const { voice } = DEFAULT_LLM_CONFIG.roles;
+  return createLlmGateway({
+    config: {
+      ...DEFAULT_LLM_CONFIG,
+      roles: {
+        ...DEFAULT_LLM_CONFIG.roles,
+        voice: {
+          provider: info.provider,
+          model: info.model,
+          temperature: voice.temperature,
+          maxOutputTokens: voice.maxOutputTokens,
+          timeoutMs: voice.timeoutMs,
+        },
+      },
+    },
+    credentials,
+    resolveModel: createModelResolver(credentials),
+    log,
+  });
+}
+
+async function replayTests(): Promise<void> {
+  const tests = replayableTests(records);
+  if (tests.length === 0) {
+    console.log(dim('  aucun test : chaque correction ou rejet en devient un'));
+    return;
+  }
+  console.log(
     dim(
-      ' — rien n’est jamais envoyé. /media <fichier> (il envoie) /envoi <fichier> [verrouillé] (elle envoie) /brief /notes /health /save /reset /quit',
+      `  ${String(tests.length)} moments rejoués avec ${versionLabel({ voicePrompt: voicePromptVersion, voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model })}`,
     ),
+  );
+  for (const test of tests) {
+    const { brief } = test.moment;
+    if (brief === undefined) continue;
+    const result = await gateway.voice({
+      creatorName: persona.creatorName,
+      personaSheet: persona.personaSheet,
+      fanNotes: test.moment.fanNotes,
+      situation: test.moment.situation,
+      history: test.moment.history,
+      brief,
+    });
+    const why =
+      test.verdict.kind === 'rejected'
+        ? `rejetée : ${REJECT_REASON_LABELS[test.verdict.reason]}`
+        : 'corrigée';
+    console.log(`\n  fan › ${test.fanMessage || '(média)'}`);
+    console.log(dim(`  avant (${why}) : ${test.bubbles.join(' / ')}`));
+    if (test.verdict.kind === 'corrected') console.log(dim(`  attendu : ${test.verdict.text}`));
+    console.log(
+      result.ok
+        ? pink(`  maintenant : ${result.value.output.bubbles.join(' / ')}`)
+        : red('  maintenant : échec'),
+    );
+  }
+  console.log(
+    dim('\n  Note chaque nouvelle réponse dans une conversation pour qu’elle compte dans le taux.'),
+  );
+}
+
+const HELP = [
+  'Noter la dernière réponse : /ok · /corrige <texte, bulles séparées par |> · /rejet <raison> [précision]',
+  `  raisons : ${REJECT_REASONS.map((r) => REJECT_REASON_LABELS[r]).join(', ')} (ou ia, perso, long, tot, vente, oubli, autre)`,
+  'Mettre en situation : /fans · /fan <id> · /heure 23:30 · /avance 3h|2j · /depuis 2j · /achat 30',
+  'Rejouer et comparer : /rejouer <n° du message du fan> · /compare <modèle> · /tests',
+  'Médias : /media <fichier> (il envoie) · /envoi <fichier> [verrouillé] (elle envoie)',
+  'Autres : /taux · /brief · /notes · /moment · /health · /save · /reset · /aide · /quit',
+].join('\n');
+
+console.log(
+  pink(`Playground ${persona.creatorName}`) + dim(' — rien n’est jamais envoyé. /aide pour les commandes.'),
 );
+console.log(`  ${statusLine()}`);
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 for (;;) {
   const line = (await rl.question('fan › ')).trim();
@@ -165,6 +341,7 @@ for (;;) {
   if (line === '/quit') break;
   if (line === '/reset') {
     session.reset();
+    isRated = true;
     console.log(dim('  conversation remise à zéro'));
     continue;
   }
@@ -217,6 +394,150 @@ for (;;) {
     console.log(dim(`  enregistré dans ${file}`));
     continue;
   }
+  if (line === '/aide') {
+    console.log(dim(HELP));
+    continue;
+  }
+  if (line === '/taux') {
+    console.log(`  ${statusLine()}`);
+    continue;
+  }
+  if (line === '/ok') {
+    await rate({ kind: 'validated' });
+    continue;
+  }
+  if (line.startsWith('/corrige ')) {
+    const text = line
+      .slice('/corrige '.length)
+      .split('|')
+      .map((b) => b.trim())
+      .filter((b) => b !== '')
+      .join('\n');
+    if (text === '') console.log(dim('  /corrige <la réponse qu’elle aurait écrite>'));
+    else await rate({ kind: 'corrected', text });
+    continue;
+  }
+  if (line.startsWith('/rejet')) {
+    const [word = '', ...rest] = line.slice('/rejet'.length).trim().split(/\s+/);
+    const reason = parseRejectReason(word);
+    if (reason === undefined) {
+      console.log(dim(`  raison : ${REJECT_REASONS.map((r) => REJECT_REASON_LABELS[r]).join(', ')}`));
+      continue;
+    }
+    const note = rest.join(' ').trim();
+    await rate({ kind: 'rejected', reason, ...(note !== '' && { note }) });
+    continue;
+  }
+  if (line === '/fans') {
+    for (const p of FAN_PRESETS) console.log(dim(`  ${p.id.padEnd(9)} ${p.label} — teste ${p.tests}`));
+    continue;
+  }
+  if (line.startsWith('/fan ')) {
+    const preset = findPreset(line.slice('/fan '.length).trim());
+    if (preset === undefined) {
+      console.log(dim('  préréglage inconnu : /fans pour la liste'));
+      continue;
+    }
+    session.reset();
+    session.setFanNotes(preset.fanNotes);
+    session.setSituation({
+      relationshipStartedAt: new Date(
+        session.situation.now.getTime() - preset.relationshipAgeHours * HOUR_MS,
+      ),
+      spentCents: preset.spentCents,
+    });
+    isRated = true;
+    console.log(
+      dim(`  ${preset.label} : teste ${preset.tests}. Idée de premier message : « ${preset.opening} »`),
+    );
+    continue;
+  }
+  if (line.startsWith('/heure ')) {
+    const match = /^(\d{1,2})[:h](\d{2})?$/.exec(line.slice('/heure '.length).trim());
+    if (match?.[1] === undefined) {
+      console.log(dim('  /heure 23:30'));
+      continue;
+    }
+    const { hour } = localTime(session.situation.now, session.situation.timeZone);
+    const target = Number(match[1]) * 60 + Number(match[2] ?? '0');
+    const current = hour * 60 + session.situation.now.getMinutes();
+    session.advance(((((target - current) % 1_440) + 1_440) % 1_440) * 60_000);
+    console.log(dim(`  ${describeSituation(session.situation).split('\n')[0] ?? ''}`));
+    continue;
+  }
+  if (line.startsWith('/avance ') || line.startsWith('/depuis ')) {
+    const ms = parseDuration(line.slice(line.indexOf(' ') + 1));
+    if (ms === undefined) {
+      console.log(dim('  durée : 45min, 3h ou 2j'));
+      continue;
+    }
+    if (line.startsWith('/avance ')) session.advance(ms);
+    else session.setSituation({ relationshipStartedAt: new Date(session.situation.now.getTime() - ms) });
+    console.log(dim(describeSituation(session.situation).replace(/^/gm, '  ')));
+    continue;
+  }
+  if (line.startsWith('/achat ')) {
+    const amount = Number.parseFloat(line.slice('/achat '.length).replace(',', '.'));
+    if (!Number.isFinite(amount) || amount < 0) {
+      console.log(dim('  /achat 30 (dollars déjà dépensés)'));
+      continue;
+    }
+    session.setSituation({ spentCents: Math.round(amount * 100) });
+    console.log(dim(describeSituation(session.situation).replace(/^/gm, '  ')));
+    continue;
+  }
+  if (line === '/moment') {
+    console.log(dim(describeSituation(session.situation).replace(/^/gm, '  ')));
+    continue;
+  }
+  if (line.startsWith('/rejouer ')) {
+    const replay = session.branchAt(Number.parseInt(line.slice('/rejouer '.length), 10));
+    if (replay === undefined) {
+      console.log(dim('  /rejouer <n> : n est le numéro du message du fan, à partir de 1'));
+      continue;
+    }
+    console.log(dim(`  nouvelle branche depuis « ${replay.text || '(média)'} »`));
+    isRated = false;
+    print(await session.handleFanMessage(replay.text, replay.media));
+    console.log(dim(`  ${nextAction()}`));
+    continue;
+  }
+  if (line.startsWith('/compare ')) {
+    const model = line.slice('/compare '.length).trim();
+    const other = gatewayWithVoice(model);
+    if (other === undefined) {
+      console.log(dim(`  modèles : ${MODELS.map((m) => m.model).join(', ')}`));
+      continue;
+    }
+    const comparison = await session.compareVoice(other);
+    if (comparison === undefined) {
+      console.log(dim('  rien à comparer : envoie d’abord un message'));
+      continue;
+    }
+    console.log(
+      dim(
+        `  1 · ${session.lastExchange?.turn.model ?? '—'} : ${session.lastExchange?.turn.bubbles.join(' / ') ?? ''}`,
+      ),
+    );
+    console.log(
+      comparison.failure === undefined
+        ? pink(`  2 · ${comparison.model ?? model} : ${comparison.bubbles.join(' / ')}`)
+        : red(`  2 · ${model} : échec (${comparison.failure})`),
+    );
+    for (const v of comparison.violations) console.log(red(`      garde ${v.code} (${v.severity})`));
+    console.log(dim('  la 2 te plaît plus ? /corrige avec son texte, elle devient l’exemple'));
+    continue;
+  }
+  if (line === '/tests') {
+    await replayTests();
+    continue;
+  }
+  if (line.startsWith('/') && line !== '.') {
+    console.log(dim('  commande inconnue : /aide'));
+    continue;
+  }
+  isRated = false;
   print(await session.handleFanMessage(line === '.' ? '' : line, pendingMedia.splice(0)));
+  console.log(dim(`  ${nextAction()}`));
 }
 rl.close();

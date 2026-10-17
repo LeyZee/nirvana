@@ -43,7 +43,9 @@ describe('prompts', () => {
     const voice = loadPrompt('voice').body;
     expect(voice.indexOf('{{brief}}')).toBeGreaterThan(voice.indexOf('# Les pièges'));
     expect(voice.indexOf('{{fan_notes}}')).toBeGreaterThan(voice.indexOf('{{persona_sheet}}'));
+    expect(voice.indexOf('{{situation}}')).toBeGreaterThan(voice.indexOf('# Les pièges'));
     const brain = loadPrompt('brain').body;
     expect(brain.indexOf('{{fan_notes}}')).toBeGreaterThan(brain.indexOf('# Les messages et les médias'));
+    expect(brain.indexOf('{{situation}}')).toBeGreaterThan(brain.indexOf('# Les messages et les médias'));
   });
 });
