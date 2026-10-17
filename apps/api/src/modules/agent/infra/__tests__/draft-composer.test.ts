@@ -47,6 +47,7 @@ function health(hasKey: boolean): HealthReport {
 
 interface Script {
   readonly brief?: Brief;
+  readonly brain?: LlmFailure;
   readonly voice?: VoiceOutput | LlmFailure;
   readonly hasKey?: boolean;
 }
@@ -57,7 +58,11 @@ function gateway(script: Script, seen: { voiceCalls: number; traces: unknown[] }
     transcribe: () => Promise.reject(new Error('not used')),
     brain: (input) => {
       seen.traces.push(input.trace);
-      return Promise.resolve({ ok: true, value: { output: script.brief ?? BRIEF, meta: META } });
+      return Promise.resolve(
+        script.brain === undefined
+          ? { ok: true, value: { output: script.brief ?? BRIEF, meta: META } }
+          : { ok: false, error: script.brain },
+      );
     },
     voice: () => {
       seen.voiceCalls += 1;
@@ -127,6 +132,21 @@ describe('createDraftComposer', () => {
       reason: 'handoff',
       detail: ['minor_suspected'],
       costUsd: 0.002,
+    });
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('holds without a voice call when the brain did not read the risks', async () => {
+    const { draftComposer, seen } = composer({
+      brain: {
+        code: 'all_models_failed',
+        attempts: [{ provider: 'xai', model: 'grok-4.7', outcome: 'invalid_output' }],
+      },
+    });
+    expect(await draftComposer.compose(INPUT)).toMatchObject({
+      kind: 'held',
+      reason: 'llm_unavailable',
+      detail: ['grok-4.7: invalid_output'],
     });
     expect(seen.voiceCalls).toBe(0);
   });

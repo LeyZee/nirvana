@@ -8,6 +8,7 @@ import { createLogger } from '../logger';
 import { FakeConnector } from '../modules/connectors';
 import { startWorker, type WorkerHandle } from '../worker-runner';
 
+import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
 
@@ -26,7 +27,10 @@ describe('connector.poll on the account queue (ADR 0006)', () => {
       DATABASE_ADMIN_URL: test.adminUrl,
     });
     const logger = createLogger(config, sink);
-    app = await createApp(config, logger, { connectorRegistry: { reveal: () => fake } });
+    app = await createApp(config, logger, {
+      connectorRegistry: { reveal: () => fake },
+      composer: fixedComposer,
+    });
     worker = await startWorker(app, {
       logger,
       concurrency: 5,

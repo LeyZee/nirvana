@@ -53,6 +53,9 @@ export interface DraftComposerDeps {
 const failureDetail = (error: LlmFailure): readonly string[] =>
   error.attempts.map((a) => `${a.model}: ${a.outcome}`);
 
+// The fan's photos and videos do not reach the composer yet (history carries text only): no screening on this
+// path until media ingestion lands. TODO(P3-06): pass his media once `HistoryMessage` carries them.
+
 /** No voice model with a key, main or fallback: no call is worth making. */
 function voiceUnavailable(gateway: LlmGateway): boolean {
   const voice = gateway.health().roles.find((r) => r.role === 'voice');
@@ -87,15 +90,20 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
           spentCents: input.fan.spentMinor,
         },
         trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
-        // Safety first: a possible minor or distress hands over even when he is testing her.
-        skipVoice: (brief) => brief !== undefined && holdDecision(brief).kind !== 'answer',
+        // Safety first: a possible minor or distress hands over even when he is testing her, and without the
+        // brain's reading of the risks nobody knows, so the voice does not write either.
+        skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
       });
       const { costUsd } = composed;
       if (composed.handoff !== undefined) {
         return { kind: 'held', reason: 'handoff', detail: composed.handoff, costUsd };
       }
-      const decision: HoldDecision =
-        composed.brief === undefined ? { kind: 'answer' } : holdDecision(composed.brief);
+      if (composed.brief === undefined) {
+        const failure = composed.briefFailure;
+        const reason = failure?.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
+        return { kind: 'held', reason, detail: failure === undefined ? [] : failureDetail(failure), costUsd };
+      }
+      const decision: HoldDecision = holdDecision(composed.brief);
       if (decision.kind !== 'answer') {
         return { kind: 'held', reason: decision.kind, detail: decision.detail, costUsd };
       }
