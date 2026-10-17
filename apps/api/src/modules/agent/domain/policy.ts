@@ -1,38 +1,30 @@
 /**
- * The offer rules of the sales corpus (docs/sessions/tasks/PROPOSED-sales-policy.md): few offers, made well, and
- * none once he says he has no money. Pure code: the brain may suggest an offer, only this decides.
+ * When she may offer a script (docs/sessions/tasks/PROPOSED-sales-policy.md, Charles 17/10 22h00): one script per
+ * cooldown, only when he sexualizes again, and none once he says he has no money. Pure code: the brain may suggest
+ * an offer, only this decides.
  */
 
-interface OfferLimits {
-  /** Offers on one of her days; the corpus sells within one warm session, then stops. */
-  readonly maxPerDay: number;
-  /** Offers since his last purchase (or ever); beyond, nothing until he comes back to paid content himself. */
-  readonly maxWithoutPurchase: number;
-}
-
-/** Corpus defaults, to calibrate in the playground; the persona will carry them (fields asked of the plumbing). */
-const DEFAULT_OFFER_LIMITS: OfferLimits = { maxPerDay: 3, maxWithoutPurchase: 5 };
-
-export interface PastOffer {
-  readonly at: Date;
-  readonly outcome: 'purchased' | 'refused' | 'pending';
+export interface OfferLimits {
+  /** Minimum time between two scripts to one fan; per creator, set in the CRM (persona `strategies.script_launch.cooldown_hours`). */
+  readonly cooldownHours: number;
 }
 
 export interface OfferContext {
   readonly now: Date;
-  /** Her clock: « today » is her day. */
-  readonly timeZone: string;
-  /** Oldest first. */
-  readonly offers: readonly PastOffer[];
+  /** When the last script was offered to him, bought or not. */
+  readonly lastOfferAt: Date | null;
+  /** He is flirting or sexting now (the brain's intent or sentiment): a script follows his heat, never opens it. */
+  readonly fanSexualizes: boolean;
+  /** He asks for paid content himself (« tu as des vidéos ? »): the cooldown and the no-budget stop are lifted. */
+  readonly fanAsksForPaid: boolean;
   /** Set by code when he says he cannot pay; lifted only when he comes back to paid content himself. */
   readonly hasNoBudget: boolean;
   readonly risks: readonly string[];
-  /** He asks for paid content himself (« tu as des vidéos ? »): the stops that wait for him are lifted. */
-  readonly fanAsksForPaid: boolean;
-  readonly limits?: OfferLimits;
+  /** Hers, read from her persona (`PersonaForModels.offerLimits`). */
+  readonly limits: OfferLimits;
 }
 
-type OfferBlock = 'risk' | 'no_budget' | 'refused_today' | 'daily_limit' | 'too_many_without_purchase';
+type OfferBlock = 'risk' | 'no_budget' | 'cooldown' | 'not_sexualizing';
 
 export type OfferDecision =
   { readonly allowed: true } | { readonly allowed: false; readonly reason: OfferBlock };
@@ -45,33 +37,24 @@ const NO_SALE_RISKS = [
   'minor_suspected',
   'dangerous_request',
   'real_abuse',
+  'harassment',
+  'dispute',
 ];
 
-function localDay(date: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-}
+const HOUR_MS = 3_600_000;
 
 export function offerDecision(context: OfferContext): OfferDecision {
-  const limits = context.limits ?? DEFAULT_OFFER_LIMITS;
+  const { limits } = context;
   if (context.risks.some((risk) => NO_SALE_RISKS.includes(risk))) return { allowed: false, reason: 'risk' };
-  const offers = [...context.offers].sort((a, b) => a.at.getTime() - b.at.getTime());
-  const today = localDay(context.now, context.timeZone);
-  const offersToday = offers.filter((o) => localDay(o.at, context.timeZone) === today);
-  // The day's ceiling holds even when he asks: the corpus sells within one warm session, then stops.
-  if (offersToday.length >= limits.maxPerDay) return { allowed: false, reason: 'daily_limit' };
-  // He came back to paid content himself: no budget, a refusal or a long run without purchase no longer stop her.
+  // He came back to paid content himself: no waiting on the cooldown or on his budget.
   if (context.fanAsksForPaid) return { allowed: true };
   if (context.hasNoBudget) return { allowed: false, reason: 'no_budget' };
-  // A refusal ends the day's selling, unless he bought afterwards.
-  if (offersToday.at(-1)?.outcome === 'refused') return { allowed: false, reason: 'refused_today' };
-  const lastPurchase = offers.findLastIndex((o) => o.outcome === 'purchased');
-  if (offers.length - (lastPurchase + 1) >= limits.maxWithoutPurchase) {
-    return { allowed: false, reason: 'too_many_without_purchase' };
+  if (
+    context.lastOfferAt !== null &&
+    context.now.getTime() - context.lastOfferAt.getTime() < limits.cooldownHours * HOUR_MS
+  ) {
+    return { allowed: false, reason: 'cooldown' };
   }
+  if (!context.fanSexualizes) return { allowed: false, reason: 'not_sexualizing' };
   return { allowed: true };
 }

@@ -199,3 +199,31 @@ describe('ElevenLabs', () => {
     expect(await verifier().verify('sk_FAKE', {})).toEqual({ ok: false, kind: 'unauthorized' });
   });
 });
+
+describe('a rate limit (429) says nothing about the key', () => {
+  const tooMany = { status: 429, body: { error: 'Too many requests, slow down' } };
+
+  it('reads as unreachable at xAI, Google and ElevenLabs, never as a refused key or an empty account', async () => {
+    replies.set('/v1/api-key', tooMany);
+    replies.set('/v1beta/models', { status: 429, body: { error: { status: 'RESOURCE_EXHAUSTED' } } });
+    replies.set('/v1/user/subscription', tooMany);
+    const unreachable = { ok: false, kind: 'unreachable' };
+    expect(await createXaiVerifier({ fetch: realFetch, baseUrl }).verify('xai-FAKE', {})).toEqual(
+      unreachable,
+    );
+    expect(await createGoogleVerifier({ fetch: realFetch, baseUrl }).verify('AIzaFAKE', {})).toEqual(
+      unreachable,
+    );
+    expect(await createElevenLabsVerifier({ fetch: realFetch, baseUrl }).verify('sk_FAKE', {})).toEqual(
+      unreachable,
+    );
+  });
+
+  it('even mentioning credits in the body', async () => {
+    replies.set('/v1/api-key', { status: 429, body: { error: 'Rate limit for your credits tier' } });
+    expect(await createXaiVerifier({ fetch: realFetch, baseUrl }).verify('xai-FAKE', {})).toEqual({
+      ok: false,
+      kind: 'unreachable',
+    });
+  });
+});

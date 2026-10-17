@@ -38,6 +38,8 @@ export interface PlaygroundDeps extends PlaygroundGatewayDeps {
   readonly records: CalibrationRecord[];
   readonly timeZone?: string;
   readonly now?: () => Date;
+  /** The creator the ratings belong to (the only one there is); ratings stay unassigned without it. */
+  readonly creatorId?: () => Promise<string | null>;
   /** The app's one gateway (or a fake in tests); built from the deps otherwise, as in the terminal. */
   readonly gateway?: LlmGateway;
   /** Tests only: fake gateways for the comparison. */
@@ -59,6 +61,7 @@ export function createPlaygroundModule(deps: PlaygroundDeps): PlaygroundModule {
       records: deps.records,
       version,
       sessionId: `api-${randomUUID()}`,
+      ...(deps.creatorId !== undefined && { creatorId: deps.creatorId }),
       ...(deps.timeZone !== undefined && { timeZone: deps.timeZone }),
       ...(deps.now !== undefined && { now: deps.now }),
     }),
@@ -72,6 +75,7 @@ export interface PlaygroundStartOptions extends PlaygroundGatewayDeps {
   readonly personaPath: string;
   /** Where the ratings are kept, outside the repository, until a table exists. */
   readonly trainingDir: string;
+  readonly creatorId?: () => Promise<string | null>;
 }
 
 /** Reads the persona and the ratings kept so far, then builds the module. Throws when the persona is unreadable. */

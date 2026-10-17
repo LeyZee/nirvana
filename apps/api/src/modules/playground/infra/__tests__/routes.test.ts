@@ -89,7 +89,9 @@ const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
   request.user = { id, email: `${id}@example.test`, name: id, role: 'owner', creatorIds: [] };
 };
 
-async function server(options: { voice?: VoiceOutput; control?: GatewayControl } = {}) {
+async function server(
+  options: { voice?: VoiceOutput; control?: GatewayControl; creatorId?: string | null } = {},
+) {
   const records: CalibrationRecord[] = [];
   const stored: CalibrationRecord[] = [];
   const store: CalibrationStore = {
@@ -102,13 +104,19 @@ async function server(options: { voice?: VoiceOutput; control?: GatewayControl }
   const playground = createPlaygroundModule({
     credentials: {},
     log: { append: () => undefined, since: () => [] },
-    persona: { creatorName: 'Lina', personaSheet: 'fiche', forbiddenTerms: [] },
+    persona: {
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      forbiddenTerms: [],
+      offerLimits: { cooldownHours: 10 },
+    },
     store,
     records,
     gateway: gateway(options.voice ?? { bubbles: ['Coucou toi ✨'] }, options.control),
     gatewayForVoice: (model) =>
       model === 'mistral-large-latest' ? gateway({ bubbles: ['Hey toi'] }) : undefined,
     now: () => new Date('2026-10-17T10:00:00Z'),
+    ...(options.creatorId !== undefined && { creatorId: () => Promise.resolve(options.creatorId ?? null) }),
   });
   const config = testConfig();
   const app = await buildServer({
@@ -151,6 +159,19 @@ describe('/v1/playground', () => {
     const again = await post('/rating', { verdict: { kind: 'validated' } });
     expect(again.statusCode).toBe(409);
     expect(codeOf(again)).toBe('nothing_to_rate_conflict');
+    expect(stored[0]?.creatorId).toBeUndefined();
+  });
+
+  it('files the rating under the creator when there is one, and leaves it unassigned otherwise', async () => {
+    const one = await server({ creatorId: 'creator-1' });
+    await one.post('/messages', { text: 'Salut' });
+    await one.post('/rating', { verdict: { kind: 'validated' } });
+    expect(one.stored[0]?.creatorId).toBe('creator-1');
+
+    const none = await server({ creatorId: null });
+    await none.post('/messages', { text: 'Salut' });
+    await none.post('/rating', { verdict: { kind: 'validated' } });
+    expect(none.stored[0]).not.toHaveProperty('creatorId');
   });
 
   it('refuses to validate a blocked answer, and keeps a correction as a voice example', async () => {

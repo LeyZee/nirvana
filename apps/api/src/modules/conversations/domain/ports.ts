@@ -95,6 +95,12 @@ interface MessageRepository {
   fanContext(fanId: FanId): Promise<FanContext>;
 }
 
+/** The voice prompt version and the model that wrote a draft: what the live rate is read by (ADR 0019). */
+interface DraftVoice {
+  readonly voicePrompt: string;
+  readonly voiceModel: string;
+}
+
 interface DraftRepository {
   lock(id: DraftId): Promise<Draft | null>;
   /** Drafts not yet sent nor closed (`pending`, `approved`, `edited`), oldest first. */
@@ -107,6 +113,8 @@ interface DraftRepository {
     bubbles?: readonly string[];
     /** Soft guard findings the operator should see next to the draft. */
     softViolations?: readonly string[];
+    /** The voice that wrote it, for the live rate (ADR 0019). */
+    voice?: DraftVoice;
   }): Promise<void>;
   setStatus(id: DraftId, status: DraftStatus, decision?: DraftDecision): Promise<void>;
 }
@@ -244,6 +252,7 @@ export type ComposeResult =
       readonly bubbles: readonly string[];
       readonly softViolations: readonly string[];
       readonly costUsd: number;
+      readonly voice?: DraftVoice;
     }
   | {
       readonly kind: 'held';

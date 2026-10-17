@@ -17,11 +17,14 @@ import {
   credentialFromVerification,
   markRefusedInProduction,
   toStatus,
+  type StoredCredential,
 } from '../domain/credential';
 import { checkKeyShape } from '../domain/key-shape';
 import { describeRefusal } from '../domain/messages';
 import type { Clock, CredentialStore } from '../domain/ports';
 import type { ProviderVerifier } from '../domain/verification';
+
+import type { KeyCache } from './key-cache';
 
 class ProviderNotSupported extends DomainError {
   constructor(provider: AiProvider) {
@@ -129,20 +132,79 @@ export async function reverifyAll(deps: ConnectionsDeps): Promise<readonly Provi
   return Promise.all(saved.map((credential) => reverifyProvider(deps, credential.provider)));
 }
 
-/** The gateway saw a 401 or 403 on a real call: the line turns red now, not at the next check (point 2). */
-export async function reportRefusedKey(
-  deps: ConnectionsDeps,
-  provider: AiProvider,
-  kind: ProviderErrorKind,
-): Promise<void> {
-  for (let attempt = 0; attempt < UPDATE_ATTEMPTS; attempt += 1) {
-    const stored = await deps.store.find(provider);
-    if (stored === null || stored.state === 'needs_reconnect') return;
-    if (await deps.store.update(markRefusedInProduction(stored, kind))) {
-      await changed(deps, provider);
-      return;
+/** How long a saved key the provider just accepted stays trusted against refusals reported for it. */
+const CONFIRMED_KEY_TRUST_MS = 60_000;
+
+/**
+ * How long a call started with the previous key can still end in a refusal after the key changed: the longest
+ * role timeout (90 s) times its attempts (1 + 2 retries), rounded up.
+ */
+const CALL_IN_FLIGHT_MS = 5 * 60_000;
+
+export type RefusalReporter = (provider: AiProvider, kind: ProviderErrorKind) => Promise<void>;
+
+/** The keys this process hands to the gateway, and when it last switched them (`KeyCache`). */
+export type KeysInUse = Pick<KeyCache, 'lookup' | 'changedAt'>;
+
+/**
+ * The gateway saw a 401 or 403 on a real call (point 2). Each process reports its own refusals, so the refused key
+ * is the one this process handed out:
+ * - the saved key, handed out for longer than a call can last: the line turns red now, as the provider said;
+ * - possibly the previous one (the key changed moments ago, or this process has not reloaded it yet): the saved key
+ *   is checked once with the provider first. Accepted, the refusal was the old key's and nothing changes (that
+ *   answer holds for a minute); refused, the line turns red with the provider's reason; unreachable, nothing is
+ *   concluded and the 15-minute check will tell.
+ * A credit or spending limit refused on calls but not on the key check (xAI, Google) thus still turns red.
+ * One decision at a time per service, however many refusals arrive meanwhile.
+ */
+export function createRefusalReporter(deps: ConnectionsDeps, keys: KeysInUse): RefusalReporter {
+  const running = new Map<AiProvider, Promise<void>>();
+  const trusted = new Map<AiProvider, { readonly revision: number; readonly until: number }>();
+
+  async function refusalOf(
+    stored: StoredCredential,
+    key: string,
+    reported: ProviderErrorKind,
+    now: number,
+  ): Promise<ProviderErrorKind | null> {
+    const changedAt = keys.changedAt(stored.provider);
+    const mayBeOldKey =
+      keys.lookup(stored.provider) !== key ||
+      (changedAt !== undefined && now - changedAt < CALL_IN_FLIGHT_MS);
+    if (!mayBeOldKey) return reported;
+    const trust = trusted.get(stored.provider);
+    if (trust?.revision === stored.revision && trust.until > now) return null;
+    const outcome = await verifierFor(deps, stored.provider).verify(key, stored.settings);
+    if (outcome.ok) {
+      trusted.set(stored.provider, { revision: stored.revision, until: now + CONFIRMED_KEY_TRUST_MS });
+      return null;
+    }
+    return outcome.kind === 'unreachable' ? null : outcome.kind;
+  }
+
+  async function decide(provider: AiProvider, reported: ProviderErrorKind): Promise<void> {
+    for (let attempt = 0; attempt < UPDATE_ATTEMPTS; attempt += 1) {
+      const stored = await deps.store.find(provider);
+      if (stored === null || stored.state === 'needs_reconnect' || stored.key === null) return;
+      const kind = await refusalOf(stored, stored.key, reported, deps.clock.now().getTime());
+      if (kind === null) return;
+      if (await deps.store.update(markRefusedInProduction(stored, kind))) {
+        await changed(deps, provider);
+        return;
+      }
+      // A voice picked meanwhile: read the line again and decide over it.
     }
   }
+
+  return (provider, kind) => {
+    const pending = running.get(provider);
+    if (pending !== undefined) return pending;
+    const check = decide(provider, kind).finally(() => {
+      running.delete(provider);
+    });
+    running.set(provider, check);
+    return check;
+  };
 }
 
 export async function disconnectProvider(

@@ -107,6 +107,7 @@ export function createRespondJob({ uow, clock, composer }: RespondDeps) {
           createdAt: meta.at,
           bubbles: result.bubbles,
           softViolations: result.softViolations,
+          ...(result.voice !== undefined && { voice: result.voice }),
         });
         await appendEvent(
           tx,

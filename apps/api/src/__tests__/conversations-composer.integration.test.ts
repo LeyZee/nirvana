@@ -130,6 +130,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       bubbles: ['Coucou toi', 'Je me pose'],
       softViolations: ['emoji'],
       costUsd: 0.002,
+      voice: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
     };
     await respond(id);
 
@@ -143,6 +144,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       status: 'pending',
       bubbles: ['Coucou toi', 'Je me pose'],
       guardTrace: { softViolations: ['emoji'] },
+      promptHashes: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
     });
     expect(await state(id)).toBe('awaiting_approval');
   });
