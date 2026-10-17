@@ -13,7 +13,7 @@ Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'
 ## Ce qui est déjà conçu, et ce qui manque
 | Besoin de Charles | Déjà conçu | Manque, tranché ici |
 |---|---|---|
-| KYC (prénom, âge, métier, ville, couple, passions…) | `fans.kyc_state` (slots remplis), `fan_facts` catégorie `identity` / `life`, `kyc_missing` du brief, persona `strategies.kyc` | La liste fermée `KycSlot` : la persona ne porte plus de slots (P0-08), seulement des cibles en texte. Liste proposée : `first_name`, `age`, `city`, `country`, `job`, `relationship`, `children`, `hobbies`, `schedule`. |
+| KYC (prénom, âge, métier, ville, couple, passions…) | `fans.kyc_state` (slots remplis), `fan_facts` catégorie `identity` / `life`, `kyc_missing` du brief, persona `strategies.kyc` | La liste fermée `KycSlot` : la persona ne porte plus de slots (P0-08). Ce sont les lignes du canevas de notes de Reveal, telles quelles : `first_name` (Prénom), `location` (Localisation), `age` (Âge), `job` (Métier), `hobbies` (Passions), `desires` (Envies), `situation` (Situation). |
 | Faits appris | `fan_facts` (append-only, `declared` / `inferred`, confiance, source, expiration), `fan_summaries`, `fans.refresh_summary` | Rien. |
 | Note libre de l'opérateur | `release(…, note)` écrit un `fan_fact` catégorie `operator_note` (`message-flow.md`) | `operator_note` absent de la liste des catégories de `data-model.md` : l'ajouter. |
 | Scripts déjà envoyés | `media_sends` (un média payant n'est jamais revendu au même fan), `script_runs` réservé (phase 6) | Lecture « déjà envoyé à ce fan » exposée par `fans` pour le contexte ; l'écriture des `script_runs` reste en phase 6 (fiche catalogue). |
@@ -22,13 +22,18 @@ Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'
 | Étapes refusées et raison du refus | `offer_made`, `sale_detected` | Fait `commercial` « refus » relié à l'offre (`offer_id`, raison si connue), lu avant de relancer. |
 | Limites du fan | `fans.flags` (jsonb, non spécifié), risques du brief (`distress`, `minor_suspected`…) | Clés fermées de `fans.flags`, lues par la politique avant toute offre : `age_confirmed` (date), `sales_frozen` (raison : `money_trouble`, `spending_limit`, `distress`, `operator`), `spending_limit_minor`, `fragile`, `no_explicit`, `do_not_contact`. `sales_frozen` et `fragile` bloquent aussi le chouinage (méthode §4). Écrites par la politique (risque détecté) ou par un humain, jamais par le LLM seul. |
 
-## Les notes de Reveal (Charles, 17/10 à 17h33)
-Reveal affiche déjà, à droite de chaque conversation, des **notes client** par fan, des **notes du modèle** (l'équivalent de la persona) et des statistiques, dont un onglet PPV. La mémoire de Nirvana s'appuie sur elles au lieu de tenir une mémoire parallèle qui divergerait :
-- **Lecture** : à l'ingestion, les notes client de Reveal entrent comme faits (`source: platform_note`) et les statistiques PPV alimentent `purchaseSummary`.
-- **Écriture** : un fait confirmé est réécrit dans les notes client de Reveal, pour que l'agent et les humains lisent la même fiche.
-- **Conflit** : une note modifiée par un humain dans Reveal l'emporte sur le fait plus ancien de Nirvana, qui est remplacé (`superseded_by`).
-- **Notes du modèle** : écrites depuis la persona active à chaque activation de version.
-- **Point d'accroche** : capacités optionnelles du port connecteur (`readFanNotes`, `writeFanNotes`, `readFanStats`, signalées dans `ConnectorCapabilities`), sans forme fixée ici. Les champs viennent de l'observation de Reveal (P1-02, fil Connexion Reveal) ; sans ces capacités, la mémoire fonctionne seule.
+## Les notes de Reveal (Charles, 17/10 à 17h33 ; observées par le fil Connexion Reveal)
+Reveal tient déjà la fiche du fan, dans le panneau de droite de chaque conversation (inventaire du connecteur Reveal, section « Observé à l'écran », PR #15, pas encore fusionnée) :
+- **Notes** : texte libre structuré par le canevas de l'agence, Prénom, Localisation, Âge, Métier, Passions, Envies, Situation. L'agent le remplit ligne par ligne sans en changer le format : c'est la note que l'agent et les humains lisent.
+- **Prénom du membre** : champ dédié, source de la variable `%NAME%` des scripts. Premier slot à remplir ; garde en code : jamais de `%NAME%` brut ni de prénom vide.
+- **Note du modèle** : la fiche de la créatrice, réécrite depuis la persona active. Données personnelles : jamais dans le dépôt ni dans un log (ADR 0010).
+- **Analytics** : total dépensé, tips, messages, dernier paiement, achat le plus élevé, abonnement. Lus pour `purchaseSummary`, pas recopiés.
+
+Ce que Nirvana ajoute, et seulement cela, parce que Reveal ne le stocke pas : les faits datés et leur historique (`fan_facts`), ce qui a été vendu ou refusé et pourquoi (`media_sends`, ventes, faits « refus »), les scripts déjà envoyés (Reveal n'a pas d'indicateur « déjà envoyé »), la phase de la relation et les drapeaux de sécurité.
+
+- **Lecture** : à l'ingestion, chaque ligne du canevas devient le fait de son slot (`source: platform_note`) ; le prénom du membre aussi.
+- **Écriture** : un fait confirmé d'un slot réécrit sa ligne du canevas ; un humain qui modifie une ligne dans Reveal l'emporte sur le fait plus ancien, remplacé (`superseded_by`).
+- **Point d'accroche** : capacités optionnelles du port connecteur (`readFanNotes`, `writeFanNotes`, `readFanStats`, signalées dans `ConnectorCapabilities`). La forme des appels vient du trafic (P1-02) ; sans ces capacités, la mémoire fonctionne seule.
 
 ## À faire
 - `packages/contracts` : `KycSlot`, `FactCategory` avec `operator_note`, `FanFlagsSchema` (clés ci-dessus), `FanPurchaseSummary`.
