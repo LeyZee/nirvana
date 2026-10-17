@@ -1,0 +1,116 @@
+/**
+ * What the Dashboard shows, in the shape the screen needs. Until `GET /v1/dashboard` exists (PR 3, contract in
+ * `@nirvana/contracts`), `useDashboard` serves sample data of this shape and the screen says « Exemple ».
+ * Money is in euros, durations in minutes, rates in % (0 to 100).
+ */
+
+export type Tone = 'ok' | 'warn' | 'bad';
+export type Period = 'day' | 'week' | 'month';
+/** The single control of the agent (revue 08): Automatique stays locked under 80 % in real use (ADR 0019). */
+export type AgentMode = 'auto' | 'copilot' | 'stop';
+
+export const PERIODS: readonly { readonly id: Period; readonly label: string }[] = [
+  { id: 'day', label: 'Aujourd’hui' },
+  { id: 'week', label: '7 jours' },
+  { id: 'month', label: '30 jours' },
+];
+
+/** One line of « À traiter ». `fanId` opens the reader; without it, `where` says what to open instead. */
+export interface Todo {
+  readonly id: string;
+  readonly tone: Tone;
+  /** The kind, in the trade's words: « Mineur possible », « Demande de rencontre », « À valider dans Reveal ». */
+  readonly kind: string;
+  readonly title: string;
+  /** One sentence: why it waits for a human, and what the agent does meanwhile. */
+  readonly why: string;
+  /** « 23:41 », creator's time. */
+  readonly at: string;
+  readonly fanId?: string;
+  readonly where?: string;
+}
+
+/** One card of the « L'agent » fold. `rows` feed the tip; `gauge` is a spend or a rate against a mark. */
+interface AgentCard {
+  readonly id: string;
+  readonly tone: Tone;
+  readonly title: string;
+  readonly value: string;
+  readonly rows: readonly (readonly [label: string, value: string])[];
+  /** A spend against its budget (neutral, amber from 70 %, neon from 90 %) or a rate against its target (tone). */
+  readonly gauge?: { readonly kind: 'spend' | 'rate'; readonly value: number; readonly mark: number };
+}
+
+export interface AgentState {
+  readonly tone: Tone;
+  /** The eyebrow over the sentence, after the mode: how many conversations it follows. */
+  readonly eyebrow: string;
+  /** The state sentence; the part between ** is lit in the tone. */
+  readonly headline: string;
+  readonly lead: string;
+  /** The one action of the screen, when there is one (« Voir l'urgence »). */
+  readonly action?: string;
+  /** The fold's title (« L'agent fonctionne normalement ») and its one-line summary. */
+  readonly foldTitle: string;
+  readonly foldSummary: string;
+  readonly cards: readonly AgentCard[];
+}
+
+/** A figure the corpus says moves sales, against the period before. */
+export interface Lever {
+  readonly id: 'first-offer-bought' | 'time-to-first-offer' | 'blocked-at-payment';
+  readonly label: string;
+  readonly current: number;
+  readonly previous: number;
+  readonly tip: readonly [title: string, text: string];
+}
+
+export interface SalesSeries {
+  /** One label per point: hours (« 14 h ») for a day, dates (« 12 oct. ») otherwise. */
+  readonly labels: readonly string[];
+  readonly agent: readonly number[];
+  readonly chatters: readonly number[];
+  /** Yesterday, same hours, agent only: shown dotted on the day view. */
+  readonly past?: readonly number[];
+}
+
+export interface Sales {
+  readonly agent: number;
+  readonly chatters: number;
+  /** What the agent sold over the period before, for the delta. */
+  readonly agentBefore: number;
+  readonly series: SalesSeries;
+  readonly levers: readonly Lever[];
+  /** Head counts per funnel step, this period and the one before. */
+  readonly funnel: { readonly counts: readonly number[]; readonly before: readonly number[] };
+}
+
+interface Bubble {
+  readonly from: 'fan' | 'creator' | 'flag';
+  readonly text: string;
+}
+
+export interface Fan {
+  readonly id: string;
+  readonly name: string;
+  /** « abonné depuis 3 semaines · Nantes » */
+  readonly line: string;
+  readonly spent: number;
+  readonly byAgent: number;
+  /** What she knows about him (notes), and the alert that froze him, if any. */
+  readonly notes: readonly string[];
+  readonly alert?: string;
+  readonly thread: readonly Bubble[];
+}
+
+export interface Dashboard {
+  readonly mode: AgentMode;
+  /** Taux en réel and its target: Automatique opens at the target. */
+  readonly liveRate: { readonly rate: number; readonly target: number };
+  readonly creator: { readonly name: string; readonly platform: string; readonly now: string };
+  readonly agent: AgentState;
+  readonly todos: readonly Todo[];
+  readonly sales: Readonly<Record<Period, Sales>>;
+  /** Best fans first. */
+  readonly fans: readonly Fan[];
+}
