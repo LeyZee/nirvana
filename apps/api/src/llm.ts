@@ -29,7 +29,7 @@ export interface AppLlmOptions {
     kind: 'unauthorized' | 'missing_permission',
   ) => Promise<void>;
   readonly logger: Logger;
-  /** The llm_calls journal once the plumbing writes it; in memory until then (a restart resets the day's count). */
+  /** The llm_calls journal (`createPersistentCallLog`); in memory when absent (tests, terminal). */
   readonly log?: LlmCallLog;
 }
 

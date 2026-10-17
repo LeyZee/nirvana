@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
-import type { LlmCallStore } from '@nirvana/llm';
+import { createPersistentCallLog, DEFAULT_LLM_CONFIG, type LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
@@ -132,8 +132,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger.warn({ err: error }, 'AI service keys not loaded');
     },
   });
-  // TODO(P3-06): once the composer PR lands, `log: await createPersistentCallLog(<llm_calls store>, { timeZone, refreshEveryMs: 30_000 })`.
+  const llmCalls = createDrizzleLlmCallStore(adminDb.db);
+  // The day's calls of both processes, reloaded every 30 s: one daily cap for the API and the worker.
+  const llmLog = await createPersistentCallLog(llmCalls, {
+    timeZone: DEFAULT_LLM_CONFIG.dailyBudget.timeZone,
+    refreshEveryMs: 30_000,
+    onError: (error) => {
+      logger.warn({ err: error }, 'llm_calls not written or not reloaded');
+    },
+  });
   const llm = createAppLlm({
+    log: llmLog,
     credentials: providers.apiKeySource,
     reportRefusedKey: (provider, kind) => providers.reportRefusedKey(provider, kind),
     logger,
@@ -211,7 +220,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     db,
     adminDb,
     jobs,
-    llmCalls: createDrizzleLlmCallStore(adminDb.db),
+    llmCalls,
     auth,
     requireRole,
     routes: [
@@ -225,6 +234,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     readiness: () => checkReadiness(db.db, adminDb.db),
     async shutdown() {
       modules.providers.stop();
+      llmLog.stop();
       await jobs.close();
       await Promise.all([db.close(), adminDb.close()]);
     },
