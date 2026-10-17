@@ -29,6 +29,7 @@ Un `RevealApiConnector` qui lit la boîte de réception, les conversations, les 
 - Test de contrat commun : vert contre `FakeConnector` et contre `RevealApiConnector` + FakeReveal, y compris les scénarios `session_expired`, `rate_limited`, `shape_changed`, `challenge`.
 - Tests unitaires du mappage (chaque type de message, PPV acheté ou non, étape de script) et de la lecture de l'indicateur « script déjà envoyé » de Reveal.
 - `reveal-api-observed.md` : section « Capacités déclarées » à jour.
+- Achats à observer (à anticiper, contrat à définir avec le fil Bilan d'après la capture) : l'onglet Ventes des alertes Telegram et l'entonnoir du Dashboard ont besoin de chaque achat payé, par conversation, avec montant, bundle, et vendu par l'agent ou un chatteur. Le connecteur les lit là où Reveal les expose (historique des bundles du panneau PPV, dépenses du panneau Analytics, transactions) et les publie comme événement de domaine.
 
 ## Critères d'acceptation
 
