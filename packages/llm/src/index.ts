@@ -40,6 +40,7 @@ export {
   type ConversationTurn,
   type LlmFailure,
   type LlmGateway,
+  type KeyRefusal,
   type LlmGatewayDeps,
   type LlmSuccess,
   type SenseInput,

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createInMemoryCallLog } from './call-log';
 import { DEFAULT_LLM_CONFIG, type ModelRef, type ProviderCredentials } from './config';
-import { createLlmGateway, type VoiceInput } from './gateway';
+import { createLlmGateway, type KeyRefusal, type VoiceInput } from './gateway';
 import type { ModelResolver } from './providers';
 
 type Step = { text: string; finish?: 'stop' | 'content-filter' } | { status: number };
@@ -64,7 +64,11 @@ const INPUT: VoiceInput = {
 
 const ALL_KEYS: ProviderCredentials = { LLM_XAI_API_KEY: 'test-xai', LLM_MISTRAL_API_KEY: 'test-mistral' };
 
-function setup(models: { xai?: MockLanguageModelV4; mistral?: MockLanguageModelV4 }, credentials = ALL_KEYS) {
+function setup(
+  models: { xai?: MockLanguageModelV4; mistral?: MockLanguageModelV4 },
+  credentials = ALL_KEYS,
+  onKeyRefused?: (refusal: KeyRefusal) => void,
+) {
   const log = createInMemoryCallLog();
   const resolveModel: ModelResolver = (ref: ModelRef) =>
     ref.provider === 'xai' ? models.xai : ref.provider === 'mistral' ? models.mistral : undefined;
@@ -75,11 +79,49 @@ function setup(models: { xai?: MockLanguageModelV4; mistral?: MockLanguageModelV
     resolveModel,
     log,
     now: () => new Date((clock.t += 10)),
+    ...(onKeyRefused !== undefined && { onKeyRefused }),
   });
   return { gateway, log };
 }
 
 describe('LlmGateway', () => {
+  it('reports a key the provider refuses, and still answers with the fallback', async () => {
+    const refusals: KeyRefusal[] = [];
+    const { gateway } = setup(
+      { xai: scripted([{ status: 403 }]), mistral: scripted([{ text: BUBBLES }]) },
+      ALL_KEYS,
+      (refusal) => refusals.push(refusal),
+    );
+
+    const result = await gateway.voice(INPUT);
+
+    expect(result.ok && result.value.meta.provider).toBe('mistral');
+    expect(refusals).toEqual([{ provider: 'xai', status: 403 }]);
+  });
+
+  it('goes on when reporting the refusal fails', async () => {
+    const { gateway } = setup(
+      { xai: scripted([{ status: 401 }]), mistral: scripted([{ text: BUBBLES }]) },
+      ALL_KEYS,
+      () => {
+        throw new Error('store down');
+      },
+    );
+
+    expect((await gateway.voice(INPUT)).ok).toBe(true);
+  });
+
+  it('does not report other errors as a refused key', async () => {
+    const refusals: KeyRefusal[] = [];
+    const { gateway } = setup(
+      { xai: scripted([{ status: 400 }]), mistral: scripted([{ text: BUBBLES }]) },
+      ALL_KEYS,
+      (r) => refusals.push(r),
+    );
+    await gateway.voice(INPUT);
+    expect(refusals).toEqual([]);
+  });
+
   it('writes bubbles with Grok 4.7, wraps the fan message and logs the cost', async () => {
     const xai = scripted([{ text: BUBBLES }]);
     const { gateway, log } = setup({ xai });

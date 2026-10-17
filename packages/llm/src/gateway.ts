@@ -5,6 +5,7 @@ import { generateText, transcribe as transcribeAudio } from 'ai';
 
 import { classify, createCallRunner } from './call-runner';
 import { MODELS, TRANSCRIPTION_MODEL } from './catalog';
+import type { ProviderId } from './config';
 import { describeBrief, notesBlock, toMessages } from './conversation-messages';
 import type { LlmGateway, LlmGatewayDeps, VideoKeyframes } from './gateway-types';
 import { computeHealth } from './health';
@@ -23,12 +24,20 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
   };
   const canary = deps.canary ?? `nv-${randomBytes(6).toString('hex')}`;
 
+  const reportRefusal = (provider: ProviderId, status: 401 | 403): void => {
+    try {
+      deps.onKeyRefused?.({ provider, status });
+    } catch {
+      // Reporting is best effort: the call goes on to its fallback either way.
+    }
+  };
   const run = createCallRunner({
     config: deps.config,
     log: deps.log,
     resolveModel: deps.resolveModel,
     now,
     canary,
+    reportRefusal,
   });
 
   return {
@@ -124,7 +133,8 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         });
         return ok({ text: result.text, ...(durationS !== undefined && { durationS }) });
       } catch (error) {
-        const { outcome, message } = classify(error);
+        const { outcome, message, refusedStatus } = classify(error);
+        if (refusedStatus !== undefined) reportRefusal(ref.provider, refusedStatus);
         deps.log.append({
           ...base,
           at: now(),
