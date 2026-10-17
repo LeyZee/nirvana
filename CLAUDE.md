@@ -37,7 +37,7 @@ docs/                START-HERE, architecture, ADR, conventions, playbooks, réf
 
 ## Commandes
 
-Prérequis : Node 22 (`.nvmrc`), pnpm 10, Docker (Postgres de dev et Testcontainers), `gitleaks` sur le PATH. La définition de chaque commande est dans `package.json` ; `scripts/check-repo.mjs` vérifie que les docs ne citent que des commandes qui existent.
+Prérequis : Node 22 (`.nvmrc`), pnpm 10, Docker (Postgres de dev et Testcontainers), `gitleaks` et `ffmpeg` sur le PATH. La définition de chaque commande est dans `package.json` ; `scripts/check-repo.mjs` vérifie que les docs ne citent que des commandes qui existent.
 
 ```
 pnpm install            # installe aussi les hooks git (lefthook)
