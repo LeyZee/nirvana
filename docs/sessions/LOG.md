@@ -51,7 +51,8 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Alertes Telegram : ADR 0020, fiche P3-07, maquette | done | `log/2026-10-17-alertes-telegram.md` |
 | 2026-10-17 | Suivi, squelette : liste des conversations (P0-07b, côté web) | done (PR #42) | `log/2026-10-17-web-suivi-squelette.md` |
 | 2026-10-17 | Écran Persona du CRM, dans Créatrices (Opus) | in_progress | `log/2026-10-17-persona-screen.md` |
-| 2026-10-17 | P3-07 lot 1 : moteur des notifications Telegram | done | `log/2026-10-17-telegram-lot1.md` |
+| 2026-10-17 | P3-07 lot 1 : moteur des notifications Telegram | done (PR #59) | `log/2026-10-17-telegram-lot1.md` |
+| 2026-10-17 | P3-07 lot 2 : page Réglages › Telegram | done (PR #70) | `log/2026-10-17-telegram-lot2.md` |
 | 2026-10-17 | Dashboard, PR 2 : coquille sur données d'exemple | done (PR #55) | `log/2026-10-17-dashboard-shell.md` |
 | 2026-10-17 | Audit des champs de la persona (Opus) | in_progress | `log/2026-10-17-persona-audit.md` |
 | 2026-10-17 | Contrôle de l'agent partagé, pastille de la barre | done | `log/2026-10-17-web-controle-agent.md` |

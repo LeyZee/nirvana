@@ -1,5 +1,5 @@
 # P3-07 Notifications Telegram : bots, groupes, routage, page Réglages › Telegram
-Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 en relecture, branchement du worker par Bilan)
+Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 fusionné (#59), branchement par Bilan (#71), lot 2 fusionné (#70) ; restent le bandeau du Dashboard et les réglages des ventes)
 Phase : 3
 Dépend de : P0-05, P0-07b, P3-03 (chiffrement des secrets du CRM, ré-auth #41), changements de contrat de Bilan et du fil agent (ADR 0020 §3)
 Branche : claude/telegram-alerts-3urhyn
@@ -80,7 +80,7 @@ Pour le Dashboard (carte Gardes de la maquette v6, « Alertes Telegram cette nui
 En tête : l'état (tout fonctionne, nombre de bots et de groupes, dernier envoi) et le bouton « Ajouter un bot ». Cinq onglets :
 - **Alertes** : couverture, routage par niveau et par créatrice, aperçu, dernières alertes.
 - **Ventes** : un message à chaque vente, groupes, ventes de l'agent ou toutes, montant minimum, bilan du soir.
-- **Mots-clés** : liste par créatrice, « Prévenir » ou « Prévenir et arrêter l'agent », ajout d'un mot. La liste appartient à l'agent, l'écran passe par son API.
+- **Mots-clés** : liste par créatrice, lue dans `notifications.alert_keywords` de sa persona (API persona) et modifiée dans sa fiche Persona, jamais ici. Un mot met toujours l'agent en pause pour ce fan (PersonaSchema) : pas de réglage « Prévenir » seul tant que le besoin n'est pas exprimé.
 - **Validations** : quels types de demande (vocal, brouillon en attente), dans quels groupes.
 - **Bots et groupes** : bots, groupes, santé, test, remplacer le jeton, supprimer (confirmation dans la page).
 
@@ -102,9 +102,11 @@ Un onglet dont l'événement n'existe pas encore dit « bientôt » et pourquoi,
 - [x] Glossaire : « Notification Telegram », « Sujet », « Bot », « Groupe », « Astreinte ». Runbook `docs/runbooks/telegram.md` : que faire à chaque niveau, révoquer un jeton.
 
 ## À faire, lot 2 : écran
-- [ ] `apps/web/src/settings/telegram/` (dossier propre, le fil Extension relit). Lignes de router et de navigation passées par le coordinateur.
-- [ ] Page à cinq onglets et feuille de création, d'après la maquette.
-- [ ] Bandeau de couverture sur la page et sur le Dashboard.
+- [x] `apps/web/src/settings/telegram/` (dossier propre, le fil Extension relit). Lignes de router et de navigation ajoutées dans la même PR, add-only, relues par le fil Extension.
+- [x] Page à cinq onglets et feuille de création en quatre étapes, d'après la maquette. Ventes et Validations : routage prêt, message « arrive avec … » tant que l'événement n'existe pas.
+- [x] Bandeau de couverture sur la page.
+- [ ] Bandeau de couverture sur le Dashboard : avec `GET /v1/dashboard` (fil agent), qui lit `nightCounts` et la couverture.
+- [ ] Ventes : réglages « ventes de l'agent ou toutes », montant minimum, bilan du soir (côté serveur d'abord, avec `sale_detected`).
 
 ## À faire, lots suivants (quand l'événement existe)
 - [ ] Ventes : `sale_detected` complété et publié (connecteur Reveal), bilan du soir.

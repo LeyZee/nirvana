@@ -1,0 +1,7 @@
+# 2026-10-17 — P3-07 lot 2 : page Réglages › Telegram — done
+Fait : `apps/web/src/settings/telegram/` (client API parsé par les contrats, règles d'affichage testées, page à cinq onglets, feuille « Ajouter un bot » en quatre étapes avec écoute du groupe, remplacement du jeton, suppression confirmée, ré-auth ADR 0016), route `/reglages/telegram` et entrée « Telegram » dans le sous-menu Réglages. Parcours complet joué dans Chromium contre un faux serveur, bureau et téléphone.
+Pas fait : bandeau de couverture sur le Dashboard (avec `GET /v1/dashboard`) ; réglages fins des ventes (avec `sale_detected`). Les routes répondent depuis le branchement de Bilan (#71).
+Décisions : les mots-clés se lisent dans la persona (`notifications.alert_keywords`) et se modifient dans la fiche Persona, pas de seconde liste ; un mot met toujours l'agent en pause (PersonaSchema), donc pas de choix par mot ; chaque choix de routage s'enregistre aussitôt, en file, avec la version du routage (un conflit recharge et le dit).
+Découvertes : sur téléphone, un sous-menu de quatre entrées élargissait la page (grille `nv-page` sans `minmax(0, 1fr)`) : corrigé dans `shell.css` (deux lignes, relecture du fil Extension). Les couleurs de l'aperçu Telegram sont locales à la page (`telegram.css`) : à déplacer dans le design system si un autre écran dessine Telegram.
+Candidats à suppression : aucun.
+Vérifié : `pnpm check` ✓, `pnpm test` ✓ (19 tests ajoutés dans `apps/web`).
