@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { JOB_PAYLOADS } from '@nirvana/contracts';
@@ -64,8 +65,12 @@ export interface App {
   shutdown(): Promise<void>;
 }
 
-/** From `src/` in development and from `dist/` once built: both sit two levels under the repository root. */
-const fromRepoRoot = (path: string): string => fileURLToPath(new URL(`../../../${path}`, import.meta.url));
+/**
+ * A path from the repository root, as the terminal playground reads it: `src/` in development and `dist/` once
+ * built both sit two levels under it. An absolute path is kept as is.
+ */
+const fromRepoRoot = (path: string): string =>
+  resolve(fileURLToPath(new URL('../../../', import.meta.url)), path);
 
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
@@ -136,8 +141,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   const playground = await startPlaygroundModule({
     ...llm.deps,
     gateway: llm.gateway,
-    personaPath: config.PLAYGROUND_PERSONA_PATH ?? fromRepoRoot('personas/demo/v0.1.0.yaml'),
-    trainingDir: config.NIRVANA_TRAINING_DIR ?? fromRepoRoot('.scratch/training'),
+    personaPath: fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml'),
+    trainingDir: fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training'),
   }).catch((error: unknown) => {
     logger.warn({ err: error }, 'playground not started: persona unreadable');
     return null;

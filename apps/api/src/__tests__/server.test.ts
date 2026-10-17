@@ -265,4 +265,10 @@ describe('loadConfig', () => {
     expect(testConfig({ NIRVANA_INLINE_WORKER: '1' }).NIRVANA_INLINE_WORKER).toBe(true);
     expect(() => testConfig({ NIRVANA_INLINE_WORKER: 'yes' })).toThrow(/NIRVANA_INLINE_WORKER/);
   });
+
+  it('treats an empty playground path as unset, as copied from .env.example', () => {
+    const config = testConfig({ PLAYGROUND_PERSONA_PATH: '', NIRVANA_TRAINING_DIR: '' });
+    expect(config.PLAYGROUND_PERSONA_PATH).toBeUndefined();
+    expect(config.NIRVANA_TRAINING_DIR).toBeUndefined();
+  });
 });
