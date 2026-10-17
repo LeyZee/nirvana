@@ -20,6 +20,10 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Juge | `judge` | Rôle LLM d'évaluation (hors production). |
 | Politique | `policy` | Règles déterministes en code appliquées entre le cerveau et la voix. |
 | Gardes | `guards` | Vérifications en code après la voix (dégoûts, répétition, longueur, argent, identité). |
+| Repli | `fallback` | Le modèle de secours d'un rôle LLM, utilisé quand le modèle actif refuse, ne répond pas ou n'a pas de clé. |
+| Santé (des modèles) | `health` | État des rôles LLM (`ok`, `degraded`, `down`), latences, erreurs, coût du jour face au budget ; alimente le panneau « Modèles IA ». |
+| Playground | `playground` | Conversation d'essai avec la persona par le même chemin que la production (cerveau, voix, gardes), sans aucun envoi possible. |
+| Test express | `probe` | Script qui vérifie qu'un modèle tient la persona en sexting sans refuser ni avouer être une IA (`pnpm probe`). |
 | Passage à l'humain | `handoff` | La conversation est confiée à un humain ; le bot ne répond plus. |
 | Prise en main | `takeover` | Un humain prend la main volontairement. |
 | Mode copilote | `copilot` | Le bot propose, un humain approuve. |

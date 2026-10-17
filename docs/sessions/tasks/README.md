@@ -41,5 +41,6 @@ Branche : task/<id>-<slug>
 | P1-01 | Extension : enregistreur d'API | 1 | todo | P0-01 |
 | P1-02 | Analyse de l'API Reveal et FakeReveal | 1 | blocked (accès Reveal) | P1-01 |
 | P1-03 | Décision B/C et spécification du connecteur Reveal | 1 | todo | P1-02 |
+| P3-01 | Passerelle LLM multi-fournisseurs, Grok 4.7 et playground en terminal | 3 | in_progress | P0-01 |
 | H-01 | Première session d'hygiène | 0 | todo | P0-07 |
 | D-01 | Design system « Liquid Glass » | 4 | in_progress | P0-01 |
