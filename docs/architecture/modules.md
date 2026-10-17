@@ -29,6 +29,7 @@ supervision ──▶ conversations, fans
 media ──▶ packages/llm
 sales ──▶ conversations, media            (phase 6)
 scripts ──▶ sales, media, conversations   (phase 6)
+playground ──▶ agent, packages/llm        (écran Entraîner, P3-06)
 fans, persona ──▶ (feuilles)
 ```
 
@@ -69,6 +70,7 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | supervision | 4 | squelette |
 | sales | 6 | réservé |
 | scripts | 6 | réservé |
+| playground | 3 | API de l'écran Entraîner (P3-06) |
 | content (Instagram) | 7 | non créé |
 | platform (Nirvana propre) | 8 | non créé, voir `own-platform.md` |
 

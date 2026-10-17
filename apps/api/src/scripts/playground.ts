@@ -11,14 +11,10 @@ import { parseArgs } from 'node:util';
 import type { MediaDescription } from '@nirvana/contracts';
 import {
   createJsonlCallLog,
-  createLlmGateway,
-  createModelResolver,
-  createTranscriberResolver,
   DEFAULT_LLM_CONFIG,
   loadPrompt,
   MODELS,
   readProviderCredentials,
-  type LlmGateway,
 } from '@nirvana/llm';
 
 import {
@@ -46,10 +42,17 @@ import {
   createInMemoryDescriptionStore,
   createMediaDescriber,
 } from '../modules/media/index';
-
-import { FAN_PRESETS, findPreset } from './fan-presets';
-import { readPersonaFile } from './persona-file';
-import { createPlaygroundSession, withExamples, type PlaygroundTurn } from './playground-session';
+import {
+  createPlaygroundGateway,
+  createPlaygroundSession,
+  createVoiceVariant,
+  FAN_PRESETS,
+  findPreset,
+  ratingRecord,
+  readPersonaFile,
+  withExamples,
+  type PlaygroundTurn,
+} from '../modules/playground/index';
 
 const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
 const red = (s: string): string => `\x1b[31m${s}\x1b[0m`;
@@ -87,13 +90,7 @@ const scratch = resolve(repoRoot, '.scratch/playground');
 const today = new Date().toISOString().slice(0, 10);
 const persona = readPersonaFile(readFileSync(resolve(cwd, values.persona), 'utf8'), values.name, today);
 const log = createJsonlCallLog(resolve(scratch, 'llm-calls.jsonl'));
-const gateway = createLlmGateway({
-  config: DEFAULT_LLM_CONFIG,
-  credentials,
-  resolveModel: createModelResolver(credentials),
-  resolveTranscriber: createTranscriberResolver(credentials),
-  log,
-});
+const gateway = createPlaygroundGateway({ credentials, log });
 // Ratings hold persona phrasing: kept out of the repository, in the shape the database will take (P0-03).
 const trainingDir = process.env['NIRVANA_TRAINING_DIR'] ?? resolve(repoRoot, '.scratch/training');
 const store = createJsonlCalibrationStore(resolve(trainingDir, 'ratings.jsonl'));
@@ -242,20 +239,19 @@ async function rate(verdict: Verdict): Promise<void> {
     return;
   }
   const destination = suggestDestination(verdict);
-  const record: CalibrationRecord = {
+  const record = ratingRecord({
     id: `${sessionId}-${String(records.length + 1)}`,
     sessionId,
-    at: new Date().toISOString(),
+    at: new Date(),
     version: {
       voicePrompt: voicePromptVersion,
-      voiceModel: exchange.turn.model ?? DEFAULT_LLM_CONFIG.roles.voice.model,
+      voiceModel: exchange.turn.model ?? currentVersion.voiceModel,
     },
     verdict,
-    ...(destination !== undefined && { destination }),
-    fanMessage: exchange.fanMessage,
-    bubbles: exchange.turn.bubbles,
+    destination,
+    exchange: { fanMessage: exchange.fanMessage, bubbles: exchange.turn.bubbles },
     moment: exchange.moment,
-  };
+  });
   await store.append(record);
   records.push(record);
   isRated = true;
@@ -267,31 +263,6 @@ async function rate(verdict: Verdict): Promise<void> {
   } as const;
   console.log(dim(`  noté${destination === undefined ? '' : ` → ${where[destination]}`}`));
   console.log(`  ${statusLine()}`);
-}
-
-/** The same config, another voice model: for /compare. */
-function gatewayWithVoice(model: string): LlmGateway | undefined {
-  const info = MODELS.find((m) => m.model === model);
-  if (info === undefined) return undefined;
-  const { voice } = DEFAULT_LLM_CONFIG.roles;
-  return createLlmGateway({
-    config: {
-      ...DEFAULT_LLM_CONFIG,
-      roles: {
-        ...DEFAULT_LLM_CONFIG.roles,
-        voice: {
-          provider: info.provider,
-          model: info.model,
-          temperature: voice.temperature,
-          maxOutputTokens: voice.maxOutputTokens,
-          timeoutMs: voice.timeoutMs,
-        },
-      },
-    },
-    credentials,
-    resolveModel: createModelResolver(credentials),
-    log,
-  });
 }
 
 async function replayTests(): Promise<void> {
@@ -515,7 +486,7 @@ for (;;) {
   }
   if (line.startsWith('/compare ')) {
     const model = line.slice('/compare '.length).trim();
-    const other = gatewayWithVoice(model);
+    const other = createVoiceVariant({ credentials, log }, model);
     if (other === undefined) {
       console.log(dim(`  modèles : ${MODELS.map((m) => m.model).join(', ')}`));
       continue;

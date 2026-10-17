@@ -7,7 +7,7 @@ export {
   type GuardViolation,
 } from './domain/guards';
 export { assessTrap, screenMedia, type TrapAssessment } from './domain/traps';
-export { describeSituation, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
+export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,
   rateReport,
@@ -22,6 +22,7 @@ export {
   replayableTests,
   voiceExamples,
   type CalibrationRecord,
+  type CalibrationStore,
   type RatedMoment,
 } from './infra/calibration-record';
 export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';

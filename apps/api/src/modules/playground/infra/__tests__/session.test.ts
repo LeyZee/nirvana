@@ -4,9 +4,9 @@ import type { MediaDescription } from '@nirvana/contracts';
 import type { Brief, ConversationInput, LlmGateway, VoiceInput, VoiceOutput } from '@nirvana/llm';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_GUARD_SETTINGS } from '../modules/agent/index';
-import { readPersonaFile } from '../scripts/persona-file';
-import { createPlaygroundSession } from '../scripts/playground-session';
+import { DEFAULT_GUARD_SETTINGS } from '../../../agent/index';
+import { readPersonaFile } from '../persona-file';
+import { createPlaygroundSession } from '../session';
 
 const BRIEF: Brief = {
   intent: 'kyc_answer',
@@ -240,7 +240,7 @@ describe('playground session, traps and media', () => {
 
 describe('persona file', () => {
   const read = (path: string): string =>
-    readFileSync(new URL(`../../../../personas/${path}`, import.meta.url), 'utf8');
+    readFileSync(new URL(`../../../../../../../personas/${path}`, import.meta.url), 'utf8');
 
   it('reads the placeholder persona of the repository', () => {
     const persona = readPersonaFile(read('messalina/v0.0.0.yaml'), 'Messa', '2026-10-17');

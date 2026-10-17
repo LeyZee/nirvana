@@ -2,16 +2,16 @@
  * Calibration: each answer the team rates in the playground (spec moteur-ia/playground-entrainement.md).
  * One number matters, the validation rate: answers kept as written, out of the last rated ones.
  */
-export const REJECT_REASONS = [
-  'sounds_ai',
-  'out_of_character',
-  'too_long',
-  'too_early_sexual',
-  'missed_sale',
-  'forgot_fact',
-  'other',
-] as const;
-export type RejectReason = (typeof REJECT_REASONS)[number];
+import {
+  REJECT_REASONS,
+  type AnswerVersion,
+  type Destination,
+  type RejectReason,
+  type Verdict,
+} from '@nirvana/contracts';
+
+export { REJECT_REASONS };
+export type { AnswerVersion, Destination, RejectReason, Verdict };
 
 export const REJECT_REASON_LABELS: Readonly<Record<RejectReason, string>> = {
   sounds_ai: 'sonne IA',
@@ -70,14 +70,6 @@ export function parseRejection(text: string): { reason: RejectReason; note?: str
   return undefined;
 }
 
-export type Verdict =
-  | { readonly kind: 'validated' }
-  | { readonly kind: 'corrected'; readonly text: string }
-  | { readonly kind: 'rejected'; readonly reason: RejectReason; readonly note?: string };
-
-/** Where a correction goes once confirmed: a voice example, a rule for Charles to approve (then code), a test. */
-export type Destination = 'voice_example' | 'rule' | 'test';
-
 /** A rule is what code must enforce (rule 3): timing, selling, memory. Style goes to the voice examples. */
 const RULE_REASONS: readonly RejectReason[] = ['too_early_sexual', 'missed_sale', 'forgot_fact'];
 
@@ -85,12 +77,6 @@ export function suggestDestination(verdict: Verdict): Destination | undefined {
   if (verdict.kind === 'validated') return undefined;
   if (verdict.kind === 'corrected') return 'voice_example';
   return RULE_REASONS.includes(verdict.reason) ? 'rule' : 'test';
-}
-
-/** What wrote the answer: the rate is read per voice prompt and model, so a change shows its effect. */
-export interface AnswerVersion {
-  readonly voicePrompt: string;
-  readonly voiceModel: string;
 }
 
 export function versionLabel(version: AnswerVersion): string {
