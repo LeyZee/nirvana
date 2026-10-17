@@ -132,6 +132,18 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     'connector.dispatch': defineTask('connector.dispatch', JOB_PAYLOADS['connector.dispatch'], logger, () =>
       Promise.resolve(),
     ),
+    'providers.check_credentials': defineTask(
+      'providers.check_credentials',
+      JOB_PAYLOADS['providers.check_credentials'],
+      logger,
+      async (_payload, { logger: jobLogger }) => {
+        const statuses = await modules.providers.reverifyAll();
+        jobLogger.info(
+          { states: statuses.map((s) => `${s.provider}:${s.state}`) },
+          'AI service keys checked',
+        );
+      },
+    ),
   };
 
   return {

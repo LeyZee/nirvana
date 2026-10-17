@@ -29,6 +29,7 @@ export const JOB_NAMES = [
   'connector.reconcile',
   'fans.refresh_summary',
   'media.describe',
+  'providers.check_credentials',
 ] as const;
 export const JobNameSchema = z.enum(JOB_NAMES);
 export type JobName = z.infer<typeof JobNameSchema>;
@@ -54,6 +55,7 @@ export const JOB_PAYLOADS = {
     mediaAssetId: MediaAssetIdSchema,
     correlationId: z.string().min(1),
   }),
+  'providers.check_credentials': z.object({}),
 } as const satisfies Record<JobName, z.ZodType>;
 
 export type JobPayload<J extends JobName> = z.infer<(typeof JOB_PAYLOADS)[J]>;

@@ -8,7 +8,7 @@
 
 **Routes.** `/v1/settings/providers` : `GET`, `PUT /:provider/key`, `POST /:provider/verify`, `PUT /:provider/settings`, `DELETE /:provider`, derrière `requireRole('owner')` (montées avec P0-07a).
 
-**Jobs émis.** Revérification des clés toutes les 15 minutes (à câbler).
+**Jobs émis.** `providers.check_credentials`, toutes les 15 minutes (`crontab.ts`) : revérifie les clés enregistrées (crédit, clé révoquée, retour à la normale).
 
 ## Règles propres
 
