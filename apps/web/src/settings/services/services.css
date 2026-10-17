@@ -1,0 +1,668 @@
+/*
+ * Réglages › Modèles IA › Services (fiche P3-03). Built on the design-system tokens and nv-* classes; only what the
+ * package has no class for lives here, prefixed `sv-`. The container is glass, the rows are not (docs/design).
+ */
+
+.sv-page {
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-5);
+}
+.sv-heading h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.sv-crumb {
+  margin: 0 0 var(--nv-space-1);
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-faint);
+}
+.sv-muted {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+}
+.sv-lead {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.sv-self-start {
+  align-self: flex-start;
+}
+.sv-grow {
+  flex: 1;
+}
+
+/* What to do now: the first thing read, with the one neon button of the page. */
+.sv-next {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: sv-rise var(--nv-dur-base) var(--nv-ease-out) both;
+}
+/* Each row is its own stacking context (the entry animation); the one holding the menu goes on top. */
+.sv-row:has(.sv-menu) {
+  z-index: 2;
+}
+.sv-next__head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.sv-next__text {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sv-bar {
+  display: flex;
+  gap: 6px;
+}
+.sv-bar i {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--nv-glass-fill-strong);
+  overflow: hidden;
+  position: relative;
+}
+.sv-bar i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--nv-success);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.sv-bar i[data-segment='on']::after {
+  transform: scaleX(1);
+}
+.sv-bar i[data-segment='bad']::after {
+  background: var(--nv-danger);
+  transform: scaleX(1);
+}
+
+/* State dots: calm is still, waiting breathes, an error pulses; colour changes fade in 300 ms. */
+.sv-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--nv-ink-faint);
+  transition:
+    background-color 300ms var(--nv-ease-out),
+    box-shadow 300ms var(--nv-ease-out);
+}
+.sv-dot--big {
+  width: 16px;
+  height: 16px;
+}
+.sv-dot[data-dot='ok'] {
+  background: var(--nv-success);
+}
+.sv-dot[data-dot='off'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--nv-ink-faint);
+}
+.sv-dot[data-dot='must'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--nv-neon-ink);
+}
+.sv-dot[data-dot='low'] {
+  background: var(--nv-warning);
+}
+.sv-dot[data-dot='bad'] {
+  background: var(--nv-danger);
+  animation: sv-pulse 1.4s ease-in-out infinite;
+}
+.sv-dot[data-dot='busy'] {
+  background: var(--nv-warning);
+  animation: sv-breathe 1.6s ease-in-out infinite;
+}
+
+/* Services */
+.sv-list {
+  padding: 4px 0;
+}
+.sv-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 14px;
+  align-items: center;
+  padding: 16px 14px 16px 20px;
+  position: relative;
+  animation: sv-rise var(--nv-dur-base) var(--nv-ease-out) both;
+}
+.sv-row + .sv-row {
+  border-top: 1px solid var(--nv-hairline);
+}
+.sv-row > .sv-dot {
+  grid-row: 1 / 3;
+  align-self: start;
+  margin-top: 5px;
+}
+.sv-row__name {
+  font-weight: 600;
+  font-size: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.sv-row__name small {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--nv-ink-faint);
+}
+.sv-row__act {
+  grid-row: 1 / 3;
+  grid-column: 3;
+}
+.sv-row__line {
+  grid-column: 2;
+  margin: 0;
+  min-width: 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+  overflow-wrap: anywhere;
+}
+.sv-row__line[data-state='needs_reconnect'] {
+  color: var(--nv-danger);
+}
+.sv-row__line[data-state='low_credit'] {
+  color: var(--nv-warning);
+}
+.sv-more {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--nv-radius-full);
+  background: transparent;
+  color: var(--nv-ink-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.sv-more:hover {
+  background: var(--nv-glass-fill);
+  color: var(--nv-ink);
+}
+/* Floating layers sit over text: a raised base under the glass keeps them legible. */
+:is(.sv-menu, .sv-sheet).nv-glass {
+  background:
+    linear-gradient(165deg, var(--nv-glass-fill-strong) 0%, var(--nv-glass-fill) 62%),
+    color-mix(in srgb, var(--nv-surface-raised) 92%, transparent);
+}
+.sv-menu.nv-glass {
+  position: absolute;
+  right: 14px;
+  top: 58px;
+  z-index: 5;
+  min-width: 210px;
+  padding: 6px;
+  border-radius: var(--nv-radius-md);
+  display: flex;
+  flex-direction: column;
+  animation: sv-pop var(--nv-dur-fast) var(--nv-ease-out);
+}
+.sv-menu button {
+  appearance: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink);
+  background: transparent;
+  border-radius: var(--nv-radius-sm);
+  padding: 0 12px;
+  min-height: var(--nv-target-min);
+  cursor: pointer;
+}
+.sv-menu button:hover {
+  background: var(--nv-glass-fill-strong);
+}
+.sv-menu .sv-danger {
+  color: var(--nv-danger);
+}
+.sv-confirm {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+}
+.sv-confirm p {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+}
+.sv-confirm b {
+  color: var(--nv-ink);
+}
+.sv-btn--quiet {
+  color: var(--nv-ink-muted);
+}
+.sv-btn--quiet:hover {
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill);
+}
+
+/* Sheet */
+.sv-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--nv-void) 62%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: sv-fade var(--nv-dur-fast) var(--nv-ease-out) both;
+}
+@media (min-width: 640px) {
+  .sv-scrim {
+    align-items: center;
+  }
+}
+.sv-sheet {
+  width: 100%;
+  max-width: 500px;
+  max-height: calc(100% - 8px);
+  overflow: auto;
+  border-radius: var(--nv-radius-xl);
+  padding: 22px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: sv-sheet var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.sv-sheet__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sv-sheet__title {
+  flex: 1;
+  min-width: 0;
+}
+.sv-sheet h3 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.sv-sheet__title p {
+  margin: 2px 0 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+}
+.sv-close {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: var(--nv-radius-full);
+  background: transparent;
+  color: var(--nv-ink-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sv-close:hover {
+  background: var(--nv-glass-fill);
+  color: var(--nv-ink);
+}
+.sv-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.sv-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 0 12px;
+  padding: 14px 0;
+}
+.sv-step + .sv-step {
+  border-top: 1px solid var(--nv-hairline);
+}
+.sv-step[data-state='later'] {
+  opacity: 0.4;
+}
+.sv-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--nv-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--nv-glass-fill-strong);
+  color: var(--nv-ink-muted);
+  transition:
+    background-color 300ms var(--nv-ease-out),
+    color 300ms var(--nv-ease-out);
+}
+.sv-num svg {
+  width: 14px;
+  height: 14px;
+}
+.sv-step[data-state='now'] .sv-num {
+  background: var(--nv-neon-soft);
+  color: var(--nv-neon-ink);
+}
+.sv-step[data-state='done'] .sv-num {
+  background: color-mix(in srgb, var(--nv-success) 16%, transparent);
+  color: var(--nv-success);
+}
+.sv-step__head {
+  margin-top: 2px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.sv-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--nv-ink-faint);
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--nv-radius-full);
+  cursor: pointer;
+}
+.sv-link:hover {
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill);
+}
+.sv-step__body {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  min-width: 0;
+  animation: sv-rise var(--nv-dur-base) var(--nv-ease-out);
+}
+.sv-step__body > .nv-btn {
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+}
+.sv-ticks {
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+  background: var(--nv-glass-fill);
+  border-radius: var(--nv-radius-sm);
+}
+.sv-ticks li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.sv-ticks b {
+  font-weight: 500;
+  color: var(--nv-ink);
+  min-width: 78px;
+}
+.sv-ticks code,
+.sv-copy {
+  font-family: var(--nv-font-mono);
+  font-size: 13px;
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill-strong);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+.sv-copy {
+  appearance: none;
+  border: 0;
+  padding: 3px 8px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+.sv-copy span {
+  font-family: var(--nv-font-sans);
+  font-size: 11px;
+  color: var(--nv-ink-faint);
+}
+.sv-copy[data-copied='true'] span {
+  color: var(--nv-success);
+}
+.sv-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--nv-warning);
+}
+.sv-key {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 4px 4px 14px;
+  border-radius: var(--nv-radius-sm);
+  background: var(--nv-glass-fill);
+  box-shadow: inset 0 0 0 1px var(--nv-fill-track);
+  transition: box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+.sv-key:focus-within {
+  box-shadow: var(--nv-shadow-focus);
+}
+.sv-key[data-error='true'] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-danger) 60%, transparent);
+  animation: sv-nudge 300ms var(--nv-ease-out);
+}
+.sv-key input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--nv-font-mono);
+  font-size: 14px;
+  color: var(--nv-ink);
+  caret-color: var(--nv-neon);
+  padding: 10px 0;
+}
+.sv-key input::placeholder {
+  font-family: inherit;
+  color: var(--nv-ink-faint);
+}
+.sv-msg {
+  margin: 0;
+  min-height: 20px;
+  font-size: var(--nv-text-footnote);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.sv-msg[data-kind='error'] {
+  color: var(--nv-danger);
+}
+.sv-msg[data-kind='busy'] {
+  color: var(--nv-ink-muted);
+}
+.sv-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sv-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.sv-done svg {
+  width: 52px;
+  height: 52px;
+}
+.sv-done circle {
+  stroke: var(--nv-success);
+  stroke-width: 2.5;
+  fill: color-mix(in srgb, var(--nv-success) 10%, transparent);
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: sv-draw 500ms var(--nv-ease-out) forwards;
+}
+.sv-done path {
+  stroke: var(--nv-success);
+  stroke-width: 3;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: sv-draw 300ms 350ms var(--nv-ease-out) forwards;
+}
+.sv-done h3 {
+  font-size: 17px;
+}
+.sv-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  overflow: hidden;
+}
+.sv-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  font-size: var(--nv-text-footnote);
+  flex-wrap: wrap;
+}
+.sv-facts div + div {
+  border-top: 1px solid var(--nv-hairline);
+}
+.sv-facts dt {
+  color: var(--nv-ink-muted);
+}
+.sv-facts dd {
+  margin: 0;
+  font-weight: 500;
+  text-align: right;
+}
+.sv-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+}
+.sv-voice select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill-strong);
+  border: 0;
+  border-radius: var(--nv-radius-sm);
+  padding: 10px 12px;
+  min-height: var(--nv-target-min);
+}
+.sv-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--nv-ink-faint);
+  text-align: center;
+}
+
+.sv-page :is(button, a, select):focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 3px;
+}
+.sv-scrim :is(button, a, select):focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 3px;
+}
+
+@keyframes sv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes sv-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sv-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+@keyframes sv-sheet {
+  from {
+    opacity: 0.3;
+    transform: translateY(20px);
+  }
+}
+@keyframes sv-nudge {
+  30% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+}
+@keyframes sv-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes sv-pulse {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--nv-danger) 18%, transparent);
+  }
+}
+@keyframes sv-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sv-page *,
+  .sv-scrim,
+  .sv-scrim * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .sv-done circle,
+  .sv-done path {
+    stroke-dashoffset: 0;
+  }
+}
