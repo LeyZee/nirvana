@@ -3,7 +3,13 @@ import { createRootRouteWithContext, createRoute, createRouter, redirect } from 
 
 import { CreatorsPage } from './creators/CreatorsPage';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
-import { DevicesPage, AgentModePage, AiModelsPage, SettingsLayout } from './screens/settings/SettingsLayout';
+import {
+  DevicesPage,
+  AgentModePage,
+  AiModelsPage,
+  SettingsLayout,
+  TelegramPage,
+} from './screens/settings/SettingsLayout';
 import { TrackingPage } from './screens/tracking/TrackingPage';
 import { CorrectionsPage } from './screens/train/CorrectionsPage';
 import { PlaygroundPage } from './screens/train/PlaygroundPage';
@@ -71,6 +77,11 @@ const aiModels = createRoute({
   path: '/modeles-ia',
   component: AiModelsPage,
 });
+const telegram = createRoute({
+  getParentRoute: () => settings,
+  path: '/telegram',
+  component: TelegramPage,
+});
 const devices = createRoute({ getParentRoute: () => settings, path: '/appareils', component: DevicesPage });
 const agentMode = createRoute({ getParentRoute: () => settings, path: '/mode', component: AgentModePage });
 
@@ -79,7 +90,7 @@ const routeTree = rootRoute.addChildren([
   creators,
   train.addChildren([trainIndex, playground, corrections, tests]),
   tracking,
-  settings.addChildren([settingsIndex, aiModels, devices, agentMode]),
+  settings.addChildren([settingsIndex, aiModels, telegram, devices, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext) =>

@@ -2,6 +2,7 @@ import { Outlet, useRouteContext } from '@tanstack/react-router';
 import type { JSX } from 'react';
 
 import { ServicesSection } from '@/settings/services/ServicesSection';
+import { TelegramSection } from '@/settings/telegram/TelegramSection';
 import { ComingSoon, Page, PageHeader, SubNav } from '@/shell/layout';
 
 export function SettingsLayout(): JSX.Element {
@@ -16,6 +17,7 @@ export function SettingsLayout(): JSX.Element {
               label="Réglages"
               items={[
                 { to: '/reglages/modeles-ia', label: 'Modèles IA' },
+                { to: '/reglages/telegram', label: 'Telegram' },
                 { to: '/reglages/appareils', label: 'Appareils' },
                 { to: '/reglages/mode', label: "Mode de l'agent" },
               ]}
@@ -34,6 +36,11 @@ export function SettingsLayout(): JSX.Element {
 /** Réglages › Modèles IA: the Services page of P3-03, as the Connecteurs thread built it. */
 export function AiModelsPage(): JSX.Element {
   return <ServicesSection />;
+}
+
+/** Réglages › Telegram: bots, groups and who gets which alert (fiche P3-07). */
+export function TelegramPage(): JSX.Element {
+  return <TelegramSection />;
 }
 
 export function DevicesPage(): JSX.Element {
