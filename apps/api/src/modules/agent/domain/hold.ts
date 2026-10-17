@@ -1,8 +1,15 @@
 /**
- * When the bot steps back and a chatter takes over (methode-chatting.md): a possible minor, distress, self-harm.
+ * When the bot steps back and a chatter takes over (methode-chatting.md): a possible minor, distress, self-harm,
+ * and from the sales corpus a dangerous request or a story of real sexual abuse (L05, L28).
  * Decided here from the brain's risks, whatever action it suggested; the brain only reports.
  */
-const HANDOFF_RISKS = ['minor_suspected', 'distress', 'self_harm'] as const;
+const HANDOFF_RISKS = [
+  'minor_suspected',
+  'distress',
+  'self_harm',
+  'dangerous_request',
+  'real_abuse',
+] as const;
 
 const isHandoffRisk = (risk: string): boolean => HANDOFF_RISKS.some((r) => r === risk);
 

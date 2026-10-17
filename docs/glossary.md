@@ -52,6 +52,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Média | `media_asset` | Une photo, vidéo ou audio de la créatrice (catalogue) ou reçue d'un fan. |
 | Description de média | `media_description` | La sortie du rôle sens, au vocabulaire Nirvana. |
 | Offre | `offer` | Une proposition commerciale (média + prix + plancher). Phase 6. |
+| Budget nul | `hasNoBudget` | Drapeau posé par le code quand le fan dit ne pas pouvoir payer : plus aucune offre ni bouderie ni relance de vente tant qu'il ne revient pas de lui-même vers le payant. |
+| Plafonds d'offres | `OfferLimits` | Offres par jour de la créatrice (3) et offres sans achat avant d'arrêter (5), tenues par le code (`offerDecision`). |
 | Vente | `sale` | Une transaction détectée sur la plateforme. Montant en centimes + devise. |
 | Script | `script` | Séquence d'étapes de vente (structure). Phase 6. |
 | Étape | `script_step` | Une étape d'un script (message, médias, prix, pacing). |
