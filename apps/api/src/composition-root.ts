@@ -4,6 +4,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
 
+import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
 import type { Config } from './config';
 import { createDemoEchoTask, createDemoRoutes } from './demo';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
@@ -40,6 +41,9 @@ export interface App {
   /** Owner role: Graphile Worker, unscoped jobs, migration status. */
   readonly adminDb: DbClient;
   readonly jobs: JobQueue;
+  /** Dashboard authentication (Better Auth); routes guard themselves with `requireRole`. */
+  readonly auth: Auth;
+  readonly requireRole: RequireRole;
   /** Mounted under `/v1` by the server. */
   readonly routes: readonly FastifyPluginAsyncZod[];
   /** Run by the worker. */
@@ -67,6 +71,8 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     pool.on('connect', (client) => client.on('error', onError));
   }
   const jobs = await createJobQueue(adminDb.pool);
+  const auth = createAuth(config, db.db, logger);
+  const requireRole = createRequireRole(auth);
 
   const modules: Modules = {
     connectors: createConnectorsModule(),
@@ -93,7 +99,9 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     db,
     adminDb,
     jobs,
-    routes: [createDemoRoutes(jobs)],
+    auth,
+    requireRole,
+    routes: [createAuthRoutes(auth, config, requireRole), createDemoRoutes(jobs, requireRole)],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
     async shutdown() {

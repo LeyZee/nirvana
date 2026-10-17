@@ -4,6 +4,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { Task } from 'graphile-worker';
 import { z } from 'zod';
 
+import type { RequireRole } from './auth';
 import { DemoEchoPayloadSchema, defineTask, type JobQueue } from './jobs';
 import type { Logger } from './logger';
 
@@ -36,11 +37,12 @@ const EchoBodySchema = z.object({
     .default('demo'),
 });
 
-export function createDemoRoutes(jobs: JobQueue): FastifyPluginAsyncZod {
+export function createDemoRoutes(jobs: JobQueue, requireRole: RequireRole): FastifyPluginAsyncZod {
   return (app) => {
     app.post(
       '/demo/echo',
       {
+        preHandler: requireRole('owner', 'operator'),
         schema: {
           body: EchoBodySchema,
           response: { 202: z.object({ jobId: z.string() }) },

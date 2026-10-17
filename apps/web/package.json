@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@nirvana/contracts": "workspace:*",
     "@nirvana/design-system": "workspace:*",
     "clsx": "2.1.1",
     "react": "19.3.1",

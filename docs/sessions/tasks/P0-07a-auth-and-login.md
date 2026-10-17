@@ -1,6 +1,6 @@
 # P0-07a Authentification du dashboard, rôles, CSRF, page de connexion
 
-Statut : todo
+Statut : done
 Phase : 0
 Dépend de : P0-04
 Branche : task/p0-07a-auth-and-login
@@ -29,3 +29,11 @@ Un opérateur se connecte au dashboard avec email et mot de passe, l'API connaî
 Passkeys, rôle `creator` et PWA (phase 5), e2e de phase 0 (P0-07b).
 
 ## Notes de session
+
+## Résultat (2026-10-17)
+
+Fait : `apps/api/src/auth.ts` (Better Auth 1.7.7 sous `/v1/auth/*` avec l'adaptateur Drizzle sur les tables de `schema/auth.ts`, email + mot de passe de 12 caractères minimum, inscription publique coupée, sessions de 12 h en base, cookies `HttpOnly` `SameSite=Lax` et `Secure` en production, identifiants UUID v7, télémétrie coupée, jeton de session retiré des corps JSON (il ne vit que dans le cookie), `audit_log` à chaque connexion) ; `requireRole(...)` exposé par le composition root (401 `session_unauthenticated`, 403 `role_forbidden`) ; `GET /v1/me` (contrat `CurrentUserSchema`) ; vérification de l'en-tête `Origin` sur toute mutation dans `server.ts` (absente ou étrangère → 403 `origin_forbidden`) ; limite de 20 requêtes par minute et par IP sur `/v1/auth/*` ; `pnpm owner:create --email … --name …` (mot de passe tapé au terminal, `audit_log` du rôle) ; `AUTH_SECRET` refusé en production s'il vaut encore l'exemple ; `apps/web` : page de connexion, garde (rien ne s'affiche sans session), déconnexion, proxy `/v1` de Vite pour garder le cookie en première partie ; `/v1/demo/echo` réservé à `owner` et `operator`.
+
+Tests : 8 d'intégration (401 sans session, jeton absent du corps de connexion, connexion puis `/v1/me` avec le rôle, ligne `auth.login` dans `audit_log`, cookie `HttpOnly` et `SameSite=Lax`, mauvais mot de passe refusé, `operator` → 403 sur une route `owner` et `owner` → 200, mutation d'une autre origine → 403 même connecté, aucune inscription publique, déconnexion qui invalide la session, doublon d'email et mot de passe court refusés), 2 unitaires de plus côté serveur (Origin, secret d'exemple), 3 côté web (session et messages de connexion), 2 de contrat.
+
+Écarts : les tables Better Auth sont lues avec le rôle applicatif et non `withAdmin` : elles sont hors RLS et ce rôle suffit (moins de privilèges) ; `data-model.md` corrigé. La comparaison avec la CLI de Better Auth est faite par l'usage (connexion, session, compte, déconnexion passent sur nos tables) plutôt que par la CLI, qui demande de charger la configuration hors de l'application ; aucune migration n'a été nécessaire. Le mot de passe de `owner:create` s'affiche pendant la saisie (lecture de ligne simple) ; à masquer si le script sert ailleurs qu'en local.

@@ -35,6 +35,7 @@ export interface ServerDeps {
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const BODY_LIMIT_BYTES = 1_048_576;
+const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Reuses the caller's `x-request-id` when it is sane (it ends up in logs), otherwise a fresh one. */
 function requestIdFor(request: { headers: Record<string, string | string[] | undefined> }): string {
@@ -46,6 +47,7 @@ function requestIdFor(request: { headers: Record<string, string | string[] | und
 export function statusForCode(code: string): number {
   if (code.endsWith('_not_found')) return 404;
   if (code.endsWith('_invalid')) return 400;
+  if (code.endsWith('_unauthenticated')) return 401;
   if (code.endsWith('_forbidden')) return 403;
   if (code.endsWith('_conflict')) return 409;
   if (code.endsWith('_limited')) return 429;
@@ -84,6 +86,17 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   server.addHook('onSend', async (request, reply) => {
     reply.header('x-request-id', request.id);
+  });
+
+  // CSRF (security.md §6): a mutation must come from the dashboard. `SameSite=Lax` cookies plus this check, no
+  // separate token. A missing `Origin` is refused too: browsers always send it on a cross-site POST.
+  const allowedOrigins = new Set([config.WEB_ORIGIN]);
+  server.addHook('onRequest', async (request, reply) => {
+    if (!MUTATIONS.has(request.method)) return;
+    const origin = request.headers.origin;
+    if (origin === undefined || !allowedOrigins.has(origin)) {
+      await reply.code(403).send(errorBody(request, 'origin_forbidden', 'Origine non autorisée'));
+    }
   });
 
   await server.register(helmet);

@@ -12,6 +12,8 @@ import { buildServer, statusForCode } from '../server';
 
 import { testConfig } from './support/config';
 
+const ORIGIN = { origin: 'http://localhost:5173' };
+
 const READY: Readiness = { isReady: true, checks: { database: true, migrations: true, worker: true } };
 
 class ConversationNotFound extends DomainError {}
@@ -90,7 +92,7 @@ describe('error format (api.md)', () => {
       method: 'POST',
       url: '/v1/probe',
       payload: { name: '', count: 1.5 },
-      headers: { 'x-request-id': 'req-400' },
+      headers: { ...ORIGIN, 'x-request-id': 'req-400' },
     });
     expect(response.statusCode).toBe(400);
     const body = response.json<{
@@ -113,6 +115,7 @@ describe('error format (api.md)', () => {
       method: 'POST',
       url: '/v1/probe',
       payload: { name: 'ok', count: 2 },
+      headers: ORIGIN,
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ hello: 'ok' });
@@ -125,7 +128,7 @@ describe('error format (api.md)', () => {
       method: 'POST',
       url: '/v1/probe',
       payload: '{"name":',
-      headers: { 'content-type': 'application/json' },
+      headers: { ...ORIGIN, 'content-type': 'application/json' },
     });
     expect(response.statusCode).toBe(400);
     expect(response.json<{ error: { code: string } }>().error.code).toBe('request_invalid');
@@ -158,6 +161,7 @@ describe('error format (api.md)', () => {
   it('maps the code suffixes to their status', () => {
     expect(statusForCode('fan_not_found')).toBe(404);
     expect(statusForCode('price_invalid')).toBe(400);
+    expect(statusForCode('session_unauthenticated')).toBe(401);
     expect(statusForCode('takeover_forbidden')).toBe(403);
     expect(statusForCode('draft_conflict')).toBe(409);
     expect(statusForCode('send_limited')).toBe(429);
@@ -166,6 +170,18 @@ describe('error format (api.md)', () => {
 });
 
 describe('HTTP protections (security.md §6)', () => {
+  it('refuses a mutation without Origin or from another origin, lets reads through', async () => {
+    const app = await server();
+    const post = (headers: Record<string, string>) =>
+      app.inject({ method: 'POST', url: '/v1/probe', payload: { name: 'a', count: 1 }, headers });
+    for (const response of [await post({}), await post({ origin: 'https://evil.example' })]) {
+      expect(response.statusCode).toBe(403);
+      expect(response.json<{ error: { code: string } }>().error.code).toBe('origin_forbidden');
+    }
+    expect((await post(ORIGIN)).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
+  });
+
   it('sends the helmet headers', async () => {
     const response = await (await server()).inject({ method: 'GET', url: '/health' });
     expect(response.headers['x-content-type-options']).toBe('nosniff');
@@ -188,7 +204,8 @@ describe('HTTP protections (security.md §6)', () => {
 
   it('rate-limits per IP with the common error body', async () => {
     const app = await server({ env: { RATE_LIMIT_PER_MINUTE: '2' } });
-    const call = () => app.inject({ method: 'POST', url: '/v1/probe', payload: { name: 'a', count: 1 } });
+    const call = () =>
+      app.inject({ method: 'POST', url: '/v1/probe', payload: { name: 'a', count: 1 }, headers: ORIGIN });
     await call();
     await call();
     const limited = await call();
@@ -203,6 +220,7 @@ describe('HTTP protections (security.md §6)', () => {
       method: 'POST',
       url: '/v1/probe',
       payload: { name: 'x'.repeat(1_100_000), count: 1 },
+      headers: ORIGIN,
     });
     expect(response.statusCode).toBe(413);
     expect(response.json<{ error: { code: string } }>().error.code).toBe('payload_too_large');
@@ -234,6 +252,12 @@ describe('loadConfig', () => {
 
   it('names every missing required variable', () => {
     expect(() => loadConfig({})).toThrow(/DATABASE_URL[\s\S]*DATABASE_ADMIN_URL[\s\S]*WEB_ORIGIN/);
+  });
+
+  it('refuses the placeholder secret in production only', () => {
+    const placeholder = { AUTH_SECRET: 'replace-with-openssl-rand-base64-32' };
+    expect(testConfig(placeholder).AUTH_SECRET).toBe(placeholder.AUTH_SECRET);
+    expect(() => testConfig({ ...placeholder, NODE_ENV: 'production' })).toThrow(/AUTH_SECRET/);
   });
 
   it('reads the inline-worker flag', () => {

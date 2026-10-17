@@ -24,7 +24,7 @@ audit_log           id, user_id, action, entity, entity_id, details jsonb, ip, c
 
 ### Utilisateurs du dashboard (Better Auth)
 
-Les tables d'authentification sont **générées par la CLI de Better Auth** (adaptateur Drizzle) dans `packages/db/src/schema/auth.ts` : `user`, `session`, `account`, `verification`, avec deux champs additionnels sur `user` déclarés dans la config Better Auth : `role` (`owner|operator|creator`) et `creator_ids uuid[]`. Elles n'ont pas de `creator_id` et sont **hors RLS** (lues par le serveur via `withAdmin`). Elles sont migrées comme les autres (`drizzle-kit generate`), jamais à la main. Défauts : email + mot de passe, cookies `SameSite=Lax`, sessions en base. P0-03 génère le schéma sans logique ; P0-07a branche Better Auth.
+Les tables d'authentification sont **générées par la CLI de Better Auth** (adaptateur Drizzle) dans `packages/db/src/schema/auth.ts` : `user`, `session`, `account`, `verification`, avec deux champs additionnels sur `user` déclarés dans la config Better Auth : `role` (`owner|operator|creator`) et `creator_ids uuid[]`. Elles n'ont pas de `creator_id` et sont **hors RLS** (lues par Better Auth avec le rôle applicatif, qui suffit). Elles sont migrées comme les autres (`drizzle-kit generate`), jamais à la main. Défauts : email + mot de passe, cookies `SameSite=Lax`, sessions en base. P0-03 génère le schéma sans logique ; P0-07a branche Better Auth.
 
 ## Fans et mémoire (module `fans`)
 
