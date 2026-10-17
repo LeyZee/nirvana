@@ -9,13 +9,13 @@ import {
 import {
   decryptSecret,
   encryptSecret,
+  eq,
   keyVersionOf,
   schema,
   withAdmin,
   type Database,
   type EncryptionKey,
 } from '@nirvana/db';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { StoredCredential } from '../domain/credential';

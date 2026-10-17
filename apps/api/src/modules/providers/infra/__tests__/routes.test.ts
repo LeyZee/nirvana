@@ -1,4 +1,4 @@
-import type { onRequestHookHandler } from 'fastify';
+import type { preHandlerAsyncHookHandler } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
 import { createMemoryCredentialStore, createProvidersModule } from '../..';
@@ -15,13 +15,9 @@ const fakeXai: FetchLike = (_url, init) => {
   return Promise.resolve({ status, text: () => Promise.resolve(JSON.stringify({ name: 'nirvana' })) });
 };
 
-/** Stands in for `requireRole('owner')` (P0-07a): the header says who asks. */
-const ownerOnly: onRequestHookHandler = (request, reply, done) => {
-  if (request.headers['x-test-role'] === 'owner') {
-    done();
-    return;
-  }
-  void reply.code(403).send({ error: 'forbidden' });
+/** Stands in for `requireRole('owner')` (auth.ts): the header says who asks. */
+const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+  if (request.headers['x-test-role'] !== 'owner') await reply.code(403).send({ error: 'forbidden' });
 };
 
 async function server() {

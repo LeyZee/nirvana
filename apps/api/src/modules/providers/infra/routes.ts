@@ -6,7 +6,7 @@ import {
   ProviderStatusSchema,
   SaveProviderKeyBodySchema,
 } from '@nirvana/contracts';
-import type { onRequestHookHandler } from 'fastify';
+import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -17,7 +17,7 @@ const ProviderParamsSchema = z.object({ provider: AiProviderSchema });
 
 export interface ProvidersRoutesOptions {
   /** `requireRole('owner')` (P0-07a): keys are an agency setting, nobody else reads or changes them. */
-  readonly guard: onRequestHookHandler;
+  readonly guard: preHandlerAsyncHookHandler;
 }
 
 /**
@@ -29,7 +29,7 @@ export function createProvidersRoutes(
   options: ProvidersRoutesOptions,
 ): FastifyPluginAsyncZod {
   return (app) => {
-    app.addHook('onRequest', options.guard);
+    app.addHook('preHandler', options.guard);
 
     app.get('/settings/providers', { schema: { response: { 200: ProviderOverviewSchema } } }, async () => {
       const services = await providers.list();

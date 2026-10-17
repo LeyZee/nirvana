@@ -153,7 +153,11 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     jobs,
     auth,
     requireRole,
-    routes: [createAuthRoutes(auth, config, requireRole), modules.conversations.routes],
+    routes: [
+      createAuthRoutes(auth, config, requireRole),
+      modules.conversations.routes,
+      modules.providers.routes({ guard: requireRole('owner') }),
+    ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
     async shutdown() {
