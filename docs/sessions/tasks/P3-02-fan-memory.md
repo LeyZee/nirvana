@@ -1,8 +1,8 @@
-# Mémoire par fan : coder le module `fans`
-Statut : proposed
+# P3-02 Mémoire par fan : coder le module `fans`
+Statut : todo
 Phase : 3
 Dépend de : P0-03, P0-05, P0-08, P1-02 (forme des notes Reveal)
-Branche : (à fixer à l'acceptation)
+Branche : task/p3-02-fan-memory
 
 ## Objectif
 Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'agent connaisse chaque fan pendant des mois sans relire tout l'historique.

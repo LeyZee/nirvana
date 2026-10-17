@@ -1,8 +1,8 @@
-# Catalogue tarifé : index des scripts Reveal, de leurs étapes et de leurs bundles
-Statut : proposed
+# P6-01 Catalogue tarifé : index des scripts Reveal, de leurs étapes et de leurs bundles
+Statut : todo
 Phase : 6
-Dépend de : PROPOSED-fan-memory, P1-02, P1-03
-Branche : (à fixer à l'acceptation)
+Dépend de : P3-02, P1-02, P1-03
+Branche : task/p6-01-sales-catalog
 
 ## Objectif
 Donner à l'agent le catalogue qu'il vend tel qu'il existe sur Reveal. Le bot n'envoie que des scripts Reveal, et chaque étape d'un script contient un bundle préparé à l'avance (Charles, 17/10 à 18h18) ; il n'envoie jamais un média isolé. Le catalogue est donc l'index de ces scripts, de leurs étapes et de leurs bundles : prix, moment jour ou nuit, médias, et une description de chaque média que l'agent peut raconter au fan. Aucun script n'est rejoué à un fan, aucun bundle ne lui est revendu.
@@ -13,7 +13,7 @@ Donner à l'agent le catalogue qu'il vend tel qu'il existe sur Reveal. Le bot n'
 ## Ce qui existe
 Conçus : `media_assets`, `media_descriptions` (rôle `sense`, vocabulaire fermé, `factual_description` en texte libre), `media_sends` (anti-doublon par fan, avec le prix). Réservés sans conception : `offers`, `sales`, `scripts`, `script_steps`, `script_runs`, `cards`. Le principe est acté : les prix sont tenus par le code, jamais par le prompt. Ce que montre l'inventaire de Reveal (PR #15) : les scripts sont natifs, un bundle est un PPV, et rien n'indique qu'un script a déjà été envoyé à un fan. La forme exacte des scripts et des bundles dans l'API n'est pas connue avant P1-02.
 
-## Proposition (à valider par Charles avant de coder)
+## Proposition (validée par Charles le 17/10 à 18h35)
 - **Source** : les scripts se créent et se modifient dans Reveal, pas dans Nirvana. Le connecteur les lit (capacité `listScripts`, à confirmer en P1-02) et le module `scripts` tient un index synchronisé ; un script disparu de Reveal est désactivé, jamais supprimé.
 - `scripts` : `id`, `creator_id`, `platform_script_id` (unique par compte), `name`, `moment` (`day` | `night` | `any`), `active`, `synced_at`.
 - `script_steps` : `script_id`, `rank`, `kind` (`teaser` gratuit | `bundle` payant), `bundle_id`, `caption` lue dans Reveal (la voix écrit le texte autour, jamais à la place).
@@ -27,8 +27,8 @@ Conçus : `media_assets`, `media_descriptions` (rôle `sense`, vocabulaire ferm�
 - Règles en code (politique et gardes) : seul un script peut partir, jamais un média seul ; prix toujours celui du bundle ; aucune remise ; un bundle déjà acheté par ce fan n'est jamais reproposé ; un média n'est annoncé que s'il part réellement ; pas de script si la mémoire du fan l'interdit (drapeaux, âge non confirmé, cooldown de `persona.strategies.script_launch`) ; notification « plus de script » quand tous les scripts actifs ont été joués à ce fan.
 - Historique par fan : `script_runs` + `media_sends` + `sales`, exposés par le module `fans` (`playedScriptIds`, `sentMediaIds`, `purchaseSummary`).
 
-## À faire (après validation)
-- ADR « Catalogue = index des scripts Reveal » et ADR « Récupération et conservation des médias » si la proposition est retenue.
+## À faire
+- ADR « Catalogue = index des scripts Reveal » et ADR « Récupération et conservation des médias ». La seconde tranche la question ouverte de l'accès aux médias ; elle se décide avec Charles avant d'écrire ce code.
 - Contrats, schéma Drizzle et migration (`scripts`, `script_steps`, `bundles`, `script_runs`, `sales`, validation de `media_descriptions`), synchronisation par le connecteur contre `FakeReveal`, règles de politique, tests.
 - Les vrais scripts, bundles et prix de Messa restent hors dépôt (ADR 0010) ; les tests utilisent un catalogue fictif.
 
