@@ -28,3 +28,5 @@ Le reste de P0-02 (ids, money, events, jobs, settings, media), le chargement en 
 ## Notes de session
 - Remplace la structure `identity` / `style` / `boundaries` / `kinks` / `schedule` / `kyc` / `sales` / `examples` de la première version du document de référence, jamais codée. Les horaires de vie et les exemples de voix sortent de la persona (voir la référence).
 - Décision : les relances ont une seule source, `persona.follow_ups` ; `CreatorSettings.followUp` est retiré de P0-02 et de `ai-engine.md`.
+- Conséquence : la persona ne porte plus de slots KYC (`strategies.kyc.targets` est du texte). La liste fermée `KycSlot` du brief passe dans les contrats (fiche `PROPOSED-fan-memory.md`).
+- Fiches créées : `PROPOSED-fan-memory.md` (coder la mémoire déjà conçue et combler ses manques) et `PROPOSED-media-catalog-pricing.md` (catalogue, échelle de prix, historique par fan, à valider).
