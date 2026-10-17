@@ -53,13 +53,60 @@ export function attachGlassLight(element: HTMLElement): () => void {
   };
 }
 
-/** Plays the squash-and-release of a thumb or lens while it travels. No-op under reduced motion. */
-export function playLiquid(element: HTMLElement): void {
+/**
+ * Restarts a one-shot CSS animation carried by `className`. No-op under reduced motion.
+ * Used for the squash of a lens (`is-liquid`) and the gesture of a navigation icon (`is-playing`).
+ */
+export function playOnce(element: Element, className: string): void {
   if (prefersReducedMotion()) return;
-  element.classList.remove('is-liquid');
+  element.classList.remove(className);
   // Forcing a layout restarts the CSS animation on the next class add.
   element.getBoundingClientRect();
-  element.classList.add('is-liquid');
+  element.classList.add(className);
+}
+
+/** Plays the squash-and-release of a thumb or lens while it travels. No-op under reduced motion. */
+export function playLiquid(element: HTMLElement): void {
+  playOnce(element, 'is-liquid');
+}
+
+/** Fast start, soft landing: the curve numbers count on. `t` is clamped to [0, 1]. */
+export function easeOutQuart(t: number): number {
+  const clamped = Math.min(1, Math.max(0, t));
+  return 1 - (1 - clamped) ** 4;
+}
+
+/** Value shown at `elapsedMs` of a count from `from` to `to` lasting `durationMs`. */
+export function countValue(from: number, to: number, elapsedMs: number, durationMs: number): number {
+  if (durationMs <= 0) return to;
+  return from + (to - from) * easeOutQuart(elapsedMs / durationMs);
+}
+
+/**
+ * Counts the text of `element` from `from` to `to` (a stat value, a total). Shows `to` at once under
+ * reduced motion. Returns a cancel function (React effect friendly).
+ */
+export function countUp(
+  element: HTMLElement,
+  to: number,
+  format: (value: number) => string,
+  { from = 0, durationMs = 1000 }: { from?: number; durationMs?: number } = {},
+): () => void {
+  if (prefersReducedMotion()) {
+    element.textContent = format(to);
+    return () => undefined;
+  }
+  const start = performance.now();
+  let frame = 0;
+  const step = (now: number): void => {
+    const elapsed = now - start;
+    element.textContent = format(countValue(from, to, elapsed, durationMs));
+    if (elapsed < durationMs) frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+  return () => {
+    cancelAnimationFrame(frame);
+  };
 }
 
 /** Where the tab bar lens must sit to cover an item. */
