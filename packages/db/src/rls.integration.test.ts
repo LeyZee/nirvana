@@ -171,6 +171,20 @@ async function seedCreator(admin: Database, label: string) {
       conversationId,
       draftId,
     });
+    await tx.insert(s.calibrationRatings).values({
+      id: newId(MessageIdSchema),
+      creatorId,
+      sessionId: 'session',
+      ratedAt: at,
+      voicePrompt: 'voice@1',
+      voiceModel: 'model',
+      verdictKind: 'corrected',
+      verdict: { kind: 'corrected', text: 'Coucou' },
+      destination: 'voice_example',
+      fanMessage: 'Salut',
+      bubbles: ['Salut toi'],
+      moment: { history: [] },
+    });
     await tx
       .insert(s.notifications)
       .values({ id: newId(MessageIdSchema), creatorId, userId: 'u', type: 'sale' });
@@ -202,6 +216,7 @@ const TENANT_TABLES = {
   media_descriptions: s.mediaDescriptions,
   media_sends: s.mediaSends,
   llm_calls: s.llmCalls,
+  calibration_ratings: s.calibrationRatings,
   notifications: s.notifications,
   kill_switches: s.killSwitches,
 };
@@ -299,6 +314,31 @@ describe('database (RLS, constraints, migrations)', () => {
         ),
       ),
     ).toMatch(/messages_platform_message_unique/);
+  });
+
+  it('calibration ratings are append-only, except the purge of their moment', async () => {
+    const own = eq(s.calibrationRatings.creatorId, a.creatorId);
+    const asA = <T>(work: Parameters<typeof withTenant<T>>[2]) => withTenant(test.app.db, a.creatorId, work);
+    expect(
+      await failure(asA((tx) => tx.update(s.calibrationRatings).set({ fanMessage: 'changed' }).where(own))),
+    ).toMatch(/append-only/);
+    expect(
+      await failure(
+        asA((tx) =>
+          tx
+            .update(s.calibrationRatings)
+            .set({ moment: null, momentPurgedAt: at, voiceModel: 'other' })
+            .where(own),
+        ),
+      ),
+    ).toMatch(/append-only/);
+    expect(await failure(withAdmin(test.admin.db, (tx) => tx.delete(s.calibrationRatings)))).toMatch(
+      /append-only/,
+    );
+    const purged = await asA((tx) =>
+      tx.update(s.calibrationRatings).set({ moment: null, momentPurgedAt: at }).where(own).returning(),
+    );
+    expect(purged.map((row) => [row.moment, row.verdictKind])).toEqual([[null, 'corrected']]);
   });
 
   it('conversation events are append-only and ordered without duplicates', async () => {
