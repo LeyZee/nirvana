@@ -81,6 +81,18 @@ describe('ModeControl', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith('stop');
   });
 
+  it('gives the focus back to the option checked once the dialog closes', () => {
+    const { option } = setup('copilot', CLOSED);
+    fireEvent.click(option('Arrêt'));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.activeElement).toBe(option('Copilote'));
+
+    fireEvent.click(option('Arrêt'));
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’agent' }));
+    // The parent has not re-rendered with the new mode yet: the focus already aims at Arrêt.
+    expect(document.activeElement).toBe(option('Arrêt'));
+  });
+
   it('moves with the arrow keys, skipping a closed Automatique', () => {
     const { onChange, option } = setup('copilot', CLOSED);
     expect(option('Copilote').tabIndex).toBe(0);
