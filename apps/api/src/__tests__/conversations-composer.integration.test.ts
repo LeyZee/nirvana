@@ -174,6 +174,29 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     });
   });
 
+  it('writes nothing more to the fan while a human is awaited, whatever the fan sends', async () => {
+    const id = await fanWrites('c-awaited', 'Je vais pas bien');
+    composer.next = { kind: 'held', reason: 'handoff', cause: 'distress', detail: ['distress'], costUsd: 0 };
+    await respond(id);
+    const asked = composer.inputs.length;
+
+    await fanWrites('c-awaited', 'Tu es là ?');
+    await fanWrites('c-awaited', 'Réponds stp');
+    composer.next = { kind: 'draft', bubbles: ['Coucou'], softViolations: [], costUsd: 0 };
+    // A respond job queued before the handoff, replayed now: it must find nobody to answer.
+    await respond(id);
+
+    expect(composer.inputs).toHaveLength(asked);
+    expect(await drafts(id)).toHaveLength(0);
+    expect(await state(id)).toBe('human');
+    expect((await events(id)).map((event) => event.type)).toEqual([
+      'message_received',
+      'handoff_requested',
+      'message_received',
+      'message_received',
+    ]);
+  });
+
   it('goes back to idle when there is nothing to say, or when the engine fails', async () => {
     const quiet = await fanWrites('c-quiet', 'Ok bonne nuit');
     composer.next = { kind: 'held', reason: 'no_reply', detail: [], costUsd: 0 };

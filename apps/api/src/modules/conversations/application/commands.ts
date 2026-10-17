@@ -283,6 +283,7 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           {
             type: 'takeover_started',
             payload: {
+              conversationId: conversation.id,
               userId: input.userId,
               ...(input.reason === undefined ? {} : { reason: input.reason }),
             },
