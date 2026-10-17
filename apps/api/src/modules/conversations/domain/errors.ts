@@ -1,5 +1,6 @@
 import { DomainError, type ConversationState, type DraftStatus } from '@nirvana/contracts';
 
+import type { BlockedReason } from './ports';
 import type { ConversationCommand } from './state-machine';
 
 /** Error codes of the module (api.md § Erreurs): the suffix gives the HTTP status. */
@@ -35,3 +36,21 @@ export class DraftConflict extends DomainError {
     super('draft_conflict', `Brouillon « ${from} » : passage à « ${to} » impossible`);
   }
 }
+
+const BLOCKED_MESSAGES: Readonly<Record<BlockedReason, string>> = {
+  kill_switch: 'Arrêt d’urgence actif : rien ne part tant qu’il n’est pas levé',
+  session_expired: 'La session de la plateforme a expiré : rien ne part tant qu’elle n’est pas reconnectée',
+};
+
+/** An approval while nothing may leave (message-flow.md §6): the draft stays as it was. */
+export class SendBlocked extends DomainError {
+  constructor(reason: BlockedReason) {
+    super(`${reason}_conflict`, BLOCKED_MESSAGES[reason]);
+  }
+}
+
+/** Why a draft stopped before its send, in the words of its `draft_expired` event. */
+export const BLOCKED_EXPIRY_REASONS: Readonly<Record<BlockedReason, string>> = {
+  kill_switch: 'Arrêt d’urgence à l’envoi',
+  session_expired: 'Session de la plateforme expirée à l’envoi',
+};

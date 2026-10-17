@@ -154,7 +154,7 @@ interface JobEnqueuer {
 }
 
 /** Reasons the bot must not answer now (message-flow.md §6), read fresh by each job. */
-type BlockedReason = 'kill_switch' | 'session_expired';
+export type BlockedReason = 'kill_switch' | 'session_expired';
 
 interface RespondGate {
   blockedReason(conversation: ConversationKey): Promise<BlockedReason | null>;
