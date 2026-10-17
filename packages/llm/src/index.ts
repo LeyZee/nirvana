@@ -11,6 +11,8 @@ export {
   type LlmCallLog,
   type LlmCallRecord,
   type LlmCallStore,
+  type PersistentCallLog,
+  type PersistentCallLogOptions,
 } from './call-log';
 export {
   MODELS,
