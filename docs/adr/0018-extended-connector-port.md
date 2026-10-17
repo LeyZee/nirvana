@@ -1,0 +1,68 @@
+# 0018. Port connecteur étendu : scripts natifs, notes, coffre, médias, garde d'écriture
+
+Statut : proposed
+Date : 2026-10-17
+
+## Contexte
+
+Le port `PlatformConnector` livré par P0-06 (`apps/api/src/modules/connectors/domain/platform-connector.ts`) couvre la messagerie : boîte de réception, historique, texte, média, vérification d'envoi, transactions, lu et frappe, temps réel. L'inventaire du connecteur Reveal (`docs/reference/reveal-connector-inventory.md`) montre que l'agent a besoin de plus pour vendre comme un chatteur :
+
+- le panneau de droite d'une conversation : note client, notes du modèle, statistiques du fan, onglet PPV ;
+- les scripts natifs (bundles prêts, étapes, moment ☀️ / 🌙) : c'est le seul moyen de vente du bot (décision de Charles du 17/10, le bot n'envoie jamais de média libre) ;
+- le coffre et les fichiers des médias, pour que la vision voie ce que le fan envoie et ce que contient un bundle.
+
+Ces capacités ne sont pas propres à Reveal : OnlyFans, Fansly et notre future plateforme ont des notes, des PPV et des médias, sous d'autres noms. Elles doivent donc entrer dans le port, sans que le cœur connaisse Reveal (ADR 0003).
+
+Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès que son adaptateur est branché.
+
+## Décision
+
+1. **Méthodes optionnelles** ajoutées à `PlatformConnector`, chacune annoncée par un drapeau de `capabilities`, avec la même règle que les méthodes existantes : erreurs typées (`ConnectorError`) seulement, clé d'idempotence sur toute écriture.
+
+   | Méthode | Drapeau | Inventaire |
+   |---|---|---|
+   | `getFanProfile?(fanRef)` | `fanProfile` | L5 |
+   | `getFanNote?(fanRef)` / `setFanNote?(fanRef, text, key)` | `fanNotes` | L7, E4 |
+   | `getCreatorNotes?(conversationRef)` | `creatorNotes` | L11 |
+   | `getFanPpvStats?(fanRef)` | `ppvStats` | L12, L13 |
+   | `listPlatformScripts?()` / `sendScriptStep?(conversationRef, scriptRef, stepIndex, key)` | `scripts` | L8, E3 |
+   | `listVaultMedia?(opts)` | `vault` | L10 |
+   | `fetchMedia?(mediaRef)` | `mediaDownload` | L14, L15 |
+
+   L9 (étapes déjà envoyées) n'a pas de méthode tant que la capture ne montre pas que Reveal l'expose : notre propre journal d'envois et l'historique PPV en tiennent lieu.
+
+   `setCreatorNotes` (E4b) attend que la capture montre la portée des notes du modèle.
+
+2. **Schémas** dans `packages/contracts/src/connector.ts`, en vocabulaire du glossaire et sans aucun champ propre à Reveal :
+   - `FanProfile`, `FanNote`, `CreatorNote`, `FanPpvStats` ;
+   - `PlatformScript`, avec ses étapes (texte, médias vendus et d'aperçu, prix en unités mineures, gratuit possible) et son moment `day | night | null` ;
+   - `VaultMedia`, `FetchedMedia` (type MIME, taille, flux ou URL temporaire).
+
+   La traduction depuis les formes de la plateforme reste dans l'infra de chaque adaptateur, avec ses propres schémas Zod.
+
+3. **Garde d'écriture** : `ConnectorConfigSchema` reçoit `writes: boolean`, `false` par défaut. Tant qu'elle vaut `false`, le module `connectors` refuse toute écriture avant l'appel réseau. Le refus est un échec permanent (`send_failed`, sans nouvel essai). Le `FakeConnector` des tests et de l'e2e passe `writes: true` explicitement. Seul Charles active l'écriture d'un compte réel.
+
+   La garde est livrée par P0-07b (fil Bilan) pour les envois existants. Les nouvelles écritures de cette ADR (`sendScriptStep`, `setFanNote`) passent par la même garde. Elle s'ajoute au kill switch, elle ne le remplace pas.
+
+4. Les **adaptateurs existants** déclarent les nouveaux drapeaux à `false` (`FakeConnector` compris) ; le cœur teste le drapeau avant d'appeler la méthode, jamais l'existence de la méthode seule.
+
+## Conséquences
+
+Positives :
+- L'agent a le contexte d'un chatteur (notes, statistiques, scripts) sans qu'aucune notion Reveal ne remonte dans le cœur.
+- Une nouvelle plateforme n'implémente que ce qu'elle sait faire.
+- Brancher l'adaptateur Reveal ne peut plus écrire chez un fan par accident.
+
+Négatives :
+- Le port grossit. Chaque méthode ajoutée doit avoir un cas dans le test de contrat commun, joué au minimum contre FakeReveal.
+- `ConnectorCapabilitiesSchema` est un objet fermé : chaque nouveau drapeau touche tous les adaptateurs.
+
+À surveiller :
+- Les signatures exactes (pagination, portée des notes, forme des étapes) seront arrêtées d'après la capture (`docs/reference/reveal-api-observed.md`), avant le passage en `accepted`.
+- Les fichiers téléchargés par `fetchMedia` relèvent de la politique média (stockage, durée de rétention), qui n'est pas tranchée ici.
+
+## Alternatives rejetées
+
+- **Un second port `PlatformCrm` à côté de `PlatformConnector`.** Il faudrait deux fabriques, deux sessions à résoudre et deux tests de contrat pour un même compte et une même session. Le gain de séparation est faible.
+- **Méthodes propres à Reveal exposées au cœur.** Cela contredit l'ADR 0003.
+- **Garde d'écriture dans les prompts ou dans le moteur de vente seulement.** Cela contredit la règle 3 (les règles métier vivent dans le code, au plus près de l'effet). La garde doit tenir même si un autre appelant écrit.
