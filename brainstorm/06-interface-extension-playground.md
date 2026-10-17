@@ -86,7 +86,7 @@ La façon propre de l'obtenir dans notre architecture : le playground est une **
 
 ### Ce qu'on peut y faire (maquette v2)
 
-Le playground est un onglet de la section **Entraîner** du dashboard (prototype v3), à côté de **Corrections** et **Tests** ; la barre de navigation compte quatre entrées (prototype v4, décision de Charles le 17/10) : Dashboard, Entraîner, Suivi, Réglages. Pas d'Inbox ni de page Fans dans Nirvana : la validation en copilote se fait dans Reveal, par l'extension. Une pastille « Bac à sable : rien ne part vers un fan » reste visible en tête de section.
+Le playground est un onglet de la section **Entraîner** du dashboard (prototype v3), à côté de **Corrections** et **Tests** ; la barre de navigation compte cinq entrées (décisions de Charles le 17/10) : Dashboard, Créatrices, Entraîner, Suivi, Réglages. Pas d'Inbox ni de page Fans dans Nirvana : la validation en copilote se fait dans Reveal, par l'extension. Une pastille « Bac à sable : rien ne part vers un fan » reste visible en tête de section.
 
 Colonne de gauche, la partie, de la décision la plus fréquente à la plus rare :
 
@@ -134,9 +134,9 @@ Le playground n'a **pas besoin de Reveal**. Il lui faut les fondations (P0), la 
 
 `docs/design/README.md` et D-01 appellent « playground » la page de démonstration des composants (`_playground.tsx`). Pour éviter deux sens au même mot, proposition : cette page devient la **vitrine** (`_showcase.tsx`) et « Playground » désigne seulement le bac à sable de conversation. Glossaire mis à jour dans le même commit que cette note.
 
-### Réglages › Créatrices › Persona (prototype, 17/10)
+### Créatrices › Persona (prototype, 17/10)
 
-Charles veut saisir la persona dans l'interface, calquée sur la fiche créatrice d'OnlyChat, sans fonctions ajoutées (« ils sont les boss pour ça »). Dans Réglages, l'entrée **Créatrices** liste les modèles ; une fiche par créatrice porte deux onglets, **Persona** et **Plateformes** (comptes et fans de test). La persona reprend les onglets et les champs d'OnlyChat, lus par leur MCP :
+Charles veut saisir la persona dans l'interface, calquée sur la fiche créatrice d'OnlyChat, sans fonctions ajoutées (« ils sont les boss pour ça »). **Créatrices** est une entrée de la barre de navigation (entre Dashboard et Entraîner, demandé par Charles) et liste les modèles ; une fiche par créatrice porte deux onglets, **Persona** et **Plateformes** (comptes et fans de test). La persona reprend les onglets et les champs d'OnlyChat, lus par leur MCP :
 
 - **Détails** : prénom, date de naissance (l'âge en est calculé), genre, origine, fuseau, langues (choisies dans une liste), physique en listes de valeurs (taille, poids, pointure, cheveux, yeux, tour de poitrine en bonnet et tour), centres d'intérêt et traits ajoutés ou retirés un par un.
 - **Infos en plus** : le texte libre d'OnlyChat (6 000 caractères au plus sur Telegram).
