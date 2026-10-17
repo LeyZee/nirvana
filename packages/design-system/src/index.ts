@@ -14,6 +14,8 @@ export {
   type ChartPoint,
 } from './chart.js';
 
+export { funnelSteps, ringDash, tipPlacement, type Funnel, type FunnelStep, type Size } from './dashboard.js';
+
 export interface Point {
   readonly x: number;
   readonly y: number;
@@ -41,7 +43,8 @@ export function lightPosition(box: Box, clientX: number, clientY: number): Point
 }
 
 /**
- * Makes the inner light of a `.nv-glass` surface follow the pointer.
+ * Makes the inner light of a `.nv-glass` surface follow the pointer. While the pointer is over it, the surface
+ * carries `is-lit`: the light tightens from the 200px resting sheen to a 110px halo and fades in.
  * Returns a cleanup function (React effect friendly).
  */
 export function attachGlassLight(element: HTMLElement): () => void {
@@ -49,8 +52,10 @@ export function attachGlassLight(element: HTMLElement): () => void {
     const point = lightPosition(element.getBoundingClientRect(), event.clientX, event.clientY);
     element.style.setProperty('--nv-light-x', `${String(point.x)}px`);
     element.style.setProperty('--nv-light-y', `${String(point.y)}px`);
+    element.classList.add('is-lit');
   };
   const onLeave = (): void => {
+    element.classList.remove('is-lit');
     element.style.removeProperty('--nv-light-x');
     element.style.removeProperty('--nv-light-y');
   };

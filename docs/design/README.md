@@ -44,6 +44,9 @@ Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CR
 - **Tout réagit à l'utilisateur** : chaque élément cliquable a un survol, une pression et un focus visibles, et rien n'apparaît sans animation. Les classes communes sont dans « États » plus bas ; un écran n'en invente pas d'autres.
 - **On ne doit pas se noyer dans l'information** : chaque écran a une hiérarchie nette (section « Hiérarchie »).
 - **Les graphiques sont animés, ont des survols et sont beaux** : un seul composant, `nv-chart` (section « Graphiques »), jamais une courbe brute.
+- **Le halo du pointeur est serré** : 110 px sous le pointeur au lieu de 200 px, avec un fondu à l'entrée ; le reflet au repos ne change pas (`attachGlassLight` pose `is-lit`).
+- **Une info-bulle qui compare se lit comme un tableau** : la période, puis une ligne par série alignée à droite, puis une ligne de pied (`nv-chart__tip--table`).
+- **Une courbe d'indicateur montre la vraie tendance** de la période (de la valeur d'avant à l'actuelle, jamais un axe inversé) ; la couleur du `nv-delta` dit si c'est mieux ou pire. Un délai s'écrit en minutes (« −10 min »), pas en mots (« plus tôt »).
 
 ## Où vivent les choses
 
@@ -53,6 +56,7 @@ Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CR
 | `packages/design-system/src/styles/theme.css`           | Pont Tailwind v4 : `bg-void`, `text-ink-muted`, `bg-neon-solid`, `rounded-lg`, `shadow-glass`, `backdrop-blur-regular`, `ease-spring`, `text-body`… |
 | `packages/design-system/src/styles/components.css`      | Classes `nv-*` sans framework, appliquées aux composants shadcn/ui par `className`.                                                                 |
 | `packages/design-system/src/index.ts`                   | Aides d'animation sans état (lumière du verre, déformation liquide, lentille, Island).                                                              |
+| `packages/design-system/src/chart.ts`, `dashboard.ts`   | Géométrie pure des graphiques (`nv-chart`) et des pièces du Dashboard (anneau, entonnoir, info-bulle).                                              |
 | `packages/design-system/src/__tests__/contrast.test.ts` | Vérifie le contraste AA de chaque paire ci-dessous, dans les deux thèmes.                                                                           |
 
 Les consommateurs et l'ordre d'import sont dans `packages/design-system/README.md`.
@@ -156,12 +160,33 @@ Inspiré du tableau de bord de Reveal, sur le verre Nirvana :
 - `nv-delta--better` / `--worse` suivent le sens « mieux », pas le signe : un temps de réponse qui baisse est en `--better`.
 - Couleurs des graphiques : le néon pour la série principale, `sale` en second, puis `ink` à 60 % et 25 %. Jamais deux rouges.
 
+### Pièces du Dashboard
+
+Ordre de lecture de l'écran (maquette validée par Charles le 17/10) : phrase d'état, À traiter, l'agent (replié), ventes, parcours des fans, fans. Chaque pièce ci-dessous existe une fois dans `components.css` ; un écran les assemble, il n'en réécrit pas.
+
+- **Tons** : `nv-tone--ok` (cyan `success`), `--warn` (`warning`), `--bad` (`danger`), sur `nv-dot`, `nv-orb`, `nv-todo` et `nv-tile`. Un ton ne parle jamais seul : un mot dit la même chose à côté.
+- **Orbe d'état** (`nv-orb`) : ouvre l'écran à côté de la phrase d'état. Immobile au calme, un anneau qui respire en ambre, qui pulse vite en rouge.
+- **Point** (`nv-dot`, `--live` pour ce qui tourne en ce moment) : l'état d'une ligne, d'une carte, d'une option.
+- **Contrôle du mode** : un `nv-seg` à trois options (Automatique, Copilote, Arrêt). Une option impossible pour l'instant est `disabled` et dit pourquoi au survol ; `data-tone="danger"` teinte le pouce quand il est sur Arrêt.
+- **À traiter** (`nv-todos` > `nv-todo`) : barre de couleur, nature en capitales (`__kind`), titre sur une ligne (`__title`), le pourquoi en une phrase, toujours visible (`__why`), l'heure (`__time`), « Traité » (`__done`) qui fait sortir la ligne (`is-done`) et le chevron qui dit « ça s'ouvre » (`__go`). Le plus grave en premier. File vide : `nv-calm`, une phrase en `whisper`, jamais une boîte vide.
+- **Cartes d'un pli** (`nv-tiles` > `nv-tile`) : trois colonnes, deux sous 1 100 px, une sur téléphone. Chaque carte : libellé avec son point (`__label`), une valeur (`__value`), une jauge `nv-gauge` si c'est une dépense ou un taux, une ligne discrète (`__sub`). Le détail vit dans l'info-bulle. Le pli « L'agent » en compte six, sous un `nv-disclosure` dont la ligne de synthèse reprend les six.
+- **Chiffre dominant** (`nv-figure`) : sourcil (`__label`), valeur en `hero` (`__value`), puis `nv-delta` et sa comparaison (`__note`). Un seul par écran.
+- **Anneau de répartition** (`nv-ring`) : la part de l'agent sur le total, en néon sur la piste ; `ringDash(part, rayon)` donne le `stroke-dasharray` de `__value`, le pourcentage au centre (`__label`) compte avec `countUp`, et ce qu'il compte (« agent ») s'écrit dessous (`__sub`). La légende donne les montants de chaque série.
+- **Légende** (`nv-legend` > `__item` > `__key`, `--past` pour la période d'avant en pointillés). Une légende sans objet (« Hier » en 7 ou 30 jours) est `hidden`, pas laissée là.
+- **Barre empilée** (`nv-split` > `__part`) : un total coupé en parts (ce qu'un fan a dépensé : agent puis chatteurs), chaque part pousse jusqu'à `--nv-w`. Toutes les barres d'une liste commencent au même endroit.
+- **Info-bulle flottante** (`nv-tip`, `is-on`) : le détail d'une carte, d'un indicateur ou d'une étape. Titre (`__title`), lignes alignées (`__row`, valeur en gras à droite), `nv-gauge` si utile. `tipPlacement` la pose sous le pointeur et la retourne près d'un bord.
+- **Parcours des fans** (`nv-funnel` > `__step`) : nom et explication (`__label`, `__name`, `__hint`), barre centrée (`__track` porte `--nv-w`, `__bar` pousse, chaque étape un peu plus sombre par `--nv-i`), effectif (`__count`), taux de passage et écart avec la période d'avant en `nv-delta` (`__rate`). `funnelSteps(effectifs, effectifs d'avant)` donne largeurs, taux, écarts et l'étape qui casse : `__step--break` passe en ambre avec la pastille « Ça casse ici » (`__flag`) posée après la barre.
+- **Données d'exemple** (`nv-sample`, « Exemple ») : visible tant que l'écran tourne sur des données fictives.
+- **Entrées** : `nv-enter` pour les blocs à l'arrivée sur l'écran, `nv-swap` (fondu, montée de 8 px, flou qui se lève) pour un contenu qui change sur place (phrase d'état, liste rechargée).
+
 ## Graphiques
 
 Un seul composant, `nv-chart` : un SVG dessiné avec les aides de `@nirvana/design-system` (`chartPoints`, `linePath` monotone qui ne dépasse jamais les vraies valeurs, `areaPath`, `niceTicks`, `nearestIndex`) et animé par les classes.
 
 - **Apparition** : la courbe se dessine (`nv-chart__line`, `pathLength="1"`), l'aire apparaît en fondu juste après (`__area`), les barres poussent depuis leur base à 40ms d'intervalle (`__bar`, `--nv-i`). La période précédente est en pointillés discrets (`__line--past`).
 - **Survol** : `is-hovering` sur le conteneur montre un curseur vertical (`__cursor`), un point sur la courbe (`__dot`) et une bulle de verre avec la valeur et sa date (`__tip`, placée par `--nv-tip-x` / `--nv-tip-y` d'après `nearestIndex`). Survoler une barre l'éclaire et met les autres en retrait. Au doigt, toucher et glisser fait de même.
+- **Comparer des séries** : `__tip--table`, la période (`__tip-l`) puis une ligne par série (`__tip-k` avec sa couleur `--_c`, `__tip-n` aligné à droite) et une ligne de pied (`__tip-ft`).
+- **Série en cours** : le dernier point de la journée envoie une pulsation lente (`__end`) : la journée n'est pas finie.
 - **Couleur** : `--_c`, le néon par défaut ; une seconde série en `sale`, puis `ink` à 60 % et 25 %. Jamais deux rouges. Grille en `hairline`, axes en `caption` mono `ink-faint`.
 - **Mouvement réduit** : tout est dessiné d'emblée ; le survol reste.
 
