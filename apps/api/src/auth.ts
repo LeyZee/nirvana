@@ -3,6 +3,7 @@ import {
   CurrentUserSchema,
   DomainError,
   newId,
+  REAUTHENTICATION_ERROR_CODE,
   UserIdSchema,
   UserRoleSchema,
   type CurrentUser,
@@ -32,6 +33,8 @@ const SESSION_REFRESH_SECONDS = 60 * 60;
 /** Attempts per minute and per IP on `/v1/auth/*`, tighter than the API-wide limit. */
 const AUTH_RATE_LIMIT_PER_MINUTE = 20;
 const MIN_PASSWORD_LENGTH = 12;
+/** A sensitive action needs a sign-in younger than this (ADR 0016). */
+const RECENT_LOGIN_MS = 10 * 60 * 1000;
 
 class SessionUnauthenticated extends DomainError {
   constructor() {
@@ -42,6 +45,12 @@ class SessionUnauthenticated extends DomainError {
 class RoleForbidden extends DomainError {
   constructor() {
     super('role_forbidden', 'Action réservée à un autre rôle');
+  }
+}
+
+class ReauthenticationRequired extends DomainError {
+  constructor() {
+    super(REAUTHENTICATION_ERROR_CODE, 'Mot de passe à confirmer pour cette action');
   }
 }
 
@@ -145,6 +154,23 @@ export function createRequireRole(auth: Auth): RequireRole {
       if (!roles.includes(user.role)) throw new RoleForbidden();
       request.user = user;
     };
+}
+
+/**
+ * Route guard for sensitive actions, after `requireRole` (ADR 0016: connecting, replacing or removing an AI key): the
+ * session must have been opened less than 10 minutes ago, otherwise 403 `reauthentication_forbidden` and the page
+ * asks for the password again. Signing in again opens a fresh session.
+ */
+export function createRequireRecentLogin(
+  auth: Auth,
+  now: () => Date = () => new Date(),
+): preHandlerAsyncHookHandler {
+  return async (request) => {
+    const result = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
+    if (result === null) throw new SessionUnauthenticated();
+    if (now().getTime() - result.session.createdAt.getTime() > RECENT_LOGIN_MS)
+      throw new ReauthenticationRequired();
+  };
 }
 
 /** Mounts Better Auth's own handler under `/v1/auth/*` and adds `GET /v1/me`. */

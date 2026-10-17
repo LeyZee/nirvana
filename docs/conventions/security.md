@@ -47,7 +47,7 @@ Ce qu'on protège, par ordre d'importance : (1) les médias et conversations int
 ## 6. Application web et API
 
 - Validation Zod de toute entrée (corps, query, params, en-têtes utiles). Erreurs génériques vers le client, détail dans les logs.
-- Auth : Better Auth, cookies `HttpOnly; Secure; SameSite=Lax`, sessions courtes côté dashboard, passkeys encouragées. Rôles : `owner`, `operator`, `creator` ; RLS Postgres en second rideau.
+- Auth : Better Auth, cookies `HttpOnly; Secure; SameSite=Lax`, sessions courtes côté dashboard, passkeys encouragées. Action sensible (connecter, remplacer ou retirer une clé IA, ADR 0016) : connexion de moins de 10 minutes exigée (`requireRecentLogin`), sinon 403 `reauthentication_forbidden` et le dashboard redemande le mot de passe. Rôles : `owner`, `operator`, `creator` ; RLS Postgres en second rideau.
 - CSRF : `SameSite=Lax` et vérification de l'en-tête `Origin` sur chaque mutation contre la liste des origines autorisées (pas de jeton CSRF séparé). CORS : la même liste explicite. En-têtes de sécurité (`@fastify/helmet`). Limites de taille de corps. Rate limiting par IP et par utilisateur (`@fastify/rate-limit`).
 - Uploads : type vérifié par contenu (magic bytes), taille bornée, stockage hors du système de fichiers de l'app, jamais servis depuis le même domaine que le dashboard.
 - Journal d'audit des actions d'administration (`audit_log` : qui, quoi, quand, depuis où), append-only.

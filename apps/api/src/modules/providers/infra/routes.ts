@@ -18,6 +18,8 @@ const ProviderParamsSchema = z.object({ provider: AiProviderSchema });
 export interface ProvidersRoutesOptions {
   /** `requireRole('owner')` (P0-07a): keys are an agency setting, nobody else reads or changes them. */
   readonly guard: preHandlerAsyncHookHandler;
+  /** `requireRecentLogin` (ADR 0016): connecting, replacing or removing a key needs a sign-in under 10 minutes. */
+  readonly recentLogin: preHandlerAsyncHookHandler;
 }
 
 /**
@@ -39,6 +41,7 @@ export function createProvidersRoutes(
     app.put(
       '/settings/providers/:provider/key',
       {
+        preHandler: options.recentLogin,
         schema: {
           params: ProviderParamsSchema,
           body: SaveProviderKeyBodySchema,
@@ -71,7 +74,10 @@ export function createProvidersRoutes(
 
     app.delete(
       '/settings/providers/:provider',
-      { schema: { params: ProviderParamsSchema, response: { 200: ProviderStatusSchema } } },
+      {
+        preHandler: options.recentLogin,
+        schema: { params: ProviderParamsSchema, response: { 200: ProviderStatusSchema } },
+      },
       (request) => providers.disconnect(request.params.provider),
     );
 

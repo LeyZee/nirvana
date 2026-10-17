@@ -13,3 +13,9 @@ export const CurrentUserSchema = z.object({
   creatorIds: z.array(z.uuid()),
 });
 export type CurrentUser = z.infer<typeof CurrentUserSchema>;
+
+/**
+ * Error code of a sensitive action asked from a session opened too long ago (ADR 0016: AI keys): the page asks for
+ * the password again (a new sign-in) and retries.
+ */
+export const REAUTHENTICATION_ERROR_CODE = 'reauthentication_forbidden';

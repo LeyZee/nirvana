@@ -5,7 +5,14 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
 
-import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
+import {
+  createAuth,
+  createAuthRoutes,
+  createRequireRecentLogin,
+  createRequireRole,
+  type Auth,
+  type RequireRole,
+} from './auth';
 import { secretOrNull, type Config } from './config';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import { createDrizzleLlmCallStore } from './llm-call-store';
@@ -186,7 +193,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     routes: [
       createAuthRoutes(auth, config, requireRole),
       modules.conversations.routes,
-      modules.providers.routes({ guard: requireRole('owner') }),
+      modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
     ],
     tasks,
