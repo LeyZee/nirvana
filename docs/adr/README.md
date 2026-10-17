@@ -43,3 +43,4 @@ Date : AAAA-MM-JJ
 | 0016 | Clés des fournisseurs IA saisies dans le dashboard, chiffrées en base | accepted |
 | 0017 | Vision : Gemini en natif, bascule sur Grok en images clés | accepted |
 | 0019 | Deux taux (au playground, en réel) et la règle qui ouvre le mode Automatique | proposed |
+| 0020 | Alertes par des bots Telegram gérés depuis le CRM | proposed |
