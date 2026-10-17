@@ -26,6 +26,7 @@ Le métier (Charles, 17/10) : le fan vient chercher une relation. L'agent fait d
 | L12 | Statistiques du fan (panneau de droite) | `getFanProfile?()` | Priorité, rythme de vente, fans à ménager | Chaque statistique affichée et l'appel qui la fournit |
 | L13 | Onglet PPV d'une conversation : PPV envoyés, achetés, prix, statistiques de vente | `getFanPpvStats?()` (nouveau) | Charles : « l'agent doit en avoir conscience absolument » ; prix à proposer, taux d'achat, ce qui a déjà été vendu | Appels de l'onglet PPV, champs, période couverte |
 | L14 | Fichiers des médias : reçus d'un fan, et ceux des bundles envoyés | `fetchMedia?()` (nouveau) | Charles (17/10) : l'agent doit **voir** les photos et vidéos que le fan envoie et celles des bundles, pas seulement leurs métadonnées (rôle Vision) | URL du fichier (signée ou non), durée de validité, en-têtes nécessaires, format, taille, miniature ou original, vidéo en flux ou en fichier |
+| L15 | Fichiers originaux des médias des scripts et du Vault, côté créatrice (non floutés) | `fetchMedia?()` | Le bot n'envoie que des étapes de scripts dont les bundles sont préparés à l'avance (Charles, 17/10 18h18) : chaque photo et vidéo est téléchargée **une fois à l'import**, décrite par le rôle Vision, puis indexée | Ouverture d'une vidéo depuis une étape de script et depuis le Vault : URL directe ou flux segmenté (HLS/DASH), signature et durée de validité, format, taille, débit, protection éventuelle |
 
 ## Écriture
 
@@ -41,6 +42,12 @@ Toute écriture porte une clé d'idempotence et passe par `verifySent` (ADR 0008
 | E5 | Vérifier un envoi | `verifySent()` | Rejeu sans doublon après une erreur réseau | Retrouver le message par nonce, ou par texte et horodatage |
 | E6 | Marquer lu, indiquer « en train d'écrire » | `markRead?()`, `setTyping?()` | Rythme humain | Appels faits par le client officiel à l'ouverture et à la frappe |
 | E7 | Envoyer un vocal (gratuit, ou dans un bundle si Reveal l'accepte) | `sendMedia()` avec `kind: audio` | Vocaux dans la voix de la créatrice pour les fans qui doutent (fil Vocaux, 17/10) | Requête du bouton micro natif (upload, format et codec, durée max), import d'un fichier audio dans « Envoyer des médias » et dans un bundle, rendu côté fan (lecteur avec onde ou fichier joint) |
+
+## Ce que le bot envoie (Charles, 2026-10-17, 18h18)
+
+Le bot n'envoie **jamais de média libre** : seulement du texte (E1), des étapes de scripts natifs dont les bundles sont préparés à l'avance (E3) et des notes (E4, E4b). E2 (bundle composé à la volée) n'est pas utilisé par l'agent ; FakeReveal le simule seulement pour lire l'historique. Les vocaux (E7) restent à trancher par Charles, avec le fil Vocaux.
+
+Si Reveal ne permet pas de télécharger les originaux (L15), le repli est d'indexer les fichiers sources que l'agence possède déjà (ceux qu'elle a importés dans le Vault), avec une correspondance fichier ↔ étape de script faite à l'import.
 
 ## Jamais
 

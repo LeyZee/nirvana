@@ -33,6 +33,7 @@ Fais les étapes dans l'ordre, sans te presser : chaque clic produit les requêt
 | 6 | Ouvre la page des scripts : la liste, les dossiers, puis 2 ou 3 scripts en entier (étapes, médias, prix) | L8 scripts |
 | 7 | Dans la conversation d'un fan qui a déjà reçu des scripts, ouvre le sélecteur de scripts sans rien envoyer : regarde s'il montre ce qui a déjà été envoyé | L9 scripts déjà envoyés |
 | 8 | Ouvre le coffre (médias), parcours un dossier | L10 coffre |
+| 8b | Ouvre en grand une **vidéo** d'une étape de script (page Scripts), lance-la 10 secondes, puis fais de même avec une vidéo du Vault. Si un bouton « télécharger » existe, clique dessus | L15 fichiers originaux |
 | 9 | Ouvre la page des ventes ou statistiques, puis un relevé détaillé | L6 ventes |
 | 10 | ✉ Depuis ton téléphone, avec le fan test, écris à Messalina. Garde la conversation ouverte sur le PC et attends que le message arrive | L4 temps réel |
 | 11 | ✉ Dans la conversation du fan test : envoie un texte, puis un PPV (un média du coffre, 5 $), puis une étape d'un script | E1, E2, E3 |
