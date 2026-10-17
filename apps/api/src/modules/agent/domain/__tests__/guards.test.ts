@@ -47,6 +47,13 @@ describe('voice guards', () => {
     expect(codes(['Tu aimes le café ?'], ['cafe'])).toEqual(['forbidden_term']);
   });
 
+  it('asks for a regeneration on AI tics, without blocking', () => {
+    const violations = checkVoiceOutput(['Je comprends tout à fait, n’hésite pas'], DEFAULT_GUARD_SETTINGS);
+    expect(violations.map((v) => v.code)).toEqual(['ai_tic']);
+    expect(isBlocked(violations)).toBe(false);
+    expect(codes(['Voilà ce que je propose :', '- une photo'])).toEqual(['ai_tic']);
+  });
+
   it('only asks for a regeneration when the form is off', () => {
     const violations = checkVoiceOutput(['a', 'b', 'c', 'd', 'x'.repeat(300)], DEFAULT_GUARD_SETTINGS);
     expect(violations.map((v) => v.code).sort()).toEqual(['bubble_too_long', 'too_many_bubbles']);

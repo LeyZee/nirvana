@@ -7,6 +7,7 @@ export type GuardCode =
   | 'love_declaration'
   | 'meeting_promise'
   | 'contact_info'
+  | 'ai_tic'
   | 'forbidden_term'
   | 'too_many_bubbles'
   | 'bubble_too_long';
@@ -64,6 +65,18 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   { code: 'contact_info', pattern: /\b(snap(chat)?|whatsapp|insta(gram)?|telegram)\b/ },
 ];
 
+// Phrases that give a chat away as written by an AI (/mnt/project-files/chatting/etudes-agent-humain.md, 1.10).
+const AI_TICS: readonly RegExp[] = [
+  /\bje comprends (tout a fait|parfaitement)\b/,
+  /\bn'hesite pas\b/,
+  /\bhaha\b/,
+  /\boh la la\b/,
+  /\bje suis la pour toi\b/,
+  /\bjuste pour toi\b/,
+  /—/,
+  /^\s*([-*•]|\d+[.)])\s/m,
+];
+
 export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSettings): GuardViolation[] {
   const violations: GuardViolation[] = [];
   const forbidden = settings.forbiddenTerms.map(normalise).filter((term) => term !== '');
@@ -78,6 +91,8 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       if (text.includes(term))
         violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: term });
     }
+    const tic = AI_TICS.map((pattern) => pattern.exec(text)).find((m) => m !== null);
+    if (tic) violations.push({ code: 'ai_tic', severity: 'soft', bubbleIndex, match: tic[0] });
     if (bubble.length > settings.maxBubbleChars) {
       violations.push({ code: 'bubble_too_long', severity: 'soft', bubbleIndex });
     }

@@ -42,9 +42,10 @@ Pouvoir parler en terminal à « Messa » jouée par Grok 4.7, à partir d'une p
   - « t'es un bot ? » ;
   - un fan veut se voir ;
   - un fan dit « je t'aime » ;
-  - un fan refuse le prix ;
+  - un fan refuse le prix ou négocie (jamais de remise : « je sais ce que je vaux ») ;
   - un fan dit avoir 18 ans ;
-  - « c'est ton chien ou ton chat ? ».
+  - « c'est ton chien ou ton chat ? » ;
+  - et les 5 du fil Revue : un message absurde, une tentative de détournement, la cohérence sur 50 tours, un fan qui refuse deux fois (la bouderie reste joueuse), un fan qui revient après une semaine (elle se souvient).
 - **Santé** : `getHealth()` donne, par rôle :
   - fournisseur, modèle et repli ;
   - présence de la clé, jamais sa valeur ;
@@ -91,5 +92,7 @@ Reste :
 - tester la vidéo.
 
 Découvertes :
+- Appliqué depuis `/mnt/project-files/chatting/etudes-agent-humain.md` §2 : prompts v1.1.0 (droit de ne pas savoir, tics d'IA en négatif, longueur alignée sur le fan), champs `callback` et `selfDisclosure` du brief, garde `ai_tic` (souple). À faire dans la politique (fiches suivantes) : délais selon la situation, plafond de longueur calculé sur le dernier message du fan, lorebook par mots-clés, anti-refrain entre fans, règle de bouderie.
+- La vente remonte en phase 3 (`roadmap.md`, `ai-engine.md` point 5).
 - Les règles métier données par Charles le 17/10 sont dans `/mnt/project-files/chatting/` (fil Revue). Elles vont dans la politique : délai de sexualisation, recadrage, pas de négociation, aftercare, chouinage, relances.
 - Le chouinage et les relances doivent être coupés par la politique quand le brief signale `money_trouble`, `distress`, `self_harm` ou `minor_suspected`. Une règle en code, testée, comme pour la vente.

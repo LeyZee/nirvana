@@ -78,7 +78,7 @@ Entrée : contexte + brief. Sortie : `Decision` + `policy_trace`. Ordre d'évalu
 2. Interrupteurs, mode, session → `wait`.
 3. Horaires de la persona (avec jitter) → `wait` avec `runAt`.
 4. `asks_if_bot` → selon `identity_policy` : `stay_in_character` (défaut, ADR 0012) donne un `reply_brief` de déflexion en personnage ; `deflect_and_handoff` ; `disclose`.
-5. Offre : autorisée seulement si cooldowns expirés, KYC minimal atteint, média disponible et jamais vendu à ce fan, prix depuis `offers` (P6 ; avant P6, `offer` → `reply`).
+5. Offre (dès la phase 3, décision de Charles du 17/10) : autorisée seulement si cooldowns expirés, KYC minimal atteint (délai de sexualisation réglable, 24 à 48 h par défaut), étape de script Reveal disponible et jamais envoyée à ce fan, aucun risque `money_trouble`, `distress`, `self_harm` ou `minor_suspected`. Prix fixé par le script : jamais de négociation ni de remise. Bouderie (« chouinage ») au plus une fois par refus, jamais juste après un achat, jamais après un risque. Aftercare après chaque script. Détail métier : `/mnt/project-files/chatting/methode-chatting.md`.
 6. KYC : au plus une question, seulement si `intent` s'y prête et pas de question dans les 3 derniers envois.
 7. Relance : bornée par `CreatorSettings.followUp` (délai, max par jour).
 

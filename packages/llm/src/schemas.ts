@@ -43,6 +43,10 @@ export const BriefSchema = z.object({
   action: z.enum(['reply', 'offer', 'wait', 'follow_up', 'handoff']),
   replyBrief: z.string().min(1),
   toneHints: z.array(z.string()),
+  /** A fact from the fan notes worth bringing back now (« et ton chantier, ça avance ? »). */
+  callback: z.string().min(1).optional(),
+  /** A detail of her own sheet she could confide, to invite a confidence in return. */
+  selfDisclosure: z.string().min(1).optional(),
 });
 export type Brief = z.infer<typeof BriefSchema>;
 

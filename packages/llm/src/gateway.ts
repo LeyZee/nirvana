@@ -130,6 +130,8 @@ function describeBrief(brief: Brief): string {
     `Intention du fan : ${brief.intent} (humeur : ${brief.sentiment}).`,
     `À dire : ${brief.replyBrief}`,
     brief.toneHints.length > 0 ? `Ton : ${brief.toneHints.join(', ')}.` : '',
+    brief.callback !== undefined ? `Si ça vient naturellement, rappelle : ${brief.callback}` : '',
+    brief.selfDisclosure !== undefined ? `Tu peux confier : ${brief.selfDisclosure}` : '',
   ]
     .filter((line) => line !== '')
     .join('\n');
