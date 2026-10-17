@@ -125,6 +125,7 @@ export const PlaygroundRateSchema = z.object({
   trendPoints: z.number().nullable(),
   previousVersion: AnswerVersionSchema.nullable(),
 });
+export type PlaygroundRate = z.infer<typeof PlaygroundRateSchema>;
 
 export const PlaygroundStateSchema = z.object({
   presets: z.array(PlaygroundPresetSchema),
@@ -149,11 +150,13 @@ export const PlaygroundComparisonSchema = z.object({
   costUsd: z.number().nonnegative(),
   failure: z.string().exactOptional(),
 });
+export type PlaygroundComparison = z.infer<typeof PlaygroundComparisonSchema>;
 
 export const PlaygroundRatingResultSchema = z.object({
   rate: PlaygroundRateSchema,
   destination: DestinationSchema.nullable(),
 });
+export type PlaygroundRatingResult = z.infer<typeof PlaygroundRatingResultSchema>;
 
 // Request bodies.
 export const PlaygroundPresetBodySchema = z.object({ presetId: z.string().min(1) });
@@ -182,6 +185,7 @@ export const PlaygroundSituationBodySchema = z.object({
     .regex(/^([01]?\d|2[0-3]):[0-5]\d$/)
     .exactOptional(),
 });
+export type PlaygroundSituationPatch = z.infer<typeof PlaygroundSituationBodySchema>;
 export const PlaygroundAdvanceBodySchema = z.object({
   hours: z
     .number()

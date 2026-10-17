@@ -1,0 +1,221 @@
+import {
+  ApiErrorSchema,
+  PlaygroundAnswerSchema,
+  PlaygroundRatingResultSchema,
+  PlaygroundStateSchema,
+} from '@nirvana/contracts';
+import type { Brief, HealthReport, LlmGateway, VoiceOutput } from '@nirvana/llm';
+import type { LightMyRequestResponse, preHandlerAsyncHookHandler } from 'fastify';
+import { describe, expect, it } from 'vitest';
+
+import { testConfig } from '../../../../__tests__/support/config';
+import { createLogger } from '../../../../logger';
+import { buildServer } from '../../../../server';
+import type { CalibrationRecord, CalibrationStore } from '../../../agent/index';
+import { createPlaygroundModule } from '../../index';
+
+const BRIEF: Brief = {
+  intent: 'small_talk',
+  sentiment: 'positive',
+  factsProposed: [],
+  kycMissing: ['first_name'],
+  risks: [],
+  action: 'reply',
+  replyBrief: 'Lui demander son prénom.',
+  toneHints: [],
+};
+
+const META = {
+  provider: 'xai',
+  model: 'grok-4.7',
+  isFallback: false,
+  latencyMs: 800,
+  costUsd: 0.002,
+  promptHash: 'h',
+} as const;
+
+function health(hasKey: boolean): HealthReport {
+  return {
+    state: hasKey ? 'ok' : 'down',
+    at: new Date(),
+    roles: [
+      {
+        role: 'voice',
+        state: hasKey ? 'ok' : 'down',
+        active: { provider: 'xai', model: 'grok-4.7', label: 'Grok 4.7' },
+        hasKey,
+        isOnFallback: false,
+        callsLastHour: 0,
+        errorRateLastHour: 0,
+        costTodayUsd: 0,
+      },
+    ],
+    providers: [],
+    costTodayUsd: 0,
+    budget: { day: '2026-10-17', spentEur: 0, capEur: 20, alertAtEur: 16, state: 'ok' },
+  };
+}
+
+function gateway(voice: VoiceOutput, hasKey = true): LlmGateway {
+  return {
+    sense: () => Promise.reject(new Error('not used')),
+    transcribe: () => Promise.reject(new Error('not used')),
+    brain: () => Promise.resolve({ ok: true, value: { output: BRIEF, meta: META } }),
+    voice: () => Promise.resolve({ ok: true, value: { output: voice, meta: META } }),
+    health: () => health(hasKey),
+    testConnection: () => Promise.reject(new Error('not used')),
+  };
+}
+
+const stateOf = (response: LightMyRequestResponse) => PlaygroundStateSchema.parse(response.json());
+const codeOf = (response: LightMyRequestResponse) => ApiErrorSchema.parse(response.json()).error.code;
+
+/** Stands in for `requireRole('owner')`: the header says who asks, and the user is set as auth.ts does. */
+const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+  const id = request.headers['x-test-user'];
+  if (typeof id !== 'string') {
+    await reply.code(403).send({ error: 'forbidden' });
+    return;
+  }
+  request.user = { id, email: `${id}@example.test`, name: id, role: 'owner', creatorIds: [] };
+};
+
+async function server(options: { voice?: VoiceOutput; hasKey?: boolean } = {}) {
+  const records: CalibrationRecord[] = [];
+  const stored: CalibrationRecord[] = [];
+  const store: CalibrationStore = {
+    append: (record) => {
+      stored.push(record);
+      return Promise.resolve();
+    },
+    list: () => Promise.resolve([]),
+  };
+  const playground = createPlaygroundModule({
+    credentials: {},
+    log: { append: () => undefined, since: () => [] },
+    persona: { creatorName: 'Lina', personaSheet: 'fiche', forbiddenTerms: [] },
+    store,
+    records,
+    gateway: gateway(options.voice ?? { bubbles: ['Coucou toi ✨'] }, options.hasKey ?? true),
+    gatewayForVoice: (model) =>
+      model === 'mistral-large-latest' ? gateway({ bubbles: ['Hey toi'] }) : undefined,
+    now: () => new Date('2026-10-17T10:00:00Z'),
+  });
+  const config = testConfig();
+  const app = await buildServer({
+    config,
+    logger: createLogger(config),
+    routes: [playground.routes({ guard: ownerOnly })],
+    readiness: () =>
+      Promise.resolve({ isReady: true, checks: { database: true, migrations: true, worker: true } }),
+  });
+  const headers = { 'x-test-user': 'charles', origin: config.WEB_ORIGIN };
+  const post = (url: string, payload: object = {}, as = headers) =>
+    app.inject({ method: 'POST', url: `/v1/playground${url}`, headers: as, payload });
+  return { app, headers, post, stored };
+}
+
+describe('/v1/playground', () => {
+  it('is closed to anyone without the owner session', async () => {
+    const { app } = await server();
+    expect((await app.inject({ method: 'GET', url: '/v1/playground' })).statusCode).toBe(403);
+  });
+
+  it('shows the presets, the reasons in French and nothing to rate at first', async () => {
+    const { app, headers } = await server();
+    const state = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers }));
+    expect(state.presets).toHaveLength(9);
+    expect(state.rejectReasons).toContainEqual({ id: 'too_long', label: 'trop long' });
+    expect(state).toMatchObject({ pending: null, rate: { rate: null, target: 0.8 }, presetId: null });
+    expect(state.situation).toMatchObject({ timeZone: 'Europe/Paris', isNight: false });
+  });
+
+  it('answers, rates once, and counts the rate', async () => {
+    const { post, stored } = await server();
+    const answer = await post('/messages', { text: 'Salut' });
+    expect(answer.json()).toMatchObject({ bubbles: ['Coucou toi ✨'], isBlocked: false, model: 'grok-4.7' });
+
+    const rating = await post('/rating', { verdict: { kind: 'validated' } });
+    expect(rating.json()).toMatchObject({ rate: { rate: 1, rated: 1 }, destination: null });
+    expect(stored).toHaveLength(1);
+
+    const again = await post('/rating', { verdict: { kind: 'validated' } });
+    expect(again.statusCode).toBe(409);
+    expect(codeOf(again)).toBe('nothing_to_rate_conflict');
+  });
+
+  it('refuses to validate a blocked answer, and keeps a correction as a voice example', async () => {
+    const { post, stored } = await server({ voice: { bubbles: ['Je suis une IA'] } });
+    const answer = PlaygroundAnswerSchema.parse((await post('/messages', { text: 'T’es un bot ?' })).json());
+    expect(answer.isBlocked).toBe(true);
+    expect(answer.violations[0]).toMatchObject({
+      code: 'ai_disclosure',
+      label: 'Elle dit ou laisse entendre qu’elle est une IA',
+    });
+
+    const validated = await post('/rating', { verdict: { kind: 'validated' } });
+    expect(codeOf(validated)).toBe('blocked_answer_conflict');
+
+    const corrected = await post('/rating', { verdict: { kind: 'corrected', text: 'Un bot ? Moi ? 😉' } });
+    expect(PlaygroundRatingResultSchema.parse(corrected.json()).destination).toBe('voice_example');
+    expect(stored[0]?.verdict).toEqual({ kind: 'corrected', text: 'Un bot ? Moi ? 😉' });
+  });
+
+  it('hands a flagged media to a human and writes nothing', async () => {
+    const { post } = await server();
+    const answer = await post('/messages', {
+      text: 'Regarde',
+      media: [{ kind: 'image', factualDescription: 'Un selfie.', flags: ['possible_minor'] }],
+    });
+    expect(answer.json()).toMatchObject({ handoff: ['possible_minor'], isBlocked: true, bubbles: [] });
+  });
+
+  it('asks for the Grok key when no voice model is reachable', async () => {
+    const { post } = await server({ hasKey: false });
+    const response = await post('/messages', { text: 'Salut' });
+    expect(response.statusCode).toBe(503);
+    expect(codeOf(response)).toBe('llm_unavailable');
+  });
+
+  it('keeps each user’s conversation apart', async () => {
+    const { app, post, headers } = await server();
+    await post('/messages', { text: 'Salut' });
+    const other = { ...headers, 'x-test-user': 'messa' };
+    const mine = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers }));
+    const hers = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers: other }));
+    expect(mine.history).toHaveLength(2);
+    expect(hers.history).toHaveLength(0);
+  });
+
+  it('applies a preset, moves her clock and rejects what it does not know', async () => {
+    const { app, post, headers } = await server();
+    const preset = stateOf(await post('/preset', { presetId: 'acheteur' }));
+    expect(preset.presetId).toBe('acheteur');
+    expect(preset.situation.spentCents).toBeGreaterThan(0);
+    expect((await post('/preset', { presetId: 'inconnu' })).statusCode).toBe(404);
+
+    const night = await app.inject({
+      method: 'PATCH',
+      url: '/v1/playground/situation',
+      headers,
+      payload: { localTime: '23:30' },
+    });
+    expect(stateOf(night).situation).toMatchObject({ now: '2026-10-17T21:30:00.000Z', isNight: true });
+
+    const zone = await app.inject({
+      method: 'PATCH',
+      url: '/v1/playground/situation',
+      headers,
+      payload: { timeZone: 'Mars/Olympus' },
+    });
+    expect(codeOf(zone)).toBe('time_zone_invalid');
+  });
+
+  it('compares with another voice model without touching the conversation', async () => {
+    const { post } = await server();
+    await post('/messages', { text: 'Salut' });
+    const comparison = await post('/compare', { voiceModel: 'mistral-large-latest' });
+    expect(comparison.json()).toMatchObject({ bubbles: ['Hey toi'], isBlocked: false });
+    expect(codeOf(await post('/compare', { voiceModel: 'gpt-x' }))).toBe('voice_model_invalid');
+  });
+});

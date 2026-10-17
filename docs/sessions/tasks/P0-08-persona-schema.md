@@ -15,7 +15,7 @@ ADR 0010 et 0012, `docs/reference/persona-schema.md`, `brainstorm/06-interface-e
 - [x] Sections : `meta`, `details`, `additional_info`, `behavior`, `strategies`, `follow_ups`, `notifications`, `limits`.
 - [x] `personas/messalina/v0.0.0.yaml` réécrit en placeholders ; `personas/demo/v0.1.0.yaml`, créatrice fictive.
 - [x] Tests : les deux fichiers valident ; listes, bornes, style personnalisé, délais croissants, doublons, 6 000 caractères, âge minimal, fuseau.
-- [x] Le playground de P3-01 lit la persona par `PersonaSchema` (`apps/api/src/scripts/persona-file.ts`).
+- [x] Le playground de P3-01 lit la persona par `PersonaSchema` (`apps/api/src/modules/playground/infra/persona-file.ts`).
 - [x] `docs/reference/persona-schema.md`, `docs/playbooks/edit-the-persona.md`, glossaire, `ai-engine.md` (contexte).
 
 ## Critères d'acceptation

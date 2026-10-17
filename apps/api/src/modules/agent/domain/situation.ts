@@ -74,6 +74,11 @@ function duration(ms: number): string {
   return `${String(Math.floor(hours / 24))} jours`;
 }
 
+/** Night is when the Nuit scripts apply, on her clock. */
+export function isNight(situation: Situation): boolean {
+  return dayPart(localTime(situation.now, situation.timeZone).hour) === 'night';
+}
+
 export function describeSituation(situation: Situation): string {
   const time = localTime(situation.now, situation.timeZone);
   const spent = situation.spentCents / 100;

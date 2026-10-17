@@ -1,5 +1,5 @@
 import type { MediaDescription } from '@nirvana/contracts';
-import type { Brief, ConversationTurn, LlmGateway, VoiceInput } from '@nirvana/llm';
+import type { Brief, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import {
   assessTrap,
@@ -12,7 +12,7 @@ import {
   type RatedMoment,
   type Situation,
   type TrapAssessment,
-} from '../modules/agent/index';
+} from '../../agent/index';
 
 export interface PlaygroundTurn {
   /** Safety flags on his media: a human would take over, nothing is written. */
@@ -96,8 +96,11 @@ export function withExamples(sheet: string, examples: readonly string[]): string
   return `${sheet}\n\nExemples de ses messages, corrigés par l'équipe :\n${examples.map((e) => `- ${e}`).join('\n')}`;
 }
 
-const failure = (attempts: readonly { model: string; outcome: string }[]): string =>
-  attempts.map((a) => `${a.model}: ${a.outcome}`).join(', ');
+/** Why nothing was written, for the trace: the daily cap, or each model that failed. */
+const failure = (error: LlmFailure): string =>
+  error.code === 'budget_reached'
+    ? 'plafond du jour atteint'
+    : error.attempts.map((a) => `${a.model}: ${a.outcome}`).join(', ');
 
 /**
  * Same path as production (brain, then voice, then guards) with no connector at all: nothing can be sent.
@@ -182,7 +185,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         isBlocked: isBlocked(violations) || !voice.ok,
         ...(voice.ok && { model: voice.value.meta.model }),
         costUsd: voice.ok ? (voice.value.meta.costUsd ?? 0) : 0,
-        ...(!voice.ok && { failure: failure(voice.error.attempts) }),
+        ...(!voice.ok && { failure: failure(voice.error) }),
       };
     },
 
@@ -241,9 +244,9 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       const turn: PlaygroundTurn = {
         ...(trap.isTrap && { trap }),
         ...(brief && { brief }),
-        ...(!brain.ok && { briefFailure: failure(brain.error.attempts) }),
+        ...(!brain.ok && { briefFailure: failure(brain.error) }),
         bubbles,
-        ...(!voice.ok && { voiceFailure: failure(voice.error.attempts) }),
+        ...(!voice.ok && { voiceFailure: failure(voice.error) }),
         violations,
         isBlocked: blocked,
         costUsd:
