@@ -15,10 +15,17 @@ pre-commit:
       run: node scripts/check-repo.mjs --staged
 
 pre-push:
+  piped: true
   commands:
+    protect-main:
+      priority: 1
+      use_stdin: true
+      run: node scripts/protect-main.mjs
     check:
+      priority: 2
       run: pnpm check
     test:
+      priority: 3
       run: pnpm test
 
 commit-msg:

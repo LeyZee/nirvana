@@ -199,7 +199,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     connectors,
     conversations,
     fans,
-    persona: createPersonaModule(),
+    persona: createPersonaModule({ db: db.db, requireRole }),
     agent: createAgentModule(),
     media: createMediaModule(),
     supervision: createSupervisionModule(),
@@ -265,6 +265,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     routes: [
       createAuthRoutes(auth, config, requireRole),
       modules.conversations.routes,
+      modules.persona.routes,
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
       ...(playground === null ? [] : [playground.routes({ guard: requireRole('owner') })]),

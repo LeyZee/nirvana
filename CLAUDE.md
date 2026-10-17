@@ -58,7 +58,7 @@ pnpm evals              # Promptfoo (clés API requises)
 1. `pnpm check` vert, `git status` propre, aucun fichier parasite (voir hygiene.md).
 2. Fiche de tâche mise à jour (statut, ce qui reste).
 3. Entrée de journal dans son propre fichier `docs/sessions/log/<date>-<id>.md` (format dans `docs/sessions/README.md`) et une ligne dans l'index `docs/sessions/LOG.md`.
-4. Branche rebasée sur `origin/main`, PR ouverte par la session en brouillon avec le template `.github/pull_request_template.md`, passée en « prête » quand tout est vert. Charles fusionne.
+4. Branche rebasée sur `origin/main`, PR ouverte par la session en brouillon avec le template `.github/pull_request_template.md`, passée en « prête » quand tout est vert. `main` ne change que par une PR verte fusionnée, jamais par un push direct (hook `protect-main`).
 
 ## Ce qu'on ne fait jamais
 

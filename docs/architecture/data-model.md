@@ -119,6 +119,18 @@ llm_calls   id, creator_id (nullable), role (sense|brain|voice|judge), provider,
             plafond quotidien.
 ```
 
+## Calibrage (module `agent`, playground)
+
+```
+calibration_ratings   id, creator_id, session_id, rated_at, voice_prompt, voice_model,
+                      verdict_kind (validated|corrected|rejected), verdict jsonb (Verdict), destination
+                      (voice_example|rule|test, nullable), fan_message, bubbles jsonb, moment jsonb (RatedMoment,
+                      opaque, nullable une fois purgé), moment_purged_at, created_at
+  Append-only (trigger) : seule la purge de `moment` après 90 jours est permise, le verdict et la version restent.
+  Lu pour le taux de validation (50 derniers par version), les exemples de voix (corrected + voice_example, 12 max)
+  et les tests rejouables (tout sauf validated). Contenu intime : jamais copié dans les logs.
+```
+
 ## Supervision (module `supervision`)
 
 ```
@@ -168,3 +180,4 @@ Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.en
 - `fan_facts (fan_id) where superseded_by is null` (l'expiration se filtre à la requête : `now()` est interdit dans un prédicat d'index)
 - `conversations (platform_account_id, state)`, `(creator_id, last_inbound_at desc)`
 - `llm_calls (creator_id, created_at)`
+- `calibration_ratings (creator_id, rated_at desc)`, `(creator_id, voice_prompt, voice_model, rated_at desc)`

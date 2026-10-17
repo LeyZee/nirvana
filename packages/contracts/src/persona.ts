@@ -121,7 +121,7 @@ const uniqueList = <T extends z.ZodType<string>>(item: T) =>
   z.array(item).refine((list) => new Set(list).size === list.length, { message: 'Valeur en double' });
 
 /** IANA zone, checked against the runtime's own list. */
-const TimezoneSchema = z.string().refine(
+export const TimezoneSchema = z.string().refine(
   (zone) => {
     try {
       new Intl.DateTimeFormat('en', { timeZone: zone });
