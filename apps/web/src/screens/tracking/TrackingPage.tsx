@@ -1,11 +1,12 @@
 import type { ConversationSummary } from '@nirvana/contracts';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { useEffect, useState, type JSX } from 'react';
 
-import { fetchConversations, fetchCreators } from './api';
+import { fetchConversations } from './api';
 import { MODE_MEANINGS, mergeConversations, sharedMode, STATE_LABELS, statusClass, subline } from './view';
 import './tracking.css';
 
+import { useCreators } from '@/creators/api';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const REFRESH_MS = 30_000;
@@ -18,7 +19,7 @@ const NO_CREATOR =
  * et le lecteur de conversation viennent après le squelette (revue 08) ; ce n'est jamais une Inbox.
  */
 export function TrackingPage(): JSX.Element {
-  const creatorsQuery = useQuery({ queryKey: ['creators'], queryFn: fetchCreators });
+  const creatorsQuery = useCreators();
   const creators = creatorsQuery.data ?? [];
   const queries = useQueries({
     queries: creators.map((creator) => ({

@@ -1,8 +1,7 @@
-import type { CreatorSummary } from '@nirvana/contracts';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 
-import { fetchCreators } from './api';
+import { useCreators } from './api';
 import { PersonaSection } from './persona/PersonaSection';
 
 import { Page, PageHeader } from '@/shell/layout';
@@ -13,25 +12,10 @@ import { Page, PageHeader } from '@/shell/layout';
  */
 export function CreatorsPage(): JSX.Element {
   const { user } = useRouteContext({ from: '__root__' });
-  const [creators, setCreators] = useState<readonly CreatorSummary[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    fetchCreators().then(
-      (list) => {
-        if (!live) return;
-        setCreators(list);
-        setSelected((current) => current ?? list[0]?.id ?? null);
-      },
-      () => {
-        // Without the list the persona still shows, as the example it is today.
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, []);
+  // Without the list the persona still shows, as the example it is today.
+  const creators = useCreators().data ?? [];
+  const [picked, setSelected] = useState<string | null>(null);
+  const selected = picked ?? creators[0]?.id ?? null;
 
   const current = creators.find((creator) => creator.id === selected);
 

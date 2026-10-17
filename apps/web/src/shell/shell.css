@@ -145,6 +145,38 @@
 .nv-rail__sp {
   flex: 1;
 }
+/* The agent's mode, read-only: a word and a dot over the settings; a click opens the Dashboard's control. */
+.nv-rail__agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 5px 9px;
+  border-radius: var(--nv-radius-full);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--nv-ink-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--nv-dur-fast),
+    color var(--nv-dur-fast),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-rail__agent:hover {
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill);
+}
+.nv-rail__agent:active {
+  transform: scale(0.96);
+}
+.nv-rail__agent:focus-visible {
+  outline: none;
+  box-shadow: var(--nv-shadow-focus);
+}
+.nv-rail__agent[data-tone='bad'] {
+  color: var(--nv-neon-ink);
+}
 
 /* Icons: a readable rest state, and a gesture played once on activation (`is-playing`). */
 .nav-icon {
@@ -555,6 +587,7 @@
   .nv-rail__mark,
   .nv-rail__sp,
   .nv-rail__lens,
+  .nv-rail__agent,
   .nv-user {
     display: none;
   }

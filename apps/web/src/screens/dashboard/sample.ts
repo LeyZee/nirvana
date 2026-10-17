@@ -129,8 +129,6 @@ const SALES: Record<Period, Sales> = {
 };
 
 export const SAMPLE: Dashboard = {
-  mode: 'copilot',
-  liveRate: { rate: 64, target: 80 },
   creator: { name: 'Léa', platform: 'Reveal', now: 'vendredi 17 octobre, 23:45' },
   agent: {
     tone: 'warn',

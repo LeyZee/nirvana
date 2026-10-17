@@ -6,8 +6,6 @@
 
 export type Tone = 'ok' | 'warn' | 'bad';
 export type Period = 'day' | 'week' | 'month';
-/** The single control of the agent (revue 08): Automatique stays locked under 80 % in real use (ADR 0019). */
-export type AgentMode = 'auto' | 'copilot' | 'stop';
 
 export const PERIODS: readonly { readonly id: Period; readonly label: string }[] = [
   { id: 'day', label: 'Aujourd’hui' },
@@ -104,9 +102,6 @@ export interface Fan {
 }
 
 export interface Dashboard {
-  readonly mode: AgentMode;
-  /** Taux en réel and its target: Automatique opens at the target. */
-  readonly liveRate: { readonly rate: number; readonly target: number };
   readonly creator: { readonly name: string; readonly platform: string; readonly now: string };
   readonly agent: AgentState;
   readonly todos: readonly Todo[];

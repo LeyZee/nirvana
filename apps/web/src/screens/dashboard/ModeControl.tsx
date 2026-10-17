@@ -1,25 +1,35 @@
 import { placeSegmentThumb } from '@nirvana/design-system';
-import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 
-import type { AgentMode } from './model';
 import type { FloatingTip } from './parts';
 
-const ORDER: readonly AgentMode[] = ['auto', 'copilot', 'stop'];
+import { MODES, missingLines, nextMode, type AgentMode, type AutomaticGate } from '@/agent/mode';
+
+/** Arrow keys of the radio group and the way they move. */
+const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 
 /**
- * The single control of the agent (revue 08, maquette v6): Automatique, locked under the target of the
- * Taux en réel; Copilote; Arrêt, confirmed in a dialog that says what stops and what stays.
+ * The single control of the agent (revue 08, maquette v6): Automatique, open only when the server says so
+ * (ADR 0019) and otherwise saying what is missing; Copilote; Arrêt, confirmed in a dialog that says what stops
+ * and what stays. A radio group: the arrow keys move between the options that can be picked.
  */
 export function ModeControl({
   mode,
-  liveRate,
+  automatic,
   creatorName,
   tip,
   onChange,
 }: {
   mode: AgentMode;
-  liveRate: { rate: number; target: number };
+  automatic: AutomaticGate;
   creatorName: string;
   tip: FloatingTip;
   onChange: (mode: AgentMode) => void;
@@ -28,8 +38,22 @@ export function ModeControl({
   const thumbRef = useRef<HTMLSpanElement>(null);
   const placed = useRef(false);
   const [confirming, setConfirming] = useState(false);
-  const locked = liveRate.rate < liveRate.target;
-  const index = ORDER.indexOf(mode);
+  const locked = !automatic.open;
+  const index = MODES.indexOf(mode);
+
+  const pick = (next: AgentMode): void => {
+    if (next === mode) return;
+    if (next === 'stop') setConfirming(true);
+    else onChange(next);
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const step = STEPS[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    const next = nextMode(mode, step, automatic);
+    ref.current?.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
+    pick(next);
+  };
 
   useLayoutEffect(() => {
     const element = ref.current;
@@ -37,7 +61,7 @@ export function ModeControl({
     placeSegmentThumb(
       element,
       index,
-      ORDER.length,
+      MODES.length,
       placed.current ? (thumbRef.current ?? undefined) : undefined,
     );
     placed.current = true;
@@ -51,22 +75,25 @@ export function ModeControl({
         aria-label="Mode de l’agent"
         data-tone={mode === 'stop' ? 'danger' : undefined}
         ref={ref}
+        onKeyDown={onKeyDown}
       >
         <span className="nv-seg__thumb nv-glass nv-glass--thin" ref={thumbRef} aria-hidden="true" />
         <button
           type="button"
           role="radio"
           className="nv-seg__opt"
+          data-mode="auto"
+          tabIndex={mode === 'auto' ? 0 : -1}
           aria-checked={mode === 'auto'}
           aria-disabled={locked}
           {...tip.bind({
             title: locked ? 'Automatique : verrouillé' : 'Automatique',
             text: locked
-              ? `L’agent enverrait seul, sans validation. Il s’ouvre quand le taux en réel atteint ${String(liveRate.target)}\u00a0% des réponses approuvées sans retouche par les chatteurs. Aujourd’hui\u00a0: ${String(liveRate.rate)}\u00a0%.`
+              ? `L’agent enverrait seul, sans validation. Il manque encore : ${missingLines(automatic).join(' ')}`
               : 'L’agent envoie seul, sans validation, dans les limites réglées.',
           })}
           onClick={() => {
-            if (!locked) onChange('auto');
+            if (!locked) pick('auto');
           }}
         >
           {locked ? (
@@ -88,13 +115,15 @@ export function ModeControl({
           type="button"
           role="radio"
           className="nv-seg__opt"
+          data-mode="copilot"
+          tabIndex={mode === 'copilot' ? 0 : -1}
           aria-checked={mode === 'copilot'}
           {...tip.bind({
             title: 'Copilote',
             text: 'L’agent écrit, un chatteur valide chaque message dans Reveal avant qu’il parte.',
           })}
           onClick={() => {
-            onChange('copilot');
+            pick('copilot');
           }}
         >
           <span
@@ -107,13 +136,15 @@ export function ModeControl({
           type="button"
           role="radio"
           className="nv-seg__opt"
+          data-mode="stop"
+          tabIndex={mode === 'stop' ? 0 : -1}
           aria-checked={mode === 'stop'}
           {...tip.bind({
             title: 'Arrêt',
             text: 'L’agent n’écrit plus rien. Les chatteurs reprennent comme avant.',
           })}
           onClick={() => {
-            if (mode !== 'stop') setConfirming(true);
+            pick('stop');
           }}
         >
           <span className="nv-dot nv-tone--bad db-mode__dot" aria-hidden="true" />

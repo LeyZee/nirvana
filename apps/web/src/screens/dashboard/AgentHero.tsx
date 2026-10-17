@@ -1,8 +1,10 @@
 import type { JSX } from 'react';
 
-import { heroState, gaugeClass, litParts, MODE_LABEL } from './logic';
-import type { AgentMode, AgentState, Todo } from './model';
+import { heroState, gaugeClass, litParts } from './logic';
+import type { AgentState, Todo } from './model';
 import { CheckIcon, Chevron, lightUp, TONE_COLOR } from './parts';
+
+import { MODE_LABEL, type AgentMode } from '@/agent/mode';
 
 /**
  * Level 1: what state the agent is in and what waits for a human, before any money. The most serious todo
