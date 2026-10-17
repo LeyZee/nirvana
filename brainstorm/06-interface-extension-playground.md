@@ -147,6 +147,25 @@ Charles veut saisir la persona dans l'interface, calquée sur la fiche créatric
 
 Comportement, Stratégies, Relances et Notifications reprennent pour l'instant la configuration OnlyChat du bot Telegram ; ils sont à retravailler pour Reveal avec la documentation d'OnlyChat. Les deux fiches OnlyChat de Messalina (OnlyFans et Telegram) se contredisent sur l'âge, les yeux, les tatouages, le métier et les animaux : ces champs sont marqués « à confirmer avec Messa ». Écarts admis seulement s'ils viennent d'une décision : `identity_policy` verrouillée (ADR 0012), délais et cooldowns appliqués par le code (CLAUDE.md, règle 3), versions testées et validées (ADR 0010). Le contenu réel reste hors du dépôt et hors de la maquette en ligne (ADR 0010).
 
+### Créatrices : liste, fiche et suppression (prototype, 17/10)
+
+La liste montre d'abord une bande de totaux (créatrices, agent actif, fans, revenus sur 30 jours), puis une carte par créatrice : statut de l'agent, plateformes et leur état, fans et payeurs, revenus sur 30 jours avec l'écart, part envoyée sans retouche (le mode auto reste grisé sous 80 %), version de la persona et ses tests, dernière activité. La fiche reprend ces chiffres en tête, au-dessus des onglets Persona et Plateformes. Chiffres fictifs.
+
+**Supprimer une créatrice** (demandé par Charles) se confirme dans la page. Pour une créatrice active, on tape son nom. La suppression arrête l'agent pour elle, délie la plateforme sans rien effacer chez Reveal, et archive persona, versions et corrections 30 jours ; elle reste restaurable depuis « Supprimées récemment ». Une créatrice restaurée revient avec l'agent à l'arrêt. L'effacement définitif après 30 jours est une action irréversible au sens de CLAUDE.md (règle 12) : la fiche qui la construira devra le traiter.
+
+### Réglages › Modèles IA (prototype, 17/10)
+
+Contenu défini par le fil Lecture OnlyChat (`panneau-connecteurs-ia.md`, hors dépôt) et données de `getHealth()` / `testConnection()` (P3-01). L'ordre de lecture est le suivant :
+
+1. **État global et coût du jour**, dans un seul verre. Le coût est animé et posé sur une jauge de budget, avec la projection à minuit et l'écart avec hier.
+2. **Une bande secondaire** : coût du mois sur budget, coût par message envoyé, appels sur l'heure, taux de repli.
+3. **Le coupe-circuit** « Mettre l'agent en pause », confirmé par une seconde action.
+4. **Quatre rôles** : Voix, Cerveau, Vision, Juge. Chaque carte donne le modèle en gros, le repli, la médiane, les erreurs, le coût du jour et le dernier succès, avec une courbe de latence. Un repli actif met un liseré ambre. Changer de modèle propose « Lancer les tests avant », jamais un changement direct.
+5. **Fournisseurs** : état de la clé (jamais la clé elle-même, qui vit dans les variables d'environnement du serveur), capacités (la vidéo de Grok 4.7 est « à vérifier »), prix, et un bouton « Tester la connexion ».
+6. **Journal**, replié par défaut et filtrable par rôle.
+
+Hors du panneau, une pastille sur Réglages et un bandeau en haut du Dashboard signalent un état dégradé ou coupé. La maquette montre quatre états : nominal, repli sur la Voix, budget à 92 % et clé xAI refusée. Le budget de 15 € par jour et de 300 € par mois est un exemple à fixer par Charles.
+
 ## 5. Ce qui touche les manques métier (en pause)
 
 Rien ici n'est bloqué par eux, mais deux points en dépendent et attendent la documentation chatting de Charles : les profils de fans simulés (ils devraient refléter les vrais parcours fans et leur valeur), et le mode rejeu (il suppose l'import de l'historique Reveal). Les raisons de « Faux » propres à la vente seront affinées avec la même documentation.
