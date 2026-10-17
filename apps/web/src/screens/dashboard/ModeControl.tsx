@@ -38,13 +38,16 @@ export function ModeControl({
   const thumbRef = useRef<HTMLSpanElement>(null);
   const placed = useRef(false);
   const [confirming, setConfirming] = useState(false);
+  const stopping = useRef(false);
   const locked = !automatic.open;
   const index = MODES.indexOf(mode);
 
   const pick = (next: AgentMode): void => {
     if (next === mode) return;
-    if (next === 'stop') setConfirming(true);
-    else onChange(next);
+    if (next === 'stop') {
+      stopping.current = false;
+      setConfirming(true);
+    } else onChange(next);
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const step = STEPS[event.key];
@@ -155,10 +158,15 @@ export function ModeControl({
       <StopDialog
         open={confirming}
         creatorName={creatorName}
+        focusOnClose={() =>
+          // The mode may not be on screen yet when the dialog closes: aim at the option it is going to.
+          ref.current?.querySelector<HTMLElement>(`[data-mode="${stopping.current ? 'stop' : mode}"]`) ?? null
+        }
         onCancel={() => {
           setConfirming(false);
         }}
         onConfirm={() => {
+          stopping.current = true;
           setConfirming(false);
           onChange('stop');
         }}
@@ -170,27 +178,39 @@ export function ModeControl({
 function StopDialog({
   open,
   creatorName,
+  focusOnClose,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
   creatorName: string;
+  /** Where the focus goes once the dialog closes: the option checked from then on, as the radio group wants. */
+  focusOnClose: () => HTMLElement | null;
   onCancel: () => void;
   onConfirm: () => void;
 }): JSX.Element {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // The latest handlers, so a re-render of the page while the dialog is open does not re-run the opening effect.
+  const cancel = useRef(onCancel);
+  const target = useRef(focusOnClose);
+  useEffect(() => {
+    cancel.current = onCancel;
+    target.current = focusOnClose;
+  }, [onCancel, focusOnClose]);
 
   useEffect(() => {
     if (!open) return undefined;
     cancelRef.current?.focus({ preventScroll: true });
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onCancel();
+      if (event.key === 'Escape') cancel.current();
     };
     addEventListener('keydown', onKey);
     return () => {
       removeEventListener('keydown', onKey);
+      // Cancelled or confirmed, the focus lands back on the control, on the option now checked.
+      target.current()?.focus({ preventScroll: true });
     };
-  }, [open, onCancel]);
+  }, [open]);
 
   // On the body: a transformed ancestor (the entering header, the stage) would capture `position: fixed`.
   return createPortal(

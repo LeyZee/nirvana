@@ -55,6 +55,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Dashboard, PR 2 : coquille sur données d'exemple | done (PR #55) | `log/2026-10-17-dashboard-shell.md` |
 | 2026-10-17 | Audit des champs de la persona (Opus) | in_progress | `log/2026-10-17-persona-audit.md` |
 | 2026-10-17 | Contrôle de l'agent partagé, pastille de la barre | done | `log/2026-10-17-web-controle-agent.md` |
+| 2026-10-17 | Dashboard : focus après la confirmation d'arrêt | done | `log/2026-10-17-dashboard-focus.md` |
 
 ## Incidents (liste vivante)
 
