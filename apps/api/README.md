@@ -14,7 +14,6 @@ src/
 ├── crontab.ts            jobs périodiques Graphile (poll, reconcile, purge)
 ├── readiness.ts          vérifications de /ready
 ├── shutdown.ts           SIGTERM : arrêt ordonné, code 0
-├── demo.ts               demo.echo, retiré en P0-05
 ├── composition-root.ts   câblage manuel des modules
 ├── modules/              connectors, conversations, fans, persona, agent, media, supervision, sales, scripts
 ├── scripts/              commandes ops et persona (pnpm ops:*, persona:*)

@@ -4,6 +4,7 @@ Procédures d'exploitation, écrites pour être suivies sous stress, par quelqu'
 
 | Runbook | Quand |
 |---|---|
+| `local-dev.md` | Lancer le CRM sur son PC (base locale, compte, dashboard) |
 | `incident.md` | Quelque chose va mal en production (bot qui déraille, envois en double, plateforme qui bloque) |
 | `rotate-secrets.md` | Un secret a fuité ou arrive à échéance |
 | `restore.md` | Restaurer la base de données |

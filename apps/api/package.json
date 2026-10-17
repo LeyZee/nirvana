@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "playground": "tsx --env-file-if-exists=../../.env src/scripts/playground.ts",
-    "owner:create": "tsx --env-file-if-exists=../../.env src/scripts/create-owner.ts"
+    "owner:create": "tsx --env-file-if-exists=../../.env src/scripts/create-owner.ts",
+    "rebuild-projections": "tsx --env-file-if-exists=../../.env src/scripts/rebuild-projections.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",

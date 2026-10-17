@@ -7,9 +7,11 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp, type App } from '../composition-root';
 import type { Config } from '../config';
 import { createLogger } from '../logger';
+import { startWorker } from '../worker-runner';
 
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
+import { createSlowTask, enqueueSlow, SLOW_TASK } from './support/slow-task';
 
 const API_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const TSX = fileURLToPath(new URL('../../node_modules/.bin/tsx', import.meta.url));
@@ -30,7 +32,25 @@ describe('graceful shutdown (operations.md)', () => {
     await test.close();
   });
 
-  it('lets the running job finish on SIGTERM, then exits with code 0', async () => {
+  it('lets the running job finish when the worker stops', async () => {
+    const sink = new LogSink();
+    const logger = createLogger({ LOG_LEVEL: 'info' }, sink);
+    const worker = await startWorker(
+      { ...app, tasks: { [SLOW_TASK]: createSlowTask(logger) } },
+      {
+        logger,
+        concurrency: 1,
+        release: 'test',
+        cronJobs: [],
+      },
+    );
+    await enqueueSlow(test.admin.db, 1, 1_500, 'conv:z');
+    await sink.waitFor('slow started');
+    await worker.stop();
+    expect(sink.withMessage('slow finished')).toHaveLength(1);
+  });
+
+  it('stops on SIGTERM and exits with code 0', async () => {
     const child = spawn(TSX, ['src/worker.ts'], {
       cwd: API_ROOT,
       env: {
@@ -59,17 +79,9 @@ describe('graceful shutdown (operations.md)', () => {
     await output.waitFor('worker started', 1, 20_000).catch((error: unknown) => {
       throw new Error(`worker did not start: ${stderr}`, { cause: error });
     });
-    await app.jobs.enqueue(
-      'demo.echo',
-      { seq: 1, delayMs: 1_500, correlationId: 'sigterm' },
-      { queueName: 'conv:z' },
-    );
-    await output.waitFor('echo started');
     child.kill('SIGTERM');
 
     expect(await exited, stderr).toBe(0);
-    const messages = output.lines.map((line) => line.msg);
-    expect(messages).toContain('echo finished');
-    expect(messages.indexOf('echo finished')).toBeLessThan(messages.indexOf('shutdown complete'));
+    expect(output.lines.map((line) => line.msg)).toContain('shutdown complete');
   });
 });

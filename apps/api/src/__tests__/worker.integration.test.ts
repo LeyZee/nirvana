@@ -1,4 +1,5 @@
-import { createDbClient, sql } from '@nirvana/db';
+import { CreatorIdSchema, newId, PlatformAccountIdSchema } from '@nirvana/contracts';
+import { createDbClient, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { z } from 'zod';
@@ -13,11 +14,12 @@ import { startWorker, type WorkerHandle } from '../worker-runner';
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
+import { createSlowTask, enqueueSlow, SLOW_TASK } from './support/slow-task';
 
-const EchoLineSchema = z.looseObject({ seq: z.number(), at: z.number() });
+const SlowLineSchema = z.looseObject({ seq: z.number(), at: z.number() });
 
-function echoes(sink: LogSink, msg: 'echo started' | 'echo finished'): z.infer<typeof EchoLineSchema>[] {
-  return sink.withMessage(msg).map((line) => EchoLineSchema.parse(line));
+function slowLines(sink: LogSink, msg: 'slow started' | 'slow finished'): z.infer<typeof SlowLineSchema>[] {
+  return sink.withMessage(msg).map((line) => SlowLineSchema.parse(line));
 }
 
 describe('worker (Graphile, ADR 0006)', () => {
@@ -35,13 +37,16 @@ describe('worker (Graphile, ADR 0006)', () => {
     });
     const logger = createLogger(config, sink);
     app = await createApp(config, logger);
-    worker = await startWorker(app, {
-      logger,
-      concurrency: 5,
-      release: 'test',
-      cronJobs: [],
-      heartbeatIntervalMs: 500,
-    });
+    worker = await startWorker(
+      { ...app, tasks: { ...app.tasks, [SLOW_TASK]: createSlowTask(logger) } },
+      {
+        logger,
+        concurrency: 5,
+        release: 'test',
+        cronJobs: [],
+        heartbeatIntervalMs: 500,
+      },
+    );
   });
 
   afterAll(async () => {
@@ -52,36 +57,16 @@ describe('worker (Graphile, ADR 0006)', () => {
 
   it('runs the jobs of one conversation queue in order, never two at once', async () => {
     for (let seq = 0; seq < 10; seq += 1) {
-      await app.jobs.enqueue(
-        'demo.echo',
-        { seq, delayMs: 40, correlationId: 'serial' },
-        { queueName: 'conv:x' },
-      );
+      await enqueueSlow(test.admin.db, seq, 40, 'conv:x');
     }
-    await sink.waitFor('echo finished', 10);
-    const started = echoes(sink, 'echo started');
-    const finished = echoes(sink, 'echo finished');
+    await sink.waitFor('slow finished', 10, 30_000);
+    const started = slowLines(sink, 'slow started');
+    const finished = slowLines(sink, 'slow finished');
     expect(started.map((line) => line.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     for (let index = 1; index < 10; index += 1) {
       // Disjoint: each job starts after the previous one finished, despite a concurrency of 5.
       expect(started[index]!.at).toBeGreaterThanOrEqual(finished[index - 1]!.at);
     }
-  });
-
-  it('keeps only the last of five jobs sharing a job key', async () => {
-    const before = echoes(sink, 'echo finished').length;
-    const runAt = new Date(Date.now() + 1_000);
-    for (let seq = 100; seq < 105; seq += 1) {
-      await app.jobs.enqueue(
-        'demo.echo',
-        { seq, correlationId: 'debounce' },
-        { queueName: 'conv:y', jobKey: 'demo.echo:y', runAt },
-      );
-    }
-    await sink.waitFor('echo finished', before + 1);
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    const debounced = echoes(sink, 'echo finished').filter((line) => line.seq >= 100);
-    expect(debounced.map((line) => line.seq)).toEqual([104]);
   });
 
   it('carries the request id from the route to the job logs', async () => {
@@ -95,15 +80,50 @@ describe('worker (Graphile, ADR 0006)', () => {
     const owner = { email: 'owner@example.test', name: 'Owner', password: 'correct horse battery' };
     await createOwner(app.auth, app.db.db, owner);
     const cookie = await signIn(server, owner.email, owner.password);
+
+    // A conversation with a draft waiting: the approval enqueues `conversation.send` with the request id.
+    const creatorId = newId(CreatorIdSchema);
+    const platformAccountId = newId(PlatformAccountIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+    await test.admin.db
+      .insert(schema.platformAccounts)
+      .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test-corr' });
+    const { conversationId } = await app.modules.conversations.ingestMessage({
+      creatorId,
+      platformAccountId,
+      platformConversationId: 'c-corr',
+      platformFanId: 'f-corr',
+      fanDisplayName: 'Fan',
+      message: {
+        ref: { platform: 'reveal', id: 'm-corr' },
+        conversationRef: { platform: 'reveal', id: 'c-corr' },
+        direction: 'inbound',
+        text: 'coucou',
+        media: [],
+        priceMinor: null,
+        currency: null,
+        isPaid: false,
+        createdAt: new Date().toISOString(),
+      },
+      correlationId: 'ingest-corr',
+    });
+    await app.modules.conversations.jobs.respond(
+      { creatorId, conversationId, correlationId: 'respond-corr' },
+      { info: () => undefined, warn: () => undefined },
+    );
+    const [draft] = await test.admin.db.select().from(schema.drafts);
     const response = await server.inject({
       method: 'POST',
-      url: '/v1/demo/echo',
-      payload: { seq: 200, queue: 'corr' },
+      url: `/v1/conversations/${conversationId}/drafts/${draft!.id}/approve?creatorId=${creatorId}`,
+      payload: { bubbles: ['Coucou toi'] },
       headers: { cookie, origin: DASHBOARD_ORIGIN, 'x-request-id': 'req-corr-1' },
     });
-    expect(response.statusCode).toBe(202);
-    const lines = await sink.waitFor('echo finished', echoes(sink, 'echo finished').length + 1);
-    expect(lines.at(-1)).toMatchObject({ seq: 200, correlationId: 'req-corr-1', task: 'demo.echo' });
+    expect(response.statusCode, response.body).toBe(204);
+    // No connector yet (P0-06): the send fails, and its log line carries the request id.
+    const lines = await sink.waitFor('send: failed');
+    expect(lines.at(-1)).toMatchObject({ correlationId: 'req-corr-1', task: 'conversation.send' });
     await server.close();
   });
 

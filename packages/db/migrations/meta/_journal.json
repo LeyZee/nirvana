@@ -8,6 +8,13 @@
       "when": 1792263895762,
       "tag": "0000_core",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792266767668,
+      "tag": "0001_enqueue_job",
+      "breakpoints": true
     }
   ]
 }

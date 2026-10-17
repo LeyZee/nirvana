@@ -8,11 +8,12 @@ Dernière revue : 2026-10-16. S'applique à `apps/api` (routes Fastify) et à se
 - Ressources au pluriel, en kebab-case : `/v1/conversations/{id}/drafts/{draftId}`. Actions non-CRUD en sous-ressource verbe : `POST /v1/conversations/{id}/takeover`, `/release`, `/mode`.
 - Identifiants : UUID v7 en chaîne. Dates : ISO 8601 en UTC (`2026-10-16T18:00:00Z`). Argent : `{ "amountMinor": 1500, "currency": "EUR" }`. Jamais de `snake_case` dans le JSON exposé : **camelCase** partout (la base est en snake_case, Drizzle fait la conversion).
 - Lecture : `GET`. Création : `POST` → `201` + objet. Modification partielle : `PATCH`. Suppression logique : `DELETE` → `204`.
+- Une route qui lit ou modifie les données d'une créatrice prend `creatorId` en paramètre de requête : un `owner` les voit toutes, les autres rôles seulement celles de leur `creatorIds` (sinon 403 `creator_forbidden`).
 - Hors `/v1` : seulement `/health` et `/ready`. Tout le reste est sous `/v1`, y compris `/v1/events` (SSE), `/v1/connector/sessions` (extension, jeton d'appareil) et `/v1/auth/*` (Better Auth, `basePath` configuré).
 
 ## Pagination
 
-Toujours par curseur, jamais par offset : `GET /v1/messages?conversationId=…&limit=50&cursor=…` → `{ "items": [...], "nextCursor": "…" | null }`. `limit` borné (défaut 50, max 200). Le curseur est opaque (base64 de `(created_at, id)`).
+Toujours par curseur, jamais par offset : `GET /v1/conversations/{id}/messages?creatorId=…&limit=50&cursor=…` → `{ "items": [...], "nextCursor": "…" | null }`. `limit` borné (défaut 50, max 200). Le curseur est opaque (base64 de `(created_at, id)`).
 
 ## Erreurs
 
