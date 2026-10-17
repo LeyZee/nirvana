@@ -42,6 +42,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Contrats pour les alertes (cause de passage à un humain, budget, reprise) | done | `log/2026-10-17-alert-contracts.md` |
 | 2026-10-17 | Persona : genre déprécié | done | `log/2026-10-17-persona-gender.md` |
 | 2026-10-17 | `owner:create` ne montre plus le mot de passe | done | `log/2026-10-17-owner-password.md` |
+| 2026-10-17 | `takeover_started` nomme sa conversation | done | `log/2026-10-17-takeover-conversation.md` |
 | 2026-10-17 | Dashboard, PR 1 : pièces du design system | done | `log/2026-10-17-dashboard-ds.md` |
 | 2026-10-17 | Alertes Telegram : ADR 0020, fiche P3-07, maquette | done | `log/2026-10-17-alertes-telegram.md` |
 | 2026-10-17 | Suivi, squelette : liste des conversations (P0-07b, côté web) | done (PR #42) | `log/2026-10-17-web-suivi-squelette.md` |

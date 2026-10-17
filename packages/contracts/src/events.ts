@@ -87,6 +87,9 @@ const handoffPayload = z.object({
   reason: z.string().min(1).max(500).optional(),
 });
 
+/** Who took the conversation, with its id: an alert sent for it is closed by this event (ADR 0020). */
+const takeoverPayload = controlPayload.extend({ conversationId: ConversationIdSchema });
+
 const commercePayload = z.object({
   offerId: z.uuid().optional(),
   saleId: z.uuid().optional(),
@@ -170,7 +173,7 @@ export const EVENT_PAYLOADS = {
     reason: z.enum(['no_reply', 'llm_unavailable']),
     detail: z.array(z.string().max(500)).max(20),
   }),
-  takeover_started: controlPayload,
+  takeover_started: takeoverPayload,
   takeover_ended: controlPayload,
   mode_changed: controlPayload,
   kill_switch_toggled: z.object({

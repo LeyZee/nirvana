@@ -168,6 +168,14 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations/${id}?creatorId=${creatorId}`, ownerCookie)).json(),
     );
     expect(detail).toMatchObject({ state: 'human', openDrafts: [] });
+    // The outbox copy names the conversation, so a Telegram alert sent for it can be closed (ADR 0020).
+    const published = await test.admin.db
+      .select({ payload: schema.domainEvents.payload })
+      .from(schema.domainEvents)
+      .where(eq(schema.domainEvents.type, 'takeover_started'));
+    expect(published.map((event) => event.payload)).toContainEqual(
+      expect.objectContaining({ conversationId: id }),
+    );
     const release = await call(
       'POST',
       `/v1/conversations/${id}/release?creatorId=${creatorId}`,
