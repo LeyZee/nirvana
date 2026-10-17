@@ -45,7 +45,7 @@ Toute écriture porte une clé d'idempotence et passe par `verifySent` (ADR 0008
 
 ## Ce que le bot envoie (Charles, 2026-10-17, 18h18)
 
-Le bot n'envoie **jamais de média libre** : seulement du texte (E1), des étapes de scripts natifs dont les bundles sont préparés à l'avance (E3) et des notes (E4, E4b). E2 (bundle composé à la volée) n'est pas utilisé par l'agent ; FakeReveal le simule seulement pour lire l'historique. Les vocaux (E7) restent à trancher par Charles, avec le fil Vocaux.
+Le bot n'envoie **jamais de média libre** : seulement du texte (E1), des étapes de scripts natifs dont les bundles sont préparés à l'avance (E3) et des notes (E4, E4b). E2 (bundle composé à la volée) n'est pas utilisé par l'agent ; FakeReveal le simule seulement pour lire l'historique. Seule exception, tranchée par Charles (17/10, 18h25) : les vocaux générés dans la voix de la créatrice (E7), toujours en copilote (chaque vocal écouté et approuvé par un humain avant l'envoi), avec le prénom du fan et des fréquences bornées par le code (fiche du fil Vocaux, PR #18).
 
 Si Reveal ne permet pas de télécharger les originaux (L15), le repli est d'indexer les fichiers sources que l'agence possède déjà (ceux qu'elle a importés dans le Vault), avec une correspondance fichier ↔ étape de script faite à l'import.
 
