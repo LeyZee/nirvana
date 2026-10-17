@@ -13,6 +13,7 @@
     "lint": "eslint src",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "drift": "tsx scripts/check-drift.mjs",
     "generate": "drizzle-kit generate",
     "migrate": "tsx --env-file-if-exists=../../.env src/scripts/migrate.ts",
     "studio": "drizzle-kit studio"

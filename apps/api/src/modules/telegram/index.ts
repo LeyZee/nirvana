@@ -1,5 +1,6 @@
 /** Public entry point of the `telegram` module (ADR 0002, ADR 0020). Other modules import this file only. */
 import type { TelegramBotId, TelegramChatId } from '@nirvana/contracts';
+import { parseEncryptionKeys, type Database, type EncryptionKey } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import type { TelegramApi } from './application/api';
@@ -21,7 +22,9 @@ import {
 } from './application/settings';
 import type { BotsStore, Clock, DeliveriesStore, NotificationChannel } from './domain/ports';
 import type { ScannedEvent } from './domain/signals';
+import { createPostgresTelegramStore, type ResealReport } from './infra/postgres.store';
 import { createTelegramRoutes, type TelegramRoutesOptions } from './infra/routes';
+import { createTelegramApi } from './infra/telegram-api';
 
 export { SCANNED_EVENT_TYPES } from './domain/classify';
 
@@ -35,7 +38,7 @@ export interface TelegramDeps {
   /** An urgent alert no group can receive (ADR 0020 §12): the caller logs it as an error. */
   readonly onUncovered?: (event: ScannedEvent) => void;
   /** Re-seals the tokens with the newest key at start (rotation); absent in tests. */
-  readonly resealTokens?: () => Promise<number>;
+  readonly resealTokens?: () => Promise<ResealReport>;
 }
 
 /** The job handlers, one per `telegram.*` job (TELEGRAM_JOB_PAYLOADS); the worker wires them. */
@@ -51,8 +54,8 @@ interface TelegramJobs {
 export interface TelegramModule extends TelegramApi {
   readonly name: 'telegram';
   readonly jobs: TelegramJobs;
-  /** Re-seals tokens left on an older encryption key; call once at start-up. Returns how many were rewritten. */
-  readonly start: () => Promise<number>;
+  /** Re-seals tokens left on an older encryption key; call once at start-up. */
+  readonly start: () => Promise<ResealReport>;
   /** `/v1/settings/telegram`, behind the guards given here. */
   readonly routes: (options: TelegramRoutesOptions) => FastifyPluginAsyncZod;
 }
@@ -87,7 +90,44 @@ export function createTelegramModule(deps: TelegramDeps): TelegramModule {
       morningDigest: () => morningDigest(base),
       purge: () => purge(base),
     },
-    start: () => deps.resealTokens?.() ?? Promise.resolve(0),
+    start: () => deps.resealTokens?.() ?? Promise.resolve({ rewritten: 0, unreadable: [] }),
     routes: (options) => createTelegramRoutes(api, options),
   };
+}
+
+export interface TelegramStartOptions {
+  readonly adminDb: Database;
+  /** CREDENTIALS_ENCRYPTION_KEYS: the bot tokens are sealed with the AI service keys' encryption keys. */
+  readonly encryptionKeys: string;
+  readonly webOrigin: string;
+  readonly onUncovered: (event: ScannedEvent) => void;
+  /** Tokens no listed key opens, found at start: the caller logs them (the old key was dropped too early). */
+  readonly onUnreadableTokens: (bots: readonly string[]) => void;
+}
+
+/** Builds the module on Postgres and the Telegram Bot API, and re-seals the tokens of a past rotation. */
+export async function startTelegramModule(options: TelegramStartOptions): Promise<TelegramModule> {
+  const store = createPostgresTelegramStore({
+    adminDb: options.adminDb,
+    keys: parseEncryptionKeys(options.encryptionKeys),
+  });
+  const module = createTelegramModule({
+    bots: store.bots,
+    deliveries: store.deliveries,
+    channel: createTelegramApi({ fetch }),
+    webOrigin: options.webOrigin,
+    onUncovered: options.onUncovered,
+    resealTokens: store.resealTokens,
+  });
+  const report = await module.start();
+  if (report.unreadable.length > 0) options.onUnreadableTokens(report.unreadable);
+  return module;
+}
+
+/** `pnpm ops:reencrypt-credentials`: the bot tokens, next to the AI service keys (rotate-secrets.md). */
+export function resealTelegramTokens(
+  adminDb: Database,
+  keys: readonly EncryptionKey[],
+): Promise<ResealReport> {
+  return createPostgresTelegramStore({ adminDb, keys }).resealTokens();
 }

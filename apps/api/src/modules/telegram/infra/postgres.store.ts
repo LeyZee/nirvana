@@ -1,4 +1,5 @@
 import {
+  AuditEntryIdSchema,
   CreatorIdSchema,
   TelegramBotIdSchema,
   TelegramBotStateSchema,
@@ -141,6 +142,13 @@ async function enqueueFlushIn(
   );
 }
 
+export interface ResealReport {
+  /** Tokens re-sealed with the newest key. */
+  readonly rewritten: number;
+  /** Bots (`@username`) whose token no listed key opens: left as is, so an older key put back recovers them. */
+  readonly unreadable: readonly string[];
+}
+
 /**
  * The module's Postgres store (ADR 0020 §4, §5). Bot tokens are sealed with AES-256-GCM; a token that no longer
  * decrypts (an encryption key dropped too early) reads as `null`, its ciphertext untouched so that putting the old
@@ -149,8 +157,8 @@ async function enqueueFlushIn(
 export function createPostgresTelegramStore(deps: TelegramStoreDeps): {
   readonly bots: BotsStore;
   readonly deliveries: DeliveriesStore;
-  /** Re-seals every token with the newest key (rotation, rotate-secrets.md); returns how many were rewritten. */
-  readonly resealTokens: () => Promise<number>;
+  /** Re-seals every token with the newest key (rotation, rotate-secrets.md). */
+  readonly resealTokens: () => Promise<ResealReport>;
 } {
   const admin = <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> => withAdmin(deps.adminDb, fn);
 
@@ -608,23 +616,38 @@ export function createPostgresTelegramStore(deps: TelegramStoreDeps): {
     },
   };
 
-  async function resealTokens(): Promise<number> {
+  async function resealTokens(): Promise<ResealReport> {
     const current = deps.keys[0]?.version;
-    if (current === undefined) return 0;
+    if (current === undefined) return { rewritten: 0, unreadable: [] };
     return admin(async (tx) => {
       const rows = await tx
         .select()
         .from(bots)
-        .where(sql`${bots.keyVersion} <> ${current}`);
+        .where(sql`${bots.keyVersion} <> ${current}`)
+        .for('update');
       let rewritten = 0;
+      const unreadable: string[] = [];
       for (const row of rows) {
         const token = open(row);
         // Unreadable with every key given: left as is, so the old key can still be put back.
-        if (token === null) continue;
+        if (token === null) {
+          unreadable.push(`@${row.username}`);
+          continue;
+        }
         await tx.update(bots).set(seal(row.id, token)).where(eq(bots.id, row.id));
         rewritten += 1;
       }
-      return rewritten;
+      if (rewritten > 0 || unreadable.length > 0) {
+        await tx.insert(schema.auditLog).values({
+          id: newId(AuditEntryIdSchema),
+          userId: null,
+          action: 'telegram_token.reencrypted',
+          entity: 'telegram_bot',
+          entityId: null,
+          details: { keyVersion: current, rewritten, unreadable },
+        });
+      }
+      return { rewritten, unreadable };
     });
   }
 

@@ -16,6 +16,7 @@ import {
   type Auth,
   type RequireRole,
 } from './auth';
+import { publishBudgetThreshold } from './budget-events';
 import { secretOrNull, type Config } from './config';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import { createAppLlm } from './llm';
@@ -36,6 +37,7 @@ import { startProvidersModule, type ProvidersModule } from './modules/providers'
 import { createSalesModule, type SalesModule } from './modules/sales';
 import { createScriptsModule, type ScriptsModule } from './modules/scripts';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
+import { startTelegramModule, type TelegramModule } from './modules/telegram';
 import { checkReadiness, type Readiness } from './readiness';
 
 /** Every business module, wired. */
@@ -52,6 +54,8 @@ interface Modules {
   readonly providers: ProvidersModule;
   /** Null in the worker, or when its persona cannot be read: the API starts without the playground and says why. */
   readonly playground: PlaygroundModule | null;
+  /** Null without CREDENTIALS_ENCRYPTION_KEYS: a bot token is never kept unsealed (ADR 0020 §5). */
+  readonly telegram: TelegramModule | null;
 }
 
 /** What both entry points (API and worker) are built from. */
@@ -145,6 +149,22 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger.warn({ err: error }, 'AI service keys not loaded');
     },
   });
+  const credentialKeys = secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS);
+  const telegram =
+    credentialKeys === null
+      ? null
+      : await startTelegramModule({
+          adminDb: adminDb.db,
+          encryptionKeys: credentialKeys,
+          webOrigin: config.WEB_ORIGIN,
+          onUncovered: (event) => {
+            logger.error({ eventId: event.id }, 'urgent alert reaches no Telegram group');
+          },
+          onUnreadableTokens: (bots) => {
+            logger.error({ bots }, 'Telegram bot tokens unreadable with CREDENTIALS_ENCRYPTION_KEYS');
+          },
+        });
+  if (telegram === null) logger.warn('Telegram notifications off: CREDENTIALS_ENCRYPTION_KEYS is not set');
   const llmCalls = createDrizzleLlmCallStore(adminDb.db);
   // The day's calls of both processes, reloaded every 30 s: one daily cap for the API and the worker.
   const llmLog = await createPersistentCallLog(llmCalls, {
@@ -158,6 +178,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     log: llmLog,
     credentials: providers.apiKeySource,
     reportRefusedKey: (provider, kind) => providers.reportRefusedKey(provider, kind),
+    publishBudget: (crossing) => publishBudgetThreshold(adminDb.db, crossing),
     logger,
   });
   const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
@@ -222,7 +243,19 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     scripts: createScriptsModule(),
     providers,
     playground,
+    telegram,
   };
+
+  /** A Telegram job when the module is off: nothing to do, said once per run. */
+  const withTelegram =
+    (run: (module: TelegramModule) => Promise<unknown>) =>
+    async (_payload: unknown, context: { readonly logger: Logger }): Promise<void> => {
+      if (modules.telegram === null) {
+        context.logger.info('telegram: off, nothing to do');
+        return;
+      }
+      await run(modules.telegram);
+    };
 
   const tasks: TaskList = {
     'conversation.respond': defineTask(
@@ -267,6 +300,46 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         );
       },
     ),
+    'telegram.scan': defineTask(
+      'telegram.scan',
+      JOB_PAYLOADS['telegram.scan'],
+      logger,
+      withTelegram((module) => module.jobs.scan()),
+    ),
+    'telegram.flush_chat': defineTask(
+      'telegram.flush_chat',
+      JOB_PAYLOADS['telegram.flush_chat'],
+      logger,
+      (payload, context) => withTelegram((module) => module.jobs.flushChat(payload.chatId))(payload, context),
+    ),
+    'telegram.dispatch_polls': defineTask(
+      'telegram.dispatch_polls',
+      JOB_PAYLOADS['telegram.dispatch_polls'],
+      logger,
+      withTelegram((module) => module.jobs.dispatchPolls()),
+    ),
+    'telegram.poll_updates': defineTask(
+      'telegram.poll_updates',
+      JOB_PAYLOADS['telegram.poll_updates'],
+      logger,
+      (payload, context) =>
+        withTelegram((module) => module.jobs.pollUpdates(payload.botId, payload.waitSeconds))(
+          payload,
+          context,
+        ),
+    ),
+    'telegram.morning_digest': defineTask(
+      'telegram.morning_digest',
+      JOB_PAYLOADS['telegram.morning_digest'],
+      logger,
+      withTelegram((module) => module.jobs.morningDigest()),
+    ),
+    'telegram.purge': defineTask(
+      'telegram.purge',
+      JOB_PAYLOADS['telegram.purge'],
+      logger,
+      withTelegram((module) => module.jobs.purge()),
+    ),
   };
 
   return {
@@ -284,6 +357,9 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
       ...(playground === null ? [] : [playground.routes({ guard: requireRole('owner') })]),
+      ...(telegram === null
+        ? []
+        : [telegram.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) })]),
     ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),

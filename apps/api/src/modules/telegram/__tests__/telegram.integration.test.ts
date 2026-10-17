@@ -20,7 +20,7 @@ import { testConfig } from '../../../__tests__/support/config';
 import { createJobQueue, type JobQueue } from '../../../jobs';
 import { createLogger } from '../../../logger';
 import { buildServer } from '../../../server';
-import { createPostgresTelegramStore } from '../infra/postgres.store';
+import { createPostgresTelegramStore, type ResealReport } from '../infra/postgres.store';
 
 import { FAKE_TOKEN, FakeTelegram, OTHER_TOKEN, SAME_BOT_NEW_TOKEN, joined } from './support/fake-telegram';
 
@@ -41,7 +41,10 @@ describe('telegram module on Postgres', () => {
   let module: TelegramModule;
   let uncovered: string[];
 
-  function build(encryptionKeys = keys): { module: TelegramModule; resealTokens: () => Promise<number> } {
+  function build(encryptionKeys = keys): {
+    module: TelegramModule;
+    resealTokens: () => Promise<ResealReport>;
+  } {
     const store = createPostgresTelegramStore({
       adminDb: test.admin.db,
       keys: parseEncryptionKeys(encryptionKeys),
@@ -424,14 +427,16 @@ describe('telegram module on Postgres', () => {
     await module.addBot(FAKE_TOKEN);
     const next = keyOf('v2');
     const rotated = build(`${next},${keys}`);
-    expect(await rotated.resealTokens()).toBe(1);
-    expect(await rotated.resealTokens()).toBe(0);
+    expect(await rotated.resealTokens()).toEqual({ rewritten: 1, unreadable: [] });
+    expect(await rotated.resealTokens()).toEqual({ rewritten: 0, unreadable: [] });
     const [row] = await test.admin.db.select().from(schema.telegramBots);
     expect(row?.keyVersion).toBe('v2');
     // Only the new key now: the bot still reads.
     expect((await build(next).module.overview()).bots[0]?.state).toBe('active');
     // A key that never sealed it: the bot reads as to reconnect, nothing thrown.
     expect((await build(keyOf('v3')).module.overview()).bots[0]?.state).toBe('refused');
+    // And the rotation names it instead of passing over it, so the old key is not dropped too early.
+    expect(await build(keyOf('v3')).resealTokens()).toEqual({ rewritten: 0, unreadable: ['@demo_bot'] });
   });
 
   it('serves the settings to the owner only, a bot change after a fresh sign-in only', async () => {

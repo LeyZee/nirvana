@@ -14,6 +14,7 @@ Il faut pouvoir répondre à « pourquoi le bot a dit ça ? », rejouer l'histor
 - Les tables d'état (`conversations.state`, `drafts.status`, `fans.kyc_state`, etc.) sont des **projections** : pratiques pour les requêtes, reconstructibles depuis le journal (`pnpm db:rebuild-projections <conversation_id>`, outil livré en P0-05).
 - Un module tiers qui doit réagir (supervision, fans, sales) s'abonne aux événements via un job de distribution (outbox), pas par couplage direct.
 - Les événements ne contiennent pas de secrets ni de contenu média, seulement des identifiants et du texte de message.
+- **Lecture de l'outbox** (`domain_events`, ajouté le 17/10, revue à froid G10) : la table est append-only comme le journal ; personne n'y marque une ligne « traitée ». Chaque module consommateur garde **son propre curseur** dans sa propre table et relit une fenêtre derrière lui, parce qu'une transaction validée plus tard peut porter un `created_at` plus ancien que le curseur ; ce qu'il en tire est idempotent (clé unique par événement et destinataire). Un consommateur est réveillé par un déclencheur qui ne fait jamais échouer l'écriture de l'outbox et rattrapé par un job périodique. Premier consommateur : le module `telegram` (`telegram_state.scan_cursor`, déclencheur `domain_events_telegram_scan`, ADR 0020). Un lecteur générique (table de curseurs partagée) viendra avec le deuxième consommateur, pas avant.
 
 ## Conséquences
 

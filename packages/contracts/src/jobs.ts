@@ -8,6 +8,7 @@ import {
   MediaAssetIdSchema,
   PlatformAccountIdSchema,
 } from './ids';
+import { TELEGRAM_JOB_PAYLOADS } from './telegram';
 
 /**
  * Graphile Worker job names and payloads (ADR 0006). A job that touches a conversation runs on the serial queue
@@ -30,6 +31,12 @@ export const JOB_NAMES = [
   'fans.refresh_summary',
   'media.describe',
   'providers.check_credentials',
+  'telegram.scan',
+  'telegram.flush_chat',
+  'telegram.dispatch_polls',
+  'telegram.poll_updates',
+  'telegram.morning_digest',
+  'telegram.purge',
 ] as const;
 export const JobNameSchema = z.enum(JOB_NAMES);
 export type JobName = z.infer<typeof JobNameSchema>;
@@ -56,6 +63,7 @@ export const JOB_PAYLOADS = {
     correlationId: z.string().min(1),
   }),
   'providers.check_credentials': z.object({}),
+  ...TELEGRAM_JOB_PAYLOADS,
 } as const satisfies Record<JobName, z.ZodType>;
 
 export type JobPayload<J extends JobName> = z.infer<(typeof JOB_PAYLOADS)[J]>;
@@ -75,6 +83,14 @@ export const JOB_MAX_ATTEMPTS = {
   'fans.refresh_summary': 3,
   'media.describe': 3,
   'providers.check_credentials': 1,
+  // The scan is also enqueued by the `domain_events` trigger (0006) with 25, and a flush by the module with 10:
+  // a scan is idempotent (cursor) and a flush is Telegram's own pace, both cheap to retry.
+  'telegram.scan': 25,
+  'telegram.flush_chat': 10,
+  'telegram.dispatch_polls': 1,
+  'telegram.poll_updates': 1,
+  'telegram.morning_digest': 1,
+  'telegram.purge': 1,
 } as const satisfies Record<JobName, number>;
 
 /** Jobs debounced per conversation: a new one replaces the pending one (`jobKeyMode: 'replace'`). */

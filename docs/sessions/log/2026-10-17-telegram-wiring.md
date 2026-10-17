@@ -1,0 +1,7 @@
+# 2026-10-17 — Branchement du module Telegram — done
+Fait : les six jobs `telegram.*` entrent dans `JOB_NAMES` / `JOB_PAYLOADS` / `JOB_MAX_ATTEMPTS` ; `startTelegramModule` (index du module) ; composition root : module construit seulement avec `CREDENTIALS_ENCRYPTION_KEYS` (sinon tâches sans effet et un avertissement), routes `/v1/settings/telegram` (propriétaire, connexion récente pour les bots), une tâche par job ; crontab (scan et lectures chaque minute, bilan du matin chaque heure, purge à 3 h 30). `budget_threshold_crossed` est écrit dans l'outbox par la passerelle LLM (`publishBudgetThreshold`, rôle propriétaire, sans créatrice, une ligne par jour et seuil même avec l'API et le worker). `pnpm ops:reencrypt-credentials` rescelle aussi les jetons des bots et nomme ceux qu'aucune clé n'ouvre ; le démarrage les journalise en erreur. Contrôle d'écart schéma / migrations dans `pnpm check` et la CI (`packages/db/scripts/check-drift.mjs`, B4 de la revue à froid). ADR 0007 : garantie de lecture de l'outbox (G10).
+Pas fait : rien.
+Décisions : l'écart se mesure avec drizzle-kit/api (snapshot de la dernière migration contre le schéma) plutôt que `drizzle-kit check`, qui ne compare pas le schéma : la commande dit quelles instructions manquent. Le lecteur générique de l'outbox attend un deuxième consommateur.
+Découvertes : `conversation.follow_up`, `fans.refresh_summary` et `media.describe` n'ont pas encore de tâche dans le worker (personne ne les met en file aujourd'hui).
+Candidats à suppression : aucun.
+Vérifié : pnpm check ✓, pnpm test:all ✓.

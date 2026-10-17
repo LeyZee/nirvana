@@ -141,7 +141,7 @@ export const TelegramNightCountsSchema = z.object({
 });
 export type TelegramNightCounts = z.infer<typeof TelegramNightCountsSchema>;
 
-/** Jobs of the module (ADR 0006). Their names join `JOB_NAMES` when the worker runs them. */
+/** Jobs of the module (ADR 0006), part of `JOB_NAMES` and `JOB_PAYLOADS` (jobs.ts). */
 export const TELEGRAM_JOB_PAYLOADS = {
   'telegram.scan': z.object({}),
   'telegram.flush_chat': z.object({ chatId: TelegramChatIdSchema }),
