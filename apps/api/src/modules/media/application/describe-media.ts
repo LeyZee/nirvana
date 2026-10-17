@@ -46,7 +46,7 @@ export type SenseRequest =
       }>;
     };
 
-export interface SensedMedia {
+interface SensedMedia {
   readonly description: MediaDescription;
   /** Described by the fallback model: used for this message, not kept, so the next one asks the main model. */
   readonly isFallback: boolean;
