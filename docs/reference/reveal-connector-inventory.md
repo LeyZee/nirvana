@@ -88,11 +88,11 @@ Fenêtre « Envoyer des médias » : « Ajouter depuis le Vault » ou « Importe
 Dans Reveal, un PPV s'appelle un **bundle**. Fenêtre « Ajouter un bundle » :
 
 - **Prix TTC** ; la TVA est calculée selon la localisation du fan. **0 = offert** : le fan le voit sans payer.
-- **Tarif réduit TTC** (interrupteur) : prix barré ou remise. Utile pour la règle de remise (question à Charles).
+- **Tarif réduit TTC** (interrupteur) : prix barré. L'agent ne l'utilise pas : Charles a tranché « jamais de négociation ni de remise » (17/10, `chatting/methode-chatting.md` du dossier partagé).
 - **Contenu vendu** : médias **floutés tant que le fan n'a pas payé**, depuis le Vault ou importés. **Au moins un média, sinon l'envoi est refusé.**
 - **Aperçu gratuit (teasing)** : optionnel, **10 médias au plus**, affichés non floutés dans un carrousel tant que le bundle n'est pas acheté. Ne jamais y mettre le contenu vendu.
 
-Conséquences pour le port : `OutboundMedia` doit porter `priceCents` (TTC, devise EUR), `discountedPriceCents?`, `lockedMediaRefs` (≥ 1) et `teaserMediaRefs` (≤ 10). Les gardes en code vérifient ces bornes avant l'envoi (règle 3 de CLAUDE.md).
+Conséquences pour le port : `OutboundMedia` doit porter `priceCents` (TTC, devise EUR), `lockedMediaRefs` (≥ 1) et `teaserMediaRefs` (≤ 10). Les gardes en code vérifient ces bornes avant l'envoi (règle 3 de CLAUDE.md).
 
 ### Scripts (L8, L9, E3)
 
