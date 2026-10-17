@@ -15,6 +15,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "playground": "tsx --env-file-if-exists=../../.env src/scripts/playground.ts",
     "owner:create": "tsx --env-file-if-exists=../../.env src/scripts/create-owner.ts",
+    "creator:create": "tsx --env-file-if-exists=../../.env src/scripts/create-creator.ts",
     "rebuild-projections": "tsx --env-file-if-exists=../../.env src/scripts/rebuild-projections.ts",
     "ops:kill-switch": "tsx --env-file-if-exists=../../.env src/scripts/ops-kill-switch.ts",
     "ops:revoke-sessions": "tsx --env-file-if-exists=../../.env src/scripts/ops-revoke-sessions.ts",

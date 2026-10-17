@@ -47,6 +47,16 @@ Pour essayer le dashboard sur son PC (Windows, macOS ou Linux), avec une base Po
    pnpm owner:create --email charles@example.com --name Charles
    ```
 
+6. Créer la créatrice (une créatrice, une persona) : ses conversations s'y rattachent et l'écran Suivi la liste.
+
+   ```powershell
+   pnpm creator:create --name "<nom affiché>"
+   ```
+
+   Le fuseau vaut `Europe/Paris` par défaut (`--timezone` pour un autre).
+
+Les hooks git installés par `pnpm install` relisent `lefthook.yml` à chaque commit et à chaque push : une mise à jour du dépôt suffit pour qu'ils changent. Un `git push` vers `main` doit répondre « Push direct sur main refusé ». S'il n'affiche aucun hook, relancer `pnpm install`.
+
 ## À chaque fois
 
 ```powershell
