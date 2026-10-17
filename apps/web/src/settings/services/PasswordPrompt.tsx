@@ -10,9 +10,16 @@ const MESSAGES = {
 
 /**
  * Asks for the password again before a key is connected, replaced or removed (ADR 0016: the sign-in is more than
- * 10 minutes old). Confirmed, it signs in afresh and lets the caller run its action again.
+ * 10 minutes old). Confirmed, it signs in afresh and lets the caller run its action again; « Annuler » or Escape
+ * gives up the action.
  */
-export function PasswordPrompt({ onConfirmed }: { onConfirmed: () => void }): JSX.Element {
+export function PasswordPrompt({
+  onConfirmed,
+  onCancel,
+}: {
+  onConfirmed: () => void;
+  onCancel: () => void;
+}): JSX.Element {
   const input = useRef<HTMLInputElement>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +42,15 @@ export function PasswordPrompt({ onConfirmed }: { onConfirmed: () => void }): JS
   }
 
   return (
-    <div className="sv-reauth">
+    <div
+      className="sv-reauth"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        // Handled here so that Escape leaves the prompt only, not the sheet around it.
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
       <p className="sv-muted">Pour toucher à une clé, confirme ton mot de passe.</p>
       <form
         className="sv-key"
@@ -56,6 +71,14 @@ export function PasswordPrompt({ onConfirmed }: { onConfirmed: () => void }): JS
         />
         <button type="submit" className="nv-btn nv-btn--soft nv-btn--sm" disabled={isBusy}>
           Confirmer
+        </button>
+        <button
+          type="button"
+          className="nv-btn nv-btn--plain nv-btn--sm"
+          disabled={isBusy}
+          onClick={onCancel}
+        >
+          Annuler
         </button>
       </form>
       <p

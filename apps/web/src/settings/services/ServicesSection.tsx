@@ -239,6 +239,9 @@ export function ServicesSection(): JSX.Element {
                       setReauthFor(null);
                       remove(provider);
                     }}
+                    onCancel={() => {
+                      setReauthFor(null);
+                    }}
                   />
                 </div>
               ) : null}

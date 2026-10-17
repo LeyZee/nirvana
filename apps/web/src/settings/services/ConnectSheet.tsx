@@ -315,6 +315,9 @@ export function ConnectSheet({
                 onConfirmed={() => {
                   void submit(phase.key);
                 }}
+                onCancel={() => {
+                  setPhase({ kind: 'edit', error: null });
+                }}
               />
             </div>
           ) : hasOpenedConsole ? (
