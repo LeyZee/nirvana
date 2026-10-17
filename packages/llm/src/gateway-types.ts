@@ -52,6 +52,8 @@ export interface VideoKeyframes {
 
 /** Ties a call to what it was for, so the journal can sum the cost per conversation. */
 export interface CallTrace {
+  /** The creator whose fan the call answers; none for the playground. */
+  readonly creatorId?: string;
   readonly conversationId?: string;
   readonly draftId?: string;
 }
