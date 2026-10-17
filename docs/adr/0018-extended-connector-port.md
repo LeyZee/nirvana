@@ -40,9 +40,9 @@ Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès q
 
    La traduction depuis les formes de la plateforme reste dans l'infra de chaque adaptateur, avec ses propres schémas Zod.
 
-3. **Garde d'écriture** : `ConnectorConfigSchema` reçoit `writes: boolean`, `false` par défaut. Tant qu'elle vaut `false`, le module `connectors` refuse toute écriture avant l'appel réseau. Le refus est un échec permanent (`send_failed`, sans nouvel essai). Le `FakeConnector` des tests et de l'e2e passe `writes: true` explicitement. Seul Charles active l'écriture d'un compte réel.
+3. **Garde d'écriture** : `ConnectorConfigSchema` reçoit `writes: boolean`, `false` par défaut. Tant qu'elle vaut `false`, le module `connectors` refuse toute écriture avant l'appel réseau. Le refus est un échec définitif (`SendRefused` « connector_writes_disabled », sans nouvel essai). Le `FakeConnector` des tests et de l'e2e passe `writes: true` explicitement. Seul Charles active l'écriture d'un compte réel.
 
-   La garde est livrée par P0-07b (fil Bilan) pour les envois existants. Les nouvelles écritures de cette ADR (`sendScriptStep`, `setFanNote`) passent par la même garde. Elle s'ajoute au kill switch, elle ne le remplace pas.
+   La garde est livrée par P0-07b (#40, `application/outbound-sender.ts`) pour les envois existants. Les nouvelles écritures de cette ADR (`sendScriptStep`, `setFanNote`) passent par la même garde. Elle s'ajoute au kill switch, elle ne le remplace pas.
 
 4. Les **adaptateurs existants** déclarent les nouveaux drapeaux à `false` (`FakeConnector` compris) ; le cœur teste le drapeau avant d'appeler la méthode, jamais l'existence de la méthode seule.
 
