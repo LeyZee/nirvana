@@ -59,9 +59,9 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     service: 'Mistral',
     vendor: 'Mistral',
     role: 'Prend le relais si Grok ne répond plus',
-    withoutIt: 'Optionnel. Sans lui, pas de repli pour l’écriture',
-    revoked: 'Mistral refuse la clé. Plus de repli pour l’écriture.',
-    whileRefused: 'Plus de repli pour l’écriture.',
+    withoutIt: 'Recommandé. Sans lui, si Grok tombe, l’agent ne répond plus',
+    revoked: 'Mistral refuse la clé. Plus de relais si Grok tombe.',
+    whileRefused: 'Plus de relais si Grok tombe.',
     keyPrefix: null,
     isRequired: false,
   },
@@ -78,8 +78,11 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
   },
 ];
 
-/** The services the Services section shows today; Mistral and Venice join when they are switched on (P3-03). */
-export const DASHBOARD_PROVIDERS: readonly AiProvider[] = ['xai', 'google', 'elevenlabs'];
+/**
+ * The services the Services section shows, in reading order. Mistral is the writing fallback (packages/llm config);
+ * Venice joins when a role uses it.
+ */
+export const DASHBOARD_PROVIDERS: readonly AiProvider[] = ['xai', 'google', 'mistral', 'elevenlabs'];
 
 export function profileOf(provider: AiProvider): ProviderProfile {
   const profile = PROVIDER_PROFILES.find((p) => p.provider === provider);

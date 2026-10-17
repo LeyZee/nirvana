@@ -18,6 +18,7 @@ import {
   eq,
   keyVersionOf,
   schema,
+  sql,
   withAdmin,
   type Database,
   type EncryptionKey,
@@ -33,8 +34,8 @@ type Row = typeof table.$inferSelect;
 const NOBODY: KeyActor = { userId: null, ip: null };
 
 /**
- * Enough to tell two keys apart in `audit_log` (« la clé a changé »), and to match it against the end of a key the
- * provider's console shows: 8 hex characters of its SHA-256, which give nothing usable about the key itself.
+ * Enough to tell two keys apart in `audit_log` (« la clé a changé le 17 à 22 h, puis le 18 ») without keeping anything
+ * usable about either: 8 hex characters of its SHA-256.
  */
 export function keyFingerprint(key: string): string {
   return createHash('sha256').update(key).digest('hex').slice(0, 8);
@@ -57,7 +58,7 @@ export interface PostgresStoreDeps {
   readonly adminDb: Database;
   /** CREDENTIALS_ENCRYPTION_KEYS, newest first. */
   readonly keys: readonly EncryptionKey[];
-  /** A saved key no listed encryption key opens; called once per service and process, for the log. */
+  /** A saved key no listed encryption key opens, for the log: once each time a service becomes unreadable. */
   readonly onUnreadable?: (provider: AiProvider) => void;
 }
 
@@ -127,20 +128,17 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
         updatedAt: new Date(),
       };
       await withAdmin(deps.adminDb, async (tx) => {
-        const existing = await tx
-          .select({ provider: table.provider })
-          .from(table)
-          .where(eq(table.provider, credential.provider))
-          .for('update');
-        await tx
+        // `xmax = 0` only on a row this statement inserted: connected or replaced, decided by the write itself.
+        const [written] = await tx
           .insert(table)
           .values({ provider: credential.provider, ...values })
-          .onConflictDoUpdate({ target: table.provider, set: values });
+          .onConflictDoUpdate({ target: table.provider, set: values })
+          .returning({ isNew: sql<boolean>`(xmax = 0)` });
         await tx.insert(schema.auditLog).values({
           id: newId(AuditEntryIdSchema),
           userId: by.userId,
           ip: by.ip,
-          action: existing.length === 0 ? 'provider_key.connected' : 'provider_key.replaced',
+          action: written?.isNew === false ? 'provider_key.replaced' : 'provider_key.connected',
           entity: 'provider_credential',
           entityId: credential.provider,
           details: { provider: credential.provider, fingerprint: keyFingerprint(credential.key) },

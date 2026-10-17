@@ -75,13 +75,18 @@ describe('/v1/settings/providers', () => {
     ).toBe(200);
   });
 
-  it('lists the three services, Grok first, and says what to do next', async () => {
+  it('lists the four services, Grok first, and says what to do next', async () => {
     const { app, headers } = await server();
     const response = await app.inject({ method: 'GET', url: '/v1/settings/providers', headers });
     expect(response.statusCode).toBe(200);
     const body: unknown = response.json();
     expect(body).toMatchObject({
-      services: [{ provider: 'xai' }, { provider: 'google' }, { provider: 'elevenlabs' }],
+      services: [
+        { provider: 'xai' },
+        { provider: 'google' },
+        { provider: 'mistral' },
+        { provider: 'elevenlabs' },
+      ],
       next: { kind: 'connect', provider: 'xai' },
     });
   });

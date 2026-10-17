@@ -20,6 +20,7 @@ import { createElevenLabsVerifier } from './infra/elevenlabs.verifier';
 import { createGoogleVerifier } from './infra/google.verifier';
 import type { FetchLike } from './infra/http';
 import { createMemoryCredentialStore } from './infra/memory.store';
+import { createMistralVerifier } from './infra/mistral.verifier';
 import { createPostgresCredentialStore } from './infra/postgres.store';
 import { createProvidersRoutes, type ProvidersRoutesOptions } from './infra/routes';
 import { createXaiVerifier } from './infra/xai.verifier';
@@ -68,6 +69,7 @@ export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
       createXaiVerifier({ fetch: deps.fetch }),
       createGoogleVerifier({ fetch: deps.fetch, compareWith: 'gemini-4-argon' }),
       createElevenLabsVerifier({ fetch: deps.fetch }),
+      createMistralVerifier({ fetch: deps.fetch }),
     ],
     onChange: async (provider) => {
       await cache.reload();

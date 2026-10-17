@@ -229,9 +229,15 @@ export async function updateProviderSettings(
   for (let attempt = 0; attempt < UPDATE_ATTEMPTS; attempt += 1) {
     const stored = await deps.store.find(provider);
     if (stored === null) throw new ProviderNotConnected(provider);
-    const voice = settings.voice;
-    if (voice !== undefined && !stored.voices.some((v) => v.id === voice.id)) throw new VoiceNotOnAccount();
-    const merged = ProviderSettingsSchema.parse({ ...stored.settings, ...settings });
+    // The name shown on the line is the account's, never the one the request carries.
+    const voice =
+      settings.voice === undefined ? undefined : stored.voices.find((v) => v.id === settings.voice?.id);
+    if (settings.voice !== undefined && voice === undefined) throw new VoiceNotOnAccount();
+    const merged = ProviderSettingsSchema.parse({
+      ...stored.settings,
+      ...settings,
+      ...(voice === undefined ? {} : { voice }),
+    });
     // The line names the voice: picking another one rewrites it at once, not at the next check.
     const voiceLine =
       voice === undefined || stored.charactersLeft === null
@@ -249,7 +255,8 @@ export async function updateProviderSettings(
 /** The line of a saved key. */
 function savedStatus(deps: ConnectionsDeps, provider: AiProvider, stored: StoredCredential): ProviderStatus {
   const status = toStatus(provider, stored, 'dashboard');
-  if (deps.keepsKeysInMemory !== true) return status;
+  // Only on a working line: a red or amber one already says what to do, and leads the next action.
+  if (deps.keepsKeysInMemory !== true || stored.state !== 'connected') return status;
   return { ...status, message: `${status.message} · gardée en mémoire jusqu’au redémarrage` };
 }
 

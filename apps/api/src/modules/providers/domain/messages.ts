@@ -37,7 +37,9 @@ export function describeRefusal(
     case 'unauthorized':
       return `${vendor} ne reconnaît pas cette clé. Vérifie qu’elle est copiée en entier.`;
     case 'model_not_allowed':
-      return `Cette clé n’a pas accès à Grok 4.7. Dans la console ${vendor}, ajoute grok-4.7 à ses modèles.`;
+      return provider === 'mistral'
+        ? 'Cette clé ne voit pas Mistral Large. Vérifie l’offre du workspace dans la console Mistral.'
+        : `Cette clé n’a pas accès à Grok 4.7. Dans la console ${vendor}, ajoute grok-4.7 à ses modèles.`;
     case 'no_credit':
       return `Le compte ${vendor} n’a plus de crédit. Recharge-le, puis réessaie.`;
     case 'api_not_enabled':
