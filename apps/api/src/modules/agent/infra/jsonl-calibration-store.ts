@@ -1,20 +1,13 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { MediaDescriptionSchema } from '@nirvana/contracts';
+import { DestinationSchema, MediaDescriptionSchema, VerdictSchema } from '@nirvana/contracts';
 import { BriefSchema } from '@nirvana/llm';
 import { z } from 'zod';
 
-import { REJECT_REASONS } from '../domain/calibration';
 import { isTimeZone } from '../domain/situation';
 
 import type { CalibrationRecord, CalibrationStore } from './calibration-record';
-
-const VerdictSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('validated') }),
-  z.object({ kind: z.literal('corrected'), text: z.string().min(1) }),
-  z.object({ kind: z.literal('rejected'), reason: z.enum(REJECT_REASONS), note: z.string().exactOptional() }),
-]);
 
 const TurnSchema = z.object({
   from: z.enum(['fan', 'creator']),
@@ -30,7 +23,7 @@ const RecordSchema = z.object({
   at: z.string().min(1),
   version: z.object({ voicePrompt: z.string(), voiceModel: z.string() }),
   verdict: VerdictSchema,
-  destination: z.enum(['voice_example', 'rule', 'test']).exactOptional(),
+  destination: DestinationSchema.exactOptional(),
   fanMessage: z.string(),
   bubbles: z.array(z.string()),
   moment: z.object({
