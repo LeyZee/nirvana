@@ -25,6 +25,7 @@ Le métier (Charles, 17/10) : le fan vient chercher une relation. L'agent fait d
 | L11 | Notes du modèle (panneau de droite d'une conversation) | `getCreatorNotes?()` (nouveau) | C'est la fiche persona de Messalina vue par Reveal (Charles, 17/10) : la garder alignée sur la persona versionnée | Lecture, format, si elles sont par compte ou par conversation |
 | L12 | Statistiques du fan (panneau de droite) | `getFanProfile?()` | Priorité, rythme de vente, fans à ménager | Chaque statistique affichée et l'appel qui la fournit |
 | L13 | Onglet PPV d'une conversation : PPV envoyés, achetés, prix, statistiques de vente | `getFanPpvStats?()` (nouveau) | Charles : « l'agent doit en avoir conscience absolument » ; prix à proposer, taux d'achat, ce qui a déjà été vendu | Appels de l'onglet PPV, champs, période couverte |
+| L14 | Fichiers des médias : reçus d'un fan, et ceux des bundles envoyés | `fetchMedia?()` (nouveau) | Charles (17/10) : l'agent doit **voir** les photos et vidéos que le fan envoie et celles des bundles, pas seulement leurs métadonnées (rôle Vision) | URL du fichier (signée ou non), durée de validité, en-têtes nécessaires, format, taille, miniature ou original, vidéo en flux ou en fichier |
 
 ## Écriture
 
@@ -46,7 +47,7 @@ Le connecteur n'appelle aucun endpoint qui supprime, rembourse, bloque un fan, e
 
 ## Effets sur le port
 
-L5, L7 à L13, E3, E4 et E4b n'existent pas dans le port décrit par `docs/architecture/connectors.md`. Ce sont des méthodes **optionnelles**, annoncées par `capabilities` (`fanProfile`, `fanNotes`, `creatorNotes`, `ppvStats`, `platformScripts`, `vault`) : OnlyFans n'a pas de scripts natifs, notre plateforme les aura en interne, et le cœur s'adapte à ce que le connecteur déclare (ADR 0003). La forme exacte se fixe après la capture, dans la fiche proposée `docs/sessions/tasks/PROPOSED-reveal-connector.md`. Si le changement de contrat touche plusieurs modules, la session écrit une ADR `proposed`.
+L5, L7 à L14, E3, E4 et E4b n'existent pas dans le port décrit par `docs/architecture/connectors.md`. Ce sont des méthodes **optionnelles**, annoncées par `capabilities` (`fanProfile`, `fanNotes`, `creatorNotes`, `ppvStats`, `platformScripts`, `vault`) : OnlyFans n'a pas de scripts natifs, notre plateforme les aura en interne, et le cœur s'adapte à ce que le connecteur déclare (ADR 0003). La forme exacte se fixe après la capture, dans la fiche proposée `docs/sessions/tasks/PROPOSED-reveal-connector.md`. Si le changement de contrat touche plusieurs modules, la session écrit une ADR `proposed`.
 
 ## Questions ajoutées aux 10 de `connectors.md`
 

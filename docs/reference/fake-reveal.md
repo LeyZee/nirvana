@@ -45,6 +45,7 @@ Fixtures de départ (`fixtures/default.json`) : 1 créatrice, 12 fans dont 3 pay
 | L8 | Liste et contenu des scripts, dossiers |
 | L9, E3 | Trace des étapes envoyées par fan ; si Reveal n'en expose pas, FakeReveal non plus, et le test vérifie que l'agent s'appuie sur son propre journal |
 | L10 | Coffre paginé |
+| L14 | Sert de vrais fichiers de test (image et vidéo minuscules, générées) derrière des URL signées qui expirent ; une URL expirée répond comme Reveal |
 | E1, E2 | Envoi : nouvel identifiant, message visible à la relecture ; bornes de prix (rejet hors bornes, code observé) ; bundle refusé sans média vendu ou avec plus de 10 médias d'aperçu ; `%NAME%` remplacé par le prénom du membre |
 | E5 | Un envoi rejoué avec le même nonce ne crée pas de doublon si Reveal le garantit ; sinon le doublon apparaît et `verifySent` doit l'éviter en amont |
 | E6 | Accepte `markRead` et la frappe, remet `unreadCount` à zéro |

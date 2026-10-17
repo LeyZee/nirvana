@@ -34,6 +34,7 @@ Fais les étapes dans l'ordre, sans te presser : chaque clic produit les requêt
 | 9 | Ouvre la page des ventes ou statistiques, puis un relevé détaillé | L6 ventes |
 | 10 | ✉ Depuis ton téléphone, avec le fan test, écris à Messalina. Garde la conversation ouverte sur le PC et attends que le message arrive | L4 temps réel |
 | 11 | ✉ Dans la conversation du fan test : envoie un texte, puis un PPV (un média du coffre, 5 $), puis une étape d'un script | E1, E2, E3 |
+| 11b | ✉ Avec le fan test, envoie à Messalina une photo puis une courte vidéo. Sur le PC, ouvre-les en grand et lance la vidéo. Ouvre aussi en grand un média du bundle envoyé | L14 fichiers des médias |
 | 12 | ✉ Rouvre le sélecteur de scripts du fan test : l'étape envoyée est-elle marquée ? | L9, E3 |
 | 13 | ✉ Écris une ligne dans la note client du fan test, enregistre | E4 |
 | 14 | ✉ Avec le fan test, achète le PPV si c'est possible sans frais excessifs, sinon passe | L6, L4 achat |
