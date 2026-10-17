@@ -49,5 +49,6 @@ Branche : task/<id>-<slug>
 | P6-01 | Catalogue tarifé : index des scripts Reveal, de leurs étapes et de leurs bundles | 6 | todo | P3-02, P1-02, P1-03 |
 | P3-04 | Vision des médias et protection contre les pièges | 3 | in_progress | P3-01 |
 | P3-05 | Boucle de calibrage dans le playground | 3 | in_progress | P3-04 |
+| P3-07 | Notifications Telegram : bots, groupes, routage, page Réglages › Telegram | 3 | in_progress | P0-05, P0-07b, P3-03 |
 | H-01 | Première session d'hygiène | 0 | todo | P0-07b |
 | D-01 | Design system « Liquid Glass » | 4 | in_progress | P0-01 |
