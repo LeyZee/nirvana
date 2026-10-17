@@ -16,6 +16,7 @@ Ce qu'on protège, par ordre d'importance : (1) les médias et conversations int
 - Un secret par usage, par environnement (dev / staging / prod). Une clé LLM par rôle et par environnement, avec plafond de dépense côté fournisseur.
 - Rotation : procédure dans `docs/runbooks/rotate-secrets.md`. Toute suspicion de fuite = rotation immédiate, pas d'enquête avant.
 - Les **sessions plateforme** (cookies/jetons Reveal) sont chiffrées en base (AES-256-GCM, clé hors base, dans l'env chiffré de Coolify), déchiffrées uniquement dans le processus connecteur, jamais renvoyées par l'API, jamais loguées (redaction pino sur `session`, `cookie`, `token`, `authorization`).
+- Les **clés des fournisseurs IA** suivent la même règle : saisies dans le dashboard, chiffrées en base avec `CREDENTIALS_ENCRYPTION_KEYS`, jamais renvoyées par l'API ni loguées (ADR 0016).
 - 2FA obligatoire sur GitHub, Hetzner, Cloudflare, Neon, fournisseurs LLM, Reveal.
 
 ## 3. Données
