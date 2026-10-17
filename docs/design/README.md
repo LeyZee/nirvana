@@ -2,6 +2,20 @@
 
 Dernière revue : 2026-10-17. Fiche : D-01. Code : `packages/design-system` (ADR 0015, proposed).
 
+## En images
+
+Rendus du package lui-même (`tokens.css`, `components.css`, polices du design system) dans Chromium, à 2×, mouvement réduit ; textes fictifs. Ce ne sont pas des captures de l'application, qui n'existe pas encore. Si une image et le CSS divergent, le CSS a raison et l'image est à refaire.
+
+![Composants, thème Nuit](images/composants-nuit.jpg)
+
+![Composants, thème Jour](images/composants-jour.jpg)
+
+![Palette des thèmes Nuit et Jour](images/palette.jpg)
+
+![Typographie](images/typographie.jpg)
+
+![Logo et déclinaisons](images/marque.png)
+
 ## Décisions de Charles (2026-10-16)
 
 Réponses aux questions ouvertes de `brief.md` :
@@ -144,4 +158,4 @@ Le popup (capture de session, enregistreur) importe `@nirvana/design-system/styl
 
 ## Ce qui reste (fiche D-01)
 
-Bloqué par P0-01 (apps non initialisées) : restylage des composants shadcn/ui, page `_playground.tsx`, test axe-core en CI, auto-hébergement des polices si la politique réseau du dashboard l'exige.
+Débloqué depuis P0-01 (#14, `apps/web` et `apps/extension` initialisées), pas encore fait : restylage des composants shadcn/ui, page `_playground.tsx`, test axe-core en CI, `brand/favicon.svg` dans `public/` des apps, auto-hébergement des polices si la politique réseau du dashboard l'exige.
