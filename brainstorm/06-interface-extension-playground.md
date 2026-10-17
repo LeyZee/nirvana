@@ -86,7 +86,7 @@ La façon propre de l'obtenir dans notre architecture : le playground est une **
 
 ### Ce qu'on peut y faire (maquette v2)
 
-Le playground est un onglet de la section **Entraîner** du dashboard (prototype v3), à côté de **Corrections** et **Tests** ; la barre de navigation compte cinq entrées courtes : Inbox, Fans, Entraîner, Suivi, Réglages. Une pastille « Bac à sable : rien ne part vers un fan » reste visible en tête de section.
+Le playground est un onglet de la section **Entraîner** du dashboard (prototype v3), à côté de **Corrections** et **Tests** ; la barre de navigation compte quatre entrées (prototype v4, décision de Charles le 17/10) : Dashboard, Entraîner, Suivi, Réglages. Pas d'Inbox ni de page Fans dans Nirvana : la validation en copilote se fait dans Reveal, par l'extension. Une pastille « Bac à sable : rien ne part vers un fan » reste visible en tête de section.
 
 Colonne de gauche, la partie, de la décision la plus fréquente à la plus rare :
 
@@ -96,7 +96,7 @@ Colonne de gauche, la partie, de la décision la plus fréquente à la plus rare
 - **Ce que l'agent sait de lui** (mémoire, éditable) : on peut démarrer avec un fan qui a déjà dépensé 200 €. Ce qui manque est écrit « inconnue », pas laissé vide.
 - Plus tard : catalogue fictif (P6), dépôt d'une image pour tester le rôle sens.
 
-Au centre, la conversation, la proposition en pointillés néon (`nv-bubble--draft`), et sous elle une seule question : **« Elle aurait dit ça ? »** avec trois réponses au clavier, **les mêmes touches que dans l'Inbox** : **C'est elle** (A), **Corriger** (E), **Rejeter** (R, qui régénère et garde le rejet). « Corriger » ouvre un panneau à la place du champ de saisie : une ou plusieurs raisons (pas son style, trop robot, trop direct, fait faux, répète, trop tôt pour vendre, occasion de vente ratée, aurait dû passer la main), ce qu'elle aurait écrit, et **ce que devient la leçon** : test (rejoué à chaque version), exemple de voix (proposé pour la persona, validé par Messa) ou règle à coder (part dans les fiches). On peut aussi revenir à n'importe quel tour et repartir de là (branche).
+Au centre, la conversation, la proposition en pointillés néon (`nv-bubble--draft`), et sous elle une seule question : **« Elle aurait dit ça ? »** avec trois réponses au clavier, **les mêmes touches qu'en copilote** : **C'est elle** (A), **Corriger** (E), **Rejeter** (R, qui régénère et garde le rejet). « Corriger » ouvre un panneau à la place du champ de saisie : une ou plusieurs raisons (pas son style, trop robot, trop direct, fait faux, répète, trop tôt pour vendre, occasion de vente ratée, aurait dû passer la main), ce qu'elle aurait écrit, et **ce que devient la leçon** : test (rejoué à chaque version), exemple de voix (proposé pour la persona, validé par Messa) ou règle à coder (part dans les fiches). On peut aussi revenir à n'importe quel tour et repartir de là (branche).
 
 À droite, **pourquoi cette réponse**, dans l'ordre où on le lit : un verdict en tête (« Toutes les règles passent », ou la règle qui a bloqué), puis ce que l'agent a compris (intention, ton, action, brief en une phrase), les règles appliquées écrites en français (avec le nom technique au survol), la relecture avant envoi (gardes, réécritures), et les détails techniques (hash des prompts, coût, latence) en dernier. C'est ce panneau qui transforme « elle a dit un truc bizarre » en « l'agent a mal lu l'intention » ou « la voix a ignoré le brief ».
 
@@ -106,10 +106,11 @@ Prototype cliquable : https://claude.ai/artifact/TZjCUAPFhxN4pJn978A9zz (animati
 
 Ajouté, parce que chaque correction doit aboutir quelque part :
 
-- **Corrections** : la banque de toutes les corrections (playground et Inbox), filtrable, avec qui a corrigé (Charles ou Messa), ce qu'elle devient et son état (à traiter, dans la persona, fiche ouverte, test réussi).
+- **Corrections** : la banque de toutes les corrections (playground et copilote), filtrable, avec qui a corrigé (Charles ou Messa), ce qu'elle devient et son état (à traiter, dans la persona, fiche ouverte, test réussi).
 - **Tests** : rejouer toute la suite sur une persona brouillon avant de la passer en ligne, score par famille, historique par version (« v0.4.0 : +2 réussis, 0 régression ») ; le test à l'aveugle de Messa y vit aussi.
 - **Comparer** : deux propositions côte à côte dans la même conversation, on clique la meilleure.
-- **Inbox** : la même barre « Elle aurait dit ça ? » que le playground, pour que la production nourrisse l'entraînement ; note libre par fan lue par l'agent ; un fan à risque apparaît « Pour toi » sans proposition.
+- **Copilote** : la même barre « Elle aurait dit ça ? » que le playground, posée dans Reveal par l'extension, pour que la production nourrisse l'entraînement. Le panneau latéral (question 5) devient donc nécessaire, pas optionnel.
+- **Dashboard** (v4, inspiré du tableau de bord Reveal) : revenu net, part vendue par l'agent, ventes, nouveaux abonnés, projection, panier moyen, offres acceptées, temps de réponse ; revenu par jour comparé à la période précédente, répartition par type de revenu, ventes par heure, fans qui rapportent le plus avec la part agent ou humain. Ces chiffres supposent les sources de revenus encore absentes du modèle de données (manques métier, en pause).
 - **Suivi** : « Envoyées sans retouche » en premier, c'est la mesure de l'entraînement ; le mode automatique reste grisé tant qu'elle n'atteint pas 80 %.
 
 Retiré, parce que rien ne s'en décidait : les chiffres du jour dans le popup (ventes, conversations actives) et le bloc « Détails techniques » du panneau pourquoi, réduit à une ligne de versions et un lien vers le message complet envoyé au modèle.
