@@ -199,7 +199,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     ]);
   });
 
-  it('goes back to idle when there is nothing to say, or when the engine fails', async () => {
+  it('goes back to idle when there is nothing to say', async () => {
     const quiet = await fanWrites('c-quiet', 'Ok bonne nuit');
     composer.next = { kind: 'held', reason: 'no_reply', detail: [], costUsd: 0 };
     await respond(quiet);
@@ -208,12 +208,30 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       type: 'reply_skipped',
       payload: { reason: 'no_reply', detail: [] },
     });
+  });
 
+  it('hands the conversation to a human when no model answers, thrown or held', async () => {
     const broken = await fanWrites('c-broken', 'Hello');
     composer.next = new Error('provider down');
     await respond(broken);
-    expect(await state(broken)).toBe('idle');
-    expect((await events(broken)).at(-1)?.payload).toEqual({ reason: 'llm_unavailable', detail: [] });
+    expect(await state(broken)).toBe('human');
+    expect((await events(broken)).at(-1)).toEqual({
+      type: 'handoff_requested',
+      payload: { conversationId: broken, cause: 'llm_unavailable', reason: 'llm_unavailable' },
+    });
+
+    const keyless = await fanWrites('c-keyless', 'Hello');
+    composer.next = { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
+    await respond(keyless);
+    expect(await state(keyless)).toBe('human');
+    expect((await events(keyless)).at(-1)).toEqual({
+      type: 'handoff_requested',
+      payload: {
+        conversationId: keyless,
+        cause: 'llm_unavailable',
+        reason: 'llm_unavailable : no voice key',
+      },
+    });
   });
 
   it('drops the result when the fan writes again while the engine thinks', async () => {

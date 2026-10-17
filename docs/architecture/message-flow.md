@@ -59,8 +59,8 @@ Code actuel : les étapes 1 à 6 sont derrière le port `DraftComposer` (module 
 
 Le moteur peut aussi ne pas écrire de brouillon (`held`) :
 
-- `guard_blocked`, `handoff` et `budget_reached` donnent `handoff_requested` : la conversation passe à `human` et les chatteurs reprennent.
-- `no_reply` et `llm_unavailable` donnent `reply_skipped` et la conversation revient à `idle`.
+- `guard_blocked`, `handoff`, `budget_reached` et `llm_unavailable` donnent `handoff_requested` : la conversation passe à `human` et les chatteurs reprennent. Un modèle injoignable (fournisseur en panne, clé absente) ne laisse donc plus un fan sans réponse ni alerte : la cause `llm_unavailable` part en alerte « Important ».
+- `no_reply` donne `reply_skipped` et la conversation revient à `idle`. Les anciens `reply_skipped` de raison `llm_unavailable` restent lisibles.
 
 Le job n'envoie jamais rien lui-même.
 

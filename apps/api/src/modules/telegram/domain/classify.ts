@@ -41,6 +41,7 @@ const CAUSE_TEXT: Readonly<Record<HandoffCause | 'keyword', string>> = {
   guard: 'Une réponse a été bloquée par une garde.',
   budget: 'Le plafond IA du jour est atteint.',
   keyword: 'Un mot surveillé a été écrit.',
+  llm_unavailable: 'Le modèle ne répond plus.',
   other: 'L’agent ne sait pas répondre.',
 };
 
