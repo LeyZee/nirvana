@@ -126,3 +126,10 @@ Le sélecteur s'ouvre depuis le bouton bulle de la zone de saisie. Le parcours d
 ### Statistiques du compte (L6)
 
 Vue modèle par jour, semaine, mois ou période, comparée à la période précédente : Revenu modèle, Volume TTC, CA HT, **Revenu agence**, projection sur 31 jours, nouveaux abonnés, ventes, panier moyen TTC, détail des revenus par jour et répartition. Mise à jour toutes les heures. Sert au suivi du CA du bot, pas au chatting.
+
+### Décisions de Charles (2026-10-17, 17h52)
+
+- **Fan test** : le compte de la conversation des captures est un compte test de Charles. C'est la seule cible des écritures pendant la capture et les essais (son abonnement doit être réactivé). Son pseudo ne va pas dans le dépôt : il se configure en variable d'environnement le moment venu.
+- **Automatisations de Reveal** : actives, mais sans effet sur le bot. Le connecteur les ignore.
+- **Membre d'équipe « bot »** : on crée dans Reveal un membre d'équipe dédié à l'agent, pour que ses messages portent son nom. Le connecteur utilise la session de ce membre, pas celle de Charles. Cela donne l'attribution des ventes bot ou chatteur, et une révocation possible sans toucher aux autres comptes.
+- **Scripts de jour ☀️ et de nuit 🌙** : le suffixe du dossier dit si les médias ont été pris de jour ou de nuit. On vend « du temps présent » : le fan doit croire que le média vient d'être pris pour lui. Règle en code : un script ☀️ ne part qu'en journée, un script 🌙 qu'en soirée et la nuit, à l'heure de la créatrice (Europe/Paris par défaut). Les heures de bascule sont un réglage de la persona, pas une valeur en dur. Un script sans suffixe n'a pas de contrainte. Il reste à lire ce suffixe dans le nom du script lui-même s'il n'y figure pas (lien script ↔ dossier du Vault).
