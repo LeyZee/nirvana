@@ -8,7 +8,7 @@ import {
   type SendResult,
 } from '@nirvana/contracts';
 
-import { SendRefused } from '../../domain/errors';
+import { BLOCKED_EXPIRY_REASONS, SendRefused } from '../../domain/errors';
 import type {
   Clock,
   Conversation,
@@ -50,10 +50,15 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
     at: clock.now(),
   });
 
-  /** Locks both rows and checks the draft may still leave; expires it when it no longer may. */
+  /**
+   * Locks both rows and checks the draft may still leave; expires it when it no longer may. Before a bubble goes
+   * out (`beforeSending`), the kill switches and the session are read again too (message-flow.md §6): a draft
+   * caught by them expires, so nothing leaves on its own once the switch is lifted.
+   */
   async function lockSendable(
     tx: Transaction,
     payload: JobPayload<'conversation.send'>,
+    beforeSending = false,
   ): Promise<Sendable | null> {
     const conversation = await lockConversation(tx, payload.conversationId);
     const draft = await tx.drafts.lock(payload.draftId);
@@ -64,15 +69,14 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
       conversationState: conversation.state,
       lastInboundAt: conversation.lastInboundAt,
     };
-    if (canSend(check)) return { conversation, draft };
+    const blocked = beforeSending ? await tx.gate.blockedReason(conversation) : null;
+    if (blocked === null && canSend(check)) return { conversation, draft };
     const at = meta(payload);
+    const reason = blocked === null ? 'Plus valable à l’envoi' : BLOCKED_EXPIRY_REASONS[blocked];
     await appendEvent(
       tx,
       conversation,
-      {
-        type: 'draft_expired',
-        payload: { draftId: draft.id, status: 'expired', reason: 'Plus valable à l’envoi' },
-      },
+      { type: 'draft_expired', payload: { draftId: draft.id, status: 'expired', reason } },
       at,
     );
     await setDraftStatus(tx, draft, 'expired', { decidedBy: null, at: at.at });
@@ -85,7 +89,7 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
     attempt: number,
   ): Promise<void> => {
     const start = await uow.inTenant(payload.creatorId, async (tx) => {
-      const sendable = await lockSendable(tx, payload);
+      const sendable = await lockSendable(tx, payload, true);
       if (sendable === null) return null;
       return { ...sendable, alreadySent: await tx.messages.countForDraft(sendable.draft.id) };
     });
@@ -100,7 +104,7 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
       const idempotencyKey = bubbleIdempotencyKey(payload.draftId, index);
       const text = bubbles[index] ?? '';
       const conversation = await uow.inTenant(payload.creatorId, async (tx) => {
-        const sendable = await lockSendable(tx, payload);
+        const sendable = await lockSendable(tx, payload, true);
         if (sendable === null) return null;
         await appendEvent(
           tx,

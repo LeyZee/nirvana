@@ -389,6 +389,55 @@ describe('conversations module (P0-05)', () => {
     expect(projected).toMatchObject({ state: 'awaiting_approval', mode: 'auto' });
   });
 
+  async function killSwitch(scope: 'global' | 'creator', active: boolean) {
+    await test.admin.db.insert(schema.killSwitches).values({
+      id: randomUUID(),
+      scope,
+      scopeId: scope === 'global' ? null : creatorId,
+      creatorId: scope === 'global' ? null : creatorId,
+      active,
+      reason: 'test',
+      setBy: 'system',
+    });
+  }
+
+  it('refuses an approval while a kill switch is on, and leaves the draft pending', async () => {
+    const { conversationId } = await ingest('c-kill-approve');
+    const draftId = await respond(conversationId);
+    const queued = (await jobs('conversation.send')).length;
+    await killSwitch('global', true);
+    try {
+      await expect(
+        conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Coucou'] }),
+      ).rejects.toMatchObject({ code: 'kill_switch_conflict' });
+      const [draft] = await test.admin.db.select().from(schema.drafts).where(eq(schema.drafts.id, draftId));
+      expect(draft?.status).toBe('pending');
+      expect(await jobs('conversation.send')).toHaveLength(queued);
+    } finally {
+      await test.admin.db.delete(schema.killSwitches);
+    }
+  });
+
+  it('sends nothing once a kill switch is on, even for a draft approved before it, nor after it is lifted', async () => {
+    const { conversationId } = await ingest('c-kill-send');
+    const draftId = await respond(conversationId);
+    await conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Un', 'Deux'] });
+    await killSwitch('creator', true);
+    const payload = { creatorId, conversationId, draftId, correlationId: 'test' };
+    try {
+      await conversations.jobs.send(payload, NO_LOG, 1);
+      expect(sender.sent.filter((send) => send.key.startsWith(draftId))).toEqual([]);
+      expect((await events(conversationId)).at(-1)).toBe('draft_expired');
+      expect(await conversationRow(conversationId)).toMatchObject({ state: 'idle' });
+
+      await killSwitch('creator', false);
+      await conversations.jobs.send(payload, NO_LOG, 2);
+      expect(sender.sent.filter((send) => send.key.startsWith(draftId))).toEqual([]);
+    } finally {
+      await test.admin.db.delete(schema.killSwitches);
+    }
+  });
+
   it('does not answer while a kill switch is on', async () => {
     const { conversationId } = await ingest('c-kill');
     await test.admin.db.insert(schema.killSwitches).values({

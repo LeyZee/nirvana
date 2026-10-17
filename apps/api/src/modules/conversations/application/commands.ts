@@ -14,7 +14,7 @@ import {
   type UserId,
 } from '@nirvana/contracts';
 
-import { ConversationNotFound } from '../domain/errors';
+import { ConversationNotFound, SendBlocked } from '../domain/errors';
 import type { Clock, Conversation, EventMeta, FanDirectory, Transaction, UnitOfWork } from '../domain/ports';
 import { rebuildProjection, type ConversationProjection } from '../domain/projection';
 import { debounceFor } from '../domain/rules';
@@ -196,6 +196,9 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
         const isEdited = input.bubbles !== undefined;
         const status = isEdited ? 'edited' : 'approved';
         const draft = await lockDraftFor(tx, conversation, input.draftId, status);
+        // Nothing is approved while nothing may leave: the draft stays pending (message-flow.md §6).
+        const blocked = await tx.gate.blockedReason(conversation);
+        if (blocked !== null) throw new SendBlocked(blocked);
         const bubbles = input.bubbles ?? draft.bubbles;
         if (bubbles.length === 0 || bubbles.some((bubble) => bubble.trim() === '')) {
           throw new DomainError('draft_invalid', 'Le brouillon est vide');
