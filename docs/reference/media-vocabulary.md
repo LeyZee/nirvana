@@ -1,6 +1,6 @@
 # Vocabulaire de description des médias (rôle `sense`)
 
-Version `1.0.0`. Schéma Zod : `packages/contracts/src/media.ts` (`MediaDescriptionSchema`). Toute description en base porte `vocabulary_version`.
+Version `1.0.0`. Schéma Zod : `packages/contracts/src/media.ts` (`MediaDescriptionSchema`), avec les champs en camelCase dans le code (`vocabularyVersion`, `factualDescription`…) ; le YAML ci-dessous garde les noms de la conception. Toute description en base porte sa version.
 
 ## Principes (hérités d'OnlyScript)
 
@@ -39,8 +39,8 @@ flags:                               # alertes de sécurité, décident d'un han
 
 ## Usage
 
-- **Médias de la créatrice** (catalogue, phase 6) : décrits une fois, mis en cache par `sha256`, utilisés par `offers` et `scripts` pour choisir quoi vendre à qui.
-- **Médias des fans** (entrants) : décrits pour que la voix réagisse de façon crédible, avec rétention courte (30 jours par défaut, `security.md`). `flags` non vide → handoff immédiat, pas de réponse automatique.
+- **Médias de la créatrice** (bundles des scripts Reveal) : décrits une fois à l'import, mis en cache par `sha256`, relus par Charles ou Messa, utilisés pour parler d'un média et donner envie de l'acheter.
+- **Médias des fans** (entrants) : décrits pour que la voix réagisse de façon crédible ; le fichier n'est pas conservé, la description a une rétention courte (30 jours par défaut, `security.md`). `flags` non vide → handoff immédiat, pas de réponse automatique.
 - Les descriptions sont du **contenu non fiable** pour le cerveau et la voix (un média peut contenir du texte conçu pour manipuler) : enveloppées par `wrapUntrusted()`.
 
 ## Évolution

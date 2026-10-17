@@ -233,9 +233,9 @@ describe('health', () => {
     expect(JSON.stringify(setup({}).gateway.health())).not.toContain('test-xai');
   });
 
-  it('marks the unconfirmed video input of Grok 4.7', () => {
+  it('lists what each model reads: Grok 4.7 takes images, not video', () => {
     const { gateway } = setup({});
     const xai = gateway.health().providers.find((p) => p.provider === 'xai');
-    expect(xai?.models.find((m) => m.model === 'grok-4.7')?.unconfirmedInputs).toEqual(['video']);
+    expect(xai?.models.find((m) => m.model === 'grok-4.7')).toMatchObject({ unconfirmedInputs: [] });
   });
 });

@@ -35,6 +35,7 @@
     "evals": "pnpm --filter @nirvana/evals run evals",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo",
     "probe": "pnpm --filter @nirvana/evals run probe",
+    "probe:vision": "pnpm --filter @nirvana/evals run probe:vision",
     "playground": "pnpm --filter @nirvana/api run playground"
   },
   "devDependencies": {

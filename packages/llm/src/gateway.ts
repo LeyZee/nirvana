@@ -1,4 +1,6 @@
-import { err, ok, type Result } from '@nirvana/contracts';
+import { randomBytes } from 'node:crypto';
+
+import { err, MEDIA_VOCABULARY_VERSION, ok, type MediaDescription, type Result } from '@nirvana/contracts';
 import {
   APICallError,
   generateText,
@@ -8,21 +10,67 @@ import {
   Output,
   TypeValidationError,
   type ModelMessage,
+  type TextPart,
+  type TranscriptionModel,
+  transcribe as transcribeAudio,
+  type UserContent,
 } from 'ai';
 import type { z } from 'zod';
 
 import type { CallOutcome, LlmCallLog } from './call-log';
-import { costUsd, MODELS } from './catalog';
+import { acceptsInput, costUsd, MODELS, TRANSCRIPTION_MODEL } from './catalog';
 import type { LlmConfig, LlmRole, ModelRef, ProviderCredentials, ProviderId } from './config';
 import { computeHealth, type HealthReport } from './health';
 import { loadPrompt, renderPrompt, type PromptTemplate } from './prompts';
 import type { ModelResolver } from './providers';
-import { BriefSchema, VoiceOutputSchema, type Brief, type VoiceOutput } from './schemas';
+import { BriefSchema, SenseOutputSchema, VoiceOutputSchema, type Brief, type VoiceOutput } from './schemas';
 import { wrapUntrusted } from './untrusted';
+
+/** A media exchanged in the conversation, already described by `sense`. */
+export interface TurnMedia {
+  readonly description: MediaDescription;
+  /** A paid media of hers the fan has not bought yet: she can tease it, not give it away. */
+  readonly isLocked?: boolean;
+}
 
 export interface ConversationTurn {
   readonly from: 'fan' | 'creator';
   readonly text: string;
+  readonly media?: readonly TurnMedia[];
+}
+
+export interface VideoFrame {
+  readonly atS: number;
+  readonly mediaType: string;
+  readonly data: Uint8Array;
+}
+
+export type SenseMedia =
+  | { readonly kind: 'image'; readonly mediaType: string; readonly data: Uint8Array }
+  | {
+      readonly kind: 'video';
+      readonly durationS: number;
+      /** The file, read natively (picture and sound) by a model that takes video, such as Gemini. */
+      readonly mediaType: string;
+      readonly data: Uint8Array;
+      /**
+       * Dated keyframes and transcript, for a model that reads images only (Grok). Called only when the call
+       * falls back to such a model, at most once: a fan's video costs ffmpeg and speech to text only then.
+       */
+      readonly keyframes: () => Promise<VideoKeyframes>;
+    }
+  | { readonly kind: 'audio'; readonly durationS: number; readonly transcript: string };
+
+export interface VideoKeyframes {
+  readonly frames: readonly VideoFrame[];
+  /** What is said in it, from `transcribe`. */
+  readonly transcript?: string;
+}
+
+export interface SenseInput {
+  /** A fan's media is described to react to it; one of hers, to talk about it and make him want it. */
+  readonly origin: 'fan' | 'creator';
+  readonly media: SenseMedia;
 }
 
 export interface ConversationInput {
@@ -70,10 +118,16 @@ export interface ConnectionTest {
 }
 
 export interface LlmGateway {
+  sense(input: SenseInput): Promise<Result<LlmSuccess<MediaDescription>, LlmFailure>>;
   brain(input: ConversationInput): Promise<Result<LlmSuccess<Brief>, LlmFailure>>;
   voice(input: VoiceInput): Promise<Result<LlmSuccess<VoiceOutput>, LlmFailure>>;
   health(): HealthReport;
   testConnection(provider: ProviderId): Promise<ConnectionTest>;
+  /** The sound of a video or a voice note, as text for `sense`. */
+  transcribe(audio: {
+    readonly data: Uint8Array;
+    readonly mediaType: string;
+  }): Promise<Result<Transcript, LlmFailure>>;
 }
 
 export interface LlmGatewayDeps {
@@ -82,7 +136,20 @@ export interface LlmGatewayDeps {
   readonly resolveModel: ModelResolver;
   readonly log: LlmCallLog;
   readonly now?: () => Date;
-  readonly prompts?: { readonly voice: PromptTemplate; readonly brain: PromptTemplate };
+  readonly prompts?: {
+    readonly voice: PromptTemplate;
+    readonly brain: PromptTemplate;
+    readonly sense: PromptTemplate;
+  };
+  /** Secret written in every system prompt: an output that contains it has leaked the prompt. */
+  readonly canary?: string;
+  /** Speech to text (xAI); undefined when no key is set. */
+  readonly resolveTranscriber?: () => TranscriptionModel | undefined;
+}
+
+export interface Transcript {
+  readonly text: string;
+  readonly durationS?: number;
 }
 
 interface Classified {
@@ -117,13 +184,112 @@ function classify(error: unknown): Classified {
   };
 }
 
-function toMessages(history: readonly ConversationTurn[]): ModelMessage[] {
-  return history.map((turn) =>
-    turn.from === 'fan'
-      ? { role: 'user', content: wrapUntrusted('fan_message', turn.text) }
-      : { role: 'assistant', content: turn.text },
-  );
+const LABELS = {
+  image: 'Photo',
+  video: 'Vidéo',
+  audio: 'Vocal',
+} as const;
+
+/** A description as the brain and the voice read it: plain French, closed values kept as they are. */
+function renderMedia(media: TurnMedia): string {
+  const d = media.description;
+  const duration = d.durationS === null ? '' : ` de ${String(Math.round(d.durationS))} s`;
+  return [
+    `${LABELS[d.kind]}${duration}${media.isLocked === true ? ' (verrouillé, pas encore acheté)' : ''}.`,
+    d.factualDescription,
+    ...d.segments.map((s) => `De ${String(s.startS)} à ${String(s.endS)} s : ${s.description}`),
+    `Intensité : ${d.intensity}. Visible : ${d.anatomyVisible.join(', ') || 'rien de particulier'}.`,
+    d.mood.length > 0 ? `Ambiance : ${d.mood.join(', ')}.` : '',
+    d.setting === null ? '' : `Décor : ${d.setting}.`,
+    d.audio?.transcript ? `Ce qui est dit : « ${d.audio.transcript} ».` : '',
+    d.textVisible === null ? '' : `Texte écrit dans le média : « ${d.textVisible} ».`,
+    d.confidenceLow ? 'Description incertaine.' : '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
 }
+
+function toMessages(history: readonly ConversationTurn[]): ModelMessage[] {
+  return history.map((turn) => {
+    const isFan = turn.from === 'fan';
+    const media = (turn.media ?? []).map((m) =>
+      wrapUntrusted(isFan ? 'fan_media_description' : 'creator_media_description', renderMedia(m)),
+    );
+    if (isFan) {
+      const text = turn.text.trim() === '' ? [] : [wrapUntrusted('fan_message', turn.text)];
+      return { role: 'user', content: [...text, ...media].join('\n') };
+    }
+    return { role: 'assistant', content: [turn.text, ...media].filter((part) => part !== '').join('\n') };
+  });
+}
+
+// Gemini takes up to 20 MB inline; a larger video goes through keyframes until the Files API is wired.
+const INLINE_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
+
+const ORIGIN = { fan: 'Média envoyé par un fan.', creator: 'Média du catalogue de la créatrice.' } as const;
+
+function transcriptPart(transcript: string | undefined): TextPart[] {
+  return transcript === undefined
+    ? []
+    : [{ type: 'text', text: wrapUntrusted('media_transcript', transcript) }];
+}
+
+/** The user message of a `sense` call, or undefined when this model cannot read this media. */
+async function senseContent(
+  input: SenseInput,
+  ref: ModelRef,
+  keyframes: () => Promise<VideoKeyframes>,
+): Promise<UserContent | undefined> {
+  const { media } = input;
+  const origin = ORIGIN[input.origin];
+  switch (media.kind) {
+    case 'image':
+      if (!acceptsInput(ref, 'image')) return undefined;
+      return [
+        { type: 'text', text: `${origin} Photo.` },
+        { type: 'file', data: media.data, mediaType: media.mediaType },
+      ];
+    case 'audio':
+      return [
+        { type: 'text', text: `${origin} Vocal de ${String(media.durationS)} s, transcrit.` },
+        ...transcriptPart(media.transcript),
+      ];
+    case 'video': {
+      const intro = `${origin} Vidéo de ${String(Math.round(media.durationS))} s`;
+      if (acceptsInput(ref, 'video') && media.data.byteLength <= INLINE_VIDEO_MAX_BYTES) {
+        return [
+          { type: 'text', text: `${intro}, avec son.` },
+          { type: 'file', data: media.data, mediaType: media.mediaType },
+        ];
+      }
+      if (!acceptsInput(ref, 'image')) return undefined;
+      const { frames, transcript } = await keyframes();
+      if (frames.length === 0) return undefined;
+      return [
+        { type: 'text', text: `${intro}, en images extraites et datées :` },
+        ...frames.flatMap((frame) => [
+          { type: 'text' as const, text: `À ${String(frame.atS)} s :` },
+          { type: 'file' as const, data: frame.data, mediaType: frame.mediaType },
+        ]),
+        ...transcriptPart(transcript),
+      ];
+    }
+  }
+}
+
+/** Gemini's own filters, off for sexual content between adults (Charles, 17/10); core harms stay blocked. */
+const GOOGLE_SAFETY = {
+  google: {
+    safetySettings: (
+      [
+        'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+        'HARM_CATEGORY_HARASSMENT',
+        'HARM_CATEGORY_HATE_SPEECH',
+        'HARM_CATEGORY_DANGEROUS_CONTENT',
+      ] as const
+    ).map((category) => ({ category, threshold: 'OFF' })),
+  },
+};
 
 function describeBrief(brief: Brief): string {
   const lines = [
@@ -146,13 +312,18 @@ function notesBlock(fanNotes: string): string {
 
 export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
   const now = deps.now ?? (() => new Date());
-  const prompts = deps.prompts ?? { voice: loadPrompt('voice'), brain: loadPrompt('brain') };
+  const prompts = deps.prompts ?? {
+    voice: loadPrompt('voice'),
+    brain: loadPrompt('brain'),
+    sense: loadPrompt('sense'),
+  };
+  const canary = deps.canary ?? `nv-${randomBytes(6).toString('hex')}`;
 
   async function run<T>(
     role: LlmRole,
     prompt: PromptTemplate,
     system: string,
-    history: readonly ConversationTurn[],
+    buildMessages: (ref: ModelRef) => Promise<ModelMessage[] | undefined>,
     schema: z.ZodType<T>,
   ): Promise<Result<LlmSuccess<T>, LlmFailure>> {
     const roleConfig = deps.config.roles[role];
@@ -181,7 +352,18 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         attempts.push({ provider: ref.provider, model: ref.model, outcome: 'missing_key' });
         continue;
       }
-      let messages = toMessages(history);
+      let built: ModelMessage[] | undefined;
+      try {
+        built = await buildMessages(ref);
+      } catch {
+        // Keyframes could not be made: this model cannot be given the media.
+        built = undefined;
+      }
+      if (built === undefined) {
+        attempts.push({ provider: ref.provider, model: ref.model, outcome: 'unsupported_input' });
+        continue;
+      }
+      let messages = built;
       let transientLeft = deps.config.maxTransientRetries;
       let hasRepaired = false;
       for (;;) {
@@ -196,6 +378,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
             maxOutputTokens: roleConfig.maxOutputTokens,
             maxRetries: 0,
             abortSignal: AbortSignal.timeout(roleConfig.timeoutMs),
+            ...(ref.provider === 'google' && { providerOptions: GOOGLE_SAFETY }),
           });
           const latencyMs = now().getTime() - startedAt;
           if (result.finishReason === 'content-filter') {
@@ -203,6 +386,11 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
             break;
           }
           const cost = costUsd(ref, result.usage);
+          if (JSON.stringify(result.output).includes(canary)) {
+            // The fan got the model to write its instructions: nothing of this output may go further.
+            record('prompt_leak', latencyMs, cost === undefined ? {} : { costUsd: cost });
+            break;
+          }
           record('ok', latencyMs, {
             ...(result.usage.inputTokens !== undefined && { inputTokens: result.usage.inputTokens }),
             ...(result.usage.inputTokenDetails.cacheReadTokens !== undefined && {
@@ -249,13 +437,51 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
   }
 
   return {
+    async sense(input) {
+      const system = renderPrompt(prompts.sense, { canary });
+      let pending: Promise<VideoKeyframes> | undefined;
+      const keyframes = (): Promise<VideoKeyframes> => {
+        if (input.media.kind !== 'video') return Promise.resolve({ frames: [] });
+        pending ??= input.media.keyframes();
+        return pending;
+      };
+      const result = await run(
+        'sense',
+        prompts.sense,
+        system,
+        async (ref) => {
+          const content = await senseContent(input, ref, keyframes);
+          return content === undefined ? undefined : [{ role: 'user', content }];
+        },
+        SenseOutputSchema,
+      );
+      if (!result.ok) return result;
+      const { media } = input;
+      return ok({
+        ...result.value,
+        output: {
+          ...result.value.output,
+          vocabularyVersion: MEDIA_VOCABULARY_VERSION,
+          kind: media.kind,
+          durationS: media.kind === 'image' ? null : media.durationS,
+        },
+      });
+    },
+
     brain(input) {
       const system = renderPrompt(prompts.brain, {
         creator_name: input.creatorName,
         persona_sheet: input.personaSheet,
         fan_notes: notesBlock(input.fanNotes),
+        canary,
       });
-      return run('brain', prompts.brain, system, input.history, BriefSchema);
+      return run(
+        'brain',
+        prompts.brain,
+        system,
+        () => Promise.resolve(toMessages(input.history)),
+        BriefSchema,
+      );
     },
 
     voice(input) {
@@ -264,8 +490,53 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         persona_sheet: input.personaSheet,
         fan_notes: notesBlock(input.fanNotes),
         brief: describeBrief(input.brief),
+        canary,
       });
-      return run('voice', prompts.voice, system, input.history, VoiceOutputSchema);
+      return run(
+        'voice',
+        prompts.voice,
+        system,
+        () => Promise.resolve(toMessages(input.history)),
+        VoiceOutputSchema,
+      );
+    },
+
+    async transcribe(audio) {
+      const ref = { provider: TRANSCRIPTION_MODEL.provider, model: TRANSCRIPTION_MODEL.model };
+      const model = deps.resolveTranscriber?.();
+      if (model === undefined)
+        return err({ code: 'all_models_failed', attempts: [{ ...ref, outcome: 'missing_key' }] });
+      const startedAt = now().getTime();
+      const base = { role: 'sense', ...ref, promptHash: 'transcription', isFallback: false } as const;
+      try {
+        const result = await transcribeAudio({
+          model,
+          audio: audio.data,
+          maxRetries: deps.config.maxTransientRetries,
+          abortSignal: AbortSignal.timeout(deps.config.roles.sense.timeoutMs),
+        });
+        const durationS = result.durationInSeconds;
+        deps.log.append({
+          ...base,
+          at: now(),
+          outcome: 'ok',
+          latencyMs: now().getTime() - startedAt,
+          ...(durationS !== undefined && {
+            costUsd: (durationS / 3_600) * TRANSCRIPTION_MODEL.usdPerAudioHour,
+          }),
+        });
+        return ok({ text: result.text, ...(durationS !== undefined && { durationS }) });
+      } catch (error) {
+        const { outcome, message } = classify(error);
+        deps.log.append({
+          ...base,
+          at: now(),
+          outcome,
+          latencyMs: now().getTime() - startedAt,
+          errorMessage: message.slice(0, 200),
+        });
+        return err({ code: 'all_models_failed', attempts: [{ ...ref, outcome }] });
+      }
     },
 
     health() {

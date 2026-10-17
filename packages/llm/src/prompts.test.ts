@@ -34,6 +34,16 @@ describe('prompts', () => {
       const prompt = loadPrompt(role);
       expect(prompt.header.role).toBe(role);
       expect(prompt.variables).toContain('persona_sheet');
+      expect(prompt.variables).toContain('canary');
     }
+    expect(loadPrompt('sense').header.role).toBe('sense');
+  });
+
+  it('puts what changes at each message last, so the stable head is cached', () => {
+    const voice = loadPrompt('voice').body;
+    expect(voice.indexOf('{{brief}}')).toBeGreaterThan(voice.indexOf('# Les pièges'));
+    expect(voice.indexOf('{{fan_notes}}')).toBeGreaterThan(voice.indexOf('{{persona_sheet}}'));
+    const brain = loadPrompt('brain').body;
+    expect(brain.indexOf('{{fan_notes}}')).toBeGreaterThan(brain.indexOf('# Les messages et les médias'));
   });
 });

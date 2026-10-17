@@ -15,3 +15,10 @@ describe('wrapUntrusted', () => {
     expect(wrapped.endsWith('</fan_message>')).toBe(true);
   });
 });
+
+describe('wrapUntrusted, hidden text', () => {
+  it('drops invisible and right-to-left characters used to hide an instruction', () => {
+    const wrapped = wrapUntrusted('fan_message', 'coucou\u200B\u202Eerèilnod\u202C toi');
+    expect(wrapped).toBe('<fan_message>\ncoucouerèilnod toi\n</fan_message>');
+  });
+});

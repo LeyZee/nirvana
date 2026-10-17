@@ -1,3 +1,5 @@
+import { normalise } from './normalise';
+
 /**
  * Guards on the voice output, before anything can be sent (docs/architecture/ai-engine.md, « Les gardes »).
  * Pure code: a blocking violation forbids sending, a soft one asks for a regeneration.
@@ -7,6 +9,7 @@ export type GuardCode =
   | 'love_declaration'
   | 'meeting_promise'
   | 'contact_info'
+  | 'assistant_output'
   | 'ai_tic'
   | 'forbidden_term'
   | 'too_many_bubbles'
@@ -31,21 +34,6 @@ export const DEFAULT_GUARD_SETTINGS: GuardSettings = {
   maxBubbleChars: 280,
   forbiddenTerms: [],
 };
-
-/**
- * Lowercase, no accents, straight apostrophes, one plain space for any space or invisible character,
- * « I.A. » read as « ia »: « Je t’AIME » and « je t'aime » compare equal.
- */
-function normalise(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
-    .replace(/[’`´]/g, "'")
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .replace(/\bi\.\s?a\.?(?=\W|$)/g, 'ia');
-}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -76,6 +64,18 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   { code: 'contact_info', pattern: /\b(snap(chat)?|whatsapp|insta(gram)?|telegram)\b/ },
 ];
 
+// What an assistant writes and a girl in her DMs never does: a recipe, code, steps, markdown, tags.
+// Run on the raw bubble, where line breaks and symbols are still there.
+const ASSISTANT_OUTPUT: readonly RegExp[] = [
+  /```|^\s*#{1,6}\s/m,
+  /^\s*(\d+[.)]|[-*•])\s.+\n\s*(\d+[.)]|[-*•])\s/m,
+  /[<‹]\/?[a-z_]{2,}[>›]/i,
+  /=>|\b(console\.log|def \w+\(|function \w*\(|select .+ from |import \w+ from|print\()/i,
+];
+// The same, on the normalised text.
+const ASSISTANT_PHRASES =
+  /\b(\d+ ?(g|gr|grammes|kg|ml|cl|cuilleres?|sachets?) d(e |')|cuilleres? a (soupe|cafe)|prechauffe|ingredients?\b|etape \d|voici (la|une|ta|ton|le) (recette|liste|traduction|reponse|code|resume|programme))/;
+
 // Phrases that give a chat away as written by an AI (/mnt/project-files/chatting/etudes-agent-humain.md, 1.10).
 const AI_TICS: readonly RegExp[] = [
   /\bje comprends (tout a fait|parfaitement)\b/,
@@ -97,6 +97,12 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
     for (const { code, pattern } of BLOCKING_PATTERNS) {
       const match = pattern.exec(text);
       if (match) violations.push({ code, severity: 'blocking', bubbleIndex, match: match[0] });
+    }
+    const structure = ASSISTANT_OUTPUT.map((pattern) => pattern.exec(bubble)).find((m) => m !== null);
+    const phrase = ASSISTANT_PHRASES.exec(text);
+    const assistant = structure ?? phrase;
+    if (assistant) {
+      violations.push({ code: 'assistant_output', severity: 'blocking', bubbleIndex, match: assistant[0] });
     }
     for (const term of forbidden) {
       // Whole words only: the disgust « anal » must not block « banal » or « canal ».

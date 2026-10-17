@@ -6,6 +6,7 @@ export {
   type GuardSettings,
   type GuardViolation,
 } from './domain/guards';
+export { assessTrap, screenMedia, type TrapAssessment } from './domain/traps';
 
 export interface AgentModule {
   readonly name: 'agent';

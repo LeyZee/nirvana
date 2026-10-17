@@ -9,7 +9,8 @@
     "probe": "tsx probe/run.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "probe:vision": "tsx probe/vision.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

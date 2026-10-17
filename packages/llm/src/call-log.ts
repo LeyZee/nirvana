@@ -13,6 +13,8 @@ export type CallOutcome =
   | 'unavailable'
   | 'missing_key'
   | 'unknown_model'
+  | 'unsupported_input'
+  | 'prompt_leak'
   | 'error';
 
 /** One provider call. Never holds prompt or message content: only what supervision and costs need. */
