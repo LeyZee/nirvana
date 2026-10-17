@@ -15,7 +15,8 @@ Conçus : `media_assets`, `media_descriptions` (rôle `sense`, vocabulaire ferm�
 
 ## Proposition (à valider par Charles avant de coder)
 - `price_ladders` : `id`, `creator_id`, `name`, `currency`, `steps` (`[{ rank, label, floor_minor, list_minor }]`), `max_step_ratio` (défaut 2 : un palier ne coûte jamais plus du double du précédent ; tripler a coupé net chez l'ancien bot). Aucune remise : on ne négocie jamais (méthode de chatting, §3).
-- `offers` : `id`, `creator_id`, `kind` (`teaser` gratuit | `pack` | `single`), `media_asset_ids[]` (ex. 3 photos et 1 vidéo), `ladder_step_rank`, `caption_brief` (l'idée de la légende, la voix l'écrit), `intensity` (calculée depuis les descriptions), `active`.
+- `offers` : `id`, `creator_id`, `kind` (`teaser` gratuit | `pack` | `single`), `media_asset_ids[]` (ex. 3 photos et 1 vidéo), `ladder_step_rank`, `caption_brief` (l'idée de la légende, la voix l'écrit), `intensity` (calculée depuis les descriptions), `moment` (`day` | `night` | `any`), `active`.
+- **Moment** (Charles, 17/10 à 17h52) : Reveal range scripts et dossiers du Vault en « Jour » ☀️ et « Nuit » 🌙, pour qu'un média corresponde à l'heure à laquelle le fan le reçoit. `moment` est porté par chaque média (`media_assets`), chaque offre et chaque script ; la politique ne propose que ce qui correspond à l'heure locale du fan (fuseau tiré du slot `location`, sinon celui de la créatrice). Les heures qui bornent le jour et la nuit sont un réglage de la créatrice.
 - `sales` : `id`, `creator_id`, `fan_id`, `offer_id` (nullable si inconnue), `amount_minor`, `currency`, `platform_transaction_id` (unique), `detected_at`. Source : `listTransactions` du connecteur ou détection dans les messages.
 - `scripts` : Nirvana lit les scripts de Reveal (système natif) au lieu d'en éditer ; un script est une suite d'étapes de paliers croissants avec un teaser entre chaque. `script_runs (fan_id, script_id)` unique, pour ne jamais rejouer un script à un fan. Forme exacte après P1-02.
 - Règles en code (politique et gardes) : prix toujours lu dans l'échelle, jamais inventé par le LLM ; plancher jamais franchi ; aucune remise ; même média, même prix pour tous les fans ; un média n'est annoncé que s'il part réellement ; pas d'offre si la mémoire du fan l'interdit (drapeaux, âge non confirmé, cooldown de `persona.strategies.script_launch`).
@@ -27,7 +28,7 @@ Conçus : `media_assets`, `media_descriptions` (rôle `sense`, vocabulaire ferm�
 - Le catalogue réel de Messa (médias, paliers, prix) reste hors dépôt (ADR 0010) ; les tests utilisent un catalogue fictif.
 
 ## Critères d'acceptation
-- Tests du domaine : palier ×3 refusé, contre-offre refusée au prix affiché, même prix pour deux fans, script jamais rejoué, média jamais revendu.
+- Tests du domaine : média de nuit refusé à 15 h chez le fan, palier ×3 refusé, contre-offre refusée au prix affiché, même prix pour deux fans, script jamais rejoué, média jamais revendu.
 - Évals : fan qui refuse le prix, fan qui demande « c'est ton prix le plus bas ? », fan qui a déjà tout acheté (notification « plus de script »).
 
 ## Hors périmètre
