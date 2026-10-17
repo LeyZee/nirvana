@@ -30,6 +30,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P0-06 Module connectors | done | `log/2026-10-17-p0-06.md` |
 | 2026-10-17 | P0-05 suite : port du moteur et journal `llm_calls` | done | `log/2026-10-17-p0-05-composer.md` |
 | 2026-10-17 | P0-07b CI, scripts ops, bout en bout : phase 0 acceptée | done | `log/2026-10-17-p0-07b.md` |
+| 2026-10-17 | Redemande du mot de passe avant une clé IA (ADR 0016) | done | `log/2026-10-17-reauth.md` |
 
 ## Incidents (liste vivante)
 

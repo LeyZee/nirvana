@@ -1,4 +1,4 @@
-import { eq, schema } from '@nirvana/db';
+import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -121,6 +121,32 @@ describe('dashboard authentication (P0-07a)', () => {
     });
     expect(out.statusCode).toBe(200);
     expect((await server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } })).statusCode).toBe(401);
+  });
+
+  it('asks for the password again before touching an AI key with a session older than 10 minutes', async () => {
+    const cookie = await signIn(server, OWNER.email, OWNER.password);
+    const headers = { cookie, origin: DASHBOARD_ORIGIN };
+    const remove = () => server.inject({ method: 'DELETE', url: '/v1/settings/providers/xai', headers });
+    expect((await remove()).statusCode).toBe(200);
+
+    await test.admin.db.execute(
+      sql`update "session" set created_at = now() - interval '11 minutes' where user_id = (select id from "user" where email = ${OWNER.email})`,
+    );
+    const stale = await remove();
+    expect(stale.statusCode).toBe(403);
+    expect(stale.json<{ error: { code: string } }>().error.code).toBe('reauthentication_forbidden');
+    // Reading stays open; only connecting, replacing and removing a key ask again.
+    expect((await server.inject({ method: 'GET', url: '/v1/settings/providers', headers })).statusCode).toBe(
+      200,
+    );
+
+    const fresh = await signIn(server, OWNER.email, OWNER.password);
+    const again = await server.inject({
+      method: 'DELETE',
+      url: '/v1/settings/providers/xai',
+      headers: { cookie: fresh, origin: DASHBOARD_ORIGIN },
+    });
+    expect(again.statusCode).toBe(200);
   });
 
   it('refuses a second account with the same email and a short password', async () => {

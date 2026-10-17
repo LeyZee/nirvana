@@ -20,6 +20,12 @@ const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
   if (request.headers['x-test-role'] !== 'owner') await reply.code(403).send({ error: 'forbidden' });
 };
 
+/** Stands in for `requireRecentLogin` (auth.ts): the header says the sign-in is old. */
+const freshOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+  if (request.headers['x-test-stale'] === '1')
+    await reply.code(403).send({ error: { code: 'reauthentication_forbidden' } });
+};
+
 async function server() {
   const providers = createProvidersModule({
     store: createMemoryCredentialStore(),
@@ -30,7 +36,7 @@ async function server() {
   const app = await buildServer({
     config,
     logger: createLogger(config),
-    routes: [providers.routes({ guard: ownerOnly })],
+    routes: [providers.routes({ guard: ownerOnly, recentLogin: freshOnly })],
     readiness: () =>
       Promise.resolve({ isReady: true, checks: { database: true, migrations: true, worker: true } }),
   });
@@ -43,6 +49,24 @@ describe('/v1/settings/providers', () => {
     const { app } = await server();
     const response = await app.inject({ method: 'GET', url: '/v1/settings/providers' });
     expect(response.statusCode).toBe(403);
+  });
+
+  it('asks for a recent sign-in to connect or remove a key, not to read', async () => {
+    const { app, headers } = await server();
+    const stale = { ...headers, 'x-test-stale': '1' };
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/v1/settings/providers/xai/key',
+      headers: stale,
+      payload: { key: XAI_KEY },
+    });
+    expect(put.statusCode).toBe(403);
+    expect(
+      (await app.inject({ method: 'DELETE', url: '/v1/settings/providers/xai', headers: stale })).statusCode,
+    ).toBe(403);
+    expect(
+      (await app.inject({ method: 'GET', url: '/v1/settings/providers', headers: stale })).statusCode,
+    ).toBe(200);
   });
 
   it('lists the three services, Grok first, and says what to do next', async () => {

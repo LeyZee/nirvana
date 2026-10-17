@@ -663,3 +663,9 @@
     stroke-dashoffset: 0;
   }
 }
+
+/* Password asked again before a key changes (ADR 0016). */
+.sv-reauth {
+  display: grid;
+  gap: 8px;
+}
