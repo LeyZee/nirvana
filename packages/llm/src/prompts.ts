@@ -24,7 +24,9 @@ export interface PromptTemplate {
 
 const VARIABLE = /\{\{(\w+)\}\}/g;
 
-export function parsePrompt(name: string, source: string): PromptTemplate {
+export function parsePrompt(name: string, raw: string): PromptTemplate {
+  // A Windows checkout may turn LF into CRLF: same prompt, same hash on every machine.
+  const source = raw.replace(/\r\n/g, '\n');
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(source);
   if (match?.[1] === undefined || match[2] === undefined) {
     throw new Error(`prompt ${name}: missing YAML header`);

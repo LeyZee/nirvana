@@ -18,6 +18,14 @@ describe('prompts', () => {
     expect(prompt.hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('reads a Windows checkout (CRLF) as the same prompt, with the same hash', () => {
+    const crlf = parsePrompt('voice/test', SOURCE.replace(/\n/g, '\r\n'));
+    const lf = parsePrompt('voice/test', SOURCE);
+    expect(crlf.header).toEqual(lf.header);
+    expect(crlf.body).toBe(lf.body);
+    expect(crlf.hash).toBe(lf.hash);
+  });
+
   it('renders only with exactly the declared variables', () => {
     const prompt = parsePrompt('voice/test', SOURCE);
     expect(renderPrompt(prompt, { name: 'M', fan: 'F' })).toBe('Tu es M. M parle à F.');
