@@ -1,9 +1,9 @@
+import type { PlaygroundState } from '@nirvana/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { createHttpClient, PlaygroundError, type PlaygroundClient, type PlaygroundErrorCode } from './client';
 import { createDemoClient } from './demo';
-import type { PlaygroundState } from './model';
 
 const http = createHttpClient();
 let demo: PlaygroundClient | undefined;

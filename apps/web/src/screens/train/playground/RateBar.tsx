@@ -1,8 +1,8 @@
+import type { PlaygroundState } from '@nirvana/contracts';
 import { countUp } from '@nirvana/design-system';
 import { useEffect, useRef, type JSX } from 'react';
 
 import { percent, rateTone, usd } from './logic';
-import type { PlaygroundState } from './model';
 
 /**
  * The one number of the screen, and nothing that competes with it: what wrote the answers and what the
@@ -10,7 +10,7 @@ import type { PlaygroundState } from './model';
  * The automatic mode opens at the target on the reference scenarios.
  */
 export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boolean }): JSX.Element {
-  const { rate, target, rated, trend } = state.rate;
+  const { rate, target, rated, trendPoints, previousVersion } = state.rate;
   const tone = rateTone(rate, target);
   const valueRef = useRef<HTMLSpanElement>(null);
   const shown = useRef(0);
@@ -48,14 +48,14 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
           </span>
           <span className="pg-rate__d">
             Objectif {percent(target)}
-            {trend === undefined ? null : (
+            {trendPoints === null || previousVersion === null ? null : (
               <>
                 {' · '}
-                <b className={trend.points < 0 ? 'is-down' : undefined}>
-                  {trend.points >= 0 ? '+' : ''}
-                  {trend.points} pts
+                <b className={trendPoints < 0 ? 'is-down' : undefined}>
+                  {trendPoints >= 0 ? '+' : ''}
+                  {Math.round(trendPoints)} pts
                 </b>{' '}
-                depuis la voix {trend.since.replace(/^voix\s+/i, '')}
+                depuis la voix {previousVersion.voicePrompt}
               </>
             )}
           </span>

@@ -1,13 +1,14 @@
+import type { PlaygroundAnswer, PlaygroundState } from '@nirvana/contracts';
 import type { JSX, ReactNode } from 'react';
 
 import { needsAttention, usd } from './logic';
-import type { Answer, PlaygroundState } from './model';
+import { actionLabel, handoffReasons, intentLabel, isHandoff, riskLabel, sentimentLabel } from './model';
 
 type Level = 'none' | 'ok' | 'warn' | 'bad';
 
-function levelOf(answer: Answer | undefined): Level {
-  if (answer === undefined) return 'none';
-  if (answer.isBlocked || (answer.handoff?.length ?? 0) > 0) return 'bad';
+function levelOf(answer: PlaygroundAnswer | null): Level {
+  if (answer === null) return 'none';
+  if (answer.isBlocked || isHandoff(answer)) return 'bad';
   return needsAttention(answer) ? 'warn' : 'ok';
 }
 
@@ -33,6 +34,9 @@ export function WhyPanel({
 }): JSX.Element {
   const answer = state.pending;
   const level = levelOf(answer);
+  const brief = answer?.brief;
+  const risks =
+    answer === null ? [] : [...new Set([...handoffReasons(answer), ...(brief?.risks ?? []).map(riskLabel)])];
 
   if (!open) {
     return (
@@ -63,16 +67,25 @@ export function WhyPanel({
           ×
         </button>
       </div>
-      {answer === undefined ? (
+      {answer === null ? (
         <p className="pg-why__empty">Le raisonnement de la prochaine réponse s’affichera ici.</p>
       ) : (
         <div className="nv-scroll">
-          <Sec label="Ce qu’elle a compris">{answer.brief?.understood}</Sec>
-          <Sec label="Décision">{answer.brief?.decision}</Sec>
-          {(answer.brief?.risks.length ?? 0) > 0 || (answer.handoff?.length ?? 0) > 0 ? (
+          {brief === undefined ? null : (
+            <>
+              <Sec label="Ce qu’elle a compris">
+                {intentLabel(brief.intent)}, {sentimentLabel(brief.sentiment)}
+              </Sec>
+              <Sec label="Décision">
+                <b>{actionLabel(brief.action)}</b>
+                {brief.replyBrief === '' ? null : <p>{brief.replyBrief}</p>}
+              </Sec>
+            </>
+          )}
+          {risks.length > 0 ? (
             <Sec label="Risques">
               <ul className="pg-list">
-                {[...new Set([...(answer.handoff ?? []), ...(answer.brief?.risks ?? [])])].map((r) => (
+                {risks.map((r) => (
                   <li key={r} className="is-warn">
                     {r}
                   </li>
@@ -80,26 +93,19 @@ export function WhyPanel({
               </ul>
             </Sec>
           ) : null}
-          {(answer.trap?.length ?? 0) > 0 ? (
+          {(answer.trap?.signals.length ?? 0) > 0 ? (
             <Sec label="Piège">
               <ul className="pg-list">
-                {answer.trap?.map((t) => (
-                  <li key={t.code} className="is-warn">
+                {answer.trap?.signals.map((t) => (
+                  <li key={`${t.kind}-${t.source}`} className="is-warn">
                     {t.label}
                   </li>
                 ))}
               </ul>
             </Sec>
           ) : null}
-          {(answer.vision?.length ?? 0) > 0 ? (
-            <Sec label="Ce que la Vision a vu">
-              {answer.vision?.map((v) => (
-                <p key={v}>{v}</p>
-              ))}
-            </Sec>
-          ) : null}
-          {(answer.brief?.kycMissing.length ?? 0) > 0 ? (
-            <Sec label="Encore à découvrir">{answer.brief?.kycMissing.join(', ')}</Sec>
+          {(brief?.kycMissing.length ?? 0) > 0 ? (
+            <Sec label="Encore à découvrir">{brief?.kycMissing.join(', ')}</Sec>
           ) : null}
           <Sec label="Relecture avant envoi">
             <ul className="pg-list">
@@ -107,7 +113,7 @@ export function WhyPanel({
                 <li className="is-ok">Mots interdits, longueur, langue, rien qui ressemble à une IA</li>
               ) : (
                 answer.violations.map((v) => (
-                  <li key={v.code} className={v.blocking ? 'is-bad' : 'is-warn'}>
+                  <li key={v.code} className={v.severity === 'blocking' ? 'is-bad' : 'is-warn'}>
                     {v.label}
                   </li>
                 ))

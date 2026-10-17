@@ -1,3 +1,12 @@
+import {
+  DestinationSchema,
+  type Destination,
+  type PlaygroundAnswer as Answer,
+  type PlaygroundComparison as Comparison,
+  type PlaygroundMedia as Media,
+  type PlaygroundState,
+  type RejectReason,
+} from '@nirvana/contracts';
 import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { MEDIA_KINDS } from './SetupPanel';
@@ -5,13 +14,10 @@ import { bubblesOf } from './logic';
 import {
   DESTINATION_HINTS,
   DESTINATION_LABELS,
-  DestinationSchema,
-  type Answer,
-  type Comparison,
-  type Destination,
-  type Media,
+  handoffReasons,
+  isHandoff,
+  MEDIA_FLAG_LABELS,
   type MediaKind,
-  type PlaygroundState,
   type Turn,
 } from './model';
 
@@ -30,7 +36,7 @@ export interface ConversationProps {
   readonly onEdit: () => void;
   readonly onKeep: (text: string) => void;
   readonly onReject: () => void;
-  readonly onReason: (code: string) => void;
+  readonly onReason: (reason: RejectReason) => void;
   readonly onCancel: () => void;
   readonly onRegenerate: () => void;
   readonly onHandoff: (wasRight: boolean) => void;
@@ -40,8 +46,8 @@ export interface ConversationProps {
 }
 
 /** Index in the history of her answer still waiting for a rating (the engine keeps an answer that passed). */
-function pendingIndex(history: readonly Turn[], pending: Answer | undefined): number {
-  if (pending === undefined || pending.isBlocked) return -1;
+function pendingIndex(history: readonly Turn[], pending: Answer | null): number {
+  if (pending === null || pending.isBlocked || isHandoff(pending)) return -1;
   const lastFan = history.findLastIndex((t) => t.from === 'fan');
   return history.findIndex((t, i) => i > lastFan && t.from === 'creator' && t.media === undefined);
 }
@@ -60,7 +66,7 @@ export function Conversation(props: ConversationProps): JSX.Element {
   return (
     <div className="pg-thread nv-scroll">
       <div className="nv-thread">
-        {state.history.length === 0 && pending === undefined && !writing ? (
+        {state.history.length === 0 && pending === null && !writing ? (
           <Empty
             opening={state.presets.find((p) => p.id === state.presetId)?.opening}
             onSend={props.onSend}
@@ -81,7 +87,7 @@ export function Conversation(props: ConversationProps): JSX.Element {
             />
           );
         })}
-        {pending !== undefined && draftAt === -1 ? (
+        {pending !== null && draftAt === -1 ? (
           <Draft answer={pending} text={pending.bubbles.join('\n')} {...props} />
         ) : null}
         {writing ? (
@@ -166,14 +172,23 @@ function TurnView({
   );
 }
 
-function MediaCard({ media, from }: { media: Media; from: Turn['from'] }): JSX.Element {
+function MediaCard({
+  media,
+  from,
+}: {
+  media: NonNullable<Turn['media']>[number];
+  from: Turn['from'];
+}): JSX.Element {
+  const { description, isLocked } = media;
+  const flags = description.flags.map((f) => MEDIA_FLAG_LABELS[f] ?? f);
   return (
-    <div className={`pg-media ${media.isLocked === true ? 'is-locked' : ''}`}>
+    <div className={`pg-media ${isLocked ? 'is-locked' : ''} ${flags.length > 0 ? 'is-flagged' : ''}`}>
       <span className="pg-media__k">
-        {KIND_LABELS[media.kind]}{' '}
-        {from === 'fan' ? 'du fan' : media.isLocked === true ? 'payante, floutée' : 'offerte'}
+        {KIND_LABELS[description.kind]}{' '}
+        {from === 'fan' ? 'du fan' : isLocked ? 'payante, floutée' : 'offerte'}
+        {flags.length > 0 ? ` · ${flags.join(', ')}` : ''}
       </span>
-      <span className="pg-media__d">{media.factualDescription}</span>
+      <span className="pg-media__d">{description.factualDescription}</span>
     </div>
   );
 }
@@ -182,19 +197,19 @@ function Draft({
   answer,
   text,
   ...props
-}: ConversationProps & { answer: Answer | undefined; text: string }): JSX.Element | null {
+}: ConversationProps & { answer: Answer | null; text: string }): JSX.Element | null {
   const [edit, setEdit] = useState(text);
   useEffect(() => {
     setEdit(text);
   }, [text, props.mode]);
-  if (answer === undefined) return null;
+  if (answer === null) return null;
 
-  if ((answer.handoff?.length ?? 0) > 0) {
+  if (isHandoff(answer)) {
     return (
       <div className="pg-relay" role="group" aria-label="Relais humain">
         <p className="pg-relay__t">
-          <b>Relais à un humain : {answer.handoff?.join(', ')}</b>
-          {answer.brief?.understood} L’agent ne répond plus à ce fan et toute vente est bloquée.
+          <b>Relais à un humain : {handoffReasons(answer).join(', ') || 'décision du cerveau'}</b>
+          L’agent ne répond plus à ce fan et toute vente est bloquée.
         </p>
         <div className="pg-gest">
           <button
@@ -307,7 +322,7 @@ function Draft({
   }
 
   const lines = answer.isBlocked ? answer.bubbles : bubblesOf(text);
-  const blocking = answer.violations.filter((v) => v.blocking);
+  const blocking = answer.violations.filter((v) => v.severity === 'blocking');
   return (
     <div className="pg-draft">
       <span className="nv-draft-label">{answer.isBlocked ? 'Bloquée avant envoi' : 'Proposée, à noter'}</span>
@@ -345,16 +360,16 @@ function Draft({
         <div className="pg-rej">
           <p className="nv-eyebrow">Pourquoi ?</p>
           <div className="pg-chips">
-            {props.state.reasons.map((r) => (
+            {props.state.rejectReasons.map((r) => (
               <button
-                key={r.code}
+                key={r.id}
                 type="button"
                 className="nv-chip"
                 onClick={() => {
-                  props.onReason(r.code);
+                  props.onReason(r.id);
                 }}
               >
-                {r.label}
+                {r.label.charAt(0).toUpperCase() + r.label.slice(1)}
               </button>
             ))}
           </div>

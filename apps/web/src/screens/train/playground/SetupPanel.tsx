@@ -1,7 +1,8 @@
+import type { PlaygroundState } from '@nirvana/contracts';
 import { useEffect, useState, type JSX } from 'react';
 
 import { clockAt, duration, money } from './logic';
-import type { Media, MediaKind, PlaygroundState } from './model';
+import type { CreatorMedia as CreatorMediaInput, MediaKind } from './model';
 import type { Playground } from './usePlayground';
 
 export const MEDIA_KINDS: readonly { kind: MediaKind; label: string }[] = [
@@ -17,7 +18,6 @@ export const MEDIA_KINDS: readonly { kind: MediaKind; label: string }[] = [
 export function SetupPanel({ state, pg }: { state: PlaygroundState; pg: Playground }): JSX.Element {
   const { situation } = state;
   const age = new Date(situation.now).getTime() - new Date(situation.relationshipStartedAt).getTime();
-  const wait = situation.sexualizationInHours ?? 0;
   const known = [
     ...state.fanNotes.slice(0, 2),
     situation.spentCents === 0 ? 'jamais acheté' : `${money(situation.spentCents)} dépensés`,
@@ -70,14 +70,7 @@ export function SetupPanel({ state, pg }: { state: PlaygroundState; pg: Playgrou
               </span>
             </div>
             <p className="pg-hint">
-              {wait > 0 ? (
-                <>
-                  Elle ne sexualise pas d’elle-même avant <b>{duration(wait * 3_600_000)}</b>.
-                </>
-              ) : (
-                'Elle peut sexualiser d’elle-même.'
-              )}{' '}
-              Scripts <b>{situation.isNight ? 'Nuit' : 'Jour'}</b> seulement.
+              Nuit de 22 h à 7 h chez elle : scripts <b>{situation.isNight ? 'Nuit' : 'Jour'}</b> seulement.
             </p>
             <div className="pg-row2">
               <button
@@ -233,7 +226,7 @@ function CreatorMedia({
   onSend,
 }: {
   disabled: boolean;
-  onSend: (media: Media) => void;
+  onSend: (media: CreatorMediaInput) => void;
 }): JSX.Element {
   const [kind, setKind] = useState<MediaKind>('image');
   const [text, setText] = useState('');

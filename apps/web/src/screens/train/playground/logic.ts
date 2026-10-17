@@ -1,4 +1,6 @@
-import type { Answer, Destination, PlaygroundState, Verdict } from './model';
+import type { PlaygroundAnswer, PlaygroundState } from '@nirvana/contracts';
+
+import { isHandoff } from './model';
 
 /** Under 60 % the rate is red, under the target amber, at the target neutral: the eye goes where work is. */
 export type RateTone = 'ok' | 'warn' | 'bad';
@@ -46,24 +48,15 @@ export function bubblesOf(text: string): string[] {
 }
 
 /** Something to look at in « Pourquoi »: it opens by itself only then. */
-export function needsAttention(answer: Answer | undefined): boolean {
-  if (answer === undefined) return false;
+export function needsAttention(answer: PlaygroundAnswer | null): boolean {
+  if (answer === null) return false;
   return (
     answer.isBlocked ||
-    (answer.handoff?.length ?? 0) > 0 ||
-    (answer.trap?.length ?? 0) > 0 ||
+    isHandoff(answer) ||
+    (answer.trap?.signals.length ?? 0) > 0 ||
     (answer.brief?.risks.length ?? 0) > 0 ||
     answer.failure !== undefined
   );
-}
-
-export function destinationFor(
-  verdict: Verdict,
-  reasons: PlaygroundState['reasons'],
-): Destination | undefined {
-  if (verdict.kind === 'validated') return undefined;
-  if (verdict.kind === 'corrected') return 'voice_example';
-  return reasons.find((r) => r.code === verdict.reason)?.destination ?? 'test';
 }
 
 /** Where the screen stands: which keys answer and which gesture is expected. */
@@ -76,9 +69,9 @@ export function stepOf(
 ): Step {
   if (busy) return 'busy';
   if (local !== 'idle') return local;
-  const pending = state?.pending;
-  if (pending === undefined) return 'write';
-  if ((pending.handoff?.length ?? 0) > 0) return 'handoff';
+  const pending = state?.pending ?? null;
+  if (pending === null) return 'write';
+  if (isHandoff(pending)) return 'handoff';
   if (pending.isBlocked) return 'blocked';
   return 'rate';
 }

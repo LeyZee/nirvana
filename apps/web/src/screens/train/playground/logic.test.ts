@@ -1,7 +1,8 @@
+import type { PlaygroundAnswer as Answer, PlaygroundState } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { bubblesOf, destinationFor, duration, needsAttention, percent, rateTone, stepOf } from './logic';
-import type { Answer, PlaygroundState } from './model';
+import { bubblesOf, duration, needsAttention, percent, rateTone, stepOf } from './logic';
+import { handoffReasons, suggestedDestination } from './model';
 
 const answer = (patch: Partial<Answer> = {}): Answer => ({
   bubbles: ['Coucou toi ✨'],
@@ -39,34 +40,49 @@ describe('formatting', () => {
 
 describe('needsAttention', () => {
   it('opens « Pourquoi » only when something was blocked or flagged', () => {
-    expect(needsAttention(undefined)).toBe(false);
+    expect(needsAttention(null)).toBe(false);
     expect(needsAttention(answer())).toBe(false);
     expect(needsAttention(answer({ isBlocked: true }))).toBe(true);
-    expect(needsAttention(answer({ handoff: ['Mineur suspecté'] }))).toBe(true);
+    expect(needsAttention(answer({ handoff: ['possible_minor'] }))).toBe(true);
     expect(
-      needsAttention(answer({ trap: [{ code: 'injection', label: 'Consigne', blocking: false }] })),
+      needsAttention(
+        answer({ trap: { signals: [{ kind: 'override', source: 'fan_message', label: 'Ordre' }] } }),
+      ),
     ).toBe(true);
   });
 });
 
-describe('destinationFor', () => {
-  const reasons: PlaygroundState['reasons'] = [
-    { code: 'sounds_ai', label: 'Sonne IA', destination: 'test' },
-    { code: 'missed_sale', label: 'Vente ratée', destination: 'rule' },
-  ];
+describe('suggestedDestination', () => {
+  it('sends a correction to the voice examples, a rule reason to a rule, the rest to a test', () => {
+    expect(suggestedDestination({ kind: 'validated' })).toBeUndefined();
+    expect(suggestedDestination({ kind: 'corrected', text: 'Pas faux !' })).toBe('voice_example');
+    expect(suggestedDestination({ kind: 'rejected', reason: 'missed_sale' })).toBe('rule');
+    expect(suggestedDestination({ kind: 'rejected', reason: 'sounds_ai' })).toBe('test');
+  });
+});
 
-  it('sends a correction to the voice examples and a rejection where its reason says', () => {
-    expect(destinationFor({ kind: 'validated' }, reasons)).toBeUndefined();
-    expect(destinationFor({ kind: 'corrected', text: 'Pas faux !' }, reasons)).toBe('voice_example');
-    expect(destinationFor({ kind: 'rejected', reason: 'missed_sale' }, reasons)).toBe('rule');
-    expect(destinationFor({ kind: 'rejected', reason: 'unknown' }, reasons)).toBe('test');
+describe('handoffReasons', () => {
+  it('says in words why a human takes over, without repeats', () => {
+    const brief = {
+      intent: 'distress',
+      sentiment: 'negative',
+      risks: ['distress', 'distress'],
+      action: 'handoff',
+      replyBrief: 'Ne rien écrire.',
+      kycMissing: [],
+    };
+    expect(handoffReasons(answer({ handoff: ['possible_minor'], brief }))).toEqual([
+      'Mineur possible',
+      'Détresse',
+    ]);
+    expect(handoffReasons(answer({ handoff: ['new_flag'] }))).toEqual(['new_flag']);
   });
 });
 
 describe('stepOf', () => {
-  const state = (pending?: Answer): PlaygroundState => ({
+  const state = (pending: Answer | null = null): PlaygroundState => ({
     presets: [],
-    reasons: [],
+    presetId: null,
     situation: {
       now: '2026-10-17T21:40:00.000Z',
       timeZone: 'Europe/Paris',
@@ -76,10 +92,11 @@ describe('stepOf', () => {
     },
     fanNotes: [],
     history: [],
-    ...(pending && { pending }),
-    rate: { rate: 0.64, rated: 50, validated: 32, target: 0.8 },
+    rate: { rate: 0.64, rated: 50, validated: 32, target: 0.8, trendPoints: null, previousVersion: null },
     version: { voicePrompt: '1.4.0', voiceModel: 'grok-4.7' },
+    rejectReasons: [],
     sessionCostUsd: 0,
+    pending,
   });
 
   it('proposes the one thing to do next', () => {
@@ -87,7 +104,9 @@ describe('stepOf', () => {
     expect(stepOf(state(), 'idle', false)).toBe('write');
     expect(stepOf(state(answer()), 'idle', false)).toBe('rate');
     expect(stepOf(state(answer({ isBlocked: true })), 'idle', false)).toBe('blocked');
-    expect(stepOf(state(answer({ isBlocked: true, handoff: ['Détresse'] })), 'idle', false)).toBe('handoff');
+    expect(stepOf(state(answer({ isBlocked: true, handoff: ['possible_minor'] })), 'idle', false)).toBe(
+      'handoff',
+    );
     expect(stepOf(state(answer()), 'lesson', false)).toBe('lesson');
   });
 });

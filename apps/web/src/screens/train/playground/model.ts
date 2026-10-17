@@ -1,12 +1,21 @@
-import { z } from 'zod';
+import type {
+  Destination,
+  PlaygroundAnswer,
+  PlaygroundMedia,
+  PlaygroundState,
+  RejectReason,
+  Verdict,
+} from '@nirvana/contracts';
 
 /**
- * What the playground API answers (P3-06, routes under /v1/playground). Mirrors the shapes agreed with the agent
- * thread; moves to `@nirvana/contracts` (playground.ts) when the routes land, and this file goes away.
+ * Screen-side vocabulary of the playground. The data shapes live in `@nirvana/contracts` (playground.ts, P3-06);
+ * this file only adds what the screen needs on top: names for parts of them, and French labels.
  */
 
-export const DestinationSchema = z.enum(['voice_example', 'rule', 'test']);
-export type Destination = z.infer<typeof DestinationSchema>;
+export type MediaKind = PlaygroundMedia['kind'];
+export type Turn = PlaygroundState['history'][number];
+/** A media the trainer has her send: what it shows, and whether it is paid and blurred. */
+export type CreatorMedia = PlaygroundMedia & { readonly isLocked: boolean };
 
 export const DESTINATION_LABELS: Readonly<Record<Destination, string>> = {
   voice_example: 'Exemple de voix',
@@ -19,113 +28,84 @@ export const DESTINATION_HINTS: Readonly<Record<Destination, string>> = {
   test: 'Rejoué à chaque changement de prompt ou de modèle.',
 };
 
-const RejectReasonSchema = z.object({
-  code: z.string().min(1),
-  label: z.string().min(1),
-  /** Where a rejection for this reason goes by default (calibration.ts, suggestDestination). */
-  destination: DestinationSchema,
-});
+const RULE_REASONS: readonly RejectReason[] = ['too_early_sexual', 'missed_sale', 'forgot_fact'];
 
-export type Verdict =
-  | { readonly kind: 'validated' }
-  | { readonly kind: 'corrected'; readonly text: string }
-  | { readonly kind: 'rejected'; readonly reason: string; readonly note?: string };
+/**
+ * The destination proposed for a lesson: the engine's own rule (calibration.ts, suggestDestination), shown before
+ * the rating so the trainer can change it. The server keeps the one sent.
+ */
+export function suggestedDestination(verdict: Verdict): Destination | undefined {
+  if (verdict.kind === 'validated') return undefined;
+  if (verdict.kind === 'corrected') return 'voice_example';
+  return RULE_REASONS.includes(verdict.reason) ? 'rule' : 'test';
+}
 
-const MediaKindSchema = z.enum(['image', 'video', 'audio']);
-export type MediaKind = z.infer<typeof MediaKindSchema>;
+const INTENTS: Readonly<Record<string, string>> = {
+  small_talk: 'Il discute',
+  kyc_answer: 'Il parle de lui',
+  flirt: 'Il flirte',
+  sexting: 'Il veut du sexto',
+  media_reaction: 'Il réagit à un média',
+  asks_for_media: 'Il demande un média',
+  price_objection: 'Il discute le prix',
+  asks_if_bot: 'Il demande si elle est un bot',
+  asks_to_meet: 'Il veut la rencontrer',
+  asks_personal_contact: 'Il veut ses coordonnées',
+  distress: 'Il va mal',
+  complaint: 'Il se plaint',
+  off_topic_request: 'Il demande autre chose (recette, code…)',
+  other: 'Autre chose',
+};
+const SENTIMENTS: Readonly<Record<string, string>> = {
+  positive: 'de bonne humeur',
+  neutral: 'neutre',
+  negative: 'contrarié',
+  aroused: 'excité',
+  frustrated: 'frustré',
+};
+const ACTIONS: Readonly<Record<string, string>> = {
+  reply: 'Répondre, sans offre',
+  offer: 'Proposer un script',
+  wait: 'Attendre avant de répondre',
+  follow_up: 'Relancer',
+  handoff: 'Se taire : un humain reprend la main',
+};
+const RISKS: Readonly<Record<string, string>> = {
+  minor_suspected: 'Mineur suspecté',
+  distress: 'Détresse',
+  meet_request: 'Demande de rencontre',
+  off_platform_payment: 'Paiement hors plateforme',
+  dispute: 'Litige',
+  harassment: 'Harcèlement',
+  self_harm: 'Idées noires',
+  money_trouble: 'Argent difficile',
+  manipulation_attempt: 'Tentative de manipulation',
+};
+/** Safety flags of a media (MediaDescription.flags): any of them hands the fan over to a human. */
+export const MEDIA_FLAG_LABELS: Readonly<Record<string, string>> = {
+  possible_minor: 'Mineur possible',
+  possible_non_consent: 'Non-consentement possible',
+  identifiable_third_party: 'Tiers identifiable',
+  weapon: 'Arme',
+  drugs: 'Drogue',
+  self_harm: 'Automutilation',
+};
 
-const MediaSchema = z.object({
-  kind: MediaKindSchema,
-  factualDescription: z.string(),
-  isLocked: z.boolean().optional(),
-});
-export type Media = z.infer<typeof MediaSchema>;
+/** The brain's codes in the team's words; an unknown code shows as is, never as an empty line. */
+export const intentLabel = (code: string): string => INTENTS[code] ?? code;
+export const sentimentLabel = (code: string): string => SENTIMENTS[code] ?? code;
+export const actionLabel = (code: string): string => ACTIONS[code] ?? code;
+export const riskLabel = (code: string): string => RISKS[code] ?? code;
 
-const TurnSchema = z.object({
-  from: z.enum(['fan', 'creator']),
-  text: z.string(),
-  media: z.array(MediaSchema).optional(),
-});
-export type Turn = z.infer<typeof TurnSchema>;
+/** A human takes over: a flag on his media, or the brain decided to step back. Nothing was written. */
+export function isHandoff(answer: PlaygroundAnswer | null): boolean {
+  if (answer === null) return false;
+  return (answer.handoff?.length ?? 0) > 0 || answer.brief?.action === 'handoff';
+}
 
-/** A finding, already in French: the screen shows labels, never codes. */
-const FindingSchema = z.object({ code: z.string(), label: z.string(), blocking: z.boolean() });
-export type Finding = z.infer<typeof FindingSchema>;
-
-const BriefSchema = z.object({
-  /** What she understood, in one sentence. */
-  understood: z.string(),
-  /** What she decided to do: answer, offer, hold back, hand over. */
-  decision: z.string(),
-  risks: z.array(z.string()),
-  kycMissing: z.array(z.string()),
-});
-
-const AnswerSchema = z.object({
-  bubbles: z.array(z.string()),
-  isBlocked: z.boolean(),
-  violations: z.array(FindingSchema),
-  /** A human must take over (possible minor, distress): nothing was written. */
-  handoff: z.array(z.string()).optional(),
-  trap: z.array(FindingSchema).optional(),
-  /** What Vision saw in his media. */
-  vision: z.array(z.string()).optional(),
-  brief: BriefSchema.optional(),
-  model: z.string().optional(),
-  latencyMs: z.number().nonnegative(),
-  costUsd: z.number().nonnegative(),
-  isFallback: z.boolean(),
-  failure: z.string().optional(),
-});
-export type Answer = z.infer<typeof AnswerSchema>;
-
-export const ComparisonSchema = z.object({
-  bubbles: z.array(z.string()),
-  isBlocked: z.boolean(),
-  violations: z.array(FindingSchema),
-  model: z.string().optional(),
-  costUsd: z.number().nonnegative(),
-  failure: z.string().optional(),
-});
-export type Comparison = z.infer<typeof ComparisonSchema>;
-
-const PresetSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  tests: z.string(),
-  opening: z.string(),
-});
-export type Preset = z.infer<typeof PresetSchema>;
-
-const SituationSchema = z.object({
-  now: z.iso.datetime({ offset: true }),
-  timeZone: z.string(),
-  relationshipStartedAt: z.iso.datetime({ offset: true }),
-  spentCents: z.number().int().nonnegative(),
-  isNight: z.boolean(),
-  /** Hours before she may sexualise on her own (persona); 0 once allowed. */
-  sexualizationInHours: z.number().nonnegative().optional(),
-});
-
-const RateSchema = z.object({
-  /** Answers kept as written, out of the last 50 rated for this version; null before the first rating. */
-  rate: z.number().min(0).max(1).nullable(),
-  rated: z.number().int().nonnegative(),
-  validated: z.number().int().nonnegative(),
-  target: z.number().min(0).max(1),
-  trend: z.object({ since: z.string(), points: z.number() }).optional(),
-});
-
-export const PlaygroundStateSchema = z.object({
-  presets: z.array(PresetSchema),
-  presetId: z.string().optional(),
-  reasons: z.array(RejectReasonSchema),
-  situation: SituationSchema,
-  fanNotes: z.array(z.string()),
-  history: z.array(TurnSchema),
-  pending: AnswerSchema.optional(),
-  rate: RateSchema,
-  version: z.object({ voicePrompt: z.string(), voiceModel: z.string() }),
-  sessionCostUsd: z.number().nonnegative(),
-});
-export type PlaygroundState = z.infer<typeof PlaygroundStateSchema>;
+/** Why a human takes over, in words, without repeats. */
+export function handoffReasons(answer: PlaygroundAnswer): string[] {
+  const flags = (answer.handoff ?? []).map((f) => MEDIA_FLAG_LABELS[f] ?? f);
+  const risks = answer.brief?.action === 'handoff' ? answer.brief.risks.map(riskLabel) : [];
+  return [...new Set([...flags, ...risks])];
+}

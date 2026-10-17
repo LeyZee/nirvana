@@ -1,17 +1,19 @@
+import type { Destination, PlaygroundComparison, PlaygroundMedia, Verdict } from '@nirvana/contracts';
 import { useEffect, useState, type JSX } from 'react';
 
 import { Composer, Conversation, LessonCard, type LocalMode } from './playground/Conversation';
 import { RateBar } from './playground/RateBar';
 import { SetupPanel } from './playground/SetupPanel';
 import { WhyPanel } from './playground/WhyPanel';
-import type { PlaygroundErrorCode } from './playground/client';
-import { destinationFor, fanMessageCount, needsAttention, stepOf } from './playground/logic';
-import type { Comparison, Destination, Media, Verdict } from './playground/model';
+import { COMPARE_MODEL, PlaygroundError, type PlaygroundErrorCode } from './playground/client';
+import { fanMessageCount, needsAttention, stepOf } from './playground/logic';
+import { isHandoff, suggestedDestination } from './playground/model';
 import { usePlayground } from './playground/usePlayground';
 
 const ERRORS: Readonly<Record<PlaygroundErrorCode, string>> = {
   llm_unavailable: 'Grok ne répond pas : ajoute ou vérifie sa clé dans Réglages, Modèles IA.',
   not_deployed: 'Le playground n’est pas encore en ligne sur ce serveur.',
+  still_writing: 'L’agent rédige encore la réponse précédente.',
   failed: 'Le serveur n’a pas répondu. Réessaie dans un instant.',
 };
 
@@ -24,11 +26,11 @@ export function PlaygroundPage(): JSX.Element {
   const { state } = pg;
   const [mode, setMode] = useState<LocalMode>('idle');
   const [lesson, setLesson] = useState<{ verdict: Verdict; destination: Destination } | undefined>(undefined);
-  const [comparison, setComparison] = useState<Comparison | undefined>(undefined);
+  const [comparison, setComparison] = useState<PlaygroundComparison | undefined>(undefined);
   const [writing, setWriting] = useState(false);
   const [whyManual, setWhyManual] = useState<boolean | undefined>(undefined);
 
-  const pending = state?.pending;
+  const pending = state?.pending ?? null;
   const step = stepOf(state, mode, pg.busy);
   const whyOpen = whyManual ?? needsAttention(pending);
 
@@ -47,14 +49,13 @@ export function PlaygroundPage(): JSX.Element {
     if (!(await pg.run((c) => c.rate(verdict, destination)))) return;
     reset();
     // A rejected answer gets a new draw for the same moment, as a trainer would ask « again ».
-    if (verdict.kind === 'rejected' && state !== undefined && state.pending?.handoff === undefined) {
+    if (verdict.kind === 'rejected' && state !== undefined && !isHandoff(state.pending)) {
       replay(fanMessageCount(state));
     }
   };
 
   const startLesson = (verdict: Verdict): void => {
-    if (state === undefined) return;
-    setLesson({ verdict, destination: destinationFor(verdict, state.reasons) ?? 'test' });
+    setLesson({ verdict, destination: suggestedDestination(verdict) ?? 'test' });
     setMode('lesson');
   };
 
@@ -65,7 +66,7 @@ export function PlaygroundPage(): JSX.Element {
     setWriting(false);
   };
 
-  const send = (text: string, media: Media[]): void => {
+  const send = (text: string, media: PlaygroundMedia[]): void => {
     void answerTo(() => pg.run((c) => c.send(text, media)));
   };
   const replay = (n: number): void => {
@@ -75,10 +76,10 @@ export function PlaygroundPage(): JSX.Element {
   const compare = async (): Promise<void> => {
     setWriting(true);
     try {
-      setComparison(await pg.client.compare());
+      setComparison(await pg.client.compare(COMPARE_MODEL));
       setMode('compare');
-    } catch {
-      pg.fail('failed');
+    } catch (error) {
+      pg.fail(error instanceof PlaygroundError ? error.code : 'failed');
     } finally {
       setWriting(false);
     }
@@ -153,10 +154,10 @@ export function PlaygroundPage(): JSX.Element {
             type="button"
             className="nv-btn nv-btn--sm"
             title="Même fan, conversation remise à zéro"
-            disabled={pg.busy || state.presetId === undefined}
+            disabled={pg.busy}
             onClick={() => {
               reset();
-              void pg.run((c) => c.choosePreset(state.presetId ?? ''));
+              void pg.run((c) => c.reset());
             }}
           >
             Recommencer
@@ -210,9 +211,9 @@ export function PlaygroundPage(): JSX.Element {
             />
           ) : null}
           <Composer
-            disabled={pg.busy || pending !== undefined}
+            disabled={pg.busy || pending !== null}
             placeholder={
-              pending === undefined ? `Écris comme ${name} le ferait…` : 'Note d’abord la réponse de l’agent'
+              pending === null ? `Écris comme ${name} le ferait…` : 'Note d’abord la réponse de l’agent'
             }
             onSend={send}
           />
