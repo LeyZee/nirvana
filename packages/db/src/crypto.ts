@@ -27,14 +27,23 @@ const KeySchema = z
   })
   .refine((parsed) => parsed.key.length === 32, 'each key must be 32 bytes (openssl rand -base64 32)');
 
-/** Parses the env value; the first key encrypts, all of them decrypt. */
-export function parseEncryptionKeys(value: string): EncryptionKey[] {
-  const keys = z
+/**
+ * Parses the env value; the first key encrypts, all of them decrypt. `variable` names the setting in the errors
+ * (`SESSION_ENCRYPTION_KEYS`, `CREDENTIALS_ENCRYPTION_KEYS`), so a bad value points at the right line of `.env`.
+ * The error never quotes the value.
+ */
+export function parseEncryptionKeys(value: string, variable = 'encryption keys'): EncryptionKey[] {
+  const parsed = z
     .array(KeySchema)
     .min(1)
-    .parse(value.split(',').map((entry) => entry.trim()));
+    .safeParse(value.split(',').map((entry) => entry.trim()));
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((issue) => issue.message).join(' ; ');
+    throw new Error(`${variable}: ${issues}`);
+  }
+  const keys = parsed.data;
   const versions = new Set(keys.map((k) => k.version));
-  if (versions.size !== keys.length) throw new Error('SESSION_ENCRYPTION_KEYS has a duplicate version');
+  if (versions.size !== keys.length) throw new Error(`${variable} has a duplicate version`);
   return keys;
 }
 

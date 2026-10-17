@@ -161,7 +161,7 @@ export async function startProvidersModule(options: ProvidersStartOptions): Prom
         ? createMemoryCredentialStore()
         : createPostgresCredentialStore({
             adminDb: options.adminDb,
-            keys: parseEncryptionKeys(options.encryptionKeys),
+            keys: parseEncryptionKeys(options.encryptionKeys, 'CREDENTIALS_ENCRYPTION_KEYS'),
             onUnreadable: (provider) => {
               options.onLoadError(new UnreadableProviderKey(provider));
             },

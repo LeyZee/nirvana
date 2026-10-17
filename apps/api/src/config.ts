@@ -52,6 +52,8 @@ const configSchema = z
     /** Development only: AI service keys read from the environment, ignored in production (ADR 0016). Empty = unset. */
     LLM_XAI_API_KEY: optionalValue,
     LLM_GOOGLE_API_KEY: optionalValue,
+    LLM_MISTRAL_API_KEY: optionalValue,
+    LLM_VENICE_API_KEY: optionalValue,
     SPEECH_ELEVENLABS_API_KEY: optionalValue,
     /** AES-256-GCM keys of the platform sessions, `v2:<base64>,v1:<base64>` newest first (security.md). */
     SESSION_ENCRYPTION_KEYS: z.string().optional(),

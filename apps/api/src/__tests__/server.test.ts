@@ -269,8 +269,16 @@ describe('loadConfig', () => {
   });
 
   it('takes an AI key left empty in .env as unset', () => {
-    const config = testConfig({ LLM_XAI_API_KEY: '', LLM_GOOGLE_API_KEY: '', SPEECH_ELEVENLABS_API_KEY: '' });
+    const config = testConfig({
+      LLM_XAI_API_KEY: '',
+      LLM_GOOGLE_API_KEY: '',
+      LLM_MISTRAL_API_KEY: '',
+      LLM_VENICE_API_KEY: '',
+      SPEECH_ELEVENLABS_API_KEY: '',
+    });
     expect(config.LLM_XAI_API_KEY).toBeUndefined();
+    expect(config.LLM_MISTRAL_API_KEY).toBeUndefined();
+    expect(config.LLM_VENICE_API_KEY).toBeUndefined();
     expect(config.SPEECH_ELEVENLABS_API_KEY).toBeUndefined();
   });
 

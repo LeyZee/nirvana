@@ -59,6 +59,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Dashboard : focus après la confirmation d'arrêt | done | `log/2026-10-17-dashboard-focus.md` |
 | 2026-10-17 | Gardes de sortie, relances et plafond (revue 09) (Opus) | in_progress | `log/2026-10-17-gardes-revue-09.md` |
 | 2026-10-17 | Tests d'écran d'apps/web (G15) | done | `log/2026-10-17-web-tests-ecran.md` |
+| 2026-10-17 | Clés Mistral et Venice en développement, message des clés de chiffrement | done | `log/2026-10-17-mistral-env-keys.md` |
 
 ## Incidents (liste vivante)
 
