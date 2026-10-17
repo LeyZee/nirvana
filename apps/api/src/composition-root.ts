@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { JOB_PAYLOADS } from '@nirvana/contracts';
+import { CreatorIdSchema, JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
 import { createPersistentCallLog, DEFAULT_LLM_CONFIG, type LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
@@ -194,7 +194,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           gateway: llm.gateway,
           personaPath,
           trainingDir,
-          timeZone: DEFAULT_LLM_CONFIG.dailyBudget.timeZone,
+          // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
+          timeZoneOf: async (creatorId) => {
+            const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);
+            return creator?.timezone ?? DEFAULT_LLM_CONFIG.dailyBudget.timeZone;
+          },
         }).catch((error: unknown) => {
           logger.warn({ err: error }, 'draft composer not started: persona unreadable');
           return undefined;

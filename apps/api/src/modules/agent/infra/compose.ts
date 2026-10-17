@@ -10,6 +10,13 @@ export interface ComposerPersona {
   readonly creatorName: string;
   readonly personaSheet: string;
   readonly guardSettings: GuardSettings;
+  /** False: her answer goes out as one message (`behavior.split_messages`). Absent: as the voice wrote it. */
+  readonly splitMessages?: boolean;
+}
+
+/** What the fan receives: her bubbles, or one message when she does not split hers. */
+export function asSent(bubbles: readonly string[], splitMessages = true): readonly string[] {
+  return splitMessages || bubbles.length <= 1 ? bubbles : [bubbles.join('\n')];
 }
 
 export interface ComposeTurnInput {
@@ -121,8 +128,10 @@ export async function composeTurn(
   }
   const voiceInput: VoiceInput = { ...base, brief: voiceBrief };
   const voice = await gateway.voice(voiceInput);
-  const bubbles = voice.ok ? voice.value.output.bubbles : [];
-  const violations = checkVoiceOutput(bubbles, persona.guardSettings);
+  const written = voice.ok ? voice.value.output.bubbles : [];
+  // Checked as written: the length and count guards read the voice's bubbles, not the joined message.
+  const violations = checkVoiceOutput(written, persona.guardSettings);
+  const bubbles = asSent(written, persona.splitMessages);
   return {
     ...(trap.isTrap && { trap }),
     ...(brief && { brief }),

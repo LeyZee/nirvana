@@ -109,6 +109,8 @@ async function server(
       personaSheet: 'fiche',
       forbiddenTerms: [],
       offerLimits: { cooldownHours: 10 },
+      splitMessages: true,
+      petNames: [],
     },
     store,
     records,

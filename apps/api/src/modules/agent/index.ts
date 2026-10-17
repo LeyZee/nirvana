@@ -3,12 +3,11 @@ import { join } from 'node:path';
 
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
-import { DEFAULT_GUARD_SETTINGS } from './domain/guards';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
 import { createDraftComposer, type AgentDraftComposer } from './infra/draft-composer';
 import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
-import { readPersonaFile } from './infra/persona-file';
+import { guardSettingsOf, readPersonaFile } from './infra/persona-file';
 
 /** Public entry point of the `agent` module (ADR 0002). Other modules import this file only. */
 export {
@@ -38,8 +37,8 @@ export {
   type RatedMoment,
 } from './infra/calibration-record';
 export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
-export { composeTurn, withExamples } from './infra/compose';
-export { readPersonaFile, type PersonaForModels } from './infra/persona-file';
+export { asSent, composeTurn, withExamples } from './infra/compose';
+export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
 export type { AgentDraftComposer } from './infra/draft-composer';
 
@@ -49,7 +48,8 @@ export interface DraftComposerStartOptions {
   readonly personaPath: string;
   /** The playground's ratings: her corrected answers become the voice's examples here too. */
   readonly trainingDir: string;
-  readonly timeZone: string;
+  /** Her clock, read for each draft: the creator's time zone. */
+  readonly timeZoneOf: (creatorId: string) => Promise<string>;
 }
 
 /** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
@@ -62,9 +62,10 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     persona: {
       creatorName: persona.creatorName,
       personaSheet: withExamples(persona.personaSheet, voiceExamples(records)),
-      guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: persona.forbiddenTerms },
+      guardSettings: guardSettingsOf(persona),
+      splitMessages: persona.splitMessages,
     },
-    timeZone: options.timeZone,
+    timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
   });
 }

@@ -2,6 +2,7 @@ import type { MediaDescription } from '@nirvana/contracts';
 import type { Brief, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import {
+  asSent,
   checkVoiceOutput,
   composeTurn,
   withExamples,
@@ -73,6 +74,8 @@ export interface PlaygroundDeps {
   readonly creatorName: string;
   readonly personaSheet: string;
   readonly guardSettings: GuardSettings;
+  /** False: her answer is shown as one message, as the fan would get it (`behavior.split_messages`). */
+  readonly splitMessages?: boolean;
   /** Answers the team corrected earlier: given to the voice as her examples (they take precedence). */
   readonly voiceExamples?: readonly string[];
   readonly timeZone?: string;
@@ -160,8 +163,9 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       const input = lastExchange?.voiceInput;
       if (input === undefined) return undefined;
       const voice = await gateway.voice(input);
-      const bubbles = voice.ok ? voice.value.output.bubbles : [];
-      const violations = checkVoiceOutput(bubbles, deps.guardSettings);
+      const written = voice.ok ? voice.value.output.bubbles : [];
+      const violations = checkVoiceOutput(written, deps.guardSettings);
+      const bubbles = asSent(written, deps.splitMessages);
       return {
         bubbles,
         violations,
@@ -181,7 +185,12 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       };
       const composed = await composeTurn(
         deps.gateway,
-        { creatorName: deps.creatorName, personaSheet, guardSettings: deps.guardSettings },
+        {
+          creatorName: deps.creatorName,
+          personaSheet,
+          guardSettings: deps.guardSettings,
+          ...(deps.splitMessages !== undefined && { splitMessages: deps.splitMessages }),
+        },
         { history: [...history], fanText: text, media, fanNotes: moment.fanNotes, situation },
       );
       // In-memory fan notes until the fans module stores facts (P3-02).

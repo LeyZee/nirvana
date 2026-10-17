@@ -74,6 +74,21 @@ describe('playground session', () => {
     expect(session.history).toHaveLength(0);
   });
 
+  it('sends one message when she does not split hers, the guards reading the bubbles as written', async () => {
+    const session = createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['Enchantée Julien ✨', 'Et tu as quel âge'] }),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: { ...settings, maxBubbles: 1 },
+      splitMessages: false,
+    });
+
+    const turn = await session.handleFanMessage('Moi c’est Julien');
+
+    expect(turn.bubbles).toEqual(['Enchantée Julien ✨\nEt tu as quel âge']);
+    expect(turn.violations.map((v) => v.code)).toEqual(['too_many_bubbles']);
+  });
+
   it('shows a blocked answer without adding it to the conversation', async () => {
     const session = createPlaygroundSession({
       gateway: fakeGateway({ bubbles: ['Je suis une IA'] }),
@@ -262,11 +277,24 @@ describe('persona file', () => {
     ]);
   });
 
-  it('gives the model her age and voice, never the date of birth nor the rules code applies', () => {
+  it('gives the model her age, voice and own way to run each stage, never what code applies', () => {
     const { personaSheet } = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
     expect(personaSheet).toContain('age: 25');
     expect(personaSheet).toContain('additional_info:');
-    expect(personaSheet).not.toMatch(/date_of_birth|strategies|follow_ups|notifications/);
+    expect(personaSheet).toContain('languages:');
+    // Her written approach to the getting-to-know stage reaches the models; its numbers stay in code.
+    expect(personaSheet).toContain('Une question à la fois');
+    expect(personaSheet).toContain('targets:');
+    expect(personaSheet).not.toMatch(
+      /date_of_birth|gender|timezone|response_delay|cooldown|max_messages|initiate_after|follow_ups|notifications/,
+    );
+  });
+
+  it('gives the code her pace, her pet names and whether she splits her messages', () => {
+    const persona = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
+    expect(persona.offerLimits).toEqual({ cooldownHours: 12 });
+    expect(persona.splitMessages).toBe(true);
+    expect(persona.petNames).toEqual(['Toi', 'Beau gosse', 'Mon grand']);
   });
 
   it('refuses a file outside the persona schema', () => {

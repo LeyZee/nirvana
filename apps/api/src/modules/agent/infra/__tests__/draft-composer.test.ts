@@ -94,7 +94,7 @@ function composer(script: Script = {}) {
   const draftComposer = createDraftComposer({
     gateway: gateway(script, seen),
     persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
-    timeZone: 'Europe/Paris',
+    timeZoneOf: () => Promise.resolve('Europe/Paris'),
     voicePrompt: '1.2.0',
   });
   return { draftComposer, seen };
@@ -115,6 +115,21 @@ describe('createDraftComposer', () => {
       conversationId: 'conversation-1',
       draftId: 'draft-1',
     });
+  });
+
+  it('reads her clock from the creator of the conversation', async () => {
+    const asked: string[] = [];
+    const draftComposer = createDraftComposer({
+      gateway: gateway({}, { voiceCalls: 0, traces: [] }),
+      persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
+      timeZoneOf: (creatorId) => {
+        asked.push(creatorId);
+        return Promise.resolve('America/Montreal');
+      },
+      voicePrompt: '1.2.0',
+    });
+    await draftComposer.compose(INPUT);
+    expect(asked).toEqual(['creator-1']);
   });
 
   it('holds when no voice model has a key, without calling anything', async () => {
