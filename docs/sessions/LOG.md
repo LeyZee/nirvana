@@ -9,6 +9,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-16 | Revue des fondations (Fable) | done | `log/2026-10-16-fondations-revue.md` |
 | 2026-10-16 | Logo et marque (Fable) | done | `log/2026-10-16-logo.md` |
 | 2026-10-16 | Revue indépendante (Opus) | done | `log/2026-10-16-revue-independante.md` |
+| 2026-10-17 | Brainstorm interface, extension, playground (Opus) | done | `log/2026-10-17-interface-brainstorm.md` |
 
 ## Incidents (liste vivante)
 
