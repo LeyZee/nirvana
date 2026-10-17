@@ -13,6 +13,10 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Suit la version de Node du projet (.nvmrc, 22) : une majeure de @types/node décrirait une API absente.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
     labels: [dependencies]
   - package-ecosystem: github-actions
     directory: /
