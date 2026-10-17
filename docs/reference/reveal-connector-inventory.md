@@ -54,3 +54,75 @@ L5, L7 à L13, E3, E4 et E4b n'existent pas dans le port décrit par `docs/archi
 12. **Historique** : pagination de tout l'historique d'une conversation, des achats passés et des notes client (import initial, anti-doublon).
 13. **Notes client** : lecture, écriture, format, concurrence avec un chatteur.
 14. **Âge des fans** : Reveal vérifie-t-il l'âge, et l'expose-t-il.
+
+## Observé à l'écran (captures de Charles, 2026-10-17)
+
+Neuf captures d'écran de l'interface créatrice de Reveal, sans trafic réseau : elles disent ce que l'interface montre, pas encore quels appels le fournissent. Aucun pseudo, contenu ni donnée de persona n'est recopié ici.
+
+### Navigation
+
+Menu du compte : Statistiques, Profil, Boost, Stories, Publications, Informations, Messages, **Automatisations**, Abonnements, Liens de paiement, Mass DM, Listes, **Scripts**, **Vault**, Boudoir, Transactions, Liens de suivi. En haut : Dashboard, Classement, Affiliation, notifications, réglages, compte connecté.
+
+- **Automatisations** : Reveal envoie peut-être déjà des messages seul (bienvenue, relances). À inventorier avant tout envoi par l'agent, sinon un fan reçoit deux messages.
+- **Mass DM** apparaît dans les conversations comme un message ordinaire (promotion d'une autre créatrice, « SFS ») : le connecteur doit savoir le reconnaître pour ne pas y répondre comme à un échange.
+
+### Boîte de réception (L2)
+
+- Compteurs et filtres : Tous, épinglés, en ligne (point vert, nombre), Priorité (nombre), Non lu (nombre) ; recherche par pseudo ; filtre « Toutes les listes ».
+- Ligne de conversation : avatar, **badge du total dépensé par le fan** (en €), pseudo, point de présence, aperçu du dernier message (« Vous avez envoyé un media »), date.
+- Les non-lus et un aperçu sont donc visibles sans ouvrir la conversation (question 3, à confirmer dans le trafic).
+
+### Conversation (L3, E1, E6)
+
+- En-tête : pseudo, crayon (renommer le fan pour l'équipe), « Vu il y a environ 3 heures » (dernière présence), puis des actions à identifier : liste, épingler « Moi », **« Équipe »** (attribution à un chatteur ?), enveloppe (marquer non lu ?), cercle barré (bloquer ou masquer ?).
+- **Chaque message sortant porte le nom du chatteur et l'heure** (« Prénom - JJ/MM/AAAA HH:MM »). Reveal attribue donc les envois par membre de l'équipe : c'est la base de l'attribution des ventes bot ou chatteur.
+- Les **messages supprimés** restent visibles pour les admins (« Message supprimé - Visible uniquement par les admins ») : le connecteur doit les reconnaître et ne jamais les compter comme lus par le fan.
+- Zone de saisie : bouton média (image), **bouton étiquette (bundle PPV, à confirmer)**, micro (message vocal), champ texte, emoji, **bouton bulle (scripts)**, envoyer. Une barre d'emojis rapides éditable au-dessus.
+
+### Envoyer des médias (E2, gratuit)
+
+Fenêtre « Envoyer des médias » : « Ajouter depuis le Vault » ou « Importer depuis l'ordinateur », puis « Sélectionner ».
+
+### Bundle = PPV (E2)
+
+Dans Reveal, un PPV s'appelle un **bundle**. Fenêtre « Ajouter un bundle » :
+
+- **Prix TTC** ; la TVA est calculée selon la localisation du fan. **0 = offert** : le fan le voit sans payer.
+- **Tarif réduit TTC** (interrupteur) : prix barré ou remise. Utile pour la règle de remise (question à Charles).
+- **Contenu vendu** : médias **floutés tant que le fan n'a pas payé**, depuis le Vault ou importés. **Au moins un média, sinon l'envoi est refusé.**
+- **Aperçu gratuit (teasing)** : optionnel, **10 médias au plus**, affichés non floutés dans un carrousel tant que le bundle n'est pas acheté. Ne jamais y mettre le contenu vendu.
+
+Conséquences pour le port : `OutboundMedia` doit porter `priceCents` (TTC, devise EUR), `discountedPriceCents?`, `lockedMediaRefs` (≥ 1) et `teaserMediaRefs` (≤ 10). Les gardes en code vérifient ces bornes avant l'envoi (règle 3 de CLAUDE.md).
+
+### Scripts (L8, L9, E3)
+
+Le sélecteur s'ouvre depuis le bouton bulle de la zone de saisie. Le parcours de Charles : **choisir un script, puis une étape, puis envoyer**.
+
+- Filtre « Tous » en haut (dossiers ou catégories, à confirmer), recherche « par nom ou message ».
+- Chaque ligne est **une étape** : nom de l'étape (« Contexte », « Teasing », « Etape 1 : … »), texte du message (parfois « / » = pas de texte, média seul), prix (« Gratuit » ou montant), vignettes des médias (« +1 » au-delà de deux).
+- La bibliothèque mélange étapes de vente et **réponses toutes faites** à des questions fréquentes (vrai prénom, pratique apprise seule…). L'agent peut s'en servir comme réservoir de faits de persona, pas seulement pour vendre.
+- **Variable `%NAME%`** : remplacée par le « prénom du membre » saisi dans le panneau Analytics de la conversation. Si le prénom n'est pas rempli, le résultat est à vérifier (vide ? pseudo ?) : garde en code, ne jamais envoyer un `%NAME%` brut ni un prénom vide.
+- **Aucun indicateur « déjà envoyé » n'est visible** dans le sélecteur. Si le trafic n'en montre pas non plus, la règle « jamais deux fois le même script au même fan » s'appuie sur notre journal et sur l'historique PPV du fan (médias déjà envoyés), pas sur Reveal.
+
+### Vault (L10)
+
+« Vault de \<créatrice\> », nombre de dossiers (28), bouton **SFS**, bouton +, recherche de dossier. Dossiers système verrouillés : Tous les médias, Feed, Mass DM, Message. Dossiers créés par l'agence, **un par script** (« SCRIPT \<thème\> | ☀️ » ou « | 🌙 »), plus des dossiers de récompense. Le lien script ↔ dossier du Vault est une convention de nommage, pas une donnée : à confirmer avec Charles (et le sens de ☀️ / 🌙).
+
+### Panneau de droite, onglet Analytics (L5, L6, L7, L11, E4)
+
+- Tuiles : **Abonnement (jours)**, **Tips**, **Messages** (€ dépensés en messages), **Boudoir** (€), **Médias entrants** (€), **Total dépensé**.
+- Lignes : Dernier paiement, Achat le plus élevé, Statut d'abonnement (ex. Expiré), Renouvellement (ex. Désactivé), Date d'abonnement.
+- **Prénom du membre** : champ dédié, source de `%NAME%`. C'est le premier slot KYC à remplir (`kyc_slot` prénom).
+- **Notes** : texte libre structuré par un **canevas modifiable** (« Modifier le canevas ») ; le canevas de l'agence est : Prénom, Localisation, Âge, Métier, Passions, Envies, Situation. Ce sont les slots KYC de Nirvana : l'agent remplit ce canevas, ligne par ligne, sans le casser.
+- **Note du modèle** : texte libre (fiche de la créatrice : âge, nationalité, ville, mensurations…). Contient des données personnelles de la créatrice : jamais dans le dépôt, jamais dans un log (ADR 0010).
+- Taux d'achat du fan : « x/y, n % des PPV envoyés ».
+
+### Panneau de droite, onglet PPV (L13)
+
+- Bascule **Payant / Gratuit**.
+- **Taux d'achat** (achetés / envoyés, %), **Prix le plus élevé**, **Prix le plus bas** (des PPV envoyés à ce fan).
+- **Historique PPV payant** : une carte par bundle envoyé, avec prix, cadenas (non acheté), date et heure, vignettes des médias. C'est la source de l'anti-doublon de médias et de l'échelle de prix par fan.
+
+### Statistiques du compte (L6)
+
+Vue modèle par jour, semaine, mois ou période, comparée à la période précédente : Revenu modèle, Volume TTC, CA HT, **Revenu agence**, projection sur 31 jours, nouveaux abonnés, ventes, panier moyen TTC, détail des revenus par jour et répartition. Mise à jour toutes les heures. Sert au suivi du CA du bot, pas au chatting.

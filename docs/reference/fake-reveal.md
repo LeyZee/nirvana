@@ -20,12 +20,12 @@ Tout est inventé et évidemment faux (pseudos `fan_test_01`, textes « Message 
 | Session | `valid`, `expiresAt`, compteur d'appels (rate limit) |
 | Fan | `ref`, pseudo, `subscribedAt`, statut d'abonnement, `totalSpentCents`, listes ou étiquettes, âge vérifié (si Reveal l'expose) |
 | Conversation | `ref`, `fanRef`, `unreadCount`, `lastMessageAt`, messages |
-| Message | `ref`, `direction`, `kind` (texte, média, PPV, tip, système, masse), texte, `mediaRefs`, `priceCents`, `unlockedAt`, `createdAt`, nonce client, `scriptRef` et `stepIndex` si envoyé par script |
-| Note client | `fanRef`, texte, `updatedAt` |
+| Message | `ref`, `direction`, `kind` (texte, média, bundle, vocal, tip, système, masse), texte, `lockedMediaRefs`, `teaserMediaRefs` (≤ 10), `priceCents` TTC, `discountedPriceCents?`, `unlockedAt`, `createdAt`, auteur côté équipe (membre), `deletedAt?` (visible des admins seulement), nonce client, `scriptRef` et `stepIndex` si envoyé par script |
+| Note client | `fanRef`, texte, `updatedAt` ; canevas du compte (lignes « Clé : ») ; prénom du membre (source de `%NAME%`) |
 | Notes du modèle | portée (compte ou conversation, d'après la capture), texte, `updatedAt` |
 | Statistiques PPV | dérivées des messages PPV et des transactions du fan, avec les champs de l'onglet PPV |
 | Média du coffre | `ref`, `kind` (photo, vidéo, audio), dossier |
-| Script natif | `ref`, nom, dossier, étapes (texte, `mediaRefs`, `priceCents`, délai) |
+| Script natif | `ref`, nom, dossier, étapes (nom, texte avec `%NAME%` possible, `mediaRefs`, `priceCents` ou gratuit, délai) |
 | Envoi de script | `fanRef`, `scriptRef`, `stepIndex`, `messageRef`, `sentAt` |
 | Transaction | `ref`, `fanRef`, type (PPV, tip, abonnement), `amountCents`, `messageRef`, `createdAt` |
 
@@ -45,7 +45,7 @@ Fixtures de départ (`fixtures/default.json`) : 1 créatrice, 12 fans dont 3 pay
 | L8 | Liste et contenu des scripts, dossiers |
 | L9, E3 | Trace des étapes envoyées par fan ; si Reveal n'en expose pas, FakeReveal non plus, et le test vérifie que l'agent s'appuie sur son propre journal |
 | L10 | Coffre paginé |
-| E1, E2 | Envoi : nouvel identifiant, message visible à la relecture ; bornes de prix (rejet hors bornes, code observé) |
+| E1, E2 | Envoi : nouvel identifiant, message visible à la relecture ; bornes de prix (rejet hors bornes, code observé) ; bundle refusé sans média vendu ou avec plus de 10 médias d'aperçu ; `%NAME%` remplacé par le prénom du membre |
 | E5 | Un envoi rejoué avec le même nonce ne crée pas de doublon si Reveal le garantit ; sinon le doublon apparaît et `verifySent` doit l'éviter en amont |
 | E6 | Accepte `markRead` et la frappe, remet `unreadCount` à zéro |
 
