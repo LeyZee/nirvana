@@ -61,10 +61,10 @@ export function Conversation(props: ConversationProps): JSX.Element {
     <div className="pg-thread nv-scroll">
       <div className="nv-thread">
         {state.history.length === 0 && pending === undefined && !writing ? (
-          <p className="pg-empty">
-            Écris comme le fan le ferait. Rien ne part : c’est le même chemin que la production, sans
-            connexion.
-          </p>
+          <Empty
+            opening={state.presets.find((p) => p.id === state.presetId)?.opening}
+            onSend={props.onSend}
+          />
         ) : null}
         {state.history.map((turn, index) => {
           if (turn.from === 'fan') fanCount += 1;
@@ -101,6 +101,34 @@ export function Conversation(props: ConversationProps): JSX.Element {
         )}
         <div ref={endRef} />
       </div>
+    </div>
+  );
+}
+
+/** An empty conversation says what to do and offers the first message of this fan type. */
+function Empty({
+  opening,
+  onSend,
+}: {
+  opening: string | undefined;
+  onSend: (text: string, media: Media[]) => void;
+}): JSX.Element {
+  return (
+    <div className="pg-empty">
+      <p className="pg-empty__t">À toi de jouer le fan</p>
+      <p className="pg-empty__s">Rien ne part : c’est le même chemin que la production, sans connexion.</p>
+      {opening === undefined ? null : (
+        <button
+          type="button"
+          className="pg-empty__go nv-tap"
+          title="Envoyer ce premier message"
+          onClick={() => {
+            onSend(opening, []);
+          }}
+        >
+          <span>Commencer par</span>« {opening} »
+        </button>
+      )}
     </div>
   );
 }
@@ -321,7 +349,7 @@ function Draft({
               <button
                 key={r.code}
                 type="button"
-                className="pg-chip"
+                className="nv-chip"
                 onClick={() => {
                   props.onReason(r.code);
                 }}
@@ -393,7 +421,7 @@ export function LessonCard({
             type="button"
             role="radio"
             aria-checked={d === destination}
-            className="pg-chip"
+            className="nv-chip"
             onClick={() => {
               onDestination(d);
             }}
@@ -429,8 +457,10 @@ export function Composer({
   const media: Media[] =
     attachOpen && described.trim() !== '' ? [{ kind, factualDescription: described.trim() }] : [];
 
+  const ready = !disabled && (text.trim() !== '' || media.length > 0);
+
   const send = (): void => {
-    if (disabled || (text.trim() === '' && media.length === 0)) return;
+    if (!ready) return;
     onSend(text.trim(), media);
     setText('');
     setDescribed('');
@@ -448,7 +478,7 @@ export function Composer({
                 type="button"
                 role="radio"
                 aria-checked={k.kind === kind}
-                className="pg-chip"
+                className="nv-chip"
                 onClick={() => {
                   setKind(k.kind);
                 }}
@@ -517,10 +547,11 @@ export function Composer({
             }
           }}
         />
+        {/* Neon only once there is something to send: until then the answer to rate is the one action. */}
         <button
           type="submit"
-          className="nv-btn nv-btn--neon nv-btn--sm"
-          disabled={disabled || (text.trim() === '' && media.length === 0)}
+          className={`nv-btn nv-btn--sm ${ready ? 'nv-btn--neon' : 'nv-btn--soft'}`}
+          disabled={!ready}
         >
           Envoyer
         </button>

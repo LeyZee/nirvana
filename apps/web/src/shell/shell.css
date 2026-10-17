@@ -125,10 +125,15 @@
   font-size: 11px;
   font-weight: 600;
   text-decoration: none;
-  transition: color var(--nv-dur-fast);
+  transition:
+    color var(--nv-dur-fast),
+    background-color var(--nv-dur-fast);
 }
 .nv-rail__item:hover {
   color: var(--nv-ink-muted);
+}
+.nv-rail__item:hover:not([aria-current='page']) {
+  background: var(--nv-glass-fill);
 }
 .nv-rail__item:focus-visible {
   outline: none;
@@ -433,6 +438,7 @@
 
 /* ── Section tabs ── */
 .nv-subnav {
+  position: relative;
   display: inline-flex;
   gap: 2px;
   padding: 3px;
@@ -440,6 +446,8 @@
   background: var(--nv-glass-fill);
 }
 .nv-subnav__item {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -451,11 +459,14 @@
   color: var(--nv-ink-muted);
   text-decoration: none;
   transition:
-    background var(--nv-dur-base) var(--nv-ease-spring),
-    color var(--nv-dur-fast);
+    color var(--nv-dur-fast),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
 }
 .nv-subnav__item:hover {
   color: var(--nv-ink);
+}
+.nv-subnav__item:active {
+  transform: scale(0.96);
 }
 .nv-subnav__item:focus-visible {
   outline: none;
@@ -463,8 +474,22 @@
 }
 .nv-subnav__item[aria-current='page'] {
   color: var(--nv-ink);
+}
+/* The active tab's glass, moved by placeTabBarLens; it stretches as it travels (playLiquid). */
+.nv-subnav__thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--nv-lens-width, 0px);
+  transform: translateX(var(--nv-lens-x, 0px));
+  border-radius: var(--nv-radius-full);
   background: var(--nv-glass-fill-strong);
   box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+  pointer-events: none;
+  transition:
+    transform var(--nv-dur-slow) var(--nv-ease-spring),
+    width var(--nv-dur-slow) var(--nv-ease-spring);
 }
 .nv-subnav__count {
   min-width: 18px;
@@ -556,6 +581,7 @@
     animation: none;
   }
   .nv-rail__lens,
+  .nv-subnav__thumb,
   .nav-needle {
     transition: none;
   }

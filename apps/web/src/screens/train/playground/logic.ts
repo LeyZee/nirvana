@@ -66,9 +66,8 @@ export function destinationFor(
   return reasons.find((r) => r.code === verdict.reason)?.destination ?? 'test';
 }
 
-/** Where the screen stands, for the single action proposed in the top bar. */
-export type Step =
-  'busy' | 'handoff' | 'blocked' | 'rate' | 'edit' | 'reject' | 'lesson' | 'compare' | 'write';
+/** Where the screen stands: which keys answer and which gesture is expected. */
+type Step = 'busy' | 'handoff' | 'blocked' | 'rate' | 'edit' | 'reject' | 'lesson' | 'compare' | 'write';
 
 export function stepOf(
   state: PlaygroundState | undefined,
@@ -83,18 +82,6 @@ export function stepOf(
   if (pending.isBlocked) return 'blocked';
   return 'rate';
 }
-
-export const STEP_ACTIONS: Readonly<Record<Step, string>> = {
-  busy: 'L’agent rédige…',
-  handoff: 'Juger le relais humain',
-  blocked: 'Corriger la réponse bloquée',
-  rate: 'Noter la réponse',
-  edit: 'Garder ta version',
-  reject: 'Dire pourquoi',
-  lesson: 'Ranger la leçon',
-  compare: 'Garder la meilleure',
-  write: 'Écrire comme le fan',
-};
 
 export function fanMessageCount(state: PlaygroundState): number {
   return state.history.filter((turn) => turn.from === 'fan').length;

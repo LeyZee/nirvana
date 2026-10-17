@@ -37,6 +37,14 @@ Prototype cliquable : https://claude.ai/artifact/TZjCUAPFhxN4pJn978A9zz (brainst
 - **Supprimer se confirme dans la page** : `nv-confirm` dit ce qui se passe (ce qui s'arrête, ce qui est gardé, combien de temps c'est restaurable) ; pour une créatrice active, on tape son nom avant que le bouton s'ouvre. Une suppression archive 30 jours, puis efface.
 - **Santé et coûts se lisent en deux secondes** (Réglages › Modèles IA) : d'abord « est-ce que ça marche », puis « combien ça coûte », puis « quel modèle fait quoi ». La jauge de budget `nv-gauge` reste neutre sous 70 %, passe en ambre de 70 à 90 % et en néon au-delà ; son repère montre la projection à minuit.
 
+## Retours de Charles sur le CRM (2026-10-17, soir)
+
+Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CRM :
+
+- **Tout réagit à l'utilisateur** : chaque élément cliquable a un survol, une pression et un focus visibles, et rien n'apparaît sans animation. Les classes communes sont dans « États » plus bas ; un écran n'en invente pas d'autres.
+- **On ne doit pas se noyer dans l'information** : chaque écran a une hiérarchie nette (section « Hiérarchie »).
+- **Les graphiques sont animés, ont des survols et sont beaux** : un seul composant, `nv-chart` (section « Graphiques »), jamais une courbe brute.
+
 ## Où vivent les choses
 
 | Fichier                                                 | Rôle                                                                                                                                                |
@@ -56,6 +64,22 @@ Les consommateurs et l'ordre d'import sont dans `packages/design-system/README.m
 3. **Le verre a besoin de lumière.** Une surface de verre est posée sur `nv-aura` ou sur du contenu, jamais sur un aplat.
 4. **La matière bouge, l'interface reste calme.** Ce qui se déplace (pouce, lentille, Island) se déforme sur un ressort ; le reste ne fait que des fondus.
 5. **Le travail de l'IA se voit dans le dashboard.** Un brouillon garde son pointillé et son étiquette jusqu'à l'envoi vérifié (`send_verified`). C'est une information pour l'opérateur, pas un texte montré au fan (la politique d'identité, ADR 0012, ne change pas).
+
+## Hiérarchie
+
+Un écran se lit en deux secondes : ce qui compte, puis quoi faire. Trois niveaux, jamais plus :
+
+1. **Ce qui domine** : un chiffre ou une action, un seul par écran. Le chiffre est grand (`metric` ou plus), l'action est le seul bouton néon. Deux néons visibles en même temps veulent dire que l'écran ne sait pas ce qu'il demande.
+2. **Le travail en cours** : le contenu sur lequel on agit (une conversation, une liste à traiter), en `ink`, taille `body`.
+3. **Le reste en retrait** : réglages, détails, métadonnées. En `ink-faint`, taille `footnote` ou `caption`, et **replié** par défaut (`nv-disclosure`) avec une ligne de résumé qui répond à « qu'y a-t-il dedans ? » sans l'ouvrir.
+
+Règles pratiques :
+
+- Une information secondaire se montre au survol ou en dépliant, pas en permanence (version, coût, latence, modèle).
+- Une liste de choix longue se replie sur le choix fait ; on la déplie pour changer.
+- Pas plus de trois chiffres secondaires côte à côte ; au-delà, une bande `nv-meta` ou un pli.
+- Les titres de section sont des sourcils (`nv-eyebrow`, capitales espacées, `ink-faint`) : ils guident l'œil, ils ne l'attirent pas.
+- Un état vide dit quoi faire et propose l'action (un bouton ou une suggestion cliquable), pas seulement « rien ici ».
 
 ## Couleur
 
@@ -97,11 +121,15 @@ Contraste garanti par le test : `ink`, `ink-muted`, `ink-faint` ≥ 4,5:1 sur `v
 
 ## États
 
-- **Survol** : halo néon `shadow-neon` → `shadow-neon-strong` ; lignes de liste en `glass-fill`.
+Tout élément cliquable a les quatre états ; un écran prend la classe qui convient au lieu d'écrire les siens.
+
+- **Survol** : bouton néon, halo `shadow-neon` → `shadow-neon-strong` et +8 % de lumière ; autres boutons, teinte `glass-fill` ; bouton rond `nv-iconbtn`, grossit de 6 % ; ligne ou carte cliquable (`nv-tap`), `glass-fill` ; carte flottante (`nv-lift`), monte de 2px avec `shadow-lift`.
 - **Focus clavier** : anneau `focus` sur tout élément interactif, champs compris (`shadow-focus`). Visible sur verre dans les deux thèmes.
-- **Actif** : `scale(0.96)` en `dur-instant`, retour sur `ease-spring`.
-- **Sélection** : `neon-soft` (conversation ouverte, onglet actif).
-- **Désactivé** : opacité 0,4, sans ombre. Pendant un envoi, le bouton reste visible avec un libellé d'état.
+- **Actif** : `scale(0.96)` (boutons), `0.95` (puces), `0.985` (lignes) en `dur-instant`, retour sur `ease-spring`.
+- **Sélection** : `neon-soft` (conversation ouverte, onglet actif, puce cochée `aria-checked`).
+- **Désactivé** : opacité 0,4, sans ombre ni survol. Pendant un envoi, le bouton reste visible avec un libellé d'état.
+
+Classes communes : `nv-btn` (actions), `nv-chip` (un choix parmi quelques-uns), `nv-tap` (ligne, carte, élément de liste), `nv-lift` (carte flottante, pas un grand panneau), `nv-disclosure` (pli `<details>` avec titre `__title`, résumé `__sum` et contenu `__body`), `nv-enter` (entrée en fondu montant, décalée par `--nv-i`).
 
 Pastilles d'état (`nv-status--<état>`) : une par valeur de `conversations.state` (`data-model.md`) : `idle`, `pending`, `drafting` (respire), `awaiting-approval`, `sending` (respire), `human`, `paused`, `error`, plus `sale`. Libellés : Au calme, En attente, Rédaction, À valider, Envoi, Humain, En pause, Erreur, Vente.
 
@@ -127,6 +155,15 @@ Inspiré du tableau de bord de Reveal, sur le verre Nirvana :
 - Graphiques : courbe de la période contre la précédente (pointillés), curseur et bulle au survol ; répartition en anneau ; barres par heure ; classement des fans avec la part vendue par l'agent.
 - `nv-delta--better` / `--worse` suivent le sens « mieux », pas le signe : un temps de réponse qui baisse est en `--better`.
 - Couleurs des graphiques : le néon pour la série principale, `sale` en second, puis `ink` à 60 % et 25 %. Jamais deux rouges.
+
+## Graphiques
+
+Un seul composant, `nv-chart` : un SVG dessiné avec les aides de `@nirvana/design-system` (`chartPoints`, `linePath` monotone qui ne dépasse jamais les vraies valeurs, `areaPath`, `niceTicks`, `nearestIndex`) et animé par les classes.
+
+- **Apparition** : la courbe se dessine (`nv-chart__line`, `pathLength="1"`), l'aire apparaît en fondu juste après (`__area`), les barres poussent depuis leur base à 40ms d'intervalle (`__bar`, `--nv-i`). La période précédente est en pointillés discrets (`__line--past`).
+- **Survol** : `is-hovering` sur le conteneur montre un curseur vertical (`__cursor`), un point sur la courbe (`__dot`) et une bulle de verre avec la valeur et sa date (`__tip`, placée par `--nv-tip-x` / `--nv-tip-y` d'après `nearestIndex`). Survoler une barre l'éclaire et met les autres en retrait. Au doigt, toucher et glisser fait de même.
+- **Couleur** : `--_c`, le néon par défaut ; une seconde série en `sale`, puis `ink` à 60 % et 25 %. Jamais deux rouges. Grille en `hairline`, axes en `caption` mono `ink-faint`.
+- **Mouvement réduit** : tout est dessiné d'emblée ; le survol reste.
 
 ## Copilote et raccourcis
 

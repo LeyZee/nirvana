@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 import { Composer, Conversation, LessonCard, type LocalMode } from './playground/Conversation';
 import { RateBar } from './playground/RateBar';
@@ -27,7 +27,6 @@ export function PlaygroundPage(): JSX.Element {
   const [comparison, setComparison] = useState<Comparison | undefined>(undefined);
   const [writing, setWriting] = useState(false);
   const [whyManual, setWhyManual] = useState<boolean | undefined>(undefined);
-  const mainRef = useRef<HTMLElement>(null);
 
   const pending = state?.pending;
   const step = stepOf(state, mode, pg.busy);
@@ -130,21 +129,11 @@ export function PlaygroundPage(): JSX.Element {
     'Le fan';
   const fans = fanMessageCount(state);
 
-  const onAction = (): void => {
-    if (step === 'blocked') setMode('edit');
-    else if (step === 'write') mainRef.current?.querySelector('textarea')?.focus();
-    else if (step === 'lesson' && lesson !== undefined) void rate(lesson.verdict, lesson.destination);
-    else
-      mainRef.current
-        ?.querySelector('.pg-gest, .pg-lesson, .pg-rej, .pg-edit')
-        ?.scrollIntoView({ block: 'center' });
-  };
-
   return (
     <div className="pg">
-      <RateBar state={state} step={step} isDemo={pg.client.isDemo} onAction={onAction} />
+      <RateBar state={state} isDemo={pg.client.isDemo} />
       <SetupPanel state={state} pg={pg} />
-      <main className="pg-main nv-glass" ref={mainRef} aria-label="Conversation">
+      <main className="pg-main nv-glass" aria-label="Conversation">
         <div className="pg-top">
           <span className="nv-avatar nv-avatar--sm">{name.slice(0, 1).toUpperCase()}</span>
           <span className="pg-top__t">
@@ -153,7 +142,7 @@ export function PlaygroundPage(): JSX.Element {
           </span>
           <button
             type="button"
-            className="nv-btn nv-btn--soft nv-btn--sm"
+            className="nv-btn nv-btn--sm"
             title="La même réponse par un autre modèle, côte à côte"
             disabled={step !== 'rate'}
             onClick={() => void compare()}
@@ -162,7 +151,7 @@ export function PlaygroundPage(): JSX.Element {
           </button>
           <button
             type="button"
-            className="nv-btn nv-btn--soft nv-btn--sm"
+            className="nv-btn nv-btn--sm"
             title="Même fan, conversation remise à zéro"
             disabled={pg.busy || state.presetId === undefined}
             onClick={() => {

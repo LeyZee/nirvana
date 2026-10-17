@@ -10,109 +10,160 @@ export const MEDIA_KINDS: readonly { kind: MediaKind; label: string }[] = [
   { kind: 'audio', label: 'Vocal' },
 ];
 
-/** Who the fan is, what we know of him, what time it is for her, and what she can send. */
+/**
+ * Who the fan is, what we know of him, what time it is for her, and what she can send. Only the fan stays
+ * open: the rest folds to one line that says what it holds (docs/design/README.md, « Hiérarchie »).
+ */
 export function SetupPanel({ state, pg }: { state: PlaygroundState; pg: Playground }): JSX.Element {
   const { situation } = state;
-  const preset = state.presets.find((p) => p.id === state.presetId);
   const age = new Date(situation.now).getTime() - new Date(situation.relationshipStartedAt).getTime();
   const wait = situation.sexualizationInHours ?? 0;
+  const known = [
+    ...state.fanNotes.slice(0, 2),
+    situation.spentCents === 0 ? 'jamais acheté' : `${money(situation.spentCents)} dépensés`,
+  ].join(' · ');
 
   return (
     <aside className="pg-setup nv-glass" aria-label="Mise en situation">
       <div className="nv-scroll">
-        <section className="pg-sec">
-          <p className="nv-eyebrow">Le fan</p>
-          <div className="pg-presets" role="radiogroup" aria-label="Fan type">
-            {state.presets.map((p) => (
+        <FanPicker state={state} pg={pg} />
+
+        <details className="nv-disclosure pg-fold">
+          <summary>
+            <span className="nv-disclosure__title">Ce qu’on sait</span>
+            <span className="nv-disclosure__sum">{known}</span>
+          </summary>
+          <div className="nv-disclosure__body">
+            <Notes
+              key={state.presetId}
+              notes={state.fanNotes}
+              onSave={(notes) => void pg.run((c) => c.setNotes(notes))}
+            />
+            <Spent
+              key={`${state.presetId ?? ''}-spent`}
+              cents={situation.spentCents}
+              onSave={(cents) => void pg.run((c) => c.setSpent(cents))}
+            />
+          </div>
+        </details>
+
+        <details className="nv-disclosure pg-fold">
+          <summary>
+            <span className="nv-disclosure__title">Le moment</span>
+            <span className="nv-disclosure__sum">
+              {clockAt(situation.now, situation.timeZone)} {situation.isNight ? 'Nuit' : 'Jour'} ·{' '}
+              {duration(age)}
+            </span>
+          </summary>
+          <div className="nv-disclosure__body">
+            <div className="pg-clock">
+              <span className="pg-clock__c">
+                <span>Chez elle</span>
+                <b>
+                  {clockAt(situation.now, situation.timeZone)}
+                  <span className="pg-moon">{situation.isNight ? '🌙 Nuit' : '☀️ Jour'}</span>
+                </b>
+              </span>
+              <span className="pg-clock__c">
+                <span>Relation</span>
+                <b>{duration(age)}</b>
+              </span>
+            </div>
+            <p className="pg-hint">
+              {wait > 0 ? (
+                <>
+                  Elle ne sexualise pas d’elle-même avant <b>{duration(wait * 3_600_000)}</b>.
+                </>
+              ) : (
+                'Elle peut sexualiser d’elle-même.'
+              )}{' '}
+              Scripts <b>{situation.isNight ? 'Nuit' : 'Jour'}</b> seulement.
+            </p>
+            <div className="pg-row2">
+              <button
+                type="button"
+                className="nv-btn nv-btn--soft nv-btn--sm"
+                disabled={pg.busy}
+                onClick={() => void pg.run((c) => c.advance(1))}
+              >
+                +1 h
+              </button>
+              <button
+                type="button"
+                className="nv-btn nv-btn--soft nv-btn--sm"
+                disabled={pg.busy}
+                onClick={() => void pg.run((c) => c.advance(24))}
+              >
+                +1 jour
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <details className="nv-disclosure pg-fold">
+          <summary>
+            <span className="nv-disclosure__title">Elle envoie</span>
+            <span className="nv-disclosure__sum">une photo, une vidéo…</span>
+          </summary>
+          <div className="nv-disclosure__body">
+            <CreatorMedia
+              disabled={pg.busy}
+              onSend={(media) => void pg.run((c) => c.sendCreatorMedia(media))}
+            />
+          </div>
+        </details>
+      </div>
+    </aside>
+  );
+}
+
+/** The fan being played, always visible; the other types unfold only to change. */
+function FanPicker({ state, pg }: { state: PlaygroundState; pg: Playground }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const preset = state.presets.find((p) => p.id === state.presetId);
+  return (
+    <section className="pg-fan">
+      <p className="nv-eyebrow">Le fan</p>
+      <button
+        type="button"
+        className="pg-fan__now nv-tap"
+        aria-expanded={open}
+        aria-controls="pg-fan-list"
+        onClick={() => {
+          setOpen(!open);
+        }}
+      >
+        <span className="pg-fan__t">
+          <b>{preset?.label ?? 'Fan libre'}</b>
+          <span>{preset === undefined ? 'Aucun profil' : `Teste ${preset.tests}`}</span>
+        </span>
+        <span className="pg-fan__c">{open ? 'Fermer' : 'Changer'}</span>
+      </button>
+      {open ? (
+        <div className="pg-fan__list" id="pg-fan-list" role="radiogroup" aria-label="Type de fan">
+          {state.presets
+            .filter((p) => p.id !== state.presetId)
+            .map((p, i) => (
               <button
                 key={p.id}
                 type="button"
                 role="radio"
-                aria-checked={p.id === state.presetId}
-                className="pg-preset"
+                aria-checked={false}
+                className="pg-fan__opt nv-tap"
+                style={{ animationDelay: `${String(i * 25)}ms` }}
                 title={`Teste ${p.tests}`}
                 disabled={pg.busy}
-                onClick={() => void pg.run((c) => c.choosePreset(p.id))}
+                onClick={() => {
+                  setOpen(false);
+                  void pg.run((c) => c.choosePreset(p.id));
+                }}
               >
-                <span className="pg-preset__n">{p.label}</span>
-                {p.id === state.presetId ? <span className="pg-preset__s">Teste {p.tests}</span> : null}
+                {p.label}
               </button>
             ))}
-          </div>
-        </section>
-
-        <section className="pg-sec">
-          <p className="nv-eyebrow">Ce qu’on sait de lui</p>
-          <Notes
-            key={state.presetId}
-            notes={state.fanNotes}
-            onSave={(notes) => void pg.run((c) => c.setNotes(notes))}
-          />
-          <Spent
-            key={`${state.presetId ?? ''}-spent`}
-            cents={situation.spentCents}
-            onSave={(cents) => void pg.run((c) => c.setSpent(cents))}
-          />
-        </section>
-
-        <section className="pg-sec">
-          <p className="nv-eyebrow">Le temps</p>
-          <div className="pg-clock">
-            <span className="pg-clock__c">
-              <span>Chez elle</span>
-              <b>
-                {clockAt(situation.now, situation.timeZone)}
-                <span className="pg-moon">{situation.isNight ? '🌙 Nuit' : '☀️ Jour'}</span>
-              </b>
-            </span>
-            <span className="pg-clock__c">
-              <span>Relation</span>
-              <b>{duration(age)}</b>
-            </span>
-          </div>
-          <p className="pg-hint">
-            {wait > 0 ? (
-              <>
-                Elle ne sexualise pas d’elle-même avant <b>{duration(wait * 3_600_000)}</b>.
-              </>
-            ) : (
-              'Elle peut sexualiser d’elle-même.'
-            )}{' '}
-            Scripts <b>{situation.isNight ? 'Nuit' : 'Jour'}</b> seulement.
-          </p>
-          <div className="pg-row2">
-            <button
-              type="button"
-              className="nv-btn nv-btn--soft nv-btn--sm"
-              disabled={pg.busy}
-              onClick={() => void pg.run((c) => c.advance(1))}
-            >
-              +1 h
-            </button>
-            <button
-              type="button"
-              className="nv-btn nv-btn--soft nv-btn--sm"
-              disabled={pg.busy}
-              onClick={() => void pg.run((c) => c.advance(24))}
-            >
-              +1 jour
-            </button>
-          </div>
-        </section>
-
-        <section className="pg-sec">
-          <p className="nv-eyebrow">Elle envoie un média</p>
-          <CreatorMedia
-            disabled={pg.busy}
-            onSend={(media) => void pg.run((c) => c.sendCreatorMedia(media))}
-          />
-        </section>
-
-        {preset === undefined ? null : (
-          <p className="pg-hint pg-sec">Idée de premier message : « {preset.opening} »</p>
-        )}
-      </div>
-    </aside>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -204,7 +255,7 @@ function CreatorMedia({
             type="button"
             role="radio"
             aria-checked={k.kind === kind}
-            className="pg-chip"
+            className="nv-chip"
             onClick={() => {
               setKind(k.kind);
             }}

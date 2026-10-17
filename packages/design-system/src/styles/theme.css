@@ -45,6 +45,7 @@
   --shadow-neon: var(--nv-shadow-neon);
   --shadow-neon-strong: var(--nv-shadow-neon-strong);
   --shadow-neon-soft: var(--nv-shadow-neon-soft);
+  --shadow-lift: var(--nv-shadow-lift);
 
   --blur-thin: var(--nv-blur-thin);
   --blur-regular: var(--nv-blur-regular);

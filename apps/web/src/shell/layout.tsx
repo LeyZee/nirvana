@@ -1,5 +1,6 @@
-import { Link, type LinkProps } from '@tanstack/react-router';
-import type { JSX, ReactNode } from 'react';
+import { placeTabBarLens } from '@nirvana/design-system';
+import { Link, useRouterState, type LinkProps } from '@tanstack/react-router';
+import { useLayoutEffect, useRef, type JSX, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -94,10 +95,33 @@ export interface SubNavItem {
   readonly count?: number;
 }
 
-/** The screens of a section, as tabs. The active one follows the URL. */
+/** The screens of a section, as tabs. The active one follows the URL; its glass slides from tab to tab. */
 export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: string }): JSX.Element {
+  const pathname = useRouterState({ select: (router) => router.location.pathname });
+  const navRef = useRef<HTMLElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const placed = useRef(false);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (nav === null || !(active instanceof HTMLElement)) return;
+    const thumb = thumbRef.current ?? undefined;
+    if (placed.current) {
+      placeTabBarLens(nav, active, thumb);
+      return;
+    }
+    // First paint: the thumb appears in place, without sliding in from the left or squashing.
+    thumb?.style.setProperty('transition', 'none');
+    placeTabBarLens(nav, active);
+    thumb?.getBoundingClientRect();
+    thumb?.style.removeProperty('transition');
+    placed.current = true;
+  }, [pathname]);
+
   return (
-    <nav className="nv-subnav" aria-label={label}>
+    <nav className="nv-subnav" aria-label={label} ref={navRef}>
+      <span className="nv-subnav__thumb" ref={thumbRef} aria-hidden="true" />
       {items.map((item) => (
         <Link key={item.to} to={item.to} className="nv-subnav__item" activeProps={{ 'aria-current': 'page' }}>
           {item.label}
