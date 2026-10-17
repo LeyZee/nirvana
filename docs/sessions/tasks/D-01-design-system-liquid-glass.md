@@ -1,7 +1,7 @@
 # D-01 Design system « Liquid Glass »
 
 Statut : in_progress
-Phase : 4 (à livrer avant le premier écran du dashboard, après P0-07)
+Phase : 4 (à livrer avant le premier écran du dashboard, après P0-07a)
 Dépend de : P0-01
 Branche : task/d-01-design-system
 

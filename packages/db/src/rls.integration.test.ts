@@ -10,12 +10,16 @@ import {
   PlatformAccountIdSchema,
 } from '@nirvana/contracts';
 import { eq, sql } from 'drizzle-orm';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { withAdmin, withTenant, type Database } from './client';
-import { runMigrations } from './migrate';
+import { MIGRATIONS_FOLDER, migrationStatus, runMigrations } from './migrate';
 import * as s from './schema';
 import { createTestDb, type TestDb } from './test/test-db';
+
+/** Every migration in the journal, so that adding one does not break these tests. */
+const SHIPPED_MIGRATIONS = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER }).length;
 
 const at = new Date('2026-10-17T12:00:00Z');
 
@@ -347,6 +351,26 @@ describe('database (RLS, constraints, migrations)', () => {
     const applied = await test.admin.db.execute(
       sql`select count(*)::int as n from drizzle.__drizzle_migrations`,
     );
-    expect(applied.rows[0]).toEqual({ n: 1 });
+    expect(applied.rows[0]).toEqual({ n: SHIPPED_MIGRATIONS });
+  });
+
+  it('reports the migrations as up to date, and a missing one as pending', async () => {
+    expect(await migrationStatus(test.admin.db)).toEqual({
+      applied: SHIPPED_MIGRATIONS,
+      expected: SHIPPED_MIGRATIONS,
+      isUpToDate: true,
+    });
+    const rolledBack = new Error('rollback');
+    await expect(
+      test.admin.db.transaction(async (tx) => {
+        await tx.execute(sql`delete from drizzle.__drizzle_migrations`);
+        expect(await migrationStatus(tx)).toEqual({
+          applied: 0,
+          expected: SHIPPED_MIGRATIONS,
+          isUpToDate: false,
+        });
+        throw rolledBack;
+      }),
+    ).rejects.toBe(rolledBack);
   });
 });

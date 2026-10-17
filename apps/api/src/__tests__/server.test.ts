@@ -1,0 +1,244 @@
+import { Writable } from 'node:stream';
+
+import { DomainError } from '@nirvana/contracts';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import { loadConfig } from '../config';
+import { createLogger } from '../logger';
+import type { Readiness } from '../readiness';
+import { buildServer, statusForCode } from '../server';
+
+import { testConfig } from './support/config';
+
+const READY: Readiness = { isReady: true, checks: { database: true, migrations: true, worker: true } };
+
+class ConversationNotFound extends DomainError {}
+class DraftConflict extends DomainError {}
+
+/** Routes that exercise the central error handler. */
+const probeRoutes: FastifyPluginAsyncZod = (app) => {
+  app.post(
+    '/probe',
+    { schema: { body: z.object({ name: z.string().min(1), count: z.number().int() }) } },
+    (request) => ({ hello: request.body.name }),
+  );
+  app.get('/missing', () => {
+    throw new ConversationNotFound('conversation_not_found', 'Conversation introuvable');
+  });
+  app.get('/conflict', () => {
+    throw new DraftConflict('draft_conflict', 'Brouillon déjà envoyé');
+  });
+  app.get('/boom', () => {
+    throw new Error('select * from secrets where leaked = true');
+  });
+  return Promise.resolve();
+};
+
+async function server(
+  options: { readiness?: Readiness; env?: NodeJS.ProcessEnv } = {},
+): ReturnType<typeof buildServer> {
+  const config = testConfig(options.env);
+  return buildServer({
+    config,
+    logger: createLogger(config),
+    routes: [probeRoutes],
+    readiness: () => Promise.resolve(options.readiness ?? READY),
+  });
+}
+
+describe('health and readiness', () => {
+  it('answers /health outside /v1', async () => {
+    const response = await (await server()).inject({ method: 'GET', url: '/health' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: 'ok' });
+  });
+
+  it('answers /ready 200 when every check passes and 503 otherwise, with the checks', async () => {
+    const ready = await (await server()).inject({ method: 'GET', url: '/ready' });
+    expect(ready.statusCode).toBe(200);
+    expect(ready.json()).toEqual({ status: 'ready', checks: READY.checks });
+
+    const down: Readiness = { isReady: false, checks: { database: true, migrations: true, worker: false } };
+    const notReady = await (await server({ readiness: down })).inject({ method: 'GET', url: '/ready' });
+    expect(notReady.statusCode).toBe(503);
+    expect(notReady.json()).toEqual({ status: 'not_ready', checks: down.checks });
+  });
+});
+
+describe('request id', () => {
+  it('echoes a sane x-request-id and replaces a dangerous one', async () => {
+    const app = await server();
+    const kept = await app.inject({ method: 'GET', url: '/health', headers: { 'x-request-id': 'req-123' } });
+    expect(kept.headers['x-request-id']).toBe('req-123');
+
+    const replaced = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': 'evil\nlog line' },
+    });
+    expect(replaced.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+describe('error format (api.md)', () => {
+  it('refuses an invalid body with 400 and the Zod field errors', async () => {
+    const response = await (
+      await server()
+    ).inject({
+      method: 'POST',
+      url: '/v1/probe',
+      payload: { name: '', count: 1.5 },
+      headers: { 'x-request-id': 'req-400' },
+    });
+    expect(response.statusCode).toBe(400);
+    const body = response.json<{
+      error: { code: string; requestId: string; details: { fields: unknown[] } };
+    }>();
+    expect(body.error.code).toBe('request_invalid');
+    expect(body.error.requestId).toBe('req-400');
+    expect(body.error.details.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: '/name' }),
+        expect.objectContaining({ path: '/count' }),
+      ]),
+    );
+  });
+
+  it('accepts a valid body under /v1', async () => {
+    const response = await (
+      await server()
+    ).inject({
+      method: 'POST',
+      url: '/v1/probe',
+      payload: { name: 'ok', count: 2 },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ hello: 'ok' });
+  });
+
+  it('refuses malformed JSON with 400', async () => {
+    const response = await (
+      await server()
+    ).inject({
+      method: 'POST',
+      url: '/v1/probe',
+      payload: '{"name":',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('request_invalid');
+  });
+
+  it('maps domain errors by the suffix of their code', async () => {
+    const app = await server();
+    const missing = await app.inject({ method: 'GET', url: '/v1/missing' });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json<{ error: { code: string; message: string } }>().error).toMatchObject({
+      code: 'conversation_not_found',
+      message: 'Conversation introuvable',
+    });
+    expect((await app.inject({ method: 'GET', url: '/v1/conflict' })).statusCode).toBe(409);
+  });
+
+  it('hides the detail of an unexpected error behind a 500', async () => {
+    const response = await (await server()).inject({ method: 'GET', url: '/v1/boom' });
+    expect(response.statusCode).toBe(500);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('internal_error');
+    expect(response.body).not.toContain('secrets');
+  });
+
+  it('answers an unknown route with route_not_found', async () => {
+    const response = await (await server()).inject({ method: 'GET', url: '/v1/nothing-here' });
+    expect(response.statusCode).toBe(404);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('route_not_found');
+  });
+
+  it('maps the code suffixes to their status', () => {
+    expect(statusForCode('fan_not_found')).toBe(404);
+    expect(statusForCode('price_invalid')).toBe(400);
+    expect(statusForCode('takeover_forbidden')).toBe(403);
+    expect(statusForCode('draft_conflict')).toBe(409);
+    expect(statusForCode('send_limited')).toBe(429);
+    expect(statusForCode('whatever')).toBe(500);
+  });
+});
+
+describe('HTTP protections (security.md §6)', () => {
+  it('sends the helmet headers', async () => {
+    const response = await (await server()).inject({ method: 'GET', url: '/health' });
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['content-security-policy']).toBeDefined();
+  });
+
+  it('lets CORS through for the dashboard origin only', async () => {
+    const app = await server();
+    const preflight = (origin: string) =>
+      app.inject({
+        method: 'OPTIONS',
+        url: '/v1/probe',
+        headers: { origin, 'access-control-request-method': 'POST' },
+      });
+    expect((await preflight('http://localhost:5173')).headers['access-control-allow-origin']).toBe(
+      'http://localhost:5173',
+    );
+    expect((await preflight('https://evil.example')).headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('rate-limits per IP with the common error body', async () => {
+    const app = await server({ env: { RATE_LIMIT_PER_MINUTE: '2' } });
+    const call = () => app.inject({ method: 'POST', url: '/v1/probe', payload: { name: 'a', count: 1 } });
+    await call();
+    await call();
+    const limited = await call();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json<{ error: { code: string } }>().error.code).toBe('rate_limited');
+  });
+
+  it('refuses a body over the size limit', async () => {
+    const response = await (
+      await server()
+    ).inject({
+      method: 'POST',
+      url: '/v1/probe',
+      payload: { name: 'x'.repeat(1_100_000), count: 1 },
+    });
+    expect(response.statusCode).toBe(413);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('payload_too_large');
+  });
+});
+
+describe('logger', () => {
+  it('redacts credentials and message content', () => {
+    const lines: string[] = [];
+    const sink = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        lines.push(chunk.toString());
+        done();
+      },
+    });
+    const logger = createLogger({ LOG_LEVEL: 'info' }, sink);
+    logger.info({ message: { text: 'mon message intime' }, credentials: { apiKey: 'xai-123' } }, 'check');
+    const output = lines.join('');
+    expect(output).not.toContain('mon message intime');
+    expect(output).not.toContain('xai-123');
+    expect(output).toContain('[redacted]');
+  });
+});
+
+describe('loadConfig', () => {
+  it('rejects an invalid port', () => {
+    expect(() => testConfig({ PORT: 'not-a-port' })).toThrow(/PORT/);
+  });
+
+  it('names every missing required variable', () => {
+    expect(() => loadConfig({})).toThrow(/DATABASE_URL[\s\S]*DATABASE_ADMIN_URL[\s\S]*WEB_ORIGIN/);
+  });
+
+  it('reads the inline-worker flag', () => {
+    expect(testConfig().NIRVANA_INLINE_WORKER).toBe(false);
+    expect(testConfig({ NIRVANA_INLINE_WORKER: '1' }).NIRVANA_INLINE_WORKER).toBe(true);
+    expect(() => testConfig({ NIRVANA_INLINE_WORKER: 'yes' })).toThrow(/NIRVANA_INLINE_WORKER/);
+  });
+});

@@ -46,7 +46,7 @@
 | ✅ **Sur `main`** | **Fiches validées** : mémoire du fan sur les notes Reveal (P3-02), catalogue de vente = index des scripts, étapes et bundles (P6-01). Connexion des services IA depuis le dashboard (P3-03, ADR 0016). Fiche proposée : vocaux avec la voix clonée. | #18, #20, #21, #22 |
 | ✅ **Sur `main`** | **Connexion Reveal préparée** : inventaire de ce que Reveal expose, runbook de capture réseau, anonymiseur testé, spécification de `FakeReveal`. Aucune capture faite à ce jour : elle attend le chatteur « bot » dans Reveal. | #15 |
 | 🔶 **PR ouverte** | **Vision et anti-injection** : médias des fans décrits par Gemini 3.8 Flash avec bascule automatique vers Grok, fiche média par vidéo de bundle, pièges texte, image, vocal et caractères invisibles. | P3-04 · #19 (brouillon) |
-| ⏳ **Pas commencé** | Base de données et RLS, journal de conversation, worker, connecteur Reveal, dashboard, extension (seul le squelette du popup existe). | P0-02 → P0-07, P1 |
+| ⏳ **Pas commencé** | Base de données et RLS, journal de conversation, worker, connecteur Reveal, dashboard, extension (seul le squelette du popup existe). | P0-02 → P0-07b, P1 |
 
 **Aucun message n'a encore été généré par Grok** : `pnpm probe` et `pnpm playground` attendent la clé `LLM_XAI_API_KEY` dans l'environnement. Le premier verdict sur le sexting en français viendra de là.
 
