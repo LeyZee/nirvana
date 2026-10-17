@@ -47,6 +47,7 @@ Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CR
 - **Le halo du pointeur est serré** : 110 px sous le pointeur au lieu de 200 px, avec un fondu à l'entrée ; le reflet au repos ne change pas (`attachGlassLight` pose `is-lit`).
 - **Une info-bulle qui compare se lit comme un tableau** : la période, puis une ligne par série alignée à droite, puis une ligne de pied (`nv-chart__tip--table`).
 - **Une courbe d'indicateur montre la vraie tendance** de la période (de la valeur d'avant à l'actuelle, jamais un axe inversé) ; la couleur du `nv-delta` dit si c'est mieux ou pire. Un délai s'écrit en minutes (« −10 min »), pas en mots (« plus tôt »).
+- **Créatrices et Réglages ne se mélangent pas** : sous Créatrices, tout ce qui est propre à une créatrice (persona, plus tard catalogue et chiffres par créatrice) ; sous Réglages, le CRM lui-même (clés, appareils, mode, notifications).
 - **Tout doit être intuitif** : se mettre à la place de quelqu'un qui découvre l'écran, repérer ce qui est flou ou ambigu, simplifier les mots et les chiffres, sans le prendre pour un idiot (section « Clarté »).
 
 ## Où vivent les choses

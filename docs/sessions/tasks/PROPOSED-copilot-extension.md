@@ -1,54 +1,57 @@
-# Poste du chatteur en copilote, dans l'extension sur Reveal
-Statut : proposed
-Phase : 4 (supervision), ne se code qu'après la clé xAI et la capture Reveal
-Dépend de : P0-05 (brouillons, approve / reject), P0-06 (connecteur), table `training_notes` (fil Bilan, PR #46), capture HAR Reveal (P1-02)
+# Poste du chatteur en copilote, dans l'extension sur Reveal : l'interface (ID à attribuer)
+Statut : proposed (décision de Charles le 17/10 à 21h44, recommandation du coordinateur ; à coder après la clé xAI et la capture Reveal)
+Phase : 3
+Dépend de : la fiche « Copilote côté API » (PR #47, fil Bilan : contrat `copilot.ts`, routes, notes `live`), capture HAR Reveal (P1-02), lot A Reveal
 Branche : task/<id>-copilot-extension
 
 ## Objectif (1 phrase)
 
-Le chatteur valide, retouche ou refuse chaque brouillon de l'agent là où il travaille déjà, à côté de la conversation Reveal, et chaque geste nourrit le taux « en réel » qui déverrouille l'Automatique.
+Le chatteur voit le brouillon de l'agent à côté de la conversation Reveal ouverte et choisit Envoyer, Retoucher ou Refuser avec une raison, sans quitter Reveal.
+
+Le côté serveur (brouillon en attente, verdict idempotent, note de calibrage `live`, rapprochement avec le message sortant) est dans la fiche « Copilote côté API » ; cette fiche ne le redéfinit pas. Elle couvre l'extension et ce qu'elle demande au contrat.
 
 ## Contexte à lire
 
-- Décision de Charles (17/10, chat du projet, recommandation du coordinateur 21h47) : poste du chatteur dans l'extension, pas dans le CRM ; Suivi reste en lecture seule ; « moins d'écrans, plus de moteur ».
-- `docs/roadmap.md` (phase 4 : « validation des propositions dans le panneau latéral de l'extension »).
-- `docs/design/README.md` : « Copilote et raccourcis », « Extension Chrome » (aucun style injecté dans la page Reveal), « Clarté ».
-- `packages/contracts/src/conversations.ts` (`ApproveDraftBodySchema`, `RejectDraftBodySchema`), routes `/v1/conversations/:id/drafts/:draftId/approve|reject`.
-- ADR 0008 (session capturée par l'extension), ADR 0012 (`identity_policy`).
+- la fiche « Copilote côté API » du fil Bilan (PR #47, fichier PROPOSED-copilot-api.md), en entier : l'envoi par défaut, le verdict, les routes.
+- `docs/design/README.md` : « Copilote et raccourcis », « Extension Chrome » (rien de stylé injecté dans la page Reveal), « Clarté ».
+- `packages/contracts/src/playground.ts` : verdicts et raisons de refus, les mêmes qu'au playground.
+- `apps/extension` (WXT), ADR 0008 (session capturée par l'extension), ADR 0012 (`identity_policy`).
 
-## Décisions à prendre avant le code
+## Comment ça se passe pour le chatteur
 
-- **Surface** : panneau latéral Chrome (`chrome.sidePanel`) ouvert à côté de Reveal, pas une bulle injectée dans la page (règle « pas de verre au-dessus de Reveal »). À confirmer par la capture : l'extension sait quelle conversation Reveal est ouverte (URL ou requête observée).
-- **Qui est connecté** : le chatteur se connecte à Nirvana dans le panneau avec son compte `operator` (Better Auth, même cookie que le dashboard sur le domaine de l'API). Le jeton d'appareil de l'extension (`EXTENSION_DEVICE_TOKEN`) reste réservé à la capture de session ; il ne valide jamais un brouillon.
-- **Envoi** : l'envoi part du serveur par le connecteur (job `conversation.send`, idempotent), jamais par un clic simulé dans la page Reveal.
+1. Il ouvre une conversation dans Reveal. Le panneau latéral de l'extension montre le brouillon de l'agent pour ce fan, ou « L'agent n'a rien proposé pour ce fan ».
+2. **Envoyer** (`a`) : l'extension place le texte dans le champ de saisie de Reveal ; le chatteur relit et appuie lui-même sur Envoyer dans Reveal. L'agent n'envoie rien pendant cette phase et la garde d'écriture reste fermée (fiche API).
+3. **Retoucher** (`e`) : édition en place dans le panneau, puis même chemin qu'Envoyer, verdict `corrected` avec les bulles finales.
+4. **Refuser** (`r`) : raison en puces (liste fermée du playground) et note libre facultative ; rien n'est placé dans Reveal, le chatteur écrit sa propre réponse.
+5. Le panneau passe à « Envoyé » quand l'API a rapproché le message sortant du brouillon, pas au clic.
 
-## Ce que l'API doit exposer (à valider par le fil Bilan)
+## À accorder avec le fil Bilan avant le code
 
-1. `GET /v1/conversations/by-platform/:platformConversationId?creatorId=` : la conversation Nirvana qui correspond à la conversation Reveal ouverte, avec ses brouillons ouverts (`ConversationDetailSchema`). Ou un paramètre de filtre sur la liste existante.
-2. `POST …/drafts/:draftId/approve` existe : sans `bubbles`, verdict `validated` ; avec `bubbles`, verdict `corrected`.
-3. `POST …/drafts/:draftId/reject` existe, mais sa raison est libre : il faut un `reason` codé (même liste que le playground, `RejectReason` de `playground.ts`) plus une note libre facultative, pour que la note d'entraînement ait le même format que celles du playground.
-4. Chaque approve / reject écrit une ligne `training_notes` (`validated` / `corrected` / `rejected`, source `production`), lue par le calcul du taux « en réel ».
-5. Un événement temps réel (SSE ou interrogation courte) « nouveau brouillon pour cette conversation », pour que le panneau se mette à jour sans recharger.
+- **Qui a validé** : la note de calibrage doit porter le chatteur, pas seulement l'appareil. Proposition : le jeton d'appareil authentifie l'extension, et le panneau demande une fois la connexion `operator` du chatteur (même compte que le CRM) ; les routes `copilot` acceptent les deux. Sinon, rattacher l'appareil à un membre.
+- **Placer le texte dans Reveal** : écriture dans le champ de saisie par le script de contenu (aucun style, aucun clic simulé sur Envoyer), à confirmer par la capture. Repli si le champ n'est pas fiable : copie dans le presse-papiers et « Colle dans Reveal ».
+- **Mise à jour du panneau** : interrogation courte de `GET /v1/copilot/conversations/:platformConversationId/draft` quand le panneau est visible, ou flux SSE si la fiche API en ajoute un.
 
 ## À faire (liste vérifiable)
 
-1. Panneau latéral WXT (`entrypoints/sidepanel`), connexion `operator`, design system importé (`@nirvana/design-system/styles.css`).
-2. Détection de la conversation Reveal ouverte (d'après la capture), appel 1 ci-dessus.
-3. Brouillon affiché avec ses bulles, le brief en une ligne et ce que l'agent sait du fan (une ligne) ; trois gestes : Envoyer (`a`), Retoucher (`e`, édition en place), Refuser (`r`, raison en puces) ; raccourcis communs au playground.
-4. États : aucun brouillon (« L'agent n'a rien proposé pour ce fan »), l'agent écrit, envoyé (vérifié par `send_verified`), relais à un humain (raison en mots).
-5. Tests : unitaires sur la logique du panneau ; contrat contre `FakeReveal` pour la détection de conversation ; aucun envoi réel.
-6. Glossaire : « Poste du chatteur » si le terme est retenu.
+1. Panneau latéral WXT (`entrypoints/sidepanel`, `chrome.sidePanel`), design system importé (`@nirvana/design-system/styles.css`).
+2. Détection de la conversation Reveal ouverte (URL ou requête observée, d'après la capture), puis appel de la route brouillon.
+3. Brouillon affiché bulle par bulle, avec ce que l'agent sait du fan en une ligne ; trois gestes et leurs raccourcis, communs au playground.
+4. États, en mots de chatteur : aucun brouillon, l'agent écrit, à valider, envoyé, un humain doit répondre (raison en mots), session Reveal expirée.
+5. Tests : unitaires sur la logique du panneau ; détection de conversation et placement du texte contre `FakeReveal` ; aucun envoi réel.
+6. Glossaire : « Poste du chatteur » si le terme est retenu (« Copilote » et « Verdict » viennent de la fiche API).
 
 ## Critères d'acceptation
 
-- Un chatteur connecté valide, retouche ou refuse un brouillon de `FakeReveal` depuis le panneau, l'envoi part par le connecteur, et une note d'entraînement est écrite pour chaque geste.
-- Rien n'est injecté dans la page Reveal.
+- Contre `FakeReveal`, un chatteur connecté place, retouche ou refuse un brouillon depuis le panneau ; le verdict part une fois (rejeu sans effet) et le panneau ne dit « Envoyé » qu'après le rapprochement.
+- Aucun style ni aucun élément injecté dans la page Reveal ; aucun clic simulé sur Envoyer.
+- L'extension ne porte aucune clé LLM.
 - `pnpm check` et `pnpm test:all` verts.
 
 ## Hors périmètre
 
-- Mode Automatique et son verrou (contrôle unique de la barre du CRM, fiche à part).
-- Vocaux (fiche vocaux).
+- Les routes, le contrat et la migration (fiche API du fil Bilan).
+- Le mode Automatique et son verrou (contrôle unique de la barre du CRM).
+- Les vocaux.
 - Toute écriture vers un vrai fan avant l'accord explicite de Charles.
 
 ## Notes de session
