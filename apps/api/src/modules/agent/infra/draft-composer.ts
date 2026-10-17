@@ -31,7 +31,8 @@ type AgentComposeResult =
       readonly bubbles: readonly string[];
       readonly softViolations: readonly string[];
       readonly costUsd: number;
-      readonly voice: { readonly voicePrompt: string; readonly voiceModel: string };
+      /** Absent when no model is known: no voice is better than a false one on the live rate (ADR 0019). */
+      readonly voice?: { readonly voicePrompt: string; readonly voiceModel: string };
     }
   | {
       readonly kind: 'held';
@@ -125,7 +126,9 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         bubbles: composed.bubbles,
         softViolations: composed.violations.map((v) => v.code),
         costUsd,
-        voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model ?? 'unknown' },
+        ...(composed.model !== undefined && {
+          voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
+        }),
       };
     },
   };
