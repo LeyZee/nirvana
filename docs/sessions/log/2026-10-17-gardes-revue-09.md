@@ -7,7 +7,7 @@ Fait :
 Pas fait :
 - G5, bulles retouchées : `startBubbleGuard` (gardes dures, bulle par bulle et message entier) est prêt pour le port `BubbleGuard` de Bilan, qui refuse l'approbation en 422 ; branchement par Bilan.
 - G9 : brancher `offerDecision` attend les offres, les ventes et les refus (P6-01).
-- G12 : coûts en entiers et ids `llm_calls` en uuid v7, dans `llm-call-store.ts`, à voir avec Bilan.
+- G12 : ids `llm_calls` en uuid v7 chez Bilan (`llm-call-store.ts`) ; coûts du journal en entiers (ADR 0011), PR suivante.
 - B2, vision sur tout message avec média : attend les médias dans `HistoryMessage` (Bilan).
 Décisions : aucune nouvelle ; seuils de relance et d'estimation dans le code.
 Découvertes : aucune.
