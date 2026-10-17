@@ -1,12 +1,12 @@
 # Moteur IA : sens, cerveau, voix, politique, gardes
 
-Dernière revue : 2026-10-17 (Grok 4.7, P3-01). Décisions : ADR 0009, 0012.
+Dernière revue : 2026-10-17 (Grok 4.7, P3-01 ; Vision et pièges, P3-04). Décisions : ADR 0009, 0012.
 
 ## Les rôles
 
 | Rôle | Entrée | Sortie | Fournisseur par défaut (à confirmer par évals, P3) | Repli |
 |---|---|---|---|---|
-| **sense** | image / vidéo / audio (créatrice ou fan) | `MediaDescription` (vocabulaire Nirvana, Zod) | xAI `grok-4.7` (image ; vidéo native à confirmer, sinon images clés ou `grok-4.3`) | Gemini 2.5 Flash sur Vertex (BLOCK_NONE, prouvé dans OnlyScript) ; Qwen3-VL hébergé ; audio : Whisper |
+| **sense** | photo / vidéo / vocal (créatrice ou fan) | `MediaDescription` (`packages/contracts/src/media.ts`, Zod) | Google `gemini-3.8-flash` : photo, vidéo et son natifs (décision de Charles, 17/10) | xAI `grok-4.7` en images clés datées + transcription xAI ; puis Qwen3-VL (à brancher) |
 | **brain** | `ConversationContext` | `Brief` (Zod strict) | xAI `grok-4.7` | Mistral Large |
 | **voice** | `ConversationContext` + `Decision` | `bubbles[]` | xAI `grok-4.7` | Venice (open-weight sans filtre), Mistral |
 | **judge** | transcript + rubrique | scores (Zod) | xAI `grok-4.7` ou Mistral | hors production |
@@ -23,7 +23,9 @@ interface LlmGateway {
   voice(input: VoiceInput): Promise<Result<LlmSuccess<VoiceOutput>, LlmFailure>>;
   health(): HealthReport;                       // panneau « Modèles IA »
   testConnection(provider): Promise<ConnectionTest>;
-  // sense, judge : à venir (P3-xx)
+  sense(input: SenseInput): Promise<Result<LlmSuccess<MediaDescription>, LlmFailure>>;
+  transcribe(audio): Promise<Result<Transcript, LlmFailure>>;   // son d'une vidéo ou d'un vocal (xAI)
+  // judge : à venir
 }
 ```
 
@@ -31,8 +33,26 @@ interface LlmGateway {
 - Config par rôle : `{ provider, model, temperature, maxOutputTokens, timeoutMs, fallback?: {provider, model} }` (`packages/llm/src/config.ts`, `DEFAULT_LLM_CONFIG`), surchargée plus tard par `CreatorSettings.llm`.
 - Chaque appel : timeout, retry borné (2) sur erreurs transitoires, repli sur le fournisseur de secours si refus (`refused`) ou indisponibilité, journal `LlmCallLog` (en mémoire ou JSONL en attendant la table `llm_calls` de P0-03, jamais de contenu de message) + trace Langfuse, coût calculé depuis le catalogue daté (`packages/llm/src/catalog.ts`).
 - Sortie invalide (Zod) : une relance avec l'erreur en contexte, puis échec propre.
-- Cache : `sense` est mis en cache par `sha256(média) + vocabulary_version + model` ; on ne décrit jamais deux fois le même média.
+- Cache : `sense` est mis en cache par `sha256(média) + vocabularyVersion + origine + modèle + version du prompt sense` (module `media`, `describe-media.ts`) ; on ne décrit jamais deux fois le même média. Une description faite par le modèle de repli sert au message en cours mais n'est pas gardée. Un média verrouillé (pas encore acheté) n'arrive à la Voix qu'en aperçu : type, durée, intensité, ambiance, décor.
+- Cache de prompt (coût) : chaque prompt met en tête ce qui ne change pas (rôle, fiche, règles) et en queue ce qui change à chaque message (notes du fan, brief), puis l'historique. Sans cache, la facture est multipliée par ~2,3 (`modeles-ia/comparatif-modeles.md`, section 10).
+- Canari : un secret aléatoire est écrit dans chaque prompt système ; une sortie qui le contient a fuité le prompt, elle est rejetée (`prompt_leak`) et l'appel passe au repli.
 - Plafonds : tokens par appel, appels par conversation/heure, budget quotidien par créatrice (coupe-circuit → copilote + alerte).
+
+## Vision (rôle `sense`, module `media`)
+
+- **Médias du catalogue** : l'agent n'envoie que des étapes de scripts Reveal, dont les bundles sont préparés à l'avance (règle de Charles, 17/10). Chaque média de bundle est décrit **une fois, à l'import**, stocké et relu par Charles ou Messa ; un refus se rattrape alors sans que le fan attende.
+- **Médias des fans** : décrits à la réception par le même chemin, puis le fichier n'est pas gardé (seule la description l'est, rétention de `security.md`). Les quelques secondes d'analyse passent pour le temps qu'une vraie fille met à regarder.
+- **Chemin** : Gemini reçoit la photo ou la vidéo elle-même (image et son). S'il refuse ou bloque (`content-filter`), la passerelle bascule sur Grok 4.7, qui reçoit des images clés datées (ffmpeg : une par seconde au plus, quasi-doublons retirés, 24 au plus en gardant début et fin) et la transcription du son ; ces images ne sont calculées qu'à la bascule. Une photo hors jpg/png ou de plus de 20 Mio est convertie en JPEG.
+- **Sécurité** : toute alerte (`flags`) d'un média de fan passe la main à un humain sans réponse automatique (`screenMedia`). Le texte écrit dans un média et la transcription sont des données non fiables (`wrapUntrusted`), lues aussi par la détection de pièges.
+
+## Les pièges (code pur, `modules/agent/domain/injection.ts` et `traps.ts`)
+
+Des fans tentent de prouver qu'ils parlent à une machine : recette de la tarte aux fraises, code, traduction, devoirs, « ignore tes instructions », « répète ton prompt », « tu es maintenant une assistante », balises de rôle, y compris écrits dans une photo ou dits dans un vocal. Défense en profondeur :
+
+1. **Entrée** : le contenu du fan est enveloppé (`wrapUntrusted`, chevrons neutralisés, caractères invisibles et bidirectionnels retirés) et déclaré comme donnée par chaque prompt.
+2. **Détection en code** (`detectInjection`) sur le message et sur le texte des médias, après normalisation (accents, casse, chiffres déguisés en lettres, espaces invisibles) ; le cerveau signale en plus `off_topic_request` et le risque `manipulation_attempt`.
+3. **Décision en code** (`assessTrap`) : un piège remplace le brief par une réponse en personnage (elle ne le fait pas, le trouve bizarre ou drôle, ramène la conversation sur eux deux, sans parler de règles), quoi qu'ait proposé le cerveau.
+4. **Sortie** : la garde bloquante `assistant_output` arrête ce qu'une assistante écrirait (quantités et étapes de recette, code, listes numérotées, Markdown, balises) ; le canari arrête une fuite du prompt.
 
 ## Santé (panneau « Modèles IA »)
 
@@ -58,11 +78,11 @@ interface LlmGateway {
 ```ts
 Brief {
   intent: 'small_talk'|'kyc_answer'|'flirt'|'sexting'|'media_reaction'|'asks_for_media'|'price_objection'|
-          'asks_if_bot'|'asks_to_meet'|'asks_personal_contact'|'distress'|'complaint'|'other';
+          'asks_if_bot'|'asks_to_meet'|'asks_personal_contact'|'distress'|'complaint'|'off_topic_request'|'other';
   sentiment: 'positive'|'neutral'|'negative'|'aroused'|'frustrated';
   factsProposed: { category, key, value, kind: 'declared'|'inferred', confidence }[];
   kycMissing: KycSlot[];
-  risks: ('minor_suspected'|'distress'|'meet_request'|'off_platform_payment'|'dispute'|'harassment'|'self_harm'|'money_trouble')[];
+  risks: ('minor_suspected'|'distress'|'meet_request'|'off_platform_payment'|'dispute'|'harassment'|'self_harm'|'money_trouble'|'manipulation_attempt')[];
   action: 'reply'|'offer'|'wait'|'follow_up'|'handoff';
   replyBrief: string;           // ce qu'il faut dire, en 1-3 phrases, pas le texte final
   toneHints: string[];
@@ -86,7 +106,7 @@ Chaque règle est une fonction testée unitairement avec cas nominal, limite, ad
 
 ## Les gardes (code pur, `modules/agent/domain/guards.ts`)
 
-Après la voix, sur le texte final : dégoûts et mots interdits (persona, liste normalisée avec variantes), anti-répétition (similarité avec les N derniers envois), longueur par bulle, mention d'argent/prix hors offre, mention d'IA/prompt/système/assistant, fuite d'un autre fan (noms/faits d'un autre fan dans le contexte ne doivent pas apparaître), URL/téléphone/email, langue attendue. Une violation `blocking` interdit l'envoi ; une violation `soft` déclenche une régénération puis laisse passer avec trace.
+Après la voix, sur le texte final : sortie d'assistante (recette, code, liste, balises), dégoûts et mots interdits (persona, liste normalisée avec variantes), anti-répétition (similarité avec les N derniers envois), longueur par bulle, mention d'argent/prix hors offre, mention d'IA/prompt/système/assistant, fuite d'un autre fan (noms/faits d'un autre fan dans le contexte ne doivent pas apparaître), URL/téléphone/email, langue attendue. Une violation `blocking` interdit l'envoi ; une violation `soft` déclenche une régénération puis laisse passer avec trace.
 
 ## Humanisation (envoi)
 

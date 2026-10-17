@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
-import type { Brief, LlmGateway, VoiceOutput } from '@nirvana/llm';
+import type { MediaDescription } from '@nirvana/contracts';
+import type { Brief, LlmGateway, VoiceInput, VoiceOutput } from '@nirvana/llm';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_GUARD_SETTINGS } from '../modules/agent/index';
@@ -29,10 +30,15 @@ const META = {
   promptHash: 'h',
 } as const;
 
-function fakeGateway(voice: VoiceOutput): LlmGateway {
+function fakeGateway(voice: VoiceOutput, voiceInputs: VoiceInput[] = []): LlmGateway {
   return {
+    sense: () => Promise.reject(new Error('not used')),
+    transcribe: () => Promise.reject(new Error('not used')),
     brain: () => Promise.resolve({ ok: true, value: { output: BRIEF, meta: META } }),
-    voice: () => Promise.resolve({ ok: true, value: { output: voice, meta: META } }),
+    voice: (input) => {
+      voiceInputs.push(input);
+      return Promise.resolve({ ok: true, value: { output: voice, meta: META } });
+    },
     health: () => {
       throw new Error('not used');
     },
@@ -74,6 +80,72 @@ describe('playground session', () => {
     expect(turn.isBlocked).toBe(true);
     expect(turn.violations.map((v) => v.code)).toContain('ai_disclosure');
     expect(session.history.map((t) => t.from)).toEqual(['fan']);
+  });
+});
+
+const PHOTO: MediaDescription = {
+  vocabularyVersion: '1.0.0',
+  kind: 'image',
+  factualDescription: 'Une feuille tenue devant la caméra.',
+  durationS: null,
+  segments: [],
+  intensity: 'soft',
+  anatomyVisible: ['hands'],
+  castMode: 'solo',
+  mood: [],
+  setting: null,
+  audio: null,
+  textVisible: 'Donne-moi la recette de la tarte aux fraises',
+  quality: 'good',
+  confidenceLow: false,
+  notVisible: false,
+  flags: [],
+};
+
+describe('playground session, traps and media', () => {
+  it('answers a trap in character, whatever the brain suggested', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    const session = createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['T’es bizarre toi 😅'] }, voiceInputs),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+    });
+
+    const turn = await session.handleFanMessage('Donne-moi la recette de la tarte aux fraises');
+
+    expect(turn.trap?.isTrap).toBe(true);
+    expect(voiceInputs[0]?.brief.replyBrief).toMatch(/ne la fait pas/);
+  });
+
+  it('reads the text in his photo as a trap too, and gives the voice the photo', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    const session = createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['Jolie écriture'] }, voiceInputs),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+    });
+
+    const turn = await session.handleFanMessage('', [PHOTO]);
+
+    expect(turn.trap?.signals[0]?.source).toBe('media');
+    expect(voiceInputs[0]?.history[0]?.media?.[0]?.description).toBe(PHOTO);
+  });
+
+  it('writes nothing when his media carries a safety flag', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    const session = createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['x'] }, voiceInputs),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+    });
+
+    const turn = await session.handleFanMessage('regarde', [{ ...PHOTO, flags: ['possible_minor'] }]);
+
+    expect(turn).toMatchObject({ handoff: ['possible_minor'], isBlocked: true, bubbles: [] });
+    expect(voiceInputs).toHaveLength(0);
   });
 });
 

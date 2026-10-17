@@ -233,9 +233,27 @@ describe('health', () => {
     expect(JSON.stringify(setup({}).gateway.health())).not.toContain('test-xai');
   });
 
-  it('marks the unconfirmed video input of Grok 4.7', () => {
+  it('lists what each model reads: Grok 4.7 takes images, not video', () => {
     const { gateway } = setup({});
     const xai = gateway.health().providers.find((p) => p.provider === 'xai');
-    expect(xai?.models.find((m) => m.model === 'grok-4.7')?.unconfirmedInputs).toEqual(['video']);
+    expect(xai?.models.find((m) => m.model === 'grok-4.7')).toMatchObject({ unconfirmedInputs: [] });
+  });
+});
+
+describe('key source', () => {
+  it('reads keys from a source as well as from the environment, never exposing them', () => {
+    const log = createInMemoryCallLog();
+    const gateway = createLlmGateway({
+      config: DEFAULT_LLM_CONFIG,
+      credentials: (provider) => (provider === 'google' ? 'saved-in-crm' : undefined),
+      resolveModel: () => undefined,
+      log,
+    });
+
+    const report = gateway.health();
+
+    expect(report.providers.find((p) => p.provider === 'google')?.hasKey).toBe(true);
+    expect(report.providers.find((p) => p.provider === 'xai')?.hasKey).toBe(false);
+    expect(JSON.stringify(report)).not.toContain('saved-in-crm');
   });
 });

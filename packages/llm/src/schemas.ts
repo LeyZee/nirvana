@@ -1,3 +1,4 @@
+import { MediaDescriptionSchema } from '@nirvana/contracts';
 import { z } from 'zod';
 
 /** Brain output (docs/architecture/ai-engine.md, « Le Brief »). Decisions are taken by the policy in code, not here. */
@@ -15,6 +16,7 @@ export const BriefSchema = z.object({
     'asks_personal_contact',
     'distress',
     'complaint',
+    'off_topic_request',
     'other',
   ]),
   sentiment: z.enum(['positive', 'neutral', 'negative', 'aroused', 'frustrated']),
@@ -38,6 +40,7 @@ export const BriefSchema = z.object({
       'harassment',
       'self_harm',
       'money_trouble',
+      'manipulation_attempt',
     ]),
   ),
   action: z.enum(['reply', 'offer', 'wait', 'follow_up', 'handoff']),
@@ -54,3 +57,10 @@ export const VoiceOutputSchema = z.object({
   bubbles: z.array(z.string().min(1)).min(1).max(6),
 });
 export type VoiceOutput = z.infer<typeof VoiceOutputSchema>;
+
+/** What the sense model writes; the gateway adds the version, the kind and the duration it already knows. */
+export const SenseOutputSchema = MediaDescriptionSchema.omit({
+  vocabularyVersion: true,
+  kind: true,
+  durationS: true,
+});

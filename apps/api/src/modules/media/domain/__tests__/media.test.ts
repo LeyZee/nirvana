@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+
+import { descriptionKey, keyframeRate, mediaKindOf, needsConversion, spreadFrames } from '../media';
+
+describe('media domain', () => {
+  it('tells photos from videos and refuses the rest', () => {
+    expect(mediaKindOf('image/jpeg')).toBe('image');
+    expect(mediaKindOf('video/mp4')).toBe('video');
+    expect(mediaKindOf('application/pdf')).toBeUndefined();
+  });
+
+  it('keys a description by content, vocabulary, origin and describer', () => {
+    const scope = { origin: 'fan', senseVersion: 'gemini-3.8-flash:abc' } as const;
+    const a = descriptionKey(new Uint8Array([1, 2]), scope);
+    expect(a).toBe(descriptionKey(new Uint8Array([1, 2]), scope));
+    expect(a).not.toBe(descriptionKey(new Uint8Array([1, 3]), scope));
+    expect(a).not.toBe(descriptionKey(new Uint8Array([1, 2]), { ...scope, senseVersion: 'grok-4.7:abc' }));
+    expect(a).not.toBe(descriptionKey(new Uint8Array([1, 2]), { ...scope, origin: 'creator' }));
+    expect(a).toMatch(/:1\.0\.0:fan:gemini-3\.8-flash:abc$/);
+  });
+
+  it('converts what the vision API refuses: WebP, HEIC, huge files', () => {
+    expect(needsConversion('image/jpeg', 1_000)).toBe(false);
+    expect(needsConversion('image/png', 1_000)).toBe(false);
+    expect(needsConversion('image/webp', 1_000)).toBe(true);
+    expect(needsConversion('image/heic', 1_000)).toBe(true);
+    expect(needsConversion('image/jpeg', 25 * 1024 * 1024)).toBe(true);
+  });
+
+  it('keeps every keyframe of a short video, and an even spread with the ending of a long one', () => {
+    expect(spreadFrames([1, 2, 3])).toEqual([1, 2, 3]);
+    const long = spreadFrames(Array.from({ length: 180 }, (_, i) => i));
+    expect(long).toHaveLength(24);
+    expect(long[0]).toBe(0);
+    expect(long.at(-1)).toBe(179);
+  });
+});
+
+describe('keyframeRate', () => {
+  it('decodes one frame a second for a short video, 24 at most for a long one', () => {
+    expect(keyframeRate(9)).toBe(1);
+    expect(keyframeRate(240)).toBe(0.1);
+    expect(keyframeRate(0)).toBe(1);
+  });
+});

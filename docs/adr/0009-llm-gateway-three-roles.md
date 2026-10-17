@@ -3,11 +3,13 @@
 Statut : accepted
 Date : 2026-10-16
 
-Mise à jour 2026-10-17 : le modèle par défaut devient Grok 4.7 (`grok-4.7`, sorti le 21/09/2026) à la demande de Charles ; la décision ne change pas. Sa lecture native des vidéos n'est pas confirmée (voir `docs/reference/llm-providers.md`).
+Mises à jour du 2026-10-17, la décision ne change pas :
+- `voice`, `brain` et `judge` passent sur Grok 4.7 (`grok-4.7`, sorti le 21/09/2026) à la demande de Charles, avec repli Mistral Large ; les évals le comparent à Grok 4.3. Le repli ne sert que si une clé Mistral est fournie.
+- `sense` passe sur Gemini 3.8 Flash, avec bascule sur Grok 4.7 : voir l'ADR 0017. Aucun modèle de chat xAI ne lit la vidéo ; Grok n'accepte que des images JPEG ou PNG (`docs/reference/llm-providers.md`).
 
 ## Contexte
 
-Claude et GPT refusent le contenu explicite ; les candidats sont xAI (Grok 4.3, images et vidéo natives), Mistral, Venice/open-weights, Gemini (analyse seulement). Les fournisseurs changent, les politiques aussi. OnlyScript a montré qu'un vocabulaire de description de médias structuré et des règles codées (dégoûts garantis par le code) valent mieux que de tout demander au prompt.
+Claude et GPT refusent le contenu explicite ; les candidats étaient, au 16/10, xAI (Grok 4.3 ; on le croyait alors lecteur de vidéo), Mistral, Venice/open-weights, Gemini (analyse seulement). Les fournisseurs changent, les politiques aussi. OnlyScript a montré qu'un vocabulaire de description de médias structuré et des règles codées (dégoûts garantis par le code) valent mieux que de tout demander au prompt.
 
 ## Décision
 

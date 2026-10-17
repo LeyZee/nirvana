@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const ProviderIdSchema = z.enum(['xai', 'mistral', 'venice']);
+const ProviderIdSchema = z.enum(['xai', 'mistral', 'venice', 'google']);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
 export const LlmRoleSchema = z.enum(['voice', 'brain', 'sense', 'judge']);
@@ -50,18 +50,28 @@ export const DEFAULT_LLM_CONFIG: LlmConfig = LlmConfigSchema.parse({
       timeoutMs: 30_000,
       fallback: MISTRAL_FALLBACK,
     },
-    sense: { provider: 'xai', model: 'grok-4.7', temperature: 0.2, maxOutputTokens: 800, timeoutMs: 60_000 },
+    // Gemini reads photo, video and sound natively (Charles, 17/10 18h20); when it refuses or blocks, Grok 4.7
+    // reads the same media as keyframes plus a transcript. Next fallback: Qwen3-VL (modeles-ia/comparatif-modeles.md).
+    sense: {
+      provider: 'google',
+      model: 'gemini-3.8-flash',
+      temperature: 0.2,
+      maxOutputTokens: 1_200,
+      timeoutMs: 90_000,
+      fallback: { provider: 'xai', model: 'grok-4.7' },
+    },
     judge: { provider: 'xai', model: 'grok-4.7', temperature: 0, maxOutputTokens: 600, timeoutMs: 60_000 },
   },
   maxTransientRetries: 2,
   dailyBudgetUsd: 15,
 });
 
-/** API keys come from the environment only (playbook add-an-llm-provider.md, step 9); they are never logged. */
+/** API keys from the environment: the fallback outside production (ADR 0016); never logged. */
 const ProviderCredentialsSchema = z.object({
   LLM_XAI_API_KEY: z.string().min(1).optional(),
   LLM_MISTRAL_API_KEY: z.string().min(1).optional(),
   LLM_VENICE_API_KEY: z.string().min(1).optional(),
+  LLM_GOOGLE_API_KEY: z.string().min(1).optional(),
 });
 export type ProviderCredentials = z.infer<typeof ProviderCredentialsSchema>;
 
@@ -72,7 +82,17 @@ export function readProviderCredentials(env: Record<string, string | undefined>)
   return ProviderCredentialsSchema.parse(nonEmpty);
 }
 
-export function apiKeyFor(credentials: ProviderCredentials, provider: ProviderId): string | undefined {
+/**
+ * Where API keys come from (ADR 0016): the keys a manager saves in Réglages > Modèles IA, stored encrypted
+ * per account and kept in server memory so the lookup stays synchronous; the environment
+ * (`readProviderCredentials`) only outside production, for development and `pnpm probe`.
+ */
+export type ApiKeySource = (provider: ProviderId) => string | undefined;
+export type ApiKeys = ProviderCredentials | ApiKeySource;
+
+export function apiKeyFor(keys: ApiKeys, provider: ProviderId): string | undefined {
+  if (typeof keys === 'function') return keys(provider);
+  const credentials = keys;
   switch (provider) {
     case 'xai':
       return credentials.LLM_XAI_API_KEY;
@@ -80,5 +100,7 @@ export function apiKeyFor(credentials: ProviderCredentials, provider: ProviderId
       return credentials.LLM_MISTRAL_API_KEY;
     case 'venice':
       return credentials.LLM_VENICE_API_KEY;
+    case 'google':
+      return credentials.LLM_GOOGLE_API_KEY;
   }
 }

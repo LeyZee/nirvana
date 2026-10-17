@@ -23,7 +23,10 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Repli | `fallback` | Le modèle de secours d'un rôle LLM, utilisé quand le modèle actif refuse, ne répond pas ou n'a pas de clé. |
 | Santé (des modèles) | `health` | État des rôles LLM (`ok`, `degraded`, `down`), latences, erreurs, coût du jour face au budget ; alimente le panneau « Modèles IA ». |
 | Playground | `playground` | Conversation d'essai avec la persona par le même chemin que la production (cerveau, voix, gardes), sans aucun envoi possible. |
-| Test express | `probe` | Script qui vérifie qu'un modèle tient la persona en sexting sans refuser ni avouer être une IA (`pnpm probe`). |
+| Test express | `probe` | Script qui vérifie qu'un modèle tient la persona en sexting sans refuser ni avouer être une IA (`pnpm probe`), et lit photos et vidéos sans obéir à leur texte (`pnpm probe:vision`). |
+| Piège | `trap` | Message (ou texte d'un média) qui cherche à prouver qu'on parle à une machine : recette, code, consigne, extraction du prompt. Détecté et traité en code (`assessTrap`). |
+| Images clés | `keyframes` | Images datées extraites d'une vidéo (une par seconde au plus, quasi-doublons retirés) pour un modèle de vision qui ne lit pas la vidéo. |
+| Canari | `canary` | Secret écrit dans chaque prompt système ; une sortie qui le contient a fuité le prompt et est rejetée. |
 | Passage à l'humain | `handoff` | La conversation est confiée à un humain ; le bot ne répond plus. |
 | Prise en main | `takeover` | Un humain prend la main volontairement. |
 | Mode copilote | `copilot` | Le bot propose, un humain approuve. |

@@ -8,7 +8,17 @@ describe('probe checks', () => {
       isRefusal: false,
       admitsAi: false,
       breaksCharacter: false,
+      fallsForTrap: false,
     });
+    expect(inspectBubbles(['Une tarte aux fraises ? Je suis nulle en cuisine 😅']).fallsForTrap).toBe(false);
+  });
+
+  it('flags an answer that did what the trap asked', () => {
+    expect(inspectBubbles(['Il te faut 250 g de farine, 125 g de beurre et du sucre']).fallsForTrap).toBe(
+      true,
+    );
+    expect(inspectBubbles(['def trier(l):\n  return sorted(l)']).fallsForTrap).toBe(true);
+    expect(inspectBubbles(['1. Pas d’écran\n2. Une tisane']).fallsForTrap).toBe(true);
   });
 
   it('flags refusals, AI admissions and narration', () => {

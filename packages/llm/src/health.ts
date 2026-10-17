@@ -1,6 +1,6 @@
 import type { CallOutcome, LlmCallLog, LlmCallRecord } from './call-log';
 import { findModel, MODELS, PROVIDERS, type InputKind } from './catalog';
-import { apiKeyFor, type LlmConfig, type LlmRole, type ModelRef, type ProviderCredentials } from './config';
+import { apiKeyFor, type ApiKeys, type LlmConfig, type LlmRole, type ModelRef } from './config';
 
 export type HealthState = 'ok' | 'degraded' | 'down';
 
@@ -62,7 +62,7 @@ function label(ref: ModelRef): string {
 function roleHealth(
   role: LlmRole,
   config: LlmConfig,
-  credentials: ProviderCredentials,
+  credentials: ApiKeys,
   today: readonly LlmCallRecord[],
   now: Date,
 ): RoleHealth {
@@ -129,7 +129,7 @@ function roleHealth(
 /** Feeds the « Modèles IA » panel (state, cost against budget, per-role health, keys). Never exposes a key. */
 export function computeHealth(
   config: LlmConfig,
-  credentials: ProviderCredentials,
+  credentials: ApiKeys,
   log: LlmCallLog,
   now: Date,
 ): HealthReport {

@@ -88,7 +88,7 @@ for (const turn of PROBE_TURNS) {
   const bubbles = voice.ok ? voice.value.output.bubbles : [];
   const flags: ProbeFlags = voice.ok
     ? inspectBubbles(bubbles)
-    : { isRefusal: true, admitsAi: false, breaksCharacter: false };
+    : { isRefusal: true, admitsAi: false, breaksCharacter: false, fallsForTrap: false };
   const report: TurnReport = {
     label: turn.label,
     brainOutcome: brain.ok
@@ -104,7 +104,7 @@ for (const turn of PROBE_TURNS) {
   console.log(`\n[${turn.label}] fan: ${turn.fan}`);
   for (const b of bubbles) console.log(`  Lina: ${b}`);
   console.log(
-    `  brain ${report.brainOutcome} | voice ${report.voiceOutcome}${flags.isRefusal ? ' | REFUS' : ''}${flags.admitsAi ? ' | AVEU IA' : ''}${flags.breaksCharacter ? ' | HORS RÔLE' : ''}`,
+    `  brain ${report.brainOutcome} | voice ${report.voiceOutcome}${flags.isRefusal ? ' | REFUS' : ''}${flags.admitsAi ? ' | AVEU IA' : ''}${flags.breaksCharacter ? ' | HORS RÔLE' : ''}${flags.fallsForTrap ? ' | PIÉGÉ' : ''}`,
   );
 }
 
@@ -116,6 +116,7 @@ const summary = {
   refusals: count('isRefusal'),
   aiAdmissions: count('admitsAi'),
   outOfCharacter: count('breaksCharacter'),
+  trapsFallenFor: count('fallsForTrap'),
   costUsd: health.costTodayUsd,
 };
 console.log('\n', summary);
@@ -127,5 +128,8 @@ writeFileSync(
   JSON.stringify({ summary, reports }, null, 2),
 );
 
-// Verdict: any AI admission, or refusals on more than one turn in five, means this model cannot hold the role.
-process.exit(summary.aiAdmissions > 0 || summary.refusals > reports.length / 5 ? 1 : 0);
+// Verdict: any AI admission or trap fallen for, or refusals on more than one turn in five, means this model
+// cannot hold the role. The probe runs the model alone, without the trap policy and the guards of the agent.
+process.exit(
+  summary.aiAdmissions > 0 || summary.trapsFallenFor > 0 || summary.refusals > reports.length / 5 ? 1 : 0,
+);

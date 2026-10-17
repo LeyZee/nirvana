@@ -11,6 +11,8 @@ export {
 export {
   MODELS,
   PROVIDERS,
+  TRANSCRIPTION_MODEL,
+  acceptsInput,
   costUsd,
   findModel,
   type InputKind,
@@ -21,6 +23,8 @@ export {
   DEFAULT_LLM_CONFIG,
   LlmConfigSchema,
   readProviderCredentials,
+  type ApiKeys,
+  type ApiKeySource,
   type LlmConfig,
   type LlmRole,
   type LlmRoleConfig,
@@ -38,9 +42,16 @@ export {
   type LlmGateway,
   type LlmGatewayDeps,
   type LlmSuccess,
+  type SenseInput,
+  type SenseMedia,
+  type Transcript,
+  type TurnMedia,
+  type VideoFrame,
+  type VideoKeyframes,
   type VoiceInput,
 } from './gateway';
 export type { HealthReport, HealthState, ProviderHealth, RoleHealth } from './health';
-export { createModelResolver, type ModelResolver } from './providers';
+export { loadPrompt } from './prompts';
+export { createModelResolver, createTranscriberResolver, type ModelResolver } from './providers';
 export { BriefSchema, VoiceOutputSchema, type Brief, type VoiceOutput } from './schemas';
 export { wrapUntrusted, type UntrustedKind } from './untrusted';
