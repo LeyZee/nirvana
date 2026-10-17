@@ -1,0 +1,795 @@
+/*
+ * Créatrices › Persona. Built on the design-system tokens and nv-* classes; only what the package has no class for
+ * lives here, prefixed `ps-`. Head and panel are glass; the controls on them are tints, never a second glass.
+ */
+
+.ps-page {
+  max-width: 760px;
+  width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nv-hairline) transparent;
+  padding-bottom: var(--nv-space-6);
+}
+.ps-muted {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-faint);
+}
+.ps-self-start {
+  align-self: flex-start;
+}
+
+/* ── Head: what dominates ── */
+.ps-head {
+  --_radius: var(--nv-radius-xl);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: none;
+}
+/* While loading: the shapes of the page, breathing, so nothing jumps when it arrives. */
+.ps-skeleton {
+  min-height: 150px;
+  animation: ps-skeleton 1.6s var(--nv-ease-out) infinite;
+}
+.ps-skeleton--tall {
+  min-height: 420px;
+}
+@keyframes ps-skeleton {
+  50% {
+    opacity: 0.55;
+  }
+}
+.ps-head__top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.ps-head__who {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.ps-head__meta {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: var(--nv-font-mono);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-faint);
+}
+.ps-example {
+  font-family: var(--nv-font-sans);
+  cursor: help;
+}
+.ps-title {
+  margin: 0;
+  font-size: var(--nv-text-title-2);
+  line-height: var(--nv-text-title-2-leading);
+  letter-spacing: var(--nv-text-title-2-tracking);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.ps-title[data-placeholder='true'] {
+  color: var(--nv-ink-faint);
+  font-family: var(--nv-font-serif);
+  font-style: italic;
+  font-weight: 400;
+}
+.ps-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ps-head__state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+.ps-head__text {
+  font-size: var(--nv-text-callout);
+  line-height: var(--nv-text-callout-leading);
+  font-weight: 600;
+  animation: ps-swap var(--nv-dur-base) var(--nv-ease-out) both;
+}
+@keyframes ps-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* A field changed since the saved version: a small neon dot before its label (and on its tab). */
+.ps-changed {
+  flex: none;
+  width: 0;
+  height: 6px;
+  margin-right: -8px;
+  border-radius: 99px;
+  background: var(--nv-neon);
+  box-shadow: 0 0 8px var(--nv-neon);
+  opacity: 0;
+  transform: scale(0);
+  transition:
+    width var(--nv-dur-base) var(--nv-ease-spring),
+    margin var(--nv-dur-base) var(--nv-ease-spring),
+    opacity var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring-bouncy);
+}
+[data-changed='true'] > .ps-field__head > .ps-changed,
+[data-changed='true'] .ps-switch__label > .ps-changed,
+.ps-changed--on {
+  width: 6px;
+  margin-right: 0;
+  opacity: 1;
+  transform: scale(1);
+}
+.ps-changed--on {
+  display: inline-block;
+}
+.ps-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--nv-ink-faint);
+  transition:
+    background-color 300ms var(--nv-ease-out),
+    box-shadow 300ms var(--nv-ease-out);
+}
+.ps-dot[data-dot='ok'] {
+  background: var(--nv-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nv-success) 18%, transparent);
+}
+.ps-dot[data-dot='warn'] {
+  background: var(--nv-warning);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nv-warning) 18%, transparent);
+  animation: ps-breathe 2.4s var(--nv-ease-out) infinite;
+}
+@keyframes ps-breathe {
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--nv-warning) 6%, transparent);
+  }
+}
+.ps-pop {
+  animation: nv-enter var(--nv-dur-base) var(--nv-ease-spring) both;
+}
+
+/* ── Tabs ── */
+.ps-tabs {
+  flex: none;
+  display: flex;
+  justify-content: center;
+}
+.ps-tabs__bar {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ps-tabs__bar::-webkit-scrollbar {
+  display: none;
+}
+.ps-tabs__item {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+}
+.ps-tabs__item[aria-selected='true'] {
+  color: var(--nv-ink);
+}
+
+/* ── Panel: the work ── */
+.ps-panel {
+  --_radius: var(--nv-radius-xl);
+  flex: none;
+  padding: 8px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  animation: nv-enter var(--nv-dur-slow) var(--nv-ease-spring) both;
+}
+/* Changing tab slides the panel in from the side of the tab picked. */
+.ps-panel[data-direction='right'] {
+  animation-name: ps-from-right;
+}
+.ps-panel[data-direction='left'] {
+  animation-name: ps-from-left;
+}
+@keyframes ps-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+@keyframes ps-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+.ps-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--nv-hairline);
+}
+.ps-block:first-child {
+  border-top: 0;
+}
+.ps-block > .nv-eyebrow {
+  margin-bottom: -4px;
+}
+.ps-lead {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--nv-ink-muted);
+}
+.ps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.ps-grid--3 {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.ps-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* A block that appears because of a choice (custom style, follow-ups on) slides in. */
+.ps-reveal {
+  animation: nv-enter var(--nv-dur-base) var(--nv-ease-out) both;
+}
+
+/* A group of numbers the code enforces: one mark above them. */
+.ps-coded {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ps-coded > .ps-grid {
+  align-self: stretch;
+}
+
+/* ── Fields ── */
+.ps-field {
+  min-width: 0;
+}
+.ps-field__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ps-code {
+  flex: none;
+  cursor: help;
+  height: 20px;
+  font-size: 10px;
+}
+.ps-hint {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-faint);
+}
+.ps-error {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  font-weight: 600;
+  color: var(--nv-danger);
+  animation: nv-enter var(--nv-dur-base) var(--nv-ease-out) both;
+}
+.ps-error::before {
+  content: '! ';
+}
+.ps-field[data-invalid='true'] .nv-field__control {
+  box-shadow:
+    var(--nv-shadow-glass),
+    inset 0 0 0 1px color-mix(in srgb, var(--nv-danger) 70%, transparent);
+}
+.ps-input:hover:not(:focus) {
+  background-color: var(--nv-glass-fill-strong);
+}
+.ps-input[data-placeholder='true'] {
+  color: var(--nv-ink-faint);
+  font-style: italic;
+}
+.ps-input[type='date'] {
+  color-scheme: dark;
+}
+:root[data-theme='light'] .ps-input[type='date'] {
+  color-scheme: light;
+}
+
+.ps-area {
+  position: relative;
+}
+.ps-area__input {
+  resize: vertical;
+  min-height: 88px;
+  padding-bottom: 26px;
+  line-height: 22px;
+}
+.ps-area__count {
+  position: absolute;
+  right: 12px;
+  bottom: 7px;
+  font-family: var(--nv-font-mono);
+  font-size: var(--nv-text-caption);
+  color: var(--nv-ink-faint);
+  pointer-events: none;
+  transition: color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.ps-area__count[data-near='true'] {
+  color: var(--nv-warning);
+}
+
+.ps-number.nv-field__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 0;
+  padding-bottom: 0;
+  cursor: text;
+}
+.ps-block > .ps-field > .ps-number,
+.ps-reveal > .ps-field > .ps-number,
+.ps-fold__body > .ps-field > .ps-number {
+  max-width: 260px;
+}
+.ps-number:focus-within {
+  box-shadow: var(--nv-shadow-glass), var(--nv-shadow-focus);
+}
+.ps-number__input {
+  flex: 1;
+  min-width: 0;
+  height: var(--nv-target-min);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  outline: none;
+  font-family: var(--nv-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--nv-text-body);
+  color: var(--nv-ink);
+  caret-color: var(--nv-neon);
+  -moz-appearance: textfield;
+}
+.ps-number__input::-webkit-inner-spin-button,
+.ps-number__input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.ps-number.nv-field__control {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.ps-number__input:focus,
+.ps-number__input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.ps-step {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 99px;
+  background: none;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--nv-ink-faint);
+  cursor: pointer;
+  position: relative;
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    color var(--nv-dur-fast) var(--nv-ease-out),
+    opacity var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.ps-step::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.ps-step:hover:not(:disabled) {
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill-strong);
+}
+.ps-step:active:not(:disabled) {
+  transform: scale(0.88);
+  transition-duration: var(--nv-dur-instant);
+}
+.ps-step:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.ps-number__input {
+  text-align: right;
+}
+.ps-number__unit {
+  flex: none;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-faint);
+}
+
+.ps-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ps-seg {
+  position: relative;
+  align-self: flex-start;
+  max-width: 100%;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-glass-fill);
+}
+.ps-seg__thumb {
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-glass-fill-strong);
+  box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+}
+.ps-seg .nv-seg__opt:hover {
+  color: var(--nv-ink);
+}
+.ps-seg .nv-seg__opt:active {
+  transform: scale(0.96);
+  transition: transform var(--nv-dur-instant);
+}
+
+.ps-switches {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -12px;
+}
+.ps-switch {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: var(--nv-radius-md);
+}
+.ps-switches .ps-switch {
+  margin: 0;
+}
+.ps-switch__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+.ps-switch__label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 600;
+}
+
+/* A value set elsewhere, shown as a field that does not take input. */
+.ps-static.nv-field__control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A list of entries: removable tints in a field. */
+.ps-entries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: text;
+}
+.ps-entries:focus-within {
+  box-shadow: var(--nv-shadow-glass), var(--nv-shadow-focus);
+}
+.ps-entries[data-refused='true'] {
+  animation: ps-shake var(--nv-dur-slow) var(--nv-ease-spring);
+}
+@keyframes ps-shake {
+  25% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+}
+.ps-entries__input {
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 28px;
+  border: 0;
+  padding: 0 4px;
+  margin: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  color: var(--nv-ink);
+  caret-color: var(--nv-neon);
+}
+.ps-entries__input:focus-visible {
+  /* The whole field already lights up (focus-within). */
+  outline: none;
+}
+.ps-entries__input::placeholder {
+  color: var(--nv-ink-faint);
+}
+.ps-entry {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px 0 11px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-glass-fill-strong);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+  animation: nv-enter var(--nv-dur-base) var(--nv-ease-spring) both;
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.ps-entry:hover {
+  background: var(--nv-neon-soft);
+}
+.ps-entry[data-placeholder='true'] {
+  background: none;
+  outline: 1px dashed var(--nv-ink-faint);
+  outline-offset: -1px;
+  color: var(--nv-ink-faint);
+  font-style: italic;
+  font-weight: 400;
+}
+.ps-entry__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-entry__remove {
+  appearance: none;
+  border: 0;
+  margin: 0 0 0 2px;
+  padding: 0;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 99px;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--nv-ink-faint);
+  cursor: pointer;
+  position: relative;
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    color var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+/* 44px hit area around a small mark (docs/design, « Copilote et raccourcis »). */
+.ps-entry__remove::after {
+  content: '';
+  position: absolute;
+  inset: -11px -6px;
+}
+.ps-entry__remove:hover {
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill);
+}
+.ps-entry__remove:active {
+  transform: scale(0.9);
+  transition-duration: var(--nv-dur-instant);
+}
+.ps-entry__remove:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 1px;
+}
+
+.ps-delays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ps-delays__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ps-delays__add .ps-number {
+  width: 150px;
+}
+
+/* ── Folds ── */
+.ps-fold {
+  margin: 0 -14px;
+}
+.ps-fold + .ps-fold {
+  margin-top: -8px;
+}
+.ps-fold > summary .ps-code {
+  margin-left: -2px;
+}
+.ps-fold__body {
+  gap: 16px;
+}
+.ps-panel > .ps-fold {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nv-hairline);
+}
+
+@media (max-width: 820px) {
+  .ps-page {
+    overflow: visible;
+  }
+  .ps-head,
+  .ps-panel {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .ps-tabs {
+    justify-content: flex-start;
+  }
+  .ps-fold > summary .ps-code {
+    display: none;
+  }
+}
+
+/* A select of several picks: the field holds the picks, the list unfolds under it. */
+.ps-picker {
+  position: relative;
+}
+.ps-picker__field {
+  padding-right: 34px;
+  cursor: pointer;
+}
+.ps-picker__chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -5px;
+  border-right: 1.5px solid var(--nv-ink-faint);
+  border-bottom: 1.5px solid var(--nv-ink-faint);
+  transform: rotate(45deg);
+  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
+  pointer-events: none;
+}
+.ps-picker__field[data-open='true'] .ps-picker__chevron {
+  transform: translateY(3px) rotate(-135deg);
+}
+.ps-picker .ps-picker__list {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  max-height: 264px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  /* Opaque: a menu over the form must not let the fields show through. */
+  background: var(--nv-surface-raised);
+  transform-origin: top center;
+  animation: ps-unfold var(--nv-dur-base) var(--nv-ease-spring) both;
+}
+@keyframes ps-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.ps-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--nv-radius-md);
+  cursor: pointer;
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.ps-picker__option[data-active='true'] {
+  background: var(--nv-glass-fill-strong);
+}
+.ps-picker__option[aria-selected='true'] {
+  font-weight: 600;
+}
+.ps-picker__check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  outline: 1.5px solid var(--nv-ink-faint);
+  outline-offset: -1.5px;
+  position: relative;
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    outline-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.ps-picker__option[aria-selected='true'] .ps-picker__check {
+  background: var(--nv-neon-solid);
+  outline-color: transparent;
+}
+.ps-picker__option[aria-selected='true'] .ps-picker__check::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+  height: 9px;
+  border-right: 2px solid var(--nv-on-neon);
+  border-bottom: 2px solid var(--nv-on-neon);
+  transform: rotate(45deg);
+  animation: nv-enter var(--nv-dur-fast) var(--nv-ease-spring) both;
+}
+.ps-picker__empty {
+  padding: 10px;
+  color: var(--nv-ink-faint);
+  font-size: var(--nv-text-footnote);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-panel,
+  .ps-reveal,
+  .ps-error,
+  .ps-entry,
+  .ps-picker__list,
+  .ps-pop,
+  .ps-entries[data-refused='true'],
+  .ps-dot[data-dot='warn'],
+  .ps-skeleton,
+  .ps-head__text {
+    animation: none;
+  }
+  .ps-changed {
+    transition: none;
+  }
+}
