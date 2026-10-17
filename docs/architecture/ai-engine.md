@@ -29,7 +29,7 @@ interface LlmGateway {
 }
 ```
 
-- Implémentation sur le Vercel AI SDK 7 (`generateText` + `Output.object` avec schémas Zod, providers `@ai-sdk/xai`, `@ai-sdk/mistral`, `@ai-sdk/google-vertex`, `@ai-sdk/openai-compatible` pour Venice/Novita). Le reste du code n'importe jamais le SDK : seulement `LlmGateway`.
+- Implémentation sur le Vercel AI SDK 7 (`generateText` + `Output.object` avec schémas Zod, providers `@ai-sdk/xai`, `@ai-sdk/mistral`, `@ai-sdk/google` (API Gemini par clé AI Studio, ADR 0016), `@ai-sdk/openai-compatible` pour Venice/Novita). Le reste du code n'importe jamais le SDK : seulement `LlmGateway`.
 - Config par rôle : `{ provider, model, temperature, maxOutputTokens, timeoutMs, fallback?: {provider, model} }` (`packages/llm/src/config.ts`, `DEFAULT_LLM_CONFIG`), surchargée plus tard par `CreatorSettings.llm`.
 - Chaque appel : timeout, retry borné (2) sur erreurs transitoires, repli sur le fournisseur de secours si refus (`refused`) ou indisponibilité, journal `LlmCallLog` (en mémoire ou JSONL en attendant la table `llm_calls` de P0-03, jamais de contenu de message) + trace Langfuse, coût calculé depuis le catalogue daté (`packages/llm/src/catalog.ts`).
 - Sortie invalide (Zod) : une relance avec l'erreur en contexte, puis échec propre.

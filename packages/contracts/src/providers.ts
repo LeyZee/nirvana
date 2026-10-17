@@ -67,3 +67,26 @@ export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
 /** Keys are long random strings; 512 characters leaves room and stops abuse of the route. */
 export const SaveProviderKeyBodySchema = z.object({ key: z.string().trim().min(1).max(512) });
 export type SaveProviderKeyBody = z.infer<typeof SaveProviderKeyBodySchema>;
+
+/** A key the provider (or the shape check) turned down, as the sheet shows it under the key field. */
+export const ProviderRefusalSchema = z.object({ kind: ProviderErrorKindSchema, message: z.string().min(1) });
+export type ProviderRefusal = z.infer<typeof ProviderRefusalSchema>;
+
+/** The one thing the top of the Services section asks for, with its single neon button. */
+export const ProviderNextActionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.enum(['replace_key', 'top_up', 'connect']),
+    provider: AiProviderSchema,
+    lead: z.string().min(1),
+    detail: z.string().min(1),
+  }),
+  z.object({ kind: z.literal('all_set'), lead: z.string().min(1), detail: z.string().min(1) }),
+]);
+export type ProviderNextAction = z.infer<typeof ProviderNextActionSchema>;
+
+/** `GET /v1/settings/providers`: the lines in display order and what to do next. */
+export const ProviderOverviewSchema = z.object({
+  services: z.array(ProviderStatusSchema),
+  next: ProviderNextActionSchema,
+});
+export type ProviderOverview = z.infer<typeof ProviderOverviewSchema>;

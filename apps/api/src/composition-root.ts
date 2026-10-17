@@ -18,6 +18,7 @@ import {
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
+import { startProvidersModule, type ProvidersModule } from './modules/providers';
 import { createSalesModule, type SalesModule } from './modules/sales';
 import { createScriptsModule, type ScriptsModule } from './modules/scripts';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
@@ -34,6 +35,7 @@ interface Modules {
   readonly supervision: SupervisionModule;
   readonly sales: SalesModule;
   readonly scripts: ScriptsModule;
+  readonly providers: ProvidersModule;
 }
 
 /** What both entry points (API and worker) are built from. */
@@ -96,6 +98,21 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     supervision: createSupervisionModule(),
     sales: createSalesModule(),
     scripts: createScriptsModule(),
+    providers: await startProvidersModule({
+      adminDb: adminDb.db,
+      encryptionKeys: config.CREDENTIALS_ENCRYPTION_KEYS,
+      environmentKeys:
+        config.NODE_ENV === 'production'
+          ? null
+          : {
+              xai: config.LLM_XAI_API_KEY,
+              google: config.LLM_GOOGLE_API_KEY,
+              elevenlabs: config.SPEECH_ELEVENLABS_API_KEY,
+            },
+      onLoadError: (error) => {
+        logger.warn({ err: error }, 'AI service keys not loaded');
+      },
+    }),
   };
 
   const tasks: TaskList = {

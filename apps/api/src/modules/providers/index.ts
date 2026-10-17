@@ -1,5 +1,7 @@
 /** Public entry point of the `providers` module (ADR 0002, ADR 0016). Other modules import this file only. */
 import type { AiProvider } from '@nirvana/contracts';
+import { parseEncryptionKeys, type Database } from '@nirvana/db';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import {
   connectProvider,
@@ -11,16 +13,20 @@ import {
   updateProviderSettings,
   type ConnectionsDeps,
 } from './application/connections';
-import { createKeyCache, type KeyCache } from './application/key-cache';
+import { createKeyCache } from './application/key-cache';
+import type { ProvidersApi } from './application/providers-api';
 import type { Clock, CredentialStore } from './domain/ports';
 import { createElevenLabsVerifier } from './infra/elevenlabs.verifier';
 import { createGoogleVerifier } from './infra/google.verifier';
 import type { FetchLike } from './infra/http';
+import { createMemoryCredentialStore } from './infra/memory.store';
+import { createPostgresCredentialStore } from './infra/postgres.store';
+import { createProvidersRoutes, type ProvidersRoutesOptions } from './infra/routes';
 import { createXaiVerifier } from './infra/xai.verifier';
 
 export { ProviderNotConnected } from './application/connections';
 export { nextAction } from './domain/next-action';
-export { createMemoryCredentialStore } from './infra/memory.store';
+export { createMemoryCredentialStore };
 
 export interface ProvidersDeps {
   readonly store: CredentialStore;
@@ -32,29 +38,18 @@ export interface ProvidersDeps {
   readonly onChange?: (provider: AiProvider) => void;
 }
 
-export interface ProvidersModule {
+export interface ProvidersModule extends ProvidersApi {
   readonly name: 'providers';
   /** The `ApiKeySource` handed to the LLM gateway and the speech client. */
   readonly apiKeySource: (provider: AiProvider) => string | undefined;
   /** Loads the saved keys into memory; call once at start-up. */
   readonly start: () => Promise<void>;
-  readonly list: () => ReturnType<typeof listProviderStatuses>;
-  readonly connect: (provider: AiProvider, key: string) => ReturnType<typeof connectProvider>;
-  readonly reverify: (provider: AiProvider) => ReturnType<typeof reverifyProvider>;
-  readonly reverifyAll: () => ReturnType<typeof reverifyAll>;
-  readonly reportRefusedKey: (
-    provider: AiProvider,
-    kind: Parameters<typeof reportRefusedKey>[2],
-  ) => Promise<void>;
-  readonly updateSettings: (
-    provider: AiProvider,
-    settings: Parameters<typeof updateProviderSettings>[2],
-  ) => ReturnType<typeof updateProviderSettings>;
-  readonly disconnect: (provider: AiProvider) => ReturnType<typeof disconnectProvider>;
+  /** `/v1/settings/providers`, behind the guard given here. */
+  readonly routes: (options: ProvidersRoutesOptions) => FastifyPluginAsyncZod;
 }
 
 export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
-  const cache: KeyCache = createKeyCache(deps.store, deps.environmentKeys);
+  const cache = createKeyCache(deps.store, deps.environmentKeys);
   const connections: ConnectionsDeps = {
     store: deps.store,
     clock: deps.clock ?? { now: () => new Date() },
@@ -69,10 +64,7 @@ export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
     },
     hasEnvironmentKey: (provider) => deps.environmentKeys?.(provider) !== undefined,
   };
-  return {
-    name: 'providers',
-    apiKeySource: (provider) => cache.lookup(provider),
-    start: () => cache.reload(),
+  const api: ProvidersApi = {
     list: () => listProviderStatuses(connections),
     connect: (provider, key) => connectProvider(connections, provider, key),
     reverify: (provider) => reverifyProvider(connections, provider),
@@ -81,4 +73,43 @@ export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
     updateSettings: (provider, settings) => updateProviderSettings(connections, provider, settings),
     disconnect: (provider) => disconnectProvider(connections, provider),
   };
+  return {
+    ...api,
+    name: 'providers',
+    apiKeySource: (provider) => cache.lookup(provider),
+    start: () => cache.reload(),
+    routes: (options) => createProvidersRoutes(api, options),
+  };
+}
+
+export interface ProvidersStartOptions {
+  /** The admin connection (`provider_credentials` is revoked from the application role). */
+  readonly adminDb: Database;
+  /**
+   * CREDENTIALS_ENCRYPTION_KEYS. Required in production (config.ts); without it, in development, keys are kept in
+   * memory and lost at restart.
+   */
+  readonly encryptionKeys: string | undefined;
+  /** Development keys from the environment, null in production (ADR 0016). */
+  readonly environmentKeys: Partial<Record<AiProvider, string | undefined>> | null;
+  /** The saved keys could not be loaded at start-up: the environment keys still apply, the next change reloads. */
+  readonly onLoadError: (error: unknown) => void;
+}
+
+/** The module as the composition root builds it: Postgres store when there is an encryption key, keys loaded. */
+export async function startProvidersModule(options: ProvidersStartOptions): Promise<ProvidersModule> {
+  const environment = options.environmentKeys;
+  const module = createProvidersModule({
+    store:
+      options.encryptionKeys === undefined
+        ? createMemoryCredentialStore()
+        : createPostgresCredentialStore({
+            adminDb: options.adminDb,
+            keys: parseEncryptionKeys(options.encryptionKeys),
+          }),
+    fetch,
+    environmentKeys: environment === null ? null : (provider) => environment[provider],
+  });
+  await module.start().catch(options.onLoadError);
+  return module;
 }

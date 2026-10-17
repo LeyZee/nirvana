@@ -1,6 +1,6 @@
 # Rotation des secrets
 
-Secrets du système (liste de référence dans `.env.example`) : clés LLM par fournisseur, `DATABASE_URL` (rôle app) et rôle admin, `SESSION_ENCRYPTION_KEYS` (AES-256-GCM des sessions plateforme, clés versionnées), secret Better Auth, clés VAPID, DSN Sentry, clés Langfuse, jeton d'appareil de l'extension, identifiants S3, jeton Cloudflare Access (hors `.env` : il vit dans Cloudflare, pas sur le serveur).
+Secrets du système (liste de référence dans `.env.example`) : clés LLM par fournisseur (dev seulement : en production elles sont dans le dashboard), `CREDENTIALS_ENCRYPTION_KEYS`, `DATABASE_URL` (rôle app) et rôle admin, `SESSION_ENCRYPTION_KEYS` (AES-256-GCM des sessions plateforme, clés versionnées), secret Better Auth, clés VAPID, DSN Sentry, clés Langfuse, jeton d'appareil de l'extension, identifiants S3, jeton Cloudflare Access (hors `.env` : il vit dans Cloudflare, pas sur le serveur).
 
 ## Procédure générale
 
@@ -14,6 +14,8 @@ Secrets du système (liste de référence dans `.env.example`) : clés LLM par f
 ## Cas particuliers
 
 - **`SESSION_ENCRYPTION_KEYS`** : les sessions plateforme en base sont chiffrées avec l'ancienne clé. Le code supporte `SESSION_ENCRYPTION_KEYS="v2:<nouvelle>,v1:<ancienne>"` (déchiffre avec les deux, chiffre avec la première). Déployer, lancer `pnpm ops:reencrypt-sessions`, puis retirer `v1`.
+- **`CREDENTIALS_ENCRYPTION_KEYS`** (clés des services IA, ADR 0016) : même format. Mettre `v2:<nouvelle>,v1:<ancienne>`, déployer, puis dans Réglages › Modèles IA cliquer « Vérifier maintenant » sur chaque service : une clé vérifiée est réenregistrée avec `v2` (colonne `key_version`). Retirer `v1` seulement quand plus aucune ligne de `provider_credentials` ne l'utilise ; sinon le service passe à « clé à remplacer » et il faut recoller sa clé.
+- **Clé d'un service IA** (Grok, Gemini, ElevenLabs) : la révoquer dans la console du fournisseur, en créer une, la coller dans Réglages › Modèles IA. L'ancienne reste en service jusqu'à ce que la nouvelle soit vérifiée.
 - **Rôle Postgres** : créer un nouveau mot de passe via Neon, mettre à jour `DATABASE_URL`, redémarrer, puis seulement révoquer. Pas l'inverse.
 - **Jeton d'appareil extension** : régénérer depuis le dashboard, le coller dans l'extension (popup → Paramètres). L'ancien est invalidé immédiatement.
 - **Clé LLM fuitée** : révoquer **d'abord** (le coût d'un abus est immédiat), puis régénérer ; le coupe-circuit budget limite les dégâts entre-temps.

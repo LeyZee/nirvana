@@ -4,9 +4,11 @@
 
 **Peut dépendre de.** Aucun module. `packages/contracts` ; l'infra parle aux API des fournisseurs (lecture seule).
 
-**Tables possédées.** `provider_credentials` (à venir avec P0-03 : clé chiffrée par `CREDENTIALS_ENCRYPTION_KEYS`, hors RLS, réglage de l'agence).
+**Tables possédées.** `provider_credentials` (`packages/db/src/schema/credentials.ts`) : clé scellée par `CREDENTIALS_ENCRYPTION_KEYS`, hors RLS, retirée au rôle applicatif, lue et écrite par `withAdmin` seulement.
 
-**Jobs émis.** Revérification des clés toutes les 15 minutes (à câbler avec P0-04).
+**Routes.** `/v1/settings/providers` : `GET`, `PUT /:provider/key`, `POST /:provider/verify`, `PUT /:provider/settings`, `DELETE /:provider`, derrière `requireRole('owner')` (montées avec P0-07a).
+
+**Jobs émis.** Revérification des clés toutes les 15 minutes (à câbler).
 
 ## Règles propres
 
@@ -20,7 +22,7 @@
 
 - `domain/` : profils des services, forme des clés, textes, états, prochaine action. Pur, testé.
 - `application/` : connexion, revérification, déconnexion, réglages (voix, modèle Vision), cache des clés.
-- `infra/` : un vérificateur par fournisseur (un `GET` en lecture seule, réponses validées par Zod), dépôt en mémoire. Le dépôt Postgres et les routes arrivent avec P0-03, P0-04 et P0-07a.
-- `index.ts` : `createProvidersModule(deps)`, seule porte d'entrée.
+- `infra/` : un vérificateur par fournisseur (un `GET` en lecture seule, réponses validées par Zod), magasin Postgres (et en mémoire pour les tests et le développement sans clé de chiffrement), routes.
+- `index.ts` : `startProvidersModule(options)` pour le composition root, `createProvidersModule(deps)` pour les tests.
 
 Les chemins d'API des fournisseurs (`/v1/api-key` chez xAI, `/v1beta/models` chez Google, `/v1/user/subscription` et `/v1/voices` chez ElevenLabs) sont à reconfirmer avec une vraie clé lors de la première connexion.

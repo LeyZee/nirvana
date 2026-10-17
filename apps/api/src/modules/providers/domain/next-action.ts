@@ -1,23 +1,9 @@
-import type { AiProvider, ProviderStatus } from '@nirvana/contracts';
+import type { ProviderNextAction, ProviderStatus } from '@nirvana/contracts';
 
 import { profileOf } from './catalog';
 
-/** The one thing the top of the Services section asks for, with its single neon button. */
-export type NextAction =
-  | {
-      readonly kind: 'replace_key';
-      readonly provider: AiProvider;
-      readonly lead: string;
-      readonly detail: string;
-    }
-  | { readonly kind: 'top_up'; readonly provider: AiProvider; readonly lead: string; readonly detail: string }
-  | {
-      readonly kind: 'connect';
-      readonly provider: AiProvider;
-      readonly lead: string;
-      readonly detail: string;
-    }
-  | { readonly kind: 'all_set'; readonly lead: string; readonly detail: string };
+/** The one thing the top of the Services section asks for (contract: `ProviderNextAction`). */
+export type NextAction = ProviderNextAction;
 
 /**
  * Priority (fiche P3-03): a refused key first, then low credit, then the next service not connected, in the order

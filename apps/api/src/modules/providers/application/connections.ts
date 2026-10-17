@@ -5,6 +5,7 @@ import {
   ProviderSettingsSchema,
   type AiProvider,
   type ProviderErrorKind,
+  type ProviderRefusal,
   type ProviderSettings,
   type ProviderStatus,
   type Result,
@@ -24,13 +25,13 @@ import type { ProviderVerifier } from '../domain/verification';
 
 class ProviderNotSupported extends DomainError {
   constructor(provider: AiProvider) {
-    super('provider_not_supported', `no verifier for provider ${provider}`);
+    super('provider_invalid', `Service inconnu : ${provider}`);
   }
 }
 
 export class ProviderNotConnected extends DomainError {
   constructor(provider: AiProvider) {
-    super('provider_not_connected', `provider ${provider} has no saved key`);
+    super('provider_key_not_found', `Aucune clé enregistrée pour ${provider}`);
   }
 }
 
@@ -45,10 +46,7 @@ export interface ConnectionsDeps {
 }
 
 /** A refusal as the sheet shows it, under the key field. */
-export interface ConnectRefusal {
-  readonly kind: ProviderErrorKind;
-  readonly message: string;
-}
+export type ConnectRefusal = ProviderRefusal;
 
 function verifierFor(deps: ConnectionsDeps, provider: AiProvider): ProviderVerifier {
   const verifier = deps.verifiers.find((v) => v.provider === provider);
