@@ -27,6 +27,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session √©crit son entr√
 | 2026-10-17 | P0-07a Login du dashboard | done | `log/2026-10-17-p0-07a.md` |
 | 2026-10-17 | P0-05 Module conversations | done | `log/2026-10-17-p0-05.md` |
 | 2026-10-17 | P0-06 Module connectors | done | `log/2026-10-17-p0-06.md` |
+| 2026-10-17 | P0-05 suite : port du moteur et journal `llm_calls` | done | `log/2026-10-17-p0-05-composer.md` |
 
 ## Incidents (liste vivante)
 

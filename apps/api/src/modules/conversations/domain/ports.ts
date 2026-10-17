@@ -87,6 +87,10 @@ interface MessageRepository {
   insertIfNew(message: NewMessage): Promise<boolean>;
   /** Bubbles of this draft already on the platform; a retried send resumes after them. */
   countForDraft(draftId: DraftId): Promise<number>;
+  /** The conversation's last `limit` messages, oldest first: what the engine reads. */
+  history(conversationId: ConversationId, limit: number): Promise<readonly HistoryMessage[]>;
+  /** What the fan's messages tell about them across the creator's conversations. */
+  fanContext(fanId: FanId): Promise<FanContext>;
 }
 
 interface DraftRepository {
@@ -98,6 +102,9 @@ interface DraftRepository {
     conversationId: ConversationId;
     idempotencyKey: string;
     createdAt: Date;
+    bubbles?: readonly string[];
+    /** Soft guard findings the operator should see next to the draft. */
+    softViolations?: readonly string[];
   }): Promise<void>;
   setStatus(id: DraftId, status: DraftStatus, decision?: DraftDecision): Promise<void>;
 }
@@ -182,6 +189,62 @@ export interface OutboundSender {
     idempotencyKey: string,
     ref: ExternalRef | null,
   ): Promise<VerifyResult>;
+}
+
+/** One message as the engine reads it. */
+interface HistoryMessage {
+  readonly direction: MessageDirection;
+  readonly author: MessageAuthor;
+  readonly text: string;
+  readonly at: Date;
+  readonly priceMinor: number | null;
+  readonly isPaid: boolean;
+}
+
+interface FanContext {
+  /** Confirmed facts about the fan, current ones only (`fan_facts`), as « key : value ». */
+  readonly notes: readonly string[];
+  /** Paid messages (PPV bought), in minor units. */
+  readonly spentMinor: number;
+  readonly firstMessageAt: Date | null;
+}
+
+export interface ComposeInput {
+  readonly creatorId: CreatorId;
+  readonly conversationId: ConversationId;
+  readonly fanId: FanId;
+  /** Ties the LLM calls to the draft (real cost per draft in `llm_calls`). */
+  readonly draftId: DraftId;
+  readonly correlationId: string;
+  readonly now: Date;
+  /** The last 40 messages, oldest first. */
+  readonly history: readonly HistoryMessage[];
+  readonly fan: FanContext;
+}
+
+/** Why the engine wrote no draft. The first three hand the conversation to the chatters. */
+export type HoldReason = 'guard_blocked' | 'handoff' | 'budget_reached' | 'llm_unavailable' | 'no_reply';
+
+export type ComposeResult =
+  | {
+      readonly kind: 'draft';
+      readonly bubbles: readonly string[];
+      readonly softViolations: readonly string[];
+      readonly costUsd: number;
+    }
+  | {
+      readonly kind: 'held';
+      readonly reason: HoldReason;
+      readonly detail: readonly string[];
+      readonly costUsd: number;
+    };
+
+/**
+ * The engine behind `conversation.respond`, implemented by the agent's adapter and injected by the composition
+ * root. It resolves the persona from `creatorId` itself. Called outside any transaction: it may take seconds.
+ */
+export interface DraftComposer {
+  compose(input: ComposeInput): Promise<ComposeResult>;
 }
 
 /** What a job handler logs through; the composition root passes the job's own logger. */

@@ -112,8 +112,11 @@ media_sends         id, creator_id, media_asset_id, fan_id, conversation_id, mes
 
 ```
 llm_calls   id, creator_id (nullable), role (sense|brain|voice|judge), provider, model, prompt_hash,
-            input_tokens, output_tokens, cost_minor, currency, latency_ms, status (ok|error|refused|timeout),
-            conversation_id (nullable), draft_id (nullable), trace_id (Langfuse), created_at
+            input_tokens, output_tokens, cost_minor, currency, cost_micro_usd (coût exact), latency_ms,
+            status (les 12 issues de la passerelle : ok, refused, timeout, rate_limited…), is_fallback,
+            conversation_id (nullable), draft_id (nullable, sans clé étrangère : l'appel précède le brouillon),
+            trace_id (Langfuse), created_at. Journal de la passerelle (LlmCallStore), lu au démarrage pour le
+            plafond quotidien.
 ```
 
 ## Supervision (module `supervision`)

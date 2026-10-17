@@ -7,7 +7,7 @@ import { applyEvent, commandFor } from '../domain/projection';
 import { canDraftBecome, nextState } from '../domain/state-machine';
 
 /** Events other modules react to (`supervision` notifies on a new draft): also written to the outbox. */
-const PUBLISHED: ReadonlySet<EventType> = new Set(['draft_created', 'message_sent']);
+const PUBLISHED: ReadonlySet<EventType> = new Set(['draft_created', 'message_sent', 'handoff_requested']);
 
 /**
  * The only way the module writes an event (ADR 0007): checks the transition, appends to the journal, writes the
