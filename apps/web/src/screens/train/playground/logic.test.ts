@@ -77,6 +77,18 @@ describe('handoffReasons', () => {
     ]);
     expect(handoffReasons(answer({ handoff: ['new_flag'] }))).toEqual(['new_flag']);
   });
+
+  it('names the newest risks of the brain in words', () => {
+    const brief = {
+      intent: 'other',
+      sentiment: 'negative',
+      risks: ['dangerous_request', 'real_abuse'],
+      action: 'handoff',
+      replyBrief: 'Ne rien écrire.',
+      kycMissing: [],
+    };
+    expect(handoffReasons(answer({ brief }))).toEqual(['Demande dangereuse', 'Récit de violences réelles']);
+  });
 });
 
 describe('stepOf', () => {

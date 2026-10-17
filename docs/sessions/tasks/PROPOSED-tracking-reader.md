@@ -1,5 +1,5 @@
 # Suivi : file « à traiter » et lecteur de conversation avec le volet fan
-Statut : proposed
+Statut : proposed (API accordée avec le fil Bilan le 17/10)
 Phase : 4 (supervision), ne se code qu'après la clé xAI et la capture Reveal
 Dépend de : #42 (liste de Suivi), P0-05 (messages et événements d'une conversation), P0-06 (connecteur, lecture de la note Reveal), P3-02 (mémoire fan)
 Branche : task/<id>-tracking-reader
@@ -21,10 +21,10 @@ Le propriétaire voit d'abord ce qui demande un humain, ouvre une conversation e
 - **Notification** : le propriétaire est prévenu d'une entrée dans la file (navigateur d'abord ; téléphone avec la PWA plus tard).
 - **Volet fan** : ce que l'agent a lu, rien de copié chez nous. La note Reveal du fan est lue en direct par le connecteur au moment de l'ouverture (pas stockée) ; l'état propre à l'agent vient de notre base.
 
-## Ce que l'API doit exposer (à valider par le fil Bilan)
+## Ce que l'API expose (accordé avec le fil Bilan le 17/10)
 
-1. `GET /v1/conversations?creatorId=&queue=to_handle` (ou un champ `needsHuman` et `handoffReason` sur `ConversationSummary`).
-2. `GET /v1/conversations/:id/fan-panel?creatorId=` : `{ revealNote: string | null, cursor: { stage, sexualizationAllowedAt | null }, offers: [{ scriptLabel, at, outcome: bought | refused | pending }], budgetFlag: boolean, lastHandoff: { reason, at } | null }`. La note Reveal passe par le connecteur, n'est jamais journalisée ni stockée.
+1. `needsHuman` et `handoffReason` sur `ConversationSummary`, et le filtre `GET /v1/conversations?creatorId=&queue=to_handle`.
+2. `GET /v1/conversations/:id/fan-panel?creatorId=` : `{ revealNote: string | null, cursor: { stage, sexualizationAllowedAt | null }, offers: [{ scriptLabel, at, outcome: bought | refused | pending }], budgetFlag: boolean, lastHandoff: { reason, at } | null }`. La note Reveal est lue en direct par le connecteur (méthode de l'ADR 0018, sous drapeau), jamais stockée ni journalisée. `cursor` et `offers` arrivent quand le moteur les produit : d'ici là le volet ne les montre pas.
 
 ## À faire (liste vérifiable)
 

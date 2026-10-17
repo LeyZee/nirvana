@@ -1,7 +1,7 @@
 # Poste du chatteur en copilote, dans l'extension sur Reveal : l'interface (ID à attribuer)
 Statut : proposed (décision de Charles le 17/10 à 21h44, recommandation du coordinateur ; à coder après la clé xAI et la capture Reveal)
 Phase : 3
-Dépend de : la fiche « Copilote côté API » (PR #47, fil Bilan : contrat `copilot.ts`, routes, notes `live`), capture HAR Reveal (P1-02), lot A Reveal
+Dépend de : `docs/sessions/tasks/PROPOSED-copilot-api.md` (fil Bilan : contrat `copilot.ts`, routes, notes `live`), capture HAR Reveal (P1-02), lot A Reveal
 Branche : task/<id>-copilot-extension
 
 ## Objectif (1 phrase)
@@ -12,7 +12,7 @@ Le côté serveur (brouillon en attente, verdict idempotent, note de calibrage `
 
 ## Contexte à lire
 
-- la fiche « Copilote côté API » du fil Bilan (PR #47, fichier PROPOSED-copilot-api.md), en entier : l'envoi par défaut, le verdict, les routes.
+- `docs/sessions/tasks/PROPOSED-copilot-api.md` (fil Bilan), en entier : l'envoi par défaut, le verdict, les routes.
 - `docs/design/README.md` : « Copilote et raccourcis », « Extension Chrome » (rien de stylé injecté dans la page Reveal), « Clarté ».
 - `packages/contracts/src/playground.ts` : verdicts et raisons de refus, les mêmes qu'au playground.
 - `apps/extension` (WXT), ADR 0008 (session capturée par l'extension), ADR 0012 (`identity_policy`).
@@ -25,16 +25,18 @@ Le côté serveur (brouillon en attente, verdict idempotent, note de calibrage `
 4. **Refuser** (`r`) : raison en puces (liste fermée du playground) et note libre facultative ; rien n'est placé dans Reveal, le chatteur écrit sa propre réponse.
 5. Le panneau passe à « Envoyé » quand l'API a rapproché le message sortant du brouillon, pas au clic.
 
-## À accorder avec le fil Bilan avant le code
+## Accordé avec le fil Bilan (17/10)
 
-- **Qui a validé** : la note de calibrage doit porter le chatteur, pas seulement l'appareil. Proposition : le jeton d'appareil authentifie l'extension, et le panneau demande une fois la connexion `operator` du chatteur (même compte que le CRM) ; les routes `copilot` acceptent les deux. Sinon, rattacher l'appareil à un membre.
-- **Placer le texte dans Reveal** : écriture dans le champ de saisie par le script de contenu (aucun style, aucun clic simulé sur Envoyer), à confirmer par la capture. Repli si le champ n'est pas fiable : copie dans le presse-papiers et « Colle dans Reveal ».
-- **Mise à jour du panneau** : interrogation courte de `GET /v1/copilot/conversations/:platformConversationId/draft` quand le panneau est visible, ou flux SSE si la fiche API en ajoute un.
+- **Qui valide** : la session `operator` ou `owner` du chatteur, comme dans le CRM (`requireRole`) ; la note de calibrage porte donc le membre. Pas de jeton d'appareil sur les routes `copilot` : il reste réservé à la capture de session. L'origine `chrome-extension://<id>` entre dans les origines de confiance de Better Auth et dans le CORS, avec les routes (fil Bilan). Le panneau demande la connexion une fois.
+- **Placer le texte dans Reveal** : le script de contenu écrit dans le champ de saisie, sans style ni clic simulé sur Envoyer, à confirmer par la capture. Repli accepté : copie dans le presse-papiers et « Colle dans Reveal ». Le rapprochement avec le message sortant se fait côté API.
+- **Mise à jour du panneau** : interrogation de la route brouillon toutes les 5 s tant que le panneau est visible ; pas de flux SSE pour l'instant.
+- **Raisons de refus** : la liste fermée du playground, déjà dans `@nirvana/contracts`.
+- **« Envoyé »** : le panneau ne le dit qu'une fois le rapprochement lu sur la route brouillon, jamais au clic.
 
 ## À faire (liste vérifiable)
 
 1. Panneau latéral WXT (`entrypoints/sidepanel`, `chrome.sidePanel`), design system importé (`@nirvana/design-system/styles.css`).
-2. Détection de la conversation Reveal ouverte (URL ou requête observée, d'après la capture), puis appel de la route brouillon.
+2. Connexion du chatteur dans le panneau, puis détection de la conversation Reveal ouverte (URL ou requête observée, d'après la capture) et appel de la route brouillon.
 3. Brouillon affiché bulle par bulle, avec ce que l'agent sait du fan en une ligne ; trois gestes et leurs raccourcis, communs au playground.
 4. États, en mots de chatteur : aucun brouillon, l'agent écrit, à valider, envoyé, un humain doit répondre (raison en mots), session Reveal expirée.
 5. Tests : unitaires sur la logique du panneau ; détection de conversation et placement du texte contre `FakeReveal` ; aucun envoi réel.

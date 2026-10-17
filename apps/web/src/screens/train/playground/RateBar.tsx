@@ -7,7 +7,7 @@ import { percent, rateTone, usd } from './logic';
 /**
  * The one number of the screen, and nothing that competes with it: what wrote the answers and what the
  * session cost sit in retreat on the right. The action lives under the answer, not here.
- * The automatic mode opens at the target on the reference scenarios.
+ * This is the playground rate (ADR 0019): it calibrates a voice version and never opens the automatic mode.
  */
 export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boolean }): JSX.Element {
   const { rate, target, rated, trendPoints, previousVersion } = state.rate;
