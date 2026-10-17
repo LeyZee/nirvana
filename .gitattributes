@@ -1,0 +1,17 @@
+# LF everywhere, Windows checkouts included: prompts, personas and scripts are read byte for byte.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.mp4 binary
+*.pdf binary
+*.zip binary

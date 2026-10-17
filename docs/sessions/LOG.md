@@ -36,11 +36,9 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Garde-fou local contre les push sur `main` | done | `log/2026-10-17-protect-main.md` |
 | 2026-10-17 | Table des notes d'entraînement (`calibration_ratings`) | done | `log/2026-10-17-calibration-table.md` |
 | 2026-10-17 | Fiches proposées : alertes de nuit, copilote côté API | done | `log/2026-10-17-fiches-alertes-copilote.md` |
-<<<<<<< HEAD
-| 2026-10-17 | Alertes Telegram : ADR 0020, fiche étendue, maquette | done | `log/2026-10-17-alertes-telegram.md` |
-=======
+| 2026-10-17 | Démarrage sous Windows : fins de ligne et clés vides | done | `log/2026-10-17-windows.md` |
 | 2026-10-17 | Dashboard, PR 1 : pièces du design system | done | `log/2026-10-17-dashboard-ds.md` |
->>>>>>> origin/main
+| 2026-10-17 | Alertes Telegram : ADR 0020, fiche P3-07, maquette | done | `log/2026-10-17-alertes-telegram.md` |
 
 ## Incidents (liste vivante)
 

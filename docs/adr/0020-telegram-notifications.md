@@ -51,10 +51,11 @@ Faits Telegram qui contraignent le choix :
 
    Le bilan du matin et le bilan du soir des ventes sont produits par le module lui-même, à heure fixe dans le fuseau de la créatrice.
 
-4. **Plusieurs bots, des groupes découverts, un routage.** Quatre tables, réglages de l'agence hors RLS (comme `provider_credentials`), retirées au rôle `nirvana_app`, lues et écrites par `withAdmin` dans le module :
+4. **Plusieurs bots, des groupes découverts, un routage.** Des tables réglages de l'agence hors RLS (comme `provider_credentials`), retirées au rôle `nirvana_app`, lues et écrites par `withAdmin` dans le module :
    - `telegram_bots` : un bot, son jeton scellé, son identité Telegram, son état, son curseur `getUpdates`.
    - `telegram_chats` : un groupe où un bot se trouve, découvert, jamais saisi à la main.
-   - `telegram_routes` : quel sujet va dans quel groupe, pour une créatrice ou pour toutes, avec les réglages du sujet (montant minimum d'une vente, ventes de l'agent seulement).
+   - `telegram_routes` : quel sujet va dans quel groupe, pour une créatrice ou pour toutes.
+   - `telegram_settings` : les réglages d'un sujet (montant minimum d'une vente, ventes de l'agent seulement), ajoutée avec l'onglet Ventes.
    - `telegram_deliveries` : un message à livrer dans un groupe, unique par (source, groupe).
 
 5. **Le jeton est un secret de l'agence.** Il est scellé en AES-256-GCM avec `CREDENTIALS_ENCRYPTION_KEYS` (contexte `telegram_bot:<id>`), comme les clés IA, et vérifié par `getMe` avant d'être gardé. Aucune route ne le renvoie. Ajouter, remplacer ou supprimer un bot est réservé au propriétaire, avec la redemande du mot de passe après 10 minutes (ADR 0016, #41). Le jeton fait partie de l'URL de l'API Telegram (`/bot<jeton>/…`). Le client HTTP du module ne journalise donc jamais une URL ni une erreur brute : il les traduit d'abord en un type d'erreur. Ni l'extension ni `.env` ne portent de jeton en production.
@@ -90,7 +91,7 @@ Faits Telegram qui contraignent le choix :
 - Telegram sait qu'un message a eu lieu, pour quelle créatrice, à quelle heure, et le montant d'une vente. Il ne sait rien du fan. C'est le prix d'un push mobile gratuit, accepté par Charles.
 - Une fuite de la base seule ne livre pas les jetons. Une fuite de la base et de l'environnement, oui : rotation par `docs/runbooks/rotate-secrets.md`, plus une révocation dans @BotFather (`/revoke`).
 - `telegram_deliveries` est purgée après 30 jours (`telegram.purge`). Un message n'est pas une preuve, le journal des conversations l'est.
-- À surveiller : si Nirvana sert plusieurs agences, les quatre tables prennent une colonne d'agence et une politique RLS, comme `provider_credentials`.
+- À surveiller : si Nirvana sert plusieurs agences, les tables du module prennent une colonne d'agence et une politique RLS, comme `provider_credentials`.
 
 ## Alternatives rejetées
 
