@@ -1,0 +1,47 @@
+import { ConversationStateSchema, DraftStatusSchema } from '@nirvana/contracts';
+import { describe, expect, it } from 'vitest';
+
+import { canDraftBecome, nextState } from '../state-machine';
+
+describe('conversation state machine', () => {
+  it('moves a fan message to pending, except where a human or an error holds the conversation', () => {
+    expect(nextState('idle', 'receive_inbound')).toBe('pending');
+    expect(nextState('awaiting_approval', 'receive_inbound')).toBe('pending');
+    expect(nextState('human', 'receive_inbound')).toBe('human');
+    expect(nextState('paused', 'receive_inbound')).toBe('paused');
+    expect(nextState('error', 'receive_inbound')).toBe('error');
+  });
+
+  it('follows the copilot path: draft, approval, verified send', () => {
+    const path = [
+      nextState('pending', 'create_draft'),
+      nextState('awaiting_approval', 'approve'),
+      nextState('sending', 'send_verified'),
+    ];
+    expect(path).toEqual(['awaiting_approval', 'sending', 'idle']);
+  });
+
+  it('refuses what the state does not allow', () => {
+    expect(nextState('idle', 'approve')).toBeNull();
+    expect(nextState('human', 'create_draft')).toBeNull();
+    expect(nextState('idle', 'release')).toBeNull();
+    expect(nextState('human', 'takeover')).toBeNull();
+  });
+
+  it('lets a human take over from anywhere but human, and release only human or error', () => {
+    for (const state of ConversationStateSchema.options) {
+      expect(nextState(state, 'takeover')).toBe(state === 'human' ? null : 'human');
+      const released = nextState(state, 'release');
+      expect(released).toBe(state === 'human' || state === 'error' ? 'idle' : null);
+    }
+  });
+
+  it('never leaves a closed draft', () => {
+    for (const closed of ['rejected', 'sent', 'failed', 'expired'] as const) {
+      for (const to of DraftStatusSchema.options) expect(canDraftBecome(closed, to)).toBe(false);
+    }
+    expect(canDraftBecome('rejected', 'approved')).toBe(false);
+    expect(canDraftBecome('pending', 'edited')).toBe(true);
+    expect(canDraftBecome('approved', 'sent')).toBe(true);
+  });
+});

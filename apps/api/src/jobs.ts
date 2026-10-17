@@ -5,18 +5,8 @@ import { z } from 'zod';
 
 import type { Logger } from './logger';
 
-/** `demo.echo` proves the serial queues and the debounce (P0-04); removed with its route in P0-05. */
-export const DemoEchoPayloadSchema = z.object({
-  seq: z.number().int().min(0),
-  delayMs: z.number().int().min(0).max(10_000).default(0),
-  correlationId: z.string().min(1),
-});
-type DemoEchoPayload = z.input<typeof DemoEchoPayloadSchema>;
-
-/** Payload type of every task the worker knows, the contract jobs plus the demo. */
-type TaskPayloads = { readonly [J in JobName]: JobPayload<J> } & {
-  readonly 'demo.echo': DemoEchoPayload;
-};
+/** Payload type of every task the worker knows. */
+type TaskPayloads = { readonly [J in JobName]: JobPayload<J> };
 type TaskName = keyof TaskPayloads;
 
 interface EnqueueOptions {
@@ -39,8 +29,8 @@ export interface JobQueue {
 }
 
 /**
- * Enqueues through Graphile's own functions on the owner pool. Enqueuing in the same transaction as a business
- * write (outbox, ADR 0006) arrives with the first module that needs it (P0-05).
+ * Enqueues through Graphile's own functions on the owner pool, outside any business transaction (ops, tests).
+ * A command enqueues in its own transaction instead, through `public.enqueue_job` (ADR 0006).
  */
 export async function createJobQueue(adminPool: Pool): Promise<JobQueue> {
   const utils: WorkerUtils = await makeWorkerUtils({ pgPool: adminPool });

@@ -46,6 +46,8 @@ const draftPayload = z.object({
   status: DraftStatusSchema,
   decidedBy: UserIdSchema.optional(),
   editedBubbles: z.array(z.string()).optional(),
+  /** Why a human rejected or the system expired it; kept for the evals (message-flow.md §3). */
+  reason: z.string().min(1).max(500).optional(),
 });
 
 const factPayload = z.object({

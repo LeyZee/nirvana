@@ -34,6 +34,10 @@ export type PersonaVersionId = z.infer<typeof PersonaVersionIdSchema>;
 export const UserIdSchema = uuid.brand<'UserId'>();
 export type UserId = z.infer<typeof UserIdSchema>;
 
+/** A row of `conversation_events` or of the `domain_events` outbox. */
+export const EventIdSchema = uuid.brand<'EventId'>();
+export type EventId = z.infer<typeof EventIdSchema>;
+
 export const AuditEntryIdSchema = uuid.brand<'AuditEntryId'>();
 export type AuditEntryId = z.infer<typeof AuditEntryIdSchema>;
 

@@ -219,7 +219,7 @@ pnpm probe              # test express : Grok 4.7 accepte-t-il le sexting en fra
 pnpm playground         # converser avec l'agent dans le terminal (clé requise)
 ```
 
-Les clés vont dans `.env` (jamais commité, documenté par `.env.example`). `docker compose up -d` et `pnpm dev` serviront quand la base et le serveur auront leur code (P0-03, P0-04). Les commandes `db:*`, `persona:*` et `ops:*` de `package.json` sont déclarées mais n'ont pas encore de script derrière.
+Les clés vont dans `.env` (jamais commité, documenté par `.env.example`). Pour lancer le CRM sur son PC (Postgres en Docker, `pnpm db:migrate`, `pnpm owner:create`, `pnpm dev:crm`, puis http://localhost:5173) : [`docs/runbooks/local-dev.md`](docs/runbooks/local-dev.md). Les commandes `persona:*` et `ops:*` de `package.json` sont déclarées mais n'ont pas encore de script derrière.
 
 ## Comment on travaille ici
 

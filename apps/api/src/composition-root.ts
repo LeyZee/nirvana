@@ -1,4 +1,4 @@
-import { JOB_PAYLOADS } from '@nirvana/contracts';
+import { DomainError, JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, type DbClient } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
@@ -6,12 +6,15 @@ import type { Pool } from 'pg';
 
 import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
 import type { Config } from './config';
-import { createDemoEchoTask, createDemoRoutes } from './demo';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import type { Logger } from './logger';
 import { createAgentModule, type AgentModule } from './modules/agent';
 import { createConnectorsModule, type ConnectorsModule } from './modules/connectors';
-import { createConversationsModule, type ConversationsModule } from './modules/conversations';
+import {
+  createConversationsModule,
+  type ConversationsModule,
+  type OutboundSender,
+} from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
@@ -53,6 +56,13 @@ export interface App {
   shutdown(): Promise<void>;
 }
 
+/** Until the connectors arrive (P0-06), an approved draft cannot leave: the send job fails and is retried. */
+const NO_SENDER: OutboundSender = {
+  sendText: () => Promise.reject(new DomainError('connector_unavailable', 'Aucun connecteur branché')),
+  sendMedia: () => Promise.reject(new DomainError('connector_unavailable', 'Aucun connecteur branché')),
+  verifySent: () => Promise.resolve({ status: 'not_found' }),
+};
+
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
 /** Wires every business module by hand (no DI container, coding.md). Called once by each entry point. */
@@ -74,10 +84,12 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
   const auth = createAuth(config, db.db, logger);
   const requireRole = createRequireRole(auth);
 
+  const fans = createFansModule({ db: db.db });
   const modules: Modules = {
     connectors: createConnectorsModule(),
-    conversations: createConversationsModule(),
-    fans: createFansModule(),
+    // TODO(P0-06): `sender: connectors.outboundSender`.
+    conversations: createConversationsModule({ db: db.db, fans, sender: NO_SENDER, requireRole }),
+    fans,
     persona: createPersonaModule(),
     agent: createAgentModule(),
     media: createMediaModule(),
@@ -87,7 +99,18 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
   };
 
   const tasks: TaskList = {
-    'demo.echo': createDemoEchoTask(logger),
+    'conversation.respond': defineTask(
+      'conversation.respond',
+      JOB_PAYLOADS['conversation.respond'],
+      logger,
+      (payload, context) => modules.conversations.jobs.respond(payload, context.logger),
+    ),
+    'conversation.send': defineTask(
+      'conversation.send',
+      JOB_PAYLOADS['conversation.send'],
+      logger,
+      (payload, context) => modules.conversations.jobs.send(payload, context.logger, context.attempt),
+    ),
     // TODO(P0-06): the connectors module enqueues one `connector.poll` per account on `account:<id>`.
     'connector.dispatch': defineTask('connector.dispatch', JOB_PAYLOADS['connector.dispatch'], logger, () =>
       Promise.resolve(),
@@ -101,7 +124,7 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     jobs,
     auth,
     requireRole,
-    routes: [createAuthRoutes(auth, config, requireRole), createDemoRoutes(jobs, requireRole)],
+    routes: [createAuthRoutes(auth, config, requireRole), modules.conversations.routes],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
     async shutdown() {

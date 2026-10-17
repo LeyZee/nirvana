@@ -142,6 +142,8 @@ offers, sales, scripts, script_steps, script_runs, cards   — voir docs/roadmap
 
 Noms et payloads dans `packages/contracts/src/jobs.ts`. Conventions : `queue_name = conv:<conversation_id>` pour tout job qui touche une conversation ; `job_key = <job>:<conversation_id>` avec `replace` pour les jobs qu'on debounce (`respond`, `follow_up`, `refresh_summary`).
 
+Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.enqueue_job(task, payload, queue_name, run_at, max_attempts, job_key)` (migration `0001`) : fonction `SECURITY DEFINER` du propriétaire, seul droit de `nirvana_app` sur Graphile ; si la transaction est annulée, le job l'est aussi.
+
 ## RLS
 
 - Les tables appartiennent à `nirvana_admin` (rôle des migrations, `NOSUPERUSER BYPASSRLS` en production : `FORCE` s'applique au propriétaire, `BYPASSRLS` lui laisse traverser les tenants pour `withAdmin`). L'application se connecte en `nirvana_app` (`NOSUPERUSER NOBYPASSRLS`, droits par `GRANT` seulement, voir `packages/db/docker/init.sql`). Si `nirvana_app` possédait les tables, la RLS ne s'appliquerait pas à lui.

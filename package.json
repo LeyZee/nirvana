@@ -12,6 +12,7 @@
   "scripts": {
     "prepare": "lefthook install || echo \"lefthook install skipped (no git repository)\"",
     "dev": "turbo run dev --parallel",
+    "dev:crm": "turbo run dev --parallel --filter=@nirvana/api --filter=@nirvana/web",
     "build": "turbo run build",
     "check": "turbo run typecheck lint && prettier --check . && knip && node scripts/check-repo.mjs",
     "check:repo": "node scripts/check-repo.mjs",

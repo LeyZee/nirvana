@@ -23,6 +23,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P0-04 Serveur et worker | done | `log/2026-10-17-p0-04.md` |
 | 2026-10-17 | P3-05 Boucle de calibrage dans le playground (Opus) | in_progress | `log/2026-10-17-p3-05.md` |
 | 2026-10-17 | P0-07a Login du dashboard | done | `log/2026-10-17-p0-07a.md` |
+| 2026-10-17 | P0-05 Module conversations | done | `log/2026-10-17-p0-05.md` |
 
 ## Incidents (liste vivante)
 
@@ -30,7 +31,7 @@ _Aucun pour l'instant._
 
 ## Candidats à suppression (liste vivante)
 
-- `apps/api/src/demo.ts` (`demo.echo` et `POST /v1/demo/echo`) : échafaudage de P0-04, à retirer en P0-05 ; ses tests d'intégration passent alors sur un vrai job.
+_Aucun pour l'instant._
 
 ---
 

@@ -6,6 +6,10 @@
 
 **Règles propres.** Propriétaire des tables `conversations`, `messages`, `conversation_events`, `drafts`.
 
+**Exposé (`index.ts`).** `createConversationsModule({ db, fans, sender, requireRole, clock? })` : les commandes (`ingestMessage`, `approveDraft`, `rejectDraft`, `expireDraft`, `takeover`, `release`, `setMode`, `rebuildProjection`), les routes `/v1/conversations` et les handlers des jobs `conversation.respond` et `conversation.send`, que le composition root enregistre.
+
+**Invariants.** Tout événement passe par `appendEvent` (`application/journal.ts`) : transition vérifiée, journal, projection et outbox dans la même transaction, sous le verrou de la conversation. Un job s'enfile dans cette même transaction (`public.enqueue_job`).
+
 ## Structure
 
 - `domain/` : types, règles pures, machines d'état. Zéro I/O, zéro import de framework.
