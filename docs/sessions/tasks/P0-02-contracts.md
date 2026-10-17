@@ -1,6 +1,6 @@
 # P0-02 Contrats partagés : identifiants, argent, événements, jobs
 
-Statut : todo
+Statut : done
 Phase : 0
 Dépend de : P0-01
 Branche : task/p0-02-contracts
@@ -31,3 +31,9 @@ Fournir dans `packages/contracts` les types et schémas Zod que tout le reste im
 Schéma Drizzle, routes, prompts.
 
 ## Notes de session
+
+## Résultat (2026-10-17)
+
+Fait : `ids.ts` (marques Zod, `newId(schema)` en UUID v7), `money.ts` (`money`, `add`, `multiplyPercent` arrondi au plus proche loin de zéro, `format` brut), `enums.ts` (dont `Actor` : `system | ai | fan | human:<userId>`), `events.ts` (liste fermée `EVENT_TYPES`, un payload par type, union discriminée, `ConversationEventSchema`, `DomainEventSchema`), `jobs.ts` (noms, payloads, `queueNameFor`, `accountQueueNameFor`, `jobKeyFor`, `DEBOUNCED_JOBS`), `connector.ts`, `settings.ts`, `result.ts` complété (`isOk`, `map`, `unwrapOr`, `DomainError`). Seule dépendance ajoutée : `uuid` 14.0.2.
+
+Écarts : `media.ts` n'est pas fait ici, la PR #19 (P3-04) l'apporte avec le vocabulaire média ; les clés de `CreatorSettings` sont en camelCase (`identityPolicy`, `autoApproveCategories`), comme toute colonne `jsonb` (`data-model.md`) ; `connector.dispatch` a un payload vide (job de crontab).

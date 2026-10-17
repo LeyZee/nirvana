@@ -32,7 +32,7 @@ Branche : task/<id>-<slug>
 | ID | Titre | Phase | Statut | Dépend de |
 |---|---|---|---|---|
 | P0-01 | Outillage du monorepo | 0 | done | — |
-| P0-02 | Contrats partagés : identifiants, argent, événements, jobs | 0 | todo | P0-01 |
+| P0-02 | Contrats partagés : identifiants, argent, événements, jobs | 0 | done | P0-01 |
 | P0-03 | Base de données : schéma noyau, migrations, RLS, `withTenant` | 0 | todo | P0-02 |
 | P0-04 | Serveur Fastify et worker Graphile, composition root, santé | 0 | todo | P0-03 |
 | P0-05 | Module `conversations` : ingestion, journal, projections | 0 | todo | P0-04 |

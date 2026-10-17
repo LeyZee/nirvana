@@ -1,0 +1,40 @@
+import { v7 } from 'uuid';
+import { z } from 'zod';
+
+/**
+ * Application-generated UUID v7 identifiers (ADR 0011): sortable by time, branded so a `FanId` cannot be passed
+ * where a `ConversationId` is expected. Platform identifiers stay opaque strings in `platform_<x>_id` fields.
+ */
+const uuid = z.uuid();
+
+export const CreatorIdSchema = uuid.brand<'CreatorId'>();
+export type CreatorId = z.infer<typeof CreatorIdSchema>;
+
+export const PlatformAccountIdSchema = uuid.brand<'PlatformAccountId'>();
+export type PlatformAccountId = z.infer<typeof PlatformAccountIdSchema>;
+
+export const FanIdSchema = uuid.brand<'FanId'>();
+export type FanId = z.infer<typeof FanIdSchema>;
+
+export const ConversationIdSchema = uuid.brand<'ConversationId'>();
+export type ConversationId = z.infer<typeof ConversationIdSchema>;
+
+export const MessageIdSchema = uuid.brand<'MessageId'>();
+export type MessageId = z.infer<typeof MessageIdSchema>;
+
+export const DraftIdSchema = uuid.brand<'DraftId'>();
+export type DraftId = z.infer<typeof DraftIdSchema>;
+
+export const MediaAssetIdSchema = uuid.brand<'MediaAssetId'>();
+export type MediaAssetId = z.infer<typeof MediaAssetIdSchema>;
+
+export const PersonaVersionIdSchema = uuid.brand<'PersonaVersionId'>();
+export type PersonaVersionId = z.infer<typeof PersonaVersionIdSchema>;
+
+export const UserIdSchema = uuid.brand<'UserId'>();
+export type UserId = z.infer<typeof UserIdSchema>;
+
+/** A fresh UUID v7 branded by the given schema: `newId(FanIdSchema)`. */
+export function newId<S extends z.ZodType<string>>(schema: S): z.output<S> {
+  return schema.parse(v7());
+}
