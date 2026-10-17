@@ -4,3 +4,5 @@
 @import '@nirvana/design-system/theme.css';
 @import '@nirvana/design-system/base.css';
 @import '@nirvana/design-system/components.css';
+@import './shell/shell.css';
+@import './screens/train/playground/playground.css';
