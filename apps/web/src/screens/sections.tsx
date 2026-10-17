@@ -16,16 +16,3 @@ export function DashboardPage(): JSX.Element {
     </Page>
   );
 }
-
-export function CreatorsPage(): JSX.Element {
-  return (
-    <Page>
-      <PageHeader title="Créatrices" />
-      <ComingSoon
-        title="Sa persona, ses limites, sa voix"
-        what="La fiche de chaque créatrice, rangée comme ses réglages OnlyChat : détails, comportement, stratégies, relances."
-        when="Après la persona en base"
-      />
-    </Page>
-  );
-}

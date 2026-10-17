@@ -1,0 +1,27 @@
+# Écran Persona du CRM, dans Créatrices (ID à donner)
+Statut : in_progress (écran livré sur l'exemple du dépôt ; ID à valider par Charles)
+Phase : 5 (éditeur de persona, ADR 0010), avancé par la revue 08, action 5
+Dépend de : P0-08 (`PersonaSchema`), coquille `apps/web` (#34) ; pour l'API, la PR créatrices du fil Bilan (`GET /v1/creators`)
+Branche : claude/persona-screen-jbetuh
+
+## Objectif
+Créatrices › Persona montre et édite la persona de la créatrice onglet par onglet, comme la fiche créatrice d'OnlyChat (Détails, Infos en plus, Comportement, Stratégies, Relances, Notifications), plus Limites, construite sur `packages/contracts/src/persona.ts` et non sur l'ancien prototype. Pas de réglage de négociation, curseurs dans les unités du schéma (heures, minutes, jours), mention « Règle stricte » sur ce que la politique et les gardes appliquent.
+
+## Contexte à lire
+`docs/reference/persona-schema.md`, ADR 0010 et 0012, `docs/design/README.md` (Hiérarchie, États), revue 08 §Persona (hors dépôt).
+
+## À faire
+- [x] Écran `apps/web/src/creators/persona/` : en-tête (version, état du brouillon, action unique), sept onglets, validation par `PersonaSchema` avec messages français, pastilles d'erreurs par onglet, blocs secondaires repliés derrière une ligne de synthèse.
+- [x] Lecture derrière un seul hook (`usePersona`) ; tant que l'API n'existe pas, il lit `personas/messalina/v0.0.0.yaml` avec la pastille « Exemple » et le bouton « Enregistrer une version » reste désactivé.
+- [x] Persona rangée dans l'onglet Créatrices (`/creatrices`, demande de Charles du 17/10 à 21h51), nom de la créatrice lu par `GET /v1/creators`, choix de la créatrice quand il y en a plusieurs.
+- [x] Finitions : point néon sur chaque champ et onglet modifié, nombre de modifications dans l'en-tête, « Tout annuler », − / + sur les nombres, « Voir le premier » qui ouvre l'onglet, déplie le bloc et place le curseur dans le champ, panneau qui glisse du côté de l'onglet choisi, squelette au chargement, l'exemple `<à remplir>` remplacé à la première saisie.
+- [x] Genre retiré de l'écran (Charles, 22h11 : Nirvana sert des créatrices) ; langues parlées en liste déroulante à choix multiples avec recherche.
+- [x] Fuseau horaire en lecture seule : celui de la créatrice (`creators.timezone` via `GET /v1/creators`, décision du coordinateur et de Bilan), avec l'heure qu'il est chez elle.
+- [ ] API, après la fusion de la PR créatrices de Bilan, add-only sur le module `persona` (Bilan en relecture, ligne de composition-root à Bilan) : `packages/contracts/src/persona-api.ts` (`PersonaOverview`, `PersonaVersionSummary`, `CreatePersonaVersionBody`, objets stricts, `contentHash`), `GET /v1/creators/:creatorId/persona` et `POST /v1/creators/:creatorId/persona/versions` (contrôle d'accès de conversations, lecture en `withTenant`, 409 `persona_version_conflict`, jamais de version active : l'activation reste `pnpm persona:load --activate`).
+- [ ] L'écran lit la persona de la créatrice choisie ; la pastille « Exemple » disparaît, le bouton s'ouvre. La copie `details.timezone` envoyée au modèle est alignée sur `creators.timezone` à l'enregistrement ; les mots-clés d'alerte restent saisis ici, la page Telegram les lit.
+- [ ] Historique des versions et comparaison (ADR 0010), plus tard.
+
+## Critères d'acceptation
+- `pnpm check` et `pnpm test` verts ; règles de l'écran testées (onglets, messages, synthèses, exemple valide).
+- Rendu à 1 440 px et 400 px sans débordement horizontal.
+- Aucune vraie donnée de la créatrice dans le dépôt ni dans une page hébergée (ADR 0010).
