@@ -14,6 +14,17 @@ describe('holdDecision', () => {
     });
   });
 
+  it('hands a dangerous request or a story of real abuse to a chatter, never to the voice', () => {
+    expect(holdDecision({ risks: ['dangerous_request'], action: 'reply' })).toEqual({
+      kind: 'handoff',
+      detail: ['dangerous_request'],
+    });
+    expect(holdDecision({ risks: ['real_abuse'], action: 'offer' })).toEqual({
+      kind: 'handoff',
+      detail: ['real_abuse'],
+    });
+  });
+
   it('follows the brain when it asks for a human, and stays quiet when there is nothing to answer', () => {
     expect(holdDecision({ risks: ['meet_request'], action: 'handoff' })).toEqual({
       kind: 'handoff',

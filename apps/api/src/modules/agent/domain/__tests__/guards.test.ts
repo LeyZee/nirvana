@@ -68,6 +68,24 @@ describe('voice guards', () => {
     expect(codes(['Pas d’anal, désolée'], ['anal'])).toEqual(['forbidden_term']);
   });
 
+  it('never asks him for intimate pictures, despises him or lies about paid content', () => {
+    expect(codes(['Envoie-moi une photo de toi tout nu 😏'])).toContain('asks_for_nudes');
+    expect(codes(['Tu m’envoies des nudes ?'])).toContain('asks_for_nudes');
+    expect(codes(['Montre-moi ta bite'])).toContain('asks_for_nudes');
+    expect(codes(['Envoie-moi une photo de ton chien 🐶'])).toEqual([]);
+    expect(codes(['T’es vraiment un radin toi'])).toContain('contempt');
+    expect(codes(['Menteur va 🙄'])).toContain('contempt');
+    expect(codes(['T’inquiète, t’as rien à payer'])).toContain('payment_lie');
+    expect(codes(['Pas besoin d’argent avec moi'])).toContain('payment_lie');
+    expect(codes(['Cette vidéo est à 6 €, tu l’ouvres en touchant le cadenas'])).toEqual([]);
+  });
+
+  it('asks for a regeneration when she makes him feel guilty, without blocking', () => {
+    const violations = checkVoiceOutput(['Bon… tu me déçois un peu là'], DEFAULT_GUARD_SETTINGS);
+    expect(violations.map((v) => [v.code, v.severity])).toEqual([['guilt_trip', 'soft']]);
+    expect(codes(['Tant pis, une prochaine fois 😌'])).toEqual([]);
+  });
+
   it('asks for a regeneration on AI tics, without blocking', () => {
     const violations = checkVoiceOutput(['Je comprends tout à fait, n’hésite pas'], DEFAULT_GUARD_SETTINGS);
     expect(violations.map((v) => v.code)).toEqual(['ai_tic']);
