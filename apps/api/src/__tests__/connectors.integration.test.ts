@@ -21,6 +21,7 @@ import { createLogger } from '../logger';
 import { FakeConnector } from '../modules/connectors';
 import { buildServer, type Server } from '../server';
 
+import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
 
@@ -97,6 +98,7 @@ describe('connectors module (P0-06)', () => {
     });
     const logger = createLogger(config, sink);
     app = await createApp(config, logger, {
+      composer: fixedComposer,
       connectorRegistry: {
         reveal: (connectorAccount, session) => {
           sessionsSeen.set(connectorAccount.id, session);

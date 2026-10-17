@@ -19,6 +19,7 @@ import { createLogger } from '../../logger';
 import { FakeConnector } from '../../modules/connectors';
 import { buildServer, type Server } from '../../server';
 import { startWorker, type WorkerHandle } from '../../worker-runner';
+import { FIXED_BUBBLES, fixedComposer } from '../support/composer';
 import { testConfig } from '../support/config';
 import { DASHBOARD_ORIGIN } from '../support/sign-in';
 
@@ -66,7 +67,10 @@ describe('phase 0 end to end', () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
     const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
     const logger = createLogger(config);
-    app = await createApp(config, logger, { connectorRegistry: { reveal: () => platform } });
+    app = await createApp(config, logger, {
+      connectorRegistry: { reveal: () => platform },
+      composer: fixedComposer,
+    });
     server = await buildServer({ config, logger, routes: app.routes, readiness: app.readiness });
     baseUrl = await server.listen({ host: '127.0.0.1', port: 0 });
     worker = await startWorker(app, { logger, concurrency: 5, release: 'e2e', cronJobs: [] });
@@ -129,7 +133,7 @@ describe('phase 0 end to end', () => {
       return parsed.openDrafts.length > 0 ? parsed : null;
     }, 'draft_created');
     expect(detail).toMatchObject({ state: 'awaiting_approval' });
-    expect(detail.openDrafts[0]?.bubbles).toEqual([]);
+    expect(detail.openDrafts[0]?.bubbles).toEqual(FIXED_BUBBLES);
 
     const { json: eventsJson } = await api(
       'GET',

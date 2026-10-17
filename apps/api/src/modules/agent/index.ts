@@ -1,3 +1,15 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import type { LlmGateway } from '@nirvana/llm';
+
+import { DEFAULT_GUARD_SETTINGS } from './domain/guards';
+import { voiceExamples } from './infra/calibration-record';
+import { withExamples } from './infra/compose';
+import { createDraftComposer, type AgentDraftComposer } from './infra/draft-composer';
+import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
+import { readPersonaFile } from './infra/persona-file';
+
 /** Public entry point of the `agent` module (ADR 0002). Other modules import this file only. */
 export {
   checkVoiceOutput,
@@ -6,7 +18,7 @@ export {
   type GuardSettings,
   type GuardViolation,
 } from './domain/guards';
-export { assessTrap, screenMedia, type TrapAssessment } from './domain/traps';
+export type { TrapAssessment } from './domain/traps';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,
@@ -26,6 +38,35 @@ export {
   type RatedMoment,
 } from './infra/calibration-record';
 export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
+export { composeTurn, withExamples } from './infra/compose';
+export { readPersonaFile, type PersonaForModels } from './infra/persona-file';
+
+export type { AgentDraftComposer } from './infra/draft-composer';
+
+export interface DraftComposerStartOptions {
+  readonly gateway: LlmGateway;
+  /** A persona YAML (PersonaSchema); the real one lives outside the repository (ADR 0010). */
+  readonly personaPath: string;
+  /** The playground's ratings: her corrected answers become the voice's examples here too. */
+  readonly trainingDir: string;
+  readonly timeZone: string;
+}
+
+/** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
+export async function startDraftComposer(options: DraftComposerStartOptions): Promise<AgentDraftComposer> {
+  const today = new Date().toISOString().slice(0, 10);
+  const persona = readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today);
+  const records = await createJsonlCalibrationStore(join(options.trainingDir, 'ratings.jsonl')).list();
+  return createDraftComposer({
+    gateway: options.gateway,
+    persona: {
+      creatorName: persona.creatorName,
+      personaSheet: withExamples(persona.personaSheet, voiceExamples(records)),
+      guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: persona.forbiddenTerms },
+    },
+    timeZone: options.timeZone,
+  });
+}
 
 export interface AgentModule {
   readonly name: 'agent';

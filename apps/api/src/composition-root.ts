@@ -14,9 +14,13 @@ import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import { createAppLlm } from './llm';
 import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
-import { createAgentModule, type AgentModule } from './modules/agent';
+import { createAgentModule, startDraftComposer, type AgentModule } from './modules/agent';
 import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
-import { createConversationsModule, type ConversationsModule } from './modules/conversations';
+import {
+  createConversationsModule,
+  type ConversationsModule,
+  type DraftComposer,
+} from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
@@ -77,6 +81,8 @@ const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000
 export interface AppOptions {
   /** Tests and local development plug a `FakeConnector` here; production gets the real adapters. */
   readonly connectorRegistry?: ConnectorRegistry;
+  /** Tests plug a composer with fixed bubbles here; the agent's composer otherwise, on the app's gateway. */
+  readonly composer?: DraftComposer;
 }
 
 /** Wires every business module by hand (no DI container, coding.md). Called once by each entry point. */
@@ -110,12 +116,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     sessionKeys: sessionKeys === null ? null : parseEncryptionKeys(sessionKeys),
     deviceToken: secretOrNull(config.EXTENSION_DEVICE_TOKEN),
   });
-  const conversations = createConversationsModule({
-    db: db.db,
-    fans,
-    sender: connectors.outboundSender,
-    requireRole,
-  });
   const providers = await startProvidersModule({
     adminDb: adminDb.db,
     // The `.env.example` placeholder counts as unset: keys stay in memory instead of crashing the start.
@@ -147,14 +147,35 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     reportRefusedKey: (provider, kind) => providers.reportRefusedKey(provider, kind),
     logger,
   });
+  const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
+  const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
   const playground = await startPlaygroundModule({
     ...llm.deps,
     gateway: llm.gateway,
-    personaPath: fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml'),
-    trainingDir: fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training'),
+    personaPath,
+    trainingDir,
   }).catch((error: unknown) => {
     logger.warn({ err: error }, 'playground not started: persona unreadable');
     return null;
+  });
+  // Without a readable persona, drafts stay empty as before the engine (P0-05) and the dashboard says why.
+  const composer =
+    options.composer ??
+    (await startDraftComposer({
+      gateway: llm.gateway,
+      personaPath,
+      trainingDir,
+      timeZone: DEFAULT_LLM_CONFIG.dailyBudget.timeZone,
+    }).catch((error: unknown) => {
+      logger.warn({ err: error }, 'draft composer not started: persona unreadable');
+      return undefined;
+    }));
+  const conversations = createConversationsModule({
+    db: db.db,
+    fans,
+    sender: connectors.outboundSender,
+    requireRole,
+    ...(composer !== undefined && { composer }),
   });
   const modules: Modules = {
     connectors,

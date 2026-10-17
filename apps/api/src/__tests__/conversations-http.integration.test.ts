@@ -18,6 +18,7 @@ import { createApp, type App } from '../composition-root';
 import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
+import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
@@ -44,7 +45,7 @@ describe('/v1/conversations', () => {
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
     const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
-    app = await createApp(config, createLogger(config));
+    app = await createApp(config, createLogger(config), { composer: fixedComposer });
     server = await buildServer({
       config,
       logger: createLogger(config),

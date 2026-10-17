@@ -11,6 +11,7 @@ import { checkReadiness } from '../readiness';
 import { buildServer } from '../server';
 import { startWorker, type WorkerHandle } from '../worker-runner';
 
+import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
@@ -36,7 +37,7 @@ describe('worker (Graphile, ADR 0006)', () => {
       DATABASE_ADMIN_URL: test.adminUrl,
     });
     const logger = createLogger(config, sink);
-    app = await createApp(config, logger);
+    app = await createApp(config, logger, { composer: fixedComposer });
     worker = await startWorker(
       { ...app, tasks: { ...app.tasks, [SLOW_TASK]: createSlowTask(logger) } },
       {
