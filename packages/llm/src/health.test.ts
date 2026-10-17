@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { budgetStatus } from './budget';
 import { createInMemoryCallLog, type LlmCallRecord } from './call-log';
 import { DEFAULT_LLM_CONFIG } from './config';
 import { computeHealth } from './health';
@@ -22,7 +23,8 @@ function call(minutesAgo: number, outcome: LlmCallRecord['outcome'], latencyMs =
 function voiceHealth(records: LlmCallRecord[]) {
   const log = createInMemoryCallLog();
   for (const r of records) log.append(r);
-  return computeHealth(DEFAULT_LLM_CONFIG, { LLM_XAI_API_KEY: 'k' }, log, NOW).roles.find(
+  const budget = budgetStatus(DEFAULT_LLM_CONFIG.dailyBudget, 20, log, NOW);
+  return computeHealth(DEFAULT_LLM_CONFIG, { LLM_XAI_API_KEY: 'k' }, log, NOW, budget).roles.find(
     (r) => r.role === 'voice',
   );
 }

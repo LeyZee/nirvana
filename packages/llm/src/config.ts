@@ -20,12 +20,26 @@ const LlmRoleConfigSchema = ModelRefSchema.extend({
 });
 export type LlmRoleConfig = z.infer<typeof LlmRoleConfigSchema>;
 
+const DailyBudgetSchema = z.object({
+  /** Hard cap: past it, no generation at all until her midnight (Charles, 17/10 20h01). */
+  capEur: z.number().positive(),
+  /** Share of the cap that raises the alert (0.8: 16 € out of 20 €). */
+  alertRatio: z.number().gt(0).lt(1),
+  /** The budget day starts at midnight in this zone. */
+  timeZone: z.string().min(1),
+  /**
+   * Dollars per euro, to convert the providers' USD prices. Kept below the market rate on purpose: the spend
+   * in euros is overestimated, so the cap stops early rather than late. Update it if the euro falls below it.
+   */
+  usdPerEur: z.number().positive(),
+});
+export type DailyBudget = z.infer<typeof DailyBudgetSchema>;
+
 export const LlmConfigSchema = z.object({
   roles: z.record(LlmRoleSchema, LlmRoleConfigSchema),
   /** Transient errors (timeout, 429, 5xx) are retried this many times before the fallback. */
   maxTransientRetries: z.number().int().min(0).max(5),
-  /** Daily spend ceiling in USD; the health report compares today's cost with it. */
-  dailyBudgetUsd: z.number().positive(),
+  dailyBudget: DailyBudgetSchema,
 });
 export type LlmConfig = z.infer<typeof LlmConfigSchema>;
 
@@ -63,7 +77,7 @@ export const DEFAULT_LLM_CONFIG: LlmConfig = LlmConfigSchema.parse({
     judge: { provider: 'xai', model: 'grok-4.7', temperature: 0, maxOutputTokens: 600, timeoutMs: 60_000 },
   },
   maxTransientRetries: 2,
-  dailyBudgetUsd: 15,
+  dailyBudget: { capEur: 20, alertRatio: 0.8, timeZone: 'Europe/Paris', usdPerEur: 1.1 },
 });
 
 /** API keys from the environment: the fallback outside production (ADR 0016); never logged. */

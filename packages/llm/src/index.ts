@@ -1,6 +1,7 @@
 /** LlmGateway: sense, brain, voice and judge roles over provider SDKs (ADR 0009). The only package that imports one. */
 export const LLM_PACKAGE = '@nirvana/llm';
 
+export { type BudgetEvent, type BudgetState, type BudgetStatus } from './budget';
 export {
   createInMemoryCallLog,
   createJsonlCallLog,
@@ -40,6 +41,7 @@ export {
   type ConversationTurn,
   type LlmFailure,
   type LlmGateway,
+  type CallTrace,
   type KeyRefusal,
   type LlmGatewayDeps,
   type LlmSuccess,

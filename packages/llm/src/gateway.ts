@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { err, MEDIA_VOCABULARY_VERSION, ok } from '@nirvana/contracts';
 import { generateText, transcribe as transcribeAudio } from 'ai';
 
+import { budgetStatus, type BudgetStatus } from './budget';
+import type { LlmCallLog } from './call-log';
 import { classify, createCallRunner } from './call-runner';
 import { MODELS, TRANSCRIPTION_MODEL } from './catalog';
 import type { ProviderId } from './config';
@@ -31,13 +33,48 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
       // Reporting is best effort: the call goes on to its fallback either way.
     }
   };
+  const capEur = (): number => deps.dailyCapEur?.() ?? deps.config.dailyBudget.capEur;
+  const status = (): BudgetStatus => budgetStatus(deps.config.dailyBudget, capEur(), deps.log, now());
+  const announced = new Set<string>();
+  const announce = (current: BudgetStatus): void => {
+    const kinds =
+      current.state === 'reached'
+        ? (['alert', 'reached'] as const)
+        : current.state === 'alert'
+          ? (['alert'] as const)
+          : [];
+    for (const kind of kinds) {
+      const key = `${current.day}:${kind}`;
+      if (announced.has(key)) continue;
+      announced.add(key);
+      try {
+        deps.onBudget?.({ kind, status: current });
+      } catch {
+        // Best effort, like the key refusals: the cap itself is enforced here, not by the listener.
+      }
+    }
+  };
+  // Every journaled call may cross a threshold: checked right after it is written.
+  const log: LlmCallLog = {
+    append(record) {
+      deps.log.append(record);
+      if (record.costUsd !== undefined && record.costUsd > 0) announce(status());
+    },
+    since: (from) => deps.log.since(from),
+  };
+  const isOverBudget = (): boolean => {
+    const current = status();
+    announce(current);
+    return current.state === 'reached';
+  };
   const run = createCallRunner({
     config: deps.config,
-    log: deps.log,
+    log,
     resolveModel: deps.resolveModel,
     now,
     canary,
     reportRefusal,
+    isOverBudget,
   });
 
   return {
@@ -58,6 +95,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
           return content === undefined ? undefined : [{ role: 'user', content }];
         },
         SenseOutputSchema,
+        input.trace,
       );
       if (!result.ok) return result;
       const { media } = input;
@@ -86,6 +124,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         system,
         () => Promise.resolve(toMessages(input.history)),
         BriefSchema,
+        input.trace,
       );
     },
 
@@ -104,6 +143,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         system,
         () => Promise.resolve(toMessages(input.history)),
         VoiceOutputSchema,
+        input.trace,
       );
     },
 
@@ -112,8 +152,15 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
       const model = deps.resolveTranscriber?.();
       if (model === undefined)
         return err({ code: 'all_models_failed', attempts: [{ ...ref, outcome: 'missing_key' }] });
+      if (isOverBudget()) return err({ code: 'budget_reached', attempts: [] });
       const startedAt = now().getTime();
-      const base = { role: 'sense', ...ref, promptHash: 'transcription', isFallback: false } as const;
+      const base = {
+        role: 'sense',
+        ...ref,
+        promptHash: 'transcription',
+        isFallback: false,
+        ...audio.trace,
+      } as const;
       try {
         const result = await transcribeAudio({
           model,
@@ -122,7 +169,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
           abortSignal: AbortSignal.timeout(deps.config.roles.sense.timeoutMs),
         });
         const durationS = result.durationInSeconds ?? audio.durationS;
-        deps.log.append({
+        log.append({
           ...base,
           at: now(),
           outcome: 'ok',
@@ -135,7 +182,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
       } catch (error) {
         const { outcome, message, refusedStatus } = classify(error);
         if (refusedStatus !== undefined) reportRefusal(ref.provider, refusedStatus);
-        deps.log.append({
+        log.append({
           ...base,
           at: now(),
           outcome,
@@ -147,7 +194,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
     },
 
     health() {
-      return computeHealth(deps.config, deps.credentials, deps.log, now());
+      return computeHealth(deps.config, deps.credentials, deps.log, now(), status());
     },
 
     async testConnection(provider) {

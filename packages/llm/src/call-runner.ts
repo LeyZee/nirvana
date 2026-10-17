@@ -15,7 +15,7 @@ import type { z } from 'zod';
 import type { CallOutcome, LlmCallLog } from './call-log';
 import { costUsd } from './catalog';
 import type { LlmConfig, LlmRole, ModelRef, ProviderId } from './config';
-import type { LlmFailure, LlmSuccess } from './gateway-types';
+import type { CallTrace, LlmFailure, LlmSuccess } from './gateway-types';
 import type { PromptTemplate } from './prompts';
 import type { ModelResolver } from './providers';
 
@@ -94,6 +94,8 @@ export interface CallRunnerDeps {
   readonly now: () => Date;
   readonly canary: string;
   readonly reportRefusal: (provider: ProviderId, status: 401 | 403) => void;
+  /** True once today's spend reaches the cap: no model is called at all. */
+  readonly isOverBudget: () => boolean;
 }
 
 export type CallRunner = <T>(
@@ -102,6 +104,7 @@ export type CallRunner = <T>(
   system: string,
   buildMessages: (ref: ModelRef) => Promise<ModelMessage[] | undefined>,
   schema: z.ZodType<T>,
+  trace?: CallTrace,
 ) => Promise<Result<LlmSuccess<T>, LlmFailure>>;
 
 /**
@@ -116,6 +119,7 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     system: string,
     buildMessages: (ref: ModelRef) => Promise<ModelMessage[] | undefined>,
     schema: z.ZodType<T>,
+    trace: CallTrace = {},
   ): Promise<Result<LlmSuccess<T>, LlmFailure>> {
     const roleConfig = deps.config.roles[role];
     const targets: { ref: ModelRef; isFallback: boolean }[] = [{ ref: roleConfig, isFallback: false }];
@@ -123,6 +127,8 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     const attempts: LlmFailure['attempts'][number][] = [];
 
     for (const { ref, isFallback } of targets) {
+      // Checked before each model: a costly failure can spend the last euros before the fallback.
+      if (deps.isOverBudget()) return err({ code: 'budget_reached', attempts });
       const record = (outcome: CallOutcome, latencyMs: number, extra: object = {}): void => {
         attempts.push({ provider: ref.provider, model: ref.model, outcome });
         deps.log.append({
@@ -134,6 +140,7 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
           outcome,
           latencyMs,
           isFallback,
+          ...trace,
           ...extra,
         });
       };

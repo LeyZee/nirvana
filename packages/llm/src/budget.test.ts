@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest';
+
+import { budgetStatus, startOfLocalDay } from './budget';
+import { createInMemoryCallLog, type LlmCallRecord } from './call-log';
+import { DEFAULT_LLM_CONFIG } from './config';
+
+const call = (at: string, costUsd: number): LlmCallRecord => ({
+  at: new Date(at),
+  role: 'voice',
+  provider: 'xai',
+  model: 'grok-4.7',
+  promptHash: 'h',
+  outcome: 'ok',
+  latencyMs: 100,
+  isFallback: false,
+  costUsd,
+});
+
+describe('daily budget', () => {
+  it('starts the day at midnight in Paris, including the day the clocks go back', () => {
+    expect(startOfLocalDay(new Date('2026-10-17T20:05:00Z'), 'Europe/Paris').toISOString()).toBe(
+      '2026-10-16T22:00:00.000Z',
+    );
+    // 25 October 2026: midnight is still UTC+2, the afternoon is UTC+1.
+    expect(startOfLocalDay(new Date('2026-10-25T15:00:00Z'), 'Europe/Paris').toISOString()).toBe(
+      '2026-10-24T22:00:00.000Z',
+    );
+  });
+
+  it('counts only her day, in euros, with the alert at 80 % of the cap', () => {
+    const log = createInMemoryCallLog();
+    log.append(call('2026-10-16T21:59:00Z', 50)); // yesterday in Paris
+    log.append(call('2026-10-17T08:00:00Z', 17.6)); // 16 €
+    const now = new Date('2026-10-17T20:00:00Z');
+    const { dailyBudget } = DEFAULT_LLM_CONFIG;
+
+    expect(budgetStatus(dailyBudget, 20, log, now)).toEqual({
+      day: '2026-10-17',
+      spentEur: 16,
+      capEur: 20,
+      alertAtEur: 16,
+      state: 'alert',
+    });
+    log.append(call('2026-10-17T19:00:00Z', 4.4));
+    expect(budgetStatus(dailyBudget, 20, log, now).state).toBe('reached');
+    expect(budgetStatus(dailyBudget, 30, log, now).state).toBe('ok');
+  });
+});
