@@ -52,6 +52,11 @@ describe('Telegram API client', () => {
     });
   });
 
+  it('never takes a refused removal for a success', async () => {
+    answer(409, { kind: 'routes_version_conflict', message: 'x' });
+    await expect(removeBot(bot.id)).rejects.toThrow('DELETE /bots: 409');
+  });
+
   it('asks for the password when the sign-in is too old', async () => {
     answer(403, {
       error: { code: REAUTHENTICATION_ERROR_CODE, message: 'x', details: {}, requestId: 'r1' },
@@ -68,6 +73,6 @@ describe('Telegram API client', () => {
 
   it('reads the alert words of a creator, none before her first version', async () => {
     answer(200, { creatorId: newId(CreatorIdSchema), latest: null, versions: [] });
-    expect(await fetchAlertKeywords(newId(CreatorIdSchema))).toEqual([]);
+    expect(await fetchAlertKeywords(newId(CreatorIdSchema))).toEqual({ words: [], isActive: true });
   });
 });

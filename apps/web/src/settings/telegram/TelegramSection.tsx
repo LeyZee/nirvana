@@ -700,7 +700,8 @@ function KeywordsTab(routing: RoutingProps): JSX.Element {
   );
 }
 
-type Words = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; words: readonly string[] };
+type Words =
+  { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; words: readonly string[]; isActive: boolean };
 
 /** Read-only: her `alert_keywords`, from her newest persona version. */
 function CreatorKeywords({
@@ -715,7 +716,7 @@ function CreatorKeywords({
     let live = true;
     fetchAlertKeywords(creatorId).then(
       (list) => {
-        if (live) setWords({ kind: 'ready', words: list });
+        if (live) setWords({ kind: 'ready', words: list.words, isActive: list.isActive });
       },
       () => {
         if (live) setWords({ kind: 'failed' });
@@ -744,6 +745,12 @@ function CreatorKeywords({
               </span>
             ))}
           </div>
+        ) : null}
+        {words.kind === 'ready' && !words.isActive ? (
+          <p className="tg-hint">
+            Ces mots viennent de sa dernière version, pas encore activée : l’agent les appliquera quand elle
+            le sera.
+          </p>
         ) : null}
         <Link className="nv-btn nv-btn--plain nv-btn--sm tg-self-start" to="/creatrices">
           Modifier dans sa fiche Persona

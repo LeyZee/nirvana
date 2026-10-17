@@ -601,31 +601,51 @@ function TopicsStep({
   );
 }
 
+type Copy = 'idle' | 'copied' | 'selected';
+
+/**
+ * Copies the value. When the browser refuses the clipboard (plain http, permission), the value is selected instead
+ * and the chip says so: it never claims a copy that did not happen.
+ */
 function CopyChip({ value }: { value: string }): JSX.Element {
-  const [isCopied, setIsCopied] = useState(false);
+  const [copy, setCopy] = useState<Copy>('idle');
+  const text = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (!isCopied) return undefined;
+    if (copy === 'idle') return undefined;
     const timer = window.setTimeout(() => {
-      setIsCopied(false);
+      setCopy('idle');
     }, 1400);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isCopied]);
+  }, [copy]);
+  const select = (): void => {
+    const selection = window.getSelection();
+    if (text.current === null || selection === null) return;
+    const range = document.createRange();
+    range.selectNodeContents(text.current);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    setCopy('selected');
+  };
   return (
     <button
       type="button"
       className="tg-copy"
-      data-copied={isCopied}
+      data-copied={copy === 'copied'}
       onClick={() => {
-        const done = (): void => {
-          setIsCopied(true);
-        };
-        void navigator.clipboard.writeText(value).then(done, done);
+        // `navigator.clipboard` only exists in a secure context (https, localhost).
+        if (!window.isSecureContext) {
+          select();
+          return;
+        }
+        navigator.clipboard.writeText(value).then(() => {
+          setCopy('copied');
+        }, select);
       }}
     >
-      {value}
-      <span>{isCopied ? 'Copié' : 'Copier'}</span>
+      <b ref={text}>{value}</b>
+      <span>{copy === 'copied' ? 'Copié' : copy === 'selected' ? 'Sélectionné' : 'Copier'}</span>
     </button>
   );
 }

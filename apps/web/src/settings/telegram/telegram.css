@@ -772,6 +772,10 @@
   background: var(--nv-glass-fill);
   transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
 }
+.tg-copy b {
+  font-weight: inherit;
+  user-select: text;
+}
 .tg-copy:hover {
   background: var(--nv-glass-fill-strong);
 }

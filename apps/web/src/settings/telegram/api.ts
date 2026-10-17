@@ -71,13 +71,16 @@ export async function replaceToken(id: TelegramBotId, token: string): Promise<Ou
   return outcome(response, (body) => TelegramBotSchema.parse(body));
 }
 
+/** The contract answers 204 or 404: any refusal is an error, never a silent success. */
 export async function removeBot(id: TelegramBotId): Promise<void> {
-  await call(`/bots/${id}`, { method: 'DELETE' });
+  const response = await call(`/bots/${id}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error(`DELETE /bots: ${String(response.status)}`);
 }
 
 /** Asks the server to watch the bot's updates closely while the sheet waits for a group. */
 export async function listen(id: TelegramBotId): Promise<void> {
-  await call(`/bots/${id}/listen`, { method: 'POST' });
+  const response = await call(`/bots/${id}/listen`, { method: 'POST' });
+  if (!response.ok) throw new Error(`POST /listen: ${String(response.status)}`);
 }
 
 export async function saveRoutes(
@@ -102,15 +105,23 @@ export async function fetchDeliveries(limit = 50): Promise<TelegramDelivery[]> {
   return TelegramDeliveriesSchema.parse(await response.json()).deliveries;
 }
 
+export interface AlertKeywords {
+  readonly words: string[];
+  /** False while her newest version is not the one the agent applies yet. */
+  readonly isActive: boolean;
+}
+
 /**
  * The alert words of a creator, from her newest persona version (`notifications.alert_keywords`). Edited on her
  * Persona page, never here: one place per piece of data.
  */
-export async function fetchAlertKeywords(creatorId: CreatorId): Promise<string[]> {
+export async function fetchAlertKeywords(creatorId: CreatorId): Promise<AlertKeywords> {
   const response = await fetch(`/v1/creators/${encodeURIComponent(creatorId)}/persona`, {
     credentials: 'include',
   });
   if (!response.ok) throw new Error(`GET persona: ${String(response.status)}`);
   const { latest } = PersonaOverviewSchema.parse(await response.json());
-  return latest?.persona.notifications.alert_keywords ?? [];
+  return latest === null
+    ? { words: [], isActive: true }
+    : { words: latest.persona.notifications.alert_keywords, isActive: latest.summary.isActive };
 }
