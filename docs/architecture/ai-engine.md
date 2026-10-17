@@ -86,7 +86,7 @@ Brief {
   sentiment: 'positive'|'neutral'|'negative'|'aroused'|'frustrated';
   factsProposed: { category, key, value, kind: 'declared'|'inferred', confidence }[];
   kycMissing: KycSlot[];
-  risks: ('minor_suspected'|'distress'|'meet_request'|'off_platform_payment'|'dispute'|'harassment'|'self_harm'|'money_trouble'|'manipulation_attempt')[];
+  risks: ('minor_suspected'|'distress'|'meet_request'|'off_platform_payment'|'dispute'|'harassment'|'self_harm'|'money_trouble'|'manipulation_attempt'|'dangerous_request'|'real_abuse')[];
   action: 'reply'|'offer'|'wait'|'follow_up'|'handoff';
   replyBrief: string;           // ce qu'il faut dire, en 1-3 phrases, pas le texte final
   toneHints: string[];
@@ -98,11 +98,11 @@ Brief {
 
 Entrée : contexte + brief. Sortie : `Decision` + `policy_trace`. Ordre d'évaluation fixe :
 
-1. Risques bloquants → `handoff` (non contournable, même en auto).
+1. Risques bloquants → `handoff` (non contournable, même en auto) : `minor_suspected`, `distress`, `self_harm`, `dangerous_request`, `real_abuse` (`agent/domain/hold.ts`), décidé avant que la voix écrive.
 2. Interrupteurs, mode, session → `wait`.
 3. Horaires de la persona (avec jitter) → `wait` avec `runAt`.
 4. `asks_if_bot` → selon `identity_policy` : `stay_in_character` (défaut, ADR 0012) donne un `reply_brief` de déflexion en personnage ; `deflect_and_handoff` ; `disclose`.
-5. Offre (dès la phase 3, décision de Charles du 17/10) : autorisée seulement si cooldowns expirés, KYC minimal atteint (délai de sexualisation réglable, 24 à 48 h par défaut), étape de script Reveal disponible et jamais envoyée à ce fan, aucun risque `money_trouble`, `distress`, `self_harm` ou `minor_suspected`. Prix fixé par le script : jamais de négociation ni de remise. Bouderie (« chouinage ») au plus une fois par refus, jamais juste après un achat, jamais après un risque. Aftercare après chaque script. Détail métier : `/mnt/project-files/chatting/methode-chatting.md`.
+5. Offre (dès la phase 3, décision de Charles du 17/10) : autorisée seulement si cooldowns expirés, KYC minimal atteint (délai de sexualisation réglable, 24 à 48 h par défaut), étape de script Reveal disponible et jamais envoyée à ce fan, aucun risque `money_trouble`, `distress`, `self_harm` ou `minor_suspected`. Prix fixé par le script : jamais de négociation ni de remise. Rythme du corpus de vente (`offerDecision`, `agent/domain/policy.ts`) : 3 offres par jour de la créatrice au plus, aucune après un refus le même jour, plus rien après 5 offres sans achat tant que le fan ne revient pas de lui-même, rien sous le drapeau « budget nul ». Bouderie (« chouinage ») au plus une fois par refus, jamais juste après un achat, jamais après un risque. Aftercare après chaque script. Détail métier : `/mnt/project-files/chatting/methode-chatting.md`.
 6. KYC : au plus une question, seulement si `intent` s'y prête et pas de question dans les 3 derniers envois.
 7. Relance : bornée par `persona.follow_ups` (délais, petits rappels par jour).
 
@@ -110,7 +110,7 @@ Chaque règle est une fonction testée unitairement avec cas nominal, limite, ad
 
 ## Les gardes (code pur, `modules/agent/domain/guards.ts`)
 
-Après la voix, sur le texte final : sortie d'assistante (recette, code, liste, balises), dégoûts et mots interdits (persona, liste normalisée avec variantes), anti-répétition (similarité avec les N derniers envois), longueur par bulle, mention d'argent/prix hors offre, mention d'IA/prompt/système/assistant, fuite d'un autre fan (noms/faits d'un autre fan dans le contexte ne doivent pas apparaître), URL/téléphone/email, langue attendue. Une violation `blocking` interdit l'envoi ; une violation `soft` déclenche une régénération puis laisse passer avec trace.
+Après la voix, sur le texte final : demande de photos intimes au fan, mépris (« radin », « menteur »), mensonge sur le payant (« rien à payer »), bouderie culpabilisante (souple), sortie d'assistante (recette, code, liste, balises), dégoûts et mots interdits (persona, liste normalisée avec variantes), anti-répétition (similarité avec les N derniers envois), longueur par bulle, mention d'argent/prix hors offre, mention d'IA/prompt/système/assistant, fuite d'un autre fan (noms/faits d'un autre fan dans le contexte ne doivent pas apparaître), URL/téléphone/email, langue attendue. Une violation `blocking` interdit l'envoi ; une violation `soft` déclenche une régénération puis laisse passer avec trace.
 
 ## Humanisation (envoi)
 

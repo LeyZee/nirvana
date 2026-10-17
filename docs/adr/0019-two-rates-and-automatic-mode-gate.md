@@ -1,6 +1,6 @@
 # 0019. Deux taux, et la règle qui ouvre le mode Automatique
 
-Statut : proposed
+Statut : accepted (Charles, 17/10 21h54)
 Date : 2026-10-17
 
 ## Contexte

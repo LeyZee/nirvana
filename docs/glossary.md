@@ -52,6 +52,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Média | `media_asset` | Une photo, vidéo ou audio de la créatrice (catalogue) ou reçue d'un fan. |
 | Description de média | `media_description` | La sortie du rôle sens, au vocabulaire Nirvana. |
 | Offre | `offer` | Une proposition commerciale (média + prix + plancher). Phase 6. |
+| Budget nul | `hasNoBudget` | Drapeau posé par le code quand le fan dit ne pas pouvoir payer : plus aucune offre ni bouderie ni relance de vente tant qu'il ne revient pas de lui-même vers le payant. |
+| Plafonds d'offres | `OfferLimits` | Offres par jour de la créatrice (3) et offres sans achat avant d'arrêter (5), tenues par le code (`offerDecision`). |
 | Vente | `sale` | Une transaction détectée sur la plateforme. Montant en centimes + devise. |
 | Script | `script` | Séquence d'étapes de vente (structure). Phase 6. |
 | Étape | `script_step` | Une étape d'un script (message, médias, prix, pacing). |
@@ -88,6 +90,9 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Vitrine | `showcase` | Page de démonstration des composants du design system (dev seulement). Ne pas confondre avec le playground. |
 | Fan simulé | `simulated_fan` | Fan joué par une IA d'après un profil, dans le playground. |
 | Mode démo | `isDemo` | Écran du playground servi par des réponses écrites à l'avance, quand les routes `/v1/playground` ne sont pas en ligne sur le serveur. Signalé par la pastille « Démo » ; rien n'est noté pour de vrai. |
+| À traiter | `todo` | La file en tête du Dashboard : ce qui attend un humain (passage à l'humain, mot-clé d'alerte, fan sans réponse depuis plus de 10 min, proposition du copilote), le plus grave en premier. Ligne `nv-todo` du design system. |
+| Parcours des fans | `funnel` | L'entonnoir du Dashboard : combien de fans passent chaque étape (nouveau, fan connu, conversation chaude, 1re offre, achat), et l'étape qui casse. |
+| Données d'exemple | `sample` | Données fictives d'un écran du CRM tant que sa route n'existe pas, signalées par la pastille « Exemple » (`nv-sample`). Distinct du mode démo du playground. |
 | Compte fan de test | `test_fan_account` | Vrai compte fan sur une plateforme, tenu par nous, pour tester envois et ventes sans toucher un vrai fan. |
 | Liste blanche d'envoi | `send_allowlist` | Fans vers lesquels le connecteur accepte d'envoyer tant qu'elle n'est pas vide (phase 2). |
 | Enregistreur | `recorder` | Fonction de l'extension qui note les échanges réseau du site d'une plateforme, anonymisés. |

@@ -25,6 +25,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P0-04 Serveur et worker | done | `log/2026-10-17-p0-04.md` |
 | 2026-10-17 | P3-05 Boucle de calibrage dans le playground (Opus) | in_progress | `log/2026-10-17-p3-05.md` |
 | 2026-10-17 | P3-06 API du playground (Opus) | in_progress | `log/2026-10-17-p3-06.md` |
+| 2026-10-17 | Politique de vente du corpus, ID proposé (Opus) | in_progress | `log/2026-10-17-sales-policy.md` |
 | 2026-10-17 | P0-07a Login du dashboard | done | `log/2026-10-17-p0-07a.md` |
 | 2026-10-17 | P0-05 Module conversations | done | `log/2026-10-17-p0-05.md` |
 | 2026-10-17 | P0-06 Module connectors | done | `log/2026-10-17-p0-06.md` |
@@ -35,7 +36,11 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Garde-fou local contre les push sur `main` | done | `log/2026-10-17-protect-main.md` |
 | 2026-10-17 | Table des notes d'entraînement (`calibration_ratings`) | done | `log/2026-10-17-calibration-table.md` |
 | 2026-10-17 | Fiches proposées : alertes de nuit, copilote côté API | done | `log/2026-10-17-fiches-alertes-copilote.md` |
+<<<<<<< HEAD
 | 2026-10-17 | Alertes Telegram : ADR 0020, fiche étendue, maquette | done | `log/2026-10-17-alertes-telegram.md` |
+=======
+| 2026-10-17 | Dashboard, PR 1 : pièces du design system | done | `log/2026-10-17-dashboard-ds.md` |
+>>>>>>> origin/main
 
 ## Incidents (liste vivante)
 

@@ -41,6 +41,8 @@ export const BriefSchema = z.object({
       'self_harm',
       'money_trouble',
       'manipulation_attempt',
+      'dangerous_request',
+      'real_abuse',
     ]),
   ),
   action: z.enum(['reply', 'offer', 'wait', 'follow_up', 'handoff']),

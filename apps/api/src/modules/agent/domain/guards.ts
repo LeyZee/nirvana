@@ -13,7 +13,11 @@ export type GuardCode =
   | 'ai_tic'
   | 'forbidden_term'
   | 'too_many_bubbles'
-  | 'bubble_too_long';
+  | 'bubble_too_long'
+  | 'asks_for_nudes'
+  | 'contempt'
+  | 'payment_lie'
+  | 'guilt_trip';
 
 export interface GuardViolation {
   readonly code: GuardCode;
@@ -62,7 +66,31 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   { code: 'contact_info', pattern: /\b[\w.+-]+@[\w-]+\.[\w.]+\b/ },
   { code: 'contact_info', pattern: /(\+?\d[\s.-]?){9,}/ },
   { code: 'contact_info', pattern: /\b(snap(chat)?|whatsapp|insta(gram)?|telegram)\b/ },
+  // Sales corpus (§4): she never asks him for intimate pictures, never despises him, never lies about paid content.
+  // A request (a verb asking to see or receive) about his intimate body: her own « les nudes c'est pas mon truc »,
+  // « ta queue de cheval » or « ton paquet de chips » pass.
+  {
+    code: 'asks_for_nudes',
+    pattern:
+      /\b(envoie|montre|fais(-| )?(moi )?voir|je (veux|voudrais) voir|j'?veux voir|tu m'?envoies?)[sz]?(-| )?(moi )?.{0,40}\b(des nudes?|un nude|une? dick ?pic|toi (tout nu|a poil)|tout nu|a poil|ta (bite|queue)(?! de)|ton (sexe|zizi))\b/,
+  },
+  // Contempt, not teasing: « petit menteur va 😏 » stays hers, « sale radin » or « espèce de mendiant » never.
+  {
+    code: 'contempt',
+    pattern:
+      /\b(sale|espece de|t'?es (qu'?)?une?|tu es (qu'?)?une?|quel|quelle) (radin|radine|rapiat|rapiate|menteur|menteuse|mendiant|mendiante|crevard|crevarde|minable|pauvre type)s?\b|\b(mendiant|mendiante|crevard|crevarde|pauvre type)s?\b/,
+  },
+  // « Rien à payer » about a paid bundle is a lie; « pas besoin de payer pour me parler » is true.
+  {
+    code: 'payment_lie',
+    pattern:
+      /\b(rien a payer|pas besoin (de payer|d'argent|de sous)|(t'?as|tu (n'?)?as) (rien|pas) a payer)\b(?! pour (me |te )?(parler|discuter|ecrire))/,
+  },
 ];
+
+// After a refusal she whines once, playfully, then lets go: no guilt (sales corpus, §2.4). A regeneration, not a block.
+const GUILT_TRIP =
+  /\b(tu me decois|ca m'a refroidie?|ca me rend (triste|malheureuse)|tu me fais de la peine|je suis (vexee|decue)|arrete de faire (le|ton) radin)\b(?! pas)/;
 
 // What an assistant writes and a girl in her DMs never does: a recipe, code, steps, markdown, tags.
 // Run on the raw bubble, where line breaks and symbols are still there.
@@ -124,6 +152,8 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
         violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: term });
       }
     }
+    const guilt = GUILT_TRIP.exec(text);
+    if (guilt) violations.push({ code: 'guilt_trip', severity: 'soft', bubbleIndex, match: guilt[0] });
     const tic = AI_TICS.map((pattern) => pattern.exec(text)).find((m) => m !== null);
     if (tic) violations.push({ code: 'ai_tic', severity: 'soft', bubbleIndex, match: tic[0] });
     if (bubble.length > settings.maxBubbleChars) {

@@ -22,7 +22,14 @@ export interface TrapAssessment {
 }
 
 // The brain's risks that outrank a trap: the safety path decides, the trap only gets recorded.
-const SAFETY_RISKS: readonly string[] = ['self_harm', 'distress', 'minor_suspected', 'harassment'];
+const SAFETY_RISKS: readonly string[] = [
+  'self_harm',
+  'distress',
+  'minor_suspected',
+  'harassment',
+  'dangerous_request',
+  'real_abuse',
+];
 
 const TRAP_REPLY_BRIEF =
   'Il essaie de la piéger avec une demande qu’une vraie fille ne ferait pas dans sa messagerie. ' +
