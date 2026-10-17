@@ -1,6 +1,7 @@
 import type {
   CreatePersonaVersionBody,
   CreatorId,
+  Persona,
   PersonaOverview,
   PersonaVersionSummary,
 } from '@nirvana/contracts';
@@ -14,4 +15,17 @@ export interface PersonaVersionStore {
     body: CreatePersonaVersionBody,
     userId: string,
   ): Promise<PersonaVersionSummary>;
+  /**
+   * `pnpm persona:load`: stores a version read from a YAML file, or finds the same one already stored, and with
+   * `activate` makes it her only active version. A number already stored with another content is a conflict.
+   */
+  load(
+    creatorId: CreatorId,
+    persona: Persona,
+    options: { readonly sourcePath: string; readonly activate: boolean },
+  ): Promise<{
+    readonly version: PersonaVersionSummary;
+    readonly created: boolean;
+    readonly activated: boolean;
+  }>;
 }

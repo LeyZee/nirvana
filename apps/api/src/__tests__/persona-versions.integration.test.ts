@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   PersonaSchema,
+  type CreatorId,
   type Persona,
   type PersonaOverview,
   type PersonaVersionSummary,
@@ -42,8 +43,8 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
   let server: Server;
   let owner: string;
   let operator: string;
-  let anna: string;
-  let bea: string;
+  let anna: CreatorId;
+  let bea: CreatorId;
 
   const get = (creatorId: string, cookie: string) =>
     server.inject({ method: 'GET', url: `/v1/creators/${creatorId}/persona`, headers: { cookie } });
@@ -140,5 +141,46 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
 
   it('keeps each creator’s versions to herself', async () => {
     expect((await get(bea, owner)).json()).toEqual({ creatorId: bea, latest: null, versions: [] });
+  });
+
+  it('loads a file version once, activates one version at a time, and refuses a number with another content', async () => {
+    const { versions } = app.modules.persona;
+    const first = await versions.load(bea, withVersion(demo(), '1.0.0'), {
+      sourcePath: 'a.yaml',
+      activate: true,
+    });
+    expect(first).toMatchObject({
+      created: true,
+      activated: true,
+      version: { version: '1.0.0', isActive: true },
+    });
+    const again = await versions.load(bea, withVersion(demo(), '1.0.0'), {
+      sourcePath: 'a.yaml',
+      activate: true,
+    });
+    expect(again).toMatchObject({ created: false, activated: false, version: { isActive: true } });
+
+    const next = withVersion(demo(), '1.0.1');
+    await versions.load(bea, next, { sourcePath: 'b.yaml', activate: false });
+    const { versions: listed } = (await get(bea, owner)).json<PersonaOverview>();
+    expect(listed.map((v) => [v.version, v.isActive])).toEqual([
+      ['1.0.1', false],
+      ['1.0.0', true],
+    ]);
+    await versions.load(bea, next, { sourcePath: 'b.yaml', activate: true });
+    const after = (await get(bea, owner)).json<PersonaOverview>().versions;
+    expect(after.filter((v) => v.isActive).map((v) => v.version)).toEqual(['1.0.1']);
+
+    const changed = { ...next, additional_info: 'Autre texte' };
+    await expect(
+      versions.load(bea, changed, { sourcePath: 'c.yaml', activate: false }),
+    ).rejects.toMatchObject({
+      code: 'persona_version_conflict',
+    });
+    const actions = await test.admin.db
+      .select({ action: schema.auditLog.action })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, 'persona_version.activate'));
+    expect(actions).toHaveLength(2);
   });
 });

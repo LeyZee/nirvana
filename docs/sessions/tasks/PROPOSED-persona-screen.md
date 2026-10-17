@@ -19,7 +19,8 @@ Créatrices › Persona montre et édite la persona de la créatrice onglet par 
 - [x] Fuseau horaire en lecture seule : celui de la créatrice (`creators.timezone` via `GET /v1/creators`, décision du coordinateur et de Bilan), avec l'heure qu'il est chez elle.
 - [x] API, après la fusion de la PR créatrices de Bilan, add-only sur le module `persona` (Bilan en relecture, ligne de composition-root à Bilan) : `packages/contracts/src/persona-api.ts` (`PersonaOverview`, `PersonaVersionSummary`, `CreatePersonaVersionBody`, objets stricts, `contentHash`), `GET /v1/creators/:creatorId/persona` et `POST /v1/creators/:creatorId/persona/versions` (contrôle d'accès de conversations, lecture en `withTenant`, 409 `persona_version_conflict`, jamais de version active : l'activation reste `pnpm persona:load --activate`).
 - [x] L'écran lit la persona de la créatrice choisie ; la pastille « Exemple » disparaît, le bouton s'ouvre. La copie `details.timezone` envoyée au modèle est alignée sur `creators.timezone` à l'enregistrement ; les mots-clés d'alerte restent saisis ici, la page Telegram les lit. Enregistrer : propriétaire et créatrice seulement (les chatteurs lisent), numéro suivant calculé par l'écran (0.0.1 au-dessus du plus haut), 409 si une autre version est arrivée entre-temps.
-- [ ] Activation d'une version depuis le CRM (après test et validation par la créatrice) : rien ne l'active encore, `pnpm persona:load` n'existe pas.
+- [x] `pnpm persona:load <fichier> [--creator <id>] [--activate]` et `pnpm persona:validate <fichier>` (demande du coordinateur, relecture Bilan) : chargement idempotent, une seule version active, audit.
+- [ ] Activation depuis le CRM après test et validation par la créatrice, plus tard ; le passage de l'agent du fichier à la version active en base est un port de Bilan.
 - [ ] Historique des versions et comparaison (ADR 0010), plus tard.
 
 ## Critères d'acceptation
