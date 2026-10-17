@@ -23,9 +23,11 @@ import {
   type CalibrationStore,
 } from '../../agent/index';
 import {
+  AnswerInProgress,
   BlockedAnswer,
   FanMessageNotFound,
   LlmUnavailable,
+  NothingToCompare,
   NothingToRate,
   PresetNotFound,
   TimeZoneInvalid,
@@ -135,6 +137,21 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
   let isRated = true;
   let sessionCostUsd = 0;
   let ratings = 0;
+  let isBusy = false;
+
+  /** Nothing changes the conversation while an answer or a rating is under way. */
+  const idle = (): void => {
+    if (isBusy) throw new AnswerInProgress();
+  };
+  const exclusive = async <T>(work: () => Promise<T>): Promise<T> => {
+    idle();
+    isBusy = true;
+    try {
+      return await work();
+    } finally {
+      isBusy = false;
+    }
+  };
 
   const rate = () => {
     const report = rateReport(deps.records, deps.version);
@@ -204,6 +221,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     state,
 
     applyPreset(id) {
+      idle();
       const preset = findPreset(id);
       if (preset === undefined) throw new PresetNotFound();
       restart();
@@ -219,70 +237,77 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     },
 
     reset() {
+      idle();
       restart();
       return state();
     },
 
-    send: (text, media) => sendDescribed(text, media.map(completeMedia)),
+    send: (text, media) => exclusive(() => sendDescribed(text, media.map(completeMedia))),
 
-    async rate(verdict, override) {
-      const exchange = session.lastExchange;
-      if (exchange === undefined || isRated) throw new NothingToRate();
-      // Nothing was written, or the guards stopped it: there is nothing to validate as it stands.
-      if (verdict.kind === 'validated' && exchange.turn.isBlocked) throw new BlockedAnswer();
-      const destination =
-        verdict.kind === 'validated' ? undefined : (override ?? suggestDestination(verdict));
-      ratings += 1;
-      const record = ratingRecord({
-        id: `${deps.sessionId}-${String(ratings)}`,
-        sessionId: deps.sessionId,
-        at: (deps.now ?? (() => new Date()))(),
-        // The model that wrote it: an answer of the fallback counts for the fallback, not for Grok.
-        version: {
-          voicePrompt: deps.version.voicePrompt,
-          voiceModel: exchange.turn.model ?? deps.version.voiceModel,
-        },
-        verdict,
-        destination,
-        exchange: { fanMessage: exchange.fanMessage, bubbles: exchange.turn.bubbles },
-        moment: exchange.moment,
-      });
-      await deps.store.append(record);
-      deps.records.push(record);
-      isRated = true;
-      if (verdict.kind === 'corrected') session.replaceLastAnswer(verdict.text);
-      return { rate: rate(), destination: destination ?? null };
-    },
+    rate: (verdict, override) =>
+      exclusive(async () => {
+        const exchange = session.lastExchange;
+        if (exchange === undefined || isRated) throw new NothingToRate();
+        // Nothing was written, or the guards stopped it: there is nothing to validate as it stands.
+        if (verdict.kind === 'validated' && exchange.turn.isBlocked) throw new BlockedAnswer();
+        const destination =
+          verdict.kind === 'validated' ? undefined : (override ?? suggestDestination(verdict));
+        ratings += 1;
+        const record = ratingRecord({
+          id: `${deps.sessionId}-${String(ratings)}`,
+          sessionId: deps.sessionId,
+          at: (deps.now ?? (() => new Date()))(),
+          // The model that wrote it: an answer of the fallback counts for the fallback, not for Grok.
+          version: {
+            voicePrompt: deps.version.voicePrompt,
+            voiceModel: exchange.turn.model ?? deps.version.voiceModel,
+          },
+          verdict,
+          destination,
+          exchange: { fanMessage: exchange.fanMessage, bubbles: exchange.turn.bubbles },
+          moment: exchange.moment,
+        });
+        await deps.store.append(record);
+        deps.records.push(record);
+        isRated = true;
+        if (verdict.kind === 'corrected') session.replaceLastAnswer(verdict.text);
+        return { rate: rate(), destination: destination ?? null };
+      }),
 
-    async branch(fanMessageNumber) {
-      const replay = session.branchAt(fanMessageNumber);
-      if (replay === undefined) throw new FanMessageNotFound();
-      await sendDescribed(replay.text, replay.media);
-      return state();
-    },
+    branch: (fanMessageNumber) =>
+      exclusive(async () => {
+        // Checked before the history is cut: without a voice model the conversation stays as it was.
+        assertAvailable();
+        const replay = session.branchAt(fanMessageNumber);
+        if (replay === undefined) throw new FanMessageNotFound();
+        await sendDescribed(replay.text, replay.media);
+        return state();
+      }),
 
-    async compare(voiceModel) {
-      const other = deps.gatewayForVoice(voiceModel);
-      if (other === undefined) throw new VoiceModelInvalid();
-      const comparison = await session.compareVoice(other);
-      if (comparison === undefined) throw new NothingToRate();
-      sessionCostUsd += comparison.costUsd;
-      return {
-        bubbles: [...comparison.bubbles],
-        violations: comparison.violations.map((v) => ({
-          code: v.code,
-          label: guardLabel(v.code),
-          severity: v.severity,
-          ...(v.match !== undefined && { match: v.match }),
-        })),
-        isBlocked: comparison.isBlocked,
-        ...(comparison.model !== undefined && { model: comparison.model }),
-        costUsd: comparison.costUsd,
-        ...(comparison.failure !== undefined && { failure: comparison.failure }),
-      };
-    },
+    compare: (voiceModel) =>
+      exclusive(async () => {
+        const other = deps.gatewayForVoice(voiceModel);
+        if (other === undefined) throw new VoiceModelInvalid();
+        const comparison = await session.compareVoice(other);
+        if (comparison === undefined) throw new NothingToCompare();
+        sessionCostUsd += comparison.costUsd;
+        return {
+          bubbles: [...comparison.bubbles],
+          violations: comparison.violations.map((v) => ({
+            code: v.code,
+            label: guardLabel(v.code),
+            severity: v.severity,
+            ...(v.match !== undefined && { match: v.match }),
+          })),
+          isBlocked: comparison.isBlocked,
+          ...(comparison.model !== undefined && { model: comparison.model }),
+          costUsd: comparison.costUsd,
+          ...(comparison.failure !== undefined && { failure: comparison.failure }),
+        };
+      }),
 
     patchSituation(patch) {
+      idle();
       if (patch.timeZone !== undefined) {
         if (!isTimeZone(patch.timeZone)) throw new TimeZoneInvalid();
         session.setSituation({ timeZone: patch.timeZone });
@@ -304,16 +329,19 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     },
 
     advance(hours) {
+      idle();
       session.advance(hours * HOUR_MS);
       return state();
     },
 
     setNotes(notes) {
+      idle();
       session.setFanNotes(notes);
       return state();
     },
 
     sendCreatorMedia(media, isLocked) {
+      idle();
       session.sendCreatorMedia(completeMedia(media), isLocked);
       return state();
     },

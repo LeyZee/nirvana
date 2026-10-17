@@ -56,13 +56,22 @@ function health(hasKey: boolean): HealthReport {
   };
 }
 
-function gateway(voice: VoiceOutput, hasKey = true): LlmGateway {
+/** `keys.voice` can be switched off mid-test; `hold` delays the voice until the test releases it. */
+interface GatewayControl {
+  hasKey: boolean;
+  hold?: Promise<void>;
+}
+
+function gateway(voice: VoiceOutput, control: GatewayControl = { hasKey: true }): LlmGateway {
   return {
     sense: () => Promise.reject(new Error('not used')),
     transcribe: () => Promise.reject(new Error('not used')),
     brain: () => Promise.resolve({ ok: true, value: { output: BRIEF, meta: META } }),
-    voice: () => Promise.resolve({ ok: true, value: { output: voice, meta: META } }),
-    health: () => health(hasKey),
+    voice: async () => {
+      await control.hold;
+      return { ok: true, value: { output: voice, meta: META } };
+    },
+    health: () => health(control.hasKey),
     testConnection: () => Promise.reject(new Error('not used')),
   };
 }
@@ -80,7 +89,7 @@ const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
   request.user = { id, email: `${id}@example.test`, name: id, role: 'owner', creatorIds: [] };
 };
 
-async function server(options: { voice?: VoiceOutput; hasKey?: boolean } = {}) {
+async function server(options: { voice?: VoiceOutput; control?: GatewayControl } = {}) {
   const records: CalibrationRecord[] = [];
   const stored: CalibrationRecord[] = [];
   const store: CalibrationStore = {
@@ -96,7 +105,7 @@ async function server(options: { voice?: VoiceOutput; hasKey?: boolean } = {}) {
     persona: { creatorName: 'Lina', personaSheet: 'fiche', forbiddenTerms: [] },
     store,
     records,
-    gateway: gateway(options.voice ?? { bubbles: ['Coucou toi ✨'] }, options.hasKey ?? true),
+    gateway: gateway(options.voice ?? { bubbles: ['Coucou toi ✨'] }, options.control),
     gatewayForVoice: (model) =>
       model === 'mistral-large-latest' ? gateway({ bubbles: ['Hey toi'] }) : undefined,
     now: () => new Date('2026-10-17T10:00:00Z'),
@@ -171,7 +180,7 @@ describe('/v1/playground', () => {
   });
 
   it('asks for the Grok key when no voice model is reachable', async () => {
-    const { post } = await server({ hasKey: false });
+    const { post } = await server({ control: { hasKey: false } });
     const response = await post('/messages', { text: 'Salut' });
     expect(response.statusCode).toBe(503);
     expect(codeOf(response)).toBe('llm_unavailable');
@@ -217,5 +226,49 @@ describe('/v1/playground', () => {
     const comparison = await post('/compare', { voiceModel: 'mistral-large-latest' });
     expect(comparison.json()).toMatchObject({ bubbles: ['Hey toi'], isBlocked: false });
     expect(codeOf(await post('/compare', { voiceModel: 'gpt-x' }))).toBe('voice_model_invalid');
+  });
+
+  it('refuses an empty message and a destination on a validated answer', async () => {
+    const { post } = await server();
+    expect((await post('/messages', { text: '  ' })).statusCode).toBe(400);
+    await post('/messages', { text: 'Salut' });
+    const rating = await post('/rating', { verdict: { kind: 'validated' }, destination: 'rule' });
+    expect(rating.statusCode).toBe(400);
+  });
+
+  it('keeps the conversation whole when a replay cannot be answered', async () => {
+    const control: GatewayControl = { hasKey: true };
+    const { app, post, headers } = await server({ control });
+    await post('/messages', { text: 'Salut' });
+    await post('/rating', { verdict: { kind: 'validated' } });
+    await post('/messages', { text: 'Ça va ?' });
+    control.hasKey = false;
+    expect((await post('/branch', { fanMessageNumber: 1 })).statusCode).toBe(503);
+    const state = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers }));
+    expect(state.history).toHaveLength(4);
+    expect(state.pending).not.toBeNull();
+  });
+
+  it('answers one message at a time', async () => {
+    let release = (): void => undefined;
+    const control: GatewayControl = { hasKey: true, hold: new Promise((resolve) => (release = resolve)) };
+    const { post } = await server({ control });
+    // inject() starts on its first then(): Promise.resolve sends it now, the tick lets it reach the voice.
+    const first = Promise.resolve(post('/messages', { text: 'Salut' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = await post('/messages', { text: 'T’es là ?' });
+    expect(codeOf(second)).toBe('answer_in_progress_conflict');
+    release();
+    expect((await first).statusCode).toBe(200);
+  });
+
+  it('has nothing to compare after a handoff', async () => {
+    const { post } = await server();
+    await post('/messages', {
+      text: 'Regarde',
+      media: [{ kind: 'image', factualDescription: 'Un selfie.', flags: ['possible_minor'] }],
+    });
+    const comparison = await post('/compare', { voiceModel: 'mistral-large-latest' });
+    expect(codeOf(comparison)).toBe('nothing_to_compare_conflict');
   });
 });

@@ -160,15 +160,25 @@ export type PlaygroundRatingResult = z.infer<typeof PlaygroundRatingResultSchema
 
 // Request bodies.
 export const PlaygroundPresetBodySchema = z.object({ presetId: z.string().min(1) });
-export const PlaygroundMessageBodySchema = z.object({
-  text: z.string().max(4_000),
-  media: z.array(PlaygroundMediaSchema).max(10).exactOptional(),
-});
-export const PlaygroundRatingBodySchema = z.object({
-  verdict: VerdictSchema,
-  /** Overrides the suggested destination; none for a validated answer. */
-  destination: DestinationSchema.exactOptional(),
-});
+export const PlaygroundMessageBodySchema = z
+  .object({
+    text: z.string().trim().max(4_000),
+    media: z.array(PlaygroundMediaSchema).max(10).exactOptional(),
+  })
+  .refine((body) => body.text !== '' || (body.media?.length ?? 0) > 0, {
+    message: 'Un texte ou un média',
+    path: ['text'],
+  });
+export const PlaygroundRatingBodySchema = z
+  .object({
+    verdict: VerdictSchema,
+    /** Overrides the suggested destination; none for a validated answer. */
+    destination: DestinationSchema.exactOptional(),
+  })
+  .refine((body) => body.verdict.kind !== 'validated' || body.destination === undefined, {
+    message: 'Une réponse validée n’a pas de destination',
+    path: ['destination'],
+  });
 export const PlaygroundBranchBodySchema = z.object({ fanMessageNumber: z.number().int().min(1) });
 export const PlaygroundCompareBodySchema = z.object({ voiceModel: z.string().min(1) });
 export const PlaygroundSituationBodySchema = z.object({
@@ -199,9 +209,12 @@ export const PlaygroundCreatorMediaBodySchema = PlaygroundMediaSchema.extend({ i
 export const PLAYGROUND_ERROR_CODES = [
   'llm_unavailable',
   'nothing_to_rate_conflict',
+  'nothing_to_compare_conflict',
+  'answer_in_progress_conflict',
   'blocked_answer_conflict',
   'preset_not_found',
   'fan_message_not_found',
   'voice_model_invalid',
   'time_zone_invalid',
 ] as const;
+export type PlaygroundErrorCode = (typeof PLAYGROUND_ERROR_CODES)[number];
