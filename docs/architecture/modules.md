@@ -71,7 +71,7 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | sales | 6 | réservé |
 | scripts | 6 | réservé |
 | playground | 3 | API de l'écran Entraîner (P3-06) |
-| providers (clés des services IA, ADR 0016) | 3 | domaine, application et vérificateurs ; magasin Postgres et routes à venir (P3-03) |
+| providers (clés des services IA, ADR 0016) | 3 | clés vérifiées et scellées, routes `/v1/settings/providers`, page Services, revérification toutes les 15 minutes (P3-03) |
 | content (Instagram) | 7 | non créé |
 | platform (Nirvana propre) | 8 | non créé, voir `own-platform.md` |
 
