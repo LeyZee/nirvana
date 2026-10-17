@@ -80,6 +80,7 @@ Trois commandes d'exploitation, chacune laisse une ligne dans `audit_log` :
 pnpm ops:kill-switch --on --scope global --reason "essai"   # plus aucune réponse ni envoi ; --off pour lever
 pnpm ops:revoke-sessions --email charles@example.com        # déconnecte un compte du dashboard (--all : tout le monde)
 pnpm ops:reencrypt-sessions                                 # après une rotation de SESSION_ENCRYPTION_KEYS
+pnpm ops:reencrypt-credentials                              # après une rotation de CREDENTIALS_ENCRYPTION_KEYS
 ```
 
 ## Si ça coince

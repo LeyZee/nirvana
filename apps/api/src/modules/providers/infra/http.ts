@@ -39,7 +39,10 @@ function parseBody(text: string): unknown {
   }
 }
 
-/** Server-side trouble or a body we cannot read says nothing about the key. */
+/**
+ * Server-side trouble, a timeout or a rate limit says nothing about the key: a 429 during the 15-minute check must
+ * not turn a good key red (recette du 18/10). Only a refusal does.
+ */
 export function isProviderTrouble(status: number): boolean {
-  return status >= 500 || status === 408;
+  return status >= 500 || status === 408 || status === 429;
 }

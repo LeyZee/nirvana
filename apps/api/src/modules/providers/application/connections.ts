@@ -129,20 +129,50 @@ export async function reverifyAll(deps: ConnectionsDeps): Promise<readonly Provi
   return Promise.all(saved.map((credential) => reverifyProvider(deps, credential.provider)));
 }
 
-/** The gateway saw a 401 or 403 on a real call: the line turns red now, not at the next check (point 2). */
-export async function reportRefusedKey(
-  deps: ConnectionsDeps,
-  provider: AiProvider,
-  kind: ProviderErrorKind,
-): Promise<void> {
-  for (let attempt = 0; attempt < UPDATE_ATTEMPTS; attempt += 1) {
+/** How long a saved key the provider just accepted stays trusted against refusals reported for it. */
+const CONFIRMED_KEY_TRUST_MS = 60_000;
+
+export type RefusalReporter = (provider: AiProvider, kind: ProviderErrorKind) => Promise<void>;
+
+/**
+ * The gateway saw a 401 or 403 on a real call (point 2). The refusal may come from a key replaced since: another
+ * process keeps the old one in memory up to its next reload (30 s), and a key changed because it leaked is exactly
+ * the one the provider refuses. So the saved key is checked once with the provider before the line turns red:
+ * - accepted: the refusal was the old key's, nothing changes (and that answer holds for a minute);
+ * - refused: the line turns red now, with the provider's own reason;
+ * - unreachable or rate-limited: nothing is concluded, the 15-minute check will tell.
+ * One check at a time per service, however many refusals arrive meanwhile.
+ */
+export function createRefusalReporter(deps: ConnectionsDeps): RefusalReporter {
+  const running = new Map<AiProvider, Promise<void>>();
+  const trusted = new Map<AiProvider, { readonly revision: number; readonly until: number }>();
+
+  async function confirm(provider: AiProvider): Promise<void> {
     const stored = await deps.store.find(provider);
     if (stored === null || stored.state === 'needs_reconnect') return;
-    if (await deps.store.update(markRefusedInProduction(stored, kind))) {
-      await changed(deps, provider);
+    const key = stored.key;
+    if (key === null) return;
+    const trust = trusted.get(provider);
+    const now = deps.clock.now().getTime();
+    if (trust?.revision === stored.revision && trust.until > now) return;
+    const outcome = await verifierFor(deps, provider).verify(key, stored.settings);
+    if (outcome.ok) {
+      trusted.set(provider, { revision: stored.revision, until: now + CONFIRMED_KEY_TRUST_MS });
       return;
     }
+    if (outcome.kind === 'unreachable') return;
+    if (await deps.store.update(markRefusedInProduction(stored, outcome.kind))) await changed(deps, provider);
   }
+
+  return (provider) => {
+    const pending = running.get(provider);
+    if (pending !== undefined) return pending;
+    const check = confirm(provider).finally(() => {
+      running.delete(provider);
+    });
+    running.set(provider, check);
+    return check;
+  };
 }
 
 export async function disconnectProvider(

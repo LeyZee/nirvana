@@ -7,7 +7,7 @@ import {
   connectProvider,
   disconnectProvider,
   listProviderStatuses,
-  reportRefusedKey,
+  createRefusalReporter,
   reverifyAll,
   reverifyProvider,
   updateProviderSettings,
@@ -25,6 +25,7 @@ import { createProvidersRoutes, type ProvidersRoutesOptions } from './infra/rout
 import { createXaiVerifier } from './infra/xai.verifier';
 
 export { ProviderNotConnected } from './application/connections';
+export { resealProviderCredentials } from './infra/postgres.store';
 export { nextAction } from './domain/next-action';
 export { createMemoryCredentialStore };
 
@@ -72,12 +73,13 @@ export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
     },
     hasEnvironmentKey: (provider) => deps.environmentKeys?.(provider) !== undefined,
   };
+  const reportRefusedKey = createRefusalReporter(connections);
   const api: ProvidersApi = {
     list: () => listProviderStatuses(connections),
     connect: (provider, key) => connectProvider(connections, provider, key),
     reverify: (provider) => reverifyProvider(connections, provider),
     reverifyAll: () => reverifyAll(connections),
-    reportRefusedKey: (provider, kind) => reportRefusedKey(connections, provider, kind),
+    reportRefusedKey,
     updateSettings: (provider, settings) => updateProviderSettings(connections, provider, settings),
     disconnect: (provider) => disconnectProvider(connections, provider),
   };

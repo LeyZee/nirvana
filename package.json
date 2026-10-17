@@ -35,6 +35,7 @@
     "ops:kill-switch": "pnpm --filter @nirvana/api ops:kill-switch",
     "ops:revoke-sessions": "pnpm --filter @nirvana/api ops:revoke-sessions",
     "ops:reencrypt-sessions": "pnpm --filter @nirvana/api ops:reencrypt-sessions",
+    "ops:reencrypt-credentials": "pnpm --filter @nirvana/api ops:reencrypt-credentials",
     "evals": "pnpm --filter @nirvana/evals run evals",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo",
     "probe": "pnpm --filter @nirvana/evals run probe",

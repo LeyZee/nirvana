@@ -1,5 +1,7 @@
 import {
   AiProviderSchema,
+  AuditEntryIdSchema,
+  newId,
   ProviderConnectionStateSchema,
   ProviderErrorKindSchema,
   ProviderFactSchema,
@@ -138,4 +140,58 @@ export function createPostgresCredentialStore(deps: PostgresStoreDeps): Credenti
       await withAdmin(deps.adminDb, (tx) => tx.delete(table).where(eq(table.provider, provider)));
     },
   };
+}
+
+interface ResealReport {
+  /** Rows re-sealed with the newest key. */
+  readonly rewritten: number;
+  /** Rows no key of the list opens: left as they are, so an older key put back can still recover them. */
+  readonly unreadable: readonly string[];
+}
+
+/**
+ * After a rotation of CREDENTIALS_ENCRYPTION_KEYS (`v2:<new>,v1:<old>`), re-seals every saved key with the newest
+ * one, in one transaction, so that `v1` can then be dropped (runbooks/rotate-secrets.md). Re-running it is a no-op.
+ * Only the ciphertext and its version change: the row's state and version (`updated_at`) are kept, so a check
+ * running meanwhile still lands. Leaves an `audit_log` line, without any key.
+ */
+export function resealProviderCredentials(
+  adminDb: Database,
+  keys: readonly EncryptionKey[],
+): Promise<ResealReport> {
+  const current = keys[0]?.version;
+  if (current === undefined) throw new Error('CREDENTIALS_ENCRYPTION_KEYS est vide');
+  return withAdmin(adminDb, async (tx) => {
+    const rows = await tx
+      .select({ provider: table.provider, sealed: table.keyCiphertext })
+      .from(table)
+      .for('update');
+    let rewritten = 0;
+    const unreadable: string[] = [];
+    for (const row of rows) {
+      if (keyVersionOf(row.sealed) === current) continue;
+      let key: string;
+      try {
+        key = decryptSecret(row.sealed, keys, row.provider);
+      } catch {
+        unreadable.push(row.provider);
+        continue;
+      }
+      const sealed = encryptSecret(key, keys, row.provider);
+      await tx
+        .update(table)
+        .set({ keyCiphertext: sealed, keyVersion: keyVersionOf(sealed) })
+        .where(eq(table.provider, row.provider));
+      rewritten += 1;
+    }
+    await tx.insert(schema.auditLog).values({
+      id: newId(AuditEntryIdSchema),
+      userId: null,
+      action: 'provider_key.reencrypted',
+      entity: 'provider_credential',
+      entityId: null,
+      details: { keyVersion: current, rewritten, unreadable },
+    });
+    return { rewritten, unreadable };
+  });
 }

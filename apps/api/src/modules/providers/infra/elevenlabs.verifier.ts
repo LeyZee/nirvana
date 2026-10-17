@@ -39,7 +39,6 @@ function refusal(reply: HttpReply): RefusedKey | null {
     }
     return { ok: false, kind: 'unauthorized' };
   }
-  if (reply.status === 429) return { ok: false, kind: 'no_credit' };
   if (reply.status !== 200) return { ok: false, kind: 'unreachable' };
   return null;
 }
