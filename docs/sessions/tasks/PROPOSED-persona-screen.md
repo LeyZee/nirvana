@@ -1,5 +1,5 @@
 # Écran Persona du CRM, dans Créatrices (ID à donner)
-Statut : in_progress (écran livré sur l'exemple du dépôt ; ID à valider par Charles)
+Statut : in_progress (écran fusionné, #45 ; API et enregistrement en PR ; ID à valider par Charles)
 Phase : 5 (éditeur de persona, ADR 0010), avancé par la revue 08, action 5
 Dépend de : P0-08 (`PersonaSchema`), coquille `apps/web` (#34) ; pour l'API, la PR créatrices du fil Bilan (`GET /v1/creators`)
 Branche : claude/persona-screen-jbetuh
@@ -17,8 +17,9 @@ Créatrices › Persona montre et édite la persona de la créatrice onglet par 
 - [x] Finitions : point néon sur chaque champ et onglet modifié, nombre de modifications dans l'en-tête, « Tout annuler », − / + sur les nombres, « Voir le premier » qui ouvre l'onglet, déplie le bloc et place le curseur dans le champ, panneau qui glisse du côté de l'onglet choisi, squelette au chargement, l'exemple `<à remplir>` remplacé à la première saisie.
 - [x] Genre retiré de l'écran (Charles, 22h11 : Nirvana sert des créatrices) ; langues parlées en liste déroulante à choix multiples avec recherche.
 - [x] Fuseau horaire en lecture seule : celui de la créatrice (`creators.timezone` via `GET /v1/creators`, décision du coordinateur et de Bilan), avec l'heure qu'il est chez elle.
-- [ ] API, après la fusion de la PR créatrices de Bilan, add-only sur le module `persona` (Bilan en relecture, ligne de composition-root à Bilan) : `packages/contracts/src/persona-api.ts` (`PersonaOverview`, `PersonaVersionSummary`, `CreatePersonaVersionBody`, objets stricts, `contentHash`), `GET /v1/creators/:creatorId/persona` et `POST /v1/creators/:creatorId/persona/versions` (contrôle d'accès de conversations, lecture en `withTenant`, 409 `persona_version_conflict`, jamais de version active : l'activation reste `pnpm persona:load --activate`).
-- [ ] L'écran lit la persona de la créatrice choisie ; la pastille « Exemple » disparaît, le bouton s'ouvre. La copie `details.timezone` envoyée au modèle est alignée sur `creators.timezone` à l'enregistrement ; les mots-clés d'alerte restent saisis ici, la page Telegram les lit.
+- [x] API, après la fusion de la PR créatrices de Bilan, add-only sur le module `persona` (Bilan en relecture, ligne de composition-root à Bilan) : `packages/contracts/src/persona-api.ts` (`PersonaOverview`, `PersonaVersionSummary`, `CreatePersonaVersionBody`, objets stricts, `contentHash`), `GET /v1/creators/:creatorId/persona` et `POST /v1/creators/:creatorId/persona/versions` (contrôle d'accès de conversations, lecture en `withTenant`, 409 `persona_version_conflict`, jamais de version active : l'activation reste `pnpm persona:load --activate`).
+- [x] L'écran lit la persona de la créatrice choisie ; la pastille « Exemple » disparaît, le bouton s'ouvre. La copie `details.timezone` envoyée au modèle est alignée sur `creators.timezone` à l'enregistrement ; les mots-clés d'alerte restent saisis ici, la page Telegram les lit. Enregistrer : propriétaire et créatrice seulement (les chatteurs lisent), numéro suivant calculé par l'écran (0.0.1 au-dessus du plus haut), 409 si une autre version est arrivée entre-temps.
+- [ ] Activation d'une version depuis le CRM (après test et validation par la créatrice) : rien ne l'active encore, `pnpm persona:load` n'existe pas.
 - [ ] Historique des versions et comparaison (ADR 0010), plus tard.
 
 ## Critères d'acceptation

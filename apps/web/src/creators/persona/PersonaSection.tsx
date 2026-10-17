@@ -1,4 +1,4 @@
-import type { Persona } from '@nirvana/contracts';
+import type { Persona, PersonaVersionSummary } from '@nirvana/contracts';
 import { placeTabBarLens } from '@nirvana/design-system';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 
@@ -8,12 +8,13 @@ import {
   hasChange,
   issueCountByTab,
   isPlaceholder,
+  nextVersion,
   TABS,
   validate,
   type FieldIssue,
   type TabId,
 } from './model';
-import { usePersona, type PersonaSource } from './source';
+import { saveVersion, usePersona, type PersonaReady } from './source';
 import {
   AdditionalInfoTab,
   BehaviorTab,
@@ -30,8 +31,20 @@ import './persona.css';
  * `PersonaSchema`. What dominates is the state of the draft and its one action, saving a new version; the tabs
  * hold the work; secondary blocks stay folded behind their summary line (docs/design/README.md).
  */
-export function PersonaSection({ timezone }: { timezone: string | null }): JSX.Element {
-  const { load, retry } = usePersona();
+export function PersonaSection({
+  creatorId,
+  canSave,
+  timezone,
+}: {
+  /** Null while no creator is known: the example shows, nothing can be saved. */
+  creatorId: string | null;
+  /** The owner and the creator herself save versions; chatters read. */
+  canSave: boolean;
+  timezone: string | null;
+}): JSX.Element {
+  const { load, reload } = usePersona(creatorId);
+  /** Said once a save went through, until the next edit. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   if (load.kind !== 'ready') {
     return (
@@ -39,8 +52,8 @@ export function PersonaSection({ timezone }: { timezone: string | null }): JSX.E
         {load.kind === 'failed' ? (
           <div className="nv-glass ps-head">
             <p className="ps-title">La persona ne se charge pas</p>
-            <p className="ps-muted">Le fichier d’exemple ne passe pas le schéma ou n’a pas pu être lu.</p>
-            <button type="button" className="nv-btn nv-btn--soft ps-self-start" onClick={retry}>
+            <p className="ps-muted">Vérifie ta connexion, puis réessaie.</p>
+            <button type="button" className="nv-btn nv-btn--soft ps-self-start" onClick={reload}>
               Réessayer
             </button>
           </div>
@@ -54,22 +67,57 @@ export function PersonaSection({ timezone }: { timezone: string | null }): JSX.E
     );
   }
   return (
-    <Editor key={load.persona.meta.version} saved={load.persona} source={load.source} timezone={timezone} />
+    <Editor
+      key={load.basedOn ?? 'example'}
+      ready={load}
+      creatorId={creatorId}
+      canSave={canSave}
+      timezone={timezone}
+      notice={notice}
+      onEdit={() => {
+        setNotice(null);
+      }}
+      onSaved={(version) => {
+        setNotice(`Version ${version.version} enregistrée, pas encore active`);
+        reload();
+      }}
+      onReload={reload}
+    />
   );
 }
 
 const tabIndex = (tab: TabId): number => TABS.findIndex((t) => t.id === tab);
 
+const CONFLICT =
+  'Une autre version a été enregistrée pendant que tu modifiais. Recharge pour repartir de la dernière : tes modifications ici seront perdues.';
+
+/** Today as the persona's `created_at` (YYYY-MM-DD). */
+const today = (): string => new Date().toISOString().slice(0, 10);
+
 function Editor({
-  saved,
-  source,
+  ready,
+  creatorId,
+  canSave,
   timezone,
+  notice,
+  onEdit,
+  onSaved,
+  onReload,
 }: {
-  saved: Persona;
-  source: PersonaSource;
+  ready: PersonaReady;
+  creatorId: string | null;
+  canSave: boolean;
   timezone: string | null;
+  notice: string | null;
+  onEdit: () => void;
+  onSaved: (version: PersonaVersionSummary) => void;
+  onReload: () => void;
 }): JSX.Element {
+  const saved = ready.persona;
   const [draft, setDraft] = useState(saved);
+  const [saving, setSaving] = useState(false);
+  /** Why the last save did not go through, and whether reloading is the way out. */
+  const [problem, setProblem] = useState<{ text: string; reload: boolean } | null>(null);
   const [tab, setTab] = useState<TabId>('details');
   /** Which way the panel slides in: towards the tab picked, like a page turning. */
   const [direction, setDirection] = useState<'left' | 'right' | 'none'>('none');
@@ -106,7 +154,57 @@ function Editor({
 
   const set = <K extends TabId>(key: K, value: Persona[K]): void => {
     setDraft((current) => ({ ...current, [key]: value }));
+    setProblem(null);
+    onEdit();
   };
+
+  const save = async (): Promise<void> => {
+    if (creatorId === null) return;
+    setSaving(true);
+    setProblem(null);
+    const taken = [...ready.versions.map((v) => v.version), draft.meta.version];
+    // The model reads the zone from the persona; the code goes by the creator's, so the copy follows hers.
+    const persona = {
+      ...draft,
+      details: { ...draft.details, timezone: timezone ?? draft.details.timezone },
+      meta: { ...draft.meta, version: nextVersion(taken), created_at: today() },
+    };
+    const result = await saveVersion(creatorId, persona, ready.basedOn).catch(() => ({
+      kind: 'failed' as const,
+    }));
+    setSaving(false);
+    switch (result.kind) {
+      case 'saved':
+        onSaved(result.version);
+        break;
+      case 'conflict':
+        setProblem({ text: CONFLICT, reload: true });
+        break;
+      case 'forbidden':
+        setProblem({
+          text: 'Seuls le propriétaire et la créatrice peuvent enregistrer sa persona.',
+          reload: false,
+        });
+        break;
+      case 'failed':
+        setProblem({
+          text: 'L’enregistrement n’a pas abouti. Vérifie ta connexion, puis réessaie.',
+          reload: false,
+        });
+        break;
+    }
+  };
+
+  const blocked =
+    creatorId === null
+      ? 'Ajoute d’abord une créatrice pour enregistrer sa persona.'
+      : !canSave
+        ? 'Seuls le propriétaire et la créatrice peuvent enregistrer sa persona.'
+        : issues.length > 0
+          ? 'Corrige d’abord les champs signalés.'
+          : changed.length === 0
+            ? 'Rien à enregistrer pour l’instant.'
+            : null;
   const props = <K extends TabId>(key: K) => ({
     value: draft[key],
     onChange: (value: Persona[K]) => {
@@ -120,11 +218,21 @@ function Editor({
       <section className="ps-page">
         <Head
           draft={draft}
-          source={source}
+          ready={ready}
+          known={creatorId !== null}
           issues={issues}
           changes={changed.length}
+          saving={saving}
+          blocked={blocked}
+          notice={notice}
+          problem={problem}
+          onSave={() => {
+            void save();
+          }}
+          onReload={onReload}
           onReset={() => {
             setDraft(saved);
+            setProblem(null);
           }}
           onShowIssue={(issue) => {
             const first = issue.field.split('.')[0];
@@ -164,34 +272,66 @@ function Editor({
   );
 }
 
-const SAVE_LATER = 'Ceci est un exemple : tu peux tout modifier pour essayer, rien n’est encore enregistré.';
-
 const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
+
+/** What the note under the head says: where this persona comes from and what a save does. */
+function noteOf(ready: PersonaReady, known: boolean): string {
+  if (!known) return 'Ceci est un exemple : tu peux tout modifier pour essayer, rien ne sera enregistré.';
+  if (ready.source === 'example') {
+    return 'Elle n’a pas encore de persona enregistrée. Pars de cet exemple : ton premier enregistrement deviendra sa version 0.0.1.';
+  }
+  const active = ready.versions.find((v) => v.isActive);
+  return `Chaque enregistrement crée une nouvelle version, qui reste inactive tant qu’elle n’a pas été testée puis validée. ${
+    active === undefined
+      ? 'Aucune version n’est active pour l’instant.'
+      : `Version active : ${active.version}.`
+  }`;
+}
 
 /** The first thing read: whose persona, which version, whether the draft holds, and the one action. */
 function Head({
   draft,
-  source,
+  ready,
+  known,
   issues,
   changes,
+  saving,
+  blocked,
+  notice,
+  problem,
+  onSave,
+  onReload,
   onReset,
   onShowIssue,
 }: {
   draft: Persona;
-  source: PersonaSource;
+  ready: PersonaReady;
+  known: boolean;
   issues: readonly FieldIssue[];
   changes: number;
+  saving: boolean;
+  /** Why saving is not possible now, or null when it is. */
+  blocked: string | null;
+  notice: string | null;
+  problem: { text: string; reload: boolean } | null;
+  onSave: () => void;
+  onReload: () => void;
   onReset: () => void;
   onShowIssue: (issue: FieldIssue) => void;
 }): JSX.Element {
   const name = draft.details.first_name.trim();
   const first = issues[0];
+  const current = ready.versions[0];
   const state =
-    first !== undefined
-      ? { dot: 'warn', text: `${plural(issues.length, 'champ', 'champs')} à corriger` }
-      : changes > 0
-        ? { dot: 'ok', text: `${plural(changes, 'modification', 'modifications')}, prêt à enregistrer` }
-        : { dot: 'idle', text: 'Aucune modification' };
+    problem !== null
+      ? { dot: 'warn', text: problem.text }
+      : first !== undefined
+        ? { dot: 'warn', text: `${plural(issues.length, 'champ', 'champs')} à corriger` }
+        : changes > 0
+          ? { dot: 'ok', text: `${plural(changes, 'modification', 'modifications')}, prête à enregistrer` }
+          : notice !== null
+            ? { dot: 'ok', text: notice }
+            : { dot: 'idle', text: 'Aucune modification' };
   const created = new Date(`${draft.meta.created_at}T12:00:00Z`).toLocaleDateString('fr-FR', {
     day: 'numeric',
     month: 'long',
@@ -203,11 +343,16 @@ function Head({
       <div className="ps-head__top">
         <div className="ps-head__who">
           <p className="ps-head__meta">
-            {source === 'example' ? (
-              <span className="nv-tag nv-tag--inferred ps-example" title={SAVE_LATER}>
-                Exemple
+            {ready.source === 'example' ? (
+              <span className="nv-tag nv-tag--inferred ps-example">Exemple</span>
+            ) : (
+              <span
+                className="nv-tag nv-tag--declared"
+                data-active={current?.isActive === true ? 'true' : undefined}
+              >
+                {current?.isActive === true ? 'Active' : 'Pas encore active'}
               </span>
-            ) : null}
+            )}
             <span>Version {draft.meta.version}</span>
             <span aria-hidden="true">·</span>
             <span>{created}</span>
@@ -217,7 +362,7 @@ function Head({
           </h2>
         </div>
         <div className="ps-head__actions">
-          {changes > 0 ? (
+          {changes > 0 && !saving ? (
             <button type="button" className="nv-btn nv-btn--plain nv-btn--sm ps-pop" onClick={onReset}>
               Tout annuler
             </button>
@@ -225,11 +370,13 @@ function Head({
           <button
             type="button"
             className="nv-btn nv-btn--neon"
-            disabled
-            title={SAVE_LATER}
-            aria-describedby="ps-save-later"
+            disabled={blocked !== null || saving}
+            title={blocked ?? undefined}
+            aria-describedby="ps-save-note"
+            aria-busy={saving}
+            onClick={onSave}
           >
-            Enregistrer une version
+            {saving ? 'Enregistrement…' : 'Enregistrer une version'}
           </button>
         </div>
       </div>
@@ -238,7 +385,11 @@ function Head({
         <span className="ps-head__text" key={state.text}>
           {state.text}
         </span>
-        {first === undefined ? null : (
+        {problem?.reload === true ? (
+          <button type="button" className="nv-btn nv-btn--plain nv-btn--sm ps-pop" onClick={onReload}>
+            Recharger
+          </button>
+        ) : first !== undefined && problem === null ? (
           <button
             type="button"
             className="nv-btn nv-btn--plain nv-btn--sm ps-pop"
@@ -248,11 +399,10 @@ function Head({
           >
             Voir le premier
           </button>
-        )}
+        ) : null}
       </div>
-      <p className="ps-muted" id="ps-save-later">
-        {SAVE_LATER} Plus tard, chaque version enregistrée sera testée puis validée par la créatrice avant que
-        l’agent s’en serve.
+      <p className="ps-muted" id="ps-save-note">
+        {noteOf(ready, known)}
       </p>
     </div>
   );

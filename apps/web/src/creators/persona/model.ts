@@ -200,3 +200,19 @@ export const localTime = (zone: string, at: Date = new Date()): string => {
     return '';
   }
 };
+
+const semver = (version: string): [number, number, number] => {
+  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
+  return [major, minor, patch];
+};
+
+/** The number of the next version: one patch above the highest taken (« 0.1.3 » after 0.1.2 and 0.0.9). */
+export function nextVersion(taken: readonly string[]): string {
+  const [major, minor, patch] = taken
+    .map(semver)
+    .reduce<[number, number, number]>(
+      (top, v) => ((v[0] - top[0] || v[1] - top[1] || v[2] - top[2]) > 0 ? v : top),
+      [0, 0, 0],
+    );
+  return `${String(major)}.${String(minor)}.${String(patch + 1)}`;
+}
