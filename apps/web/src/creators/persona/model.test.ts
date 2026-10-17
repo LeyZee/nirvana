@@ -19,6 +19,7 @@ import {
   validate,
   localTime,
   matchOptions,
+  nextVersion,
   togglePick,
 } from './model';
 import { parsePersonaYaml } from './source';
@@ -158,5 +159,11 @@ describe('Persona screen rules', () => {
     const at = new Date('2026-10-17T20:25:00Z');
     expect(localTime('Europe/Paris', at)).toBe('22 h 25');
     expect(localTime('Nowhere/Zone', at)).toBe('');
+  });
+
+  it('numbers the next version one patch above the highest taken', () => {
+    expect(nextVersion(['0.0.0'])).toBe('0.0.1');
+    expect(nextVersion(['0.1.2', '0.0.9', '0.1.10'])).toBe('0.1.11');
+    expect(nextVersion(['1.0.0', '0.9.9'])).toBe('1.0.1');
   });
 });

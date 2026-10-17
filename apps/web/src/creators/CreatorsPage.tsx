@@ -1,4 +1,5 @@
 import type { CreatorSummary } from '@nirvana/contracts';
+import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState, type JSX } from 'react';
 
 import { fetchCreators } from './api';
@@ -11,6 +12,7 @@ import { Page, PageHeader } from '@/shell/layout';
  * not to the settings). With several creators, a row of chips picks one; with one, her name is enough.
  */
 export function CreatorsPage(): JSX.Element {
+  const { user } = useRouteContext({ from: '__root__' });
   const [creators, setCreators] = useState<readonly CreatorSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -59,7 +61,12 @@ export function CreatorsPage(): JSX.Element {
           ) : undefined
         }
       />
-      <PersonaSection key={selected ?? 'none'} timezone={current?.timezone ?? null} />
+      <PersonaSection
+        key={selected ?? 'none'}
+        creatorId={current?.id ?? null}
+        canSave={user.role === 'owner' || user.role === 'creator'}
+        timezone={current?.timezone ?? null}
+      />
     </Page>
   );
 }
