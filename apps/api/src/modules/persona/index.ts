@@ -4,13 +4,15 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import type { CreatorDirectory } from './domain/ports';
 import { createDrizzleCreatorDirectory } from './infra/db/creator-directory';
+import { createDrizzlePersonaVersionStore } from './infra/db/persona-version-store';
+import { createPersonaRoutes } from './infra/http/persona-routes';
 import { createCreatorRoutes, type RequireRole } from './infra/http/routes';
 
 export interface PersonaModule {
   readonly name: 'persona';
   /** The creators (one creator, one persona): listed by the dashboard, created by `pnpm creator:create`. */
   readonly creators: CreatorDirectory;
-  /** Mounted under `/v1` by the server. */
+  /** Mounted under `/v1` by the server: `/creators`, and each creator's `/persona` with its versions. */
   readonly routes: FastifyPluginAsyncZod;
 }
 
@@ -22,5 +24,14 @@ export interface PersonaDeps {
 
 export function createPersonaModule(deps: PersonaDeps): PersonaModule {
   const creators = createDrizzleCreatorDirectory(deps.db);
-  return { name: 'persona', creators, routes: createCreatorRoutes(creators, deps.requireRole) };
+  const creatorRoutes = createCreatorRoutes(creators, deps.requireRole);
+  const personaRoutes = createPersonaRoutes(createDrizzlePersonaVersionStore(deps.db), deps.requireRole);
+  return {
+    name: 'persona',
+    creators,
+    routes: async (app) => {
+      await app.register(creatorRoutes);
+      await app.register(personaRoutes);
+    },
+  };
 }

@@ -42,6 +42,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Résumé fan | `fan_summary` | Résumé opérationnel régénéré. |
 | Slot KYC | `kyc_slot` | Une information qu'on cherche à apprendre (prénom, âge, métier…). |
 | Persona | `persona` | La fiche versionnée de la créatrice, calquée sur la fiche OnlyChat (détails, infos en plus, comportement, stratégies, relances, notifications), plus ses limites. |
+| Version de persona | `persona_version` | Un état enregistré de la persona d'une créatrice. Une seule est active, celle avec laquelle l'agent écrit ; le CRM enregistre des versions qui restent inactives tant qu'elles ne sont pas activées (ADR 0010). |
 | Infos en plus | `additional_info` | Le texte libre de la persona (6 000 caractères au plus). |
 | Limites | `limits` | Ce que la créatrice ne fait, ne montre, ne dit jamais, et ses dégoûts. Chargées par les gardes. |
 | Surnom | `pet_name` | Un des surnoms que la créatrice donne aux fans, pris dans la liste fermée de sa persona. |
