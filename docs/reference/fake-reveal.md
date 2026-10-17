@@ -43,7 +43,7 @@ Fixtures de départ (`fixtures/default.json`) : 1 créatrice, 12 fans dont 3 pay
 | L7, E4 | Lecture et écriture de la note ; écriture concurrente (un « chatteur » écrit entre la lecture et l'écriture du connecteur) selon la sémantique observée |
 | L11, L13 | Notes du modèle ; onglet PPV calculé à partir de l'état (jamais stocké à part, pour rester cohérent) |
 | L8 | Liste et contenu des scripts, dossiers |
-| L9, E3 | Trace des étapes envoyées par fan ; si Reveal n'en expose pas, FakeReveal non plus, et le test vérifie que l'agent s'appuie sur son propre journal |
+| L9, E3 | Indicateur « déjà envoyé » par fan, sous la forme observée, mis à jour à chaque envoi d'étape (par l'agent ou par un chatteur) |
 | L10 | Coffre paginé |
 | L14 | Sert de vrais fichiers de test (image et vidéo minuscules, générées) derrière des URL signées qui expirent ; une URL expirée répond comme Reveal |
 | E1, E2 | Envoi : nouvel identifiant, message visible à la relecture ; bornes de prix (rejet hors bornes, code observé) ; bundle refusé sans média vendu ou avec plus de 10 médias d'aperçu ; `%NAME%` remplacé par le prénom du membre |

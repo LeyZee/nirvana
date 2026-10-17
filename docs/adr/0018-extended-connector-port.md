@@ -26,10 +26,9 @@ Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès q
    | `getCreatorNotes?(conversationRef)` | `creatorNotes` | L11 |
    | `getFanPpvStats?(fanRef)` | `ppvStats` | L12, L13 |
    | `listPlatformScripts?()` / `sendScriptStep?(conversationRef, scriptRef, stepIndex, key)` | `scripts` | L8, E3 |
+   | `getScriptHistory?(fanRef)` | `scriptHistory` | L9 |
    | `listVaultMedia?(opts)` | `vault` | L10 |
    | `fetchMedia?(mediaRef)` | `mediaDownload` | L14, L15 |
-
-   L9 (étapes déjà envoyées) n'a pas de méthode tant que la capture ne montre pas que Reveal l'expose : c'est nous qui tenons cet historique (point 5).
 
    `setCreatorNotes` (E4b) attend que la capture montre la portée des notes du modèle.
 
@@ -46,10 +45,9 @@ Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès q
 
 4. Les **adaptateurs existants** déclarent les nouveaux drapeaux à `false` (`FakeConnector` compris) ; le cœur teste le drapeau avant d'appeler la méthode, jamais l'existence de la méthode seule.
 
-5. **Historique des scripts et des bundles envoyés, tenu chez nous.** Reveal ne marque pas une étape déjà envoyée. Sans notre propre historique, l'agent renverrait un script que le fan a déjà vu ou acheté.
-   - **Trace de nos envois.** Chaque `sendScriptStep` réussi rend un `ScriptStepSend` (`fanRef`, `scriptRef`, `stepIndex`, `messageRef`, `sentAt`). L'appelant l'enregistre dans le journal de conversation (ADR 0007), dans une table `script_sends`, et dans une ligne `media_sends` par média vendu (table existante). La table `script_sends` arrive par une nouvelle migration du module qui porte les scripts, pas de `connectors`.
-   - **Reconstitution des autres envois.** Cela couvre les envois faits à la main par un chatteur et ceux d'avant la mise en service. `ExternalMessage` gagne `scriptRef?` et `stepIndex?`, remplis quand la plateforme les donne. Sinon, l'adaptateur rapproche chaque bundle de l'historique d'une étape de script par le même ensemble de médias vendus et le même prix. Le rapprochement est noté `matchedBy: 'platform' | 'media'`. Cela se fait à la première ingestion d'un fan, qui lit tout l'historique jusqu'au premier message, puis à chaque poll.
-   - **Règle dans le code.** Avant tout `sendScriptStep`, le cœur consulte `script_sends` et `media_sends`. Une étape déjà envoyée au fan, ou un média déjà vendu à ce fan, ne repart jamais. FakeReveal teste trois cas : un script envoyé par l'agent, un script envoyé à la main avant la mise en service, et un script modifié depuis l'envoi.
+5. **Scripts déjà envoyés à un fan : la plateforme fait foi.** Reveal indique quand un script a déjà été envoyé ou utilisé avec un fan (Charles, 17/10). `getScriptHistory` lit cet indicateur, et c'est notre seule source : nous ne tenons pas d'historique parallèle qui pourrait diverger. La forme exacte de l'indicateur (par script ou par étape) sera arrêtée d'après la capture.
+
+   Avant tout `sendScriptStep`, le cœur relit cet historique. Une étape déjà envoyée au fan ne repart jamais : la règle est dans le code, pas dans le prompt. Le média déjà vendu reste protégé par `media_sends`. Une plateforme qui n'aurait pas cet indicateur déclarerait `scriptHistory: false`, et l'appelant refuserait alors d'envoyer des scripts plutôt que de deviner.
 
 ## Conséquences
 
@@ -59,7 +57,6 @@ Positives :
 - Brancher l'adaptateur Reveal ne peut plus écrire chez un fan par accident.
 
 Négatives :
-- `ExternalMessageSchema` (contracts) gagne deux champs optionnels, et une migration ajoute `script_sends` hors du module `connectors`.
 - Le port grossit. Chaque méthode ajoutée doit avoir un cas dans le test de contrat commun, joué au minimum contre FakeReveal.
 - `ConnectorCapabilitiesSchema` est un objet fermé : chaque nouveau drapeau touche tous les adaptateurs.
 

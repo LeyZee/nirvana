@@ -20,7 +20,7 @@ Le métier (Charles, 17/10) : le fan vient chercher une relation. L'agent fait d
 | L6 | Historique d'achat d'un fan, ventes du compte | `listTransactions?()` | Échelle de prix, ne pas vendre deux fois, mesurer le CA du bot | Page ventes ou relevés ; comment un achat de PPV apparaît (message, transaction, événement) |
 | L7 | Note client d'un fan | `getFanNote?()` (nouveau) | Mémoire longue partagée avec les chatteurs ; import des notes existantes | Lecture de la note, format (texte libre, champs), date de modification |
 | L8 | Scripts natifs : liste et contenu | `listPlatformScripts?()` (nouveau) | L'agent pioche dans les scripts de l'agence | Liste, dossiers, contenu d'un script : étapes, textes, médias, prix, délais |
-| L9 | Scripts déjà envoyés à un fan | `getScriptHistory?()` (nouveau) | Règle « jamais deux fois le même script au même fan » | Indicateur « déjà envoyé » dans le sélecteur, ou lien entre message envoyé et script ; sinon on le déduit de notre journal |
+| L9 | Scripts déjà envoyés à un fan | `getScriptHistory?()` (nouveau) | Règle « jamais deux fois le même script au même fan » | Indicateur « déjà envoyé » que Reveal expose (Charles, 17/10) : sa forme dans l'API, par script ou par étape |
 | L10 | Coffre (médias de la créatrice) | `listVaultMedia?()` (nouveau) | Décrire et indexer les médias des scripts (L15) | Liste paginée, dossiers, type, identifiant réutilisable à l'envoi |
 | L11 | Notes du modèle (panneau de droite d'une conversation) | `getCreatorNotes?()` (nouveau) | C'est la fiche persona de Messalina vue par Reveal (Charles, 17/10) : la garder alignée sur la persona versionnée | Lecture, format, si elles sont par compte ou par conversation |
 | L12 | Statistiques du fan (panneau de droite) | `getFanProfile?()` | Priorité, rythme de vente, fans à ménager | Chaque statistique affichée et l'appel qui la fournit |
@@ -111,7 +111,7 @@ Le sélecteur s'ouvre depuis le bouton bulle de la zone de saisie. Le parcours d
 - Chaque ligne est **une étape** : nom de l'étape (« Contexte », « Teasing », « Etape 1 : … »), texte du message (parfois « / » = pas de texte, média seul), prix (« Gratuit » ou montant), vignettes des médias (« +1 » au-delà de deux).
 - La bibliothèque mélange étapes de vente et **réponses toutes faites** à des questions fréquentes (vrai prénom, pratique apprise seule…). L'agent peut s'en servir comme réservoir de faits de persona, pas seulement pour vendre.
 - **Variable `%NAME%`** : remplacée par le « prénom du membre » saisi dans le panneau Analytics de la conversation. Si le prénom n'est pas rempli, le résultat est à vérifier (vide ? pseudo ?) : garde en code, ne jamais envoyer un `%NAME%` brut ni un prénom vide.
-- **Aucun indicateur « déjà envoyé » n'est visible** dans le sélecteur. Si le trafic n'en montre pas non plus, la règle « jamais deux fois le même script au même fan » s'appuie sur notre journal et sur l'historique PPV du fan (médias déjà envoyés), pas sur Reveal.
+- Aucun indicateur « déjà envoyé » n'était visible sur les captures, parce qu'aucun script n'avait encore été envoyé à ce fan. Charles confirme (17/10) que Reveal indique bien un script déjà envoyé ou utilisé avec un fan : la règle « jamais deux fois le même script au même fan » s'appuie sur cet indicateur (ADR 0018).
 
 ### Vault (L10)
 
