@@ -1,5 +1,5 @@
 # P3-07 Notifications Telegram : bots, groupes, routage, page Réglages › Telegram
-Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 fusionné (#59), branchement du worker par Bilan ; lot 2 en relecture)
+Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 fusionné (#59), branchement par Bilan (#71), lot 2 fusionné (#70) ; restent le bandeau du Dashboard et les réglages des ventes)
 Phase : 3
 Dépend de : P0-05, P0-07b, P3-03 (chiffrement des secrets du CRM, ré-auth #41), changements de contrat de Bilan et du fil agent (ADR 0020 §3)
 Branche : claude/telegram-alerts-3urhyn
