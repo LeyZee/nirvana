@@ -17,7 +17,10 @@ export type DayPart = 'day' | 'night';
 const NIGHT_FROM_HOUR = 22;
 const DAY_FROM_HOUR = 7;
 
-export function localTime(now: Date, timeZone: string): { readonly hour: number; readonly label: string } {
+export function localTime(
+  now: Date,
+  timeZone: string,
+): { readonly hour: number; readonly minute: number; readonly label: string } {
   const parts = new Intl.DateTimeFormat('fr-FR', {
     timeZone,
     hour: '2-digit',
@@ -26,7 +29,38 @@ export function localTime(now: Date, timeZone: string): { readonly hour: number;
     hourCycle: 'h23',
   }).formatToParts(now);
   const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
-  return { hour: Number(part('hour')), label: `${part('weekday')} ${part('hour')} h ${part('minute')}` };
+  return {
+    hour: Number(part('hour')),
+    minute: Number(part('minute')),
+    label: `${part('weekday')} ${part('hour')} h ${part('minute')}`,
+  };
+}
+
+/** An IANA zone the runtime knows (« Europe/Paris »): checked before it reaches a clock. */
+export function isTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat('fr-FR', { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const DAY_MINUTES = 1_440;
+
+/** The next moment her clock shows hour:minute (for « /heure 23:30 »), across a change of daylight saving time. */
+export function nextLocalTime(now: Date, timeZone: string, hour: number, minute: number): Date {
+  const at = (date: Date): number => {
+    const t = localTime(date, timeZone);
+    return t.hour * 60 + t.minute;
+  };
+  const target = hour * 60 + minute;
+  const ahead = (from: Date): number => (((target - at(from)) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+  const first = new Date(now.getTime() + ahead(now) * 60_000);
+  // A clock change on the way shifts the landing by its offset: one correction puts it back on her clock.
+  const drift = ahead(first);
+  if (drift === 0) return first;
+  return new Date(first.getTime() + (drift > DAY_MINUTES / 2 ? drift - DAY_MINUTES : drift) * 60_000);
 }
 
 export function dayPart(hour: number): DayPart {

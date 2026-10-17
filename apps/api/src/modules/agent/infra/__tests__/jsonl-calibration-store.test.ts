@@ -22,7 +22,16 @@ function record(id: string, verdict: CalibrationRecord['verdict']): CalibrationR
     ...(verdict.kind === 'corrected' && { destination: 'voice_example' as const }),
     fanMessage: 'Salut toi',
     bubbles: ['Coucou toi, ça va ?'],
-    moment: { history: [{ from: 'fan', text: 'Salut toi' }], fanNotes: '', situation: 'jour' },
+    moment: {
+      history: [{ from: 'fan', text: 'Salut toi' }],
+      fanNotes: '',
+      situation: {
+        now: new Date('2026-10-17T21:30:00Z'),
+        timeZone: 'Europe/Paris',
+        relationshipStartedAt: new Date('2026-10-14T21:30:00Z'),
+        spentCents: 0,
+      },
+    },
   };
 }
 
@@ -41,6 +50,7 @@ describe('JSONL calibration store', () => {
 
     const records = await store.list();
     expect(records.map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    expect(records[0]?.moment.situation.now).toEqual(new Date('2026-10-17T21:30:00Z'));
     expect(voiceExamples(records)).toEqual(['Coucou toi ✨']);
     expect(replayableTests(records).map((r) => r.id)).toEqual(['b', 'c']);
   });

@@ -91,7 +91,7 @@ const NEUTRAL_BRIEF: Brief = {
   toneHints: [],
 };
 
-function withExamples(sheet: string, examples: readonly string[]): string {
+export function withExamples(sheet: string, examples: readonly string[]): string {
   if (examples.length === 0) return sheet;
   return `${sheet}\n\nExemples de ses messages, corrigés par l'équipe :\n${examples.map((e) => `- ${e}`).join('\n')}`;
 }
@@ -151,9 +151,13 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
     },
 
     replaceLastAnswer(text) {
-      const last = history.at(-1);
-      if (last?.from === 'creator' && last.media === undefined) history.pop();
-      history.push({ from: 'creator', text });
+      // Her answer is the text turn after his last message; a media she sent since stays after it.
+      const lastFan = history.findLastIndex((t) => t.from === 'fan');
+      const answer = history.findIndex(
+        (t, i) => i > lastFan && t.from === 'creator' && t.media === undefined,
+      );
+      if (answer === -1) history.splice(lastFan + 1, 0, { from: 'creator', text });
+      else history.splice(answer, 1, { from: 'creator', text });
     },
 
     branchAt(fanMessageNumber) {
@@ -187,7 +191,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       const moment: RatedMoment = {
         history: [...history],
         fanNotes: fanNotes.join('\n'),
-        situation: describeSituation(situation),
+        situation,
       };
       const screening = screenMedia(media);
       if (screening.mustHandoff) {
@@ -207,7 +211,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         creatorName: deps.creatorName,
         personaSheet,
         fanNotes: moment.fanNotes,
-        situation: moment.situation,
+        situation: describeSituation(situation),
         history,
       };
       const brain = await deps.gateway.brain(input);

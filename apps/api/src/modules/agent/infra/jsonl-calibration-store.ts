@@ -6,6 +6,7 @@ import { BriefSchema } from '@nirvana/llm';
 import { z } from 'zod';
 
 import { REJECT_REASONS } from '../domain/calibration';
+import { isTimeZone } from '../domain/situation';
 
 import type { CalibrationRecord, CalibrationStore } from './calibration-record';
 
@@ -35,7 +36,12 @@ const RecordSchema = z.object({
   moment: z.object({
     history: z.array(TurnSchema),
     fanNotes: z.string(),
-    situation: z.string(),
+    situation: z.object({
+      now: z.coerce.date(),
+      timeZone: z.string().refine(isTimeZone),
+      relationshipStartedAt: z.coerce.date(),
+      spentCents: z.number().int().nonnegative(),
+    }),
     brief: BriefSchema.exactOptional(),
   }),
 });

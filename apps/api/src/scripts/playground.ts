@@ -25,8 +25,9 @@ import {
   createJsonlCalibrationStore,
   DEFAULT_GUARD_SETTINGS,
   describeSituation,
-  localTime,
-  parseRejectReason,
+  isTimeZone,
+  nextLocalTime,
+  parseRejection,
   rateReport,
   REJECT_REASON_LABELS,
   REJECT_REASONS,
@@ -48,7 +49,7 @@ import {
 
 import { FAN_PRESETS, findPreset } from './fan-presets';
 import { readPersonaFile } from './persona-file';
-import { createPlaygroundSession, type PlaygroundTurn } from './playground-session';
+import { createPlaygroundSession, withExamples, type PlaygroundTurn } from './playground-session';
 
 const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
 const red = (s: string): string => `\x1b[31m${s}\x1b[0m`;
@@ -65,6 +66,10 @@ const { values } = parseArgs({
 });
 if (values.persona === undefined) {
   console.error('Usage: pnpm playground --persona <persona.yaml> [--name Messa]');
+  process.exit(2);
+}
+if (!isTimeZone(values.fuseau)) {
+  console.error(`Unknown time zone « ${values.fuseau} »: use an IANA name such as Europe/Paris.`);
   process.exit(2);
 }
 const credentials = readProviderCredentials(process.env);
@@ -95,13 +100,16 @@ const store = createJsonlCalibrationStore(resolve(trainingDir, 'ratings.jsonl'))
 const records: CalibrationRecord[] = await store.list();
 const sessionId = `playground-${String(Date.now())}`;
 const voicePromptVersion = loadPrompt('voice').header.version;
+// The rate shown is the configured voice's: an answer written by the fallback counts for the fallback.
+const currentVersion = { voicePrompt: voicePromptVersion, voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model };
+const examples = voiceExamples(records);
 
 const session = createPlaygroundSession({
   gateway,
   creatorName: persona.creatorName,
   personaSheet: persona.personaSheet,
   guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: persona.forbiddenTerms },
-  voiceExamples: voiceExamples(records),
+  voiceExamples: examples,
   timeZone: values.fuseau,
 });
 let isRated = true;
@@ -201,7 +209,7 @@ function parseDuration(text: string): number | undefined {
 
 /** The one line that matters, then the one thing to do. */
 function statusLine(): string {
-  const report = rateReport(records);
+  const report = rateReport(records, currentVersion);
   const { rate, rated } = report.current;
   const shown = rate === undefined ? '—' : `${String(Math.round(rate * 100))} %`;
   const paint = rate === undefined || rate >= VALIDATION_TARGET ? bold : rate >= 0.6 ? amber : red;
@@ -226,6 +234,11 @@ async function rate(verdict: Verdict): Promise<void> {
   const exchange = session.lastExchange;
   if (exchange === undefined || isRated) {
     console.log(dim('  rien à noter : envoie d’abord un message'));
+    return;
+  }
+  // Nothing was written, or the guards stopped it: there is nothing to validate as it stands.
+  if (verdict.kind === 'validated' && exchange.turn.isBlocked) {
+    console.log(dim('  réponse bloquée : /corrige ou /rejet'));
     return;
   }
   const destination = suggestDestination(verdict);
@@ -282,24 +295,20 @@ function gatewayWithVoice(model: string): LlmGateway | undefined {
 }
 
 async function replayTests(): Promise<void> {
-  const tests = replayableTests(records);
+  const tests = replayableTests(records).filter((t) => t.moment.brief !== undefined);
   if (tests.length === 0) {
     console.log(dim('  aucun test : chaque correction ou rejet en devient un'));
     return;
   }
-  console.log(
-    dim(
-      `  ${String(tests.length)} moments rejoués avec ${versionLabel({ voicePrompt: voicePromptVersion, voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model })}`,
-    ),
-  );
+  console.log(dim(`  ${String(tests.length)} moments rejoués avec ${versionLabel(currentVersion)}`));
   for (const test of tests) {
     const { brief } = test.moment;
     if (brief === undefined) continue;
     const result = await gateway.voice({
       creatorName: persona.creatorName,
-      personaSheet: persona.personaSheet,
+      personaSheet: withExamples(persona.personaSheet, examples),
       fanNotes: test.moment.fanNotes,
-      situation: test.moment.situation,
+      situation: describeSituation(test.moment.situation),
       history: test.moment.history,
       brief,
     });
@@ -418,14 +427,12 @@ for (;;) {
     continue;
   }
   if (line.startsWith('/rejet')) {
-    const [word = '', ...rest] = line.slice('/rejet'.length).trim().split(/\s+/);
-    const reason = parseRejectReason(word);
-    if (reason === undefined) {
+    const rejection = parseRejection(line.slice('/rejet'.length));
+    if (rejection === undefined) {
       console.log(dim(`  raison : ${REJECT_REASONS.map((r) => REJECT_REASON_LABELS[r]).join(', ')}`));
       continue;
     }
-    const note = rest.join(' ').trim();
-    await rate({ kind: 'rejected', reason, ...(note !== '' && { note }) });
+    await rate({ kind: 'rejected', ...rejection });
     continue;
   }
   if (line === '/fans') {
@@ -458,10 +465,14 @@ for (;;) {
       console.log(dim('  /heure 23:30'));
       continue;
     }
-    const { hour } = localTime(session.situation.now, session.situation.timeZone);
-    const target = Number(match[1]) * 60 + Number(match[2] ?? '0');
-    const current = hour * 60 + session.situation.now.getMinutes();
-    session.advance(((((target - current) % 1_440) + 1_440) % 1_440) * 60_000);
+    const hour = Number(match[1]);
+    const minute = Number(match[2] ?? '0');
+    if (hour > 23 || minute > 59) {
+      console.log(dim('  /heure 23:30'));
+      continue;
+    }
+    const { now, timeZone } = session.situation;
+    session.advance(nextLocalTime(now, timeZone, hour, minute).getTime() - now.getTime());
     console.log(dim(`  ${describeSituation(session.situation).split('\n')[0] ?? ''}`));
     continue;
   }

@@ -7,9 +7,9 @@ export {
   type GuardViolation,
 } from './domain/guards';
 export { assessTrap, screenMedia, type TrapAssessment } from './domain/traps';
-export { describeSituation, localTime, type Situation } from './domain/situation';
+export { describeSituation, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
-  parseRejectReason,
+  parseRejection,
   rateReport,
   REJECT_REASON_LABELS,
   REJECT_REASONS,

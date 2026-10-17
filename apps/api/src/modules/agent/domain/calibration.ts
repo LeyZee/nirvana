@@ -52,6 +52,24 @@ export function parseRejectReason(word: string): RejectReason | undefined {
   );
 }
 
+/**
+ * « trop long c'est un roman » → too_long, with the rest as the note. The longest leading words that name a
+ * reason win, so the full labels (several words) work as well as the short ones.
+ */
+export function parseRejection(text: string): { reason: RejectReason; note?: string } | undefined {
+  const words = text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w !== '');
+  for (let n = Math.min(words.length, 4); n > 0; n -= 1) {
+    const reason = parseRejectReason(words.slice(0, n).join(' '));
+    if (reason === undefined) continue;
+    const note = words.slice(n).join(' ');
+    return { reason, ...(note !== '' && { note }) };
+  }
+  return undefined;
+}
+
 export type Verdict =
   | { readonly kind: 'validated' }
   | { readonly kind: 'corrected'; readonly text: string }

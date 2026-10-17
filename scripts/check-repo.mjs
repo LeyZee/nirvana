@@ -159,13 +159,21 @@ if (!stagedOnly) {
 // 7. The nightly quality gate stays in CI
 if (!stagedOnly) {
   const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
-  const nightly = ci.slice(ci.indexOf('\n  nightly:'));
+  // The nightly job only, up to the next job: an active step, alone on its line (no comment, no `|| true`).
+  const start = ci.indexOf('\n  nightly:');
+  const rest = start === -1 ? '' : ci.slice(start + 1);
+  const next = rest.slice(1).search(/\n {2}[a-z][\w-]*:/);
+  const nightly = next === -1 ? rest : rest.slice(0, next + 1);
   for (const command of ['pnpm probe', 'pnpm evals']) {
-    if (ci.indexOf('\n  nightly:') === -1 || !nightly.includes(`run: ${command}`))
+    if (!new RegExp(`^ +- run: ${command}[ \\t]*$`, 'm').test(nightly))
       errors.push(
         `.github/workflows/ci.yml: the nightly job must run \`${command}\` (docs/playbooks/write-an-eval.md)`,
       );
   }
+  if (/^\s*continue-on-error:\s*true/m.test(nightly))
+    errors.push(
+      '.github/workflows/ci.yml: the nightly job must fail when the evals fail (no continue-on-error)',
+    );
 }
 
 for (const w of warnings) console.warn(`warning: ${w}`);

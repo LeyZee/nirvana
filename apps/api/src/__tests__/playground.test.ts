@@ -127,6 +127,25 @@ describe('playground session, calibration', () => {
     expect(session.history.map((t) => t.text)).toEqual(['Salut', 'Coucou toi ✨']);
   });
 
+  it('replaces her answer in place when she sent a media after it', async () => {
+    const session = make();
+    await session.handleFanMessage('Salut');
+    session.sendCreatorMedia(PHOTO, true);
+    session.replaceLastAnswer('Coucou toi ✨');
+    expect(session.history.map((t) => [t.from, t.text, t.media !== undefined])).toEqual([
+      ['fan', 'Salut', true],
+      ['creator', 'Coucou toi ✨', false],
+      ['creator', '', true],
+    ]);
+  });
+
+  it('keeps the moment as facts, so a replay writes it with the current code', async () => {
+    const session = make({ timeZone: 'America/Montreal' });
+    await session.handleFanMessage('Salut');
+    expect(session.lastExchange?.moment.situation.timeZone).toBe('America/Montreal');
+    expect(session.lastExchange?.moment.situation.now.toISOString()).toBe('2026-10-17T10:00:00.000Z');
+  });
+
   it('replays from his n-th message on a new branch', async () => {
     const session = make();
     await session.handleFanMessage('Un');

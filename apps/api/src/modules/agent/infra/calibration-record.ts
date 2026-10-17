@@ -1,13 +1,15 @@
 import type { Brief, ConversationTurn } from '@nirvana/llm';
 
 import type { Destination, RatedAnswer } from '../domain/calibration';
+import type { Situation } from '../domain/situation';
 
 /** Everything needed to replay the moment: a rated answer becomes a test without asking anything again. */
 export interface RatedMoment {
   /** The conversation before his message, his message included. */
   readonly history: readonly ConversationTurn[];
   readonly fanNotes: string;
-  readonly situation: string;
+  /** The facts, not their wording: a replay writes them again with the current code. */
+  readonly situation: Situation;
   readonly brief?: Brief;
 }
 

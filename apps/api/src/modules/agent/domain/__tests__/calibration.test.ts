@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parseRejection,
   parseRejectReason,
   rateReport,
   suggestDestination,
@@ -61,5 +62,20 @@ describe('destinations and reasons', () => {
     expect(parseRejectReason('Tôt')).toBe('too_early_sexual');
     expect(parseRejectReason('hors personnage')).toBe('out_of_character');
     expect(parseRejectReason('bof')).toBeUndefined();
+  });
+
+  it('reads multi-word labels and keeps the rest as the note', () => {
+    expect(parseRejection('trop long c’est un roman')).toEqual({
+      reason: 'too_long',
+      note: 'c’est un roman',
+    });
+    expect(parseRejection('sonne IA')).toEqual({ reason: 'sounds_ai' });
+    expect(parseRejection('a oublié un fait son prénom')).toEqual({
+      reason: 'forgot_fact',
+      note: 'son prénom',
+    });
+    expect(parseRejection('ia trop scolaire')).toEqual({ reason: 'sounds_ai', note: 'trop scolaire' });
+    expect(parseRejection('bof')).toBeUndefined();
+    expect(parseRejection('')).toBeUndefined();
   });
 });
