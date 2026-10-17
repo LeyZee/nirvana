@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './conversations';
+export * from './credentials';
 export * from './events';
 export * from './fans';
 export * from './llm';
