@@ -54,6 +54,8 @@ export interface EngineDeps {
   /** The configured voice prompt and model: the rate shown is theirs. */
   readonly version: AnswerVersion;
   readonly sessionId: string;
+  /** The creator the ratings belong to: the only one there is, until the screen lets the trainer choose. */
+  readonly creatorId?: () => Promise<string | null>;
   readonly timeZone?: string;
   readonly now?: () => Date;
 }
@@ -61,6 +63,7 @@ export interface EngineDeps {
 /** One rating, in the shape the training store keeps (shared with the terminal playground). */
 export function ratingRecord(input: {
   readonly id: string;
+  readonly creatorId?: string | undefined;
   readonly sessionId: string;
   readonly at: Date;
   readonly version: AnswerVersion;
@@ -71,6 +74,7 @@ export function ratingRecord(input: {
 }): CalibrationRecord {
   return {
     id: input.id,
+    ...(input.creatorId !== undefined && { creatorId: input.creatorId }),
     sessionId: input.sessionId,
     at: input.at.toISOString(),
     version: input.version,
@@ -255,6 +259,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
         ratings += 1;
         const record = ratingRecord({
           id: `${deps.sessionId}-${String(ratings)}`,
+          creatorId: (await deps.creatorId?.()) ?? undefined,
           sessionId: deps.sessionId,
           at: (deps.now ?? (() => new Date()))(),
           // The model that wrote it: an answer of the fallback counts for the fallback, not for Grok.

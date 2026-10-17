@@ -162,12 +162,18 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   });
   const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
   const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
+  const persona = createPersonaModule({ db: db.db, requireRole });
   const playground =
     options.withPlayground === false
       ? null
       : await startPlaygroundModule({
           ...llm.deps,
           gateway: llm.gateway,
+          // The ratings belong to the only creator there is; with several, the screen will have to choose.
+          creatorId: async () => {
+            const creators = await persona.creators.list('all');
+            return creators.length === 1 ? (creators[0]?.id ?? null) : null;
+          },
           personaPath,
           trainingDir,
         }).catch((error: unknown) => {
@@ -204,7 +210,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     connectors,
     conversations,
     fans,
-    persona: createPersonaModule({ db: db.db, requireRole }),
+    persona,
     agent: createAgentModule(),
     media: createMediaModule(),
     supervision: createSupervisionModule(),

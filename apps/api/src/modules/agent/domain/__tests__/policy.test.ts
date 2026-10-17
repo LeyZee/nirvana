@@ -11,6 +11,7 @@ const base: OfferContext = {
   fanAsksForPaid: false,
   hasNoBudget: false,
   risks: [],
+  limits: { cooldownHours: 10 },
 };
 
 describe('offerDecision', () => {

@@ -4,12 +4,10 @@
  * an offer, only this decides.
  */
 
-interface OfferLimits {
+export interface OfferLimits {
   /** Minimum time between two scripts to one fan; per creator, set in the CRM (persona `strategies.script_launch.cooldown_hours`). */
   readonly cooldownHours: number;
 }
-
-const DEFAULT_OFFER_LIMITS: OfferLimits = { cooldownHours: 10 };
 
 export interface OfferContext {
   readonly now: Date;
@@ -22,7 +20,8 @@ export interface OfferContext {
   /** Set by code when he says he cannot pay; lifted only when he comes back to paid content himself. */
   readonly hasNoBudget: boolean;
   readonly risks: readonly string[];
-  readonly limits?: OfferLimits;
+  /** Hers, read from her persona (`PersonaForModels.offerLimits`). */
+  readonly limits: OfferLimits;
 }
 
 type OfferBlock = 'risk' | 'no_budget' | 'cooldown' | 'not_sexualizing';
@@ -45,7 +44,7 @@ const NO_SALE_RISKS = [
 const HOUR_MS = 3_600_000;
 
 export function offerDecision(context: OfferContext): OfferDecision {
-  const limits = context.limits ?? DEFAULT_OFFER_LIMITS;
+  const { limits } = context;
   if (context.risks.some((risk) => NO_SALE_RISKS.includes(risk))) return { allowed: false, reason: 'risk' };
   // He came back to paid content himself: no waiting on the cooldown or on his budget.
   if (context.fanAsksForPaid) return { allowed: true };

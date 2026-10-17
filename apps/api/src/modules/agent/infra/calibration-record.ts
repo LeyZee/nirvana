@@ -16,6 +16,8 @@ export interface RatedMoment {
 /** One rating, in the shape the training tables will take (P0-03). */
 export interface CalibrationRecord extends RatedAnswer {
   readonly id: string;
+  /** The creator whose persona was rated; absent on ratings kept before the table (calibration_ratings). */
+  readonly creatorId?: string;
   readonly sessionId: string;
   readonly fanMessage: string;
   readonly bubbles: readonly string[];

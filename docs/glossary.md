@@ -53,7 +53,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Description de média | `media_description` | La sortie du rôle sens, au vocabulaire Nirvana. |
 | Offre | `offer` | Une proposition commerciale (média + prix + plancher). Phase 6. |
 | Budget nul | `hasNoBudget` | Drapeau posé par le code quand le fan dit ne pas pouvoir payer : plus aucune offre ni bouderie ni relance de vente tant qu'il ne revient pas de lui-même vers le payant. |
-| Délai entre deux scripts | `cooldownHours` | Temps minimum entre deux scripts proposés à un même fan (10 h par défaut, réglable par créatrice) ; après, un script ne part que si le fan sexualise de nouveau (`offerDecision`). |
+| Délai entre deux scripts | `cooldownHours` | Temps minimum entre deux scripts proposés à un même fan, lu dans la persona (`strategies.script_launch.cooldown_hours`, réglable par créatrice) ; après, un script ne part que si le fan sexualise de nouveau (`offerDecision`). |
 | Vente | `sale` | Une transaction détectée sur la plateforme. Montant en centimes + devise. |
 | Script | `script` | Séquence d'étapes de vente (structure). Phase 6. |
 | Étape | `script_step` | Une étape d'un script (message, médias, prix, pacing). |

@@ -12,7 +12,7 @@ Faire porter au code les leçons chiffrées du corpus de vente (`/mnt/project-fi
 
 ## À faire
 - [x] `agent/domain/policy.ts` : `offerDecision` dit si un script peut partir maintenant (règle de Charles, 17/10 22h00) :
-  - un script au plus par délai (`cooldownHours`, 10 h par défaut, réglable par créatrice dans le CRM, champ `strategies.script_launch.cooldown_hours` de la persona, déjà dans PersonaSchema) ;
+  - un script au plus par délai (`cooldownHours`, lu dans la persona, 10 h pour Messa, réglable par créatrice dans le CRM, champ `strategies.script_launch.cooldown_hours` de la persona, déjà dans PersonaSchema) ;
   - après le délai, seulement si le fan sexualise de nouveau ;
   - jamais sous le drapeau « budget nul » ni sur un risque ;
   - un fan qui demande lui-même du payant lève le délai et le budget nul, jamais un risque.
