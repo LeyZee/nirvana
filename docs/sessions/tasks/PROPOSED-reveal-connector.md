@@ -11,24 +11,25 @@ Un `RevealApiConnector` qui lit la boîte de réception, les conversations, les 
 
 ## Contexte à lire
 
-- ADR 0008, `docs/architecture/connectors.md` (port, règles de bonne conduite), ADR 0003 (cœur agnostique).
+- ADR 0008, ADR 0018, `docs/architecture/connectors.md` (port, règles de bonne conduite), ADR 0003 (cœur agnostique).
 - `docs/reference/reveal-connector-inventory.md` (capacités L1 à L10, E1 à E6), `docs/reference/reveal-api-observed.md` (rempli par P1-02), `docs/reference/fake-reveal.md`.
 - `docs/conventions/testing.md` (contrat, FakeReveal), `docs/conventions/security.md` (sessions chiffrées), `docs/runbooks/session-expired.md`.
 
 ## À faire
 
 - **Ne rien commencer si `reveal-api-observed.md` est vide** : passer la fiche en `blocked` et le dire.
-- Contrats (`packages/contracts`) : schémas Zod stricts des réponses Reveal utilisées, tels qu'observés ; mappage vers `ConversationSnapshot`, `ExternalMessage`, `ExternalTransaction`.
-- Port : ajouter les méthodes optionnelles de l'inventaire (`getFanProfile`, `getFanNote`, `setFanNote`, `getCreatorNotes`, `setCreatorNotes`, `getFanPpvStats`, `listPlatformScripts`, `getScriptHistory`, `sendScriptStep`, `listVaultMedia`) et les drapeaux `capabilities` correspondants. Si le changement touche le cœur au-delà de `connectors`, ADR `proposed` d'abord.
+- Schémas Zod stricts des réponses Reveal utilisées, tels qu'observés, dans `infra/reveal/` du module `connectors` (jamais dans `packages/contracts` : le cœur ne voit pas les formes Reveal) ; mappage vers `ConversationSnapshot`, `ExternalMessage`, `ExternalTransaction`.
+- Port : ajouter les méthodes optionnelles de l'inventaire (`getFanProfile`, `getFanNote`, `setFanNote`, `getCreatorNotes`, `setCreatorNotes`, `getFanPpvStats`, `listPlatformScripts`, `sendScriptStep`, `listVaultMedia`, `fetchMedia`, `getScriptHistory`) et les drapeaux `capabilities` correspondants, selon l'ADR 0018 (à faire accepter d'abord ; lot coordonné avec le fil Bilan).
 - `RevealApiConnector` (infra du module `connectors`) : client HTTP `undici`, en-têtes et User-Agent du vrai client, erreurs typées (`SessionExpired`, `RateLimited`, `NotFound`, `Transient`, `Fatal`), pagination complète de l'historique, idempotence (nonce client si Reveal l'accepte, sinon `verifySent` avant tout rejeu).
 - Bonne conduite (ADR 0008) : un client par compte, rythme humain avec jitter, coupe-circuit après N erreurs, arrêt total sur `SessionExpired`, sortie par l'IP configurée, session jamais loguée.
 - Session du **membre d'équipe « bot »** créé dans Reveal (décision de Charles, 17/10), jamais celle de Charles ; les messages sortants doivent porter ce membre comme auteur (test contre FakeReveal).
 - Exposer le moment d'un script (`day` ☀️, `night` 🌙, ou aucun) depuis son nom ou son dossier du Vault, pour la règle « temps présent » appliquée par le moteur de vente (inventaire, Décisions de Charles).
 - Garde d'écriture : toute écriture refuse de partir si le compte n'est pas en mode autorisé (réglage `connector_config.writes`, désactivé par défaut) ; les tests écrivent seulement vers FakeReveal.
-- FakeReveal complété pour chaque endpoint utilisé, avec ses scénarios (`fake-reveal.md`).
+- FakeReveal (`apps/api/test/fake-reveal/`, convention de `testing.md`) complété pour chaque endpoint utilisé, avec ses scénarios (`fake-reveal.md`).
 - Test de contrat commun : vert contre `FakeConnector` et contre `RevealApiConnector` + FakeReveal, y compris les scénarios `session_expired`, `rate_limited`, `shape_changed`, `challenge`.
-- Tests unitaires du mappage (chaque type de message, PPV acheté ou non, étape de script) et de la règle « script déjà envoyé » quand Reveal ne l'expose pas.
+- Tests unitaires du mappage (chaque type de message, PPV acheté ou non, étape de script) et de la lecture de l'indicateur « script déjà envoyé » de Reveal.
 - `reveal-api-observed.md` : section « Capacités déclarées » à jour.
+- Achats à observer (à anticiper, contrat à définir avec le fil Bilan d'après la capture) : l'onglet Ventes des alertes Telegram et l'entonnoir du Dashboard ont besoin de chaque achat payé, par conversation, avec montant, bundle, et vendu par l'agent ou un chatteur. Le connecteur les lit là où Reveal les expose (historique des bundles du panneau PPV, dépenses du panneau Analytics, transactions) et les publie comme événement de domaine.
 
 ## Critères d'acceptation
 
