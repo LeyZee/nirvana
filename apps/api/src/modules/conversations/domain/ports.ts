@@ -20,6 +20,7 @@ import type {
   OutboundMedia,
   PlatformAccountId,
   SendResult,
+  UserId,
   VerifyResult,
 } from '@nirvana/contracts';
 
@@ -158,6 +159,17 @@ export interface Transaction {
   readonly events: EventWriter;
   readonly jobs: JobEnqueuer;
   readonly gate: RespondGate;
+  readonly audit: AuditTrail;
+}
+
+/** Who did what from the dashboard (`audit_log`, security.md), in the same transaction as the act. */
+interface AuditTrail {
+  record(entry: {
+    userId: UserId;
+    action: string;
+    entityId: string;
+    details?: Record<string, unknown>;
+  }): Promise<void>;
 }
 
 export interface UnitOfWork {

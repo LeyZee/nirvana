@@ -10,6 +10,7 @@ import { createDrizzleConversationReader } from './infra/db/reader';
 import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
 import { createConversationRoutes, type RequireRole } from './infra/http/routes';
 
+export { SendRefused } from './domain/errors';
 export type { Clock, DraftComposer, OutboundSender } from './domain/ports';
 
 /** Public entry point of the `conversations` module (ADR 0002). Other modules import this file only. */

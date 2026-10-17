@@ -56,6 +56,10 @@ jobs:
       - run: pnpm test:integration
         env:
           TESTCONTAINERS_RYUK_DISABLED: 'true'
+      # Phase 0 end to end: API and worker inline, FakeConnector, a fan message to a sent draft (P0-07b).
+      - run: pnpm test:e2e
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: 'true'
 
   audit:
     name: Dependency audit

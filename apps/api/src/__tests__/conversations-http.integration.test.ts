@@ -174,6 +174,11 @@ describe('/v1/conversations', () => {
       {},
     );
     expect(release.statusCode).toBe(204);
+    const audit = await test.admin.db
+      .select({ action: schema.auditLog.action })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.entityId, id));
+    expect(audit.map((entry) => entry.action)).toEqual(['conversation.takeover', 'conversation.release']);
   });
 
   it('keeps an operator out of a creator they do not handle', async () => {

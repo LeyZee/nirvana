@@ -71,6 +71,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Jeton d'appareil | `device token` | Secret de l'extension pour déposer une session (`POST /v1/connector/sessions`, `EXTENSION_DEVICE_TOKEN`). |
 | Composeur | `DraftComposer` | Le port par lequel `conversation.respond` demande un brouillon au moteur ; il rend des bulles ou une retenue (`held`) avec sa raison. |
 | Coupe-circuit | `breaker` | Pause d'un compte plateforme après N relèves ratées d'affilée (`connector_config`), avec un événement `error`. |
+| Garde d'écriture | `writes` | Réglage d'un compte plateforme (`connector_config.writes`, fermé par défaut) : fermé, aucun envoi ne part, seule la lecture continue. |
 | Interrupteur d'arrêt | `kill_switch` | Arrêt global, par créatrice ou par conversation. |
 | Chatteur | `operator` | Humain qui chatte ou supervise (vocabulaire Imperium : chatteur). |
 | Fiche de tâche | `task card` | Une unité de travail pour une session (`docs/sessions/tasks/`). |

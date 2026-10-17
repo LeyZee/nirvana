@@ -1,6 +1,6 @@
 # P0-07b CI, scripts ops, bout en bout phase 0
 
-Statut : todo
+Statut : done
 Phase : 0
 Dépend de : P0-06, P0-07a
 Branche : task/p0-07b-ci-e2e
@@ -30,3 +30,21 @@ La phase 0 est acceptée : CI complète, scripts ops, et un test de bout en bout
 Design du dashboard, Cloudflare Access (configuration d'infra en phase 2, documentée dans `operations.md`).
 
 ## Notes de session
+
+## Résultat (2026-10-17)
+
+Fait :
+- **Bout en bout** : `apps/api/src/__tests__/e2e/phase0.e2e.test.ts` (`pnpm test:e2e`, aussi dans le job `test` de la CI). Vrai serveur sur un port, worker Graphile, `FakeConnector`. Un message de fan injecté sur la plateforme factice → `connector.dispatch` et `connector.poll` → conversation `pending` lue par l'API après connexion → `conversation.respond` → brouillon vide et événements `message_received` puis `draft_created` → approbation → `platform.sent` reçu par la plateforme factice → conversation `idle`. Aucune tâche `demo.echo`.
+- **Audit** : `conversation.takeover` et `conversation.release` (port `AuditTrail` de la transaction de `conversations`) ; `kill_switch.on|off`, `auth.sessions_revoked`, `connector.sessions_reencrypted`.
+- **Scripts ops** (`apps/api/src/ops.ts`, rôle owner) : `pnpm ops:kill-switch --on|--off --scope … [--id …] --reason …` (ligne `kill_switches`, événement `kill_switch_toggled`, audit), `pnpm ops:revoke-sessions [--email …]`, `pnpm ops:reencrypt-sessions` (cité par `rotate-secrets.md`).
+- **Garde d'écriture** (accord du coordinateur, même famille que l'interrupteur) : `connector_config.writes`, `false` par défaut. L'`OutboundSender` refuse `sendText` et `sendMedia` par `SendRefused` (`connector_writes_disabled`), que le job `send` traite comme définitif : `send_failed`, brouillon `failed`, aucun nouvel essai, aucun appel à la plateforme.
+- **Secrets** : un faux secret indexé fait échouer `gitleaks` en pre-commit (vérifié, 2 fuites trouvées, fichier retiré) ; le job `secrets` de la CI tourne sur chaque PR.
+
+Tests : e2e (1) ; intégration : commandes ops (3 : interrupteur et audit, révocation qui coupe le cookie, re-chiffrement idempotent), audit de la prise en main, garde d'écriture (aucun appel, pas de nouvel essai).
+
+Écarts :
+- Liste brute des conversations dans `apps/web` : laissée au fil Extension, propriétaire de la coquille (#34), qui l'affiche dans l'écran Suivi. L'API (`GET /v1/conversations`) est couverte par l'e2e.
+- Protection de branche : réglage GitHub que seul Charles peut activer ; le pas à pas lui est transmis par le coordinateur.
+
+Reste : envoi non retrouvé → `send_failed` dans `reconcile` (fiche P0-06).
+

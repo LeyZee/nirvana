@@ -58,6 +58,18 @@ pnpm dev:crm
 
 Pour vérifier l'API seule : http://localhost:3000/ready doit répondre `"status":"ready"`.
 
+## Envois et arrêt d'urgence
+
+Un compte plateforme ne peut rien envoyer tant que sa garde d'écriture est fermée (`connector_config.writes`, à `false` par défaut) : un brouillon approuvé échoue alors en `connector_writes_disabled`, sans rien envoyer. On ne l'ouvre que sur le compte fan de test, à la main, en base.
+
+Trois commandes d'exploitation, chacune laisse une ligne dans `audit_log` :
+
+```powershell
+pnpm ops:kill-switch --on --scope global --reason "essai"   # plus aucune réponse ni envoi ; --off pour lever
+pnpm ops:revoke-sessions --email charles@example.com        # déconnecte le dashboard (sans --email : tout le monde)
+pnpm ops:reencrypt-sessions                                 # après une rotation de SESSION_ENCRYPTION_KEYS
+```
+
 ## Si ça coince
 
 | Symptôme | Cause probable | Geste |

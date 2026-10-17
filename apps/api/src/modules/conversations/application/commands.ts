@@ -289,6 +289,12 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           },
           meta,
         );
+        await tx.audit.record({
+          userId: input.userId,
+          action: 'conversation.takeover',
+          entityId: conversation.id,
+          details: { correlationId: input.correlationId },
+        });
       });
     },
 
@@ -301,6 +307,12 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           { type: 'takeover_ended', payload: { userId: input.userId } },
           humanMeta(input),
         );
+        await tx.audit.record({
+          userId: input.userId,
+          action: 'conversation.release',
+          entityId: conversation.id,
+          details: { correlationId: input.correlationId },
+        });
       });
     },
 
