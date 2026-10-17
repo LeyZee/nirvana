@@ -41,7 +41,7 @@ export type ServicesErrorKind = 'session_expired' | 'forbidden' | 'rate_limited'
 
 const ERROR_MESSAGES: Record<ServicesErrorKind, string> = {
   session_expired: 'Ta session a expiré. Reconnecte-toi.',
-  forbidden: 'Seule la propriétaire peut gérer les clés.',
+  forbidden: 'Seul le compte propriétaire peut gérer les clés.',
   rate_limited: 'Trop d’essais. Attends une minute avant de réessayer.',
   unavailable: 'Nirvana ne répond pas. Réessaie dans un instant.',
 };

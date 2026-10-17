@@ -488,7 +488,11 @@
   font-family: inherit;
   color: var(--nv-ink-faint);
 }
-/* The key field is `type=text` so that password managers leave it alone; it is masked here instead. */
+/*
+ * The key field is `type=text` so that password managers leave it alone; it is masked here instead. Chrome and
+ * Safari mask it; some Firefox versions show it in clear. The exposure is short: a paste is verified and the field
+ * emptied at once. TODO(P3-03): a masking that does not depend on -webkit-text-security.
+ */
 .sv-key input.sv-key__secret {
   -webkit-text-security: disc;
 }

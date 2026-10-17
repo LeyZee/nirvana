@@ -34,7 +34,7 @@ export function nextAction(statuses: readonly ProviderStatus[]): NextAction {
   if (first !== undefined) {
     const profile = profileOf(first.provider);
     const detail = profile.isRequired
-      ? 'Indispensable : l’agent est à l’arrêt tant qu’il n’est pas connecté.'
+      ? 'Indispensable : c’est lui qui écrit. Mistral ne sert que de relais.'
       : missing.length === 1
         ? 'C’est le dernier. Tu peux aussi le faire plus tard.'
         : `${profile.role}.`;

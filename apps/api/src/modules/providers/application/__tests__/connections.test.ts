@@ -123,7 +123,7 @@ describe('keys kept in memory (development without CREDENTIALS_ENCRYPTION_KEYS)'
     // Not on a red line: it already says what to do.
     answer.current = { ok: false, kind: 'unauthorized' };
     expect((await reverifyProvider(inMemory, 'xai')).message).toBe(
-      'xAI refuse la clé. L’agent ne peut plus rien écrire.',
+      'xAI refuse la clé. Seul Mistral, s’il est branché, écrit en attendant.',
     );
   });
 });

@@ -46,7 +46,7 @@ export const GUIDES: Record<DashboardProvider, ServiceGuide> = {
       { label: 'Accès', value: 'Chat' },
     ],
     note: 'Le compte xAI doit avoir du crédit.',
-    offConsequence: 'L’agent ne pourra plus rien écrire tant que Grok n’est pas reconnecté.',
+    offConsequence: 'Seul Mistral, s’il est branché, écrira tant que Grok n’est pas reconnecté.',
     topUpUrl: 'https://console.x.ai',
   },
   google: {

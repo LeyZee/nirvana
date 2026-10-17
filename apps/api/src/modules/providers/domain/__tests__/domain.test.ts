@@ -107,16 +107,18 @@ describe('credential states', () => {
     );
     const refused = markRefusedInProduction(saved, 'unauthorized');
     expect(toStatus('xai', refused, 'dashboard').message).toBe(
-      'xAI refuse la clé. L’agent ne peut plus rien écrire.',
+      'xAI refuse la clé. Seul Mistral, s’il est branché, écrit en attendant.',
     );
   });
 
   it('says why the key stopped working, and what the agent does meanwhile', () => {
     const line = (kind: Parameters<typeof markRefusedInProduction>[1]) =>
       toStatus('xai', markRefusedInProduction(saved, kind), 'dashboard').message;
-    expect(line('no_credit')).toBe('Le compte xAI n’a plus de crédit. L’agent ne peut plus rien écrire.');
+    expect(line('no_credit')).toBe(
+      'Le compte xAI n’a plus de crédit. Seul Mistral, s’il est branché, écrit en attendant.',
+    );
     expect(line('missing_permission')).toBe(
-      'xAI refuse les appels de l’agent (accès ou plafond de dépenses). L’agent ne peut plus rien écrire.',
+      'xAI refuse les appels de l’agent (accès ou plafond de dépenses). Seul Mistral, s’il est branché, écrit en attendant.',
     );
     expect(
       toStatus(
@@ -137,7 +139,7 @@ describe('credential states', () => {
       lastErrorKind: 'unauthorized' as const,
     };
     expect(toStatus('xai', unreadable, 'dashboard').message).toBe(
-      'La clé Grok enregistrée ne peut plus être déchiffrée. Colle-la à nouveau. L’agent ne peut plus rien écrire.',
+      'La clé Grok enregistrée ne peut plus être déchiffrée. Colle-la à nouveau. Seul Mistral, s’il est branché, écrit en attendant.',
     );
   });
 

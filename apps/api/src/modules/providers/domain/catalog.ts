@@ -12,7 +12,7 @@ export interface ProviderProfile {
   readonly withoutIt: string;
   /** Shown when the provider refuses a key that used to work. */
   readonly revoked: string;
-  /** What happens while the key is refused, after the reason (« L’agent ne peut plus rien écrire. »). */
+  /** What happens while the key is refused, after the reason (« Pas de vocaux pour l’instant. »). */
   readonly whileRefused: string;
   /** Keys start with this; used to spot a key pasted in the wrong place. */
   readonly keyPrefix: string | null;
@@ -26,9 +26,9 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     service: 'Grok',
     vendor: 'xAI',
     role: 'Écrit les messages et décide',
-    withoutIt: 'Sans lui, l’agent ne peut rien écrire',
-    revoked: 'xAI refuse la clé. L’agent ne peut plus rien écrire.',
-    whileRefused: 'L’agent ne peut plus rien écrire.',
+    withoutIt: 'Sans lui, l’agent n’écrit qu’avec le relais Mistral, s’il est branché',
+    revoked: 'xAI refuse la clé. Seul Mistral, s’il est branché, écrit en attendant.',
+    whileRefused: 'Seul Mistral, s’il est branché, écrit en attendant.',
     keyPrefix: 'xai-',
     isRequired: true,
   },

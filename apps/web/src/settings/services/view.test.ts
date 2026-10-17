@@ -94,7 +94,7 @@ describe('Services view rules', () => {
 
   it('says what really stops when a key is removed', () => {
     expect(GUIDES.xai.offConsequence).toBe(
-      'L’agent ne pourra plus rien écrire tant que Grok n’est pas reconnecté.',
+      'Seul Mistral, s’il est branché, écrira tant que Grok n’est pas reconnecté.',
     );
     expect(GUIDES.google.offConsequence).toMatch(/Grok/);
     expect(GUIDES.elevenlabs.offConsequence).toMatch(/vocaux/);

@@ -13,8 +13,8 @@ Permettre à Charles de connecter, vérifier, remplacer et déconnecter les clé
 ## Le parcours (ce que Charles voit)
 
 **Panneau.** Réglages › Modèles IA, section « Services », sous les cartes des rôles.
-- En tête, une seule ligne « prochaine action » : pastille, phrase, un seul bouton néon. Par ordre de priorité : une clé refusée (« xAI refuse la clé. L'agent ne peut plus rien écrire. », bouton « Remplacer la clé ») ; des crédits bas (« Remplacer » devient « Recharger ↗ ») ; le prochain service non connecté (« Connecte Grok ») ; sinon « Tout est connecté ». Dessous, une barre fine en trois segments : services connectés sur trois.
-- Trois lignes, dans cet ordre : Grok (xAI) « Écrit les messages et décide », Gemini (Google) « Regarde les photos et vidéos », ElevenLabs (Vocaux) « Parle avec la voix de Messa ». Chaque ligne a une pastille et une seule phrase : ce qu'on perd sans le service (« Sans lui, l'agent ne peut rien écrire ») ou ce qui marche (« Grok 4.7 écrit et décide · vérifié il y a 2 min »). Menu `⋯` : Vérifier maintenant, Remplacer la clé, Déconnecter.
+- En tête, une seule ligne « prochaine action » : pastille, phrase, un seul bouton néon. Par ordre de priorité : une clé refusée (« xAI refuse la clé. Seul Mistral, s'il est branché, écrit en attendant. », bouton « Remplacer la clé ») ; des crédits bas (« Remplacer » devient « Recharger ↗ ») ; le prochain service non connecté (« Connecte Grok ») ; sinon « Tout est connecté ». Dessous, une barre fine en trois segments : services connectés sur trois.
+- Trois lignes, dans cet ordre : Grok (xAI) « Écrit les messages et décide », Gemini (Google) « Regarde les photos et vidéos », ElevenLabs (Vocaux) « Parle avec la voix de Messa ». Chaque ligne a une pastille et une seule phrase : ce qu'on perd sans le service (« Sans lui, l'agent n'écrit qu'avec le relais Mistral, s'il est branché ») ou ce qui marche (« Grok 4.7 écrit et décide · vérifié il y a 2 min »). Menu `⋯` : Vérifier maintenant, Remplacer la clé, Déconnecter.
 - Quatre états seulement : non connecté, connecté, crédits bas (ambre), à reconnecter (rouge, pastille qui pulse). Aucun code HTTP à l'écran.
 - Le mot « connecteur » n'apparaît pas (il désigne les plateformes, glossaire).
 - Hors du panneau : si Grok est à reconnecter, bandeau en haut du Dashboard avec le même texte et le même bouton, et pastille sur l'icône Réglages. Le bouton ouvre la feuille de Grok directement à l'étape 2.
@@ -33,7 +33,7 @@ Permettre à Charles de connecter, vérifier, remplacer et déconnecter les clé
 
 Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournisseur au moment du code et notés dans la PR.
 
-**Déconnecter** se confirme dans la page (`nv-confirm`) : « Déconnecter Grok ? L'agent ne pourra plus rien écrire tant que Grok n'est pas reconnecté. La clé est effacée de Nirvana. Chez xAI, elle reste valide tant que tu ne la supprimes pas. »
+**Déconnecter** se confirme dans la page (`nv-confirm`) : « Déconnecter Grok ? Seul Mistral, s'il est branché, écrira tant que Grok n'est pas reconnecté. La clé est effacée de Nirvana. Chez xAI, elle reste valide tant que tu ne la supprimes pas. »
 
 ## À faire
 1. **Contrats** (`packages/contracts`) : `ProviderId` (`xai`, `google`, `elevenlabs`, `mistral`, `venice`), `ProviderConnectionState` (`not_connected`, `connected`, `low_credit`, `needs_reconnect`), DTO de l'état d'un service (sans clé), corps des routes. Zod partout.
@@ -59,7 +59,7 @@ Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournis
 | Modèle Vision introuvable | « Gemini 3.8 Flash n'est pas visible avec cette clé. Modèles trouvés : … » (menu pour choisir) |
 | Permission manquante (ElevenLabs) | « La clé ne peut pas lire tes voix. Ajoute Voices en lecture à ses accès. » |
 | Fournisseur injoignable | « xAI ne répond pas. Ta clé n'est pas en cause ; réessaie dans une minute. » (rien n'est enregistré) |
-| Révoquée en production | Grok : « xAI refuse la clé. L'agent ne peut plus rien écrire. » ; Gemini : « Google refuse la clé. Grok regarde les médias en attendant. » ; ElevenLabs : « ElevenLabs refuse la clé. Pas de vocaux pour l'instant. » |
+| Révoquée en production | Grok : « xAI refuse la clé. Seul Mistral, s'il est branché, écrit en attendant. » ; Gemini : « Google refuse la clé. Grok regarde les médias en attendant. » ; ElevenLabs : « ElevenLabs refuse la clé. Pas de vocaux pour l'instant. » |
 | Crédits bas | « Plus que 40 vocaux ce mois. Recharge avant d'en manquer. » |
 
 ## Critères d'acceptation

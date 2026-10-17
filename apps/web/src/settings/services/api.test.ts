@@ -80,7 +80,7 @@ describe('Services API client', () => {
   it('tells each failure in its own words', async () => {
     const cases: [number | 'network', unknown, string][] = [
       [401, apiError('session_unauthenticated'), 'Ta session a expiré. Reconnecte-toi.'],
-      [403, apiError('role_forbidden'), 'Seule la propriétaire peut gérer les clés.'],
+      [403, apiError('role_forbidden'), 'Seul le compte propriétaire peut gérer les clés.'],
       [403, { error: 'forbidden' }, 'Nirvana ne répond pas. Réessaie dans un instant.'],
       [429, apiError('rate_limited'), 'Trop d’essais. Attends une minute avant de réessayer.'],
       [500, apiError('internal_error'), 'Nirvana ne répond pas. Réessaie dans un instant.'],
