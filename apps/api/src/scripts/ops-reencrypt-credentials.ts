@@ -1,13 +1,14 @@
 /**
  * Re-seals every secret kept under CREDENTIALS_ENCRYPTION_KEYS with the newest key after a rotation
- * (runbooks/rotate-secrets.md): today the AI service keys of Réglages › Modèles IA; any later secret sealed with the
- * same keys (a Telegram bot token, for instance) adds its own re-sealer to the list below.
+ * (runbooks/rotate-secrets.md): the AI service keys of Réglages › Modèles IA and the Telegram bot tokens. Any later
+ * secret sealed with the same keys adds its own re-sealer below.
  * Usage: `pnpm ops:reencrypt-credentials`, with `CREDENTIALS_ENCRYPTION_KEYS=v2:<nouvelle>,v1:<ancienne>`.
  */
 import { createDbClient, parseEncryptionKeys } from '@nirvana/db';
 
 import { loadConfig, secretOrNull } from '../config';
 import { resealProviderCredentials } from '../modules/providers';
+import { resealTelegramTokens } from '../modules/telegram';
 
 const config = loadConfig();
 const keys = secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS);
@@ -18,13 +19,15 @@ if (keys === null) {
 const admin = createDbClient(config.DATABASE_ADMIN_URL);
 try {
   const parsed = parseEncryptionKeys(keys);
+  const version = parsed[0]?.version ?? '?';
   const services = await resealProviderCredentials(admin.db, parsed);
-  console.log(
-    `${String(services.rewritten)} clé(s) de service IA rechiffrée(s) en ${parsed[0]?.version ?? '?'}.`,
-  );
-  if (services.unreadable.length > 0) {
+  console.log(`${String(services.rewritten)} clé(s) de service IA rechiffrée(s) en ${version}.`);
+  const bots = await resealTelegramTokens(admin.db, parsed);
+  console.log(`${String(bots.rewritten)} jeton(s) de bot Telegram rechiffré(s) en ${version}.`);
+  const unreadable = [...services.unreadable, ...bots.unreadable];
+  if (unreadable.length > 0) {
     console.error(
-      `Illisible(s) avec ces clés : ${services.unreadable.join(', ')}. Ne retire pas l’ancienne clé de chiffrement : remets-la, relance la commande.`,
+      `Illisible(s) avec ces clés : ${unreadable.join(', ')}. Ne retire pas l’ancienne clé de chiffrement : remets-la, relance la commande.`,
     );
     process.exitCode = 1;
   }

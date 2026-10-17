@@ -5,6 +5,7 @@ import {
   createTranscriberResolver,
   DEFAULT_LLM_CONFIG,
   type ApiKeySource,
+  type BudgetEvent,
   type LlmCallLog,
   type LlmGateway,
   type LlmGatewayDeps,
@@ -28,6 +29,8 @@ export interface AppLlmOptions {
     provider: ProviderId,
     kind: 'unauthorized' | 'missing_permission',
   ) => Promise<void>;
+  /** Writes the crossing to the outbox (Telegram alerts it); best effort, the cap is enforced by the gateway. */
+  readonly publishBudget?: (event: BudgetEvent) => Promise<void>;
   readonly logger: Logger;
   /** The llm_calls journal (`createPersistentCallLog`); in memory when absent (tests, terminal). */
   readonly log?: LlmCallLog;
@@ -46,8 +49,11 @@ export function createAppLlm(options: AppLlmOptions): AppLlm {
           logger.warn({ err, provider }, 'key refusal not recorded');
         });
     },
-    // TODO(P3-06): a domain event so the dashboard warns Charles; the log carries it until then.
-    onBudget: ({ kind, status }) => {
+    onBudget: (event) => {
+      const { kind, status } = event;
+      void options.publishBudget?.(event).catch((err: unknown) => {
+        logger.warn({ err, kind }, 'budget crossing not written to the outbox');
+      });
       logger.warn(
         { kind, spentEur: status.spentEur, capEur: status.capEur, day: status.day },
         kind === 'reached'

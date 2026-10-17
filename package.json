@@ -14,7 +14,7 @@
     "dev": "turbo run dev --parallel",
     "dev:crm": "turbo run dev --parallel --filter=@nirvana/api --filter=@nirvana/web",
     "build": "turbo run build",
-    "check": "turbo run typecheck lint && prettier --check . && knip && node scripts/check-repo.mjs",
+    "check": "turbo run typecheck lint && prettier --check . && knip && node scripts/check-repo.mjs && pnpm --filter @nirvana/db drift",
     "check:repo": "node scripts/check-repo.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
