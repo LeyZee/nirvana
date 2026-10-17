@@ -2085,7 +2085,7 @@
   }
 }
 
-/* ── Share ring: one part of a whole (agent against humans). The value circle draws to its share
+/* ── Share ring: one part of a whole (agent against chatters). The value circle draws to its share
    (`ringDash`), the percentage sits in the middle. Colour: --_c, the neon by default. */
 .nv-ring {
   --_c: var(--nv-neon);
@@ -2117,12 +2117,23 @@
 .nv-ring__label {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   font-size: 15px;
   line-height: 1;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+}
+
+/* What the percentage counts (« agent »), under it. */
+.nv-ring__sub {
+  margin-top: 2px;
+  font-size: var(--nv-text-caption);
+  line-height: 12px;
+  font-weight: 500;
+  color: var(--nv-ink-faint);
 }
 
 /* ── Legend: one line per series, its key in the series colour. `--past` is the dotted previous period. */
@@ -2154,7 +2165,7 @@
   background: repeating-linear-gradient(90deg, var(--nv-ink-faint) 0 2px, transparent 2px 5px);
 }
 
-/* ── Split bar: one total cut in parts (what a fan spent: agent, then humans). Each part grows from the
+/* ── Split bar: one total cut in parts (what a fan spent: agent, then chatters). Each part grows from the
    left to its width `--nv-w`, in its colour `--_c`. */
 .nv-split {
   display: flex;
