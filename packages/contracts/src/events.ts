@@ -75,6 +75,7 @@ export const HANDOFF_CAUSES = [
   'manipulation',
   'guard',
   'budget',
+  'keyword',
   'other',
 ] as const;
 export const HandoffCauseSchema = z.enum(HANDOFF_CAUSES);

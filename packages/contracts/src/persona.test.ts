@@ -27,6 +27,12 @@ describe('PersonaSchema', () => {
     expect(demo().details.first_name).toBe('Elena');
   });
 
+  it('reads a persona with or without the deprecated gender', () => {
+    const { gender, ...details } = demo().details;
+    expect(gender).toBe('female');
+    expect(PersonaSchema.safeParse({ ...demo(), details }).success).toBe(true);
+  });
+
   it('rejects unknown keys, so a typo never passes silently', () => {
     const result = PersonaSchema.safeParse({ ...demo(), stlye: {} });
     expect(result.success).toBe(false);
