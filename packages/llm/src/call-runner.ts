@@ -33,8 +33,8 @@ interface Classified {
 
 /** `retry-after` in seconds or as an HTTP date. */
 function retryAfterMs(headers: Record<string, string> | undefined, now: number): number | undefined {
-  const value = headers?.['retry-after'];
-  if (value === undefined) return undefined;
+  const value = headers?.['retry-after']?.trim();
+  if (value === undefined || value === '') return undefined;
   const seconds = Number(value);
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
   const at = Date.parse(value);
@@ -79,8 +79,15 @@ export function classify(error: unknown): Classified {
         ...(wait !== undefined && { retryAfterMs: wait }),
       };
     }
-    if (status !== undefined && status >= 500)
-      return { outcome: 'unavailable', isTransient: true, message: `HTTP ${String(status)}` };
+    if (status !== undefined && status >= 500) {
+      const wait = retryAfterMs(error.responseHeaders, Date.now());
+      return {
+        outcome: 'unavailable',
+        isTransient: true,
+        message: `HTTP ${String(status)}`,
+        ...(wait !== undefined && { retryAfterMs: wait }),
+      };
+    }
     return { outcome: 'error', isTransient: error.isRetryable, message: `HTTP ${String(status ?? '?')}` };
   }
   if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {

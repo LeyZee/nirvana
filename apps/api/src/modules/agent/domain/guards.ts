@@ -56,8 +56,17 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   { code: 'ai_disclosure', pattern: /\ben tant qu'(ia|assistante?|modele|intelligence artificielle)\b/ },
   {
     code: 'ai_disclosure',
-    pattern: /\b(prompt|language model|modele de langage|mes instructions|grok|openai|xai)\b/,
+    pattern:
+      /\b(prompt|language model|modele de langage|mes instructions|grok|openai|xai|chatgpt|gpt|llm|anthropic|gemini)\b/,
   },
+  // Said of herself in the third person: « tu parles à une IA », « c'est un bot qui te répond ».
+  {
+    code: 'ai_disclosure',
+    pattern:
+      /\btu (parles|discutes|ecris|chattes?) (a|avec) (une?|l') ?(ia|ai|bot|robot|chatbot|machine|programme|intelligence artificielle)\b|\bc'?est (une?|l') ?(ia|ai|bot|robot|chatbot|programme|intelligence artificielle) qui\b/,
+  },
+  // « une lA » typed with a lowercase L, or a Cyrillic palochka read as one.
+  { code: 'ai_disclosure', pattern: /\b(je suis|jsuis|j'?suis|chuis?|chu) (qu'|juste )?une la\b/ },
   // Spoken and other-language admissions: « chui une IA », « I am an AI », « soy una IA ».
   {
     code: 'ai_disclosure',
@@ -84,14 +93,15 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
       /\b(on se (voit|retrouve|rejoint) (demain|ce soir|ce week-end|samedi|dimanche|lundi|mardi|mercredi|jeudi|vendredi|chez |a (la gare|l'hotel|paris|lyon)|au (cafe|bar|resto|restaurant))|je (viens|passe|monte) chez toi|viens chez moi|je te rejoins|mon adresse|rendez-vous (a |au |chez ))/,
   },
   { code: 'contact_info', pattern: /\b(https?:\/\/|www\.)\S+/ },
-  { code: 'contact_info', pattern: /\b[\w.+-]+@[\w-]+\.[\w.]+\b/ },
-  { code: 'contact_info', pattern: /(\+?\d[\s.-]?){9,}/ },
+  { code: 'contact_info', pattern: /\b[\w.+-]+ ?@ ?[\w-]+ ?\. ?[\w.]+\b/ },
+  { code: 'contact_info', pattern: /(\+?\d[\s.,/-]{0,2}){9,}/ },
   { code: 'contact_info', pattern: /\b(snap(chat)?|whatsapp|insta(gram)?|telegram)\b/ },
-  // « lina at gmail dot com », « lina (arobase) gmail point fr ».
+  // « lina at gmail dot com », « lina (arobase) gmail point fr », « lina @ gmail point com ». A word on each side:
+  // « ma chatte point ça » is not an address.
   {
     code: 'contact_info',
     pattern:
-      /\b[\w.+-]+ ?[([]? ?(at|arobase) ?[)\]]? ?[\w-]+ ?[([]? ?(dot|point) ?[)\]]? ?(com|fr|net|org|io|be|ch|ca)\b/,
+      /[\w.+-]+( | ?[([] ?)(at|arobase|@)( | ?[)\]] ?)[\w-]+( | ?[([] ?)(dot|point)( | ?[)\]] ?)(com|fr|net|org|io|be|ch|me|es|co|de|it|eu|info)\b/,
   },
   // Sales corpus (§4): she never asks him for intimate pictures, never despises him, never lies about paid content.
   // A request (a verb asking to see or receive) about his intimate body: her own « les nudes c'est pas mon truc »,
@@ -175,61 +185,111 @@ const AI_TICS: readonly RegExp[] = [
   /^\s*([-*•]|\d+[.)])\s/m,
 ];
 
-// A phone number written in words: « zéro six, douze, trente-quatre… ». Seven number words in a row give it away.
-const NUMBER_WORDS = new Set([
-  'zero',
-  'un',
-  'une',
-  'deux',
-  'trois',
-  'quatre',
-  'cinq',
-  'six',
-  'sept',
-  'huit',
-  'neuf',
-  'dix',
-  'onze',
-  'douze',
-  'treize',
-  'quatorze',
-  'quinze',
-  'seize',
-  'vingt',
-  'trente',
-  'quarante',
-  'cinquante',
-  'soixante',
-  'cent',
-  'et',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'seven',
-  'eight',
-  'nine',
-  'oh',
-]);
-const NUMBER_WORDS_IN_A_ROW = 7;
+// A phone number written in words, or in words and digits: « zéro six, douze, trente-quatre… », « 06 douze 34… ».
+// Values of the single words, to tell a count (« dix, neuf, huit… ») from a number.
+const NUMBER_WORDS: Readonly<Record<string, number | undefined>> = {
+  zero: 0,
+  un: 1,
+  une: 1,
+  deux: 2,
+  trois: 3,
+  quatre: 4,
+  cinq: 5,
+  six: 6,
+  sept: 7,
+  huit: 8,
+  neuf: 9,
+  dix: 10,
+  onze: undefined,
+  douze: undefined,
+  treize: undefined,
+  quatorze: undefined,
+  quinze: undefined,
+  seize: undefined,
+  vingt: undefined,
+  trente: undefined,
+  quarante: undefined,
+  cinquante: undefined,
+  soixante: undefined,
+  septante: undefined,
+  huitante: undefined,
+  octante: undefined,
+  nonante: undefined,
+  cent: undefined,
+  et: undefined,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+};
+/** Digits weigh their count, a word one: a number is about ten of them. */
+const NUMBER_WEIGHT = 7;
+const CONTACT_CUE =
+  /\b(num|numero|tel|telephone|portable|phone|appelle|appel|whatsapp|sms|texto|joindre|plus)\s?$/;
+
+function isNumberToken(token: string): boolean {
+  return /^\d+$/.test(token) || Object.hasOwn(NUMBER_WORDS, token);
+}
+
+/** « dix neuf huit… un », « un deux trois… »: single numbers going up or down by one. */
+function isCount(run: readonly string[]): boolean {
+  const values = run.map((token) => NUMBER_WORDS[token]);
+  return values.every((value, i) => {
+    if (value === undefined) return false;
+    const previous = values[i - 1];
+    return i === 0 || (previous !== undefined && Math.abs(value - previous) === 1);
+  });
+}
 
 function spelledNumber(text: string): string | undefined {
-  let run: string[] = [];
-  for (const word of text.split(/[^\p{L}]+/u).filter((w) => w !== '')) {
-    run = NUMBER_WORDS.has(word) ? [...run, word] : [];
-    if (run.length >= NUMBER_WORDS_IN_A_ROW) return run.join(' ');
+  const tokens = [...text.matchAll(/[\p{L}\d]+/gu)];
+  let start = 0;
+  while (start < tokens.length) {
+    let end = start;
+    let weight = 0;
+    while (end < tokens.length && isNumberToken(tokens[end]?.[0] ?? '')) {
+      const token = tokens[end]?.[0] ?? '';
+      weight += /^\d+$/.test(token) ? token.length : 1;
+      end += 1;
+    }
+    const run = tokens.slice(start, end).map((m) => m[0]);
+    const hasWord = run.some((token) => !/^\d+$/.test(token));
+    if (weight >= NUMBER_WEIGHT && hasWord) {
+      const first = run[0] ?? '';
+      const before = text.slice(0, tokens[start]?.index ?? 0);
+      if (first === 'zero' || first.startsWith('0') || CONTACT_CUE.test(before) || !isCount(run)) {
+        return run.join(' ');
+      }
+    }
+    start = Math.max(end, start + 1);
   }
   return undefined;
 }
 
+function forbiddenMatch(text: string, term: string): boolean {
+  // Whole words only: the disgust « anal » must not block « banal » or « canal ».
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(term)}($|[^\\p{L}\\p{N}])`, 'u').test(text);
+}
+
 /**
  * The bubbles read as one message, as the fan reads them: « je suis une » then « IA », a number cut in two, « 1A »
- * or « b0t » (unmasked), a number in words. Only what the bubble-by-bubble reading did not already catch.
+ * or « b0t » (unmasked), a number in words, a forbidden word split or masked. Only what the bubble-by-bubble reading did not already catch.
  */
-function wholeMessage(bubbles: readonly string[], found: readonly GuardViolation[]): GuardViolation[] {
+function wholeMessage(
+  bubbles: readonly string[],
+  forbidden: readonly string[],
+  found: readonly GuardViolation[],
+): GuardViolation[] {
   const joined = bubbles.join(' ');
-  const readings = [normalise(joined), unmask(joined)];
+  // Also glued (« je suis un b » then « ot ») and without emoji (« 06 12 34 🙈 56 78 »).
+  const glued = bubbles.join('');
+  const readings = [joined, glued, joined.replace(/\p{Extended_Pictographic}|\uFE0F/gu, '')].flatMap(
+    (text) => [normalise(text), unmask(text)],
+  );
   const violations: GuardViolation[] = [];
   const has = (code: GuardCode) => [...found, ...violations].some((v) => v.code === code);
   for (const { code, pattern } of BLOCKING_PATTERNS) {
@@ -240,6 +300,12 @@ function wholeMessage(bubbles: readonly string[], found: readonly GuardViolation
   const spelled = readings.map(spelledNumber).find((m) => m !== undefined);
   if (spelled !== undefined && !has('contact_info')) {
     violations.push({ code: 'contact_info', severity: 'blocking', match: spelled });
+  }
+  const named = new Set(found.filter((v) => v.code === 'forbidden_term').map((v) => v.match));
+  for (const term of forbidden) {
+    if (!named.has(term) && readings.some((text) => forbiddenMatch(text, term))) {
+      violations.push({ code: 'forbidden_term', severity: 'blocking', match: term });
+    }
   }
   return violations;
 }
@@ -262,8 +328,7 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       violations.push({ code: 'assistant_output', severity: 'blocking', bubbleIndex, match: assistant });
     }
     for (const term of forbidden) {
-      // Whole words only: the disgust « anal » must not block « banal » or « canal ».
-      if (new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(term)}($|[^\\p{L}\\p{N}])`, 'u').test(text)) {
+      if (forbiddenMatch(text, term)) {
         violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: term });
       }
     }
@@ -283,7 +348,7 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       violations.push({ code: 'bubble_too_long', severity: 'soft', bubbleIndex });
     }
   });
-  violations.push(...wholeMessage(bubbles, violations));
+  violations.push(...wholeMessage(bubbles, forbidden, violations));
   if (bubbles.length > settings.maxBubbles) violations.push({ code: 'too_many_bubbles', severity: 'soft' });
   return violations;
 }

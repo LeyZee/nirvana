@@ -55,8 +55,14 @@ export function startOfLocalDay(now: Date, timeZone: string): Date {
  * much, so an unknown cost never lets the day go past its cap unnoticed. Far above a real voice or brain call.
  */
 const UNKNOWN_CALL_COST_USD = 0.05;
-/** Refused before any work: the provider bills nothing. */
-const UNBILLED: ReadonlySet<CallOutcome> = new Set(['auth', 'rate_limited', 'missing_key', 'unknown_model']);
+/** Refused before any work, or a server error (5xx): the provider bills nothing. */
+const UNBILLED: ReadonlySet<CallOutcome> = new Set([
+  'auth',
+  'rate_limited',
+  'unavailable',
+  'missing_key',
+  'unknown_model',
+]);
 
 function billedUsd(record: LlmCallRecord): number {
   if (record.costUsd !== undefined) return record.costUsd;

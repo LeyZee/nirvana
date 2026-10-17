@@ -184,4 +184,50 @@ describe('voice guards', () => {
       expect(codes([bubble]), bubble).toEqual([]);
     }
   });
+
+  it('closes the gaps found in the cold review (17/10)', () => {
+    for (const bubbles of [
+      ['tu parles à une IA'],
+      ["c'est une IA qui te répond"],
+      ['je suis ChatGPT'],
+      ['je suis une A.I.'],
+      ['I am an A.I.'],
+      ['je suis un ʙᴏᴛ'],
+      ['je suis une \u04C0А'],
+      ['je suis une lA'],
+      ['je suis un b', 'ot'],
+    ]) {
+      expect(codes(bubbles), bubbles.join(' | ')).toContain('ai_disclosure');
+    }
+    for (const bubbles of [
+      ['06, 12, 34, 56, 78'],
+      ['06/12/34/56/78'],
+      ['mon num 06 12 34 🙈', '56 78'],
+      ['06 douze 34 cinquante-six 78'],
+      ['zéro six septante-deux trente nonante huit'],
+      ['six douze trente quatre cinquante six soixante dix huit'],
+      ['lina @ gmail.com'],
+      ['lina @ gmail point com'],
+      ['lina at proton dot me'],
+    ]) {
+      expect(codes(bubbles), bubbles.join(' | ')).toContain('contact_info');
+    }
+    expect(codes(['sodo', 'mie ce soir ?'], ['sodomie'])).toContain('forbidden_term');
+    expect(codes(['tu veux de la s0d0mie ?'], ['sodomie'])).toContain('forbidden_term');
+  });
+
+  it('lets a countdown, an interjection and her own words through', () => {
+    for (const bubbles of [
+      ['Je compte : dix, neuf, huit, sept, six, cinq, quatre, trois, deux, un 😈'],
+      ['un, deux, trois, quatre, cinq, six, sept… prêt ?'],
+      ['oh oh oh oh oh oh oh'],
+      ['ma chatte point ça'],
+      ['à quel point ça m’excite'],
+      ['je suis une machine au lit 😏'],
+      ['je suis là', 'ok ?'],
+      ['le mistral souffle fort ce soir'],
+    ]) {
+      expect(codes(bubbles), bubbles.join(' | ')).toEqual([]);
+    }
+  });
 });

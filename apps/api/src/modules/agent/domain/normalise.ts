@@ -47,12 +47,36 @@ const HOMOGLYPHS: Readonly<Record<string, string>> = {
   υ: 'u',
   χ: 'x',
   ω: 'w',
+  // Small capitals: « ʙᴏᴛ ».
+  ᴀ: 'a',
+  ʙ: 'b',
+  ᴄ: 'c',
+  ᴅ: 'd',
+  ᴇ: 'e',
+  ɢ: 'g',
+  ʜ: 'h',
+  ɪ: 'i',
+  ᴊ: 'j',
+  ᴋ: 'k',
+  ʟ: 'l',
+  ᴍ: 'm',
+  ɴ: 'n',
+  ᴏ: 'o',
+  ᴘ: 'p',
+  ʀ: 'r',
+  ꜱ: 's',
+  ᴛ: 't',
+  ᴜ: 'u',
+  ᴠ: 'v',
+  ᴡ: 'w',
+  ʏ: 'y',
+  ᴢ: 'z',
 };
 const HOMOGLYPH_PATTERN = new RegExp(`[${Object.keys(HOMOGLYPHS).join('')}]`, 'gu');
 
 /**
  * Lowercase, no accents, straight apostrophes, invisible characters dropped, one plain space for any
- * whitespace, Cyrillic and Greek look-alikes read as Latin, « I.A. » read as « ia »: « Je t’AIME » and « je t'aime » compare equal.
+ * whitespace, Cyrillic, Greek and small-capital look-alikes read as Latin, « I.A. » and « A.I. » read as « ia » and « ai »: « Je t’AIME » and « je t'aime » compare equal.
  */
 export function normalise(text: string): string {
   return text
@@ -63,7 +87,8 @@ export function normalise(text: string): string {
     .replace(/\s+/g, ' ')
     .toLowerCase()
     .replace(HOMOGLYPH_PATTERN, (c) => HOMOGLYPHS[c] ?? c)
-    .replace(/\bi\.\s?a\.?(?=\W|$)/g, 'ia');
+    .replace(/\bi\.\s?a\.?(?=\W|$)/g, 'ia')
+    .replace(/\ba\.\s?i\.?(?=\W|$)/g, 'ai');
 }
 
 /** Stricter reading for trap detection: digits and symbols inside words turned back into letters. */

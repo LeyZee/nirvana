@@ -17,11 +17,12 @@ const call = (at: string, costUsd?: number): LlmCallRecord => ({
 });
 
 describe('daily budget', () => {
-  it('counts a call of unknown cost at a high estimate, and a refused key at nothing', () => {
+  it('counts a call of unknown cost at a high estimate, and a refused key or a server error at nothing', () => {
     const log = createInMemoryCallLog();
     const unknown = call('2026-10-17T08:00:00Z');
     log.append({ ...unknown, outcome: 'timeout' });
     log.append({ ...unknown, outcome: 'auth' });
+    log.append({ ...unknown, outcome: 'unavailable' });
     const { dailyBudget } = DEFAULT_LLM_CONFIG;
     const status = budgetStatus(dailyBudget, 20, log, new Date('2026-10-17T20:00:00Z'));
     expect(status.spentEur).toBeCloseTo(0.05 / dailyBudget.usdPerEur);

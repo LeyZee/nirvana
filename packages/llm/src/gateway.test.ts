@@ -177,7 +177,7 @@ describe('LlmGateway', () => {
     expect(waits).toEqual([500, 1_000]);
   });
 
-  it('waits as long as a 429 asks, and leaves a long wait to the fallback', async () => {
+  it('waits as long as a 429 or a 503 asks, ignores a blank header, and leaves a long wait to the fallback', async () => {
     const waits: number[] = [];
     const short = setup(
       { xai: scripted([{ status: 429, retryAfter: '2' }, { text: BUBBLES }]) },
@@ -188,6 +188,23 @@ describe('LlmGateway', () => {
     );
     expect((await short.gateway.voice(INPUT)).ok).toBe(true);
     expect(waits).toEqual([2_000]);
+
+    const unavailable: number[] = [];
+    const blank = setup(
+      {
+        xai: scripted([
+          { status: 503, retryAfter: '1' },
+          { status: 429, retryAfter: ' ' },
+          { text: BUBBLES },
+        ]),
+      },
+      ALL_KEYS,
+      undefined,
+      {},
+      unavailable,
+    );
+    expect((await blank.gateway.voice(INPUT)).ok).toBe(true);
+    expect(unavailable).toEqual([1_000, 1_000]);
 
     const long = setup({
       xai: scripted([{ status: 429, retryAfter: '60' }]),
