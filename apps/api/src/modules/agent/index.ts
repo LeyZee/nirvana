@@ -26,7 +26,7 @@ export {
   REJECT_REASON_LABELS,
   REJECT_REASONS,
   suggestDestination,
-  VALIDATION_TARGET,
+  RATE_TARGET,
   versionLabel,
   type Verdict,
 } from './domain/calibration';

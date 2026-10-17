@@ -5,7 +5,7 @@ import {
   parseRejectReason,
   rateReport,
   suggestDestination,
-  validationRate,
+  playgroundRate,
   type RatedAnswer,
   type Verdict,
 } from '../calibration';
@@ -19,18 +19,18 @@ function rated(version: typeof V13, verdicts: readonly Verdict[]): RatedAnswer[]
   return verdicts.map((verdict, i) => ({ at: String(i), version, verdict }));
 }
 
-describe('validationRate', () => {
+describe('playgroundRate', () => {
   it('counts only answers kept as written, over the last 50', () => {
     const corrected: Verdict = { kind: 'corrected', text: 'Okidoki' };
-    expect(validationRate(rated(V13, [OK, OK, OK, corrected]))).toMatchObject({
+    expect(playgroundRate(rated(V13, [OK, OK, OK, corrected]))).toMatchObject({
       rate: 0.75,
       rated: 4,
       meetsTarget: false,
     });
     const old = rated(V13, Array<Verdict>(10).fill(NO));
     const recent = rated(V13, Array<Verdict>(50).fill(OK));
-    expect(validationRate([...old, ...recent])).toMatchObject({ rate: 1, rated: 50, meetsTarget: true });
-    expect(validationRate([]).rate).toBeUndefined();
+    expect(playgroundRate([...old, ...recent])).toMatchObject({ rate: 1, rated: 50, meetsTarget: true });
+    expect(playgroundRate([]).rate).toBeUndefined();
   });
 });
 
