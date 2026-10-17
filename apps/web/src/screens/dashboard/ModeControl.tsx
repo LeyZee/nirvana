@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 
 import type { FloatingTip } from './parts';
 
-import { MODES, missingLines, nextMode, type AgentMode, type AutomaticGate } from '@/agent/mode';
+import { MODES, missingRows, nextMode, type AgentMode, type AutomaticGate } from '@/agent/mode';
 
 /** Arrow keys of the radio group and the way they move. */
 const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
@@ -89,8 +89,9 @@ export function ModeControl({
           {...tip.bind({
             title: locked ? 'Automatique : verrouillé' : 'Automatique',
             text: locked
-              ? `L’agent enverrait seul, sans validation. Il manque encore : ${missingLines(automatic).join(' ')}`
+              ? 'L’agent enverrait seul, sans validation. Il s’ouvre quand tout ceci est rempli :'
               : 'L’agent envoie seul, sans validation, dans les limites réglées.',
+            ...(locked ? { rows: missingRows(automatic) } : {}),
           })}
           onClick={() => {
             if (!locked) pick('auto');

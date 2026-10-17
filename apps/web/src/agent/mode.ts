@@ -30,18 +30,24 @@ export const MODES: readonly AgentMode[] = ['auto', 'copilot', 'stop'];
 
 const percent = (value: number): string => `${String(value)}\u00a0%`;
 
-/** One sentence per missing condition, in the order of the ADR. */
-export function missingLines(gate: AutomaticGate): string[] {
-  return gate.missing.map((condition) => {
+/** One tip row per missing condition, in the order of the ADR: what is measured, and where it stands. */
+export function missingRows(gate: AutomaticGate): [label: string, value: string][] {
+  return gate.missing.map((condition): [string, string] => {
     switch (condition.kind) {
       case 'live_rate':
-        return condition.value === null
-          ? `Taux en réel : pas encore mesuré, il faut ${percent(condition.target)}.`
-          : `Taux en réel : ${percent(condition.value)}, il faut ${percent(condition.target)}.`;
+        return [
+          'Taux en réel',
+          condition.value === null
+            ? `pas encore mesuré, ${percent(condition.target)} visés`
+            : `${percent(condition.value)} sur ${percent(condition.target)}`,
+        ];
       case 'decided_drafts':
-        return `Brouillons validés ou refusés par les chatteurs : ${String(condition.value)} sur ${String(condition.target)}.`;
+        return [
+          'Brouillons validés ou refusés',
+          `${String(condition.value)} sur ${String(condition.target)}`,
+        ];
       case 'blind_test':
-        return 'Test à l’aveugle avec la créatrice : pas encore validé.';
+        return ['Test à l’aveugle', 'pas encore validé'];
     }
   });
 }
@@ -76,6 +82,6 @@ export function pillOf(mode: AgentMode): {
     case 'copilot':
       return { label: 'Copilote', tone: 'ok', live: true };
     case 'stop':
-      return { label: 'Arrêté', tone: 'bad', live: false };
+      return { label: MODE_LABEL.stop, tone: 'bad', live: false };
   }
 }
