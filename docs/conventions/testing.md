@@ -1,10 +1,11 @@
 # Stratégie de tests
 
-Cinq couches, chacune avec un outil et un but. Une PR touche la couche qui correspond à ce qu'elle change ; on ne « compense » pas un test manquant par un autre.
+Six couches, chacune avec un outil et un but. Une PR touche la couche qui correspond à ce qu'elle change ; on ne « compense » pas un test manquant par un autre.
 
 | Couche | Outil | Quoi | Vitesse | Quand |
 |---|---|---|---|---|
 | Unitaire domaine | Vitest | Règles pures, machines d'état, politiques, gardes, schémas Zod | ms | `pnpm test`, à chaque push (hook) |
+| Écran web | Vitest + jsdom + Testing Library | Ce qu'un écran d'`apps/web` montre et fait : états (vide, erreur, liste), clavier, confirmations, état partagé entre écrans ; `fetch` remplacé par un faux serveur | ms | `pnpm test`, à chaque push (hook) |
 | Intégration | Vitest + Testcontainers (Postgres) | Repositories, RLS, jobs Graphile, cas d'usage de bout en bout sur une base réelle | s | `pnpm test:integration` (Docker requis), CI |
 | Contrat connecteur | Vitest | La **même suite** tourne contre `FakeConnector`, `FakeReveal` (serveur mock) et, à la main, contre Reveal réel en lecture | s | CI (Fake) ; manuel (réel) |
 | E2E | Playwright | Dashboard (inbox copilote), extension contre `FakeReveal` | min | `pnpm test:e2e`, CI nightly + avant release |
@@ -19,6 +20,7 @@ Cinq couches, chacune avec un outil et un but. Une PR touche la couche qui corre
 - Chaque bug corrigé commence par un test qui le reproduit.
 - Les fixtures sont inventées, courtes, nommées (`fixtures/fans.ts: theQuietFan`), avec des fabriques (`makeFan(overrides)`) plutôt que des objets copiés. Jamais de donnée réelle.
 - Les tests de politique et de gardes couvrent systématiquement : le cas nominal, le cas limite, le cas adversarial.
+- Un test d'écran déclare `// @vitest-environment jsdom` en tête de fichier (le reste d'`apps/web` tourne sous Node), cherche par rôle et par nom accessible comme le ferait un lecteur d'écran, et ne remplace que ce que jsdom n'a pas (`matchMedia`, `ResizeObserver`, `scrollTo`).
 - Un test flaky est corrigé ou supprimé dans la journée, jamais mis en `retry`.
 
 ## FakeReveal

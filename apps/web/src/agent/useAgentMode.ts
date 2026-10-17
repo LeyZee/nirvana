@@ -38,6 +38,9 @@ export function useAgentMode(): AgentModeView {
   const { data = SAMPLE } = useQuery({ queryKey: KEY, queryFn: () => SAMPLE, staleTime: Infinity });
   const setMode = useCallback(
     (mode: AgentMode) => {
+      // A read still in flight would land after the switch and silently put the old mode back (an Arrêt lost):
+      // it is dropped first.
+      void client.cancelQueries({ queryKey: KEY });
       client.setQueryData<AgentControl>(KEY, (before = SAMPLE) =>
         isSelectable(mode, before.automatic) ? { ...before, mode } : before,
       );
