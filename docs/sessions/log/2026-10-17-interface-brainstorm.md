@@ -7,3 +7,4 @@ Découvertes : collision de nom entre le playground de conversation et la page `
 Candidats à suppression : aucun.
 Vérifié : `pnpm check` ✓.
 Suite (retour de Charles, même jour) : maquettes v2. Popup en six écrans (appairage, choix du compte avec Reveal actif et OnlyFans « Bientôt », quotidien, session expirée, enregistrement, arrêt d'urgence) avec le vrai lockup (auréole sur le i) ; playground intégré au dashboard, question unique « Elle aurait dit ça ? » au clavier, panneau de correction, verdict en tête du panneau « pourquoi ». Note 06 mise à jour (§3 et §4).
+Suite (deuxième retour) : prototype cliquable v3 publié (https://claude.ai/artifact/TZjCUAPFhxN4pJn978A9zz). Section Entraîner (Playground, Corrections, Tests), destinations d'une correction, comparaison, Inbox à la même barre de jugement, touches A/E/R communes ; retrait des chiffres non actionnables. Note 06 §4 mise à jour.
