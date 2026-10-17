@@ -6,6 +6,13 @@
 
 **Règles propres.** Aucun autre module n'importe un adaptateur directement : tout passe par le port.
 
+## Ce qui existe (P0-06)
+
+- `domain/platform-connector.ts` : le port et `ConnectorError` ; `domain/rhythm.ts` : rythme des relèves et coupe-circuit.
+- `application/` : jobs `dispatch`, `poll`, `reconcile` ; `sessions` ; `outbound-sender` (port `OutboundSender` de `conversations`).
+- `infra/fake/FakeConnector.ts` : plateforme en mémoire à scénarios. `infra/__tests__/contract.test.ts` : la suite que tout adaptateur doit passer.
+- Un adaptateur se branche par le registre (`ConnectorRegistry`, une fabrique par plateforme) passé à `createApp` ; registre vide = aucun compte relevé.
+
 ## Structure
 
 - `domain/` : types, règles pures, machines d'état. Zéro I/O, zéro import de framework.

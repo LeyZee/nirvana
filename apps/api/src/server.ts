@@ -33,6 +33,13 @@ export interface ServerDeps {
   readonly readiness: () => Promise<Readiness>;
 }
 
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    /** `false` exempts a route from the dashboard's Origin check: it authenticates otherwise (device token). */
+    originCheck?: boolean;
+  }
+}
+
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const BODY_LIMIT_BYTES = 1_048_576;
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -92,7 +99,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   // separate token. A missing `Origin` is refused too: browsers always send it on a cross-site POST.
   const allowedOrigins = new Set([config.WEB_ORIGIN]);
   server.addHook('onRequest', async (request, reply) => {
-    if (!MUTATIONS.has(request.method)) return;
+    if (!MUTATIONS.has(request.method) || request.routeOptions.config.originCheck === false) return;
     const origin = request.headers.origin;
     if (origin === undefined || !allowedOrigins.has(origin)) {
       await reply.code(403).send(errorBody(request, 'origin_forbidden', 'Origine non autorisée'));

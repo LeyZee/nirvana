@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { MessageDirectionSchema, PlatformSchema, SessionStateSchema } from './enums';
+import { PlatformAccountIdSchema } from './ids';
 import { CurrencySchema } from './money';
 
 /**
@@ -112,3 +113,29 @@ export const ConnectorEventSchema = z.discriminatedUnion('type', [
 export type ConnectorEvent = z.infer<typeof ConnectorEventSchema>;
 
 export type Unsubscribe = () => Promise<void>;
+
+/**
+ * `platform_accounts.connector_config` (connectors.md § Règles de bonne conduite): the polling rhythm and the
+ * circuit breaker. Every field has a default, so `{}` is a valid configuration.
+ */
+export const ConnectorConfigSchema = z.object({
+  /** Seconds between two polls of the account. */
+  pollIntervalSeconds: z.number().int().min(15).max(3_600).default(60),
+  /** Random extra wait added to each poll, so the rhythm is never regular. */
+  jitterSeconds: z.number().int().min(0).max(300).default(20),
+  /** Consecutive failed polls before the breaker opens. */
+  breakerThreshold: z.number().int().min(1).max(50).default(5),
+  /** How long an open breaker keeps the account quiet. */
+  breakerPauseMinutes: z.number().int().min(1).max(240).default(10),
+});
+export type ConnectorConfig = z.infer<typeof ConnectorConfigSchema>;
+
+/**
+ * `POST /v1/connector/sessions`: the extension's « Sync » button sends the platform session it read. The
+ * session is opaque to the core, stored encrypted, never logged and never sent back.
+ */
+export const ConnectorSessionBodySchema = z.object({
+  platformAccountId: PlatformAccountIdSchema,
+  session: z.string().min(1).max(65_536),
+});
+export type ConnectorSessionBody = z.infer<typeof ConnectorSessionBodySchema>;

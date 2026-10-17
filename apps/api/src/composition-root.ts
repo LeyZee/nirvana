@@ -1,20 +1,16 @@
-import { DomainError, JOB_PAYLOADS } from '@nirvana/contracts';
-import { createDbClient, type DbClient } from '@nirvana/db';
+import { JOB_PAYLOADS } from '@nirvana/contracts';
+import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
 
 import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
-import type { Config } from './config';
+import { secretOrNull, type Config } from './config';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import type { Logger } from './logger';
 import { createAgentModule, type AgentModule } from './modules/agent';
-import { createConnectorsModule, type ConnectorsModule } from './modules/connectors';
-import {
-  createConversationsModule,
-  type ConversationsModule,
-  type OutboundSender,
-} from './modules/conversations';
+import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
+import { createConversationsModule, type ConversationsModule } from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
@@ -58,17 +54,15 @@ export interface App {
   shutdown(): Promise<void>;
 }
 
-/** Until the connectors arrive (P0-06), an approved draft cannot leave: the send job fails and is retried. */
-const NO_SENDER: OutboundSender = {
-  sendText: () => Promise.reject(new DomainError('connector_unavailable', 'Aucun connecteur branché')),
-  sendMedia: () => Promise.reject(new DomainError('connector_unavailable', 'Aucun connecteur branché')),
-  verifySent: () => Promise.resolve({ status: 'not_found' }),
-};
-
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
+export interface AppOptions {
+  /** Tests and local development plug a `FakeConnector` here; production gets the real adapters. */
+  readonly connectorRegistry?: ConnectorRegistry;
+}
+
 /** Wires every business module by hand (no DI container, coding.md). Called once by each entry point. */
-export async function createApp(config: Config, logger: Logger): Promise<App> {
+export async function createApp(config: Config, logger: Logger, options: AppOptions = {}): Promise<App> {
   const db = createDbClient(config.DATABASE_URL, POOL_OPTIONS);
   const adminDb = createDbClient(config.DATABASE_ADMIN_URL, { ...POOL_OPTIONS, max: 5 });
   // A client losing its connection must not crash the process; the next query reconnects.
@@ -87,10 +81,26 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
   const requireRole = createRequireRole(auth);
 
   const fans = createFansModule({ db: db.db });
+  const sessionKeys = secretOrNull(config.SESSION_ENCRYPTION_KEYS);
+  const connectors = createConnectorsModule({
+    db: db.db,
+    adminDb: adminDb.db,
+    // Called by the jobs only, once `conversations` exists below (the two modules need each other's port).
+    ingest: (input) => conversations.ingestMessage(input),
+    // Reveal's adapter arrives with phase 1 (ADR 0008); until then no account is polled.
+    registry: options.connectorRegistry ?? {},
+    sessionKeys: sessionKeys === null ? null : parseEncryptionKeys(sessionKeys),
+    deviceToken: secretOrNull(config.EXTENSION_DEVICE_TOKEN),
+  });
+  const conversations = createConversationsModule({
+    db: db.db,
+    fans,
+    sender: connectors.outboundSender,
+    requireRole,
+  });
   const modules: Modules = {
-    connectors: createConnectorsModule(),
-    // TODO(P0-06): `sender: connectors.outboundSender`.
-    conversations: createConversationsModule({ db: db.db, fans, sender: NO_SENDER, requireRole }),
+    connectors,
+    conversations,
     fans,
     persona: createPersonaModule(),
     agent: createAgentModule(),
@@ -100,7 +110,8 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
     scripts: createScriptsModule(),
     providers: await startProvidersModule({
       adminDb: adminDb.db,
-      encryptionKeys: config.CREDENTIALS_ENCRYPTION_KEYS,
+      // The `.env.example` placeholder counts as unset: keys stay in memory instead of crashing the start.
+      encryptionKeys: secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS) ?? undefined,
       environmentKeys:
         config.NODE_ENV === 'production'
           ? null
@@ -128,9 +139,23 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
       logger,
       (payload, context) => modules.conversations.jobs.send(payload, context.logger, context.attempt),
     ),
-    // TODO(P0-06): the connectors module enqueues one `connector.poll` per account on `account:<id>`.
-    'connector.dispatch': defineTask('connector.dispatch', JOB_PAYLOADS['connector.dispatch'], logger, () =>
-      Promise.resolve(),
+    'connector.dispatch': defineTask(
+      'connector.dispatch',
+      JOB_PAYLOADS['connector.dispatch'],
+      logger,
+      (_payload, context) => modules.connectors.jobs.dispatch(context.logger),
+    ),
+    'connector.poll': defineTask(
+      'connector.poll',
+      JOB_PAYLOADS['connector.poll'],
+      logger,
+      (payload, context) => modules.connectors.jobs.poll(payload, context.logger),
+    ),
+    'connector.reconcile': defineTask(
+      'connector.reconcile',
+      JOB_PAYLOADS['connector.reconcile'],
+      logger,
+      (payload, context) => modules.connectors.jobs.reconcile(payload, context.logger),
     ),
     'providers.check_credentials': defineTask(
       'providers.check_credentials',
@@ -157,6 +182,7 @@ export async function createApp(config: Config, logger: Logger): Promise<App> {
       createAuthRoutes(auth, config, requireRole),
       modules.conversations.routes,
       modules.providers.routes({ guard: requireRole('owner') }),
+      modules.connectors.routes,
     ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
