@@ -50,6 +50,6 @@ Ce que Nirvana ajoute, et seulement cela, parce que Reveal ne le stocke pas : le
 - Évals : fan à découvert, fan qui fixe une limite de dépense, fan de 18 ans, fan qui revient après trois semaines (il est reconnu).
 
 ## Hors périmètre
-Tables `offers`, `sales`, `scripts` (fiche catalogue), la forme exacte des notes et statistiques Reveal (P1-02), interface de la fiche fan dans l'extension, import de l'historique Reveal.
+Tables `scripts`, `bundles`, `sales` (fiche catalogue), la forme exacte des notes et statistiques Reveal (P1-02), interface de la fiche fan dans l'extension, import de l'historique Reveal.
 
 ## Notes de session
