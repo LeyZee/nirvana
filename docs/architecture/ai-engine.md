@@ -112,6 +112,10 @@ Chaque règle est une fonction testée unitairement avec cas nominal, limite, ad
 
 Après la voix, sur le texte final : demande de photos intimes au fan, mépris (« radin », « menteur »), mensonge sur le payant (« rien à payer »), bouderie culpabilisante (souple), sortie d'assistante (recette, code, liste, balises), dégoûts et mots interdits (persona, liste normalisée avec variantes), anti-répétition (similarité avec les N derniers envois), longueur par bulle, mention d'argent/prix hors offre, mention d'IA/prompt/système/assistant, fuite d'un autre fan (noms/faits d'un autre fan dans le contexte ne doivent pas apparaître), URL/téléphone/email, langue attendue. Une violation `blocking` interdit l'envoi ; une violation `soft` déclenche une régénération puis laisse passer avec trace.
 
+Les gardes bloquantes lisent chaque bulle, puis le message entier tel que le fan le lit : bulles mises bout à bout, lettres cyrilliques et grecques ramenées à leur sosie latin, chiffres dans les mots démasqués (« 1A », « b0t »). L'aveu d'IA et la déclaration d'amour sont aussi cherchés en anglais et en espagnol. Un numéro coupé entre deux bulles, un numéro écrit en lettres (sept mots-nombres de suite) et un email écrit « at … dot com » comptent comme un contact. Les bulles retouchées par un chatteur relèvent de l'approbation (module `conversations`).
+
+Les relances d'un modèle (429, 5xx, délai dépassé) attendent 0,5 s, puis 1 s, puis 2 s, au plus 4 s, ou le délai que demande le fournisseur (`retry-after`). Au-delà de 10 s demandées, la relance cède la place au modèle de repli. Le plafond du jour compte un appel au coût inconnu à 0,05 $, et rien pour une clé refusée. Il est vérifié avant chaque appel, sur les coûts déjà journalisés : quelques centimes de dépassement restent possibles quand plusieurs appels tournent en même temps, et c'est accepté.
+
 ## Humanisation (envoi)
 
 Délai de première réponse dans une fenêtre dépendant de l'heure et de la persona ; « temps de frappe » ≈ 40-60 mots/min avec jitter ; bulles séparées ; `setTyping` si la plateforme l'expose ; jamais deux réponses identiques à deux fans ; horaires de vie avec variations hebdomadaires.

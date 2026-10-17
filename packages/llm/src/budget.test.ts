@@ -4,7 +4,7 @@ import { budgetStatus, startOfLocalDay } from './budget';
 import { createInMemoryCallLog, type LlmCallRecord } from './call-log';
 import { DEFAULT_LLM_CONFIG } from './config';
 
-const call = (at: string, costUsd: number): LlmCallRecord => ({
+const call = (at: string, costUsd?: number): LlmCallRecord => ({
   at: new Date(at),
   role: 'voice',
   provider: 'xai',
@@ -13,10 +13,21 @@ const call = (at: string, costUsd: number): LlmCallRecord => ({
   outcome: 'ok',
   latencyMs: 100,
   isFallback: false,
-  costUsd,
+  ...(costUsd !== undefined && { costUsd }),
 });
 
 describe('daily budget', () => {
+  it('counts a call of unknown cost at a high estimate, and a refused key or a server error at nothing', () => {
+    const log = createInMemoryCallLog();
+    const unknown = call('2026-10-17T08:00:00Z');
+    log.append({ ...unknown, outcome: 'timeout' });
+    log.append({ ...unknown, outcome: 'auth' });
+    log.append({ ...unknown, outcome: 'unavailable' });
+    const { dailyBudget } = DEFAULT_LLM_CONFIG;
+    const status = budgetStatus(dailyBudget, 20, log, new Date('2026-10-17T20:00:00Z'));
+    expect(status.spentEur).toBeCloseTo(0.05 / dailyBudget.usdPerEur);
+  });
+
   it('starts the day at midnight in Paris, including the day the clocks go back', () => {
     expect(startOfLocalDay(new Date('2026-10-17T20:05:00Z'), 'Europe/Paris').toISOString()).toBe(
       '2026-10-16T22:00:00.000Z',

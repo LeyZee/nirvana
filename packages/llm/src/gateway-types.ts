@@ -154,6 +154,8 @@ export interface LlmGatewayDeps {
   readonly dailyCapEur?: () => number;
   /** Once per day and kind: alert at 80 %, then cap reached. Never throws into a call. */
   readonly onBudget?: (event: BudgetEvent) => void;
+  /** Waits before a transient retry (backoff); a real timer unless a test passes its own. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 export interface KeyRefusal {

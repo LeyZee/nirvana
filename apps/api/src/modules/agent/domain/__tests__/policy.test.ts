@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { offerDecision, type OfferContext } from '../policy';
+import { offerableScripts, offerDecision, type OfferContext } from '../policy';
 
 const NOW = new Date('2026-10-17T20:00:00Z');
 const hoursAgo = (hours: number): Date => new Date(NOW.getTime() - hours * 3_600_000);
@@ -56,5 +56,13 @@ describe('offerDecision', () => {
     expect(offerDecision({ ...asks, lastOfferAt: hoursAgo(1) })).toEqual({ allowed: true });
     expect(offerDecision({ ...asks, hasNoBudget: true })).toEqual({ allowed: true });
     expect(offerDecision({ ...asks, risks: ['money_trouble'] })).toEqual({ allowed: false, reason: 'risk' });
+  });
+});
+
+describe('offerable scripts', () => {
+  it('never offers again a script he refused, even days later', () => {
+    const scripts = [{ id: 'douche' }, { id: 'lingerie' }, { id: 'reveil' }];
+    expect(offerableScripts(scripts, new Set(['lingerie'])).map((s) => s.id)).toEqual(['douche', 'reveil']);
+    expect(offerableScripts(scripts, new Set())).toHaveLength(3);
   });
 });

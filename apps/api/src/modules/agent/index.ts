@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
+import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
 import { createDraftComposer, type AgentDraftComposer } from './infra/draft-composer';
@@ -41,6 +42,8 @@ export { asSent, composeTurn, withExamples } from './infra/compose';
 export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
 export type { AgentDraftComposer } from './infra/draft-composer';
+/** @public The `BubbleGuard` port of `conversations`, matched by shape. */
+export type { AgentBubbleGuard } from './infra/bubble-guard';
 
 export interface DraftComposerStartOptions {
   readonly gateway: LlmGateway;
@@ -68,6 +71,16 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
   });
+}
+
+/**
+ * The hard guards for the bubbles a chatter rewrote, with her disgusts and forbidden words.
+ * @public Wired by the composition root once `conversations` has its `BubbleGuard` port (revue 09, G5).
+ */
+export async function startBubbleGuard(options: { readonly personaPath: string }): Promise<AgentBubbleGuard> {
+  const today = new Date().toISOString().slice(0, 10);
+  const persona = readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today);
+  return createBubbleGuard(guardSettingsOf(persona));
 }
 
 export interface AgentModule {

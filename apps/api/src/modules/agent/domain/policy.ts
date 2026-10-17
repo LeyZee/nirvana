@@ -58,3 +58,14 @@ export function offerDecision(context: OfferContext): OfferDecision {
   if (!context.fanSexualizes) return { allowed: false, reason: 'not_sexualizing' };
   return { allowed: true };
 }
+
+/**
+ * The scripts she may still offer him: never one he already refused, whatever day it was (méthode, « jamais
+ * reproposer un pack refusé »). Reveal's script history is the source of truth for what he was offered (ADR 0018).
+ */
+export function offerableScripts<T extends { readonly id: string }>(
+  scripts: readonly T[],
+  refusedIds: ReadonlySet<string>,
+): T[] {
+  return scripts.filter((script) => !refusedIds.has(script.id));
+}
