@@ -32,7 +32,8 @@ async function lint(file: string): Promise<Linter.LintMessage[]> {
 const ruleIds = (messages: Linter.LintMessage[]): (string | null)[] =>
   messages.map((message) => message.ruleId);
 
-describe('module boundaries', () => {
+// The first lint builds the typed ESLint config (TypeScript project service): over 5 s on a cold CI runner.
+describe('module boundaries', { timeout: 30_000 }, () => {
   it('allows a module to use an allowed module through its index.ts', async () => {
     expect(ruleIds(await lint('conversations/application/allowed.ts'))).toEqual([]);
   });
