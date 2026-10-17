@@ -447,6 +447,9 @@
 .sv-copy[data-copied='true'] span {
   color: var(--nv-success);
 }
+.sv-copy[data-copy='failed'] span {
+  color: var(--nv-danger);
+}
 .sv-note {
   margin: 0;
   font-size: 13px;
@@ -484,6 +487,10 @@
 .sv-key input::placeholder {
   font-family: inherit;
   color: var(--nv-ink-faint);
+}
+/* The key field is `type=text` so that password managers leave it alone; it is masked here instead. */
+.sv-key input.sv-key__secret {
+  -webkit-text-security: disc;
 }
 .sv-msg {
   margin: 0;
@@ -594,6 +601,10 @@
 .sv-notice {
   margin: 0;
   font-size: var(--nv-text-footnote);
+}
+/* Not a failure of Nirvana: the provider did not answer, the last verification still stands. */
+.sv-notice[data-tone='warning'] {
+  color: var(--nv-warning);
 }
 
 .sv-page :is(button, a, select):focus-visible {

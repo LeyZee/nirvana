@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { confirmPassword, connectKey, disconnect, fetchOverview, ReauthRequired } from './api';
+import {
+  confirmPassword,
+  connectKey,
+  describeError,
+  disconnect,
+  fetchOverview,
+  isSessionExpired,
+  ReauthRequired,
+  ServicesError,
+  showError,
+  verifyNow,
+} from './api';
 
 const status = {
   provider: 'xai',
@@ -14,10 +25,23 @@ const status = {
   voices: [],
 };
 
+function apiError(code: string): unknown {
+  return { error: { code, message: 'x', details: {}, requestId: 'r' } };
+}
+
 function answer(statusCode: number, body: unknown): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status: statusCode }))),
+  );
+}
+
+async function failure(run: () => Promise<unknown>): Promise<unknown> {
+  return run().then(
+    () => {
+      throw new Error('expected a failure');
+    },
+    (error: unknown) => error,
   );
 }
 
@@ -36,21 +60,64 @@ describe('Services API client', () => {
     });
   });
 
-  it('fails loudly on a shape it does not expect', async () => {
+  it('reads an answer it does not expect as « Nirvana ne répond pas »', async () => {
     answer(200, { services: 'nope' });
-    await expect(fetchOverview()).rejects.toThrow();
-    answer(403, { error: 'forbidden' });
-    await expect(fetchOverview()).rejects.toThrow('GET : 403');
+    const error = await failure(fetchOverview);
+    expect(error).toBeInstanceOf(ServicesError);
+    expect(describeError(error)).toBe('Nirvana ne répond pas. Réessaie dans un instant.');
   });
 
   it('asks for the password when the sign-in is too old for a key, and only then', async () => {
-    answer(403, { error: { code: 'reauthentication_forbidden', message: 'x', details: {}, requestId: 'r' } });
+    answer(403, apiError('reauthentication_forbidden'));
     await expect(connectKey('xai', 'xai-FAKE')).rejects.toBeInstanceOf(ReauthRequired);
     await expect(disconnect('xai')).rejects.toBeInstanceOf(ReauthRequired);
-    answer(403, { error: { code: 'role_forbidden', message: 'x', details: {}, requestId: 'r' } });
-    const other = await disconnect('xai').catch((error: unknown) => error);
-    expect(other).toBeInstanceOf(Error);
+    answer(403, apiError('role_forbidden'));
+    const other = await failure(() => disconnect('xai'));
+    expect(other).toBeInstanceOf(ServicesError);
     expect(other).not.toBeInstanceOf(ReauthRequired);
+  });
+
+  it('tells each failure in its own words', async () => {
+    const cases: [number | 'network', unknown, string][] = [
+      [401, apiError('session_unauthenticated'), 'Ta session a expiré. Reconnecte-toi.'],
+      [403, apiError('role_forbidden'), 'Seule la propriétaire peut gérer les clés.'],
+      [403, { error: 'forbidden' }, 'Nirvana ne répond pas. Réessaie dans un instant.'],
+      [429, apiError('rate_limited'), 'Trop d’essais. Attends une minute avant de réessayer.'],
+      [500, apiError('internal_error'), 'Nirvana ne répond pas. Réessaie dans un instant.'],
+      [503, 'Bad gateway', 'Nirvana ne répond pas. Réessaie dans un instant.'],
+      ['network', null, 'Nirvana ne répond pas. Réessaie dans un instant.'],
+    ];
+    for (const [code, body, sentence] of cases) {
+      if (code === 'network')
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(() => Promise.reject(new TypeError('offline'))),
+        );
+      else answer(code, body);
+      for (const run of [fetchOverview, () => verifyNow('xai'), () => disconnect('xai')]) {
+        expect(describeError(await failure(run))).toBe(sentence);
+      }
+    }
+  });
+
+  it('offers to sign in again only for an expired session', async () => {
+    answer(401, apiError('session_unauthenticated'));
+    expect(isSessionExpired(await failure(fetchOverview))).toBe(true);
+    answer(500, apiError('internal_error'));
+    expect(isSessionExpired(await failure(fetchOverview))).toBe(false);
+    expect(describeError(new Error('anything'))).toBe('Nirvana ne répond pas. Réessaie dans un instant.');
+  });
+
+  it('puts what did not happen before the reason', async () => {
+    answer(401, apiError('session_unauthenticated'));
+    expect(showError(await failure(fetchOverview), 'La voix n’a pas été enregistrée.')).toEqual({
+      message: 'La voix n’a pas été enregistrée. Ta session a expiré. Reconnecte-toi.',
+      isSessionExpired: true,
+    });
+    expect(showError(new TypeError('x'))).toEqual({
+      message: 'Nirvana ne répond pas. Réessaie dans un instant.',
+      isSessionExpired: false,
+    });
   });
 
   it('confirms the password by signing in again as the current user', async () => {
@@ -73,5 +140,10 @@ describe('Services API client', () => {
       'GET /v1/me',
       'POST /v1/auth/sign-in/email {"email":"owner@example.test","password":"correct horse battery"}',
     ]);
+  });
+
+  it('says the session expired, not that the password is wrong, when there is no session', async () => {
+    answer(401, apiError('session_unauthenticated'));
+    expect(await confirmPassword('correct horse battery')).toBe('session_expired');
   });
 });

@@ -46,7 +46,7 @@ export const GUIDES: Record<DashboardProvider, ServiceGuide> = {
       { label: 'Accès', value: 'Chat' },
     ],
     note: 'Le compte xAI doit avoir du crédit.',
-    offConsequence: 'L’agent passera en copilote : il proposera, tu enverras.',
+    offConsequence: 'L’agent ne pourra plus rien écrire tant que Grok n’est pas reconnecté.',
     topUpUrl: 'https://console.x.ai',
   },
   google: {
@@ -62,7 +62,7 @@ export const GUIDES: Record<DashboardProvider, ServiceGuide> = {
       { label: 'Restriction', value: 'Restrict to Gemini API only' },
     ],
     note: 'Active la facturation du projet. En offre gratuite, Google peut garder les médias des fans.',
-    offConsequence: 'Grok regardera les photos et vidéos à la place de Gemini.',
+    offConsequence: 'Grok regardera lui-même les photos et vidéos des fans, plus lentement.',
     topUpUrl: 'https://aistudio.google.com',
   },
   elevenlabs: {
@@ -79,7 +79,7 @@ export const GUIDES: Record<DashboardProvider, ServiceGuide> = {
       { label: 'Limite', value: '100 000 caractères par mois', code: true },
     ],
     note: null,
-    offConsequence: 'Le copilote ne proposera plus de vocaux.',
+    offConsequence: 'L’agent ne proposera plus de vocaux.',
     topUpUrl: 'https://elevenlabs.io/app/subscription',
   },
 };
