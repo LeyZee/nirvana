@@ -25,44 +25,45 @@ const MODULE_DEPENDENCIES = {
 
 const moduleNames = Object.keys(MODULE_DEPENDENCIES);
 
+/** Element selector helpers for `boundaries/dependencies` policies. */
+const el = (type, captured) => ({ element: captured ? { type, captured } : { type } });
+const pkg = (name) => el('package', { package: name });
+const anyOf = (...selectors) => selectors;
+
+/** Module layers, told apart by the file's path inside the module folder. */
+const LAYERS = { domain: 'domain/**', application: 'application/**', infra: 'infra/**', index: 'index.ts' };
+const layer = (name, module) => ({
+  element: {
+    type: 'module',
+    fileInternalPath: LAYERS[name],
+    ...(module === undefined ? {} : { captured: { module } }),
+  },
+});
+
 /** For each module: its own layers plus the index.ts of the modules it may depend on. */
 const moduleRules = moduleNames.flatMap((name) => {
-  const own = (type) => [type, { module: name }];
+  const own = (layerName) => layer(layerName, name);
   const allowedIndexes =
-    MODULE_DEPENDENCIES[name].length > 0 ? [['module-index', { module: MODULE_DEPENDENCIES[name] }]] : [];
+    MODULE_DEPENDENCIES[name].length > 0 ? [layer('index', MODULE_DEPENDENCIES[name])] : [];
   return [
-    { from: [own('module-domain')], allow: [own('module-domain'), ['package', { package: 'contracts' }]] },
+    { from: own('domain'), allow: { to: anyOf(own('domain'), pkg('contracts')) } },
     {
-      from: [own('module-application')],
-      allow: [
-        own('module-domain'),
-        own('module-application'),
-        ['package', { package: 'contracts' }],
-        ...allowedIndexes,
-      ],
+      from: own('application'),
+      allow: { to: anyOf(own('domain'), own('application'), pkg('contracts'), ...allowedIndexes) },
     },
     {
-      from: [own('module-infra')],
-      allow: [
-        own('module-domain'),
-        own('module-application'),
-        own('module-infra'),
-        'package',
-        ...allowedIndexes,
-      ],
+      from: own('infra'),
+      allow: { to: anyOf(own('domain'), own('application'), own('infra'), el('package'), ...allowedIndexes) },
     },
     {
-      from: [own('module-index')],
-      allow: [
-        own('module-domain'),
-        own('module-application'),
-        own('module-infra'),
-        'package',
-        ...allowedIndexes,
-      ],
+      from: own('index'),
+      allow: { to: anyOf(own('domain'), own('application'), own('infra'), el('package'), ...allowedIndexes) },
     },
   ];
 });
+
+/** External (npm) and core (node:) modules a given element may not import. */
+const external = (...sources) => ({ module: { origin: ['external', 'core'], source: sources } });
 
 export default tseslint.config(
   {
@@ -74,6 +75,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/*.config.*',
       'scripts/**',
+      // Boundary fixtures break the rules on purpose; apps/api/src/__tests__/boundaries.test.ts lints them.
+      'apps/api/src/__tests__/fixtures/**',
     ],
   },
   js.configs.recommended,
@@ -101,116 +104,87 @@ export default tseslint.config(
           project: ['apps/*/tsconfig.json', 'packages/*/tsconfig.json'],
         }),
       ],
+      // Elements are folders. A business module is one element; its layers (domain, application, infra) and its
+      // public entry point (index.ts) are told apart by the file's path inside the module (`fileInternalPath`).
       'boundaries/elements': [
-        {
-          type: 'module-domain',
-          pattern: 'apps/api/src/modules/*/domain/**',
-          capture: ['module'],
-          mode: 'full',
-        },
-        {
-          type: 'module-application',
-          pattern: 'apps/api/src/modules/*/application/**',
-          capture: ['module'],
-          mode: 'full',
-        },
-        {
-          type: 'module-infra',
-          pattern: 'apps/api/src/modules/*/infra/**',
-          capture: ['module'],
-          mode: 'full',
-        },
-        {
-          type: 'module-index',
-          pattern: 'apps/api/src/modules/*/index.ts',
-          capture: ['module'],
-          mode: 'full',
-        },
-        { type: 'api-tests', pattern: 'apps/api/src/__tests__/**', mode: 'full' },
-        { type: 'api-scripts', pattern: 'apps/api/src/scripts/**', mode: 'full' },
-        { type: 'api-root', pattern: 'apps/api/src/*.ts', mode: 'full' },
-        { type: 'api-test', pattern: 'apps/api/test/**', mode: 'full' },
-        { type: 'package', pattern: 'packages/*/src/**', capture: ['package'], mode: 'full' },
-        { type: 'web', pattern: 'apps/web/src/**', mode: 'full' },
-        { type: 'extension', pattern: 'apps/extension/src/**', mode: 'full' },
-        { type: 'evals', pattern: 'evals/**', mode: 'full' },
+        { type: 'module', pattern: 'apps/api/src/modules/*', capture: ['module'], partialMatch: false },
+        { type: 'api-tests', pattern: 'apps/api/src/__tests__', partialMatch: false },
+        { type: 'api-scripts', pattern: 'apps/api/src/scripts', partialMatch: false },
+        { type: 'api-root', pattern: 'apps/api/src', partialMatch: false },
+        { type: 'api-test', pattern: 'apps/api/test', partialMatch: false },
+        { type: 'package', pattern: 'packages/*/src', capture: ['package'], partialMatch: false },
+        { type: 'web', pattern: 'apps/web/src', partialMatch: false },
+        { type: 'extension', pattern: 'apps/extension/src', partialMatch: false },
+        { type: 'evals', pattern: 'evals', partialMatch: false },
       ],
       // Test files next to the code may import anything inside their own package.
       'boundaries/ignore': ['**/*.test.ts', '**/*.spec.ts'],
     },
     rules: {
-      // Layer purity inside a module, and the dependency graph between modules.
-      'boundaries/element-types': [
+      // Layer purity inside a module, the dependency graph between modules (ADR 0002) and the external
+      // packages each layer may use. Another module is reachable through its index.ts only: importing
+      // `modules/fans/infra/...` from another module is an error. Policies are evaluated in order; the last match wins.
+      'boundaries/dependencies': [
         'error',
         {
           default: 'disallow',
-          rules: [
+          checkAllOrigins: true,
+          policies: [
+            // npm packages and node: builtins are allowed by default; the policies at the end restrict them.
+            { allow: { to: { module: { origin: ['external', 'core'] } } } },
             ...moduleRules,
-            { from: 'api-root', allow: ['module-index', 'package', 'api-root'] },
-            { from: 'api-scripts', allow: ['module-index', 'package', 'api-root'] },
-            { from: 'api-tests', allow: ['module-index', 'package', 'api-root', 'api-test', 'api-tests'] },
-            { from: 'api-test', allow: ['module-index', 'package', 'api-root', 'api-test'] },
-            { from: 'package', allow: ['package'] },
+            { from: el('api-root'), allow: { to: anyOf(layer('index'), el('package'), el('api-root')) } },
+            {
+              from: el('api-scripts'),
+              allow: { to: anyOf(layer('index'), el('package'), el('api-root')) },
+            },
+            {
+              from: el('api-tests'),
+              allow: {
+                to: anyOf(layer('index'), el('package'), el('api-root'), el('api-test'), el('api-tests')),
+              },
+            },
+            {
+              from: el('api-test'),
+              allow: { to: anyOf(layer('index'), el('package'), el('api-root'), el('api-test')) },
+            },
+            { from: el('package'), allow: { to: el('package') } },
             // design-system: ADR 0015 (proposed). Apps may import it next to contracts.
+            { from: el('web'), allow: { to: anyOf(pkg('contracts'), pkg('design-system'), el('web')) } },
             {
-              from: 'web',
-              allow: [
-                ['package', { package: 'contracts' }],
-                ['package', { package: 'design-system' }],
-                'web',
-              ],
+              from: el('extension'),
+              allow: { to: anyOf(pkg('contracts'), pkg('design-system'), el('extension')) },
             },
-            {
-              from: 'extension',
-              allow: [
-                ['package', { package: 'contracts' }],
-                ['package', { package: 'design-system' }],
-                'extension',
-              ],
-            },
-            {
-              from: 'evals',
-              allow: [['package', { package: 'contracts' }], ['package', { package: 'llm' }], 'evals'],
-            },
-          ],
-        },
-      ],
-      // Importing a module through anything but its index.ts (for example `modules/fans/infra/...`) is an error.
-      'boundaries/no-private': ['error', { allowUncles: false }],
-      'boundaries/external': [
-        'error',
-        {
-          default: 'allow',
-          rules: [
+            { from: el('evals'), allow: { to: anyOf(pkg('contracts'), pkg('llm'), el('evals')) } },
             // The domain does no I/O.
             {
-              from: 'module-domain',
-              disallow: [
-                'drizzle-orm',
-                'fastify',
-                'graphile-worker',
-                'pg',
-                'undici',
-                'ai',
-                '@ai-sdk/*',
-                'node:!(crypto)',
-              ],
+              from: layer('domain'),
+              disallow: {
+                to: [
+                  external('drizzle-orm', 'fastify', 'graphile-worker', 'pg', 'undici', 'ai', '@ai-sdk/*'),
+                  { module: { origin: 'core', source: '!node:crypto' } },
+                ],
+              },
             },
             // LLM SDKs never leave packages/llm (ADR 0009).
             {
-              from: [
-                ['package', { package: 'contracts' }],
-                ['package', { package: 'db' }],
-                'module-domain',
-                'module-application',
-                'module-infra',
-                'web',
-                'extension',
-                'api-root',
-                'api-scripts',
-                'evals',
-              ],
-              disallow: ['ai', '@ai-sdk/*', 'openai', '@anthropic-ai/sdk', '@mistralai/mistralai'],
+              from: anyOf(
+                pkg('contracts'),
+                pkg('db'),
+                pkg('design-system'),
+                layer('domain'),
+                layer('application'),
+                layer('infra'),
+                layer('index'),
+                el('web'),
+                el('extension'),
+                el('api-root'),
+                el('api-scripts'),
+                el('evals'),
+              ),
+              disallow: {
+                to: external('ai', '@ai-sdk/*', 'openai', '@anthropic-ai/sdk', '@mistralai/mistralai'),
+              },
             },
           ],
         },

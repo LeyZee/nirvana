@@ -13,3 +13,10 @@ auditConfig:
     # braces (via micromatch, in eslint-plugin-boundaries and knip): no patched version exists. Denial of service
     # on deeply nested brace patterns; only our own lint and knip globs reach it, never untrusted input.
     - GHSA-vfj7-8cjw-p6xm
+
+# pnpm 10 blocks install scripts by default. These need theirs: esbuild and unrs-resolver download a native binary,
+# lefthook installs the git hooks.
+onlyBuiltDependencies:
+  - esbuild
+  - lefthook
+  - unrs-resolver

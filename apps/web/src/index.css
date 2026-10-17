@@ -1,0 +1,6 @@
+@import '@nirvana/design-system/fonts.css';
+@import 'tailwindcss';
+@import '@nirvana/design-system/tokens.css';
+@import '@nirvana/design-system/theme.css';
+@import '@nirvana/design-system/base.css';
+@import '@nirvana/design-system/components.css';

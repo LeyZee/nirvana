@@ -1,6 +1,6 @@
 # P0-01 Outillage du monorepo
 
-Statut : todo
+Statut : in_progress (PR ouverte, passe à done à la fusion)
 Phase : 0
 Dépend de : —
 Branche : task/p0-01-monorepo-tooling
@@ -37,3 +37,15 @@ Rendre `pnpm install`, `pnpm check`, `pnpm test`, `pnpm dev` fonctionnels sur un
 Toute logique métier, schéma de base, routes réelles, Docker (P0-03).
 
 ## Notes de session
+
+Session du 17/10/2026 (Opus 5.5, fil projet), branche `claude/project-thread-e0j3ow` imposée par l'environnement à la place de `task/p0-01-monorepo-tooling`.
+
+Retenu, et écarts à la fiche :
+- Résolution : `moduleResolution: Bundler` + `module: ESNext` dans `tsconfig.base.json` ; `exports` de chaque package sur `./src/index.ts` ; `tsx` en dev, `tsup` pour `pnpm build` (api). `turbo.json` ne fait plus dépendre `typecheck`/`test` de `^build`.
+- Versions : `pnpm up --latest` puis épinglage exact. TypeScript reste en 6.0.3 (la 7.0 sort de la plage de typescript-eslint 8.71) ; `@types/node` en 22.20.5 (aligné sur Node 22). Vitest en 5.0.5 : la fiche disait 4.x, mais Vitest 5 demande Node ≥ 22.12 et `.nvmrc` est en 22.22.0, donc compatible.
+- `evals` : le script s'appelle `evals` et non `run` (`pnpm --filter x run` sans nom liste les scripts au lieu d'en lancer un) ; `pnpm evals` le lance.
+- Frontières : migration vers `boundaries/dependencies` (v7) ; `boundaries/element-types` et `boundaries/no-private` retirés, leurs cas étant couverts par les politiques (`checkAllOrigins`, dernière politique gagnante). Éléments déclarés comme dossiers (`partialMatch: false`), couches par `fileInternalPath`. `boundaries/root-path`, le resolver TypeScript et `import-x/parsers` sont gardés. Le test de frontières (5 cas) échoue bien quand on retire la règle (vérifié : 3 tests rouges).
+- `prepare` tolérant hors dépôt git ; `onlyBuiltDependencies: [esbuild, lefthook, unrs-resolver]` ; `.wxt/` (fichiers générés par WXT) ignoré par git et prettier ; `knip.json` simplifié (les entrées venant des `package.json` sont détectées seules) ; `vitest` retiré de la racine (chaque package a le sien).
+- `pnpm dev` lance aussi `wxt dev` pour l'extension, qui ouvre un Chrome de dev.
+
+Reste : rien dans le périmètre. Vérifier la CI sur la PR.
