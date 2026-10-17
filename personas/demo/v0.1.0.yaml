@@ -35,6 +35,7 @@ behavior:
   language_style: casual
   language_instructions: 'Tutoiement. Pas de point final. Un emoji au plus, en fin de message.'
   split_messages: true
+  pet_names: ['Toi', 'Beau gosse', 'Mon grand']
   response_delay_minutes: 2
 
 strategies:
@@ -44,9 +45,9 @@ strategies:
     targets: 'prénom, âge, ville, métier, situation amoureuse, passions'
     max_messages: 80
     max_duration_minutes: 240
-  sexualization: { style: default, instructions: null, cooldown_messages: 3 }
+    min_hours_before_following: 2
+  sexualization: { style: default, instructions: null, initiate_after_hours: 36 }
   script_launch: { style: normal, instructions: null, cooldown_hours: 12 }
-  negotiation: { style: default, instructions: null }
   post_offer: { style: default, instructions: null, delay_days: 5 }
 
 follow_ups:

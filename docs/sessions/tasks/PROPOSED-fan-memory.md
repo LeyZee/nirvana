@@ -8,7 +8,7 @@ Branche : (à fixer à l'acceptation)
 Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'agent connaisse chaque fan pendant des mois sans relire tout l'historique.
 
 ## Contexte à lire
-`docs/architecture/data-model.md` (§ Fans et mémoire, § Conversations, § Médias), `docs/architecture/ai-engine.md` (§ Contexte, § Le Brief, § La politique), `docs/architecture/message-flow.md` (§ Mémoire, `release`), `docs/conventions/security.md` (rétention), `docs/reference/persona-schema.md` (`strategies.kyc`), `docs/reference/onlychat-analysis.md`. Besoin métier : message de Charles du 17/10 à 17h18 (fil Revue) et `/mnt/project-files/onlychat/README.md` §3-4 (hors dépôt).
+`docs/architecture/data-model.md` (§ Fans et mémoire, § Conversations, § Médias), `docs/architecture/ai-engine.md` (§ Contexte, § Le Brief, § La politique), `docs/architecture/message-flow.md` (§ Mémoire, `release`), `docs/conventions/security.md` (rétention), `docs/reference/persona-schema.md` (`strategies.kyc`), `docs/reference/onlychat-analysis.md`. Besoin métier : message de Charles du 17/10 à 17h18 (fil Revue), `/mnt/project-files/chatting/methode-chatting.md` §2, §4 et §7, `/mnt/project-files/onlychat/README.md` §3 (hors dépôt).
 
 ## Ce qui est déjà conçu, et ce qui manque
 | Besoin de Charles | Déjà conçu | Manque, tranché ici |
@@ -18,7 +18,9 @@ Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'
 | Note libre de l'opérateur | `release(…, note)` écrit un `fan_fact` catégorie `operator_note` (`message-flow.md`) | `operator_note` absent de la liste des catégories de `data-model.md` : l'ajouter. |
 | Scripts déjà envoyés | `media_sends` (un média payant n'est jamais revendu au même fan), `script_runs` réservé (phase 6) | Lecture « déjà envoyé à ce fan » exposée par `fans` pour le contexte ; l'écriture des `script_runs` reste en phase 6 (fiche catalogue). |
 | Achats | `messages.is_paid`, `price_minor`, `sale_detected`, `listTransactions` du connecteur, `sales` réservé (phase 6) | Un résumé d'achats par fan calculé (total, nombre, dernier achat, plus haut palier acheté), sans table nouvelle, pour le contexte et la politique. |
-| Limites du fan | `fans.flags` (jsonb, non spécifié), risques du brief (`distress`, `minor_suspected`…) | Clés fermées de `fans.flags`, lues par la politique avant toute offre : `age_confirmed` (date), `sales_frozen` (raison : `money_trouble`, `spending_limit`, `distress`, `operator`), `spending_limit_minor`, `no_explicit`, `do_not_contact`. Écrites par la politique (risque détecté) ou par un humain, jamais par le LLM seul. |
+| Phase de la relation (KYC, sexualisé, client), ce qui l'excite, ce qu'il n'aime pas | `fan_facts` catégories `preferences`, `intimate` | `relationship_phase` calculée par le code (`kyc` → `sexualized` → `client`, depuis les faits, l'âge confirmé et les ventes), jamais par le LLM. |
+| Étapes refusées et raison du refus | `offer_made`, `sale_detected` | Fait `commercial` « refus » relié à l'offre (`offer_id`, raison si connue), lu avant de relancer. |
+| Limites du fan | `fans.flags` (jsonb, non spécifié), risques du brief (`distress`, `minor_suspected`…) | Clés fermées de `fans.flags`, lues par la politique avant toute offre : `age_confirmed` (date), `sales_frozen` (raison : `money_trouble`, `spending_limit`, `distress`, `operator`), `spending_limit_minor`, `fragile`, `no_explicit`, `do_not_contact`. `sales_frozen` et `fragile` bloquent aussi le chouinage (méthode §4). Écrites par la politique (risque détecté) ou par un humain, jamais par le LLM seul. |
 
 ## Les notes de Reveal (Charles, 17/10 à 17h33)
 Reveal affiche déjà, à droite de chaque conversation, des **notes client** par fan, des **notes du modèle** (l'équivalent de la persona) et des statistiques, dont un onglet PPV. La mémoire de Nirvana s'appuie sur elles au lieu de tenir une mémoire parallèle qui divergerait :
@@ -33,7 +35,7 @@ Reveal affiche déjà, à droite de chaque conversation, des **notes client** pa
 - Module `fans` (domain, application, infra, `index.ts`) : `proposeFacts(fanId, facts, evidence)` (append-only, remplace par `superseded_by`), `activeFacts(fanId)` (non remplacés, non expirés, triés catégorie puis confiance, 40 au plus), `kycState(fanId)`, `setFlag` / `clearFlag` (événement `domain_events`, auteur obligatoire), `purchaseSummary(fanId)`, `sentMediaIds(fanId)`.
 - `assembleContext` lit `activeFacts`, le dernier `fan_summary`, `kycState`, `purchaseSummary` et les drapeaux. Les faits d'un fan n'entrent jamais dans le contexte d'un autre (garde « fuite d'un autre fan »).
 - Écriture : les `facts_proposed` du brief deviennent des faits ; en copilote, l'approbation du draft les confirme (`fact_confirmed`).
-- Politique : un drapeau `sales_frozen` ou `do_not_contact`, ou un âge non confirmé avant du contenu explicite, interdit l'offre (`policy_trace`).
+- Politique : un drapeau `sales_frozen` ou `do_not_contact`, ou un âge non confirmé avant du contenu explicite, interdit l'offre (`policy_trace`) ; `sales_frozen` ou `fragile` interdit le chouinage ; suivre un fan qui sexualise demande `persona.strategies.kyc.min_hours_before_following` atteint et l'âge confirmé.
 - Rétention : job de purge des faits expirés (12 mois après le dernier contact, `security.md`).
 - Docs : `data-model.md` (catégories, clés de `flags`), glossaire (« Drapeau du fan » : `fan_flag`).
 

@@ -49,8 +49,11 @@ describe('PersonaSchema', () => {
 
   it('keeps each number inside its OnlyChat bounds', () => {
     expect(issuePaths(withChange((p) => (p.details.height_cm = 139)))).toEqual(['details.height_cm']);
-    expect(issuePaths(withChange((p) => (p.strategies.sexualization.cooldown_messages = 6)))).toEqual([
-      'strategies.sexualization.cooldown_messages',
+    expect(issuePaths(withChange((p) => (p.strategies.sexualization.initiate_after_hours = 169)))).toEqual([
+      'strategies.sexualization.initiate_after_hours',
+    ]);
+    expect(issuePaths(withChange((p) => (p.strategies.kyc.min_hours_before_following = -1)))).toEqual([
+      'strategies.kyc.min_hours_before_following',
     ]);
     expect(issuePaths(withChange((p) => (p.strategies.script_launch.cooldown_hours = 25)))).toEqual([
       'strategies.script_launch.cooldown_hours',
@@ -61,8 +64,8 @@ describe('PersonaSchema', () => {
   });
 
   it('asks for instructions exactly when a strategy is custom', () => {
-    expect(issuePaths(withChange((p) => (p.strategies.negotiation.style = 'custom')))).toEqual([
-      'strategies.negotiation.instructions',
+    expect(issuePaths(withChange((p) => (p.strategies.post_offer.style = 'custom')))).toEqual([
+      'strategies.post_offer.instructions',
     ]);
     expect(issuePaths(withChange((p) => (p.strategies.kyc.instructions = null)))).toEqual([
       'strategies.kyc.instructions',
@@ -75,6 +78,12 @@ describe('PersonaSchema', () => {
       'follow_ups.delays_hours',
     ]);
     expect(withChange((p) => (p.follow_ups.delays_hours = [])).success).toBe(true);
+  });
+
+  it('has no price negotiation setting: the price is never negotiated', () => {
+    expect(
+      PersonaSchema.safeParse({ ...demo(), strategies: { ...demo().strategies, negotiation: {} } }).success,
+    ).toBe(false);
   });
 
   it('refuses duplicate entries whatever their case', () => {

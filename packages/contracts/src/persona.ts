@@ -44,7 +44,8 @@ export const PERSONA_BOUNDS = {
   responseDelayMinutes: [0, 60],
   kycMaxMessages: [1, 500],
   kycMaxDurationMinutes: [10, 1440],
-  sexualizationCooldownMessages: [0, 5],
+  kycMinHoursBeforeFollowing: [0, 24],
+  sexualizationInitiateAfterHours: [0, 168],
   scriptCooldownHours: [0, 24],
   postOfferDelayDays: [1, 60],
   followUpDelayHours: [1, 168],
@@ -172,24 +173,29 @@ export const PersonaBehaviorSchema = z.strictObject({
   language_style: z.enum(LANGUAGE_STYLES),
   language_instructions: optionalText(2000),
   split_messages: z.boolean(),
+  /** The only pet names she gives fans: guards refuse any other. */
+  pet_names: entries(30, 20),
   /** Enforced by code when sending, never by the prompt (CLAUDE.md rule 3). */
   response_delay_minutes: intIn(PERSONA_BOUNDS.responseDelayMinutes),
 });
 
 export const PersonaStrategiesSchema = z.strictObject({
+  /** Delays and cooldowns below are enforced by the policy, never by the prompt (CLAUDE.md rule 3). */
   kyc: z
     .strictObject({
       ...strategyShape(STRATEGY_STYLES),
       targets: optionalText(500),
       max_messages: intIn(PERSONA_BOUNDS.kycMaxMessages),
       max_duration_minutes: intIn(PERSONA_BOUNDS.kycMaxDurationMinutes),
+      /** Conversation time before the agent follows a fan who sexualizes; below it, she steers back. */
+      min_hours_before_following: intIn(PERSONA_BOUNDS.kycMinHoursBeforeFollowing),
     })
     .refine(...instructionsWhenCustom('custom')),
-  /** Cooldowns are enforced by the policy, never by the prompt (CLAUDE.md rule 3). */
   sexualization: z
     .strictObject({
       ...strategyShape(STRATEGY_STYLES),
-      cooldown_messages: intIn(PERSONA_BOUNDS.sexualizationCooldownMessages),
+      /** Relationship time before the agent opens sexualization itself. */
+      initiate_after_hours: intIn(PERSONA_BOUNDS.sexualizationInitiateAfterHours),
     })
     .refine(...instructionsWhenCustom('custom')),
   script_launch: z
@@ -198,7 +204,6 @@ export const PersonaStrategiesSchema = z.strictObject({
       cooldown_hours: intIn(PERSONA_BOUNDS.scriptCooldownHours),
     })
     .refine(...instructionsWhenCustom('custom')),
-  negotiation: z.strictObject(strategyShape(STRATEGY_STYLES)).refine(...instructionsWhenCustom('custom')),
   post_offer: z
     .strictObject({ ...strategyShape(STRATEGY_STYLES), delay_days: intIn(PERSONA_BOUNDS.postOfferDelayDays) })
     .refine(...instructionsWhenCustom('custom')),

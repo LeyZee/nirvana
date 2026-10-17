@@ -31,13 +31,13 @@ behavior:
   language_style: casual
   language_instructions: null
   split_messages: true
+  pet_names: ['<à remplir>'] # liste fermée des surnoms qu'elle donne
   response_delay_minutes: 1
 
 strategies:
-  kyc: { style: default, instructions: null, targets: null, max_messages: 100, max_duration_minutes: 360 }
-  sexualization: { style: default, instructions: null, cooldown_messages: 2 }
+  kyc: { style: default, instructions: null, targets: null, max_messages: 100, max_duration_minutes: 360, min_hours_before_following: 1 }
+  sexualization: { style: default, instructions: null, initiate_after_hours: 24 }
   script_launch: { style: normal, instructions: null, cooldown_hours: 10 }
-  negotiation: { style: default, instructions: null }
   post_offer: { style: default, instructions: null, delay_days: 7 }
 
 follow_ups:
