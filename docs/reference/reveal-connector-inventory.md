@@ -40,6 +40,7 @@ Toute écriture porte une clé d'idempotence et passe par `verifySent` (ADR 0008
 | E4 | Écrire la note client | `setFanNote?()` (nouveau) | Consigner le KYC | Remplacement complet ou ajout ; conflit si un chatteur écrit en même temps |
 | E5 | Vérifier un envoi | `verifySent()` | Rejeu sans doublon après une erreur réseau | Retrouver le message par nonce, ou par texte et horodatage |
 | E6 | Marquer lu, indiquer « en train d'écrire » | `markRead?()`, `setTyping?()` | Rythme humain | Appels faits par le client officiel à l'ouverture et à la frappe |
+| E7 | Envoyer un vocal (gratuit, ou dans un bundle si Reveal l'accepte) | `sendMedia()` avec `kind: audio` | Vocaux dans la voix de la créatrice pour les fans qui doutent (fil Vocaux, 17/10) | Requête du bouton micro natif (upload, format et codec, durée max), import d'un fichier audio dans « Envoyer des médias » et dans un bundle, rendu côté fan (lecteur avec onde ou fichier joint) |
 
 ## Jamais
 
