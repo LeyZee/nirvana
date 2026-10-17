@@ -15,6 +15,13 @@
       "when": 1792266767668,
       "tag": "0001_enqueue_job",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792268635949,
+      "tag": "0002_provider-credentials",
+      "breakpoints": true
     }
   ]
 }

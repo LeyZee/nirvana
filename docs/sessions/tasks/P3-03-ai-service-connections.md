@@ -1,5 +1,5 @@
 # P3-03 Connecter Grok, Gemini et ElevenLabs depuis le dashboard
-Statut : todo
+Statut : in_progress
 Phase : 3
 Dépend de : P0-03 (base, chiffrement), P0-04 (serveur, SSE), P0-07a (Better Auth, rôles), P3-01 (passerelle), D-01 (design system dans `apps/web`)
 Branche : task/p3-03-ai-service-connections
@@ -77,3 +77,5 @@ Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournis
 - Plusieurs agences.
 
 ## Notes de session
+
+2026-10-17 (V1, branche `claude/crm-connecteurs-ux-g38gh5`, menée en parallèle de la plomberie avec l'accord du coordinateur) : fait les points 1, 3, 4 (port `CredentialStore`, cache de clés et repli sur l'environnement ; adaptateur mémoire seulement), 6 et 7 côté domaine, plus la priorité de l'action suivante. Puis la table et sa migration (point 2), le magasin Postgres, les routes (point 5, testées derrière un garde factice), le module dans `composition-root.ts` (Postgres si `CREDENTIALS_ENCRYPTION_KEYS`, sinon mémoire hors production), `config.ts`, `.env.example`, `ai-engine.md`, `rotate-secrets.md` (point 10). Puis les routes montées derrière `requireRole('owner')` et la page (point 9), montée provisoirement dans `App.tsx` jusqu'à la navigation du shell. Reste : la ré-authentification au-delà de 10 minutes de session et les événements `provider_key.*` (point 5) ; brancher `apiKeySource` dans la passerelle et le rapport des refus (point 6) avec le fil agent ; SSE (point 8 ; le job de 15 minutes `providers.check_credentials` est fait) ; pas de commande de rechiffrement (la rotation passe par « Vérifier maintenant », `rotate-secrets.md`).

@@ -33,12 +33,22 @@ const configSchema = z
     WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
     /** Development: run the worker inside the API process (`pnpm dev`). */
     NIRVANA_INLINE_WORKER: flag,
+    /** AI service keys pasted in the dashboard are sealed with these (ADR 0016), `v2:<base64>,v1:<base64>`. */
+    CREDENTIALS_ENCRYPTION_KEYS: z.string().min(1).optional(),
+    /** Development only: AI service keys read from the environment, ignored in production (ADR 0016). */
+    LLM_XAI_API_KEY: z.string().min(1).optional(),
+    LLM_GOOGLE_API_KEY: z.string().min(1).optional(),
+    SPEECH_ELEVENLABS_API_KEY: z.string().min(1).optional(),
   })
   .refine(
     // `.env.example` placeholders are long enough to pass `min(32)`; production must not start with one.
     (config) => config.NODE_ENV !== 'production' || !config.AUTH_SECRET.startsWith('replace-'),
     { message: 'AUTH_SECRET still holds the .env.example placeholder', path: ['AUTH_SECRET'] },
-  );
+  )
+  .refine((config) => config.NODE_ENV !== 'production' || config.CREDENTIALS_ENCRYPTION_KEYS !== undefined, {
+    message: 'required in production (ADR 0016)',
+    path: ['CREDENTIALS_ENCRYPTION_KEYS'],
+  });
 
 export type Config = Readonly<z.infer<typeof configSchema>>;
 

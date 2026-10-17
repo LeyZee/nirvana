@@ -16,6 +16,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Vocaux générés, conception (Opus) | proposed | `log/2026-10-17-vocaux.md` |
 | 2026-10-17 | Connexion Reveal : inventaire, capture, FakeReveal (Opus) | done | `log/2026-10-17-reveal-connexion.md` |
 | 2026-10-17 | P3-03 Connexion des services IA, conception (Opus) | done | `log/2026-10-17-p3-03-conception.md` |
+| 2026-10-17 | P3-03 Connexion des services IA, module `providers` (Opus) | in_progress | `log/2026-10-17-p3-03.md` |
 | 2026-10-17 | README à jour et design system en images | done | `log/2026-10-17-readme-design.md` |
 | 2026-10-17 | P3-04 Vision des médias et pièges (Opus) | in_progress | `log/2026-10-17-p3-04.md` |
 | 2026-10-17 | P0-02 Contrats partagés | done | `log/2026-10-17-p0-02.md` |

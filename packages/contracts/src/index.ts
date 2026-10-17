@@ -13,5 +13,6 @@ export * from './media';
 export * from './money';
 export * from './persona';
 export * from './playground';
+export * from './providers';
 export * from './result';
 export * from './settings';

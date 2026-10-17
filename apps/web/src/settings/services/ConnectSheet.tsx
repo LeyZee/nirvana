@@ -1,0 +1,429 @@
+import type { ProviderStatus, ProviderVoice } from '@nirvana/contracts';
+import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+
+import { connectKey, saveSettings } from './api';
+import { GUIDES, type DashboardProvider } from './guide';
+import { nextAfter } from './view';
+
+type Phase =
+  { kind: 'edit'; error: string | null } | { kind: 'busy' } | { kind: 'done'; status: ProviderStatus };
+
+interface ConnectSheetProps {
+  readonly provider: DashboardProvider;
+  /** A key is already saved: the sheet replaces it, and the old one keeps working until the new one is verified. */
+  readonly isReplace: boolean;
+  readonly services: readonly ProviderStatus[];
+  readonly onChanged: (status: ProviderStatus) => void;
+  /** `null` closes the sheet; a provider opens its sheet next. */
+  readonly onFinish: (next: DashboardProvider | null) => void;
+}
+
+const CHECK = (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
+
+function CopyChip({ value }: { value: string }): JSX.Element {
+  const [isCopied, setIsCopied] = useState(false);
+  useEffect(() => {
+    if (!isCopied) return undefined;
+    const timer = window.setTimeout(() => {
+      setIsCopied(false);
+    }, 1400);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isCopied]);
+  return (
+    <button
+      type="button"
+      className="sv-copy"
+      data-copied={isCopied}
+      onClick={() => {
+        const done = (): void => {
+          setIsCopied(true);
+        };
+        void navigator.clipboard.writeText(value).then(done, done);
+      }}
+    >
+      {value}
+      <span>{isCopied ? 'Copié' : 'Copier'}</span>
+    </button>
+  );
+}
+
+/** One connection, two steps: create the key at the provider, paste it here. Verified before anything is kept. */
+export function ConnectSheet({
+  provider,
+  isReplace,
+  services,
+  onChanged,
+  onFinish,
+}: ConnectSheetProps): JSX.Element {
+  const guide = GUIDES[provider];
+  const [hasOpenedConsole, setHasOpenedConsole] = useState(isReplace);
+  const [isStepOneOpen, setIsStepOneOpen] = useState(!isReplace);
+  const [phase, setPhase] = useState<Phase>({ kind: 'edit', error: null });
+  const [voices, setVoices] = useState<readonly ProviderVoice[]>([]);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  /** Opening the console folds step one a beat later, once the new tab has taken focus. */
+  const [isConsoleOpening, setIsConsoleOpening] = useState(false);
+  const keyInput = useRef<HTMLInputElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButton.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (hasOpenedConsole && phase.kind === 'edit') keyInput.current?.focus();
+  }, [hasOpenedConsole, phase]);
+
+  useEffect(() => {
+    if (!isConsoleOpening) return undefined;
+    const timer = window.setTimeout(() => {
+      setHasOpenedConsole(true);
+      setIsStepOneOpen(false);
+      setIsConsoleOpening(false);
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isConsoleOpening]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onFinish(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onFinish]);
+
+  async function submit(raw: string): Promise<void> {
+    const key = raw.trim();
+    if (key === '') return;
+    setPhase({ kind: 'busy' });
+    try {
+      const result = await connectKey(provider, key);
+      if (!result.ok) {
+        setPhase({ kind: 'edit', error: result.refusal.message });
+        return;
+      }
+      if (keyInput.current !== null) keyInput.current.value = '';
+      setVoices(result.status.voices);
+      setPhase({ kind: 'done', status: result.status });
+      onChanged(result.status);
+    } catch {
+      setPhase({ kind: 'edit', error: 'Nirvana ne répond pas. Réessaie dans un instant.' });
+    }
+  }
+
+  async function pickVoice(id: string): Promise<void> {
+    const voice = voices.find((v) => v.id === id);
+    if (voice === undefined) return;
+    try {
+      const status = await saveSettings(provider, { voice });
+      setVoiceError(null);
+      setPhase({ kind: 'done', status });
+      onChanged(status);
+    } catch {
+      setVoiceError('La voix n’a pas été enregistrée. Réessaie dans un instant.');
+    }
+  }
+
+  const closeLabel = (
+    <button
+      ref={closeButton}
+      type="button"
+      className="sv-close"
+      aria-label="Fermer"
+      onClick={() => {
+        onFinish(null);
+      }}
+    >
+      ×
+    </button>
+  );
+
+  if (phase.kind === 'done') {
+    const after = nextAfter(services, provider);
+    const status = phase.status;
+    const showVoicePicker = provider === 'elevenlabs' && voices.length > 0;
+    return (
+      <Scrim
+        onClose={() => {
+          onFinish(null);
+        }}
+      >
+        <header className="sv-sheet__head">
+          <div className="sv-sheet__title" />
+          {closeLabel}
+        </header>
+        <div className="sv-done">
+          <svg viewBox="0 0 52 52" aria-hidden="true">
+            <circle cx="26" cy="26" r="24" />
+            <path d="M15 27l7 7 15-15" />
+          </svg>
+          <h3 id="sv-sheet-title">{guide.name} est connecté</h3>
+        </div>
+        <dl className="sv-facts">
+          {status.facts
+            .filter((fact) => !(showVoicePicker && fact.label === 'Voix'))
+            .map((fact) => (
+              <div key={fact.label}>
+                <dt>{fact.label}</dt>
+                <dd>{fact.value}</dd>
+              </div>
+            ))}
+        </dl>
+        {showVoicePicker ? (
+          <>
+            <label className="sv-voice">
+              <span>Voix utilisée</span>
+              <select
+                value={status.settings.voice?.id ?? ''}
+                onChange={(event) => void pickVoice(event.target.value)}
+              >
+                {status.settings.voice === undefined ? (
+                  <option value="">Choisis la voix de Messa</option>
+                ) : null}
+                {voices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="sv-hint" data-error={voiceError !== null} aria-live="polite">
+              {voiceError ?? 'Chaque vocal passe par toi avant d’être envoyé.'}
+            </p>
+          </>
+        ) : null}
+        {isReplace ? (
+          <a className="nv-btn sv-btn--quiet" href={guide.console.url} target="_blank" rel="noreferrer">
+            L’ancienne clé ne sert plus : supprime-la chez {guide.vendor} ↗
+          </a>
+        ) : null}
+        <div className="sv-foot">
+          <button
+            type="button"
+            className="nv-btn nv-btn--neon sv-grow"
+            onClick={() => {
+              onFinish(after.provider);
+            }}
+          >
+            {after.label}
+          </button>
+        </div>
+      </Scrim>
+    );
+  }
+
+  const isBusy = phase.kind === 'busy';
+  const error = phase.kind === 'edit' ? phase.error : null;
+  const showStepOne = !hasOpenedConsole || isStepOneOpen;
+  return (
+    <Scrim
+      onClose={() => {
+        onFinish(null);
+      }}
+    >
+      <header className="sv-sheet__head">
+        <div className="sv-sheet__title">
+          <h3 id="sv-sheet-title">
+            {isReplace ? `Remplacer la clé de ${guide.name}` : `Connecter ${guide.name}`}
+          </h3>
+          <p>{guide.role}</p>
+        </div>
+        {closeLabel}
+      </header>
+      <ol className="sv-steps">
+        <li className="sv-step" data-state={hasOpenedConsole ? 'done' : 'now'}>
+          <span className="sv-num">{hasOpenedConsole ? CHECK : '1'}</span>
+          <div className="sv-step__head">
+            Crée une clé chez {guide.vendor}
+            {hasOpenedConsole ? (
+              <button
+                type="button"
+                className="sv-link"
+                onClick={() => {
+                  setIsStepOneOpen(!isStepOneOpen);
+                }}
+              >
+                {isStepOneOpen ? 'Masquer' : 'Revoir'}
+              </button>
+            ) : null}
+          </div>
+          {showStepOne ? (
+            <div className="sv-step__body">
+              <span className="sv-muted">{guide.where}</span>
+              <ul className="sv-ticks">
+                {guide.ticks.map((tick) => (
+                  <li key={tick.label}>
+                    <b>{tick.label}</b>
+                    {tick.copy === true ? (
+                      <CopyChip value={tick.value} />
+                    ) : tick.code === true ? (
+                      <code>{tick.value}</code>
+                    ) : (
+                      <span>{tick.value}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {guide.note === null ? null : <p className="sv-note">{guide.note}</p>}
+              <a
+                className={hasOpenedConsole ? 'nv-btn nv-btn--soft' : 'nv-btn nv-btn--neon'}
+                href={guide.console.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => {
+                  setIsConsoleOpening(true);
+                }}
+              >
+                {guide.console.label} ↗
+              </a>
+            </div>
+          ) : null}
+        </li>
+        <li className="sv-step" data-state={hasOpenedConsole ? 'now' : 'later'}>
+          <span className="sv-num">2</span>
+          <div className="sv-step__head">Colle-la ici</div>
+          {hasOpenedConsole ? (
+            <div className="sv-step__body">
+              <form
+                className="sv-key"
+                data-error={error !== null}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submit(keyInput.current?.value ?? '');
+                }}
+              >
+                <input
+                  ref={keyInput}
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label={`Clé ${guide.vendor}`}
+                  aria-invalid={error !== null}
+                  aria-describedby="sv-key-msg"
+                  placeholder="Nirvana la vérifie toute seule"
+                  disabled={isBusy}
+                  onPaste={(event) => {
+                    event.preventDefault();
+                    const pasted = event.clipboardData.getData('text');
+                    event.currentTarget.value = pasted;
+                    void submit(pasted);
+                  }}
+                />
+                <button type="submit" className="nv-btn nv-btn--soft nv-btn--sm" disabled={isBusy}>
+                  Vérifier
+                </button>
+              </form>
+              <p
+                id="sv-key-msg"
+                className="sv-msg"
+                data-kind={isBusy ? 'busy' : error === null ? 'none' : 'error'}
+                aria-live="polite"
+              >
+                {isBusy ? (
+                  <>
+                    <span className="sv-dot" data-dot="busy" />
+                    Vérification auprès de {guide.vendor}…
+                  </>
+                ) : (
+                  error
+                )}
+              </p>
+            </div>
+          ) : null}
+        </li>
+      </ol>
+      <div className="sv-foot">
+        {hasOpenedConsole ? null : (
+          <button
+            type="button"
+            className="nv-btn sv-btn--quiet"
+            onClick={() => {
+              setHasOpenedConsole(true);
+              setIsStepOneOpen(false);
+            }}
+          >
+            J’ai déjà ma clé
+          </button>
+        )}
+        {guide.isRequired ? null : (
+          <button
+            type="button"
+            className="nv-btn sv-btn--quiet"
+            onClick={() => {
+              onFinish(null);
+            }}
+          >
+            Plus tard
+          </button>
+        )}
+      </div>
+    </Scrim>
+  );
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])';
+
+/**
+ * A modal sheet: Tab stays inside it, and closing it gives focus back to whatever opened it (a row's button, the
+ * next-action button), when that is still on the page.
+ */
+function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void }): JSX.Element {
+  const sheet = useRef<HTMLDivElement>(null);
+  const [opener] = useState(() => document.activeElement);
+  useEffect(
+    () => () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    },
+    [opener],
+  );
+  return (
+    <div
+      className="sv-scrim"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={sheet}
+        className="sv-sheet nv-glass nv-glass--thick"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sv-sheet-title"
+        onKeyDown={(event) => {
+          if (event.key !== 'Tab' || sheet.current === null) return;
+          const items = [...sheet.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
+          const first = items[0];
+          const last = items[items.length - 1];
+          if (first === undefined || last === undefined) return;
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
