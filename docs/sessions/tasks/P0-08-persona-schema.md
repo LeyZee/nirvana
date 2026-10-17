@@ -1,5 +1,5 @@
 # P0-08 Schéma de persona calqué sur OnlyChat
-Statut : in_progress
+Statut : done
 Phase : 0
 Dépend de : P0-01
 Branche : task/p0-08-persona-schema
@@ -15,6 +15,7 @@ ADR 0010 et 0012, `docs/reference/persona-schema.md`, `brainstorm/06-interface-e
 - [x] Sections : `meta`, `details`, `additional_info`, `behavior`, `strategies`, `follow_ups`, `notifications`, `limits`.
 - [x] `personas/messalina/v0.0.0.yaml` réécrit en placeholders ; `personas/demo/v0.1.0.yaml`, créatrice fictive.
 - [x] Tests : les deux fichiers valident ; listes, bornes, style personnalisé, délais croissants, doublons, 6 000 caractères, âge minimal, fuseau.
+- [x] Le playground de P3-01 lit la persona par `PersonaSchema` (`apps/api/src/scripts/persona-file.ts`).
 - [x] `docs/reference/persona-schema.md`, `docs/playbooks/edit-the-persona.md`, glossaire, `ai-engine.md` (contexte).
 
 ## Critères d'acceptation
@@ -29,4 +30,5 @@ Le reste de P0-02 (ids, money, events, jobs, settings, media), le chargement en 
 - Remplace la structure `identity` / `style` / `boundaries` / `kinks` / `schedule` / `kyc` / `sales` / `examples` de la première version du document de référence, jamais codée. Les horaires de vie et les exemples de voix sortent de la persona (voir la référence).
 - Décision : les relances ont une seule source, `persona.follow_ups` ; `CreatorSettings.followUp` est retiré de P0-02 et de `ai-engine.md`.
 - Conséquence : la persona ne porte plus de slots KYC (`strategies.kyc.targets` est du texte). La liste fermée `KycSlot` du brief passe dans les contrats (fiche `PROPOSED-fan-memory.md`).
-- Fiches créées : `PROPOSED-fan-memory.md` (coder la mémoire déjà conçue et combler ses manques) et `PROPOSED-media-catalog-pricing.md` (catalogue, échelle de prix, historique par fan, à valider).
+- Fiches créées : `PROPOSED-fan-memory.md` (coder la mémoire déjà conçue et combler ses manques) et `PROPOSED-media-catalog-pricing.md` (catalogue = index des scripts, étapes et bundles Reveal, à valider).
+- Fusionnée le 17/10 (PR #17). Reste : chargement en base, éditeur du dashboard et import OnlyChat (hors périmètre, fiches à venir) ; corriger le prompt de voix qui cite encore les exemples de voix « dans la fiche ».

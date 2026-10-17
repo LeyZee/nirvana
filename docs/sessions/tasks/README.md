@@ -38,7 +38,7 @@ Branche : task/<id>-<slug>
 | P0-05 | Module `conversations` : ingestion, journal, projections | 0 | todo | P0-04 |
 | P0-06 | Module `connectors` : port, `FakeConnector`, test de contrat, poller | 0 | todo | P0-05 |
 | P0-07 | CI, hooks, sécurité de base, bout en bout phase 0 | 0 | todo | P0-06 |
-| P0-08 | Schéma de persona calqué sur OnlyChat | 0 | in_progress | P0-01 |
+| P0-08 | Schéma de persona calqué sur OnlyChat | 0 | done | P0-01 |
 | P1-01 | Extension : enregistreur d'API | 1 | todo | P0-01 |
 | P1-02 | Analyse de l'API Reveal et FakeReveal | 1 | blocked (accès Reveal) | P1-01 |
 | P1-03 | Décision B/C et spécification du connecteur Reveal | 1 | todo | P1-02 |
