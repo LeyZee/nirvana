@@ -56,7 +56,7 @@ export function describeRefusal(
         : `La clé ne peut pas lire tout ce qu’il faut. Ajoute ${label} à ses accès.`;
     }
     case 'unreachable':
-      return `${vendor} ne répond pas. Ta clé n’est pas en cause ; réessaie dans une minute.`;
+      return `${vendor} ne répond pas ou freine les vérifications. Ta clé n’est pas en cause ; réessaie dans une minute.`;
   }
 }
 

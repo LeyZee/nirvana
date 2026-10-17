@@ -44,7 +44,7 @@ export function createXaiVerifier(options: XaiVerifierOptions): ProviderVerifier
       if (reply.kind === 'unreachable' || isProviderTrouble(reply.status))
         return { ok: false, kind: 'unreachable' };
       if (reply.status === 400 || reply.status === 401) return { ok: false, kind: 'unauthorized' };
-      if (reply.status === 403 || reply.status === 429) {
+      if (reply.status === 403) {
         return { ok: false, kind: mentionsCredit(reply.body) ? 'no_credit' : 'unauthorized' };
       }
       const info = ApiKeyInfoSchema.safeParse(reply.body);

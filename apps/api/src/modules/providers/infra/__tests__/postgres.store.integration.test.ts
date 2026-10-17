@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
 
-import { parseEncryptionKeys, schema, withAdmin } from '@nirvana/db';
+import { eq, parseEncryptionKeys, schema, withAdmin } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import type { NewCredential } from '../../domain/credential';
-import { createPostgresCredentialStore } from '../postgres.store';
+import { createPostgresCredentialStore, resealProviderCredentials } from '../postgres.store';
 
 const FAKE_KEY = 'sk_FAKEFAKEFAKEFAKEFAKEFAKE0000';
 
@@ -87,5 +87,47 @@ describe('Postgres credential store (ADR 0016)', () => {
     // Putting the old encryption key back recovers the key.
     const restored = createPostgresCredentialStore({ adminDb: test.admin.db, keys: original });
     expect(await restored.find('elevenlabs')).toMatchObject({ key: FAKE_KEY });
+  });
+
+  it('rotates the encryption key: re-seals with v2, after which v1 can go (ops:reencrypt-credentials)', async () => {
+    const v1 = newKey('v1');
+    const v2 = newKey('v2');
+    const both = [...v2, ...v1];
+    await createPostgresCredentialStore({ adminDb: test.admin.db, keys: v1 }).save(elevenlabs);
+    const before = await createPostgresCredentialStore({ adminDb: test.admin.db, keys: both }).find(
+      'elevenlabs',
+    );
+
+    expect(await resealProviderCredentials(test.admin.db, both)).toEqual({ rewritten: 1, unreadable: [] });
+    expect(await resealProviderCredentials(test.admin.db, both)).toEqual({ rewritten: 0, unreadable: [] });
+
+    const v2Only = createPostgresCredentialStore({ adminDb: test.admin.db, keys: v2 });
+    const after = await v2Only.find('elevenlabs');
+    expect(after).toMatchObject({ key: FAKE_KEY, state: 'connected' });
+    // The row's version is kept: a check that read it before the rotation still lands.
+    expect(after?.revision).toBe(before?.revision);
+    const [row] = await withAdmin(test.admin.db, (tx) => tx.select().from(schema.providerCredentials));
+    expect(row?.keyVersion).toBe('v2');
+
+    const audit = await withAdmin(test.admin.db, (tx) =>
+      tx.select().from(schema.auditLog).where(eq(schema.auditLog.action, 'provider_key.reencrypted')),
+    );
+    // One line for the run that re-sealed, none for the one with nothing left to do.
+    expect(audit).toHaveLength(1);
+    expect(JSON.stringify(audit)).not.toContain(FAKE_KEY);
+    await v2Only.remove('elevenlabs');
+  });
+
+  it('leaves a key no listed encryption key opens, and names it', async () => {
+    const lost = newKey('v1');
+    await createPostgresCredentialStore({ adminDb: test.admin.db, keys: lost }).save(elevenlabs);
+    expect(await resealProviderCredentials(test.admin.db, newKey('v3'))).toEqual({
+      rewritten: 0,
+      unreadable: ['elevenlabs'],
+    });
+    expect(
+      await createPostgresCredentialStore({ adminDb: test.admin.db, keys: lost }).find('elevenlabs'),
+    ).toMatchObject({ key: FAKE_KEY });
+    await createPostgresCredentialStore({ adminDb: test.admin.db, keys: lost }).remove('elevenlabs');
   });
 });

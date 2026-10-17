@@ -48,7 +48,6 @@ export function createGoogleVerifier(options: GoogleVerifierOptions): ProviderVe
         return { ok: false, kind: 'unauthorized' };
       }
       if (reply.status === 403) return { ok: false, kind: 'api_not_enabled' };
-      if (reply.status === 429) return { ok: false, kind: 'no_credit' };
       const parsed = ModelsSchema.safeParse(reply.body);
       if (reply.status !== 200 || !parsed.success) return { ok: false, kind: 'unreachable' };
 
