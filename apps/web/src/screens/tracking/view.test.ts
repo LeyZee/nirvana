@@ -25,10 +25,14 @@ describe('mergeConversations', () => {
     const a = conversation('1', { updatedAt: '2026-10-17T18:00:00Z' });
     const b = conversation('2', { updatedAt: '2026-10-17T20:30:00Z' });
     const c = conversation('3', { updatedAt: '2026-10-17T19:00:00Z' });
-    expect(mergeConversations([[a, b], [c]]).map((x) => x.fanDisplayName)).toEqual([
-      'Fan 2',
-      'Fan 3',
-      'Fan 1',
+    const lines = mergeConversations([
+      { creatorName: 'Créatrice A', items: [a, b] },
+      { creatorName: 'Créatrice B', items: [c] },
+    ]);
+    expect(lines.map((l) => `${l.conversation.fanDisplayName} ${l.creatorName}`)).toEqual([
+      'Fan 2 Créatrice A',
+      'Fan 3 Créatrice B',
+      'Fan 1 Créatrice A',
     ]);
   });
 });

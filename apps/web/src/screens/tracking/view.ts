@@ -20,11 +20,19 @@ const MODE_LABELS: Readonly<Record<ConversationMode, string>> = {
 /** The design system's class for a state: its values use `_`, the classes `-`. */
 export const statusClass = (state: ConversationState): string => `nv-status--${state.replaceAll('_', '-')}`;
 
+export interface Line {
+  readonly conversation: ConversationSummary;
+  /** Whose fan he is: shown only when the account sees several creators. */
+  readonly creatorName: string;
+}
+
 /** Every creator's conversations in one list, the most recently changed first. */
 export function mergeConversations(
-  lists: readonly (readonly ConversationSummary[])[],
-): ConversationSummary[] {
-  return lists.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  lists: readonly { readonly creatorName: string; readonly items: readonly ConversationSummary[] }[],
+): Line[] {
+  return lists
+    .flatMap(({ creatorName, items }) => items.map((conversation) => ({ conversation, creatorName })))
+    .sort((a, b) => Date.parse(b.conversation.updatedAt) - Date.parse(a.conversation.updatedAt));
 }
 
 /** « il y a 5 min », « il y a 3 h », « il y a 2 j » ; nothing for a conversation he never wrote in. */
