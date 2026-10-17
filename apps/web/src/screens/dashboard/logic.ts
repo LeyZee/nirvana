@@ -1,4 +1,6 @@
-import type { AgentMode, AgentState, Lever, Period, SalesSeries, Todo, Tone } from './model';
+import type { AgentState, Lever, Period, SalesSeries, Todo, Tone } from './model';
+
+import type { AgentMode } from '@/agent/mode';
 
 /* Pure helpers of the Dashboard: formatting and the few decisions the screen makes on its data. */
 
@@ -121,12 +123,6 @@ export interface Hero {
   readonly lead: string;
   readonly action?: string;
 }
-
-export const MODE_LABEL: Record<AgentMode, string> = {
-  auto: 'Automatique',
-  copilot: 'Copilote',
-  stop: 'Arrêt',
-};
 
 /**
  * The state sentence follows the « À traiter » list: how many things wait, and whether one is urgent. A stopped

@@ -3,6 +3,7 @@ import { playLiquid, playOnce } from '@nirvana/design-system';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
 
+import { AgentPill } from './AgentPill';
 import { NavIcon, type NavIconName } from './NavIcon';
 
 interface NavItem {
@@ -79,7 +80,7 @@ export function AppShell({ user, onSignOut }: { user: CurrentUser; onSignOut: ()
         <span className="nv-rail__lens" ref={lensRef} aria-hidden="true" />
         {NAV.map(link)}
         <span className="nv-rail__sp" />
-        {/* The single Copilote / Arrêt switch of the agent goes here (decided 17/10): no stop button anywhere else. */}
+        <AgentPill />
         {link(SETTINGS)}
         <UserMenu user={user} onSignOut={onSignOut} />
       </nav>

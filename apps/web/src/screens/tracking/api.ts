@@ -1,20 +1,6 @@
-import {
-  ConversationSummarySchema,
-  CreatorListSchema,
-  pageOf,
-  type ConversationSummary,
-  type CreatorSummary,
-} from '@nirvana/contracts';
+import { ConversationSummarySchema, pageOf, type ConversationSummary } from '@nirvana/contracts';
 
 const PageSchema = pageOf(ConversationSummarySchema);
-
-/** The creators of the account. A server without the route yet (404) has none to show. */
-export async function fetchCreators(): Promise<CreatorSummary[]> {
-  const response = await fetch('/v1/creators', { credentials: 'include' });
-  if (response.status === 404) return [];
-  if (!response.ok) throw new Error(`GET /v1/creators: ${String(response.status)}`);
-  return CreatorListSchema.parse(await response.json()).creators;
-}
 
 /** The largest page `/v1/conversations` serves (api.md § Pagination). */
 const LIMIT = 200;

@@ -156,8 +156,4 @@ describe('sample data', () => {
       expect(before).toHaveLength(5);
     }
   });
-
-  it('keeps Automatique locked: the live rate is under its target', () => {
-    expect(SAMPLE.liveRate.rate).toBeLessThan(SAMPLE.liveRate.target);
-  });
 });

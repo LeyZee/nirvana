@@ -24,12 +24,7 @@ describe('fetchCreators', () => {
     expect(await fetchCreators()).toEqual([creator]);
   });
 
-  it('has none to show on a server without the route yet', async () => {
-    answer(404, { error: { code: 'route_not_found' } });
-    expect(await fetchCreators()).toEqual([]);
-  });
-
-  it('fails on any other error, so the page says the server did not answer', async () => {
+  it('fails on an error, so the page says the server did not answer', async () => {
     answer(500, {});
     await expect(fetchCreators()).rejects.toThrow('500');
   });

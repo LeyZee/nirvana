@@ -50,7 +50,7 @@ export function AgentModePage(): JSX.Element {
   return (
     <ComingSoon
       title="Copilote ou automatique"
-      what="En copilote, chaque réponse attend ton accord. L'automatique s'ouvre quand le taux en réel tient 80 % et que le test à l'aveugle est passé."
+      what="Le mode se change en haut du Dashboard. L'automatique s'ouvre quand le taux en réel tient 80 % sur 100 brouillons validés ou refusés et que le test à l'aveugle est validé."
       when="Après le copilote"
     />
   );

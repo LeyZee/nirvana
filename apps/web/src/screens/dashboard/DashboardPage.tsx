@@ -22,7 +22,7 @@ const FUNNEL_SUB: Record<Period, string> = {
  * human, then the sales, the fans' path, the best fans. Every detail lives in a tip or the read-only reader.
  */
 export function DashboardPage(): JSX.Element {
-  const { data, isSample, todos, markDone, mode, setMode } = useDashboard();
+  const { data, isSample, todos, markDone, mode, automatic, setMode } = useDashboard();
   const [period, setPeriod] = useState<Period>('day');
   const [fanId, setFanId] = useState<string | null>(null);
   const tip = useFloatingTip();
@@ -66,7 +66,7 @@ export function DashboardPage(): JSX.Element {
         </div>
         <ModeControl
           mode={mode}
-          liveRate={data.liveRate}
+          automatic={automatic}
           creatorName={data.creator.name}
           tip={tip}
           onChange={setMode}
