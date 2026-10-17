@@ -11,6 +11,12 @@ export interface Readiness {
     readonly migrations: boolean;
     readonly worker: boolean;
   };
+  /**
+   * Jobs Graphile gave up on (attempts spent): they stay in its table with their last error, for an operator to
+   * read (operations.md). They do not make the API unready; `null` when the count could not be read. Optional
+   * so that a test stub may leave it out.
+   */
+  readonly deadJobs?: number | null;
 }
 
 async function within<T>(promise: Promise<T>, fallback: T): Promise<T> {
@@ -32,7 +38,7 @@ async function within<T>(promise: Promise<T>, fallback: T): Promise<T> {
  * wrote its heartbeat recently. The age is computed by Postgres so that the API's clock does not matter.
  */
 export async function checkReadiness(db: Database, adminDb: Database): Promise<Readiness> {
-  const [database, migrations, worker] = await Promise.all([
+  const [database, migrations, worker, deadJobs] = await Promise.all([
     within(
       db.execute(sql`select 1`).then(() => true),
       false,
@@ -50,6 +56,18 @@ export async function checkReadiness(db: Database, adminDb: Database): Promise<R
         .then((result) => result.rows[0]?.fresh === true),
       false,
     ),
+    within(
+      adminDb
+        .execute<{ dead: number }>(
+          sql`select count(*)::int as dead from graphile_worker.jobs where attempts >= max_attempts`,
+        )
+        .then((result) => result.rows[0]?.dead ?? null),
+      null,
+    ),
   ]);
-  return { isReady: database && migrations && worker, checks: { database, migrations, worker } };
+  return {
+    isReady: database && migrations && worker,
+    checks: { database, migrations, worker },
+    deadJobs,
+  };
 }

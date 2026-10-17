@@ -19,6 +19,7 @@ Règle : le code ne connaît l'environnement que par la config (`apps/api/src/co
 - **Arrêt gracieux des workers** : `SIGTERM` → on ne prend plus de job, on finit le job en cours (borné à 25 s, sous le délai de 30 s avant `SIGKILL` de Docker/Coolify), on ferme le pool, on sort avec le code 0. Graphile Worker gère les jobs orphelins par verrou expirant.
 - **Image Docker de l'API/worker** : Node 22 + `ffmpeg` (extraction de frames et transcription pour `media`, phase 3).
 - **Santé** : `/health` (vivant), `/ready` (base joignable, migrations à jour, worker vu récemment). Coolify redémarre sur échec.
+- **Jobs abandonnés** : chaque job a un nombre d'essais borné (`JOB_MAX_ATTEMPTS`, 3 au plus, 1 pour les jobs périodiques) ; au-delà, Graphile le garde dans `graphile_worker.jobs` avec sa dernière erreur. `/ready` en donne le nombre (`deadJobs`) sans passer « non prêt » ; on les lit avec `select task_identifier, last_error from graphile_worker.jobs where attempts >= max_attempts`. Un contenu de job invalide échoue de la même façon, au plus trois fois.
 
 ## Données
 

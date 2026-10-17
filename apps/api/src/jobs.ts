@@ -1,4 +1,4 @@
-import type { JobName, JobPayload } from '@nirvana/contracts';
+import { JOB_MAX_ATTEMPTS, type JobName, type JobPayload } from '@nirvana/contracts';
 import { makeWorkerUtils, type Task, type WorkerUtils } from 'graphile-worker';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -40,7 +40,10 @@ export async function createJobQueue(adminPool: Pool): Promise<JobQueue> {
     async enqueue(task, payload, options = {}) {
       // Widened so Graphile does not look the name up in its global task registry; the payload is typed above.
       const identifier: string = task;
-      const job = await utils.addJob(identifier, payload, options);
+      const job = await utils.addJob(identifier, payload, {
+        maxAttempts: JOB_MAX_ATTEMPTS[task],
+        ...options,
+      });
       return { jobId: job.id };
     },
     async close() {

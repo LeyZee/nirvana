@@ -206,6 +206,12 @@ describe('connectors module (P0-06)', () => {
       sql`select payload->>'error' as error from conversation_events where conversation_id = ${conversationId} and type = 'send_failed'`,
     );
     expect(failed.rows).toEqual([{ error: 'connector_writes_disabled' }]);
+    // Nothing will retry: the conversation waits for a human instead of staying in `sending`.
+    const [conversation] = await test.admin.db
+      .select({ state: schema.conversations.state })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, conversationId));
+    expect(conversation?.state).toBe('error');
   });
 
   it('stops an account whose session expired: state, event, no ingestion, no answer, no more calls', async () => {

@@ -39,6 +39,8 @@ const sendPayload = z.object({
   idempotencyKey: z.string().min(1),
   attempt: z.number().int().min(1),
   error: z.string().min(1).optional(),
+  /** `send_failed` only: no retry follows (last attempt, or a refusal such as a closed write guard). */
+  isFinal: z.boolean().optional(),
 });
 
 const draftPayload = z.object({

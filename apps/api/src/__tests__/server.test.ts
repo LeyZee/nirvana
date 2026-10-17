@@ -14,7 +14,11 @@ import { testConfig } from './support/config';
 
 const ORIGIN = { origin: 'http://localhost:5173' };
 
-const READY: Readiness = { isReady: true, checks: { database: true, migrations: true, worker: true } };
+const READY: Readiness = {
+  isReady: true,
+  checks: { database: true, migrations: true, worker: true },
+  deadJobs: 0,
+};
 
 class ConversationNotFound extends DomainError {}
 class DraftConflict extends DomainError {}
@@ -60,12 +64,16 @@ describe('health and readiness', () => {
   it('answers /ready 200 when every check passes and 503 otherwise, with the checks', async () => {
     const ready = await (await server()).inject({ method: 'GET', url: '/ready' });
     expect(ready.statusCode).toBe(200);
-    expect(ready.json()).toEqual({ status: 'ready', checks: READY.checks });
+    expect(ready.json()).toEqual({ status: 'ready', checks: READY.checks, deadJobs: 0 });
 
-    const down: Readiness = { isReady: false, checks: { database: true, migrations: true, worker: false } };
+    const down: Readiness = {
+      isReady: false,
+      checks: { database: true, migrations: true, worker: false },
+      deadJobs: null,
+    };
     const notReady = await (await server({ readiness: down })).inject({ method: 'GET', url: '/ready' });
     expect(notReady.statusCode).toBe(503);
-    expect(notReady.json()).toEqual({ status: 'not_ready', checks: down.checks });
+    expect(notReady.json()).toEqual({ status: 'not_ready', checks: down.checks, deadJobs: null });
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   AuditEntryIdSchema,
   EventIdSchema,
+  JOB_MAX_ATTEMPTS,
   JOB_PAYLOADS,
   MessageAuthorSchema,
   MessageDirectionSchema,
@@ -224,7 +225,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
             payload => ${JSON.stringify(parsed)}::jsonb,
             queue_name => ${options.queueName ?? null},
             run_at => ${options.runAt?.toISOString() ?? null}::timestamptz,
-            max_attempts => ${options.maxAttempts ?? null}::int,
+            max_attempts => ${options.maxAttempts ?? JOB_MAX_ATTEMPTS[job]}::int,
             job_key => ${options.jobKey ?? null}
           )`,
         );

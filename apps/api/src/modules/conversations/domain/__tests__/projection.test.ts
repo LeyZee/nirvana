@@ -35,6 +35,24 @@ describe('conversation projection', () => {
     expect(applyEvent(INITIAL_PROJECTION, approved, at(1)).state).toBe('idle');
   });
 
+  it('leaves `sending` for `error` on a final failure, whatever the attempt; an older event counts attempts', () => {
+    const sending = { ...INITIAL_PROJECTION, state: 'sending' as const };
+    const failed = (attempt: number, isFinal?: boolean) =>
+      EventBodySchema.parse({
+        type: 'send_failed',
+        payload: {
+          draftId: DRAFT,
+          idempotencyKey: `${DRAFT}:0`,
+          attempt,
+          ...(isFinal === undefined ? {} : { isFinal }),
+        },
+      });
+    expect(applyEvent(sending, failed(1, true), at(1)).state).toBe('error');
+    expect(applyEvent(sending, failed(1, false), at(1)).state).toBe('sending');
+    expect(applyEvent(sending, failed(3), at(1)).state).toBe('error');
+    expect(applyEvent(sending, failed(1), at(1)).state).toBe('sending');
+  });
+
   it('records a mode change', () => {
     const body = EventBodySchema.parse({ type: 'mode_changed', payload: { mode: 'auto' } });
     expect(applyEvent(INITIAL_PROJECTION, body, at(1)).mode).toBe('auto');

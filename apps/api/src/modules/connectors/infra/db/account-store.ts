@@ -3,6 +3,7 @@ import {
   ConnectorConfigSchema,
   CreatorIdSchema,
   EventIdSchema,
+  JOB_MAX_ATTEMPTS,
   JOB_PAYLOADS,
   accountQueueNameFor,
   newId,
@@ -199,6 +200,7 @@ export function createDrizzleAccountJobs(adminDb: Database): AccountJobs {
         payload => ${JSON.stringify(payload)}::jsonb,
         queue_name => ${accountQueueNameFor(account.id)},
         run_at => ${options.runAt?.toISOString() ?? null}::timestamptz,
+        max_attempts => ${JOB_MAX_ATTEMPTS[job]}::int,
         job_key => ${`${job === 'connector.poll' ? 'poll' : 'reconcile'}:${account.id}`},
         job_key_mode => ${options.jobKeyMode}
       )`,
