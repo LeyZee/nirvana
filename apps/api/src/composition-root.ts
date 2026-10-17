@@ -1,6 +1,9 @@
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
-import type { LlmCallStore } from '@nirvana/llm';
+import { createPersistentCallLog, DEFAULT_LLM_CONFIG, type LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
@@ -8,6 +11,7 @@ import type { Pool } from 'pg';
 import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
 import { secretOrNull, type Config } from './config';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
+import { createAppLlm } from './llm';
 import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
 import { createAgentModule, type AgentModule } from './modules/agent';
@@ -16,6 +20,7 @@ import { createConversationsModule, type ConversationsModule } from './modules/c
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
+import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
 import { createSalesModule, type SalesModule } from './modules/sales';
 import { createScriptsModule, type ScriptsModule } from './modules/scripts';
@@ -34,6 +39,8 @@ interface Modules {
   readonly sales: SalesModule;
   readonly scripts: ScriptsModule;
   readonly providers: ProvidersModule;
+  /** Null when its persona cannot be read: the API starts without the playground and says why. */
+  readonly playground: PlaygroundModule | null;
 }
 
 /** What both entry points (API and worker) are built from. */
@@ -57,6 +64,13 @@ export interface App {
   /** Closes the queue and both pools; the server and the worker are stopped before. */
   shutdown(): Promise<void>;
 }
+
+/**
+ * A path from the repository root, as the terminal playground reads it: `src/` in development and `dist/` once
+ * built both sit two levels under it. An absolute path is kept as is.
+ */
+const fromRepoRoot = (path: string): string =>
+  resolve(fileURLToPath(new URL('../../../', import.meta.url)), path);
 
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
@@ -102,6 +116,46 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     sender: connectors.outboundSender,
     requireRole,
   });
+  const providers = await startProvidersModule({
+    adminDb: adminDb.db,
+    // The `.env.example` placeholder counts as unset: keys stay in memory instead of crashing the start.
+    encryptionKeys: secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS) ?? undefined,
+    environmentKeys:
+      config.NODE_ENV === 'production'
+        ? null
+        : {
+            xai: config.LLM_XAI_API_KEY,
+            google: config.LLM_GOOGLE_API_KEY,
+            elevenlabs: config.SPEECH_ELEVENLABS_API_KEY,
+          },
+    onLoadError: (error) => {
+      logger.warn({ err: error }, 'AI service keys not loaded');
+    },
+  });
+  const llmCalls = createDrizzleLlmCallStore(adminDb.db);
+  // The day's calls of both processes, reloaded every 30 s: one daily cap for the API and the worker.
+  const llmLog = await createPersistentCallLog(llmCalls, {
+    timeZone: DEFAULT_LLM_CONFIG.dailyBudget.timeZone,
+    refreshEveryMs: 30_000,
+    onError: (error) => {
+      logger.warn({ err: error }, 'llm_calls not written or not reloaded');
+    },
+  });
+  const llm = createAppLlm({
+    log: llmLog,
+    credentials: providers.apiKeySource,
+    reportRefusedKey: (provider, kind) => providers.reportRefusedKey(provider, kind),
+    logger,
+  });
+  const playground = await startPlaygroundModule({
+    ...llm.deps,
+    gateway: llm.gateway,
+    personaPath: fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml'),
+    trainingDir: fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training'),
+  }).catch((error: unknown) => {
+    logger.warn({ err: error }, 'playground not started: persona unreadable');
+    return null;
+  });
   const modules: Modules = {
     connectors,
     conversations,
@@ -112,22 +166,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     supervision: createSupervisionModule(),
     sales: createSalesModule(),
     scripts: createScriptsModule(),
-    providers: await startProvidersModule({
-      adminDb: adminDb.db,
-      // The `.env.example` placeholder counts as unset: keys stay in memory instead of crashing the start.
-      encryptionKeys: secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS) ?? undefined,
-      environmentKeys:
-        config.NODE_ENV === 'production'
-          ? null
-          : {
-              xai: config.LLM_XAI_API_KEY,
-              google: config.LLM_GOOGLE_API_KEY,
-              elevenlabs: config.SPEECH_ELEVENLABS_API_KEY,
-            },
-      onLoadError: (error) => {
-        logger.warn({ err: error }, 'AI service keys not loaded');
-      },
-    }),
+    providers,
+    playground,
   };
 
   const tasks: TaskList = {
@@ -180,7 +220,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     db,
     adminDb,
     jobs,
-    llmCalls: createDrizzleLlmCallStore(adminDb.db),
+    llmCalls,
     auth,
     requireRole,
     routes: [
@@ -188,11 +228,13 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.conversations.routes,
       modules.providers.routes({ guard: requireRole('owner') }),
       modules.connectors.routes,
+      ...(playground === null ? [] : [playground.routes({ guard: requireRole('owner') })]),
     ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
     async shutdown() {
       modules.providers.stop();
+      llmLog.stop();
       await jobs.close();
       await Promise.all([db.close(), adminDb.close()]);
     },

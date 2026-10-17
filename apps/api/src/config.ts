@@ -14,6 +14,12 @@ export function secretOrNull(value: string | undefined): string | null {
   return value === undefined || value.trim() === '' || value.includes('replace-') ? null : value;
 }
 
+/** A path left empty in `.env` counts as unset, like a secret (`secretOrNull`). */
+const optionalPath = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 /**
  * The only place that reads `process.env` (operations.md). Validated once at startup, frozen, and passed down.
  * Each task adds the variables it needs, documented in `.env.example`.
@@ -51,6 +57,10 @@ const configSchema = z
     SESSION_ENCRYPTION_KEYS: z.string().optional(),
     /** Device token of the extension's « Sync » (`POST /v1/connector/sessions`); `openssl rand -base64 32`. */
     EXTENSION_DEVICE_TOKEN: z.string().optional(),
+    /** Entraîner > Playground: the persona YAML to train on; the fictional demo persona when absent (ADR 0010). */
+    PLAYGROUND_PERSONA_PATH: optionalPath,
+    /** Where the playground ratings are kept, out of the repository; `.scratch/training` when absent. */
+    NIRVANA_TRAINING_DIR: optionalPath,
   })
   .refine(
     // `.env.example` placeholders are long enough to pass `min(32)`; production must not start with one.

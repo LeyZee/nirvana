@@ -23,7 +23,8 @@ L'écran Entraîner > Playground du CRM (fil Extension) pilote le moteur de cali
   - contenu : `PUT /notes`, `POST /creator-media`.
 
   Garde `requireRole('owner')`. Réponse 503 `llm_unavailable` sans clé, 409 sur une note impossible.
-- [ ] Composition root, après la fusion de #27 : `startPlaygroundModule` (lit la persona et les notes gardées, chemins par la config), une ligne de démarrage du module et ses routes dans le tableau. Clés par `modules.providers.apiKeySource`, refus par `onKeyRefused`, plafond par `onBudget`.
+- [x] Composition root : une passerelle par processus (`apps/api/src/llm.ts`, clés par `providers.apiKeySource`, refus par `reportRefusedKey`, plafond par `onBudget`), `startPlaygroundModule` (persona `PLAYGROUND_PERSONA_PATH`, démo sinon ; notes dans `NIRVANA_TRAINING_DIR`) et ses routes sous `requireRole('owner')`.
+- [ ] Journal persistant branché sur le store `llm_calls` de la PR composeur ; événement de plafond vers la supervision (journal du serveur d'ici là).
 
 ## Critères d'acceptation
 - `pnpm check` et `pnpm test` verts. Tests du module : service contre un faux moteur, routes avec `fastify.inject` et une fausse passerelle.
