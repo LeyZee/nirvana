@@ -23,6 +23,8 @@ export {
   DEFAULT_LLM_CONFIG,
   LlmConfigSchema,
   readProviderCredentials,
+  type ApiKeys,
+  type ApiKeySource,
   type LlmConfig,
   type LlmRole,
   type LlmRoleConfig,

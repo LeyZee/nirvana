@@ -5,14 +5,14 @@ import { createXai } from '@ai-sdk/xai';
 import type { LanguageModel, TranscriptionModel } from 'ai';
 
 import { TRANSCRIPTION_MODEL } from './catalog';
-import { apiKeyFor, type ModelRef, type ProviderCredentials } from './config';
+import { apiKeyFor, type ApiKeys, type ModelRef } from './config';
 
 /** Returns the model, or undefined when its provider has no API key configured. */
 export type ModelResolver = (ref: ModelRef) => LanguageModel | undefined;
 
 const VENICE_BASE_URL = 'https://api.venice.ai/api/v1';
 
-export function createModelResolver(credentials: ProviderCredentials): ModelResolver {
+export function createModelResolver(credentials: ApiKeys): ModelResolver {
   return (ref) => {
     const apiKey = apiKeyFor(credentials, ref.provider);
     if (apiKey === undefined) return undefined;
@@ -30,11 +30,9 @@ export function createModelResolver(credentials: ProviderCredentials): ModelReso
 }
 
 /** xAI speech to text, or undefined without an xAI key. */
-export function createTranscriberResolver(
-  credentials: ProviderCredentials,
-): () => TranscriptionModel | undefined {
+export function createTranscriberResolver(credentials: ApiKeys): () => TranscriptionModel | undefined {
   return () => {
-    const apiKey = credentials.LLM_XAI_API_KEY;
+    const apiKey = apiKeyFor(credentials, 'xai');
     return apiKey === undefined ? undefined : createXai({ apiKey }).transcription(TRANSCRIPTION_MODEL.model);
   };
 }

@@ -19,7 +19,7 @@ import type { z } from 'zod';
 
 import type { CallOutcome, LlmCallLog } from './call-log';
 import { acceptsInput, costUsd, MODELS, TRANSCRIPTION_MODEL } from './catalog';
-import type { LlmConfig, LlmRole, ModelRef, ProviderCredentials, ProviderId } from './config';
+import type { ApiKeys, LlmConfig, LlmRole, ModelRef, ProviderId } from './config';
 import { computeHealth, type HealthReport } from './health';
 import { loadPrompt, renderPrompt, type PromptTemplate } from './prompts';
 import type { ModelResolver } from './providers';
@@ -132,7 +132,8 @@ export interface LlmGateway {
 
 export interface LlmGatewayDeps {
   readonly config: LlmConfig;
-  readonly credentials: ProviderCredentials;
+  /** The environment's keys, or a source reading the keys saved in the CRM. */
+  readonly credentials: ApiKeys;
   readonly resolveModel: ModelResolver;
   readonly log: LlmCallLog;
   readonly now?: () => Date;
