@@ -7,6 +7,14 @@ const flag = z
   .transform((value) => value === '1' || value === 'true');
 
 /**
+ * An optional secret, or `null` when unset or still the `.env.example` placeholder (`replace-…`): in development
+ * the feature that needs it stays off; production refuses to start (below).
+ */
+export function secretOrNull(value: string | undefined): string | null {
+  return value === undefined || value.trim() === '' || value.includes('replace-') ? null : value;
+}
+
+/**
  * The only place that reads `process.env` (operations.md). Validated once at startup, frozen, and passed down.
  * Each task adds the variables it needs, documented in `.env.example`.
  */
@@ -39,16 +47,38 @@ const configSchema = z
     LLM_XAI_API_KEY: z.string().min(1).optional(),
     LLM_GOOGLE_API_KEY: z.string().min(1).optional(),
     SPEECH_ELEVENLABS_API_KEY: z.string().min(1).optional(),
+    /** AES-256-GCM keys of the platform sessions, `v2:<base64>,v1:<base64>` newest first (security.md). */
+    SESSION_ENCRYPTION_KEYS: z.string().optional(),
+    /** Device token of the extension's « Sync » (`POST /v1/connector/sessions`); `openssl rand -base64 32`. */
+    EXTENSION_DEVICE_TOKEN: z.string().optional(),
   })
   .refine(
     // `.env.example` placeholders are long enough to pass `min(32)`; production must not start with one.
     (config) => config.NODE_ENV !== 'production' || !config.AUTH_SECRET.startsWith('replace-'),
     { message: 'AUTH_SECRET still holds the .env.example placeholder', path: ['AUTH_SECRET'] },
   )
-  .refine((config) => config.NODE_ENV !== 'production' || config.CREDENTIALS_ENCRYPTION_KEYS !== undefined, {
-    message: 'required in production (ADR 0016)',
-    path: ['CREDENTIALS_ENCRYPTION_KEYS'],
-  });
+  .refine(
+    (config) => config.NODE_ENV !== 'production' || secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS) !== null,
+    {
+      message: 'required in production, not the .env.example placeholder (ADR 0016)',
+      path: ['CREDENTIALS_ENCRYPTION_KEYS'],
+    },
+  )
+  .refine(
+    (config) => config.NODE_ENV !== 'production' || secretOrNull(config.SESSION_ENCRYPTION_KEYS) !== null,
+    {
+      message: 'SESSION_ENCRYPTION_KEYS is missing or still holds the .env.example placeholder',
+      path: ['SESSION_ENCRYPTION_KEYS'],
+    },
+  )
+  .refine(
+    (config) =>
+      config.NODE_ENV !== 'production' || (secretOrNull(config.EXTENSION_DEVICE_TOKEN)?.length ?? 0) >= 32,
+    {
+      message: 'EXTENSION_DEVICE_TOKEN is missing, too short or still holds the .env.example placeholder',
+      path: ['EXTENSION_DEVICE_TOKEN'],
+    },
+  );
 
 export type Config = Readonly<z.infer<typeof configSchema>>;
 

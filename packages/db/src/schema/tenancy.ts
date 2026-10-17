@@ -1,5 +1,5 @@
 import { PlatformSchema, SessionStateSchema } from '@nirvana/contracts';
-import { customType, index, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { customType, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 
 import { createdAt, enumCheck, enumText, id, tenantPolicy, timestampTz } from './columns';
 
@@ -29,6 +29,9 @@ export const platformAccounts = pgTable(
     sessionCiphertext: bytea('session_ciphertext'),
     sessionUpdatedAt: timestampTz('session_updated_at'),
     lastPollAt: timestampTz('last_poll_at'),
+    /** Circuit breaker (connectors.md): failed polls in a row, and until when the account stays quiet. */
+    consecutiveErrors: integer('consecutive_errors').notNull().default(0),
+    pausedUntil: timestampTz('paused_until'),
     connectorConfig: jsonb('connector_config').notNull().default({}),
     createdAt: createdAt(),
   },

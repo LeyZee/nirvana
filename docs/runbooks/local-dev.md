@@ -17,14 +17,20 @@ Pour essayer le dashboard sur son PC (Windows, macOS ou Linux), avec une base Po
    pnpm install
    ```
 
-3. Créer `.env` à partir de l'exemple, puis remplacer `AUTH_SECRET` par une valeur aléatoire :
+3. Créer `.env` à partir de l'exemple, puis y mettre trois secrets aléatoires :
 
    ```powershell
    Copy-Item .env.example .env
-   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   node -e "const r=()=>require('crypto').randomBytes(32).toString('base64');console.log('AUTH_SECRET='+r());console.log('CREDENTIALS_ENCRYPTION_KEYS=v1:'+r());console.log('SESSION_ENCRYPTION_KEYS=v1:'+r())"
    ```
 
-   Coller la valeur affichée après `AUTH_SECRET=` dans `.env`. Les autres valeurs de l'exemple conviennent en local : les mots de passe `change-me` sont ceux de la base Docker, `WEB_ORIGIN` et `AUTH_BASE_URL` pointent sur le dashboard (`http://localhost:5173`). Les clés d'IA ne servent pas encore au dashboard.
+   La commande affiche trois lignes : chacune remplace dans `.env` la ligne qui commence par le même nom.
+   - `AUTH_SECRET` signe les cookies du dashboard (Better Auth).
+   - `CREDENTIALS_ENCRYPTION_KEYS` chiffre les clés d'IA collées dans Réglages › Modèles IA › Services. Sans elle, ces clés restent en mémoire et disparaissent à chaque redémarrage.
+   - `SESSION_ENCRYPTION_KEYS` chiffre la session Reveal que l'extension déposera.
+   - Ces clés ne se changent plus ensuite : une clé perdue rend illisible ce qu'elle a chiffré.
+
+   Les autres valeurs de l'exemple conviennent en local. Les mots de passe `change-me` sont ceux de la base Docker. `WEB_ORIGIN` et `AUTH_BASE_URL` pointent sur le dashboard (`http://localhost:5173`). `EXTENSION_DEVICE_TOKEN` attend l'extension et peut rester tel quel.
 
 4. Démarrer Postgres et créer les tables :
 
