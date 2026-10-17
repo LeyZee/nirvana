@@ -1,7 +1,7 @@
 # Mémoire par fan : coder le module `fans`
 Statut : proposed
 Phase : 3
-Dépend de : P0-03, P0-05, P0-08
+Dépend de : P0-03, P0-05, P0-08, P1-02 (forme des notes Reveal)
 Branche : (à fixer à l'acceptation)
 
 ## Objectif
@@ -20,6 +20,14 @@ Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'
 | Achats | `messages.is_paid`, `price_minor`, `sale_detected`, `listTransactions` du connecteur, `sales` réservé (phase 6) | Un résumé d'achats par fan calculé (total, nombre, dernier achat, plus haut palier acheté), sans table nouvelle, pour le contexte et la politique. |
 | Limites du fan | `fans.flags` (jsonb, non spécifié), risques du brief (`distress`, `minor_suspected`…) | Clés fermées de `fans.flags`, lues par la politique avant toute offre : `age_confirmed` (date), `sales_frozen` (raison : `money_trouble`, `spending_limit`, `distress`, `operator`), `spending_limit_minor`, `no_explicit`, `do_not_contact`. Écrites par la politique (risque détecté) ou par un humain, jamais par le LLM seul. |
 
+## Les notes de Reveal (Charles, 17/10 à 17h33)
+Reveal affiche déjà, à droite de chaque conversation, des **notes client** par fan, des **notes du modèle** (l'équivalent de la persona) et des statistiques, dont un onglet PPV. La mémoire de Nirvana s'appuie sur elles au lieu de tenir une mémoire parallèle qui divergerait :
+- **Lecture** : à l'ingestion, les notes client de Reveal entrent comme faits (`source: platform_note`) et les statistiques PPV alimentent `purchaseSummary`.
+- **Écriture** : un fait confirmé est réécrit dans les notes client de Reveal, pour que l'agent et les humains lisent la même fiche.
+- **Conflit** : une note modifiée par un humain dans Reveal l'emporte sur le fait plus ancien de Nirvana, qui est remplacé (`superseded_by`).
+- **Notes du modèle** : écrites depuis la persona active à chaque activation de version.
+- **Point d'accroche** : capacités optionnelles du port connecteur (`readFanNotes`, `writeFanNotes`, `readFanStats`, signalées dans `ConnectorCapabilities`), sans forme fixée ici. Les champs viennent de l'observation de Reveal (P1-02, fil Connexion Reveal) ; sans ces capacités, la mémoire fonctionne seule.
+
 ## À faire
 - `packages/contracts` : `KycSlot`, `FactCategory` avec `operator_note`, `FanFlagsSchema` (clés ci-dessus), `FanPurchaseSummary`.
 - Module `fans` (domain, application, infra, `index.ts`) : `proposeFacts(fanId, facts, evidence)` (append-only, remplace par `superseded_by`), `activeFacts(fanId)` (non remplacés, non expirés, triés catégorie puis confiance, 40 au plus), `kycState(fanId)`, `setFlag` / `clearFlag` (événement `domain_events`, auteur obligatoire), `purchaseSummary(fanId)`, `sentMediaIds(fanId)`.
@@ -35,6 +43,6 @@ Coder la mémoire par fan déjà conçue (notes client structurées) pour que l'
 - Évals : fan à découvert, fan qui fixe une limite de dépense, fan de 18 ans, fan qui revient après trois semaines (il est reconnu).
 
 ## Hors périmètre
-Tables `offers`, `sales`, `scripts` (fiche catalogue), interface de la fiche fan dans l'extension, import de l'historique Reveal.
+Tables `offers`, `sales`, `scripts` (fiche catalogue), la forme exacte des notes et statistiques Reveal (P1-02), interface de la fiche fan dans l'extension, import de l'historique Reveal.
 
 ## Notes de session
