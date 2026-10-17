@@ -29,16 +29,3 @@ export function CreatorsPage(): JSX.Element {
     </Page>
   );
 }
-
-export function TrackingPage(): JSX.Element {
-  return (
-    <Page>
-      <PageHeader title="Suivi" />
-      <ComingSoon
-        title="Ce qui est à traiter"
-        what="Une file des conversations qui demandent un humain, chacune lisible en entier, sans rien envoyer d’ici."
-        when="Avec la connexion Reveal"
-      />
-    </Page>
-  );
-}

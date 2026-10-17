@@ -28,7 +28,7 @@ Réponses aux questions ouvertes de `brief.md` :
 
 Prototype cliquable : https://claude.ai/artifact/TZjCUAPFhxN4pJn978A9zz (brainstorm/06). Ce qu'il a fixé :
 
-- **Le dashboard n'a ni Inbox ni page Fans.** Navigation : Dashboard (statistiques), Créatrices, Entraîner, Suivi, Réglages. La validation en copilote passe par l'extension, dans Reveal (proposition de la note 06, à valider).
+- **Le dashboard n'a ni Inbox ni page Fans.** Navigation : Dashboard (statistiques), Créatrices, Entraîner, Suivi, Réglages. La validation en copilote passe par l'extension, dans Reveal (décision de Charles, 17/10).
 - **Un dashboard de statistiques à la manière de celui de Reveal**, animé (voir « Dashboard » plus bas).
 - **Pas de double bouton sur le verre** : un bouton secondaire posé sur une surface vitrée est une teinte (`nv-btn--soft`), pas un second verre.
 - **Chaque icône de navigation a son geste** quand on l'active, et les changements d'onglet s'animent.
@@ -47,6 +47,8 @@ Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CR
 - **Le halo du pointeur est serré** : 110 px sous le pointeur au lieu de 200 px, avec un fondu à l'entrée ; le reflet au repos ne change pas (`attachGlassLight` pose `is-lit`).
 - **Une info-bulle qui compare se lit comme un tableau** : la période, puis une ligne par série alignée à droite, puis une ligne de pied (`nv-chart__tip--table`).
 - **Une courbe d'indicateur montre la vraie tendance** de la période (de la valeur d'avant à l'actuelle, jamais un axe inversé) ; la couleur du `nv-delta` dit si c'est mieux ou pire. Un délai s'écrit en minutes (« −10 min »), pas en mots (« plus tôt »).
+- **Créatrices et Réglages ne se mélangent pas** : sous Créatrices, tout ce qui est propre à une créatrice (persona, plus tard catalogue et chiffres par créatrice) ; sous Réglages, le CRM lui-même (clés, appareils, mode, notifications).
+- **Tout doit être intuitif** : se mettre à la place de quelqu'un qui découvre l'écran, repérer ce qui est flou ou ambigu, simplifier les mots et les chiffres, sans le prendre pour un idiot (section « Clarté »).
 
 ## Où vivent les choses
 
@@ -84,6 +86,17 @@ Règles pratiques :
 - Pas plus de trois chiffres secondaires côte à côte ; au-delà, une bande `nv-meta` ou un pli.
 - Les titres de section sont des sourcils (`nv-eyebrow`, capitales espacées, `ink-faint`) : ils guident l'œil, ils ne l'attirent pas.
 - Un état vide dit quoi faire et propose l'action (un bouton ou une suggestion cliquable), pas seulement « rien ici ».
+
+## Clarté
+
+Chaque écran se relit à la place d'un nouvel utilisateur, qui connaît le chatting mais pas Nirvana. Il ne doit jamais se demander « ça veut dire quoi ? » ni « c'est à moi de faire quelque chose ? ».
+
+- **Dire qui agit.** Un état dit qui a la main : « L'agent écrit », « À valider », « Un humain répond ». Jamais un état abstrait (« En attente » : de qui ?).
+- **Les mots du métier, pas ceux du code.** Pas de `brief`, `handoff`, `KYC`, `pending`, `prompt` ni de nom de modèle à l'écran principal : « ce qu'elle sait de lui », « relais à un humain », « la voix ». Le terme technique peut vivre dans les détails repliés.
+- **Un chiffre a son unité et sa référence.** « 64 % validées sans retouche, objectif 80 % », pas « 64 % » seul ; « il a écrit il y a 3 min », pas « 3 min ».
+- **Ne pas répéter ce qui est vrai partout.** Une information identique sur toutes les lignes se dit une fois, en tête de liste, ou ne se dit pas.
+- **Une phrase, pas une notice.** Un libellé tient en quelques mots ; une explication tient en une phrase et ne paraphrase pas le libellé.
+- **Pas d'infantilisation.** Pas de « Oups ! », pas d'emoji dans l'interface, pas d'explication de ce qu'est un bouton.
 
 ## Couleur
 
@@ -135,7 +148,7 @@ Tout élément cliquable a les quatre états ; un écran prend la classe qui con
 
 Classes communes : `nv-btn` (actions), `nv-chip` (un choix parmi quelques-uns), `nv-tap` (ligne, carte, élément de liste), `nv-lift` (carte flottante, pas un grand panneau), `nv-disclosure` (pli `<details>` avec titre `__title`, résumé `__sum` et contenu `__body`), `nv-enter` (entrée en fondu montant, décalée par `--nv-i`).
 
-Pastilles d'état (`nv-status--<état>`) : une par valeur de `conversations.state` (`data-model.md`) : `idle`, `pending`, `drafting` (respire), `awaiting-approval`, `sending` (respire), `human`, `paused`, `error`, plus `sale`. Libellés : Au calme, En attente, Rédaction, À valider, Envoi, Humain, En pause, Erreur, Vente.
+Pastilles d'état (`nv-status--<état>`) : une par valeur de `conversations.state` (`data-model.md`) : `idle`, `pending`, `drafting` (respire), `awaiting-approval`, `sending` (respire), `human`, `paused`, `error`, plus `sale`. Libellés, qui disent qui a la main (section « Clarté ») : Rien à faire, Message reçu, L'agent écrit, À valider, Envoi en cours, Un humain répond, En pause, Erreur, Vente.
 
 ## Mouvement
 

@@ -80,6 +80,8 @@ const RISKS: Readonly<Record<string, string>> = {
   self_harm: 'Idées noires',
   money_trouble: 'Argent difficile',
   manipulation_attempt: 'Tentative de manipulation',
+  dangerous_request: 'Demande dangereuse',
+  real_abuse: 'Récit de violences réelles',
 };
 /** Safety flags of a media (MediaDescription.flags): any of them hands the fan over to a human. */
 export const MEDIA_FLAG_LABELS: Readonly<Record<string, string>> = {

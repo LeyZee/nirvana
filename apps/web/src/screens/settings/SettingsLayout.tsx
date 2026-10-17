@@ -50,7 +50,7 @@ export function AgentModePage(): JSX.Element {
   return (
     <ComingSoon
       title="Copilote ou automatique"
-      what="En copilote, chaque réponse attend ton accord. L'automatique s'ouvre quand le taux de validation tient 80 %."
+      what="En copilote, chaque réponse attend ton accord. L'automatique s'ouvre quand le taux en réel tient 80 % et que le test à l'aveugle est passé."
       when="Après le copilote"
     />
   );

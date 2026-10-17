@@ -20,7 +20,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P3-03 Connexion des services IA, module `providers` (Opus) | in_progress | `log/2026-10-17-p3-03.md` |
 | 2026-10-17 | README à jour et design system en images | done | `log/2026-10-17-readme-design.md` |
 | 2026-10-17 | P3-04 Vision des médias et pièges (Opus) | in_progress | `log/2026-10-17-p3-04.md` |
-| 2026-10-17 | Coquille du dashboard et écran Playground (Opus) | in_progress | `log/2026-10-17-web-coquille-playground.md` |
+| 2026-10-17 | Coquille du dashboard et écran Playground (Opus) | done (PR #34) | `log/2026-10-17-web-coquille-playground.md` |
 | 2026-10-17 | P0-02 Contrats partagés | done | `log/2026-10-17-p0-02.md` |
 | 2026-10-17 | P0-03 Base de données | done | `log/2026-10-17-p0-03.md` |
 | 2026-10-17 | P0-04 Serveur et worker | done | `log/2026-10-17-p0-04.md` |
@@ -42,6 +42,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Persona : genre déprécié | done | `log/2026-10-17-persona-gender.md` |
 | 2026-10-17 | Dashboard, PR 1 : pièces du design system | done | `log/2026-10-17-dashboard-ds.md` |
 | 2026-10-17 | Alertes Telegram : ADR 0020, fiche P3-07, maquette | done | `log/2026-10-17-alertes-telegram.md` |
+| 2026-10-17 | Suivi, squelette : liste des conversations (P0-07b, côté web) | done (PR #42) | `log/2026-10-17-web-suivi-squelette.md` |
 
 ## Incidents (liste vivante)
 
