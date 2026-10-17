@@ -1,4 +1,4 @@
-import type { LlmCallLog } from './call-log';
+import type { CallOutcome, LlmCallLog, LlmCallRecord } from './call-log';
 import type { DailyBudget } from './config';
 
 export type BudgetState = 'ok' | 'alert' | 'reached';
@@ -50,11 +50,27 @@ export function startOfLocalDay(now: Date, timeZone: string): Date {
   return new Date(candidate.getTime() - driftMinutes * 60_000);
 }
 
-/** Costs are journaled in USD (provider prices); the cap is in euros, converted with a conservative rate. */
+/**
+ * A call the provider may have billed without saying how much (no usage, no price for the model): counted at this
+ * much, so an unknown cost never lets the day go past its cap unnoticed. Far above a real voice or brain call.
+ */
+const UNKNOWN_CALL_COST_USD = 0.05;
+/** Refused before any work: the provider bills nothing. */
+const UNBILLED: ReadonlySet<CallOutcome> = new Set(['auth', 'rate_limited', 'missing_key', 'unknown_model']);
+
+function billedUsd(record: LlmCallRecord): number {
+  if (record.costUsd !== undefined) return record.costUsd;
+  return UNBILLED.has(record.outcome) ? 0 : UNKNOWN_CALL_COST_USD;
+}
+
+/**
+ * Costs are journaled in USD (provider prices); the cap is in euros, converted with a conservative rate.
+ * The cap is checked before each call against the costs already journaled: calls in flight, and those of another
+ * process until its journal is reloaded (30 s), are not counted yet. Going a few cents past the cap is possible
+ * when several calls run at once; accepted, the cap protects against a runaway day, not against one cent.
+ */
 export function budgetStatus(budget: DailyBudget, capEur: number, log: LlmCallLog, now: Date): BudgetStatus {
-  const spentUsd = log
-    .since(startOfLocalDay(now, budget.timeZone))
-    .reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
+  const spentUsd = log.since(startOfLocalDay(now, budget.timeZone)).reduce((sum, r) => sum + billedUsd(r), 0);
   const spentEur = spentUsd / budget.usdPerEur;
   const alertAtEur = capEur * budget.alertRatio;
   return {

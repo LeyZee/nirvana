@@ -1,4 +1,4 @@
-import { normalise } from './normalise';
+import { normalise, unmask } from './normalise';
 
 /**
  * Guards on the voice output, before anything can be sent (docs/architecture/ai-engine.md, « Les gardes »).
@@ -58,7 +58,25 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
     code: 'ai_disclosure',
     pattern: /\b(prompt|language model|modele de langage|mes instructions|grok|openai|xai)\b/,
   },
-  { code: 'love_declaration', pattern: /\b(je t'?\s?aime|jtm|je suis amoureuse de toi)\b/ },
+  // Spoken and other-language admissions: « chui une IA », « I am an AI », « soy una IA ».
+  {
+    code: 'ai_disclosure',
+    pattern: /\b(chui|chuis|chu) (qu'|juste |seulement )?(une?|l') ?(ia|ai|bot|robot|chatbot)\b/,
+  },
+  {
+    code: 'ai_disclosure',
+    pattern:
+      /\b(i am|i'?m|im) (just |only )?an? (ai|bot|robot|chatbot|language model|virtual assistant)\b|\bas an (ai|assistant|language model)\b/,
+  },
+  {
+    code: 'ai_disclosure',
+    pattern:
+      /\b(soy|estoy) (solo |solamente )?(una?|un) (ia|bot|robot|chatbot|asistente|inteligencia artificial)\b|\bcomo (una )?(ia|asistente|inteligencia artificial)\b/,
+  },
+  {
+    code: 'love_declaration',
+    pattern: /\b(je t'?\s?aime|j'?t'?aime|jtm|je suis amoureuse de toi|i love you|te (quiero|amo))\b/,
+  },
   // A concrete meeting (a day, a place, a visit) is blocked; the playful « un jour, peut-être » stays allowed.
   {
     code: 'meeting_promise',
@@ -69,6 +87,12 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   { code: 'contact_info', pattern: /\b[\w.+-]+@[\w-]+\.[\w.]+\b/ },
   { code: 'contact_info', pattern: /(\+?\d[\s.-]?){9,}/ },
   { code: 'contact_info', pattern: /\b(snap(chat)?|whatsapp|insta(gram)?|telegram)\b/ },
+  // « lina at gmail dot com », « lina (arobase) gmail point fr ».
+  {
+    code: 'contact_info',
+    pattern:
+      /\b[\w.+-]+ ?[([]? ?(at|arobase) ?[)\]]? ?[\w-]+ ?[([]? ?(dot|point) ?[)\]]? ?(com|fr|net|org|io|be|ch|ca)\b/,
+  },
   // Sales corpus (§4): she never asks him for intimate pictures, never despises him, never lies about paid content.
   // A request (a verb asking to see or receive) about his intimate body: her own « les nudes c'est pas mon truc »,
   // « ta queue de cheval » or « ton paquet de chips » pass.
@@ -151,6 +175,75 @@ const AI_TICS: readonly RegExp[] = [
   /^\s*([-*•]|\d+[.)])\s/m,
 ];
 
+// A phone number written in words: « zéro six, douze, trente-quatre… ». Seven number words in a row give it away.
+const NUMBER_WORDS = new Set([
+  'zero',
+  'un',
+  'une',
+  'deux',
+  'trois',
+  'quatre',
+  'cinq',
+  'six',
+  'sept',
+  'huit',
+  'neuf',
+  'dix',
+  'onze',
+  'douze',
+  'treize',
+  'quatorze',
+  'quinze',
+  'seize',
+  'vingt',
+  'trente',
+  'quarante',
+  'cinquante',
+  'soixante',
+  'cent',
+  'et',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'seven',
+  'eight',
+  'nine',
+  'oh',
+]);
+const NUMBER_WORDS_IN_A_ROW = 7;
+
+function spelledNumber(text: string): string | undefined {
+  let run: string[] = [];
+  for (const word of text.split(/[^\p{L}]+/u).filter((w) => w !== '')) {
+    run = NUMBER_WORDS.has(word) ? [...run, word] : [];
+    if (run.length >= NUMBER_WORDS_IN_A_ROW) return run.join(' ');
+  }
+  return undefined;
+}
+
+/**
+ * The bubbles read as one message, as the fan reads them: « je suis une » then « IA », a number cut in two, « 1A »
+ * or « b0t » (unmasked), a number in words. Only what the bubble-by-bubble reading did not already catch.
+ */
+function wholeMessage(bubbles: readonly string[], found: readonly GuardViolation[]): GuardViolation[] {
+  const joined = bubbles.join(' ');
+  const readings = [normalise(joined), unmask(joined)];
+  const violations: GuardViolation[] = [];
+  const has = (code: GuardCode) => [...found, ...violations].some((v) => v.code === code);
+  for (const { code, pattern } of BLOCKING_PATTERNS) {
+    if (has(code)) continue;
+    const match = readings.map((text) => pattern.exec(text)?.[0]).find((m) => m !== undefined);
+    if (match !== undefined) violations.push({ code, severity: 'blocking', match });
+  }
+  const spelled = readings.map(spelledNumber).find((m) => m !== undefined);
+  if (spelled !== undefined && !has('contact_info')) {
+    violations.push({ code: 'contact_info', severity: 'blocking', match: spelled });
+  }
+  return violations;
+}
+
 export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSettings): GuardViolation[] {
   const violations: GuardViolation[] = [];
   const forbidden = settings.forbiddenTerms.map(normalise).filter((term) => term !== '');
@@ -190,6 +283,7 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       violations.push({ code: 'bubble_too_long', severity: 'soft', bubbleIndex });
     }
   });
+  violations.push(...wholeMessage(bubbles, violations));
   if (bubbles.length > settings.maxBubbles) violations.push({ code: 'too_many_bubbles', severity: 'soft' });
   return violations;
 }

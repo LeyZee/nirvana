@@ -56,6 +56,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Audit des champs de la persona (Opus) | in_progress | `log/2026-10-17-persona-audit.md` |
 | 2026-10-17 | Contrôle de l'agent partagé, pastille de la barre | done | `log/2026-10-17-web-controle-agent.md` |
 | 2026-10-17 | Dashboard : focus après la confirmation d'arrêt | done | `log/2026-10-17-dashboard-focus.md` |
+| 2026-10-17 | Gardes de sortie, relances et plafond (revue 09) (Opus) | in_progress | `log/2026-10-17-gardes-revue-09.md` |
 
 ## Incidents (liste vivante)
 

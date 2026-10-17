@@ -35,6 +35,35 @@ describe('voice guards', () => {
     }
   });
 
+  it('reads the bubbles as one message, unmasked, in look-alike letters and other languages', () => {
+    const bypasses: string[][] = [
+      ['Bon ok je suis une', 'IA 🙈'],
+      ['je suis une 1A'],
+      ['je suis un b0t'],
+      ['je suis une \u0406\u0410'],
+      ['chui une IA'],
+      ['I am an AI, sorry'],
+      ['as an AI I cannot'],
+      ['soy una IA'],
+    ];
+    for (const bubbles of bypasses) expect(codes(bubbles), bubbles.join(' | ')).toContain('ai_disclosure');
+    expect(codes(['jtaime toi'])).toContain('love_declaration');
+    expect(codes(['te quiero mucho'])).toContain('love_declaration');
+    expect(codes(['mon num c’est 06 12', '34 56 78 hihi'])).toContain('contact_info');
+    expect(codes(['zéro six, douze, trente-quatre, cinquante-six, soixante-dix-huit'])).toContain(
+      'contact_info',
+    );
+    expect(codes(['écris-moi lina at gmail dot com'])).toContain('contact_info');
+    expect(codes(['lina (arobase) gmail point fr'])).toContain('contact_info');
+  });
+
+  it('keeps an ordinary answer split in bubbles, numbers and English words included', () => {
+    expect(codes(['J’ai 25 ans', 'et toi ?'])).toEqual([]);
+    expect(codes(['Un, deux, trois… soleil 😏'])).toEqual([]);
+    expect(codes(['Moi ? Une IA ?', 'T’es drôle toi 😂'])).toEqual([]);
+    expect(codes(['Look at me 😏', 'je suis pas sage ce soir'])).toEqual([]);
+  });
+
   it('blocks love declarations and meeting promises, whatever the spelling', () => {
     expect(codes(['Je t’AIME tellement'])).toEqual(['love_declaration']);
     expect(codes(['jtm'])).toEqual(['love_declaration']);

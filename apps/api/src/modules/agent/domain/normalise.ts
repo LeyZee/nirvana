@@ -10,9 +10,49 @@ const LEET: Readonly<Record<string, string>> = {
   $: 's',
 };
 
+// Cyrillic and Greek letters drawn like Latin ones: « ІА » or « Ьot » must read as « ia », « bot ».
+const HOMOGLYPHS: Readonly<Record<string, string>> = {
+  а: 'a',
+  в: 'b',
+  е: 'e',
+  ё: 'e',
+  к: 'k',
+  м: 'm',
+  н: 'h',
+  о: 'o',
+  р: 'p',
+  с: 'c',
+  т: 't',
+  у: 'y',
+  х: 'x',
+  ь: 'b',
+  і: 'i',
+  ї: 'i',
+  ј: 'j',
+  ѕ: 's',
+  ԁ: 'd',
+  ӏ: 'l',
+  ԛ: 'q',
+  ԝ: 'w',
+  α: 'a',
+  β: 'b',
+  ε: 'e',
+  η: 'n',
+  ι: 'i',
+  κ: 'k',
+  ν: 'v',
+  ο: 'o',
+  ρ: 'p',
+  τ: 't',
+  υ: 'u',
+  χ: 'x',
+  ω: 'w',
+};
+const HOMOGLYPH_PATTERN = new RegExp(`[${Object.keys(HOMOGLYPHS).join('')}]`, 'gu');
+
 /**
  * Lowercase, no accents, straight apostrophes, invisible characters dropped, one plain space for any
- * whitespace, « I.A. » read as « ia »: « Je t’AIME » and « je t'aime » compare equal.
+ * whitespace, Cyrillic and Greek look-alikes read as Latin, « I.A. » read as « ia »: « Je t’AIME » and « je t'aime » compare equal.
  */
 export function normalise(text: string): string {
   return text
@@ -22,6 +62,7 @@ export function normalise(text: string): string {
     .replace(/[’`´]/g, "'")
     .replace(/\s+/g, ' ')
     .toLowerCase()
+    .replace(HOMOGLYPH_PATTERN, (c) => HOMOGLYPHS[c] ?? c)
     .replace(/\bi\.\s?a\.?(?=\W|$)/g, 'ia');
 }
 

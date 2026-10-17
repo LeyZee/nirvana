@@ -8,7 +8,7 @@ import { DEFAULT_LLM_CONFIG, type ModelRef, type ProviderCredentials } from './c
 import { createLlmGateway, type KeyRefusal, type LlmGatewayDeps, type VoiceInput } from './gateway';
 import type { ModelResolver } from './providers';
 
-type Step = { text: string; finish?: 'stop' | 'content-filter' } | { status: number };
+type Step = { text: string; finish?: 'stop' | 'content-filter' } | { status: number; retryAfter?: string };
 
 const USAGE = {
   inputTokens: { total: 1_000, noCache: 1_000, cacheRead: 0, cacheWrite: 0 },
@@ -29,6 +29,7 @@ function scripted(steps: Step[]): MockLanguageModelV4 {
             url: 'https://example.invalid',
             requestBodyValues: {},
             statusCode: step.status,
+            ...(step.retryAfter !== undefined && { responseHeaders: { 'retry-after': step.retryAfter } }),
           }),
         );
       }
@@ -70,6 +71,7 @@ function setup(
   credentials = ALL_KEYS,
   onKeyRefused?: (refusal: KeyRefusal) => void,
   budget: Pick<LlmGatewayDeps, 'dailyCapEur' | 'onBudget'> = {},
+  waits: number[] = [],
 ) {
   const log = createInMemoryCallLog();
   const resolveModel: ModelResolver = (ref: ModelRef) =>
@@ -83,6 +85,10 @@ function setup(
     now: () => new Date((clock.t += 10)),
     ...(onKeyRefused !== undefined && { onKeyRefused }),
     ...budget,
+    sleep: (ms) => {
+      waits.push(ms);
+      return Promise.resolve();
+    },
   });
   return { gateway, log };
 }
@@ -159,14 +165,37 @@ describe('LlmGateway', () => {
     expect(log.since(new Date(0)).map((r) => r.outcome)).toEqual(['invalid_output', 'ok']);
   });
 
-  it('retries transient errors twice, then succeeds', async () => {
+  it('retries transient errors twice, waiting longer each time, then succeeds', async () => {
     const xai = scripted([{ status: 503 }, { status: 429 }, { text: BUBBLES }]);
-    const { gateway } = setup({ xai });
+    const waits: number[] = [];
+    const { gateway } = setup({ xai }, ALL_KEYS, undefined, {}, waits);
 
     const result = await gateway.voice(INPUT);
 
     expect(result.ok).toBe(true);
     expect(xai.doGenerateCalls).toHaveLength(3);
+    expect(waits).toEqual([500, 1_000]);
+  });
+
+  it('waits as long as a 429 asks, and leaves a long wait to the fallback', async () => {
+    const waits: number[] = [];
+    const short = setup(
+      { xai: scripted([{ status: 429, retryAfter: '2' }, { text: BUBBLES }]) },
+      ALL_KEYS,
+      undefined,
+      {},
+      waits,
+    );
+    expect((await short.gateway.voice(INPUT)).ok).toBe(true);
+    expect(waits).toEqual([2_000]);
+
+    const long = setup({
+      xai: scripted([{ status: 429, retryAfter: '60' }]),
+      mistral: scripted([{ text: BUBBLES }]),
+    });
+    const result = await long.gateway.voice(INPUT);
+    expect(result.ok && result.value.meta.provider).toBe('mistral');
+    expect(long.log.since(new Date(0)).map((r) => r.outcome)).toEqual(['rate_limited', 'ok']);
   });
 
   it('falls back to Mistral when xAI refuses the key, and says so', async () => {

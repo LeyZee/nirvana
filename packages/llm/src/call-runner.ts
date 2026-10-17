@@ -27,6 +27,18 @@ interface Classified {
   readonly usage?: LanguageModelUsage;
   /** The provider turned the key down: the CRM marks the service « à reconnecter » (ADR 0016). */
   readonly refusedStatus?: 401 | 403;
+  /** How long the provider asked to wait (`retry-after`), when it said. */
+  readonly retryAfterMs?: number;
+}
+
+/** `retry-after` in seconds or as an HTTP date. */
+function retryAfterMs(headers: Record<string, string> | undefined, now: number): number | undefined {
+  const value = headers?.['retry-after'];
+  if (value === undefined) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
 }
 
 export function classify(error: unknown): Classified {
@@ -58,7 +70,15 @@ export function classify(error: unknown): Classified {
         message: `HTTP ${String(status)}`,
         refusedStatus: status,
       };
-    if (status === 429) return { outcome: 'rate_limited', isTransient: true, message: 'HTTP 429' };
+    if (status === 429) {
+      const wait = retryAfterMs(error.responseHeaders, Date.now());
+      return {
+        outcome: 'rate_limited',
+        isTransient: true,
+        message: 'HTTP 429',
+        ...(wait !== undefined && { retryAfterMs: wait }),
+      };
+    }
     if (status !== undefined && status >= 500)
       return { outcome: 'unavailable', isTransient: true, message: `HTTP ${String(status)}` };
     return { outcome: 'error', isTransient: error.isRetryable, message: `HTTP ${String(status ?? '?')}` };
@@ -96,7 +116,25 @@ export interface CallRunnerDeps {
   readonly reportRefusal: (provider: ProviderId, status: 401 | 403) => void;
   /** True once today's spend reaches the cap: no model is called at all. */
   readonly isOverBudget: () => boolean;
+  /** Waits before a transient retry; a real timer unless a test passes its own. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
+
+/** Waits before the n-th transient retry: 0.5 s, 1 s, 2 s, at most 4 s. */
+const BACKOFF_BASE_MS = 500;
+const BACKOFF_MAX_MS = 4_000;
+/** A provider asking for more than this is better left for the fallback model. */
+const RETRY_AFTER_MAX_MS = 10_000;
+
+function retryDelayMs(retry: number, retryAfter: number | undefined): number | undefined {
+  if (retryAfter !== undefined) return retryAfter > RETRY_AFTER_MAX_MS ? undefined : retryAfter;
+  return Math.min(BACKOFF_BASE_MS * 2 ** retry, BACKOFF_MAX_MS);
+}
+
+const realSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 export type CallRunner = <T>(
   role: LlmRole,
@@ -113,6 +151,7 @@ export type CallRunner = <T>(
  */
 export function createCallRunner(deps: CallRunnerDeps): CallRunner {
   const { now, canary } = deps;
+  const sleep = deps.sleep ?? realSleep;
   return async function run<T>(
     role: LlmRole,
     prompt: PromptTemplate,
@@ -215,7 +254,14 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
           });
         } catch (error) {
           const latencyMs = now().getTime() - startedAt;
-          const { outcome, isTransient, message, usage, refusedStatus } = classify(error);
+          const {
+            outcome,
+            isTransient,
+            message,
+            usage,
+            refusedStatus,
+            retryAfterMs: asked,
+          } = classify(error);
           if (refusedStatus !== undefined) deps.reportRefusal(ref.provider, refusedStatus);
           const cost = usage === undefined ? undefined : costUsd(ref, usage);
           record(outcome, latencyMs, {
@@ -234,7 +280,12 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
             continue;
           }
           if (isTransient && transientLeft > 0) {
+            // A 429 or a 5xx asked again at once is refused again: wait, longer each time, or as the provider says.
+            const delay = retryDelayMs(deps.config.maxTransientRetries - transientLeft, asked);
+            if (delay === undefined) break;
             transientLeft -= 1;
+            if (deps.isOverBudget()) return err({ code: 'budget_reached', attempts });
+            await sleep(delay);
             continue;
           }
           break;

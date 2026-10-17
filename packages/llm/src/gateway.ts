@@ -75,6 +75,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
     canary,
     reportRefusal,
     isOverBudget,
+    ...(deps.sleep !== undefined && { sleep: deps.sleep }),
   });
 
   return {
