@@ -18,7 +18,7 @@ L'agent peut proposer, dans de rares moments choisis par le code (le fan doute q
 ## Décisions à prendre avant le code
 
 - **ADR proposé** : la passerelle de `packages/llm` gagne une capacité `speech` (synthèse vocale) à côté de `sense/brain/voice/judge` : même config par rôle, journal (`llm_calls.role = speech`, coût au caractère), santé (carte « Vocaux » du panneau Modèles IA), repli. Alternative : un package `speech` séparé. La session écrit l'ADR et s'arrête dessus si Charles ne l'a pas accepté.
-- Plateforme : la session n'implémente `sendVoiceNote` côté Reveal que si l'inventaire du connecteur confirme l'envoi d'audio et son rendu côté fan (lecteur de vocal, pas fichier joint).
+- Plateforme : Reveal a un bouton micro natif dans la zone de saisie (capacité E7 de l'inventaire, PR #15) ; format, durée max et rendu côté fan attendent la capture HAR (étape 11c). La session n'implémente `sendVoiceNote` côté Reveal que si la capture confirme l'envoi et un rendu de vocal (pas de fichier joint). Si seul le micro donne ce rendu, le connecteur rejoue la requête du micro avec l'audio converti dans le même format (conversion `ffmpeg` chez nous).
 
 ## À faire (liste vérifiable)
 
