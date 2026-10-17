@@ -5,14 +5,14 @@ Dépend de : P3-04
 Branche : claude/project-thread-e0j3ow
 
 ## Objectif
-Charles et Messa entraînent le bot dans le playground : ils notent chaque réponse, la corrigent ou la rejettent avec une raison, mettent le fan en situation, rejouent et comparent, et suivent un seul chiffre, le taux de validation (objectif 80 %). Le moteur et le terminal d'abord ; l'écran Entraîner du CRM se branchera sur ce même code (fil Extension).
+Charles et Messa entraînent le bot dans le playground : ils notent chaque réponse, la corrigent ou la rejettent avec une raison, mettent le fan en situation, rejouent et comparent, et suivent un seul chiffre, le taux au playground (objectif 80 %, ADR 0019). Le moteur et le terminal d'abord ; l'écran Entraîner du CRM se branchera sur ce même code (fil Extension).
 
 ## Contexte à lire
 `CLAUDE.md`, `docs/architecture/ai-engine.md`, la spec `/mnt/project-files/moteur-ia/playground-entrainement.md` (sections 2 à 6 et 8), `apps/api/src/scripts/playground.ts`.
 
 ## À faire
 - [x] Notes : valider, corriger (la réponse réécrite), rejeter avec une raison parmi sept ; destination proposée (exemple de voix, règle à valider, test).
-- [x] Taux de validation : part des réponses validées sans retouche parmi les 50 dernières notées, par version du prompt de voix et modèle, avec la tendance sur la version précédente.
+- [x] Taux au playground : part des réponses validées sans retouche parmi les 50 dernières notées, par version du prompt de voix et modèle, avec la tendance sur la version précédente.
 - [x] Mise en situation : préréglages de fan fictifs, heure de la créatrice (jour ou nuit), ancienneté de la relation, montant dépensé ; donnés au cerveau et à la voix dans une section « Le moment » écrite par le code (prompts 1.4.0).
 - [x] Horloge simulée : avancer d'une heure ou d'un jour.
 - [x] Rejouer depuis un message du fan ; comparer la dernière réponse avec un autre modèle de voix.

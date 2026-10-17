@@ -89,17 +89,17 @@ export interface RatedAnswer {
   readonly verdict: Verdict;
 }
 
-export const VALIDATION_TARGET = 0.8;
+export const RATE_TARGET = 0.8;
 const WINDOW = 50;
 
-export interface ValidationRate {
+export interface RateReading {
   readonly rate: number | undefined;
   readonly rated: number;
   readonly validated: number;
   readonly meetsTarget: boolean;
 }
 
-export function validationRate(ratings: readonly RatedAnswer[], window = WINDOW): ValidationRate {
+export function playgroundRate(ratings: readonly RatedAnswer[], window = WINDOW): RateReading {
   const last = ratings.slice(-window);
   const validated = last.filter((r) => r.verdict.kind === 'validated').length;
   const rate = last.length === 0 ? undefined : validated / last.length;
@@ -107,12 +107,12 @@ export function validationRate(ratings: readonly RatedAnswer[], window = WINDOW)
     rate,
     rated: last.length,
     validated,
-    meetsTarget: rate !== undefined && rate >= VALIDATION_TARGET,
+    meetsTarget: rate !== undefined && rate >= RATE_TARGET,
   };
 }
 
 export interface RateReport {
-  readonly current: ValidationRate & { readonly version: AnswerVersion | undefined };
+  readonly current: RateReading & { readonly version: AnswerVersion | undefined };
   /** Change in points from the previous version, once both have ratings. */
   readonly trendPoints?: number;
   readonly previousVersion?: AnswerVersion;
@@ -124,12 +124,12 @@ const sameVersion = (a: AnswerVersion, b: AnswerVersion): boolean =>
 /** The rate of the version in use (the latest rated), and its trend on the version rated before it. */
 export function rateReport(ratings: readonly RatedAnswer[], current?: AnswerVersion): RateReport {
   const version = current ?? ratings.at(-1)?.version;
-  if (version === undefined) return { current: { ...validationRate([]), version } };
+  if (version === undefined) return { current: { ...playgroundRate([]), version } };
   const mine = ratings.filter((r) => sameVersion(r.version, version));
-  const now = validationRate(mine);
+  const now = playgroundRate(mine);
   const previous = ratings.filter((r) => !sameVersion(r.version, version)).at(-1)?.version;
   if (previous === undefined) return { current: { ...now, version } };
-  const before = validationRate(ratings.filter((r) => sameVersion(r.version, previous)));
+  const before = playgroundRate(ratings.filter((r) => sameVersion(r.version, previous)));
   return {
     current: { ...now, version },
     previousVersion: previous,

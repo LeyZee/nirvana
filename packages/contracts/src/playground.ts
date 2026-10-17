@@ -115,6 +115,10 @@ export const PlaygroundAnswerSchema = z.object({
 });
 export type PlaygroundAnswer = z.infer<typeof PlaygroundAnswerSchema>;
 
+/**
+ * « Taux au playground » (ADR 0019): it calibrates the voice and never opens the automatic mode, which only
+ * « le taux en réel » of real drafts and the blind test do.
+ */
 export const PlaygroundRateSchema = z.object({
   /** Validated as written, out of the last 50 rated answers of the current version; null before any rating. */
   rate: z.number().min(0).max(1).nullable(),

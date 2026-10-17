@@ -17,7 +17,7 @@ import {
   REJECT_REASON_LABELS,
   REJECT_REASONS,
   suggestDestination,
-  VALIDATION_TARGET,
+  RATE_TARGET,
   voiceExamples,
   type CalibrationRecord,
   type CalibrationStore,
@@ -159,7 +159,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
       rate: report.current.rate ?? null,
       rated: report.current.rated,
       validated: report.current.validated,
-      target: VALIDATION_TARGET,
+      target: RATE_TARGET,
       trendPoints: report.trendPoints ?? null,
       previousVersion: report.previousVersion ?? null,
     };

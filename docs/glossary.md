@@ -24,8 +24,10 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Santé (des modèles) | `health` | État des rôles LLM (`ok`, `degraded`, `down`), latences, erreurs, coût du jour face au budget ; alimente le panneau « Modèles IA ». |
 | Plafond du jour | `dailyBudget`, `budget_reached` | Dépense IA maximale sur une journée, heure de Paris (20 € par défaut) : alerte à 80 %, au-delà plus aucune génération et les chatteurs reprennent. |
 | Playground | `playground` | Conversation d'essai avec la persona par le même chemin que la production (cerveau, voix, gardes), sans aucun envoi possible. |
-| Taux de validation | `validationRate` | Part des réponses du bot validées sans retouche parmi les 50 dernières notées, par version de la voix. Objectif 80 % avant tout mode automatique. |
-| Calibrage | `calibration` | Noter, corriger ou rejeter les réponses du playground pour faire monter le taux de validation. |
+| Taux au playground | `playgroundRate` | Part des réponses du playground validées sans retouche parmi les 50 dernières notées, par version de la voix. Sert à calibrer ; n'ouvre jamais le mode Automatique (ADR 0019). |
+| Taux en réel | `liveRate` | Part des brouillons des vrais fans approuvés sans modification parmi les 200 derniers décidés, par créatrice et version de la voix. 80 % sur au moins 100 brouillons, avec le test à l'aveugle, ouvrent le mode Automatique (ADR 0019). |
+| Test à l'aveugle | `blindTest` | La créatrice juge des réponses sans savoir lesquelles viennent du bot ; validé à 80 % « sans retouche » au moins, il est l'une des conditions du mode Automatique. |
+| Calibrage | `calibration` | Noter, corriger ou rejeter les réponses du playground pour faire monter le taux au playground. |
 | Le moment | `situation` | Faits écrits par le code pour le cerveau et la voix : heure de la créatrice, jour ou nuit, ancienneté de la relation, montant dépensé. |
 | Préréglage de fan | `FanPreset` | Fan fictif du playground (nouveau, chaud, négocie, détresse…) qui teste une partie de la méthode. |
 | Test express | `probe` | Script qui vérifie qu'un modèle tient la persona en sexting sans refuser ni avouer être une IA (`pnpm probe`), et lit photos et vidéos sans obéir à leur texte (`pnpm probe:vision`). |

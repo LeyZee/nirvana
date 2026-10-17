@@ -29,7 +29,7 @@ import {
   REJECT_REASONS,
   replayableTests,
   suggestDestination,
-  VALIDATION_TARGET,
+  RATE_TARGET,
   versionLabel,
   voiceExamples,
   type CalibrationRecord,
@@ -209,13 +209,13 @@ function statusLine(): string {
   const report = rateReport(records, currentVersion);
   const { rate, rated } = report.current;
   const shown = rate === undefined ? '—' : `${String(Math.round(rate * 100))} %`;
-  const paint = rate === undefined || rate >= VALIDATION_TARGET ? bold : rate >= 0.6 ? amber : red;
+  const paint = rate === undefined || rate >= RATE_TARGET ? bold : rate >= 0.6 ? amber : red;
   const trend =
     report.trendPoints === undefined
       ? ''
       : ` · ${report.trendPoints >= 0 ? '+' : ''}${String(report.trendPoints)} pts depuis ${versionLabel(report.previousVersion ?? report.current.version ?? { voicePrompt: '?', voiceModel: '?' })}`;
   const version = report.current.version === undefined ? '' : ` · ${versionLabel(report.current.version)}`;
-  return `${paint(`taux de validation ${shown}`)}${dim(` (${String(rated)} notées, objectif ${String(VALIDATION_TARGET * 100)} %)${version}${trend}`)}`;
+  return `${paint(`taux au playground ${shown}`)}${dim(` (${String(rated)} notées, objectif ${String(RATE_TARGET * 100)} %)${version}${trend}`)}`;
 }
 
 function nextAction(): string {
