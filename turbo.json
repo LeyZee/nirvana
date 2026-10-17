@@ -9,18 +9,15 @@
       "outputs": ["dist/**", ".output/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "test:integration": {
-      "dependsOn": ["^build"],
       "outputs": [],
       "cache": false
     },

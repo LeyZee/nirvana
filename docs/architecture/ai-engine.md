@@ -1,15 +1,15 @@
 # Moteur IA : sens, cerveau, voix, politique, gardes
 
-Dernière revue : 2026-10-16. Décisions : ADR 0009, 0012.
+Dernière revue : 2026-10-17 (Grok 4.7, P3-01). Décisions : ADR 0009, 0012.
 
 ## Les rôles
 
 | Rôle | Entrée | Sortie | Fournisseur par défaut (à confirmer par évals, P3) | Repli |
 |---|---|---|---|---|
-| **sense** | image / vidéo / audio (créatrice ou fan) | `MediaDescription` (vocabulaire Nirvana, Zod) | xAI `grok-4.3` (image et vidéo natives) | Gemini 2.5 Flash sur Vertex (BLOCK_NONE, prouvé dans OnlyScript) ; Qwen3-VL hébergé ; audio : Whisper |
-| **brain** | `ConversationContext` | `Brief` (Zod strict) | xAI `grok-4.3` | Mistral Large |
-| **voice** | `ConversationContext` + `Decision` | `bubbles[]` | xAI `grok-4.3` | Venice (open-weight sans filtre), Mistral |
-| **judge** | transcript + rubrique | scores (Zod) | xAI `grok-4.3` ou Mistral | hors production |
+| **sense** | image / vidéo / audio (créatrice ou fan) | `MediaDescription` (vocabulaire Nirvana, Zod) | xAI `grok-4.7` (image ; vidéo native à confirmer, sinon images clés ou `grok-4.3`) | Gemini 2.5 Flash sur Vertex (BLOCK_NONE, prouvé dans OnlyScript) ; Qwen3-VL hébergé ; audio : Whisper |
+| **brain** | `ConversationContext` | `Brief` (Zod strict) | xAI `grok-4.7` | Mistral Large |
+| **voice** | `ConversationContext` + `Decision` | `bubbles[]` | xAI `grok-4.7` | Venice (open-weight sans filtre), Mistral |
+| **judge** | transcript + rubrique | scores (Zod) | xAI `grok-4.7` ou Mistral | hors production |
 
 Pourquoi trois rôles : fournisseur changeable rôle par rôle, cerveau testable sur des décisions (pas des paragraphes), voix libre d'écrire sans porter de logique.
 
@@ -19,19 +19,24 @@ Faits sur les politiques des fournisseurs (vérifiés le 16/10/2026) : xAI n'int
 
 ```ts
 interface LlmGateway {
-  sense(input: MediaInput, opts: CallOpts): Promise<MediaDescription>;
-  brain(input: BrainInput, opts: CallOpts): Promise<Brief>;
-  voice(input: VoiceInput, opts: CallOpts): Promise<VoiceOutput>;
-  judge(input: JudgeInput, opts: CallOpts): Promise<JudgeScores>;
+  brain(input: ConversationInput): Promise<Result<LlmSuccess<Brief>, LlmFailure>>;
+  voice(input: VoiceInput): Promise<Result<LlmSuccess<VoiceOutput>, LlmFailure>>;
+  health(): HealthReport;                       // panneau « Modèles IA »
+  testConnection(provider): Promise<ConnectionTest>;
+  // sense, judge : à venir (P3-xx)
 }
 ```
 
-- Implémentation sur le Vercel AI SDK (`generateObject` avec schémas Zod, providers `@ai-sdk/xai`, `@ai-sdk/mistral`, `@ai-sdk/google-vertex`, `@ai-sdk/openai-compatible` pour Venice/Novita). Le reste du code n'importe jamais le SDK : seulement `LlmGateway`.
-- Config par rôle : `{ provider, model, temperature, maxTokens, timeoutMs, fallback?: {provider, model} }`, dans `CreatorSettings.llm` avec défauts globaux.
-- Chaque appel : timeout, retry borné (2) sur erreurs transitoires, repli sur le fournisseur de secours si refus (`refused`) ou indisponibilité, journal dans `llm_calls` + trace Langfuse, coût calculé depuis une table de prix versionnée (`packages/llm/src/pricing.ts`).
+- Implémentation sur le Vercel AI SDK 7 (`generateText` + `Output.object` avec schémas Zod, providers `@ai-sdk/xai`, `@ai-sdk/mistral`, `@ai-sdk/google-vertex`, `@ai-sdk/openai-compatible` pour Venice/Novita). Le reste du code n'importe jamais le SDK : seulement `LlmGateway`.
+- Config par rôle : `{ provider, model, temperature, maxOutputTokens, timeoutMs, fallback?: {provider, model} }` (`packages/llm/src/config.ts`, `DEFAULT_LLM_CONFIG`), surchargée plus tard par `CreatorSettings.llm`.
+- Chaque appel : timeout, retry borné (2) sur erreurs transitoires, repli sur le fournisseur de secours si refus (`refused`) ou indisponibilité, journal `LlmCallLog` (en mémoire ou JSONL en attendant la table `llm_calls` de P0-03, jamais de contenu de message) + trace Langfuse, coût calculé depuis le catalogue daté (`packages/llm/src/catalog.ts`).
 - Sortie invalide (Zod) : une relance avec l'erreur en contexte, puis échec propre.
 - Cache : `sense` est mis en cache par `sha256(média) + vocabulary_version + model` ; on ne décrit jamais deux fois le même média.
 - Plafonds : tokens par appel, appels par conversation/heure, budget quotidien par créatrice (coupe-circuit → copilote + alerte).
+
+## Santé (panneau « Modèles IA »)
+
+`health()` calcule depuis le journal, pour chaque rôle : modèle actif et repli, présence de la clé (jamais sa valeur), repli en service, dernier succès, dernière erreur typée, latence p50/p95 et taux d'erreurs sur une heure, coût du jour ; et pour l'ensemble : état (`ok`, `degraded`, `down`) et coût du jour face au budget (`dailyBudgetUsd`). `testConnection(provider)` fait un appel court.
 
 ## Prompts
 
@@ -41,7 +46,7 @@ interface LlmGateway {
 
 `assembleContext` construit l'entrée du cerveau et de la voix avec un budget explicite (`CreatorSettings.llm.contextBudgetTokens`, défaut 12 000) :
 
-1. Persona (sections pertinentes : style, limites, kinks/dégoûts, exemples) — toujours.
+1. Persona (sections pertinentes : détails, infos en plus, comportement, stratégie en cours, limites ; `docs/reference/persona-schema.md`) et exemples de voix validés — toujours.
 2. Résumé fan (dernière version) — toujours.
 3. Faits actifs, triés catégorie puis confiance — jusqu'à 40.
 4. Derniers messages, du plus récent au plus ancien, jusqu'au budget — jamais l'historique entier.
@@ -55,14 +60,13 @@ Brief {
   intent: 'small_talk'|'kyc_answer'|'flirt'|'sexting'|'media_reaction'|'asks_for_media'|'price_objection'|
           'asks_if_bot'|'asks_to_meet'|'asks_personal_contact'|'distress'|'complaint'|'other';
   sentiment: 'positive'|'neutral'|'negative'|'aroused'|'frustrated';
-  facts_proposed: { category, key, value, kind: 'declared'|'inferred', confidence, evidence_message_id }[];
-  kyc_missing: KycSlot[];
-  risks: ('minor_suspected'|'distress'|'meet_request'|'off_platform_payment'|'dispute'|'harassment'|'self_harm')[];
+  factsProposed: { category, key, value, kind: 'declared'|'inferred', confidence }[];
+  kycMissing: KycSlot[];
+  risks: ('minor_suspected'|'distress'|'meet_request'|'off_platform_payment'|'dispute'|'harassment'|'self_harm'|'money_trouble')[];
   action: 'reply'|'offer'|'wait'|'follow_up'|'handoff';
-  reply_brief: string;           // ce qu'il faut dire, en 1-3 phrases, pas le texte final
-  tone_hints: string[];
-  suggested_kyc_question?: KycSlot;
-  follow_up_in_minutes?: number;
+  replyBrief: string;           // ce qu'il faut dire, en 1-3 phrases, pas le texte final
+  toneHints: string[];
+  // à venir : suggestedKycQuestion, followUpInMinutes
 }
 ```
 
@@ -74,9 +78,9 @@ Entrée : contexte + brief. Sortie : `Decision` + `policy_trace`. Ordre d'évalu
 2. Interrupteurs, mode, session → `wait`.
 3. Horaires de la persona (avec jitter) → `wait` avec `runAt`.
 4. `asks_if_bot` → selon `identity_policy` : `stay_in_character` (défaut, ADR 0012) donne un `reply_brief` de déflexion en personnage ; `deflect_and_handoff` ; `disclose`.
-5. Offre : autorisée seulement si cooldowns expirés, KYC minimal atteint, média disponible et jamais vendu à ce fan, prix depuis `offers` (P6 ; avant P6, `offer` → `reply`).
+5. Offre (dès la phase 3, décision de Charles du 17/10) : autorisée seulement si cooldowns expirés, KYC minimal atteint (délai de sexualisation réglable, 24 à 48 h par défaut), étape de script Reveal disponible et jamais envoyée à ce fan, aucun risque `money_trouble`, `distress`, `self_harm` ou `minor_suspected`. Prix fixé par le script : jamais de négociation ni de remise. Bouderie (« chouinage ») au plus une fois par refus, jamais juste après un achat, jamais après un risque. Aftercare après chaque script. Détail métier : `/mnt/project-files/chatting/methode-chatting.md`.
 6. KYC : au plus une question, seulement si `intent` s'y prête et pas de question dans les 3 derniers envois.
-7. Relance : bornée par `CreatorSettings.followUp` (délai, max par jour).
+7. Relance : bornée par `persona.follow_ups` (délais, petits rappels par jour).
 
 Chaque règle est une fonction testée unitairement avec cas nominal, limite, adversarial.
 

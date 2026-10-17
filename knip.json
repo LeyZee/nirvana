@@ -1,19 +1,17 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
-    ".": { "entry": ["eslint.config.js", "scripts/*.mjs"], "project": ["*.{js,ts}", "scripts/**/*.mjs"] },
+    ".": { "entry": ["scripts/*.mjs"], "project": ["*.{js,ts}", "scripts/**/*.mjs"] },
     "apps/api": {
-      "entry": ["src/index.ts", "src/worker.ts", "src/scripts/*.ts", "src/__tests__/**/*.ts", "test/**/*.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"]
-    },
-    "apps/web": { "entry": ["src/main.tsx"], "project": ["src/**/*.{ts,tsx}"] },
-    "apps/extension": {
-      "entry": ["src/entrypoints/*.ts", "src/entrypoints/**/index.ts"],
+      "entry": ["src/worker.ts", "src/__tests__/**/*.ts"],
       "project": ["src/**/*.ts"]
     },
-    "packages/*": { "entry": ["src/index.ts"], "project": ["src/**/*.ts"] },
-    "evals": { "entry": ["run.ts"], "project": ["**/*.ts"] }
-  },
-  "ignore": ["**/*.d.ts", ".scratch/**"],
-  "ignoreDependencies": ["lefthook"]
+    "apps/web": { "project": ["src/**/*.{ts,tsx}"] },
+    "apps/extension": {
+      "entry": ["src/entrypoints/*.ts", "src/entrypoints/**/main.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/*": { "project": ["src/**/*.ts"] },
+    "evals": { "project": ["**/*.ts"] }
+  }
 }

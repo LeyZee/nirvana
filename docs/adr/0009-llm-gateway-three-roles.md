@@ -3,6 +3,8 @@
 Statut : accepted
 Date : 2026-10-16
 
+Mise à jour 2026-10-17 : le modèle par défaut devient Grok 4.7 (`grok-4.7`, sorti le 21/09/2026) à la demande de Charles ; la décision ne change pas. Sa lecture native des vidéos n'est pas confirmée (voir `docs/reference/llm-providers.md`).
+
 ## Contexte
 
 Claude et GPT refusent le contenu explicite ; les candidats sont xAI (Grok 4.3, images et vidéo natives), Mistral, Venice/open-weights, Gemini (analyse seulement). Les fournisseurs changent, les politiques aussi. OnlyScript a montré qu'un vocabulaire de description de médias structuré et des règles codées (dégoûts garantis par le code) valent mieux que de tout demander au prompt.
