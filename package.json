@@ -26,6 +26,7 @@
     "db:generate": "pnpm --filter @nirvana/db generate",
     "db:migrate": "pnpm --filter @nirvana/db migrate",
     "db:studio": "pnpm --filter @nirvana/db studio",
+    "owner:create": "pnpm --filter @nirvana/api owner:create",
     "db:rebuild-projections": "pnpm --filter @nirvana/api rebuild-projections",
     "persona:validate": "pnpm --filter @nirvana/api persona:validate",
     "persona:load": "pnpm --filter @nirvana/api persona:load",

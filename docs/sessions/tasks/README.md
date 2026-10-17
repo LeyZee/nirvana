@@ -37,7 +37,7 @@ Branche : task/<id>-<slug>
 | P0-04 | Serveur Fastify et worker Graphile, composition root, santé | 0 | done | P0-03 |
 | P0-05 | Module `conversations` : ingestion, journal, projections | 0 | todo | P0-04 |
 | P0-06 | Module `connectors` : port, `FakeConnector`, test de contrat, poller | 0 | todo | P0-05 |
-| P0-07a | Authentification du dashboard, rôles, CSRF, page de connexion | 0 | todo | P0-04 |
+| P0-07a | Authentification du dashboard, rôles, CSRF, page de connexion | 0 | done | P0-04 |
 | P0-07b | CI, scripts ops, bout en bout phase 0 | 0 | todo | P0-06, P0-07a |
 | P0-08 | Schéma de persona calqué sur OnlyChat | 0 | done | P0-01 |
 | P1-01 | Extension : enregistreur d'API | 1 | todo | P0-01 |

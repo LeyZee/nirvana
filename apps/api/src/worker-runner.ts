@@ -1,7 +1,6 @@
 import { hostname } from 'node:os';
 
-import { schema } from '@nirvana/db';
-import { eq } from 'drizzle-orm';
+import { eq, schema } from '@nirvana/db';
 import { run, type Runner } from 'graphile-worker';
 
 import type { App } from './composition-root';

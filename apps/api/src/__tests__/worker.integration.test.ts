@@ -1,9 +1,9 @@
-import { createDbClient } from '@nirvana/db';
+import { createDbClient, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { z } from 'zod';
 
+import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
 import { createLogger } from '../logger';
 import { checkReadiness } from '../readiness';
@@ -12,6 +12,7 @@ import { startWorker, type WorkerHandle } from '../worker-runner';
 
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
+import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 const EchoLineSchema = z.looseObject({ seq: z.number(), at: z.number() });
 
@@ -91,11 +92,14 @@ describe('worker (Graphile, ADR 0006)', () => {
       routes: app.routes,
       readiness: app.readiness,
     });
+    const owner = { email: 'owner@example.test', name: 'Owner', password: 'correct horse battery' };
+    await createOwner(app.auth, app.db.db, owner);
+    const cookie = await signIn(server, owner.email, owner.password);
     const response = await server.inject({
       method: 'POST',
       url: '/v1/demo/echo',
       payload: { seq: 200, queue: 'corr' },
-      headers: { 'x-request-id': 'req-corr-1' },
+      headers: { cookie, origin: DASHBOARD_ORIGIN, 'x-request-id': 'req-corr-1' },
     });
     expect(response.statusCode).toBe(202);
     const lines = await sink.waitFor('echo finished', echoes(sink, 'echo finished').length + 1);

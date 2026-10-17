@@ -34,6 +34,9 @@ export type PersonaVersionId = z.infer<typeof PersonaVersionIdSchema>;
 export const UserIdSchema = uuid.brand<'UserId'>();
 export type UserId = z.infer<typeof UserIdSchema>;
 
+export const AuditEntryIdSchema = uuid.brand<'AuditEntryId'>();
+export type AuditEntryId = z.infer<typeof AuditEntryIdSchema>;
+
 /** A fresh UUID v7 branded by the given schema: `newId(FanIdSchema)`. */
 export function newId<S extends z.ZodType<string>>(schema: S): z.output<S> {
   return schema.parse(v7());

@@ -5,6 +5,7 @@ import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { createApp, type App } from '../composition-root';
+import type { Config } from '../config';
 import { createLogger } from '../logger';
 
 import { testConfig } from './support/config';
@@ -16,10 +17,11 @@ const TSX = fileURLToPath(new URL('../../node_modules/.bin/tsx', import.meta.url
 describe('graceful shutdown (operations.md)', () => {
   let test: TestDb;
   let app: App;
+  let config: Config;
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
-    const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
+    config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
     app = await createApp(config, createLogger(config));
   });
 
@@ -36,7 +38,9 @@ describe('graceful shutdown (operations.md)', () => {
         LOG_LEVEL: 'info',
         DATABASE_URL: test.appUrl,
         DATABASE_ADMIN_URL: test.adminUrl,
-        WEB_ORIGIN: 'http://localhost:5173',
+        WEB_ORIGIN: config.WEB_ORIGIN,
+        AUTH_SECRET: config.AUTH_SECRET,
+        AUTH_BASE_URL: config.AUTH_BASE_URL,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
