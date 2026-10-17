@@ -10,16 +10,11 @@
   flex-direction: column;
   gap: var(--nv-space-5);
 }
-.sv-heading h1 {
+.sv-heading h2 {
   margin: 0;
   font-size: 28px;
   line-height: 1.1;
   letter-spacing: -0.02em;
-}
-.sv-crumb {
-  margin: 0 0 var(--nv-space-1);
-  font-size: var(--nv-text-footnote);
-  color: var(--nv-ink-faint);
 }
 .sv-muted {
   margin: 0;

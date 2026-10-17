@@ -368,8 +368,7 @@ function NextButton({
 function Heading(): JSX.Element {
   return (
     <header className="sv-heading">
-      <p className="sv-crumb">Réglages › Modèles IA</p>
-      <h1>Services</h1>
+      <h2>Services</h2>
     </header>
   );
 }
