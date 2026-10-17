@@ -14,6 +14,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | P3-01 Passerelle LLM, Grok 4.7 et playground (Opus) | in_progress | `log/2026-10-17-p3-01.md` |
 | 2026-10-17 | P0-08 Schéma de persona calqué sur OnlyChat | done (PR #17) | `log/2026-10-17-p0-08.md` |
 | 2026-10-17 | Vocaux générés, conception (Opus) | proposed | `log/2026-10-17-vocaux.md` |
+| 2026-10-17 | README à jour et design system en images | done | `log/2026-10-17-readme-design.md` |
 
 ## Incidents (liste vivante)
 

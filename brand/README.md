@@ -2,6 +2,8 @@
 
 Le logo est une flamme à l'auréole : une flamme pleine, cambrée, qui brûle sous un halo elliptique. Le tracé de la flamme a été dessiné par Charles le 16 octobre 2026 et n'est pas retouché. Deux corrections validées par lui le même soir : la flamme est devenue la source de lumière (cœur chaud en bas, rouge néon vers les bords, lueur autour) au lieu d'un verre translucide éclairé, et l'auréole est recentrée sur la pointe, moins inclinée (−12°).
 
+![Lockups Nuit et Jour, symbole couleur, favicon et symbole mono](../docs/design/images/marque.png)
+
 ## Fichiers
 
 | Fichier | Quoi | Quand |
