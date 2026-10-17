@@ -77,14 +77,15 @@ export function dotOfNext(next: ProviderNextAction): Dot {
 
 /**
  * « Vérifier maintenant » answers with the status as it stands. When the provider could not be reached, the
- * server keeps the last verification: same `verifiedAt`, same state. The page says so instead of saying nothing.
+ * server keeps the last verification: same `verifiedAt`. The page says so instead of saying nothing.
  */
 export function verifyNotice(
   provider: DashboardProvider,
   before: ProviderStatus,
   after: ProviderStatus,
 ): string | null {
-  if (before.verifiedAt !== after.verifiedAt || before.state !== after.state) return null;
+  // Every answer of the provider, a refusal included, moves `verifiedAt` (domain/credential.ts on the API).
+  if (before.verifiedAt !== after.verifiedAt) return null;
   return `${GUIDES[provider].vendor} n’a pas répondu. L’état affiché est celui de la dernière vérification.`;
 }
 

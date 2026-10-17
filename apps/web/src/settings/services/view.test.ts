@@ -82,7 +82,14 @@ describe('Services view rules', () => {
     );
     expect(verifyNotice('google', before, { ...before })).toMatch(/^Google n’a pas répondu/);
     expect(verifyNotice('xai', before, { ...before, verifiedAt: '2026-10-17T20:00:00.000Z' })).toBeNull();
-    expect(verifyNotice('xai', before, { ...before, state: 'needs_reconnect' })).toBeNull();
+    // A refusal is an answer: it comes with its own verification time.
+    expect(
+      verifyNotice('xai', before, {
+        ...before,
+        state: 'needs_reconnect',
+        verifiedAt: '2026-10-17T20:00:00.000Z',
+      }),
+    ).toBeNull();
   });
 
   it('says what really stops when a key is removed', () => {
@@ -91,6 +98,7 @@ describe('Services view rules', () => {
     );
     expect(GUIDES.google.offConsequence).toMatch(/Grok/);
     expect(GUIDES.elevenlabs.offConsequence).toMatch(/vocaux/);
+    expect(GUIDES.mistral.offConsequence).toMatch(/relais/);
   });
 
   it('removes every space and line break from a pasted key', () => {

@@ -33,9 +33,12 @@ export function SignInAgain(): JSX.Element {
 export function PasswordPrompt({
   onConfirmed,
   onCancel,
+  onBusyChange,
 }: {
   onConfirmed: () => void;
   onCancel: () => void;
+  /** Told while the password is being checked, so a sheet around the prompt does not close meanwhile. */
+  onBusyChange?: (isBusy: boolean) => void;
 }): JSX.Element {
   const input = useRef<HTMLInputElement>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -48,8 +51,10 @@ export function PasswordPrompt({
   async function confirm(password: string): Promise<void> {
     if (password === '') return;
     setIsBusy(true);
+    onBusyChange?.(true);
     const result = await confirmPassword(password).catch(() => 'unavailable' as const);
     setIsBusy(false);
+    onBusyChange?.(false);
     if (result === 'ok') {
       onConfirmed();
       return;
@@ -85,7 +90,9 @@ export function PasswordPrompt({
           aria-label="Mot de passe"
           aria-invalid={failure !== null}
           aria-describedby="sv-reauth-msg"
-          disabled={isBusy || isExpired}
+          // Read-only rather than disabled while checking: the field keeps the focus, so Escape stays here.
+          readOnly={isBusy}
+          disabled={isExpired}
         />
         <button type="submit" className="nv-btn nv-btn--soft nv-btn--sm" disabled={isBusy || isExpired}>
           Confirmer

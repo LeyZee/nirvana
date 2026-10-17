@@ -5,7 +5,7 @@ import type { AiProvider } from '@nirvana/contracts';
  * its facts and every refusal come from the API (`domain/messages.ts`), so they read the same everywhere.
  */
 
-export type DashboardProvider = Extract<AiProvider, 'xai' | 'google' | 'elevenlabs'>;
+export type DashboardProvider = Extract<AiProvider, 'xai' | 'google' | 'mistral' | 'elevenlabs'>;
 
 interface GuideTick {
   readonly label: string;
@@ -64,6 +64,22 @@ export const GUIDES: Record<DashboardProvider, ServiceGuide> = {
     note: 'Active la facturation du projet. En offre gratuite, Google peut garder les médias des fans.',
     offConsequence: 'Grok regardera lui-même les photos et vidéos des fans, plus lentement.',
     topUpUrl: 'https://aistudio.google.com',
+  },
+  mistral: {
+    name: 'Mistral',
+    brand: 'Relais',
+    vendor: 'Mistral',
+    role: 'Prend le relais si Grok ne répond plus',
+    isRequired: false,
+    console: { label: 'Ouvrir la console Mistral', url: 'https://console.mistral.ai/api-keys' },
+    where: 'Dans API Keys, clique sur Create new key, puis :',
+    ticks: [
+      { label: 'Nom', value: 'nirvana-prod', copy: true },
+      { label: 'Expiration', value: 'Aucune' },
+    ],
+    note: 'Active la facturation du workspace : l’offre gratuite limite fortement le nombre d’appels.',
+    offConsequence: 'Si Grok ne répond plus, l’agent n’aura plus de relais pour écrire.',
+    topUpUrl: 'https://console.mistral.ai/billing',
   },
   elevenlabs: {
     name: 'ElevenLabs',

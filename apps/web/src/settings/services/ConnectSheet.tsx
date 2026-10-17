@@ -126,8 +126,10 @@ export function ConnectSheet({
     };
   }, [isConsoleOpening]);
 
+  /** The password being checked before the key is sent: the sheet must not close under it (the key would go anyway). */
+  const [isReauthBusy, setIsReauthBusy] = useState(false);
   /** While the key is being verified, the sheet stays open: closing it would hide the answer. */
-  const isBusy = phase.kind === 'busy';
+  const isBusy = phase.kind === 'busy' || (phase.kind === 'reauth' && isReauthBusy);
   const close = useCallback(() => {
     if (!isBusy) onFinish(null);
   }, [isBusy, onFinish]);
@@ -332,6 +334,7 @@ export function ConnectSheet({
           {phase.kind === 'reauth' ? (
             <div className="sv-step__body">
               <PasswordPrompt
+                onBusyChange={setIsReauthBusy}
                 onConfirmed={() => {
                   void submit(phase.key, true);
                 }}
