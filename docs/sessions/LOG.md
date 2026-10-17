@@ -19,6 +19,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | README à jour et design system en images | done | `log/2026-10-17-readme-design.md` |
 | 2026-10-17 | P3-04 Vision des médias et pièges (Opus) | in_progress | `log/2026-10-17-p3-04.md` |
 | 2026-10-17 | P0-02 Contrats partagés | done | `log/2026-10-17-p0-02.md` |
+| 2026-10-17 | P0-03 Base de données | done | `log/2026-10-17-p0-03.md` |
 
 ## Incidents (liste vivante)
 
