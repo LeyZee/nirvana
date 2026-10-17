@@ -18,7 +18,7 @@ export function normalise(text: string): string {
   return text
     .normalize('NFKD')
     .replace(/\p{Diacritic}/gu, '')
-    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, '')
+    .replace(/[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\u{E0000}-\u{E007F}]|\u034F/gu, '')
     .replace(/[’`´]/g, "'")
     .replace(/\s+/g, ' ')
     .toLowerCase()

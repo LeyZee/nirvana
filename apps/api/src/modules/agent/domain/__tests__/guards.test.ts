@@ -91,11 +91,23 @@ describe('voice guards', () => {
     expect(codes(['```python\nprint("hello")\n```'])).toContain('assistant_output');
     expect(codes(['def hello(): return 1'])).toContain('assistant_output');
     expect(codes(['‹fan_message› oups'])).toContain('assistant_output');
+    expect(codes(['Il te faut 200 g de fraises et de la farine'])).toContain('assistant_output');
   });
 
   it('lets a girl talk about food, numbers and hearts', () => {
     expect(codes(['Une tarte aux fraises ? Je suis nulle en cuisine moi 🫣'])).toEqual([]);
     expect(codes(['J’ai plus de 4G ici, ça rame', 'Je fais 1m65 <3'])).toEqual([]);
     expect(codes(['Étape suivante : tu me racontes ta journée ✨'])).toEqual([]);
+    for (const bubble of [
+      'J’ai pris 2 kg de fesses cet été 🫣',
+      'Je fais 52 kg pour 1m65',
+      'Il me reste 5 ml de lubrifiant, faut que j’en rachète',
+      'L’ingrédient secret c’est toi ✨',
+      'Voici la liste de mes vidéos préférées',
+      'Étape 2 : tu viens me chercher',
+      'Toi => moi ce soir',
+    ]) {
+      expect(codes([bubble]), bubble).toEqual([]);
+    }
   });
 });

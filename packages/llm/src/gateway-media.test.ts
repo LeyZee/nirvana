@@ -146,6 +146,30 @@ describe('sense', () => {
     expect(userParts(grok).filter((p) => p.type === 'file')).toHaveLength(2);
   });
 
+  it('takes a silent Gemini block as a refusal: no repair round with the same media, cost kept', async () => {
+    const gemini = new MockLanguageModelV4({
+      doGenerate: () =>
+        Promise.resolve({
+          content: [],
+          finishReason: { unified: 'other', raw: 'PROHIBITED_CONTENT' },
+          usage: USAGE,
+          warnings: [],
+        }),
+    });
+    const { gateway, log } = setup({
+      'gemini-3.8-flash': gemini,
+      'grok-4.7': answering(JSON.stringify(SENSED)),
+    });
+
+    const result = await gateway.sense(video(() => Promise.resolve({ frames: FRAMES })));
+
+    expect(result.ok && result.value.meta.model).toBe('grok-4.7');
+    expect(gemini.doGenerateCalls).toHaveLength(1);
+    const [refused] = log.since(new Date(0));
+    expect(refused?.outcome).toBe('refused');
+    expect(refused?.costUsd).toBeGreaterThan(0);
+  });
+
   it('says the input is not supported when the fallback gets no frame', async () => {
     const grok = answering(JSON.stringify(SENSED));
     const { gateway } = setup({ 'grok-4.7': grok });

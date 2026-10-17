@@ -10,4 +10,4 @@ Référence : `docs/architecture/ai-engine.md`, ADR 0009.
 6. **Évals.** Lance `pnpm evals -- --provider <x>` sur `scenarios/` et `adversarial/`. Copie le tableau de résultats dans la PR, à côté du fournisseur actuel (mêmes scénarios, même rubrique). Pas de résultats, pas de merge.
 7. **Repli.** Déclare ce fournisseur comme `fallback` d'un rôle avant d'en faire le défaut ; observe une semaine dans Langfuse (refus, latence, coût).
 8. **Changement de défaut** : PR séparée, qui ne contient que le changement de config et le lien vers les évals.
-9. **Secrets** : clé dans l'environnement (`LLM_<PROVIDER>_API_KEY`), jamais dans le dépôt, jamais loguée ; `.env.example` mis à jour.
+9. **Secrets** (ADR 0016) : en production, la clé se saisit dans Réglages › Modèles IA et se lit par la source de clés de la passerelle (`ApiKeySource`) ; hors production, `LLM_<PROVIDER>_API_KEY` dans l'environnement sert de repli. Jamais dans le dépôt, jamais loguée ; `.env.example` mis à jour, et une vérification de la clé ajoutée pour l'écran.

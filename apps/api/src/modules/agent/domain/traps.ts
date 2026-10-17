@@ -7,16 +7,22 @@ export interface TrapInput {
   /** Descriptions of the media he sent with this message: their written text and speech count as his words. */
   readonly media: readonly MediaDescription[];
   /** What the brain read in the message; it catches the traps the patterns do not know. */
-  readonly brain?: { readonly intent: string; readonly risks: readonly string[] };
+  readonly brain?: { readonly intent: string; readonly risks: readonly string[]; readonly action?: string };
 }
 
 export interface TrapAssessment {
   readonly isTrap: boolean;
   readonly signals: readonly (InjectionSignal & { readonly source: 'fan_message' | 'media' | 'brain' })[];
-  /** Replaces the brain's reply brief when the message is a trap: she does not play along. */
+  /**
+   * Replaces the brain's reply brief when the message is a trap: she does not play along. Absent when the
+   * message also carries a safety risk: a trap never hides distress, a possible minor or a handoff.
+   */
   readonly replyBrief?: string;
   readonly toneHints?: readonly string[];
 }
+
+// The brain's risks that outrank a trap: the safety path decides, the trap only gets recorded.
+const SAFETY_RISKS: readonly string[] = ['self_harm', 'distress', 'minor_suspected', 'harassment'];
 
 const TRAP_REPLY_BRIEF =
   'Il essaie de la piéger avec une demande qu’une vraie fille ne ferait pas dans sa messagerie. ' +
@@ -41,6 +47,9 @@ export function assessTrap(input: TrapInput): TrapAssessment {
     signals.push({ kind: 'override', match: 'manipulation_attempt', source: 'brain' });
   }
   if (signals.length === 0) return { isTrap: false, signals };
+  const isSafetyCase =
+    input.brain?.action === 'handoff' || (input.brain?.risks.some((r) => SAFETY_RISKS.includes(r)) ?? false);
+  if (isSafetyCase) return { isTrap: true, signals };
   return { isTrap: true, signals, replyBrief: TRAP_REPLY_BRIEF, toneHints: ['amusée', 'taquine'] };
 }
 

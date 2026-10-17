@@ -70,11 +70,24 @@ const ASSISTANT_OUTPUT: readonly RegExp[] = [
   /```|^\s*#{1,6}\s/m,
   /^\s*(\d+[.)]|[-*•])\s.+\n\s*(\d+[.)]|[-*•])\s/m,
   /[<‹]\/?[a-z_]{2,}[>›]/i,
-  /=>|\b(console\.log|def \w+\(|function \w*\(|select .+ from |import \w+ from|print\()/i,
+  /\b(console\.log|def \w+\(|function \w*\(|select .+ from |import \w+ from|print\()/i,
 ];
-// The same, on the normalised text.
+// The same, on the normalised text. One of these alone gives an assistant away.
 const ASSISTANT_PHRASES =
-  /\b(\d+ ?(g|gr|grammes|kg|ml|cl|cuilleres?|sachets?) d(e |')|cuilleres? a (soupe|cafe)|prechauffe|ingredients?\b|etape \d|voici (la|une|ta|ton|le) (recette|liste|traduction|reponse|code|resume|programme))/;
+  /\b(voici (la|une|ta|ton|le) (recette|traduction|code|resume)|cuilleres? a (soupe|cafe)|prechauffe[rz]? (le|ton|votre) four)/;
+// A recipe takes two of these: a girl may say « 52 kg », « 5 ml de lubrifiant » or « l'ingrédient secret c'est toi ».
+const RECIPE_SIGNALS: readonly RegExp[] = [
+  /\b\d+ ?(g|gr|grammes|kg|ml|cl|sachets?) d(e |')/,
+  /\bingredients?\b/,
+  /\b(farine|levure|sucre en poudre|sucre glace|beurre doux|pate brisee|pate sablee)\b/,
+  /\bfour a \d+/,
+  /\b(melange|ajoute|incorpore|fouette|verse)[rsz]? (le|la|les|un|une|des|bien|ensuite)\b/,
+];
+
+function recipeMatch(text: string): string | undefined {
+  const hits = RECIPE_SIGNALS.map((pattern) => pattern.exec(text)?.[0]).filter((m) => m !== undefined);
+  return hits.length >= 2 ? hits.join(' … ') : undefined;
+}
 
 // Phrases that give a chat away as written by an AI (/mnt/project-files/chatting/etudes-agent-humain.md, 1.10).
 const AI_TICS: readonly RegExp[] = [
@@ -98,11 +111,12 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       const match = pattern.exec(text);
       if (match) violations.push({ code, severity: 'blocking', bubbleIndex, match: match[0] });
     }
-    const structure = ASSISTANT_OUTPUT.map((pattern) => pattern.exec(bubble)).find((m) => m !== null);
-    const phrase = ASSISTANT_PHRASES.exec(text);
-    const assistant = structure ?? phrase;
-    if (assistant) {
-      violations.push({ code: 'assistant_output', severity: 'blocking', bubbleIndex, match: assistant[0] });
+    const assistant =
+      ASSISTANT_OUTPUT.map((pattern) => pattern.exec(bubble)?.[0]).find((m) => m !== undefined) ??
+      ASSISTANT_PHRASES.exec(text)?.[0] ??
+      recipeMatch(text);
+    if (assistant !== undefined) {
+      violations.push({ code: 'assistant_output', severity: 'blocking', bubbleIndex, match: assistant });
     }
     for (const term of forbidden) {
       // Whole words only: the disgust « anal » must not block « banal » or « canal ».

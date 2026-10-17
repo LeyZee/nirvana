@@ -19,14 +19,18 @@ export function createGatewaySenser(gateway: Pick<LlmGateway, 'sense'>): Senser 
               keyframes: request.keyframes,
             },
     });
-    if (result.ok) return ok(result.value.output);
+    if (result.ok) return ok({ description: result.value.output, isFallback: result.value.meta.isFallback });
     return err(result.error.attempts.map((a) => `${a.model}: ${a.outcome}`).join(', '));
   };
 }
 
 export function createGatewayTranscriber(gateway: Pick<LlmGateway, 'transcribe'>): Transcriber {
-  return async (audio) => {
-    const result = await gateway.transcribe({ data: audio, mediaType: 'audio/mpeg' });
+  return async (audio, durationS) => {
+    const result = await gateway.transcribe({
+      data: audio,
+      mediaType: 'audio/mpeg',
+      ...(durationS !== undefined && { durationS }),
+    });
     if (result.ok) return ok(result.value.text);
     return err(result.error.attempts.map((a) => `${a.model}: ${a.outcome}`).join(', '));
   };

@@ -36,17 +36,17 @@ const TOOLS: MediaTools = {
   toJpeg: () => Promise.resolve(new Uint8Array([0xff, 0xd8])),
 };
 
-function setup(tools: MediaTools = TOOLS, transcribe?: Transcriber) {
+function setup(tools: MediaTools = TOOLS, transcribe?: Transcriber, isFallback = false) {
   const requests: SenseRequest[] = [];
   const describer = createMediaDescriber({
     sense: (request) => {
       requests.push(request);
-      return Promise.resolve(ok(DESCRIPTION));
+      return Promise.resolve(ok({ description: DESCRIPTION, isFallback }));
     },
     ...(transcribe && { transcribe }),
     store: createInMemoryDescriptionStore(),
     tools,
-    senseModel: 'grok-4.7',
+    senseVersion: 'gemini-3.8-flash:abc',
   });
   return { describer, requests };
 }
@@ -65,6 +65,27 @@ describe('describe media', () => {
     const cut = request?.kind === 'video' ? await request.keyframes() : undefined;
     expect(cut?.frames.map((f) => f.atS)).toEqual([0, 4, 8]);
     expect(cut?.transcript).toBe('viens voir');
+  });
+
+  it('keeps no description made by the fallback model: the next one asks the main model again', async () => {
+    const { describer, requests } = setup(TOOLS, undefined, true);
+    const file = { origin: 'fan', mediaType: 'image/png', data: new Uint8Array([5]) } as const;
+    await describer.describe(file);
+    await describer.describe(file);
+    expect(requests).toHaveLength(2);
+  });
+
+  it('samples a long video sparser instead of decoding every second', async () => {
+    const rates: number[] = [];
+    const { describer, requests } = setup({
+      ...TOOLS,
+      probe: () => Promise.resolve({ durationS: 600, hasAudio: false }),
+      keyframes: (_, perSecond) => Promise.resolve((rates.push(perSecond), [])),
+    });
+    await describer.describe({ origin: 'creator', mediaType: 'video/mp4', data: new Uint8Array([6]) });
+    const request = requests[0];
+    if (request?.kind === 'video') await request.keyframes();
+    expect(rates).toEqual([0.04]);
   });
 
   it('cuts nothing while the vision model reads the video itself', async () => {

@@ -66,7 +66,7 @@ export const DEFAULT_LLM_CONFIG: LlmConfig = LlmConfigSchema.parse({
   dailyBudgetUsd: 15,
 });
 
-/** API keys from the environment (playbook add-an-llm-provider.md, step 9); never logged. */
+/** API keys from the environment: the fallback outside production (ADR 0016); never logged. */
 const ProviderCredentialsSchema = z.object({
   LLM_XAI_API_KEY: z.string().min(1).optional(),
   LLM_MISTRAL_API_KEY: z.string().min(1).optional(),
@@ -83,9 +83,9 @@ export function readProviderCredentials(env: Record<string, string | undefined>)
 }
 
 /**
- * Where API keys come from. Today the environment (`readProviderCredentials`); tomorrow the keys a manager
- * saves in Réglages > Modèles IA, stored encrypted per account and kept in server memory, so the lookup
- * stays synchronous. The environment remains the fallback for development and `pnpm probe`.
+ * Where API keys come from (ADR 0016): the keys a manager saves in Réglages > Modèles IA, stored encrypted
+ * per account and kept in server memory so the lookup stays synchronous; the environment
+ * (`readProviderCredentials`) only outside production, for development and `pnpm probe`.
  */
 export type ApiKeySource = (provider: ProviderId) => string | undefined;
 export type ApiKeys = ProviderCredentials | ApiKeySource;

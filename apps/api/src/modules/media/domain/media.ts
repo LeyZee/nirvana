@@ -19,12 +19,22 @@ export function needsConversion(mediaType: string, sizeBytes: number): boolean {
 }
 
 /**
- * One description per file, vocabulary version and model (ai-engine.md, « Cache »): a bundle media is
- * described once at import, and a fan who sends the same picture twice costs one call.
+ * One description per file, origin, vocabulary version and describer (model and sense prompt; ai-engine.md,
+ * « Cache »): a bundle media is described once at import, and a fan who sends the same picture twice costs
+ * one call. Changing the model or the prompt describes the media again.
  */
-export function descriptionKey(data: Uint8Array, senseModel: string): string {
+export function descriptionKey(
+  data: Uint8Array,
+  scope: { readonly origin: 'fan' | 'creator'; readonly senseVersion: string },
+): string {
   const sha256 = createHash('sha256').update(data).digest('hex');
-  return `${sha256}:${MEDIA_VOCABULARY_VERSION}:${senseModel}`;
+  return `${sha256}:${MEDIA_VOCABULARY_VERSION}:${scope.origin}:${scope.senseVersion}`;
+}
+
+/** At most one frame a second, and no more than `max` decoded over the whole video. */
+export function keyframeRate(durationS: number, max = 24): number {
+  if (!(durationS > 0)) return 1;
+  return Math.min(1, max / durationS);
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   createModelResolver,
   createTranscriberResolver,
   DEFAULT_LLM_CONFIG,
+  loadPrompt,
   readProviderCredentials,
 } from '@nirvana/llm';
 
@@ -74,7 +75,7 @@ const describer = createMediaDescriber({
   transcribe: createGatewayTranscriber(gateway),
   store: createInMemoryDescriptionStore(),
   tools: createFfmpegMediaTools(),
-  senseModel: DEFAULT_LLM_CONFIG.roles.sense.model,
+  senseVersion: `${DEFAULT_LLM_CONFIG.roles.sense.model}:${loadPrompt('sense').hash.slice(0, 12)}`,
 });
 const MEDIA_TYPES: Readonly<Record<string, string>> = {
   '.jpg': 'image/jpeg',

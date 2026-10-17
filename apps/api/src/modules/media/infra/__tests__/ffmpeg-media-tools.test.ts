@@ -42,7 +42,7 @@ describe('ffmpeg media tools', () => {
 
     expect(await tools.probe(video)).toMatchObject({ hasAudio: true });
     expect((await tools.probe(video)).durationS).toBeCloseTo(6, 0);
-    const frames = await tools.keyframes(video);
+    const frames = await tools.keyframes(video, 1);
     expect(frames.length).toBeGreaterThanOrEqual(5);
     expect(frames.map((f) => f.atS)).toEqual([...frames.map((f) => f.atS)].sort((a, b) => a - b));
     expect([...(frames[0]?.data.slice(0, 2) ?? [])]).toEqual(JPEG_MAGIC);
@@ -60,7 +60,7 @@ describe('ffmpeg media tools', () => {
       'yuv420p',
     );
     expect(await tools.probe(still)).toMatchObject({ hasAudio: false });
-    expect((await tools.keyframes(still)).length).toBeLessThanOrEqual(2);
+    expect((await tools.keyframes(still, 1)).length).toBeLessThanOrEqual(2);
   });
 
   it('turns any image into a JPEG', async () => {

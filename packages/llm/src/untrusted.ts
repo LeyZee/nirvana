@@ -10,8 +10,10 @@ export type UntrustedKind =
   | 'fan_notes'
   | 'brief';
 
-// Invisible and bidirectional control characters: used to hide or reorder text the model would still read.
-const CONTROL_CHARACTERS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
+// Invisible, bidirectional and tag characters (soft hyphen, joiners, Unicode tags): used to hide or
+// reorder text the model would still read.
+const CONTROL_CHARACTERS =
+  /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\u{E0000}-\u{E007F}]|\u034F/gu;
 
 /**
  * Wraps content written by a fan (or derived from it) in a typed block that every system prompt
@@ -19,6 +21,11 @@ const CONTROL_CHARACTERS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
  * replaced so the content cannot close the block or open a fake one, and invisible characters are dropped.
  */
 export function wrapUntrusted(kind: UntrustedKind, content: string): string {
-  const neutralised = content.replace(CONTROL_CHARACTERS, '').replaceAll('<', '‹').replaceAll('>', '›');
+  // NFKC first: full-width ＜ and other look-alikes become the plain characters replaced below.
+  const neutralised = content
+    .normalize('NFKC')
+    .replace(CONTROL_CHARACTERS, '')
+    .replaceAll('<', '‹')
+    .replaceAll('>', '›');
   return `<${kind}>\n${neutralised}\n</${kind}>`;
 }

@@ -51,6 +51,7 @@ export {
   type VoiceInput,
 } from './gateway';
 export type { HealthReport, HealthState, ProviderHealth, RoleHealth } from './health';
+export { loadPrompt } from './prompts';
 export { createModelResolver, createTranscriberResolver, type ModelResolver } from './providers';
 export { BriefSchema, VoiceOutputSchema, type Brief, type VoiceOutput } from './schemas';
 export { wrapUntrusted, type UntrustedKind } from './untrusted';

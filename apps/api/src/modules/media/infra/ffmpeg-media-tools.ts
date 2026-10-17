@@ -56,9 +56,10 @@ export function createFfmpegMediaTools(binaries = { ffmpeg: 'ffmpeg', ffprobe: '
         };
       }),
 
-    keyframes: (video) =>
+    keyframes: (video, perSecond) =>
       inTempDir(video, async (dir, path) => {
-        // One frame a second, near-duplicates dropped (mpdecimate); showinfo prints each kept frame's time.
+        // A few frames a second at most, near-duplicates dropped (mpdecimate); showinfo prints each kept
+        // frame's time. A long video is sampled sparser rather than decoded in full and thinned afterwards.
         const { stderr } = await run(
           binaries.ffmpeg,
           [
@@ -67,7 +68,7 @@ export function createFfmpegMediaTools(binaries = { ffmpeg: 'ffmpeg', ffprobe: '
             '-i',
             path,
             '-vf',
-            `fps=1,mpdecimate,${SCALE},showinfo`,
+            `fps=${String(perSecond)},mpdecimate,${SCALE},showinfo`,
             '-fps_mode',
             'vfr',
             '-q:v',

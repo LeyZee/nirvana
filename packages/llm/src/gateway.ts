@@ -9,6 +9,7 @@ import {
   NoOutputGeneratedError,
   Output,
   TypeValidationError,
+  type LanguageModelUsage,
   type ModelMessage,
   type TextPart,
   type TranscriptionModel,
@@ -127,6 +128,8 @@ export interface LlmGateway {
   transcribe(audio: {
     readonly data: Uint8Array;
     readonly mediaType: string;
+    /** From ffprobe: prices the call when the provider gives no duration. */
+    readonly durationS?: number;
   }): Promise<Result<Transcript, LlmFailure>>;
 }
 
@@ -157,10 +160,25 @@ interface Classified {
   readonly outcome: CallOutcome;
   readonly isTransient: boolean;
   readonly message: string;
+  /** Tokens the failed call still billed, when the provider said. */
+  readonly usage?: LanguageModelUsage;
 }
 
 function classify(error: unknown): Classified {
-  if (NoObjectGeneratedError.isInstance(error) || NoOutputGeneratedError.isInstance(error)) {
+  if (NoObjectGeneratedError.isInstance(error)) {
+    // A block the SDK only reports as a failed object (see the finish check in `run`).
+    const isBlocked =
+      error.finishReason === 'content-filter' ||
+      error.finishReason === 'other' ||
+      (error.text ?? '').trim() === '';
+    return {
+      outcome: isBlocked ? 'refused' : 'invalid_output',
+      isTransient: false,
+      message: error.message,
+      ...(error.usage !== undefined && { usage: error.usage }),
+    };
+  }
+  if (NoOutputGeneratedError.isInstance(error)) {
     return { outcome: 'invalid_output', isTransient: false, message: error.message };
   }
   if (TypeValidationError.isInstance(error) || JSONParseError.isInstance(error)) {
@@ -195,8 +213,19 @@ const LABELS = {
 function renderMedia(media: TurnMedia): string {
   const d = media.description;
   const duration = d.durationS === null ? '' : ` de ${String(Math.round(d.durationS))} s`;
+  if (media.isLocked === true) {
+    // Not bought yet: the voice gets enough to tease it, never enough to give it away for free.
+    return [
+      `${LABELS[d.kind]}${duration} (verrouillé, pas encore acheté).`,
+      `Intensité : ${d.intensity}.`,
+      d.mood.length > 0 ? `Ambiance : ${d.mood.join(', ')}.` : '',
+      d.setting === null ? '' : `Décor : ${d.setting}.`,
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
+  }
   return [
-    `${LABELS[d.kind]}${duration}${media.isLocked === true ? ' (verrouillé, pas encore acheté)' : ''}.`,
+    `${LABELS[d.kind]}${duration}.`,
     d.factualDescription,
     ...d.segments.map((s) => `De ${String(s.startS)} à ${String(s.endS)} s : ${s.description}`),
     `Intensité : ${d.intensity}. Visible : ${d.anatomyVisible.join(', ') || 'rien de particulier'}.`,
@@ -382,11 +411,16 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
             ...(ref.provider === 'google' && { providerOptions: GOOGLE_SAFETY }),
           });
           const latencyMs = now().getTime() - startedAt;
-          if (result.finishReason === 'content-filter') {
-            record('refused', latencyMs);
+          const cost = costUsd(ref, result.usage);
+          // Gemini blocks a media by stopping with no text (finish « other ») as often as with « content-filter »:
+          // both are a refusal, and asking again with the same media would only be refused again.
+          const isBlocked =
+            result.finishReason === 'content-filter' ||
+            (result.finishReason === 'other' && result.text.trim() === '');
+          if (isBlocked) {
+            record('refused', latencyMs, cost === undefined ? {} : { costUsd: cost });
             break;
           }
-          const cost = costUsd(ref, result.usage);
           if (JSON.stringify(result.output).includes(canary)) {
             // The fan got the model to write its instructions: nothing of this output may go further.
             record('prompt_leak', latencyMs, cost === undefined ? {} : { costUsd: cost });
@@ -413,8 +447,12 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
           });
         } catch (error) {
           const latencyMs = now().getTime() - startedAt;
-          const { outcome, isTransient, message } = classify(error);
-          record(outcome, latencyMs, { errorMessage: message.slice(0, 200) });
+          const { outcome, isTransient, message, usage } = classify(error);
+          const cost = usage === undefined ? undefined : costUsd(ref, usage);
+          record(outcome, latencyMs, {
+            errorMessage: message.slice(0, 200),
+            ...(cost !== undefined && { costUsd: cost }),
+          });
           if (outcome === 'invalid_output' && !hasRepaired) {
             hasRepaired = true;
             messages = [
@@ -516,7 +554,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
           maxRetries: deps.config.maxTransientRetries,
           abortSignal: AbortSignal.timeout(deps.config.roles.sense.timeoutMs),
         });
-        const durationS = result.durationInSeconds;
+        const durationS = result.durationInSeconds ?? audio.durationS;
         deps.log.append({
           ...base,
           at: now(),
