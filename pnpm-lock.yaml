@@ -50,6 +50,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@nirvana/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@nirvana/llm':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -164,6 +167,10 @@ importers:
         version: 5.0.5(@types/node@22.20.5)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/contracts:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: 22.20.5
@@ -174,6 +181,9 @@ importers:
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@types/node@22.20.5)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   packages/db:
     devDependencies:

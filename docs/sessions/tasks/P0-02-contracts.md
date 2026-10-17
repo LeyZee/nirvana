@@ -18,14 +18,13 @@ Fournir dans `packages/contracts` les types et schémas Zod que tout le reste im
 - `events.ts` : union discriminée des types d'événements de `data-model.md` avec payload Zod par type (la table des payloads y est la référence) ; `ConversationEventSchema` ; `DomainEventSchema` pour l'outbox `domain_events` (`draft_created`, `message_sent`, `fact_confirmed`, …, types pris dans la même liste fermée), avec `correlationId`.
 - `jobs.ts` : noms de jobs (`conversation.respond`, `conversation.send`, `conversation.follow_up`, `connector.poll`, `connector.reconcile`, `fans.refresh_summary`, `media.describe`) et payloads Zod ; helper `queueNameFor(conversationId)` et `jobKeyFor(job, conversationId)`.
 - `connector.ts` : `ExternalRef`, `ConversationSnapshot`, `ExternalMessage`, `ExternalTransaction`, `OutboundMedia`, `SendResult`, `VerifyResult`, `ConnectorCapabilities`, `ConnectorErrorCode`, `ConnectorEvent`, `Unsubscribe` (tous cités par `connectors.md`).
-- `settings.ts` : `CreatorSettingsSchema` (avec `identity_policy` défaut `stay_in_character`, `llm` par rôle, `followUp`, `auto_approve_categories` vide par défaut, `retention`).
-- `persona.ts` : `PersonaSchema` selon `docs/reference/persona-schema.md` ; `media.ts` : `MediaDescriptionSchema` selon `media-vocabulary.md`.
+- `settings.ts` : `CreatorSettingsSchema` (avec `identity_policy` défaut `stay_in_character`, `llm` par rôle, `auto_approve_categories` vide par défaut, `retention`).
+- `persona.ts` : fait par P0-08 (`PersonaSchema` calqué sur OnlyChat). `settings.ts` ne reprend pas les relances : elles vivent dans `persona.follow_ups`. `media.ts` : `MediaDescriptionSchema` selon `media-vocabulary.md`.
 - `result.ts` : `Result<T, E>` en implémentation locale (`ok`, `err`, `isOk`, `map`, `unwrapOr`), pas de `neverthrow` (décision prise, `coding.md`) ; `DomainError`.
-- `index.ts` exporte tout ; tests unitaires sur ids, money, settings (défauts), persona (le `personas/messalina/v0.0.0.yaml` placeholder doit valider).
+- `index.ts` exporte tout ; tests unitaires sur ids, money, settings (défauts).
 
 ## Critères d'acceptation
 - `pnpm --filter @nirvana/contracts test` vert, couverture des helpers money à 100 %.
-- `personas/messalina/v0.0.0.yaml` passe `PersonaSchema`.
 - Aucune dépendance runtime dans le package à part `zod` et `uuid` (ou `node:crypto`).
 
 ## Hors périmètre

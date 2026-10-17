@@ -43,7 +43,8 @@ if (credentials.LLM_XAI_API_KEY === undefined && credentials.LLM_MISTRAL_API_KEY
 const cwd = process.env['INIT_CWD'] ?? process.cwd();
 const repoRoot = resolve(import.meta.dirname, '../../../..');
 const scratch = resolve(repoRoot, '.scratch/playground');
-const persona = readPersonaFile(readFileSync(resolve(cwd, values.persona), 'utf8'), values.name);
+const today = new Date().toISOString().slice(0, 10);
+const persona = readPersonaFile(readFileSync(resolve(cwd, values.persona), 'utf8'), values.name, today);
 const log = createJsonlCallLog(resolve(scratch, 'llm-calls.jsonl'));
 const gateway = createLlmGateway({
   config: DEFAULT_LLM_CONFIG,

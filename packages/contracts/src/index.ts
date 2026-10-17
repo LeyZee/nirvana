@@ -2,3 +2,4 @@
 export const CONTRACTS_PACKAGE = '@nirvana/contracts';
 
 export { err, ok, type Result } from './result';
+export * from './persona';

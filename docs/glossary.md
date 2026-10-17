@@ -31,7 +31,13 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Fait (mémoire) | `fan_fact` | Une information mémorisée sur un fan, avec source, date, confiance, `kind: declared | inferred`. |
 | Résumé fan | `fan_summary` | Résumé opérationnel régénéré. |
 | Slot KYC | `kyc_slot` | Une information qu'on cherche à apprendre (prénom, âge, métier…). |
-| Persona | `persona` | La fiche versionnée de la créatrice (style, limites, kinks, dégoûts). |
+| Persona | `persona` | La fiche versionnée de la créatrice, calquée sur la fiche OnlyChat (détails, infos en plus, comportement, stratégies, relances, notifications), plus ses limites. |
+| Infos en plus | `additional_info` | Le texte libre de la persona (6 000 caractères au plus). |
+| Limites | `limits` | Ce que la créatrice ne fait, ne montre, ne dit jamais, et ses dégoûts. Chargées par les gardes. |
+| Surnom | `pet_name` | Un des surnoms que la créatrice donne aux fans, pris dans la liste fermée de sa persona. |
+| Sexualisation | `sexualization` | Le moment où la conversation devient sexy, et la stratégie qui le règle. |
+| Suivi d'offre | `post_offer` | Ce que fait l'agent après un achat ou une offre refusée. |
+| Mot-clé d'alerte | `alert_keyword` | Un mot qui, écrit par un fan, met l'agent en pause pour ce fan et prévient un humain. |
 | Politique d'identité | `identity_policy` | Comment le bot réagit à « t'es un bot ? ». Réglage, voir ADR 0012. |
 | Média | `media_asset` | Une photo, vidéo ou audio de la créatrice (catalogue) ou reçue d'un fan. |
 | Description de média | `media_description` | La sortie du rôle sens, au vocabulaire Nirvana. |
@@ -42,6 +48,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Carton | `card` | Séparateur visuel d'étape (PNG), hérité d'OnlyScript. |
 | Structure | `script_structure` | Ossature d'un script (ordre des étapes, médias attendus, intention). |
 | Relance | `follow_up` | Message envoyé après un silence du fan. |
+| Petit rappel | `nudge` | Rappel court quand le fan a lu sans répondre (« nudge » d'OnlyChat). |
 | Cooldown | `cooldown` | Délai pendant lequel le bot ne pousse pas de vente. |
 | Connecteur | `connector` | Adaptateur d'une plateforme derrière le port `PlatformConnector`. |
 | Session (plateforme) | `platform_session` | Les jetons/cookies capturés qui permettent au connecteur d'agir. |

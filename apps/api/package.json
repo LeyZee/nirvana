@@ -15,6 +15,7 @@
     "playground": "tsx --env-file-if-exists=../../.env src/scripts/playground.ts"
   },
   "dependencies": {
+    "@nirvana/contracts": "workspace:*",
     "@nirvana/llm": "workspace:*",
     "fastify": "5.12.7",
     "yaml": "2.9.1",

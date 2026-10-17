@@ -78,19 +78,35 @@ describe('playground session', () => {
 });
 
 describe('persona file', () => {
+  const read = (path: string): string =>
+    readFileSync(new URL(`../../../../personas/${path}`, import.meta.url), 'utf8');
+
   it('reads the placeholder persona of the repository', () => {
-    const source = readFileSync(
-      new URL('../../../../personas/messalina/v0.0.0.yaml', import.meta.url),
-      'utf8',
-    );
-    const persona = readPersonaFile(source, 'Messa');
+    const persona = readPersonaFile(read('messalina/v0.0.0.yaml'), 'Messa', '2026-10-17');
     expect(persona.creatorName).toBe('Messa');
     expect(persona.forbiddenTerms).toEqual([]);
-    expect(persona.personaSheet).toContain('style:');
   });
 
-  it('takes the first name and the disgusts when they are filled', () => {
-    const persona = readPersonaFile('identity:\n  first_name: Lina\nboundaries:\n  disgusts: [pieds]\n', 'X');
-    expect(persona).toMatchObject({ creatorName: 'Lina', forbiddenTerms: ['pieds'] });
+  it('takes the first name, the disgusts and the forbidden words of a filled persona', () => {
+    const persona = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
+    expect(persona.creatorName).toBe('Elena');
+    expect(persona.forbiddenTerms).toEqual([
+      'Insultes',
+      'Humiliation',
+      "Je t'aime",
+      'Mon adresse',
+      'Mon numéro',
+    ]);
+  });
+
+  it('gives the model her age and voice, never the date of birth nor the rules code applies', () => {
+    const { personaSheet } = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
+    expect(personaSheet).toContain('age: 25');
+    expect(personaSheet).toContain('additional_info:');
+    expect(personaSheet).not.toMatch(/date_of_birth|strategies|follow_ups|notifications/);
+  });
+
+  it('refuses a file outside the persona schema', () => {
+    expect(() => readPersonaFile('identity:\n  first_name: Lina\n', 'X', '2026-10-17')).toThrow();
   });
 });
