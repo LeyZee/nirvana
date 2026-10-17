@@ -132,6 +132,17 @@ export interface LlmGatewayDeps {
   readonly canary?: string;
   /** Speech to text (xAI); undefined when no key is set. */
   readonly resolveTranscriber?: () => TranscriptionModel | undefined;
+  /**
+   * A provider answered 401 or 403 on a real call: its key was revoked or lacks a right. The providers module
+   * marks the service « à reconnecter » (ADR 0016). Called once per refused attempt; never throws into a call.
+   */
+  readonly onKeyRefused?: (refusal: KeyRefusal) => void;
+}
+
+export interface KeyRefusal {
+  readonly provider: ProviderId;
+  /** 401: the key is unknown or revoked. 403: the key exists but may not use this model or service. */
+  readonly status: 401 | 403;
 }
 
 export interface Transcript {

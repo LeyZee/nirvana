@@ -14,7 +14,7 @@ import type { z } from 'zod';
 
 import type { CallOutcome, LlmCallLog } from './call-log';
 import { costUsd } from './catalog';
-import type { LlmConfig, LlmRole, ModelRef } from './config';
+import type { LlmConfig, LlmRole, ModelRef, ProviderId } from './config';
 import type { LlmFailure, LlmSuccess } from './gateway-types';
 import type { PromptTemplate } from './prompts';
 import type { ModelResolver } from './providers';
@@ -25,6 +25,8 @@ interface Classified {
   readonly message: string;
   /** Tokens the failed call still billed, when the provider said. */
   readonly usage?: LanguageModelUsage;
+  /** The provider turned the key down: the CRM marks the service « à reconnecter » (ADR 0016). */
+  readonly refusedStatus?: 401 | 403;
 }
 
 export function classify(error: unknown): Classified {
@@ -50,7 +52,12 @@ export function classify(error: unknown): Classified {
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
     if (status === 401 || status === 403)
-      return { outcome: 'auth', isTransient: false, message: `HTTP ${String(status)}` };
+      return {
+        outcome: 'auth',
+        isTransient: false,
+        message: `HTTP ${String(status)}`,
+        refusedStatus: status,
+      };
     if (status === 429) return { outcome: 'rate_limited', isTransient: true, message: 'HTTP 429' };
     if (status !== undefined && status >= 500)
       return { outcome: 'unavailable', isTransient: true, message: `HTTP ${String(status)}` };
@@ -86,6 +93,7 @@ export interface CallRunnerDeps {
   readonly resolveModel: ModelResolver;
   readonly now: () => Date;
   readonly canary: string;
+  readonly reportRefusal: (provider: ProviderId, status: 401 | 403) => void;
 }
 
 export type CallRunner = <T>(
@@ -200,7 +208,8 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
           });
         } catch (error) {
           const latencyMs = now().getTime() - startedAt;
-          const { outcome, isTransient, message, usage } = classify(error);
+          const { outcome, isTransient, message, usage, refusedStatus } = classify(error);
+          if (refusedStatus !== undefined) deps.reportRefusal(ref.provider, refusedStatus);
           const cost = usage === undefined ? undefined : costUsd(ref, usage);
           record(outcome, latencyMs, {
             errorMessage: message.slice(0, 200),

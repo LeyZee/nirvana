@@ -56,7 +56,7 @@ Des fans tentent de prouver qu'ils parlent à une machine : recette de la tarte 
 
 ## Santé (panneau « Modèles IA »)
 
-`health()` calcule depuis le journal, pour chaque rôle : modèle actif et repli, présence de la clé (jamais sa valeur), repli en service, dernier succès, dernière erreur typée, latence p50/p95 et taux d'erreurs sur une heure, coût du jour ; et pour l'ensemble : état (`ok`, `degraded`, `down`) et coût du jour face au budget (`dailyBudgetUsd`). `testConnection(provider)` fait un appel court.
+`health()` calcule depuis le journal, pour chaque rôle : modèle actif et repli, présence de la clé (jamais sa valeur), repli en service, dernier succès, dernière erreur typée, latence p50/p95 et taux d'erreurs sur une heure, coût du jour ; et pour l'ensemble : état (`ok`, `degraded`, `down`) et coût du jour face au budget (`dailyBudgetUsd`). `testConnection(provider)` fait un appel court. Les clés viennent de l'environnement ou d'un `ApiKeySource` qui lit celles saisies dans le CRM (ADR 0016) ; quand un fournisseur répond 401 ou 403 sur un vrai appel, la passerelle appelle `onKeyRefused({ provider, status })`, que le module `providers` branche sur `reportRefusedKey` pour passer le service « à reconnecter ». L'appel continue sur son repli.
 
 ## Prompts
 
