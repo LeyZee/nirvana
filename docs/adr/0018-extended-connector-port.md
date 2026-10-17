@@ -44,9 +44,9 @@ Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès q
 
 3. **Garde d'écriture** : `ConnectorConfigSchema` reçoit `writes: boolean`, `false` par défaut. Tant qu'elle vaut `false`, le module `connectors` refuse toute écriture avant l'appel réseau. Le refus est un échec définitif (`SendRefused` « connector_writes_disabled », sans nouvel essai). Le `FakeConnector` des tests et de l'e2e passe `writes: true` explicitement. Seul Charles active l'écriture d'un compte réel.
 
-   La garde est livrée par P0-07b (#40, `application/outbound-sender.ts`) pour les envois existants. Les nouvelles écritures de cette ADR (`sendScriptStep`, `setFanNote`) passent par la même garde. Elle s'ajoute au kill switch, elle ne le remplace pas.
+   La garde est livrée par P0-07b (#40, `application/outbound-sender.ts`) pour les envois existants. Les nouvelles écritures de cette ADR (`sendScriptStep`, `setFanNote`) lèvent la même erreur depuis le même point d'entrée (`run(…, writes: true)` dans `outbound-sender.ts`), jamais par un second contrôle à part. Elle s'ajoute au kill switch, elle ne le remplace pas.
 
-4. Les **adaptateurs existants** déclarent les nouveaux drapeaux à `false` (`FakeConnector` compris) ; le cœur teste le drapeau avant d'appeler la méthode, jamais l'existence de la méthode seule.
+4. Les **adaptateurs existants** déclarent les nouveaux drapeaux à `false` (`FakeConnector` compris) ; le drapeau est testé avant l'appel, jamais l'existence de la méthode seule. Ce contrôle vit dans un seul helper de l'application du module `connectors`, qui lève `ConnectorUnavailable` si le drapeau est faux ou si la méthode manque ; il n'est pas répété chez chaque appelant.
 
 5. **Scripts déjà envoyés à un fan : la plateforme fait foi.** Reveal indique quand un script a déjà été envoyé ou utilisé avec un fan (Charles, 17/10). `getScriptHistory` lit cet indicateur, et c'est notre seule source : nous ne tenons pas d'historique parallèle qui pourrait diverger. La forme exacte de l'indicateur (par script ou par étape) sera arrêtée d'après la capture.
 
@@ -62,6 +62,7 @@ Positives :
 - Brancher l'adaptateur Reveal ne peut plus écrire chez un fan par accident.
 
 Négatives :
+- « Seul Charles active l'écriture » se fait aujourd'hui à la main en base (`docs/runbooks/local-dev.md`) : un réglage audité dans le CRM devra suivre.
 - Le port grossit. Chaque méthode ajoutée doit avoir un cas dans le test de contrat commun, joué au minimum contre FakeReveal.
 - `ConnectorCapabilitiesSchema` est un objet fermé : chaque nouveau drapeau touche tous les adaptateurs.
 
