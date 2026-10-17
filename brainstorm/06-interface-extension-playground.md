@@ -134,18 +134,18 @@ Le playground n'a **pas besoin de Reveal**. Il lui faut les fondations (P0), la 
 
 `docs/design/README.md` et D-01 appellent « playground » la page de démonstration des composants (`_playground.tsx`). Pour éviter deux sens au même mot, proposition : cette page devient la **vitrine** (`_showcase.tsx`) et « Playground » désigne seulement le bac à sable de conversation. Glossaire mis à jour dans le même commit que cette note.
 
-### Réglages › Persona (prototype, 17/10)
+### Réglages › Créatrices › Persona (prototype, 17/10)
 
-Charles veut saisir la persona dans l'interface, et la calquer sur la fiche créatrice d'OnlyChat, sans rien ajouter (« ils sont les boss pour ça »). Le prototype reprend donc leurs onglets et leurs champs, lus par le MCP OnlyChat, avec un contenu fictif :
+Charles veut saisir la persona dans l'interface, calquée sur la fiche créatrice d'OnlyChat, sans fonctions ajoutées (« ils sont les boss pour ça »). Dans Réglages, l'entrée **Créatrices** liste les modèles ; une fiche par créatrice porte deux onglets, **Persona** et **Plateformes** (comptes et fans de test). La persona reprend les onglets et les champs d'OnlyChat, lus par leur MCP :
 
-- **Détails** : identité (prénom, âge, date de naissance, genre, origine, fuseau, langues), physique, centres d'intérêt, traits de personnalité.
-- **Infos en plus** : un texte libre (histoire, voix et expressions, séduction, passions, objectifs).
-- **Comportement** : style de langage, découpage en plusieurs messages, délai de réponse.
-- **Stratégies** : KYC (avec ses cibles), sexualisation (cooldown minimal), lancement des scripts (cooldown strict), négociation, suivi (délai). Chacune a un style par défaut et des instructions personnalisées.
-- **Relances** : activées, délais, type, texte personnalisé.
-- **Notifications** : ventes, IA désactivée, plus de script, limite de plateforme, alertes par mots-clés.
+- **Détails** : prénom, date de naissance (l'âge en est calculé), genre, origine, fuseau, langues (choisies dans une liste), physique en listes de valeurs (taille, poids, pointure, cheveux, yeux, tour de poitrine en bonnet et tour), centres d'intérêt et traits ajoutés ou retirés un par un.
+- **Infos en plus** : le texte libre d'OnlyChat (6 000 caractères au plus sur Telegram).
+- **Comportement** : style de langage, découpage en plusieurs messages, délai de réponse, instructions.
+- **Stratégies** : KYC (cibles, au plus N messages ou N minutes), sexualisation (cooldown), lancement des scripts (cooldown strict), négociation, suivi (délai). Style par défaut ou personnalisé ; « personnalisé » ouvre un champ d'instructions.
+- **Relances** (délais, type, texte) et **petits rappels** (« nudges » d'OnlyChat).
+- **Notifications** : ventes, agent coupé, plus de script, limite de plateforme, et **mots-clés** : dès qu'un fan en écrit un, l'agent prévient tout de suite et attend, pour qu'un humain reprenne la main. C'est obligatoire, donc appliqué par le code.
 
-Seuls écarts, qui viennent de décisions déjà prises et pas de fonctions nouvelles : `identity_policy` affichée verrouillée (ADR 0012) ; délais et cooldowns marqués « Appliqué par le code » (CLAUDE.md, règle 3) ; une barre de version (ADR 0010, tests puis validation de Messa avant la mise en ligne) ; un bouton « Importer depuis OnlyChat ». Le contenu réel reste hors du dépôt (ADR 0010).
+Comportement, Stratégies, Relances et Notifications reprennent pour l'instant la configuration OnlyChat du bot Telegram ; ils sont à retravailler pour Reveal avec la documentation d'OnlyChat. Les deux fiches OnlyChat de Messalina (OnlyFans et Telegram) se contredisent sur l'âge, les yeux, les tatouages, le métier et les animaux : ces champs sont marqués « à confirmer avec Messa ». Écarts admis seulement s'ils viennent d'une décision : `identity_policy` verrouillée (ADR 0012), délais et cooldowns appliqués par le code (CLAUDE.md, règle 3), versions testées et validées (ADR 0010). Le contenu réel reste hors du dépôt et hors de la maquette en ligne (ADR 0010).
 
 ## 5. Ce qui touche les manques métier (en pause)
 
