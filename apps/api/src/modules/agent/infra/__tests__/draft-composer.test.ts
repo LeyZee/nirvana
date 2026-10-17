@@ -151,6 +151,22 @@ describe('createDraftComposer', () => {
     expect(seen.voiceCalls).toBe(0);
   });
 
+  it('hands a message without text to a human: his photo has not been seen', async () => {
+    const { draftComposer, seen } = composer();
+    const photo: AgentComposeInput['history'][number] = {
+      direction: 'inbound',
+      text: '',
+      at: new Date('2026-10-17T09:59:30Z'),
+    };
+    expect(await draftComposer.compose({ ...INPUT, history: [...INPUT.history, photo] })).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['media_unscreened'],
+      costUsd: 0,
+    });
+    expect(seen.traces).toHaveLength(0);
+  });
+
   it('holds an answer the guards block, with their codes', async () => {
     const { draftComposer } = composer({ voice: { bubbles: ['Je suis une IA'] } });
     expect(await draftComposer.compose(INPUT)).toMatchObject({

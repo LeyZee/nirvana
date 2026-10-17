@@ -53,8 +53,9 @@ export interface DraftComposerDeps {
 const failureDetail = (error: LlmFailure): readonly string[] =>
   error.attempts.map((a) => `${a.model}: ${a.outcome}`);
 
-// The fan's photos and videos do not reach the composer yet (history carries text only): no screening on this
-// path until media ingestion lands. TODO(P3-06): pass his media once `HistoryMessage` carries them.
+// The fan's photos and videos do not reach the composer yet (history carries text only), and every media of his
+// must be seen before she answers (minor, consent, weapon): a message without text goes to a human.
+// TODO(P3-06): pass his media to the screening once `HistoryMessage` carries them.
 
 /** No voice model with a key, main or fallback: no call is worth making. */
 function voiceUnavailable(gateway: LlmGateway): boolean {
@@ -65,6 +66,11 @@ function voiceUnavailable(gateway: LlmGateway): boolean {
 export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer {
   return {
     async compose(input) {
+      const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
+      const sinceAnswer = input.history.slice(lastAnswer + 1);
+      if (sinceAnswer.some((m) => m.text.trim() === '')) {
+        return { kind: 'held', reason: 'handoff', detail: ['media_unscreened'], costUsd: 0 };
+      }
       if (voiceUnavailable(deps.gateway)) {
         return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
       }
@@ -73,11 +79,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         text: m.text,
       }));
       // What he wrote since her last answer: the traps read it as one message.
-      const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
-      const fanText = input.history
-        .slice(lastAnswer + 1)
-        .map((m) => m.text)
-        .join('\n');
+      const fanText = sinceAnswer.map((m) => m.text).join('\n');
       const composed = await composeTurn(deps.gateway, deps.persona, {
         history,
         fanText,

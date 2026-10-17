@@ -76,6 +76,10 @@ export interface App {
 const fromRepoRoot = (path: string): string =>
   resolve(fileURLToPath(new URL('../../../', import.meta.url)), path);
 
+/** The demo persona is fictional (ADR 0010): in production, drafts for real fans need her persona to be set. */
+export const mayComposeDrafts = (config: Pick<Config, 'NODE_ENV' | 'PLAYGROUND_PERSONA_PATH'>): boolean =>
+  config.NODE_ENV !== 'production' || config.PLAYGROUND_PERSONA_PATH !== undefined;
+
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
 export interface AppOptions {
@@ -158,18 +162,25 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     logger.warn({ err: error }, 'playground not started: persona unreadable');
     return null;
   });
-  // Without a readable persona, drafts stay empty as before the engine (P0-05) and the dashboard says why.
+  // Without a readable persona, drafts stay empty as before the engine (P0-05) and the dashboard says why. In
+  // production the fictional demo persona never writes to real fans: no persona set, no composer.
+  const isDemoPersonaInProduction = !mayComposeDrafts(config);
+  if (isDemoPersonaInProduction && options.composer === undefined) {
+    logger.warn('draft composer not started: PLAYGROUND_PERSONA_PATH is not set in production');
+  }
   const composer =
     options.composer ??
-    (await startDraftComposer({
-      gateway: llm.gateway,
-      personaPath,
-      trainingDir,
-      timeZone: DEFAULT_LLM_CONFIG.dailyBudget.timeZone,
-    }).catch((error: unknown) => {
-      logger.warn({ err: error }, 'draft composer not started: persona unreadable');
-      return undefined;
-    }));
+    (isDemoPersonaInProduction
+      ? undefined
+      : await startDraftComposer({
+          gateway: llm.gateway,
+          personaPath,
+          trainingDir,
+          timeZone: DEFAULT_LLM_CONFIG.dailyBudget.timeZone,
+        }).catch((error: unknown) => {
+          logger.warn({ err: error }, 'draft composer not started: persona unreadable');
+          return undefined;
+        }));
   const conversations = createConversationsModule({
     db: db.db,
     fans,
