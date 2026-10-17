@@ -1,8 +1,9 @@
 import type { CurrentUser } from '@nirvana/contracts';
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router';
 
-import { CreatorsPage, DashboardPage, TrackingPage } from './screens/sections';
+import { CreatorsPage, DashboardPage } from './screens/sections';
 import { DevicesPage, AgentModePage, AiModelsPage, SettingsLayout } from './screens/settings/SettingsLayout';
+import { TrackingPage } from './screens/tracking/TrackingPage';
 import { CorrectionsPage } from './screens/train/CorrectionsPage';
 import { PlaygroundPage } from './screens/train/PlaygroundPage';
 import { TestsPage } from './screens/train/TestsPage';

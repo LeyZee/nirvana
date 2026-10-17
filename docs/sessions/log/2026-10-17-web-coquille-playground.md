@@ -1,4 +1,4 @@
-# 2026-10-17 — Coquille du dashboard et écran Playground — in_progress
+# 2026-10-17 — Coquille du dashboard et écran Playground — done
 
 Fait : coquille de `apps/web` après la connexion (barre Dashboard, Créatrices, Entraîner, Suivi, Réglages ; logo de `brand/` ; barre d'onglets en bas sur téléphone ; menu du compte), routes TanStack Router, composants de mise en page partagés (`apps/web/src/shell/layout.tsx`) ; écran Entraîner > Playground branché sur le moteur P3-05 par un client HTTP (`/v1/playground`, P3-06) avec repli en mode démo tant que les routes ne sont pas en ligne : taux sans retouche, mise en situation (fan, notes, dépensé, heure chez elle, média envoyé par elle), conversation avec Valider / Corriger / Rejeter (raccourcis A, E, R), leçon rangée en exemple, règle ou test, rejeu, comparaison, relais humain, panneau « Pourquoi » qui s'ouvre seul sur un blocage ou un risque.
 Pas fait : écrans Corrections et Tests (emplacements seulement) ; Dashboard laissé minimal (refonte au fil revue) ; bouton Copilote / Arrêt (emplacement réservé dans la barre, décision du 17/10) ; Réglages > Modèles IA laissé au fil Connecteurs.
