@@ -2,11 +2,10 @@ import type { MediaDescription } from '@nirvana/contracts';
 import type { Brief, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import {
-  assessTrap,
   checkVoiceOutput,
-  describeSituation,
+  composeTurn,
+  withExamples,
   isBlocked,
-  screenMedia,
   type GuardSettings,
   type GuardViolation,
   type RatedMoment,
@@ -78,22 +77,6 @@ export interface PlaygroundDeps {
   readonly voiceExamples?: readonly string[];
   readonly timeZone?: string;
   readonly now?: () => Date;
-}
-
-const NEUTRAL_BRIEF: Brief = {
-  intent: 'other',
-  sentiment: 'neutral',
-  factsProposed: [],
-  kycMissing: [],
-  risks: [],
-  action: 'reply',
-  replyBrief: 'Lui répondre dans la continuité de la conversation.',
-  toneHints: [],
-};
-
-export function withExamples(sheet: string, examples: readonly string[]): string {
-  if (examples.length === 0) return sheet;
-  return `${sheet}\n\nExemples de ses messages, corrigés par l'équipe :\n${examples.map((e) => `- ${e}`).join('\n')}`;
 }
 
 /** Why nothing was written, for the trace: the daily cap, or each model that failed. */
@@ -196,66 +179,36 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         fanNotes: fanNotes.join('\n'),
         situation,
       };
-      const screening = screenMedia(media);
-      if (screening.mustHandoff) {
-        const turn: PlaygroundTurn = {
-          handoff: screening.flags,
-          bubbles: [],
-          violations: [],
-          isBlocked: true,
-          costUsd: 0,
-          latencyMs: 0,
-          isFallback: false,
-        };
-        lastExchange = { fanMessage: text, turn, moment };
-        return turn;
-      }
-      const input = {
-        creatorName: deps.creatorName,
-        personaSheet,
-        fanNotes: moment.fanNotes,
-        situation: describeSituation(situation),
-        history,
-      };
-      const brain = await deps.gateway.brain(input);
-      const brief = brain.ok ? brain.value.output : undefined;
-      if (brief) {
-        for (const fact of brief.factsProposed)
-          fanNotes.push(`${fact.category} / ${fact.key} : ${fact.value} (${fact.kind})`);
-      }
-      // A trap overrides whatever the brain suggested: she does not play along (agent/domain/traps.ts).
-      const trap = assessTrap({ fanText: text, media, ...(brief && { brain: brief }) });
-      const voiceBrief: Brief =
-        trap.replyBrief === undefined
-          ? (brief ?? NEUTRAL_BRIEF)
-          : {
-              ...(brief ?? NEUTRAL_BRIEF),
-              action: 'reply',
-              replyBrief: trap.replyBrief,
-              toneHints: [...(trap.toneHints ?? [])],
-            };
-      const voiceInput: VoiceInput = { ...input, history: [...history], brief: voiceBrief };
-      const voice = await deps.gateway.voice(voiceInput);
-      const bubbles = voice.ok ? voice.value.output.bubbles : [];
-      const violations = checkVoiceOutput(bubbles, deps.guardSettings);
-      const blocked = isBlocked(violations) || !voice.ok;
-      if (!blocked) history.push({ from: 'creator', text: bubbles.join('\n') });
+      const composed = await composeTurn(
+        deps.gateway,
+        { creatorName: deps.creatorName, personaSheet, guardSettings: deps.guardSettings },
+        { history: [...history], fanText: text, media, fanNotes: moment.fanNotes, situation },
+      );
+      // In-memory fan notes until the fans module stores facts (P3-02).
+      for (const fact of composed.brief?.factsProposed ?? [])
+        fanNotes.push(`${fact.category} / ${fact.key} : ${fact.value} (${fact.kind})`);
+      if (!composed.isBlocked) history.push({ from: 'creator', text: composed.bubbles.join('\n') });
 
       const turn: PlaygroundTurn = {
-        ...(trap.isTrap && { trap }),
-        ...(brief && { brief }),
-        ...(!brain.ok && { briefFailure: failure(brain.error) }),
-        bubbles,
-        ...(!voice.ok && { voiceFailure: failure(voice.error) }),
-        violations,
-        isBlocked: blocked,
-        costUsd:
-          (brain.ok ? (brain.value.meta.costUsd ?? 0) : 0) + (voice.ok ? (voice.value.meta.costUsd ?? 0) : 0),
-        latencyMs: (brain.ok ? brain.value.meta.latencyMs : 0) + (voice.ok ? voice.value.meta.latencyMs : 0),
-        ...(voice.ok && { model: voice.value.meta.model }),
-        isFallback: voice.ok && voice.value.meta.isFallback,
+        ...(composed.handoff !== undefined && { handoff: composed.handoff }),
+        ...(composed.trap !== undefined && { trap: composed.trap }),
+        ...(composed.brief !== undefined && { brief: composed.brief }),
+        ...(composed.briefFailure !== undefined && { briefFailure: failure(composed.briefFailure) }),
+        bubbles: composed.bubbles,
+        ...(composed.voiceFailure !== undefined && { voiceFailure: failure(composed.voiceFailure) }),
+        violations: composed.violations,
+        isBlocked: composed.isBlocked,
+        costUsd: composed.costUsd,
+        latencyMs: composed.latencyMs,
+        ...(composed.model !== undefined && { model: composed.model }),
+        isFallback: composed.isFallback,
       };
-      lastExchange = { fanMessage: text, turn, moment: { ...moment, brief: voiceBrief }, voiceInput };
+      lastExchange = {
+        fanMessage: text,
+        turn,
+        moment: composed.voiceBrief === undefined ? moment : { ...moment, brief: composed.voiceBrief },
+        ...(composed.voiceInput !== undefined && { voiceInput: composed.voiceInput }),
+      };
       return turn;
     },
   };

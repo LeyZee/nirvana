@@ -5,7 +5,7 @@ import type { Brief, ConversationInput, LlmGateway, VoiceInput, VoiceOutput } fr
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_GUARD_SETTINGS } from '../../../agent/index';
-import { readPersonaFile } from '../persona-file';
+import { readPersonaFile } from '../../../agent/index';
 import { createPlaygroundSession } from '../session';
 
 const BRIEF: Brief = {

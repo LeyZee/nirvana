@@ -21,6 +21,7 @@ import {
   voiceExamples,
   type CalibrationRecord,
   type CalibrationStore,
+  type PersonaForModels,
 } from '../../agent/index';
 import {
   AnswerInProgress,
@@ -38,7 +39,6 @@ import { FAN_PRESETS, findPreset } from '../domain/fan-presets';
 import { guardLabel, trapLabel } from '../domain/labels';
 import { completeMedia } from '../domain/media';
 
-import type { PlaygroundPersona } from './persona-file';
 import { createPlaygroundSession, type PlaygroundTurn } from './session';
 
 const HOUR_MS = 3_600_000;
@@ -47,7 +47,7 @@ export interface EngineDeps {
   readonly gateway: LlmGateway;
   /** The same gateway with another voice model, for a comparison; undefined for an unknown model. */
   readonly gatewayForVoice: (voiceModel: string) => LlmGateway | undefined;
-  readonly persona: PlaygroundPersona;
+  readonly persona: PersonaForModels;
   readonly store: CalibrationStore;
   /** Every rating so far, shared by all the trainers: the rate measures the bot, not the person. */
   readonly records: CalibrationRecord[];

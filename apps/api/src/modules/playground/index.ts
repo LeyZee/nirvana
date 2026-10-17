@@ -6,19 +6,24 @@ import { join } from 'node:path';
 import { DEFAULT_LLM_CONFIG, loadPrompt, type LlmGateway } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
-import { createJsonlCalibrationStore, type CalibrationRecord, type CalibrationStore } from '../agent/index';
+import {
+  createJsonlCalibrationStore,
+  readPersonaFile,
+  type CalibrationRecord,
+  type CalibrationStore,
+  type PersonaForModels,
+} from '../agent/index';
 
 import { createPlaygroundService } from './application/playground-service';
 import { createPlaygroundEngine } from './infra/engine';
 import { createPlaygroundGateway, createVoiceVariant, type PlaygroundGatewayDeps } from './infra/gateways';
-import { readPersonaFile, type PlaygroundPersona } from './infra/persona-file';
 import { createPlaygroundRoutes, type PlaygroundRoutesOptions } from './infra/routes';
 
 export { FAN_PRESETS, findPreset } from './domain/fan-presets';
 export { ratingRecord } from './infra/engine';
 export { createPlaygroundGateway, createVoiceVariant } from './infra/gateways';
-export { readPersonaFile } from './infra/persona-file';
-export { createPlaygroundSession, withExamples, type PlaygroundTurn } from './infra/session';
+export { readPersonaFile, withExamples } from '../agent/index';
+export { createPlaygroundSession, type PlaygroundTurn } from './infra/session';
 
 export interface PlaygroundModule {
   readonly name: 'playground';
@@ -27,7 +32,7 @@ export interface PlaygroundModule {
 }
 
 export interface PlaygroundDeps extends PlaygroundGatewayDeps {
-  readonly persona: PlaygroundPersona;
+  readonly persona: PersonaForModels;
   readonly store: CalibrationStore;
   /** The ratings already kept: the rate starts from them and the corrections come back as voice examples. */
   readonly records: CalibrationRecord[];
