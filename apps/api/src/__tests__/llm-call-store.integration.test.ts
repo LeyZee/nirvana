@@ -57,4 +57,11 @@ describe('llm_calls as the gateway journal (LlmCallStore)', () => {
     const total = since.reduce((sum, record) => sum + (record.costUsd ?? 0), 0);
     expect(total).toBeCloseTo(0.000_834, 9);
   });
+
+  it('gives each call a UUID v7, like every other row (ADR 0011)', async () => {
+    await store.insert(call());
+    const rows = await test.admin.db.select({ id: schema.llmCalls.id }).from(schema.llmCalls);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.id[14]).toBe('7');
+  });
 });
