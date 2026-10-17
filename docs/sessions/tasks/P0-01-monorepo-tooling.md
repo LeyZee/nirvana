@@ -1,6 +1,6 @@
 # P0-01 Outillage du monorepo
 
-Statut : todo
+Statut : in_progress
 Phase : 0
 Dépend de : —
 Branche : task/p0-01-monorepo-tooling
