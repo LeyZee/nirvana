@@ -12,6 +12,8 @@ export interface ProviderProfile {
   readonly withoutIt: string;
   /** Shown when the provider refuses a key that used to work. */
   readonly revoked: string;
+  /** What happens while the key is refused, after the reason (« L’agent ne peut plus rien écrire. »). */
+  readonly whileRefused: string;
   /** Keys start with this; used to spot a key pasted in the wrong place. */
   readonly keyPrefix: string | null;
   /** Without it the agent cannot write at all. */
@@ -25,7 +27,8 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     vendor: 'xAI',
     role: 'Écrit les messages et décide',
     withoutIt: 'Sans lui, l’agent ne peut rien écrire',
-    revoked: 'xAI refuse la clé. L’agent est passé en copilote.',
+    revoked: 'xAI refuse la clé. L’agent ne peut plus rien écrire.',
+    whileRefused: 'L’agent ne peut plus rien écrire.',
     keyPrefix: 'xai-',
     isRequired: true,
   },
@@ -36,6 +39,7 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     role: 'Regarde les photos et vidéos',
     withoutIt: 'Sans lui, Grok regarde les images, plus lentement',
     revoked: 'Google refuse la clé. Grok regarde les médias en attendant.',
+    whileRefused: 'Grok regarde les médias en attendant.',
     keyPrefix: 'AIza',
     isRequired: false,
   },
@@ -46,6 +50,7 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     role: 'Parle avec la voix de Messa',
     withoutIt: 'Optionnel. Sans lui, pas de vocaux',
     revoked: 'ElevenLabs refuse la clé. Pas de vocaux pour l’instant.',
+    whileRefused: 'Pas de vocaux pour l’instant.',
     keyPrefix: 'sk_',
     isRequired: false,
   },
@@ -56,6 +61,7 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     role: 'Prend le relais si Grok ne répond plus',
     withoutIt: 'Optionnel. Sans lui, pas de repli pour l’écriture',
     revoked: 'Mistral refuse la clé. Plus de repli pour l’écriture.',
+    whileRefused: 'Plus de repli pour l’écriture.',
     keyPrefix: null,
     isRequired: false,
   },
@@ -66,6 +72,7 @@ export const PROVIDER_PROFILES: readonly ProviderProfile[] = [
     role: 'Second repli pour l’écriture',
     withoutIt: 'Optionnel. Second repli pour l’écriture',
     revoked: 'Venice refuse la clé. Second repli indisponible.',
+    whileRefused: 'Second repli indisponible.',
     keyPrefix: null,
     isRequired: false,
   },

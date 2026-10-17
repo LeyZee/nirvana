@@ -110,6 +110,49 @@ describe('after the connection', () => {
   });
 });
 
+describe('keys kept in memory (development without CREDENTIALS_ENCRYPTION_KEYS)', () => {
+  it('says on the line that a pasted key is lost at restart', async () => {
+    const { deps } = setup({ current: works });
+    const result = await connectProvider({ ...deps, keepsKeysInMemory: true }, 'xai', OLD_KEY);
+    expect(result).toMatchObject({
+      ok: true,
+      value: { message: 'Grok 4.7 écrit et décide · gardée en mémoire jusqu’au redémarrage' },
+    });
+  });
+});
+
+describe('picking another voice', () => {
+  it('rewrites the line at once with the new voice', async () => {
+    const voices = [
+      { id: 'v1', name: 'Démo' },
+      { id: 'v2', name: 'Autre démo' },
+    ];
+    const { deps } = setup({ current: works });
+    const eleven: ConnectionsDeps = {
+      ...deps,
+      verifiers: [
+        {
+          provider: 'elevenlabs',
+          verify: () =>
+            Promise.resolve({
+              ...works,
+              summary: 'Voix de Démo · 920 vocaux ce mois',
+              settings: { voice: voices[0] },
+              voices,
+              charactersLeft: 92_000,
+            }),
+        },
+      ],
+    };
+    await connectProvider(eleven, 'elevenlabs', 'sk_FAKEFAKEFAKEFAKEFAKEFAKE0000');
+    const status = await updateProviderSettings(eleven, 'elevenlabs', {
+      voice: { id: 'v2', name: 'Autre démo' },
+    });
+    expect(status.message).toBe('Voix de Autre démo · 920 vocaux ce mois');
+    expect(status.facts).toContainEqual({ label: 'Voix', value: 'Autre démo' });
+  });
+});
+
 describe('a refusal reported for a key replaced since (recette, bug 2)', () => {
   /**
    * xAI refuses the old (leaked, revoked) key and accepts the new one; it counts the checks. The clock and the

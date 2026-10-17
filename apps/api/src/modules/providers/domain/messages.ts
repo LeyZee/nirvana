@@ -1,4 +1,4 @@
-import type { AiProvider, ProviderErrorKind } from '@nirvana/contracts';
+import type { AiProvider, ProviderErrorKind, ProviderFact, ProviderVoice } from '@nirvana/contracts';
 
 import { profileOf } from './catalog';
 
@@ -63,10 +63,51 @@ export function describeRefusal(
 /** About 100 characters per voice note (vocaux/recherche-et-conception.md). */
 const AVERAGE_VOICE_NOTE_CHARACTERS = 100;
 
-export function voiceNotesLeft(charactersLeft: number): number {
+function voiceNotesLeft(charactersLeft: number): number {
   return Math.max(0, Math.floor(charactersLeft / AVERAGE_VOICE_NOTE_CHARACTERS));
 }
 
 export function describeLowCredit(charactersLeft: number): string {
   return `Plus que ${voiceNotesLeft(charactersLeft).toLocaleString('fr-FR')} vocaux ce mois. Recharge avant d’en manquer.`;
+}
+
+/**
+ * The Services line of a key that stopped working, by what the provider said: a refused key, an empty account and
+ * a missing access are not fixed the same way. `isUnreadable` is a key Nirvana itself can no longer decrypt.
+ */
+export function describeRefusedLine(
+  provider: AiProvider,
+  kind: ProviderErrorKind | null,
+  isUnreadable: boolean,
+): string {
+  const profile = profileOf(provider);
+  if (isUnreadable)
+    return `La clé ${profile.service} enregistrée ne peut plus être déchiffrée. Colle-la à nouveau. ${profile.whileRefused}`;
+  if (kind === null || kind === 'unauthorized') return profile.revoked;
+  if (kind === 'no_credit') return `Le compte ${profile.vendor} n’a plus de crédit. ${profile.whileRefused}`;
+  if (kind === 'missing_permission')
+    return `${profile.vendor} refuse les appels de l’agent (accès ou plafond de dépenses). ${profile.whileRefused}`;
+  return `${describeRefusal(provider, kind)} ${profile.whileRefused}`;
+}
+
+/** The ElevenLabs line and facts, after a check or when another voice is picked. */
+export function describeVoiceAccount(
+  voice: ProviderVoice | undefined,
+  charactersLeft: number,
+): { readonly summary: string; readonly facts: readonly ProviderFact[] } {
+  const notes = voiceNotesLeft(charactersLeft).toLocaleString('fr-FR');
+  return {
+    summary:
+      voice === undefined
+        ? `${notes} vocaux ce mois · aucune voix choisie`
+        : `Voix de ${voice.name} · ${notes} vocaux ce mois`,
+    facts: [
+      { label: 'Ce mois', value: `${notes} vocaux possibles` },
+      {
+        label: 'Voix',
+        value:
+          voice?.name ?? 'Aucune voix clonée trouvée. Crée la voix de Messa dans ElevenLabs, puis reviens.',
+      },
+    ],
+  };
 }

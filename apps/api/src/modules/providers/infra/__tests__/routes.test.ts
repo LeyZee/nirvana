@@ -26,7 +26,13 @@ const freshOnly: preHandlerAsyncHookHandler = async (request, reply) => {
     await reply.code(403).send({ error: { code: 'reauthentication_forbidden' } });
 };
 
-async function server() {
+/** Every line the server logs, for the tests that check no key ever reaches them. */
+function capturedLogs() {
+  const lines: string[] = [];
+  return { lines, destination: { write: (line: string) => void lines.push(line) } };
+}
+
+async function server(logs = capturedLogs()) {
   const providers = createProvidersModule({
     store: createMemoryCredentialStore(),
     fetch: fakeXai,
@@ -35,13 +41,13 @@ async function server() {
   const config = testConfig();
   const app = await buildServer({
     config,
-    logger: createLogger(config),
+    logger: createLogger({ LOG_LEVEL: 'trace' }, logs.destination),
     routes: [providers.routes({ guard: ownerOnly, recentLogin: freshOnly })],
     readiness: () =>
       Promise.resolve({ isReady: true, checks: { database: true, migrations: true, worker: true } }),
   });
   const headers = { 'x-test-role': 'owner', origin: config.WEB_ORIGIN };
-  return { app, headers, providers };
+  return { app, headers, providers, logs: logs.lines };
 }
 
 describe('/v1/settings/providers', () => {
@@ -130,5 +136,39 @@ describe('/v1/settings/providers', () => {
     const response = await app.inject({ method: 'DELETE', url: '/v1/settings/providers/xai', headers });
     expect(response.json()).toMatchObject({ provider: 'xai', state: 'not_connected' });
     expect(providers.apiKeySource('xai')).toBeUndefined();
+  });
+
+  it('never writes a key in the logs, accepted, refused or rejected by validation', async () => {
+    const { app, headers, logs } = await server();
+    const wrong = 'xai-WRONGWRONGWRONGWRONGWRONG00';
+    const put = (url: string, key: string) => app.inject({ method: 'PUT', url, headers, payload: { key } });
+    await put('/v1/settings/providers/xai/key', XAI_KEY);
+    await put('/v1/settings/providers/xai/key', wrong);
+    await put('/v1/settings/providers/openai/key', XAI_KEY);
+    await app.inject({
+      method: 'PUT',
+      url: '/v1/settings/providers/xai/key',
+      headers,
+      payload: { key: XAI_KEY, extra: XAI_KEY },
+    });
+    expect(logs.length).toBeGreaterThan(0);
+    const written = logs.join('\n');
+    expect(written).not.toContain(XAI_KEY);
+    expect(written).not.toContain(wrong);
+  });
+
+  it('slows down repeated pastes and checks, which each call the provider', async () => {
+    const { app, headers } = await server();
+    const codes: number[] = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/settings/providers/xai/verify',
+        headers,
+      });
+      codes.push(response.statusCode);
+    }
+    expect(codes.slice(0, 10).every((code) => code === 200)).toBe(true);
+    expect(codes[10]).toBe(429);
   });
 });

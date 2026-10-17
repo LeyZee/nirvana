@@ -9,7 +9,7 @@ import type {
 } from '@nirvana/contracts';
 
 import { profileOf } from './catalog';
-import { describeLowCredit } from './messages';
+import { describeLowCredit, describeRefusedLine } from './messages';
 import type { VerificationOutcome, VerifiedKey } from './verification';
 
 /** A saved key with what its last verification found. The key itself never leaves the module. */
@@ -103,7 +103,7 @@ export function toStatus(
   }
   const message =
     stored.state === 'needs_reconnect'
-      ? profile.revoked
+      ? describeRefusedLine(provider, stored.lastErrorKind, stored.key === null)
       : stored.state === 'low_credit' && stored.charactersLeft !== null
         ? describeLowCredit(stored.charactersLeft)
         : stored.summary;

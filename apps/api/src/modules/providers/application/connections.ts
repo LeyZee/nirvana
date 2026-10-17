@@ -20,8 +20,8 @@ import {
   type StoredCredential,
 } from '../domain/credential';
 import { checkKeyShape } from '../domain/key-shape';
-import { describeRefusal } from '../domain/messages';
-import type { Clock, CredentialStore } from '../domain/ports';
+import { describeRefusal, describeVoiceAccount } from '../domain/messages';
+import type { Clock, CredentialStore, KeyActor } from '../domain/ports';
 import type { ProviderVerifier } from '../domain/verification';
 
 import type { KeyCache } from './key-cache';
@@ -61,6 +61,8 @@ export interface ConnectionsDeps {
   readonly onChange?: (provider: AiProvider) => void | Promise<void>;
   /** Outside production only: whether the environment holds a key for this provider. */
   readonly hasEnvironmentKey?: (provider: AiProvider) => boolean;
+  /** Development without CREDENTIALS_ENCRYPTION_KEYS: a pasted key lives until the server restarts, and says so. */
+  readonly keepsKeysInMemory?: boolean;
 }
 
 /** A refusal as the sheet shows it, under the key field. */
@@ -84,6 +86,7 @@ export async function connectProvider(
   deps: ConnectionsDeps,
   provider: AiProvider,
   rawKey: string,
+  by?: KeyActor,
 ): Promise<Result<ProviderStatus, ConnectRefusal>> {
   const verifier = verifierFor(deps, provider);
   const shape = checkKeyShape(provider, rawKey);
@@ -103,9 +106,9 @@ export async function connectProvider(
     return err({ kind: outcome.kind, message: describeRefusal(provider, outcome.kind, details) });
   }
   const credential = credentialFromVerification(provider, shape.value, outcome, deps.clock.now());
-  await deps.store.save(credential);
+  await deps.store.save(credential, by);
   await changed(deps, provider);
-  return ok(toStatus(provider, credential, 'dashboard'));
+  return ok(savedStatus(deps, provider, credential));
 }
 
 /**
@@ -115,16 +118,16 @@ export async function connectProvider(
 export async function reverifyProvider(deps: ConnectionsDeps, provider: AiProvider): Promise<ProviderStatus> {
   const stored = await deps.store.find(provider);
   if (stored === null) return statusOf(deps, provider, null);
-  if (stored.key === null) return toStatus(provider, stored, 'dashboard');
+  if (stored.key === null) return savedStatus(deps, provider, stored);
   const outcome = await verifierFor(deps, provider).verify(stored.key, stored.settings);
   const next = applyReverification(stored, outcome, deps.clock.now());
-  if (next === stored) return toStatus(provider, stored, 'dashboard');
+  if (next === stored) return savedStatus(deps, provider, stored);
   if (await deps.store.update(next)) {
     await changed(deps, provider);
-    return toStatus(provider, next, 'dashboard');
+    return savedStatus(deps, provider, next);
   }
   const current = await deps.store.find(provider);
-  return current === null ? statusOf(deps, provider, null) : toStatus(provider, current, 'dashboard');
+  return current === null ? statusOf(deps, provider, null) : savedStatus(deps, provider, current);
 }
 
 export async function reverifyAll(deps: ConnectionsDeps): Promise<readonly ProviderStatus[]> {
@@ -210,8 +213,9 @@ export function createRefusalReporter(deps: ConnectionsDeps, keys: KeysInUse): R
 export async function disconnectProvider(
   deps: ConnectionsDeps,
   provider: AiProvider,
+  by?: KeyActor,
 ): Promise<ProviderStatus> {
-  await deps.store.remove(provider);
+  await deps.store.remove(provider, by);
   await changed(deps, provider);
   return statusOf(deps, provider, null);
 }
@@ -227,13 +231,26 @@ export async function updateProviderSettings(
     if (stored === null) throw new ProviderNotConnected(provider);
     const voice = settings.voice;
     if (voice !== undefined && !stored.voices.some((v) => v.id === voice.id)) throw new VoiceNotOnAccount();
-    const next = { ...stored, settings: ProviderSettingsSchema.parse({ ...stored.settings, ...settings }) };
+    const merged = ProviderSettingsSchema.parse({ ...stored.settings, ...settings });
+    // The line names the voice: picking another one rewrites it at once, not at the next check.
+    const voiceLine =
+      voice === undefined || stored.charactersLeft === null
+        ? {}
+        : describeVoiceAccount(voice, stored.charactersLeft);
+    const next = { ...stored, ...voiceLine, settings: merged };
     if (await deps.store.update(next)) {
       await changed(deps, provider);
-      return toStatus(provider, next, 'dashboard');
+      return savedStatus(deps, provider, next);
     }
   }
   throw new ProviderBusy(provider);
+}
+
+/** The line of a saved key. */
+function savedStatus(deps: ConnectionsDeps, provider: AiProvider, stored: StoredCredential): ProviderStatus {
+  const status = toStatus(provider, stored, 'dashboard');
+  if (deps.keepsKeysInMemory !== true) return status;
+  return { ...status, message: `${status.message} · gardée en mémoire jusqu’au redémarrage` };
 }
 
 function statusOf(deps: ConnectionsDeps, provider: AiProvider, stored: null): ProviderStatus {
@@ -246,6 +263,6 @@ export async function listProviderStatuses(deps: ConnectionsDeps): Promise<reado
   const saved = await deps.store.list();
   return DASHBOARD_PROVIDERS.map((provider) => {
     const stored = saved.find((c) => c.provider === provider) ?? null;
-    return stored === null ? statusOf(deps, provider, null) : toStatus(provider, stored, 'dashboard');
+    return stored === null ? statusOf(deps, provider, null) : savedStatus(deps, provider, stored);
   });
 }

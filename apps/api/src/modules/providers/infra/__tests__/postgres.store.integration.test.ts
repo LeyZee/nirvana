@@ -5,7 +5,7 @@ import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import type { NewCredential } from '../../domain/credential';
-import { createPostgresCredentialStore, resealProviderCredentials } from '../postgres.store';
+import { createPostgresCredentialStore, keyFingerprint, resealProviderCredentials } from '../postgres.store';
 
 const FAKE_KEY = 'sk_FAKEFAKEFAKEFAKEFAKEFAKE0000';
 
@@ -57,6 +57,45 @@ describe('Postgres credential store (ADR 0016)', () => {
     expect(await store.find('elevenlabs')).toBeNull();
   });
 
+  it('leaves an audit line for each connection, replacement and removal, with a fingerprint and never the key', async () => {
+    const store = createPostgresCredentialStore({ adminDb: test.admin.db, keys: newKey('v1') });
+    const owner = { userId: 'usr_owner', ip: '203.0.113.7' };
+    const replacement = 'sk_FAKEREPLACEMENTFAKEKEY00000';
+    await store.save(elevenlabs, owner);
+    await store.save({ ...elevenlabs, key: replacement }, owner);
+    await store.remove('elevenlabs', owner);
+    await store.remove('elevenlabs', owner);
+
+    const lines = await withAdmin(test.admin.db, (tx) =>
+      tx
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.entity, 'provider_credential'))
+        .orderBy(schema.auditLog.createdAt),
+    );
+    const mine = lines.filter((line) => line.userId === owner.userId);
+    expect(mine.map((line) => [line.action, line.userId, line.ip, line.details])).toEqual([
+      [
+        'provider_key.connected',
+        'usr_owner',
+        '203.0.113.7',
+        { provider: 'elevenlabs', fingerprint: keyFingerprint(FAKE_KEY) },
+      ],
+      [
+        'provider_key.replaced',
+        'usr_owner',
+        '203.0.113.7',
+        { provider: 'elevenlabs', fingerprint: keyFingerprint(replacement) },
+      ],
+      // The second removal found nothing to remove: no line.
+      ['provider_key.disconnected', 'usr_owner', '203.0.113.7', { provider: 'elevenlabs' }],
+    ]);
+    expect(keyFingerprint(FAKE_KEY)).toMatch(/^[0-9a-f]{8}$/);
+    const written = JSON.stringify(lines);
+    expect(written).not.toContain(FAKE_KEY);
+    expect(written).not.toContain(replacement);
+  });
+
   it('writes a status only over the version it read, never the key', async () => {
     const store = createPostgresCredentialStore({ adminDb: test.admin.db, keys: newKey('v1') });
     await store.save(elevenlabs);
@@ -78,8 +117,16 @@ describe('Postgres credential store (ADR 0016)', () => {
   it('reads a key it can no longer open as one to replace, and leaves its seal intact', async () => {
     const original = newKey('v1');
     await createPostgresCredentialStore({ adminDb: test.admin.db, keys: original }).save(elevenlabs);
-    const rotatedTooEarly = createPostgresCredentialStore({ adminDb: test.admin.db, keys: newKey('v2') });
+    const logged: string[] = [];
+    const rotatedTooEarly = createPostgresCredentialStore({
+      adminDb: test.admin.db,
+      keys: newKey('v2'),
+      onUnreadable: (provider) => logged.push(provider),
+    });
     const unreadable = await rotatedTooEarly.find('elevenlabs');
+    await rotatedTooEarly.list();
+    // Said once for the log, however often the row is read.
+    expect(logged).toEqual(['elevenlabs']);
     expect(unreadable).toMatchObject({ key: null, state: 'needs_reconnect', lastErrorKind: 'unauthorized' });
     if (unreadable === null) throw new Error('saved row not found');
 

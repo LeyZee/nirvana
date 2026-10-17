@@ -9,7 +9,7 @@ import {
   toStatus,
 } from '../credential';
 import { checkKeyShape, detectProvider } from '../key-shape';
-import { describeLowCredit, describeRefusal } from '../messages';
+import { describeLowCredit, describeRefusal, describeVoiceAccount } from '../messages';
 import { nextAction } from '../next-action';
 import type { VerifiedKey } from '../verification';
 
@@ -48,6 +48,15 @@ describe('key shape', () => {
       error: { kind: 'wrong_provider', belongsTo: 'google' },
     });
     expect(checkKeyShape('google', `  ${FAKE_GOOGLE}\n`)).toEqual({ ok: true, value: FAKE_GOOGLE });
+    // Copied across a line break, or with a stray space inside.
+    expect(checkKeyShape('xai', `${FAKE_XAI.slice(0, 12)}\n${FAKE_XAI.slice(12)}`)).toEqual({
+      ok: true,
+      value: FAKE_XAI,
+    });
+    expect(checkKeyShape('xai', `${FAKE_XAI.slice(0, 12)} ${FAKE_XAI.slice(12)}`)).toEqual({
+      ok: true,
+      value: FAKE_XAI,
+    });
   });
 });
 
@@ -98,7 +107,37 @@ describe('credential states', () => {
     );
     const refused = markRefusedInProduction(saved, 'unauthorized');
     expect(toStatus('xai', refused, 'dashboard').message).toBe(
-      'xAI refuse la clé. L’agent est passé en copilote.',
+      'xAI refuse la clé. L’agent ne peut plus rien écrire.',
+    );
+  });
+
+  it('says why the key stopped working, and what the agent does meanwhile', () => {
+    const line = (kind: Parameters<typeof markRefusedInProduction>[1]) =>
+      toStatus('xai', markRefusedInProduction(saved, kind), 'dashboard').message;
+    expect(line('no_credit')).toBe('Le compte xAI n’a plus de crédit. L’agent ne peut plus rien écrire.');
+    expect(line('missing_permission')).toBe(
+      'xAI refuse les appels de l’agent (accès ou plafond de dépenses). L’agent ne peut plus rien écrire.',
+    );
+    expect(
+      toStatus(
+        'google',
+        markRefusedInProduction({ ...saved, provider: 'google' }, 'api_not_enabled'),
+        'dashboard',
+      ).message,
+    ).toBe(
+      'Ce projet Google n’a pas accès à l’API Gemini. Recrée la clé depuis AI Studio. Grok regarde les médias en attendant.',
+    );
+  });
+
+  it('tells a key Nirvana can no longer decrypt from a key the provider refuses', () => {
+    const unreadable = {
+      ...saved,
+      key: null,
+      state: 'needs_reconnect' as const,
+      lastErrorKind: 'unauthorized' as const,
+    };
+    expect(toStatus('xai', unreadable, 'dashboard').message).toBe(
+      'La clé Grok enregistrée ne peut plus être déchiffrée. Colle-la à nouveau. L’agent ne peut plus rien écrire.',
     );
   });
 
@@ -107,7 +146,35 @@ describe('credential states', () => {
   });
 });
 
+describe('ElevenLabs line', () => {
+  it('names the voice and the voice notes left, or says none is picked', () => {
+    expect(describeVoiceAccount({ id: 'v1', name: 'Démo' }, 92_000).summary).toBe(
+      'Voix de Démo · 920 vocaux ce mois',
+    );
+    expect(describeVoiceAccount(undefined, 92_000).summary).toBe('920 vocaux ce mois · aucune voix choisie');
+  });
+});
+
 describe('next action', () => {
+  it('does not ask to connect a service whose key comes from the environment (development)', () => {
+    const fromEnvironment = { ...status('xai', 'not_connected'), source: 'environment' as const };
+    expect(
+      nextAction([fromEnvironment, status('google', 'connected'), status('elevenlabs', 'connected')]).kind,
+    ).toBe('all_set');
+  });
+
+  it('leads with the reason of the refusal', () => {
+    const refused = {
+      ...status('google', 'needs_reconnect'),
+      message: 'Le compte Google n’a plus de crédit.',
+    };
+    expect(nextAction([status('xai', 'connected'), refused])).toMatchObject({
+      kind: 'replace_key',
+      lead: 'Le compte Google n’a plus de crédit.',
+      detail: 'Remplace la clé, ou règle le souci chez Google puis « Vérifier maintenant ».',
+    });
+  });
+
   it('asks for Grok first, as it stops the agent', () => {
     const action = nextAction(DASHBOARD_PROVIDERS.map((p) => status(p, 'not_connected')));
     expect(action).toMatchObject({ kind: 'connect', provider: 'xai', lead: 'Connecte Grok' });
