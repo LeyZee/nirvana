@@ -13,7 +13,7 @@ Permettre à Charles de connecter, vérifier, remplacer et déconnecter les clé
 ## Le parcours (ce que Charles voit)
 
 **Panneau.** Réglages › Modèles IA, section « Services », sous les cartes des rôles.
-- En tête, une seule ligne « prochaine action » : pastille, phrase, un seul bouton néon. Par ordre de priorité : une clé refusée (« xAI refuse la clé. L'agent est passé en copilote. », bouton « Remplacer la clé ») ; des crédits bas (« Remplacer » devient « Recharger ↗ ») ; le prochain service non connecté (« Connecte Grok ») ; sinon « Tout est connecté ». Dessous, une barre fine en trois segments : services connectés sur trois.
+- En tête, une seule ligne « prochaine action » : pastille, phrase, un seul bouton néon. Par ordre de priorité : une clé refusée (« xAI refuse la clé. L'agent ne peut plus rien écrire. », bouton « Remplacer la clé ») ; des crédits bas (« Remplacer » devient « Recharger ↗ ») ; le prochain service non connecté (« Connecte Grok ») ; sinon « Tout est connecté ». Dessous, une barre fine en trois segments : services connectés sur trois.
 - Trois lignes, dans cet ordre : Grok (xAI) « Écrit les messages et décide », Gemini (Google) « Regarde les photos et vidéos », ElevenLabs (Vocaux) « Parle avec la voix de Messa ». Chaque ligne a une pastille et une seule phrase : ce qu'on perd sans le service (« Sans lui, l'agent ne peut rien écrire ») ou ce qui marche (« Grok 4.7 écrit et décide · vérifié il y a 2 min »). Menu `⋯` : Vérifier maintenant, Remplacer la clé, Déconnecter.
 - Quatre états seulement : non connecté, connecté, crédits bas (ambre), à reconnecter (rouge, pastille qui pulse). Aucun code HTTP à l'écran.
 - Le mot « connecteur » n'apparaît pas (il désigne les plateformes, glossaire).
@@ -33,7 +33,7 @@ Permettre à Charles de connecter, vérifier, remplacer et déconnecter les clé
 
 Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournisseur au moment du code et notés dans la PR.
 
-**Déconnecter** se confirme dans la page (`nv-confirm`) : « Déconnecter Grok ? L'agent passera en copilote : il proposera, tu enverras. La clé est effacée de Nirvana. Chez xAI, elle reste valide tant que tu ne la supprimes pas. »
+**Déconnecter** se confirme dans la page (`nv-confirm`) : « Déconnecter Grok ? L'agent ne pourra plus rien écrire tant que Grok n'est pas reconnecté. La clé est effacée de Nirvana. Chez xAI, elle reste valide tant que tu ne la supprimes pas. »
 
 ## À faire
 1. **Contrats** (`packages/contracts`) : `ProviderId` (`xai`, `google`, `elevenlabs`, `mistral`, `venice`), `ProviderConnectionState` (`not_connected`, `connected`, `low_credit`, `needs_reconnect`), DTO de l'état d'un service (sans clé), corps des routes. Zod partout.
@@ -59,7 +59,7 @@ Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournis
 | Modèle Vision introuvable | « Gemini 3.8 Flash n'est pas visible avec cette clé. Modèles trouvés : … » (menu pour choisir) |
 | Permission manquante (ElevenLabs) | « La clé ne peut pas lire tes voix. Ajoute Voices en lecture à ses accès. » |
 | Fournisseur injoignable | « xAI ne répond pas. Ta clé n'est pas en cause ; réessaie dans une minute. » (rien n'est enregistré) |
-| Révoquée en production | Grok : « xAI refuse la clé. L'agent est passé en copilote. » ; Gemini : « Google refuse la clé. Grok regarde les médias en attendant. » ; ElevenLabs : « ElevenLabs refuse la clé. Pas de vocaux pour l'instant. » |
+| Révoquée en production | Grok : « xAI refuse la clé. L'agent ne peut plus rien écrire. » ; Gemini : « Google refuse la clé. Grok regarde les médias en attendant. » ; ElevenLabs : « ElevenLabs refuse la clé. Pas de vocaux pour l'instant. » |
 | Crédits bas | « Plus que 40 vocaux ce mois. Recharge avant d'en manquer. » |
 
 ## Critères d'acceptation
@@ -79,3 +79,4 @@ Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournis
 ## Notes de session
 
 2026-10-17 (V1, branche `claude/crm-connecteurs-ux-g38gh5`, menée en parallèle de la plomberie avec l'accord du coordinateur) : fait les points 1, 3, 4 (port `CredentialStore`, cache de clés et repli sur l'environnement ; adaptateur mémoire seulement), 6 et 7 côté domaine, plus la priorité de l'action suivante. Puis la table et sa migration (point 2), le magasin Postgres, les routes (point 5, testées derrière un garde factice), le module dans `composition-root.ts` (Postgres si `CREDENTIALS_ENCRYPTION_KEYS`, sinon mémoire hors production), `config.ts`, `.env.example`, `ai-engine.md`, `rotate-secrets.md` (point 10). Puis les routes montées derrière `requireRole('owner')` et la page (point 9), montée provisoirement dans `App.tsx` jusqu'à la navigation du shell. Reste : la ré-authentification au-delà de 10 minutes de session et les événements `provider_key.*` (point 5) ; brancher `apiKeySource` dans la passerelle et le rapport des refus (point 6) avec le fil agent ; SSE (point 8 ; le job de 15 minutes `providers.check_credentials` est fait) ; pas de commande de rechiffrement (la rotation passe par « Vérifier maintenant », `rotate-secrets.md`).
+2026-10-17 (recette, PR #58 puis la suivante) : corrigé ce que la recette a trouvé. Un 429 ne compte plus comme un refus. Un refus vu en production passe au rouge tout de suite quand la clé refusée est celle en service ; il est vérifié auprès du fournisseur quand il peut venir de la clé précédente (changée il y a moins de 5 minutes). `pnpm ops:reencrypt-credentials` rechiffre les clés (point 10). La ré-authentification (#41) et le branchement de la passerelle sont faits. `audit_log` reçoit une ligne à chaque connexion, remplacement et déconnexion (qui, adresse, empreinte de 8 caractères, jamais la clé). La ligne d'une clé refusée dit pourquoi (refus, crédit, accès, clé illisible). La page traite la session expirée, le 403 de rôle et le 429, n'est plus lue par les gestionnaires de mots de passe et retire les espaces d'une clé collée. Les routes de collage et de vérification sont limitées à 10 par minute. Reste : les événements `provider_key.*` (point 5), le SSE (point 8), l'e2e Playwright, le bandeau du Dashboard, et des tests de composants (pas de bibliothèque DOM dans `apps/web`).
