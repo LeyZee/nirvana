@@ -22,13 +22,16 @@ Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès q
    | Méthode | Drapeau | Inventaire |
    |---|---|---|
    | `getFanProfile?(fanRef)` | `fanProfile` | L5 |
-   | `getFanNote?(fanRef)` / `setFanNote?(fanRef, text, key)` | `fanNotes` | L7, E4 |
+   | `getFanNote?(fanRef)` | `fanNoteRead` | L7 |
+   | `setFanNote?(fanRef, text, key)` | `fanNoteWrite` | E4 |
    | `getCreatorNotes?(conversationRef)` | `creatorNotes` | L11 |
    | `getFanPpvStats?(fanRef)` | `ppvStats` | L12, L13 |
    | `listPlatformScripts?()` / `sendScriptStep?(conversationRef, scriptRef, stepIndex, key)` | `scripts` | L8, E3 |
    | `getScriptHistory?(fanRef)` | `scriptHistory` | L9 |
    | `listVaultMedia?(opts)` | `vault` | L10 |
    | `fetchMedia?(mediaRef)` | `mediaDownload` | L14, L15 |
+
+   `getFanNote` lit la note client **en direct** sur la plateforme, pour le volet fan du lecteur de Suivi (`GET /v1/conversations/:id/fan-panel`, décision de Charles du 17/10) et pour le contexte de l'agent. Son contenu n'est jamais stocké ni journalisé chez nous : ni en base, ni dans les logs, ni dans `llm_calls` hors du prompt de l'appel en cours. Lecture et écriture ont chacune leur drapeau : une plateforme peut permettre de lire la note sans permettre de l'écrire.
 
    `setCreatorNotes` (E4b) attend que la capture montre la portée des notes du modèle.
 
@@ -48,6 +51,8 @@ Aujourd'hui, rien n'empêche un compte enregistré d'écrire chez son fan dès q
 5. **Scripts déjà envoyés à un fan : la plateforme fait foi.** Reveal indique quand un script a déjà été envoyé ou utilisé avec un fan (Charles, 17/10). `getScriptHistory` lit cet indicateur, et c'est notre seule source : nous ne tenons pas d'historique parallèle qui pourrait diverger. La forme exacte de l'indicateur (par script ou par étape) sera arrêtée d'après la capture.
 
    Avant tout `sendScriptStep`, le cœur relit cet historique. Une étape déjà envoyée au fan ne repart jamais : la règle est dans le code, pas dans le prompt. Le média déjà vendu reste protégé par `media_sends`. Une plateforme qui n'aurait pas cet indicateur déclarerait `scriptHistory: false`, et l'appelant refuserait alors d'envoyer des scripts plutôt que de deviner.
+
+   Un échec de `getScriptHistory` (erreur, session expirée, réponse illisible) signifie qu'aucune étape n'est envoyée : on ne vend jamais à l'aveugle. Le doublon immédiat (rejeu d'un même envoi) n'est pas couvert par l'indicateur de Reveal, qui peut arriver en retard : il est couvert par la clé d'idempotence de `sendScriptStep`.
 
 ## Conséquences
 
