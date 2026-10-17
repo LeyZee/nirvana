@@ -101,7 +101,8 @@
     linear-gradient(#000 0 0) content-box exclude,
     linear-gradient(#000 0 0);
 }
-/* Inner light that follows the pointer (attachGlassLight writes --nv-light-x / --nv-light-y). */
+/* Inner light that follows the pointer (attachGlassLight writes --nv-light-x / --nv-light-y).
+   At rest a wide 200px sheen; under the pointer (`is-lit`) a 110px halo that fades in (Charles, 17/10). */
 .nv-glass::after {
   content: '';
   position: absolute;
@@ -110,10 +111,19 @@
   border-radius: inherit;
   pointer-events: none;
   background: radial-gradient(
-    200px circle at var(--nv-light-x, 24%) var(--nv-light-y, -30%),
+    var(--nv-light-r, 200px) circle at var(--nv-light-x, 24%) var(--nv-light-y, -30%),
     var(--nv-glass-sheen),
     transparent 70%
   );
+}
+.nv-glass.is-lit::after {
+  --nv-light-r: 110px;
+  animation: nv-lit-in 360ms var(--nv-ease-out);
+}
+@keyframes nv-lit-in {
+  from {
+    opacity: 0;
+  }
 }
 .nv-glass--thin {
   --_blur: var(--nv-blur-thin);
@@ -338,7 +348,10 @@
   left: 3px;
   width: calc((100% - 6px) / var(--nv-seg-count, 2));
   transform: translateX(calc(var(--nv-seg-index, 0) * 100%));
-  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
+  transition:
+    transform var(--nv-dur-slow) var(--nv-ease-spring),
+    background var(--nv-dur-base) var(--nv-ease-out),
+    box-shadow var(--nv-dur-base) var(--nv-ease-out);
 }
 .nv-seg__opt {
   appearance: none;
@@ -359,8 +372,30 @@
   transition: color var(--nv-dur-base) var(--nv-ease-out);
 }
 .nv-seg__opt[aria-checked='true'],
+.nv-seg__opt[aria-pressed='true'],
 .nv-seg__opt[data-state='on'] {
   color: var(--nv-ink);
+}
+.nv-seg__opt:hover:not(:disabled) {
+  color: var(--nv-ink);
+}
+/* An option that cannot be picked yet (Automatique under 80 %): visible, quiet, says why on hover. */
+.nv-seg__opt:disabled {
+  cursor: not-allowed;
+  color: var(--nv-ink-faint);
+}
+.nv-seg__opt > svg {
+  width: 13px;
+  height: 13px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+/* A choice that stops something (Arrêt): the thumb turns to danger when it sits on it. */
+.nv-seg[data-tone='danger'] .nv-seg__thumb {
+  background: color-mix(in srgb, var(--nv-danger) 26%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--nv-glass-edge),
+    0 0 22px -6px var(--nv-danger);
 }
 .nv-seg__opt:focus-visible {
   outline: 2px solid var(--nv-focus);
@@ -1562,6 +1597,70 @@
   line-height: var(--nv-text-caption-leading);
   color: var(--nv-ink-muted);
 }
+/* A tip that compares series: a period line, then one row per series (key, value right-aligned), then a
+   footer line under a hairline (yesterday at the same hour, the agent's share). */
+.nv-chart__tip--table {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 16px;
+  row-gap: 2px;
+  min-width: 170px;
+}
+.nv-chart__tip--table > .nv-chart__tip-l:first-child {
+  grid-column: 1 / -1;
+  margin-bottom: 3px;
+}
+.nv-chart__tip-k {
+  --_c: var(--nv-neon);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 500;
+  color: var(--nv-ink-muted);
+}
+.nv-chart__tip-k::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--_c);
+}
+.nv-chart__tip-n {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 650;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--nv-ink);
+}
+.nv-chart__tip-ft {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid var(--nv-hairline);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-faint);
+}
+/* The latest point of a live series: a dot that sends a slow pulse (the day is not over). */
+.nv-chart__end {
+  fill: var(--_c);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nv-chart-pulse 2.2s var(--nv-ease-out) infinite;
+}
+@keyframes nv-chart-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
 @keyframes nv-chart-fade {
   from {
     opacity: 0;
@@ -1570,6 +1669,684 @@
 @keyframes nv-chart-grow {
   from {
     transform: scaleY(0);
+  }
+}
+
+/* ───────────── Dashboard pieces ───────────── */
+
+/* Tones shared by the dot, the orb, a todo row and a tile: ok = success, warn = warning, bad = danger.
+   A tone never speaks alone: a word or an icon says the same thing next to it. */
+.nv-dot,
+.nv-orb,
+.nv-todo,
+.nv-tile {
+  --_c: var(--nv-ink-faint);
+}
+:is(.nv-dot, .nv-orb, .nv-todo, .nv-tile).nv-tone--ok {
+  --_c: var(--nv-success);
+}
+:is(.nv-dot, .nv-orb, .nv-todo, .nv-tile).nv-tone--warn {
+  --_c: var(--nv-warning);
+}
+:is(.nv-dot, .nv-orb, .nv-todo, .nv-tile).nv-tone--bad {
+  --_c: var(--nv-danger);
+}
+
+/* « Exemple »: shown as long as a screen runs on demo data. Dashed, quiet, impossible to miss. */
+.nv-sample {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--nv-radius-full);
+  border: 1px dashed var(--nv-hairline);
+  font: 500 var(--nv-text-caption) / 1 var(--nv-font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nv-ink-faint);
+  white-space: nowrap;
+}
+
+/* Small state dot. `--live` sends a ping outward: something is running right now. */
+.nv-dot {
+  position: relative;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--_c);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--_c) 70%, transparent);
+  transition:
+    background-color var(--nv-dur-base) var(--nv-ease-out),
+    box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-dot--live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--_c);
+  animation: nv-ping 2s var(--nv-ease-out) infinite;
+}
+@keyframes nv-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  80%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+/* The state orb that opens a screen: still when calm, a ring that breathes in amber, pulses fast in red. */
+.nv-orb {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--_c) 14%, transparent);
+  transition: background-color var(--nv-dur-slow) var(--nv-ease-out);
+}
+.nv-orb::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--_c);
+  box-shadow:
+    0 0 18px var(--_c),
+    0 0 4px var(--_c);
+  transition:
+    background-color 300ms var(--nv-ease-out),
+    box-shadow 300ms var(--nv-ease-out);
+}
+.nv-orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--_c);
+  opacity: 0;
+}
+.nv-orb.nv-tone--warn::after {
+  animation: nv-orb-ring 2.4s var(--nv-ease-out) infinite;
+}
+.nv-orb.nv-tone--bad::after {
+  animation: nv-orb-ring 1.3s var(--nv-ease-out) infinite;
+}
+@keyframes nv-orb-ring {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* Content that changes in place (a state sentence, a list re-rendered) comes in soft, never pops. */
+.nv-swap {
+  animation: nv-swap var(--nv-dur-slow) var(--nv-ease-out) both;
+  animation-delay: calc(var(--nv-i, 0) * 60ms);
+}
+@keyframes nv-swap {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+}
+
+/* ── Todo row (« À traiter »): the most serious first. A colour bar, the kind, one line of title; the why
+   unfolds on hover or focus. « Traité » slides the row out (`is-done`), the list closes the gap. */
+.nv-todos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nv-todo {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  max-height: 140px;
+  padding: 12px 14px 12px 12px;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring),
+    opacity var(--nv-dur-base) var(--nv-ease-out),
+    max-height 420ms var(--nv-ease-out),
+    padding 420ms var(--nv-ease-out),
+    margin 420ms var(--nv-ease-out);
+}
+.nv-todo:hover {
+  background: var(--nv-glass-fill-strong);
+  transform: translateX(4px);
+}
+.nv-todo:active {
+  transform: scale(0.985);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-todo:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+}
+.nv-todo__bar {
+  align-self: stretch;
+  border-radius: 4px;
+  background: var(--_c);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--_c) 60%, transparent);
+}
+.nv-todo__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nv-todo__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.nv-todo__kind {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--_c);
+}
+.nv-todo__title {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nv-todo__why {
+  max-height: 0;
+  opacity: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+  transition:
+    max-height 320ms var(--nv-ease-out),
+    opacity 240ms var(--nv-ease-out);
+}
+.nv-todo:hover .nv-todo__why,
+.nv-todo:focus-within .nv-todo__why {
+  max-height: 40px;
+  opacity: 1;
+}
+.nv-todo__side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nv-todo__time {
+  font: 500 var(--nv-text-caption) / var(--nv-text-caption-leading) var(--nv-font-mono);
+  color: var(--nv-ink-faint);
+}
+/* « Traité »: a round check that shows on hover, turns cyan under the pointer. */
+.nv-todo__done {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nv-radius-full);
+  background: transparent;
+  color: var(--nv-ink-faint);
+  opacity: 0;
+  transform: scale(0.8);
+  transition:
+    opacity var(--nv-dur-base) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring-bouncy),
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.nv-todo__done > svg {
+  width: 16px;
+  height: 16px;
+}
+.nv-todo:hover .nv-todo__done,
+.nv-todo:focus-within .nv-todo__done,
+.nv-todo__done:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+.nv-todo__done:hover {
+  background: color-mix(in srgb, var(--nv-success) 18%, transparent);
+  color: var(--nv-success);
+}
+.nv-todo__done:focus-visible {
+  outline: 2px solid var(--nv-focus);
+}
+/* The chevron that says « this opens »: nudges right under the pointer. */
+.nv-todo__go {
+  width: 16px;
+  height: 16px;
+  color: var(--nv-ink-faint);
+  transition:
+    transform var(--nv-dur-base) var(--nv-ease-spring),
+    color var(--nv-dur-base) var(--nv-ease-out);
+}
+.nv-todo:hover .nv-todo__go {
+  transform: translateX(3px);
+  color: var(--nv-ink);
+}
+.nv-todo.is-done {
+  opacity: 0;
+  transform: translateX(40px);
+  max-height: 0;
+  padding-block: 0;
+  margin-top: -6px;
+}
+/* Nothing waiting: a calm sentence in the whisper face, never an empty box. */
+.nv-calm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  font-family: var(--nv-font-serif);
+  font-style: italic;
+  font-size: var(--nv-text-title-2);
+  line-height: var(--nv-text-title-2-leading);
+  color: var(--nv-ink-muted);
+}
+/* Touch has no hover: the why and « Traité » stay visible. */
+@media (hover: none) {
+  .nv-todo__why {
+    max-height: 40px;
+    opacity: 1;
+  }
+  .nv-todo__done {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Tiles: the cards of a fold (« L'agent ») or any small grid of figures. Three columns, two under
+   1100px, one on a phone. Each tile: a label with its dot, one value, an optional gauge, one quiet line. */
+.nv-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 1100px) {
+  .nv-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .nv-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.nv-tile {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-tile:hover {
+  background: var(--nv-glass-fill-strong);
+  transform: translateY(-1px);
+}
+.nv-tile__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--nv-ink-muted);
+}
+.nv-tile__value {
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nv-tile__sub {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--nv-ink-faint);
+}
+
+/* ── Figure: the one number that dominates a screen (règle « Hiérarchie »). Label, value, then its delta. */
+.nv-figure {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nv-figure__label {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nv-ink-faint);
+}
+.nv-figure__value {
+  margin-top: 4px;
+  font-size: var(--nv-text-hero);
+  line-height: var(--nv-text-hero-leading);
+  letter-spacing: var(--nv-text-hero-tracking);
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.nv-figure__note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+@media (max-width: 720px) {
+  .nv-figure__value {
+    font-size: 40px;
+    line-height: 44px;
+  }
+}
+
+/* ── Share ring: one part of a whole (agent against humans). The value circle draws to its share
+   (`ringDash`), the percentage sits in the middle. Colour: --_c, the neon by default. */
+.nv-ring {
+  --_c: var(--nv-neon);
+  position: relative;
+  flex: none;
+  width: 66px;
+  height: 66px;
+}
+.nv-ring > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.nv-ring__track,
+.nv-ring__value {
+  fill: none;
+  stroke-width: 7;
+}
+.nv-ring__track {
+  stroke: var(--nv-fill-track);
+}
+.nv-ring__value {
+  stroke: var(--_c);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--_c) 45%, transparent));
+  transition: stroke-dasharray 1000ms var(--nv-ease-out);
+}
+.nv-ring__label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Legend: one line per series, its key in the series colour. `--past` is the dotted previous period. */
+.nv-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--nv-ink-muted);
+}
+.nv-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.nv-legend__item[hidden] {
+  display: none;
+}
+.nv-legend__key {
+  --_c: var(--nv-neon);
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--_c);
+}
+.nv-legend__key--past {
+  background: repeating-linear-gradient(90deg, var(--nv-ink-faint) 0 2px, transparent 2px 5px);
+}
+
+/* ── Split bar: one total cut in parts (what a fan spent: agent, then humans). Each part grows from the
+   left to its width `--nv-w`, in its colour `--_c`. */
+.nv-split {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-fill-track);
+}
+.nv-split__part {
+  --_c: var(--nv-neon);
+  flex: none;
+  width: var(--nv-w, 0%);
+  height: 100%;
+  background: var(--_c);
+  animation: nv-split-grow 1000ms var(--nv-ease-out) both;
+  transition: width 1000ms var(--nv-ease-out);
+}
+@keyframes nv-split-grow {
+  from {
+    width: 0;
+  }
+}
+
+/* ── Floating tip: the detail behind a tile, a stat or a step, shown on hover (placed by `tipPlacement`).
+   A title, aligned rows (label left, value right), optionally a gauge. */
+.nv-tip {
+  --_radius: var(--nv-radius-md);
+  position: fixed;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--nv-ink-muted);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition:
+    opacity 160ms var(--nv-ease-out),
+    transform 260ms var(--nv-ease-spring);
+}
+.nv-tip.is-on {
+  opacity: 1;
+  transform: none;
+}
+.nv-tip__title {
+  margin: 0 0 4px;
+  font-size: var(--nv-text-footnote);
+  line-height: 17px;
+  font-weight: 650;
+  color: var(--nv-ink);
+}
+.nv-tip__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.nv-tip__row > b {
+  font-weight: 600;
+  color: var(--nv-ink);
+}
+.nv-tip > .nv-gauge {
+  margin: 8px 0 2px;
+}
+
+/* ── Funnel: how many make it through each step. Centred bars that grow to `--nv-w` (`funnelSteps`),
+   one step after the other; the step that broke the most turns amber with « Ça casse ici » after its bar. */
+.nv-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nv-funnel__step {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 56px 92px;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--nv-radius-sm);
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.nv-funnel__step:hover {
+  background: var(--nv-glass-fill);
+}
+.nv-funnel__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nv-funnel__name {
+  font-size: var(--nv-text-callout);
+  line-height: 19px;
+  font-weight: 600;
+}
+.nv-funnel__hint {
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--nv-ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nv-funnel__track {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  height: 28px;
+}
+.nv-funnel__bar {
+  --_c: var(--nv-neon);
+  width: var(--nv-w, 0%);
+  height: 100%;
+  border-radius: 9px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--_c) 55%, transparent),
+    var(--_c),
+    color-mix(in srgb, var(--_c) 55%, transparent)
+  );
+  /* Each step a little dimmer than the one before: the eye reads down the funnel. */
+  opacity: calc(1 - var(--nv-i, 0) * 0.14);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--_c) 22%, transparent);
+  animation: nv-funnel-grow 1000ms var(--nv-ease-out) both;
+  animation-delay: calc(var(--nv-i, 0) * 90ms);
+  transition:
+    width 1000ms var(--nv-ease-out),
+    opacity var(--nv-dur-base) var(--nv-ease-out),
+    box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+@keyframes nv-funnel-grow {
+  from {
+    width: 0;
+  }
+}
+.nv-funnel__step:hover .nv-funnel__bar {
+  opacity: 1;
+  box-shadow: 0 0 26px color-mix(in srgb, var(--_c) 45%, transparent);
+}
+.nv-funnel__step--break .nv-funnel__bar {
+  --_c: var(--nv-warning);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--_c) 30%, transparent);
+}
+.nv-funnel__flag {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--nv-w, 0%) / 2 + 10px);
+  transform: translateY(-50%);
+  padding: 3px 8px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-warning);
+  color: var(--nv-void);
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: nv-swap var(--nv-dur-slow) 700ms var(--nv-ease-out) both;
+}
+.nv-funnel__count {
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.nv-funnel__rate {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--nv-ink-muted);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .nv-funnel__step {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    row-gap: 6px;
+  }
+  .nv-funnel__track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 18px;
+  }
+  .nv-funnel__rate {
+    min-width: 0;
   }
 }
 
@@ -1590,7 +2367,15 @@
   .nv-disclosure[open] .nv-disclosure__body,
   .nv-chart__line,
   .nv-chart__area,
-  .nv-chart__bar {
+  .nv-chart__bar,
+  .nv-chart__end,
+  .nv-glass.is-lit::after,
+  .nv-dot--live::after,
+  .nv-orb::after,
+  .nv-swap,
+  .nv-split__part,
+  .nv-funnel__bar,
+  .nv-funnel__flag {
     animation: none;
   }
   .nv-stat__spark .nv-draw,
@@ -1614,7 +2399,18 @@
   .nv-disclosure::details-content,
   .nv-disclosure > summary::after,
   .nv-chart__dot,
-  .nv-chart__tip {
+  .nv-chart__tip,
+  .nv-orb,
+  .nv-orb::before,
+  .nv-todo,
+  .nv-todo__why,
+  .nv-todo__done,
+  .nv-todo__go,
+  .nv-tile,
+  .nv-ring__value,
+  .nv-split__part,
+  .nv-tip,
+  .nv-funnel__bar {
     transition-duration: 1ms;
   }
 }
