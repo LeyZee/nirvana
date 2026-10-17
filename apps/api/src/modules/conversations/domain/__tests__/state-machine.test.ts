@@ -36,6 +36,14 @@ describe('conversation state machine', () => {
     }
   });
 
+  it('lets the engine hand over from anywhere a takeover could, and stand down only while answering', () => {
+    for (const state of ConversationStateSchema.options) {
+      expect(nextState(state, 'handoff')).toBe(nextState(state, 'takeover'));
+      const skipped = nextState(state, 'skip_reply');
+      expect(skipped).toBe(state === 'pending' || state === 'drafting' ? 'idle' : null);
+    }
+  });
+
   it('never leaves a closed draft', () => {
     for (const closed of ['rejected', 'sent', 'failed', 'expired'] as const) {
       for (const to of DraftStatusSchema.options) expect(canDraftBecome(closed, to)).toBe(false);

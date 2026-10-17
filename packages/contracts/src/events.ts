@@ -100,6 +100,7 @@ export const EVENT_TYPES = [
   'fact_rejected',
   'summary_refreshed',
   'handoff_requested',
+  'reply_skipped',
   'takeover_started',
   'takeover_ended',
   'mode_changed',
@@ -139,6 +140,11 @@ export const EVENT_PAYLOADS = {
   fact_rejected: factPayload,
   summary_refreshed: factPayload,
   handoff_requested: controlPayload,
+  /** The engine answered nothing (no reply needed, or no model reachable): the conversation goes back to `idle`. */
+  reply_skipped: z.object({
+    reason: z.enum(['no_reply', 'llm_unavailable']),
+    detail: z.array(z.string().max(500)).max(20),
+  }),
   takeover_started: controlPayload,
   takeover_ended: controlPayload,
   mode_changed: controlPayload,
@@ -190,6 +196,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('fact_rejected'),
   typedEvent('summary_refreshed'),
   typedEvent('handoff_requested'),
+  typedEvent('reply_skipped'),
   typedEvent('takeover_started'),
   typedEvent('takeover_ended'),
   typedEvent('mode_changed'),

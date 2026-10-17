@@ -28,6 +28,8 @@ const COMMANDS: Readonly<Partial<Record<EventType, ConversationCommand>>> = {
   draft_expired: 'expire',
   send_verified: 'send_verified',
   takeover_started: 'takeover',
+  handoff_requested: 'handoff',
+  reply_skipped: 'skip_reply',
   takeover_ended: 'release',
 };
 

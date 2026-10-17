@@ -14,6 +14,8 @@ export type ConversationCommand =
   | 'send_verified'
   | 'send_failed_final'
   | 'takeover'
+  | 'handoff'
+  | 'skip_reply'
   | 'release';
 
 type Transitions = Readonly<Partial<Record<ConversationState, ConversationState>>>;
@@ -46,6 +48,18 @@ const TRANSITIONS: Readonly<Record<ConversationCommand, Transitions>> = {
     paused: 'human',
     error: 'human',
   },
+  // The engine hands the conversation to the chatters (guard, budget, its own call): same reach as a takeover.
+  handoff: {
+    idle: 'human',
+    pending: 'human',
+    drafting: 'human',
+    awaiting_approval: 'human',
+    sending: 'human',
+    paused: 'human',
+    error: 'human',
+  },
+  // The engine has nothing to say, or no model answered: the fan's next message starts again.
+  skip_reply: { pending: 'idle', drafting: 'idle' },
   release: { human: 'idle', error: 'idle' },
 };
 

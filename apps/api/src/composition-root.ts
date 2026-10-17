@@ -1,5 +1,6 @@
 import { JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
+import type { LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
@@ -7,6 +8,7 @@ import type { Pool } from 'pg';
 import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
 import { secretOrNull, type Config } from './config';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
+import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
 import { createAgentModule, type AgentModule } from './modules/agent';
 import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
@@ -42,6 +44,8 @@ export interface App {
   /** Owner role: Graphile Worker, unscoped jobs, migration status. */
   readonly adminDb: DbClient;
   readonly jobs: JobQueue;
+  /** `llm_calls` for the LLM gateway's journal: one daily cap for the API and the worker, across restarts. */
+  readonly llmCalls: LlmCallStore;
   /** Dashboard authentication (Better Auth); routes guard themselves with `requireRole`. */
   readonly auth: Auth;
   readonly requireRole: RequireRole;
@@ -176,6 +180,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     db,
     adminDb,
     jobs,
+    llmCalls: createDrizzleLlmCallStore(adminDb.db),
     auth,
     requireRole,
     routes: [

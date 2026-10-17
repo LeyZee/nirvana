@@ -1,4 +1,10 @@
-import { EventIdSchema, JOB_PAYLOADS, newId } from '@nirvana/contracts';
+import {
+  EventIdSchema,
+  JOB_PAYLOADS,
+  MessageAuthorSchema,
+  MessageDirectionSchema,
+  newId,
+} from '@nirvana/contracts';
 import {
   and,
   eq,
@@ -73,6 +79,49 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .where(eq(schema.messages.draftId, draftId));
         return row?.count ?? 0;
       },
+      async history(conversationId, limit) {
+        const rows = await tx
+          .select()
+          .from(schema.messages)
+          .where(eq(schema.messages.conversationId, conversationId))
+          .orderBy(sql`${schema.messages.platformCreatedAt} desc, ${schema.messages.id} desc`)
+          .limit(limit);
+        return rows.reverse().map((row) => ({
+          direction: MessageDirectionSchema.parse(row.direction),
+          author: MessageAuthorSchema.parse(row.author),
+          text: row.text,
+          at: row.platformCreatedAt,
+          priceMinor: row.priceMinor,
+          isPaid: row.isPaid,
+        }));
+      },
+      async fanContext(fanId) {
+        const facts = await tx
+          .select({ key: schema.fanFacts.key, value: schema.fanFacts.value })
+          .from(schema.fanFacts)
+          .where(
+            and(
+              eq(schema.fanFacts.fanId, fanId),
+              sql`${schema.fanFacts.supersededBy} is null`,
+              sql`(${schema.fanFacts.expiresAt} is null or ${schema.fanFacts.expiresAt} > now())`,
+            ),
+          )
+          .orderBy(schema.fanFacts.observedAt);
+        const [totals] = await tx
+          .select({
+            spentMinor: sql<number>`coalesce(sum(${schema.messages.priceMinor}) filter (where ${schema.messages.isPaid}), 0)::int`,
+            firstMessageAt: sql<string | null>`min(${schema.messages.platformCreatedAt})`,
+          })
+          .from(schema.messages)
+          .innerJoin(schema.conversations, eq(schema.conversations.id, schema.messages.conversationId))
+          .where(eq(schema.conversations.fanId, fanId));
+        const firstMessageAt = totals?.firstMessageAt ?? null;
+        return {
+          notes: facts.map((fact) => `${fact.key} : ${fact.value}`),
+          spentMinor: totals?.spentMinor ?? 0,
+          firstMessageAt: firstMessageAt === null ? null : new Date(firstMessageAt),
+        };
+      },
     },
 
     drafts: {
@@ -94,8 +143,13 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .for('update');
         return rows.map(toDraft);
       },
-      async insert(draft) {
-        await tx.insert(schema.drafts).values({ ...draft, creatorId });
+      async insert({ bubbles, softViolations, ...draft }) {
+        await tx.insert(schema.drafts).values({
+          ...draft,
+          creatorId,
+          bubbles: [...(bubbles ?? [])],
+          guardTrace: { softViolations: [...(softViolations ?? [])] },
+        });
       },
       async setStatus(id, status, decision) {
         await tx

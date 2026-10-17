@@ -1,50 +1,137 @@
 import { DraftIdSchema, newId, type JobPayload } from '@nirvana/contracts';
 
-import type { Clock, EventMeta, JobLogger, UnitOfWork } from '../../domain/ports';
+import type {
+  Clock,
+  ComposeInput,
+  ComposeResult,
+  Conversation,
+  DraftComposer,
+  EventMeta,
+  HoldReason,
+  JobLogger,
+  Transaction,
+  UnitOfWork,
+} from '../../domain/ports';
 import { appendEvent } from '../journal';
 
 export interface RespondDeps {
   readonly uow: UnitOfWork;
   readonly clock: Clock;
+  /** The engine; without it the draft stays empty and the operator writes it (P0-05 behaviour). */
+  readonly composer?: DraftComposer;
+}
+
+/** Messages the engine reads. */
+const HISTORY_LIMIT = 40;
+
+/** Holds that give the conversation to the chatters; the others put it back to `idle`. */
+const HANDOFF_REASONS: readonly HoldReason[] = ['guard_blocked', 'handoff', 'budget_reached'];
+
+const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
+
+const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
+
+/** The conversation still waits for this answer: same state, no fan message since, nothing blocking. */
+async function stillPending(tx: Transaction, conversation: Conversation | null, logger: JobLogger) {
+  if (conversation === null) {
+    logger.warn({}, 'respond: conversation not found');
+    return false;
+  }
+  if (conversation.state !== 'pending') {
+    logger.info({ state: conversation.state }, 'respond: nothing to answer');
+    return false;
+  }
+  const blocked = await tx.gate.blockedReason(conversation);
+  if (blocked !== null) {
+    logger.info({ blocked }, 'respond: blocked');
+    return false;
+  }
+  return true;
 }
 
 /**
- * `conversation.respond`, after the debounce (message-flow.md §1). Re-reads the entry gates, then writes a draft.
- * The draft is empty until the engine arrives (P3); `supervision` is told through the outbox (`draft_created`).
- * Replayed after a crash, it finds the conversation already past `pending` and does nothing.
+ * `conversation.respond`, after the debounce (message-flow.md §1). Three steps, so that no lock is held while the
+ * engine thinks (seconds): read the gates and the context; compose outside any transaction; re-lock and write,
+ * unless the fan wrote again meanwhile (the next debounce answers) or a gate closed. Never sends anything: the
+ * draft waits for an operator (copilot). Replayed after a crash, it finds the conversation past `pending`.
  */
-export function createRespondJob({ uow, clock }: RespondDeps) {
-  return (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> =>
-    uow.inTenant(payload.creatorId, async (tx) => {
+export function createRespondJob({ uow, clock, composer }: RespondDeps) {
+  return async (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> => {
+    const draftId = newId(DraftIdSchema);
+    const read = await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);
-      if (conversation === null) {
-        logger.warn({ conversationId: payload.conversationId }, 'respond: conversation not found');
-        return;
-      }
-      if (conversation.state !== 'pending') {
-        logger.info({ state: conversation.state }, 'respond: nothing to answer');
-        return;
-      }
-      const blocked = await tx.gate.blockedReason(conversation);
-      if (blocked !== null) {
-        logger.info({ blocked }, 'respond: blocked');
-        return;
-      }
-      const draftId = newId(DraftIdSchema);
-      const meta: EventMeta = { actor: 'ai', correlationId: payload.correlationId, at: clock.now() };
-      await tx.drafts.insert({
-        id: draftId,
+      if (conversation === null || !(await stillPending(tx, conversation, logger))) return null;
+      const input: ComposeInput = {
+        creatorId: conversation.creatorId,
         conversationId: conversation.id,
-        // One draft per fan message answered: a replay with the same last message cannot write a second one.
-        idempotencyKey: `respond:${conversation.id}:${String(conversation.lastInboundAt?.getTime() ?? 0)}`,
-        createdAt: meta.at,
-      });
-      await appendEvent(
-        tx,
-        conversation,
-        { type: 'draft_created', payload: { draftId, status: 'pending' } },
-        meta,
-      );
-      logger.info({ draftId, mode: conversation.mode }, 'respond: draft created');
+        fanId: conversation.fanId,
+        draftId,
+        correlationId: payload.correlationId,
+        now: clock.now(),
+        history: await tx.messages.history(conversation.id, HISTORY_LIMIT),
+        fan: await tx.messages.fanContext(conversation.fanId),
+      };
+      return { input, lastInbound: lastInboundKey(conversation) };
     });
+    if (read === null) return;
+
+    let result: ComposeResult;
+    try {
+      result = composer === undefined ? EMPTY_DRAFT : await composer.compose(read.input);
+    } catch (error) {
+      // The engine is expected to answer `held`; anything thrown counts as no model reachable.
+      logger.warn({ err: error instanceof Error ? error.name : 'unknown' }, 'respond: composer failed');
+      result = { kind: 'held', reason: 'llm_unavailable', detail: [], costUsd: 0 };
+    }
+
+    await uow.inTenant(payload.creatorId, async (tx) => {
+      const conversation = await tx.conversations.lock(payload.conversationId);
+      if (conversation === null || !(await stillPending(tx, conversation, logger))) return;
+      if (lastInboundKey(conversation) !== read.lastInbound) {
+        logger.info({ draftId }, 'respond: fan wrote again, result dropped');
+        return;
+      }
+      const meta: EventMeta = { actor: 'ai', correlationId: payload.correlationId, at: clock.now() };
+      if (result.kind === 'draft') {
+        await tx.drafts.insert({
+          id: draftId,
+          conversationId: conversation.id,
+          // One draft per fan message answered: a replay with the same last message cannot write a second one.
+          idempotencyKey: `respond:${conversation.id}:${String(read.lastInbound)}`,
+          createdAt: meta.at,
+          bubbles: result.bubbles,
+          softViolations: result.softViolations,
+        });
+        await appendEvent(
+          tx,
+          conversation,
+          { type: 'draft_created', payload: { draftId, status: 'pending' } },
+          meta,
+        );
+        logger.info(
+          { draftId, bubbles: result.bubbles.length, costUsd: result.costUsd, mode: conversation.mode },
+          'respond: draft created',
+        );
+        return;
+      }
+      if (HANDOFF_REASONS.includes(result.reason)) {
+        const reason = [result.reason, ...result.detail].join(' : ').slice(0, 500);
+        await appendEvent(tx, conversation, { type: 'handoff_requested', payload: { reason } }, meta);
+      } else {
+        await appendEvent(
+          tx,
+          conversation,
+          {
+            type: 'reply_skipped',
+            payload: {
+              reason: result.reason === 'no_reply' ? 'no_reply' : 'llm_unavailable',
+              detail: result.detail.map((line) => line.slice(0, 500)).slice(0, 20),
+            },
+          },
+          meta,
+        );
+      }
+      logger.info({ reason: result.reason, costUsd: result.costUsd }, 'respond: held');
+    });
+  };
 }

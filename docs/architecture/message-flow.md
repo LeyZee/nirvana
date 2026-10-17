@@ -51,6 +51,19 @@ Exécuté par le worker, strictement en série par conversation :
 
 Chaque étape écrit sa trace (`policy_trace`, `guard_trace`) sur le draft : on peut toujours répondre à « pourquoi le bot a dit ça ».
 
+Code actuel : les étapes 1 à 6 sont derrière le port `DraftComposer` (module `conversations`), implémenté par l'adaptateur de l'agent. Le job se déroule en trois temps, pour ne garder aucun verrou pendant que le moteur réfléchit :
+
+- Une transaction en lecture : gardes d'entrée, état `pending`, 40 derniers messages, contexte du fan.
+- `compose` hors transaction.
+- Une transaction qui re-verrouille la conversation. Si le fan a réécrit entre-temps (`last_inbound_at` a bougé), ou si une garde s'est fermée, le résultat est jeté et le prochain debounce répond.
+
+Le moteur peut aussi ne pas écrire de brouillon (`held`) :
+
+- `guard_blocked`, `handoff` et `budget_reached` donnent `handoff_requested` : la conversation passe à `human` et les chatteurs reprennent.
+- `no_reply` et `llm_unavailable` donnent `reply_skipped` et la conversation revient à `idle`.
+
+Le job n'envoie jamais rien lui-même.
+
 ## 3. Approbation et envoi
 
 ```

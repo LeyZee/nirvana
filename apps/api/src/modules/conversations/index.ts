@@ -5,12 +5,12 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { createConversationCommands, type ConversationCommands } from './application/commands';
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
-import type { Clock, FanDirectory, JobLogger, OutboundSender } from './domain/ports';
+import type { Clock, DraftComposer, FanDirectory, JobLogger, OutboundSender } from './domain/ports';
 import { createDrizzleConversationReader } from './infra/db/reader';
 import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
 import { createConversationRoutes, type RequireRole } from './infra/http/routes';
 
-export type { Clock, OutboundSender } from './domain/ports';
+export type { Clock, DraftComposer, OutboundSender } from './domain/ports';
 
 /** Public entry point of the `conversations` module (ADR 0002). Other modules import this file only. */
 export interface ConversationsModule extends ConversationCommands {
@@ -31,6 +31,8 @@ export interface ConversationsDeps {
   /** Implemented by the `connectors` module (P0-06). */
   readonly sender: OutboundSender;
   readonly requireRole: RequireRole;
+  /** The engine (agent module's adapter); without it drafts stay empty for the operator to write. */
+  readonly composer?: DraftComposer;
   readonly clock?: Clock;
 }
 
@@ -45,7 +47,11 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
     ...commands,
     routes: createConversationRoutes(createDrizzleConversationReader(deps.db), commands, deps.requireRole),
     jobs: {
-      respond: createRespondJob({ uow, clock }),
+      respond: createRespondJob({
+        uow,
+        clock,
+        ...(deps.composer === undefined ? {} : { composer: deps.composer }),
+      }),
       send: createSendJob({ uow, clock, sender: deps.sender }),
     },
   };
