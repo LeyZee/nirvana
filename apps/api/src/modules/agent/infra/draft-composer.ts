@@ -31,6 +31,7 @@ type AgentComposeResult =
       readonly bubbles: readonly string[];
       readonly softViolations: readonly string[];
       readonly costUsd: number;
+      readonly voice: { readonly voicePrompt: string; readonly voiceModel: string };
     }
   | {
       readonly kind: 'held';
@@ -48,6 +49,8 @@ export interface DraftComposerDeps {
   readonly persona: ComposerPersona;
   /** Her clock: day and night, the time she answers at. */
   readonly timeZone: string;
+  /** Version of the voice prompt, written on each draft with the model that answered (ADR 0019). */
+  readonly voicePrompt: string;
 }
 
 const failureDetail = (error: LlmFailure): readonly string[] =>
@@ -122,6 +125,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         bubbles: composed.bubbles,
         softViolations: composed.violations.map((v) => v.code),
         costUsd,
+        voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model ?? 'unknown' },
       };
     },
   };

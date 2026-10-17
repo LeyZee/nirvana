@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { LlmGateway } from '@nirvana/llm';
+import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
 import { DEFAULT_GUARD_SETTINGS } from './domain/guards';
 import { voiceExamples } from './infra/calibration-record';
@@ -65,6 +65,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
       guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: persona.forbiddenTerms },
     },
     timeZone: options.timeZone,
+    voicePrompt: loadPrompt('voice').header.version,
   });
 }
 

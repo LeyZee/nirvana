@@ -144,12 +144,13 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .for('update');
         return rows.map(toDraft);
       },
-      async insert({ bubbles, softViolations, ...draft }) {
+      async insert({ bubbles, softViolations, voice, ...draft }) {
         await tx.insert(schema.drafts).values({
           ...draft,
           creatorId,
           bubbles: [...(bubbles ?? [])],
           guardTrace: { softViolations: [...(softViolations ?? [])] },
+          ...(voice !== undefined && { promptHashes: { ...voice } }),
         });
       },
       async setStatus(id, status, decision) {
