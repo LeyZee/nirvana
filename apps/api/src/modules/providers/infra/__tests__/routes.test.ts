@@ -8,6 +8,7 @@ import { buildServer } from '../../../../server';
 import type { FetchLike } from '../http';
 
 const XAI_KEY = 'xai-FAKEFAKEFAKEFAKEFAKEFAKE0000';
+const MISTRAL_KEY = 'FAKEmistralFAKEmistralFAKEmistral0';
 
 /** xAI accepts XAI_KEY and nothing else. */
 const fakeXai: FetchLike = (_url, init) => {
@@ -150,6 +151,7 @@ describe('/v1/settings/providers', () => {
     await put('/v1/settings/providers/xai/key', XAI_KEY);
     await put('/v1/settings/providers/xai/key', wrong);
     await put('/v1/settings/providers/openai/key', XAI_KEY);
+    await put('/v1/settings/providers/mistral/key', MISTRAL_KEY);
     await app.inject({
       method: 'PUT',
       url: '/v1/settings/providers/xai/key',
@@ -160,6 +162,7 @@ describe('/v1/settings/providers', () => {
     const written = logs.join('\n');
     expect(written).not.toContain(XAI_KEY);
     expect(written).not.toContain(wrong);
+    expect(written).not.toContain(MISTRAL_KEY);
   });
 
   it('slows down repeated pastes and checks, which each call the provider', async () => {
