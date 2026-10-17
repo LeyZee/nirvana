@@ -2,7 +2,7 @@
 
 Demande de Charles : « commencer à travailler sur l'interface : l'extension et son design, la connexion avec Reveal (Messalina est enfin reliée à mon Reveal), un playground de test intégré pour discuter avec l'IA et voir ses fautes avant la mise en ligne. Et comment on apprend à l'agent à naviguer sur Reveal ? ». Brainstorm par Opus 5.5, sans code. Rien ici ne remplace un ADR : ce qui est retenu par Charles deviendra fiches (et ADR si structurant).
 
-Maquettes (esquisses, hors dépôt) : popup de l'extension et écran Playground, rendues avec `@nirvana/design-system`, livrées dans le fil du projet.
+Maquettes (esquisses, hors dépôt) : six écrans du popup de l'extension et deux états du Playground (jugement, correction), rendus avec `@nirvana/design-system` et le lockup de `brand/`, livrés dans le fil du projet. Version 2 après le retour de Charles du 17/10 (logo exact, choix de plateforme, textes et hiérarchie).
 
 ## 1. « Apprendre à l'agent à naviguer sur Reveal » : deux apprentissages qui n'ont rien à voir
 
@@ -57,15 +57,16 @@ Garde-fou proposé pour toute la phase 2 : une **liste blanche d'envoi** (`send_
 
 Petite et discrète : capturer la session (bouton « Synchroniser »), enregistrer le réseau quand on le lui demande, montrer l'état. Elle n'est pas le cockpit : le travail (inbox copilote, fiches fans, playground) vit dans le dashboard. Elle n'injecte rien dans la page Reveal, ne garde aucun secret, n'appelle aucune IA.
 
-### Ce que montre le popup (maquette)
+### Le popup, écran par écran (maquette v2, revue par Charles le 17/10)
 
-- En-tête : flamme + « Nirvana » (Playfair italique), pastille d'état de la session : **Connectée** / **À surveiller** / **Expirée** (`platform_session`, `nv-status`).
-- Le compte relié (« Messalina, via le compte agence ») : on voit d'un coup d'œil sur quel compte on agit.
-- Trois lignes de faits : session envoyée il y a…, dernière lecture du serveur il y a…, mode (copilote / auto / pause).
-- Un seul bouton néon : **Synchroniser la session** (la seule lumière de l'écran, comme le veut le design system).
-- Interrupteur **Enregistreur** (éteint par défaut).
-- **Tout arrêter** : le kill switch global, accessible là où Charles est déjà quand il voit un problème sur Reveal. Il appelle le backend ; l'extension n'arrête rien elle-même.
-- Quand la session est expirée, le popup devient un guide en trois étapes (ouvrir Reveal, se connecter, synchroniser) et rappelle que rien ne part pendant ce temps.
+Principes : un écran = un message principal (gros titre qui dit l'état en français, phrase qui dit ce que ça implique) et au plus **un** bouton néon, celui de l'action attendue ; tutoiement partout ; on dit « l'agent », jamais « le bot » ; le nom est toujours le **lockup du logo** (`brand/nirvana-lockup.svg`, auréole sur le i), jamais du texte en police : `.nv-popup__brand` du design system est à remplacer par le lockup (à reporter dans `docs/design/README.md` par la fiche qui code le popup).
+
+1. **Premier lancement** : « Relie cette extension », code à 6 chiffres saisi en cases, bouton « Relier ».
+2. **Choisir le compte** : sélecteur en haut du popup, groupé par créatrice ; Reveal actif, OnlyFans « Bientôt », plateforme Nirvana « Plus tard ». Sur reveal.me, le compte Reveal est choisi automatiquement. Une plateforme n'apparaît active que lorsque son connecteur existe (ADR 0003 : l'extension lit la liste des comptes plateforme depuis le backend, elle n'en code aucun en dur).
+3. **Au quotidien** : pastille « Session valide », titre « L'agent répond en copilote », trois chiffres (à valider, conversations actives, ventes du jour), bouton néon « Valider les N propositions » qui ouvre l'inbox ; en dessous, resynchroniser et enregistreur ; « Tout arrêter » en pied, en rouge discret.
+4. **Session expirée** : « L'agent est à l'arrêt », trois étapes numérotées avec l'étape en cours en néon, bouton « Synchroniser la session », mention que rien n'est gardé dans l'extension.
+5. **Enregistrement** : chronomètre, nombre d'échanges notés, parcours à cocher (celui du §2), « Terminer et exporter » / « Annuler et tout effacer ».
+6. **Tout arrêter** : confirmation qui dit ce qui s'arrête et comment repartir.
 
 ### Appairage
 
@@ -83,21 +84,21 @@ Le playground doit faire passer les messages par **exactement le même chemin** 
 
 La façon propre de l'obtenir dans notre architecture : le playground est une **plateforme** de plus, `playground`, avec son adaptateur en mémoire (comme `FakeConnector`). Le cœur ne sait pas qu'il est testé ; et par construction rien ne peut partir sur Reveal, puisque ces conversations ne sont rattachées à aucun compte Reveal. Les fans du playground sont fictifs, marqués comme tels, et exclus des statistiques.
 
-### Ce qu'on peut y faire (maquette)
+### Ce qu'on peut y faire (maquette v2)
 
-Colonne de gauche, la partie :
+Le playground est une page du dashboard, dans la barre de navigation à côté d'Inbox, Fils, Fans, Suivi et Réglages : on passe d'une vraie conversation au bac à sable sans changer d'outil. Une pastille « Bac à sable » reste visible en haut de la conversation.
 
-- **Qui joue le fan** : *moi* (Charles ou Messa écrit comme un fan) ; *fan simulé* (une IA joue un fan d'après un profil : nouveau et timide, radin, pressé, « t'es un bot ? », veut la rencontrer, âge douteux…) ; *rejeu* (on rejoue une vraie conversation passée, anonymisée, et on regarde ce que le bot aurait répondu à chaque tour).
-- **Réglages** : version de la persona, fournisseur par rôle (cerveau, voix), heure simulée (le bot ne parle pas pareil à 23 h 40 un mardi), délais humains réels ou accélérés.
-- **Mémoire du fan**, éditable : on peut démarrer une partie avec un fan qui a déjà dépensé 200 € et dont on connaît le prénom et la ville.
+Colonne de gauche, la partie, de la décision la plus fréquente à la plus rare :
+
+- **Qui écrit côté fan** (segment) : *Moi* (Charles ou Messa écrit comme un fan) ; *Fan simulé* (une IA joue un fan) ; *Rejeu* (on rejoue une vraie conversation passée, anonymisée, et on regarde ce que l'agent aurait répondu à chaque tour).
+- **Profil du fan**, en quatre familles lisibles plutôt qu'une liste technique : nouvel abonné, habitué qui dépense, méfiant (« t'es vraiment toi ? »), cas sensibles (rencontre, âge douteux, détresse).
+- **Réglages de la partie** : persona, modèles, moment simulé (l'agent ne parle pas pareil à 23 h 40 un mardi), délais de réponse réels ou accélérés ; le reste derrière « Tous les réglages ».
+- **Ce que l'agent sait de lui** (mémoire, éditable) : on peut démarrer avec un fan qui a déjà dépensé 200 €. Ce qui manque est écrit « inconnue », pas laissé vide.
 - Plus tard : catalogue fictif (P6), dépôt d'une image pour tester le rôle sens.
 
-Au centre, la conversation, avec le brouillon en pointillés néon (`nv-bubble--draft`), et sous chaque proposition :
+Au centre, la conversation, la proposition en pointillés néon (`nv-bubble--draft`), et sous elle une seule question : **« Elle aurait dit ça ? »** avec trois réponses au clavier : **Oui, parfait** (Entrée), **À corriger** (C), **Régénérer** (G). « À corriger » ouvre un panneau à la place du champ de saisie : la raison en une touche (pas son style, trop robot, trop direct, fait faux, répète, aurait dû passer la main, autre), ce que Messa aurait écrit, une case « En faire un cas de test » cochée par défaut, et « Enregistrer la correction ». On peut aussi revenir à n'importe quel tour et repartir de là (branche).
 
-- **Bien** · **Réécrire** (on tape ce que Messa aurait dit) · **Faux** (avec une raison à choisir : pas son style, trop robot, trop direct, erreur sur un fait, répétition, aurait dû passer la main, autre) · **Régénérer**.
-- On peut revenir à n'importe quel tour et repartir de là (branche).
-
-À droite, **pourquoi cette réponse** : intention lue, humeur, action, brief ; règles de politique appliquées (dont `identity_policy`) ; gardes déclenchées et régénérations ; version des prompts, coût, latence. C'est ce panneau qui transforme « elle a dit un truc bizarre » en « le cerveau a mal lu l'intention » ou « la voix a ignoré le brief ».
+À droite, **pourquoi cette réponse**, dans l'ordre où on le lit : un verdict en tête (« Toutes les règles passent », ou la règle qui a bloqué), puis ce que l'agent a compris (intention, ton, action, brief en une phrase), les règles appliquées écrites en français (avec le nom technique au survol), la relecture avant envoi (gardes, réécritures), et les détails techniques (hash des prompts, coût, latence) en dernier. C'est ce panneau qui transforme « elle a dit un truc bizarre » en « l'agent a mal lu l'intention » ou « la voix a ignoré le brief ».
 
 ### Ce que deviennent les corrections
 

@@ -6,3 +6,4 @@ Décisions : aucune.
 Découvertes : collision de nom entre le playground de conversation et la page `_playground.tsx` de D-01 (proposé : vitrine `_showcase.tsx`). Les CGU de Reveal ne sont pas trouvables par recherche web : lecture connectée nécessaire.
 Candidats à suppression : aucun.
 Vérifié : `pnpm check` ✓.
+Suite (retour de Charles, même jour) : maquettes v2. Popup en six écrans (appairage, choix du compte avec Reveal actif et OnlyFans « Bientôt », quotidien, session expirée, enregistrement, arrêt d'urgence) avec le vrai lockup (auréole sur le i) ; playground intégré au dashboard, question unique « Elle aurait dit ça ? » au clavier, panneau de correction, verdict en tête du panneau « pourquoi ». Note 06 mise à jour (§3 et §4).
