@@ -74,7 +74,7 @@ Pour vérifier l'API seule : http://localhost:3000/ready doit répondre `"status
 
 Un compte plateforme ne peut rien envoyer tant que sa garde d'écriture est fermée (`connector_config.writes`, à `false` par défaut) : un brouillon approuvé échoue alors en `connector_writes_disabled`, sans rien envoyer. On ne l'ouvre que sur le compte fan de test, à la main, en base.
 
-Trois commandes d'exploitation, chacune laisse une ligne dans `audit_log` :
+Quatre commandes d'exploitation, chacune laisse une ligne dans `audit_log` :
 
 ```powershell
 pnpm ops:kill-switch --on --scope global --reason "essai"   # plus aucune réponse ni envoi ; --off pour lever
