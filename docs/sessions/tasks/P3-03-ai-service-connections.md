@@ -1,5 +1,5 @@
 # P3-03 Connecter Grok, Gemini et ElevenLabs depuis le dashboard
-Statut : todo
+Statut : in_progress
 Phase : 3
 Dépend de : P0-03 (base, chiffrement), P0-04 (serveur, SSE), P0-07a (Better Auth, rôles), P3-01 (passerelle), D-01 (design system dans `apps/web`)
 Branche : task/p3-03-ai-service-connections
@@ -77,3 +77,5 @@ Les chemins d'API exacts de chaque vérification sont lus dans la doc du fournis
 - Plusieurs agences.
 
 ## Notes de session
+
+2026-10-17 (V1, branche `claude/crm-connecteurs-ux-g38gh5`, menée en parallèle de la plomberie avec l'accord du coordinateur) : fait les points 1, 3, 4 (port `CredentialStore`, cache de clés et repli sur l'environnement ; adaptateur mémoire seulement), 6 et 7 côté domaine, plus la priorité de l'action suivante. Reste : 2 (migration et magasin Postgres, après P0-03), 5 et 8 (routes, SSE, job de 15 minutes, après P0-04), 9 (page, après P0-07a), 10 (docs), branchement de l'`ApiKeySource` dans `composition-root.ts` et la passerelle.
