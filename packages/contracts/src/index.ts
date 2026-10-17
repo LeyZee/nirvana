@@ -1,11 +1,13 @@
-/** Shared Zod schemas (events, DTOs, extension protocol, media vocabulary, persona). Filled by P0-02. */
+/** Shared Zod schemas and types: ids, money, enums, events, jobs, connector port data, media, settings, persona. */
 export const CONTRACTS_PACKAGE = '@nirvana/contracts';
 
-export {
-  MEDIA_VOCABULARY_VERSION,
-  MediaDescriptionSchema,
-  type MediaDescription,
-  type MediaFlag,
-} from './media';
-export { err, ok, type Result } from './result';
+export * from './connector';
+export * from './enums';
+export * from './events';
+export * from './ids';
+export * from './jobs';
+export * from './media';
+export * from './money';
 export * from './persona';
+export * from './result';
+export * from './settings';
