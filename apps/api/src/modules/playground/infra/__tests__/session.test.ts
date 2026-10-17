@@ -251,6 +251,8 @@ describe('persona file', () => {
   it('takes the first name, the disgusts and the forbidden words of a filled persona', () => {
     const persona = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
     expect(persona.creatorName).toBe('Elena');
+    // Her pace of scripts comes from her persona, for the policy (strategies.script_launch).
+    expect(persona.offerLimits).toEqual({ cooldownHours: 12 });
     expect(persona.forbiddenTerms).toEqual([
       'Insultes',
       'Humiliation',

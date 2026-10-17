@@ -95,6 +95,7 @@ function composer(script: Script = {}) {
     gateway: gateway(script, seen),
     persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
     timeZone: 'Europe/Paris',
+    voicePrompt: '1.2.0',
   });
   return { draftComposer, seen };
 }
@@ -107,6 +108,7 @@ describe('createDraftComposer', () => {
       bubbles: ['Coucou toi ✨'],
       softViolations: [],
       costUsd: 0.004,
+      voice: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
     });
     expect(seen.traces[0]).toEqual({
       creatorId: 'creator-1',

@@ -1,11 +1,15 @@
 import { ageOn, PersonaSchema } from '@nirvana/contracts';
 import { parse, stringify } from 'yaml';
 
+import type { OfferLimits } from '../domain/policy';
+
 /** Who she is for the models, read from the persona YAML: the playground and the drafts share it. */
 export interface PersonaForModels {
   readonly creatorName: string;
   readonly personaSheet: string;
   readonly forbiddenTerms: readonly string[];
+  /** Her pace of scripts (`strategies.script_launch.cooldown_hours`), applied by `offerDecision`, never by a prompt. */
+  readonly offerLimits: OfferLimits;
 }
 
 const isPlaceholder = (value: string): boolean => value.startsWith('<');
@@ -31,5 +35,6 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     forbiddenTerms: [...persona.limits.disgusts, ...persona.limits.never_say].filter(
       (term) => !isPlaceholder(term),
     ),
+    offerLimits: { cooldownHours: persona.strategies.script_launch.cooldown_hours },
   };
 }
