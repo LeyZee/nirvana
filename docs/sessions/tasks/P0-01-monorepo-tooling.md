@@ -1,6 +1,6 @@
 # P0-01 Outillage du monorepo
 
-Statut : in_progress (PR ouverte, passe à done à la fusion)
+Statut : done
 Phase : 0
 Dépend de : —
 Branche : task/p0-01-monorepo-tooling

@@ -32,7 +32,9 @@
     "ops:revoke-sessions": "pnpm --filter @nirvana/api ops:revoke-sessions",
     "ops:reencrypt-sessions": "pnpm --filter @nirvana/api ops:reencrypt-sessions",
     "evals": "pnpm --filter @nirvana/evals run evals",
-    "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
+    "clean": "turbo run clean && rm -rf node_modules/.cache .turbo",
+    "probe": "pnpm --filter @nirvana/evals run probe",
+    "playground": "pnpm --filter @nirvana/api run playground"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

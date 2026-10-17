@@ -182,7 +182,7 @@ Projet Nirvana/
 | Langage | TypeScript strict, Node 22, pnpm + Turborepo | un seul langage, types de bout en bout |
 | API et jobs | Fastify 5 + Zod, Graphile Worker | simple, rapide, files série sur Postgres |
 | Données | PostgreSQL 16 (Neon), Drizzle, RLS | SQL visible, isolation garantie par la base |
-| IA | Vercel AI SDK derrière `LlmGateway` ; Grok 4.3 par défaut, Mistral et Venice en challengers, Gemini en repli pour l'analyse | fournisseur changeable par rôle |
+| IA | Vercel AI SDK derrière `LlmGateway` ; Grok 4.7 par défaut, Mistral et Venice en challengers, Gemini en repli pour l'analyse | fournisseur changeable par rôle |
 | Front | Vite, React 19, TanStack, Tailwind v4, shadcn/ui, PWA | moderne, clavier d'abord |
 | Extension | WXT (Manifest V3) | la seule façon propre de faire une extension en 2026 |
 | Qualité | Vitest, Testcontainers, Playwright, Promptfoo, Langfuse | tests à chaque couche, évals avant chaque changement de modèle |

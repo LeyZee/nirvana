@@ -6,12 +6,18 @@
   "type": "module",
   "scripts": {
     "evals": "tsx run.ts",
+    "probe": "tsx probe/run.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "tsx": "4.23.15",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  },
+  "dependencies": {
+    "@nirvana/llm": "workspace:*"
   }
 }
