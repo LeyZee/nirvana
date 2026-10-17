@@ -1,5 +1,5 @@
 # P3-07 Notifications Telegram : bots, groupes, routage, page Réglages › Telegram
-Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 en cours)
+Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 en relecture, branchement du worker par Bilan)
 Phase : 3
 Dépend de : P0-05, P0-07b, P3-03 (chiffrement des secrets du CRM, ré-auth #41), changements de contrat de Bilan et du fil agent (ADR 0020 §3)
 Branche : claude/telegram-alerts-3urhyn
@@ -93,13 +93,13 @@ Création d'un bot en quatre étapes :
 Un onglet dont l'événement n'existe pas encore dit « bientôt » et pourquoi, sans faux contenu.
 
 ## À faire, lot 1 : moteur et alertes
-- [ ] Module `apps/api/src/modules/telegram` (domain, application, infra, index) et son README. Le domaine contient la table de classement, le rendu des textes, le regroupement et la couverture, sans I/O.
-- [ ] Port `NotificationChannel` : `verify(token)`, `poll`, `send`, `edit`. Adaptateur Telegram en `fetch`, réponses validées par Zod, jamais d'URL ni d'erreur brute dans un journal. Faux canal pour les tests.
-- [ ] Contrat `packages/contracts/src/telegram.ts`, migration et schéma Drizzle du module, déclencheur sur `domain_events`.
-- [ ] Fonctions des jobs, exportées par l'index : scan, livraison par groupe, lecture d'un bot, répartition des lectures, bilan du matin, purge. Les noms `telegram.*`, le composition root, le worker et le crontab sont posés par Bilan.
-- [ ] Routes ci-dessus pour les bots, les groupes, le routage et le journal.
-- [ ] Test qui prouve que pendant l'attente d'un humain la conversation reste `handoff_requested` et que l'agent n'envoie plus rien au fan jusqu'à la reprise.
-- [ ] Glossaire : « Notification Telegram », « Sujet », « Bot », « Groupe », « Astreinte ». Runbook des notifications (nouveau fichier dans `docs/runbooks/`) : que faire à chaque niveau, révoquer un jeton.
+- [x] Module `apps/api/src/modules/telegram` (domain, application, infra, index) et son README. Le domaine contient la table de classement, le rendu des textes, le regroupement et la couverture, sans I/O.
+- [x] Port `NotificationChannel` : `getMe`, `deleteWebhook`, `getUpdates`, `send`, `edit`. Adaptateur Telegram en `fetch`, réponses validées par Zod, jamais d'URL ni d'erreur brute dans un journal. Faux canal pour les tests.
+- [x] Contrat `packages/contracts/src/telegram.ts`, migration et schéma Drizzle du module, déclencheur sur `domain_events`.
+- [x] Fonctions des jobs, exportées par l'index (`module.jobs`) : scan, livraison par groupe, lecture d'un bot, répartition des lectures, bilan du matin, purge. Les noms `telegram.*`, le composition root, le worker et le crontab sont posés par Bilan.
+- [x] Routes ci-dessus pour les bots, les groupes, le routage et le journal.
+- [x] Test qui prouve que pendant l'attente d'un humain la conversation reste `handoff_requested` et que l'agent n'envoie plus rien au fan jusqu'à la reprise. Fait par Bilan dans le module `conversations` (#60).
+- [x] Glossaire : « Notification Telegram », « Sujet », « Bot », « Groupe », « Astreinte ». Runbook `docs/runbooks/telegram.md` : que faire à chaque niveau, révoquer un jeton.
 
 ## À faire, lot 2 : écran
 - [ ] `apps/web/src/settings/telegram/` (dossier propre, le fil Extension relit). Lignes de router et de navigation passées par le coordinateur.
@@ -131,3 +131,4 @@ Les commandes depuis Telegram (le bot ne pilote rien), le planning d'astreinte, 
 ## Notes de session
 - 17/10, fil Alertes Telegram : fiche de Bilan (#47) étendue. Le jeton quitte `providers` pour une table propre (plusieurs bots) : ADR 0020.
 - 17/10 22h05 : à la demande de Charles, Telegram devient une page à part, Réglages › Telegram, avec les onglets Ventes, Mots-clés et Validations. Le module passe de `alerts` à `telegram`. Maquette refaite.
+- 17/10 22h40, lot 1 : module, migration 0006 (déclencheur qui n'annule jamais l'outbox, `telegram_state` pour le curseur et la version du routage), rescellement des jetons au démarrage (condition de Bilan). Reste à Bilan : noms de jobs, composition root, worker, crontab (patch dans la PR). `conversationId` sur `takeover_started` est arrivé avec #60.

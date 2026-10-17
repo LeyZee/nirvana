@@ -1,0 +1,178 @@
+import { ConversationIdSchema, newId } from '@nirvana/contracts';
+import { describe, expect, it } from 'vitest';
+
+import { FAKE_TOKEN } from '../../__tests__/support/fake-telegram';
+import { foldUpdates } from '../../application/poll';
+import { toScannedEvent } from '../events';
+import { createTelegramApi, type PostLike } from '../telegram-api';
+
+interface Call {
+  readonly url: string;
+  readonly body: unknown;
+}
+
+/** Answers every call with the given status and body, and records what was asked. */
+function fakeFetch(status: number, body: unknown, calls: Call[] = []): PostLike {
+  return (url, init) => {
+    const sent: unknown = JSON.parse(init.body);
+    calls.push({ url, body: sent });
+    return Promise.resolve({ status, text: () => Promise.resolve(JSON.stringify(body)) });
+  };
+}
+
+describe('Telegram API adapter', () => {
+  it('sends HTML without link preview, silent when asked, as a reply when asked', async () => {
+    const calls: Call[] = [];
+    const api = createTelegramApi({ fetch: fakeFetch(200, { ok: true, result: { message_id: 42 } }, calls) });
+    const sent = await api.send(FAKE_TOKEN, '-100', {
+      text: '<b>x</b>',
+      isSilent: true,
+      replyToMessageId: 7,
+    });
+    expect(sent).toEqual({ ok: true, value: { messageId: 42 } });
+    expect(calls[0]?.url).toBe(`https://api.telegram.org/bot${FAKE_TOKEN}/sendMessage`);
+    expect(calls[0]?.body).toMatchObject({
+      chat_id: '-100',
+      parse_mode: 'HTML',
+      disable_notification: true,
+      link_preview_options: { is_disabled: true },
+      reply_parameters: { message_id: 7, allow_sending_without_reply: true },
+    });
+  });
+
+  it('turns each Telegram refusal into one failure kind', async () => {
+    const answer = (status: number, body: unknown) => createTelegramApi({ fetch: fakeFetch(status, body) });
+    const message = { text: 'x', isSilent: false, replyToMessageId: null };
+    expect(
+      await answer(429, { ok: false, error_code: 429, parameters: { retry_after: 7 } }).send(
+        FAKE_TOKEN,
+        '1',
+        message,
+      ),
+    ).toEqual({
+      ok: false,
+      failure: { kind: 'rate_limited', retryAfterSeconds: 7 },
+    });
+    expect(
+      await answer(400, { ok: false, error_code: 400, parameters: { migrate_to_chat_id: -1009 } }).send(
+        FAKE_TOKEN,
+        '1',
+        message,
+      ),
+    ).toEqual({ ok: false, failure: { kind: 'migrated', toChatId: '-1009' } });
+    expect(await answer(403, { ok: false, error_code: 403 }).send(FAKE_TOKEN, '1', message)).toMatchObject({
+      failure: { kind: 'forbidden' },
+    });
+    expect(await answer(404, { ok: false, error_code: 404 }).getMe(FAKE_TOKEN)).toMatchObject({
+      failure: { kind: 'unauthorized' },
+    });
+    expect(await answer(409, { ok: false, error_code: 409 }).getUpdates(FAKE_TOKEN, 0, 0)).toMatchObject({
+      failure: { kind: 'conflict' },
+    });
+    expect(await answer(502, 'Bad Gateway').getMe(FAKE_TOKEN)).toMatchObject({
+      failure: { kind: 'unreachable' },
+    });
+  });
+
+  it('never lets a network error out, since it may quote the URL and its token', async () => {
+    const api = createTelegramApi({
+      fetch: () =>
+        Promise.reject(new Error(`connect ECONNREFUSED https://api.telegram.org/bot${FAKE_TOKEN}/getMe`)),
+    });
+    const result = await api.getMe(FAKE_TOKEN);
+    expect(result).toEqual({ ok: false, failure: { kind: 'unreachable' } });
+    expect(JSON.stringify(result)).not.toContain(FAKE_TOKEN);
+  });
+
+  it('takes a replayed edit as done', async () => {
+    const api = createTelegramApi({
+      fetch: fakeFetch(400, {
+        ok: false,
+        error_code: 400,
+        description: 'Bad Request: message is not modified',
+      }),
+    });
+    expect(await api.edit(FAKE_TOKEN, '1', 5, 'x')).toEqual({ ok: true, value: null });
+  });
+
+  it('reads membership, migration and title updates, and moves past the rest', async () => {
+    const api = createTelegramApi({
+      fetch: fakeFetch(200, {
+        ok: true,
+        result: [
+          {
+            update_id: 10,
+            my_chat_member: {
+              chat: { id: -100, type: 'group', title: 'Astreinte' },
+              new_chat_member: { status: 'member' },
+            },
+          },
+          { update_id: 11, message: { chat: { id: -100, type: 'group' }, migrate_to_chat_id: -1001 } },
+          {
+            update_id: 12,
+            message: { chat: { id: -1001, type: 'supergroup' }, new_chat_title: 'Astreinte nuit' },
+          },
+          { update_id: 13, message: { chat: { id: -1001, type: 'supergroup' }, text: 'bonjour' } },
+          { update_id: 14, weird: true },
+          {
+            update_id: 15,
+            my_chat_member: { chat: { id: 5, type: 'private' }, new_chat_member: { status: 'member' } },
+          },
+        ],
+      }),
+    });
+    const result = await api.getUpdates(FAKE_TOKEN, 0, 0);
+    expect(result.ok).toBe(true);
+    const batch = foldUpdates(0, result.ok ? result.value : []);
+    expect(batch).toEqual({
+      nextOffset: 16,
+      chats: [
+        { telegramChatId: '-100', title: 'Astreinte', kind: 'group', membership: 'member', canPost: true },
+      ],
+      migrations: [{ fromChatId: '-100', toChatId: '-1001' }],
+      titles: [{ telegramChatId: '-1001', title: 'Astreinte nuit' }],
+    });
+  });
+});
+
+describe('reading the outbox', () => {
+  const base = { id: 'e1', creatorId: null, createdAt: new Date('2026-10-17T22:00:00Z') };
+  const conversationId = newId(ConversationIdSchema);
+
+  it('reads a handoff with its cause, and an older one without', () => {
+    expect(
+      toScannedEvent({ ...base, type: 'handoff_requested', payload: { conversationId, cause: 'minor' } }),
+    ).toMatchObject({
+      signal: { kind: 'handoff', conversationId, cause: 'minor' },
+    });
+    expect(
+      toScannedEvent({ ...base, type: 'handoff_requested', payload: { reason: 'texte libre' } }),
+    ).toMatchObject({
+      signal: { kind: 'handoff', conversationId: null, cause: null },
+    });
+  });
+
+  it('keeps only the session changes that open or close a thread', () => {
+    const session = (from: string, to: string) =>
+      toScannedEvent({
+        ...base,
+        type: 'session_state_changed',
+        payload: { platformAccountId: 'acc', from, to },
+      });
+    expect(session('valid', 'expired')).toMatchObject({ signal: { kind: 'session_expired' } });
+    expect(session('expired', 'valid')).toMatchObject({ signal: { kind: 'session_back' } });
+    expect(session('valid', 'warning')).toBeNull();
+  });
+
+  it('reads the budget crossing of #54 and skips types it does not know yet', () => {
+    expect(
+      toScannedEvent({
+        ...base,
+        type: 'budget_threshold_crossed',
+        payload: { kind: 'alert', spentMinor: 1600, capMinor: 2000, currency: 'EUR', day: '2026-10-17' },
+      }),
+    ).toMatchObject({ signal: { kind: 'budget', threshold: 'alert' } });
+    expect(toScannedEvent({ ...base, type: 'sale_detected', payload: {} })).toBeNull();
+    expect(toScannedEvent({ ...base, type: 'kill_switch_toggled', payload: { nonsense: 1 } })).toBeNull();
+  });
+});

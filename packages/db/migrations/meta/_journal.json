@@ -43,6 +43,13 @@
       "when": 1792272812462,
       "tag": "0005_calibration_ratings",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792276126871,
+      "tag": "0006_telegram",
+      "breakpoints": true
     }
   ]
 }

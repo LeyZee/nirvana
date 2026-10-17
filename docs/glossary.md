@@ -97,6 +97,12 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Compte fan de test | `test_fan_account` | Vrai compte fan sur une plateforme, tenu par nous, pour tester envois et ventes sans toucher un vrai fan. |
 | Liste blanche d'envoi | `send_allowlist` | Fans vers lesquels le connecteur accepte d'envoyer tant qu'elle n'est pas vide (phase 2). |
 | Enregistreur | `recorder` | Fonction de l'extension qui note les échanges réseau du site d'une plateforme, anonymisés. |
+| Notification Telegram | `telegram_delivery` | Un message que le CRM livre dans un groupe Telegram (alerte, vente, mot-clé, validation). Ne contient jamais de donnée de fan (ADR 0020). |
+| Sujet | `topic` | Ce dont parle une notification Telegram : `urgent`, `important`, `info` (onglet Alertes), `sale`, `keyword`, `validation`. Chaque sujet a son routage. |
+| Bot (Telegram) | `telegram_bot` | Un bot créé par @BotFather, ajouté dans Réglages › Telegram par son jeton, chiffré en base. Il n'agit sur rien, il prévient. |
+| Groupe (Telegram) | `telegram_chat` | Un groupe où un bot se trouve, découvert automatiquement, jamais saisi à la main. |
+| Routage | `telegram_route` | Quel sujet va dans quel groupe, pour une créatrice ou pour toutes. |
+| Astreinte | `on_call` | Le groupe Telegram qui reçoit l'urgent la nuit. « Personne n'est prévenu la nuit » quand aucune créatrice n'en a un joignable. |
 
 ## Noms à ne pas utiliser
 

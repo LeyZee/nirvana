@@ -23,6 +23,7 @@ const MODULE_DEPENDENCIES = {
   scripts: ['sales', 'media', 'conversations'],
   playground: ['agent'],
   providers: [],
+  telegram: [],
 };
 
 const moduleNames = Object.keys(MODULE_DEPENDENCIES);

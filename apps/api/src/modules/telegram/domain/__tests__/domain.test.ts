@@ -1,0 +1,222 @@
+import { ConversationIdSchema, CreatorIdSchema, TelegramChatIdSchema, newId } from '@nirvana/contracts';
+import { describe, expect, it } from 'vitest';
+
+import { nextBatch, type Pending } from '../batch';
+import { classify } from '../classify';
+import { chatsFor, computeCoverage } from '../coverage';
+import { describeTelegramError } from '../messages';
+import { MAX_TEXT, escapeHtml, joinTexts, renderNotice, renderTakenOver } from '../render';
+import { morningDigestKey, nightOf, retryDelayMs, shouldRetry } from '../schedule';
+import { botIdOfToken } from '../token';
+
+const conversationId = newId(ConversationIdSchema);
+
+describe('classification (ADR 0020 §2)', () => {
+  it('ranks a handoff urgent for the five serious causes, important otherwise', () => {
+    for (const cause of ['minor', 'non_consent', 'distress', 'meeting', 'manipulation'] as const) {
+      expect(classify({ kind: 'handoff', conversationId, cause })).toMatchObject({
+        kind: 'notice',
+        topic: 'urgent',
+        threadKey: `conversation:${conversationId}`,
+        link: { path: `/suivi?conversation=${conversationId}` },
+      });
+    }
+    for (const cause of ['guard', 'budget', 'other', null] as const) {
+      expect(classify({ kind: 'handoff', conversationId, cause })).toMatchObject({ topic: 'important' });
+    }
+  });
+
+  it('turns a takeover into an edit of the thread, and ignores one without its conversation', () => {
+    expect(classify({ kind: 'takeover', conversationId, userId: 'u1' })).toEqual({
+      kind: 'closure',
+      threadKey: `conversation:${conversationId}`,
+      mode: 'edit',
+      text: 'Pris en main',
+      userId: 'u1',
+    });
+    expect(classify({ kind: 'takeover', conversationId: null, userId: 'u1' })).toBeNull();
+  });
+
+  it('says the budget alert and the cap reached', () => {
+    expect(classify({ kind: 'budget', threshold: 'alert', spentMinor: 1600, capMinor: 2000 })).toMatchObject({
+      topic: 'important',
+      body: 'Plafond IA : 16 € sur 20 € aujourd’hui.',
+    });
+    const reached = classify({ kind: 'budget', threshold: 'reached', spentMinor: 2000, capMinor: 2000 });
+    expect(reached?.kind === 'notice' ? reached.body : '').toContain('Plafond IA atteint (20 €)');
+  });
+
+  it('opens a thread on an expired session and closes it with a reply when it comes back', () => {
+    expect(classify({ kind: 'session_expired', platformAccountId: 'acc' })).toMatchObject({
+      topic: 'important',
+      threadKey: 'session:acc',
+    });
+    expect(classify({ kind: 'session_back', platformAccountId: 'acc' })).toMatchObject({
+      kind: 'closure',
+      threadKey: 'session:acc',
+      mode: 'reply',
+    });
+  });
+
+  it('cuts the free reason of a kill switch to 200 characters', () => {
+    const outcome = classify({
+      kind: 'kill_switch',
+      active: true,
+      scope: 'global',
+      scopeId: null,
+      reason: 'x'.repeat(500),
+    });
+    expect(outcome?.kind === 'notice' ? outcome.body.length : 0).toBeLessThan(260);
+    expect(
+      classify({ kind: 'kill_switch', active: false, scope: 'global', scopeId: null, reason: 'fini' }),
+    ).toMatchObject({
+      kind: 'closure',
+      threadKey: 'kill:global:global',
+    });
+  });
+});
+
+describe('rendering (ADR 0020 §10)', () => {
+  it('escapes everything the module did not write itself', () => {
+    expect(escapeHtml('<a href="x">&</a>')).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;');
+    const rendered = renderNotice(
+      {
+        kind: 'notice',
+        topic: 'urgent',
+        threadKey: null,
+        title: 'URGENT',
+        body: '<b>raison</b>',
+        link: { label: 'Ouvrir', path: '/suivi' },
+      },
+      'Démo <script>',
+      'https://crm.example.test',
+    );
+    expect(rendered.text).toContain('🔴 <b>URGENT · Démo &lt;script&gt;</b>');
+    expect(rendered.text).toContain('&lt;b&gt;raison&lt;/b&gt;');
+    expect(rendered.text).toContain('<a href="https://crm.example.test/suivi">Ouvrir</a>');
+    expect(rendered.summary).toBe('<b>raison</b>');
+  });
+
+  it('closes a message with the first name of who took it', () => {
+    expect(renderTakenOver('texte', 'Lucas')).toBe('texte\n✓ Pris en main par Lucas');
+    expect(renderTakenOver('texte', null)).toBe('texte\n✓ Pris en main');
+  });
+
+  it('keeps a grouped message under Telegram’s limit and says how many are left out', () => {
+    const joined = joinTexts(Array.from({ length: 10 }, () => 'y'.repeat(1000)));
+    expect(joined.length).toBeLessThanOrEqual(MAX_TEXT);
+    expect(joined).toMatch(/… et \d+ autres dans le CRM\.$/);
+  });
+});
+
+describe('grouping a flush (ADR 0020 §8)', () => {
+  const at = (seconds: number) => new Date(Date.UTC(2026, 9, 17, 22, 0, seconds));
+  const item = (
+    id: string,
+    topic: Pending['topic'],
+    action: Pending['action'] = 'send',
+    seconds = 0,
+  ): Pending => ({
+    id,
+    topic,
+    action,
+    text: id,
+    createdAt: at(seconds),
+  });
+
+  it('sends the most serious first and never mixes a ringing message with a silent one', () => {
+    const batch = nextBatch([
+      item('info', 'info'),
+      item('imp', 'important', 'send', 2),
+      item('urg', 'urgent', 'send', 3),
+    ]);
+    expect(batch).toMatchObject({ kind: 'joined', isSilent: false, text: 'urg\n\nimp' });
+    expect(nextBatch([item('info', 'info')])).toMatchObject({ kind: 'single', item: { id: 'info' } });
+  });
+
+  it('sends an edit alone', () => {
+    expect(nextBatch([item('edit', 'urgent', 'edit'), item('urg', 'urgent', 'send', 1)])).toMatchObject({
+      kind: 'single',
+      item: { id: 'edit' },
+    });
+    expect(nextBatch([])).toBeNull();
+  });
+});
+
+describe('coverage (ADR 0020 §12)', () => {
+  const creator = newId(CreatorIdSchema);
+  const other = newId(CreatorIdSchema);
+  const groupA = newId(TelegramChatIdSchema);
+  const groupB = newId(TelegramChatIdSchema);
+
+  it('counts a route for every creator, and only groups that can be reached', () => {
+    const routes = [
+      { creatorId: null, topic: 'urgent' as const, chatId: groupA },
+      { creatorId: creator, topic: 'urgent' as const, chatId: groupA },
+      { creatorId: creator, topic: 'sale' as const, chatId: groupB },
+    ];
+    expect(chatsFor(routes, creator, 'urgent')).toEqual([groupA]);
+    const coverage = computeCoverage(
+      [
+        { id: creator, displayName: 'Démo' },
+        { id: other, displayName: 'Autre' },
+      ],
+      routes,
+      [
+        { id: groupA, reachable: true },
+        { id: groupB, reachable: false },
+      ],
+    );
+    expect(coverage[0]).toMatchObject({ urgentReachable: true });
+    expect(coverage[0]?.topicsWithoutGroup).toContain('sale');
+    expect(coverage[1]).toMatchObject({ urgentReachable: true });
+    expect(
+      computeCoverage([{ id: other, displayName: 'Autre' }], routes, [{ id: groupA, reachable: false }])[0],
+    ).toMatchObject({
+      urgentReachable: false,
+    });
+  });
+});
+
+describe('timing', () => {
+  it('grows the retry delay and stops retrying after an hour', () => {
+    expect(retryDelayMs(1)).toBe(5000);
+    expect(retryDelayMs(3)).toBe(20_000);
+    expect(retryDelayMs(50)).toBe(600_000);
+    const created = new Date('2026-10-17T20:00:00Z');
+    expect(shouldRetry(created, new Date('2026-10-17T20:59:00Z'))).toBe(true);
+    expect(shouldRetry(created, new Date('2026-10-17T21:01:00Z'))).toBe(false);
+  });
+
+  it('finds the night in the creator’s time zone and the morning digest hour', () => {
+    // 23:30 in Paris (UTC+2 in October): the night started at 20:00 Paris, 18:00 UTC.
+    expect(nightOf('Europe/Paris', new Date('2026-10-17T21:30:00Z'))).toEqual({
+      from: new Date('2026-10-17T18:00:00Z'),
+      to: new Date('2026-10-17T21:30:00Z'),
+    });
+    // 14:00 in Paris: the last night, 20:00 to 08:00.
+    expect(nightOf('Europe/Paris', new Date('2026-10-18T12:00:00Z'))).toEqual({
+      from: new Date('2026-10-17T18:00:00Z'),
+      to: new Date('2026-10-18T06:00:00Z'),
+    });
+    expect(morningDigestKey('c1', 'Europe/Paris', new Date('2026-10-18T06:10:00Z'))).toBe(
+      'digest:c1:2026-10-18',
+    );
+    expect(morningDigestKey('c1', 'Europe/Paris', new Date('2026-10-18T07:10:00Z'))).toBeNull();
+  });
+});
+
+describe('token and messages', () => {
+  it('reads the bot id from a well-shaped token only', () => {
+    expect(botIdOfToken(` 1234567:AA${'FAKE'.repeat(8)}00 `)).toBe('1234567');
+    expect(botIdOfToken('sk-not-a-bot-token')).toBeNull();
+    expect(botIdOfToken('1234567:short')).toBeNull();
+  });
+
+  it('has one French sentence per error, never a code', () => {
+    expect(describeTelegramError('chat_unreachable')).toBe(
+      'Le bot ne peut plus écrire dans ce groupe. Rajoute-le au groupe, puis réessaie.',
+    );
+    expect(describeTelegramError('unreachable')).not.toMatch(/\d{3}/);
+  });
+});
