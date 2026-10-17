@@ -16,7 +16,13 @@ Toute entrée est anonymisée (identifiants hachés, contenus tronqués, aucune 
 - Stabilité des identifiants :
 - Ventes PPV (comment elles apparaissent) :
 - Envoi de média (upload / URL signée / limites) :
+- Scripts natifs (liste, contenu, trace par fan, envoi) :
+- Historique (messages, achats, notes) paginable jusqu'au début :
+- Notes client (lecture, écriture, concurrence) :
+- Âge des fans (vérifié, exposé) :
 - Capacités déclarées (`ConnectorCapabilities`) :
+
+Ce qu'on cherche à remplir : `docs/reference/reveal-connector-inventory.md`. Captures : `docs/runbooks/reveal-recording.md`.
 
 ## Endpoints
 

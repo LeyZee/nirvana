@@ -63,6 +63,12 @@ Décision : **B**. L'extension garde deux rôles : **enregistreur** (découverte
 8. Ventes PPV : comment elles apparaissent (événement, message typé, endpoint transactions) ?
 9. Envoi de média : upload direct ? URL signée ? Limites ?
 10. Rate limits observés.
+11. Scripts natifs : liste, contenu (étapes, médias, prix, textes), trace de ce qui a été envoyé à un fan, endpoint d'envoi dédié ou non.
+12. Historique : pagination de tout l'historique d'une conversation, des achats passés et des notes client (import initial, anti-doublon).
+13. Notes client : lecture, écriture, format, concurrence avec un chatteur.
+14. Âge des fans : Reveal vérifie-t-il l'âge, et l'expose-t-il.
+
+Ce que le connecteur doit savoir faire, capacité par capacité : `docs/reference/reveal-connector-inventory.md`. Comment Charles capture une session : `docs/runbooks/reveal-recording.md`.
 
 ### Règles de bonne conduite du connecteur Reveal
 
@@ -85,4 +91,4 @@ Contraintes MV3 à connaître : le service worker meurt après ~30 s d'inactivit
 
 ## FakeReveal
 
-`apps/api/test/fake-reveal/` : un serveur Fastify qui implémente les endpoints observés, avec des scénarios pilotables (`POST /__scenario`) : arrivée de messages à t+X, expiration de session, 429, 500, latence, conversation qui disparaît. Il sert aux tests de contrat (`connectors/__tests__/contract.test.ts` tourne contre `FakeConnector` et contre `RevealApiConnector`+FakeReveal), aux e2e Playwright, et au dev local sans compte Reveal.
+Spécification : `docs/reference/fake-reveal.md`. `apps/api/test/fake-reveal/` : un serveur Fastify qui implémente les endpoints observés, avec des scénarios pilotables (`POST /__scenario`) : arrivée de messages à t+X, expiration de session, 429, 500, latence, conversation qui disparaît. Il sert aux tests de contrat (`connectors/__tests__/contract.test.ts` tourne contre `FakeConnector` et contre `RevealApiConnector`+FakeReveal), aux e2e Playwright, et au dev local sans compte Reveal.

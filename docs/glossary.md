@@ -47,6 +47,13 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Étape | `script_step` | Une étape d'un script (message, médias, prix, pacing). |
 | Carton | `card` | Séparateur visuel d'étape (PNG), hérité d'OnlyScript. |
 | Structure | `script_structure` | Ossature d'un script (ordre des étapes, médias attendus, intention). |
+| Script natif | `platform_script` | Un script de vente stocké sur la plateforme (Reveal), que l'agent lit et déroule. À ne pas confondre avec `script`, notre structure interne. |
+| Note client | `fan_note` | La note libre qu'une plateforme attache à un fan, lue et écrite par les chatteurs et l'agent. Distincte de `fan_fact`. |
+| Notes du modèle | `creator_note` | Les notes que Reveal affiche à côté de chaque conversation sur la créatrice : sa fiche persona vue par la plateforme. |
+| Bundle (PPV) | `bundle` | Le PPV de Reveal : médias floutés vendus (au moins un), prix TTC, tarif réduit optionnel, aperçu gratuit de 10 médias au plus. |
+| Coffre | `vault` | Les médias de la créatrice stockés sur la plateforme, réutilisables à l'envoi. |
+| Capture | `recording` | Un enregistrement anonymisé du trafic entre le site d'une plateforme et ses serveurs (HAR ou enregistreur de l'extension). |
+| Fan test | `test_fan` | Un compte fan qui appartient à l'agence, seule cible autorisée des écritures pendant les captures et les tests manuels. |
 | Relance | `follow_up` | Message envoyé après un silence du fan. |
 | Petit rappel | `nudge` | Rappel court quand le fan a lu sans répondre (« nudge » d'OnlyChat). |
 | Cooldown | `cooldown` | Délai pendant lequel le bot ne pousse pas de vente. |

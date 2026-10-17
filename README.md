@@ -44,11 +44,13 @@
 | ✅ **Sur `main`** | **Persona** : un seul schéma Zod calqué sur la fiche créatrice d'OnlyChat (Détails, Infos en plus, Comportement, Stratégies, Relances, Notifications) et un placeholder qui le valide. | P0-08 · #17 |
 | ✅ **Sur `main`** | **Design system** « Liquid Glass » (`packages/design-system`), logo et déclinaisons (`brand/`). | D-01 · #13 |
 | ✅ **Sur `main`** | **Fiches validées** : mémoire du fan sur les notes Reveal (P3-02), catalogue de vente = index des scripts, étapes et bundles (P6-01). Fiche proposée : vocaux avec la voix clonée. | #18, #20, #21 |
+| ✅ **Sur `main`** | **Connexion Reveal préparée** : inventaire de ce que Reveal expose, runbook de capture réseau, anonymiseur testé, spécification de `FakeReveal`. Aucune capture faite à ce jour : elle attend le chatteur « bot » dans Reveal. | #15 |
 | 🔶 **PR ouverte** | **Vision et anti-injection** : médias des fans décrits par Gemini 3.8 Flash avec bascule automatique vers Grok, fiche média par vidéo de bundle, pièges texte, image, vocal et caractères invisibles. | P3-04 · #19 (brouillon) |
-| 🔶 **PR ouverte** | **Connexion Reveal** : inventaire de ce que Reveal expose, runbook de capture réseau anonymisée, spécification de `FakeReveal`. | #15 |
 | ⏳ **Pas commencé** | Base de données et RLS, journal de conversation, worker, connecteur Reveal, dashboard, extension (seul le squelette du popup existe). | P0-02 → P0-07, P1 |
 
 **Aucun message n'a encore été généré par Grok** : `pnpm probe` et `pnpm playground` attendent la clé `LLM_XAI_API_KEY` dans l'environnement. Le premier verdict sur le sexting en français viendra de là.
+
+**La CI verte teste le socle, pas encore le produit** : 96 tests unitaires, mais 0 test d'intégration (`test:integration` passe à vide) et 0 éval Promptfoo. Ils arrivent avec la base (P0-03) et le premier scénario de bout en bout.
 
 ## Le projet en une minute
 
@@ -217,7 +219,7 @@ pnpm probe              # test express : Grok 4.7 accepte-t-il le sexting en fra
 pnpm playground         # converser avec l'agent dans le terminal (clé requise)
 ```
 
-Les clés vont dans `.env` (jamais commité, documenté par `.env.example`). `docker compose up -d`, `pnpm dev` et `pnpm db:migrate` serviront quand la base et le serveur auront leur code (P0-03, P0-04).
+Les clés vont dans `.env` (jamais commité, documenté par `.env.example`). `docker compose up -d` et `pnpm dev` serviront quand la base et le serveur auront leur code (P0-03, P0-04). Les commandes `db:*`, `persona:*` et `ops:*` de `package.json` sont déclarées mais n'ont pas encore de script derrière.
 
 ## Comment on travaille ici
 
@@ -232,7 +234,7 @@ Les clés vont dans `.env` (jamais commité, documenté par `.env.example`). `do
 | Phase | Objectif | État |
 |---|---|---|
 | **0 · Fondations** | monorepo, contrats, base + RLS, serveur + worker, journal, port connecteur, CI | outillage fait, le reste à faire |
-| **1 · Spike Reveal** | capture et analyse de l'API Reveal, FakeReveal | inventaire en PR #15, capture attend le compte « bot » |
+| **1 · Spike Reveal** | capture et analyse de l'API Reveal, FakeReveal | inventaire et runbook faits (#15), capture attend le chatteur « bot » |
 | **2 · Connecteur** | lecture temps réel, envoi vérifié, session chiffrée, coupe-circuit | — |
 | **3 · Moteur IA en copilote, vente comprise** | sens, cerveau, voix, gardes, mémoire, scripts et bundles ; ≥ 80 % sans retouche au test à l'aveugle | passerelle et gardes faites, vision en PR #19 |
 | **4 · Supervision** | dashboard façon Reveal, Entraîner, Suivi, Réglages › Modèles IA, copilote dans l'extension | maquettes et design system |
