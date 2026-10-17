@@ -4,6 +4,16 @@
  * the caller; these helpers only move matter and light.
  */
 
+export {
+  areaPath,
+  chartPoints,
+  linePath,
+  nearestIndex,
+  niceTicks,
+  type ChartFrame,
+  type ChartPoint,
+} from './chart.js';
+
 export interface Point {
   readonly x: number;
   readonly y: number;

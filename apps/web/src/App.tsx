@@ -1,19 +1,15 @@
 import type { CurrentUser } from '@nirvana/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from '@tanstack/react-router';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 
 import { SignInPage } from './auth/SignInPage';
 import { fetchCurrentUser, signOut } from './auth/session';
-import { ServicesSection } from './settings/services/ServicesSection';
+import { createAppRouter, type RouterContext } from './router';
 
 type Session = { status: 'loading' } | { status: 'signed_out' } | { status: 'signed_in'; user: CurrentUser };
 
-const ROLE_LABELS: Record<CurrentUser['role'], string> = {
-  owner: 'Propriétaire',
-  operator: 'Opérateur',
-  creator: 'Créatrice',
-};
-
-/** Route guard: nothing of the dashboard renders without a session (P0-07a). The screens come later (D-01, P3). */
+/** Route guard: nothing of the dashboard renders without a session (P0-07a). */
 export function App(): JSX.Element {
   const [session, setSession] = useState<Session>({ status: 'loading' });
 
@@ -36,30 +32,16 @@ export function App(): JSX.Element {
   if (session.status === 'signed_out') {
     return <SignInPage onSignedIn={refresh} />;
   }
-  // Until the shell and its navigation land (fil Extension), the owner lands on Réglages › Modèles IA › Services.
-  if (session.user.role === 'owner') {
-    return (
-      <main className="nv-aura min-h-dvh px-4 py-6">
-        <div className="mx-auto flex max-w-[680px] justify-end">
-          <button className="nv-btn nv-btn--plain" type="button" onClick={() => void signOut().then(refresh)}>
-            Se déconnecter
-          </button>
-        </div>
-        <ServicesSection />
-      </main>
-    );
-  }
+  return <SignedIn user={session.user} onSignOut={() => void signOut().then(refresh)} />;
+}
+
+/** The dashboard itself: one router per signed-in user, so a new session starts on a clean state. */
+function SignedIn({ user, onSignOut }: RouterContext): JSX.Element {
+  const [router] = useState(() => createAppRouter({ user, onSignOut }));
+  const [queryClient] = useState(() => new QueryClient());
   return (
-    <main className="nv-aura grid min-h-dvh place-items-center px-4">
-      <div className="nv-glass nv-glass--pad flex flex-col items-center gap-4 text-center">
-        <h1 className="font-serif text-4xl italic">Nirvana</h1>
-        <p>
-          {session.user.name} · {ROLE_LABELS[session.user.role]}
-        </p>
-        <button className="nv-btn nv-btn--plain" type="button" onClick={() => void signOut().then(refresh)}>
-          Se déconnecter
-        </button>
-      </div>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} context={{ user, onSignOut }} />
+    </QueryClientProvider>
   );
 }

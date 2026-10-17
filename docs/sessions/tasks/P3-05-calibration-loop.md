@@ -27,5 +27,5 @@ L'écran du CRM (fil Extension), la base (P0-03), le juge IA qui pré-note, le C
 
 ## Reste
 - Calibrer pour de vrai avec `LLM_XAI_API_KEY` : Charles et Messa notent une cinquantaine de réponses par préréglage.
-- Brancher l'écran Entraîner du CRM sur ce code (fil Extension) et les notes sur la base (P0-03).
+- Brancher l'écran Entraîner du CRM sur ce code (fil Extension) et les notes sur la base (P0-03). Écran en cours (journal `2026-10-17-web-coquille-playground.md`), en mode démo jusqu'aux routes P3-06.
 - Construire la passerelle dans `composition-root` au branchement de l'agent sur `conversations` (après P0-05, accord du coordinateur), avec les clés du CRM : `credentials: app.modules.providers.apiKeySource` et `onKeyRefused: ({ provider, status }) => { void modules.providers.reportRefusedKey(provider, status === 401 ? 'unauthorized' : 'missing_permission').catch((err) => logger.warn({ err, provider }, 'key refusal not recorded')); }` (convenu avec le fil Connecteurs, 17/10).
