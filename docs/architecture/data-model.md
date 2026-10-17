@@ -1,6 +1,6 @@
 # Modèle de données
 
-Dernière revue : 2026-10-16. Le schéma Drizzle (`packages/db/src/schema/`) fait foi pour les colonnes ; ce document explique les intentions. Toutes les tables métier portent `creator_id` (RLS) sauf `creators` et les tables système.
+Dernière revue : 2026-10-16. Le schéma Drizzle (`packages/db/src/schema/`, P0-03) fait foi pour les colonnes ; ce document explique les intentions. Toutes les tables métier portent `creator_id` (RLS) sauf `creators` et les tables système.
 
 ## Conventions
 
@@ -144,7 +144,7 @@ Noms et payloads dans `packages/contracts/src/jobs.ts`. Conventions : `queue_nam
 
 ## RLS
 
-- Les tables appartiennent à `nirvana_admin` (rôle des migrations). L'application se connecte en `nirvana_app` (`NOSUPERUSER NOBYPASSRLS`, droits par `GRANT` seulement, voir `packages/db/docker/init.sql`). Si `nirvana_app` possédait les tables, la RLS ne s'appliquerait pas à lui.
+- Les tables appartiennent à `nirvana_admin` (rôle des migrations, `NOSUPERUSER BYPASSRLS` en production : `FORCE` s'applique au propriétaire, `BYPASSRLS` lui laisse traverser les tenants pour `withAdmin`). L'application se connecte en `nirvana_app` (`NOSUPERUSER NOBYPASSRLS`, droits par `GRANT` seulement, voir `packages/db/docker/init.sql`). Si `nirvana_app` possédait les tables, la RLS ne s'appliquerait pas à lui.
 - Chaque table avec `creator_id` a `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY` et la politique :
 
   ```sql
@@ -160,6 +160,6 @@ Noms et payloads dans `packages/contracts/src/jobs.ts`. Conventions : `queue_nam
 
 - `messages (conversation_id, platform_created_at desc)` ; `UNIQUE (platform_account_id, platform_message_id)`
 - `conversation_events (conversation_id, seq)`, `(type, created_at)` pour les vues
-- `fan_facts (fan_id) where superseded_by is null and (expires_at is null or expires_at > now())`
+- `fan_facts (fan_id) where superseded_by is null` (l'expiration se filtre à la requête : `now()` est interdit dans un prédicat d'index)
 - `conversations (platform_account_id, state)`, `(creator_id, last_inbound_at desc)`
 - `llm_calls (creator_id, created_at)`
