@@ -4,5 +4,6 @@ Fait : l'onglet Suivi lit les créatrices du compte (`GET /v1/creators`, route d
 Pas fait : la file « à traiter » et le lecteur de conversation (après le squelette, actions de la revue 08) ; pagination au-delà des 200 plus récentes par créatrice (la liste le dit).
 Décisions : périmètre fixé par le coordinateur le 17/10 (squelette, pas une Inbox) ; libellés des états repris de `docs/design/README.md`.
 Découvertes : `/v1/conversations` exige `creatorId` et aucune route ne listait les créatrices ; tranché par le fil Bilan (pas de remplissage de `creator_ids`, qui sert aux operators) : `GET /v1/creators` et une commande de création de créatrice dans sa PR suivante, que celle-ci attend pour être fusionnée.
+Suite (règle de Charles du 17/10 : se mettre à la place d'un nouvel utilisateur) : section « Clarté » dans `docs/design/README.md` ; pastilles d'état qui disent qui a la main (Rien à faire, Message reçu, L'agent écrit, À valider, Envoi en cours, Un humain répond, En pause, Erreur) ; le mode n'est dit qu'une fois en tête quand toutes les conversations le partagent ; « A écrit il y a 3 min » plutôt qu'une durée seule.
 Candidats à suppression : aucun.
-Vérifié : pnpm check ✓, pnpm test ✓ (29 web), rendu à 1440 px et 400 px avec des fans et des créatrices inventés (une créatrice, deux créatrices, aucune).
+Vérifié : pnpm check ✓, pnpm test ✓ (31 web), rendu à 1440 px et 400 px avec des fans et des créatrices inventés (une créatrice, deux créatrices, aucune).

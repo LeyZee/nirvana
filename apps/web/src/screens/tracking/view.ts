@@ -2,12 +2,12 @@ import type { ConversationMode, ConversationState, ConversationSummary } from '@
 
 /** The labels of `nv-status--<state>` (docs/design/README.md, « Pastilles d'état »). */
 export const STATE_LABELS: Readonly<Record<ConversationState, string>> = {
-  idle: 'Au calme',
-  pending: 'En attente',
-  drafting: 'Rédaction',
+  idle: 'Rien à faire',
+  pending: 'Message reçu',
+  drafting: 'L’agent écrit',
   awaiting_approval: 'À valider',
-  sending: 'Envoi',
-  human: 'Humain',
+  sending: 'Envoi en cours',
+  human: 'Un humain répond',
   paused: 'En pause',
   error: 'Erreur',
 };
@@ -46,9 +46,24 @@ export function lastMessageAgo(iso: string | null, now: Date): string | null {
   return `il y a ${String(Math.floor(hours / 24))} j`;
 }
 
-/** The line under the fan's name: the mode, then when he last wrote (short enough for a phone). */
-export function subline(conversation: ConversationSummary, now: Date): string {
+/** The mode every line shares, said once above the list; null when they differ and each line says its own. */
+export function sharedMode(lines: readonly Line[]): ConversationMode | null {
+  const modes = new Set(lines.map((l) => l.conversation.mode));
+  const [only] = modes;
+  return modes.size === 1 && only !== undefined ? only : null;
+}
+
+/** What the mode means for the person reading, in one sentence. */
+export const MODE_MEANINGS: Readonly<Record<ConversationMode, string>> = {
+  copilot: 'En copilote : chaque réponse de l’agent attend ton accord.',
+  auto: 'En automatique : l’agent répond seul.',
+};
+
+/** The line under the fan's name: when he last wrote, after the mode when the lines do not share one. */
+export function subline(conversation: ConversationSummary, now: Date, withMode: boolean): string {
   const ago = lastMessageAgo(conversation.lastInboundAt, now);
-  const mode = MODE_LABELS[conversation.mode];
-  return ago === null ? `${mode} · pas encore de message` : `${mode} · ${ago}`;
+  const wrote = ago === null ? 'N’a pas encore écrit' : `A écrit ${ago}`;
+  return withMode
+    ? `${MODE_LABELS[conversation.mode]} · ${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}`
+    : wrote;
 }

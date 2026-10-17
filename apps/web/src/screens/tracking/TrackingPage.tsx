@@ -3,7 +3,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type JSX } from 'react';
 
 import { fetchConversations, fetchCreators } from './api';
-import { mergeConversations, STATE_LABELS, statusClass, subline } from './view';
+import { MODE_MEANINGS, mergeConversations, sharedMode, STATE_LABELS, statusClass, subline } from './view';
 import './tracking.css';
 
 import { Page, PageHeader, Panel } from '@/shell/layout';
@@ -39,6 +39,7 @@ export function TrackingPage(): JSX.Element {
   );
   const hasMore = queries.some((q) => q.data?.hasMore === true);
   const showsCreator = creators.length > 1;
+  const mode = sharedMode(lines);
   const retry = (): void => {
     if (creatorsQuery.isError) void creatorsQuery.refetch();
     for (const q of failed) void q.refetch();
@@ -49,7 +50,11 @@ export function TrackingPage(): JSX.Element {
       <PageHeader
         eyebrow={creators.length === 1 ? creators[0]?.displayName : undefined}
         title="Suivi"
-        lead="Les conversations et leur état, la plus récente en haut."
+        lead={
+          mode === null
+            ? 'Les conversations et qui a la main, la plus récente en haut.'
+            : `Les conversations et qui a la main, la plus récente en haut. ${MODE_MEANINGS[mode]}`
+        }
       />
       {creatorsQuery.isError || (failed.length > 0 && lines.length === 0) ? (
         <Notice
@@ -84,6 +89,7 @@ export function TrackingPage(): JSX.Element {
                   key={conversation.id}
                   conversation={conversation}
                   creatorName={showsCreator ? creatorName : undefined}
+                  withMode={mode === null}
                   now={now}
                 />
               ))}
@@ -99,11 +105,13 @@ export function TrackingPage(): JSX.Element {
 function Row({
   conversation,
   creatorName,
+  withMode,
   now,
 }: {
   conversation: ConversationSummary;
   /** Shown before the mode when the account sees several creators. */
   creatorName: string | undefined;
+  withMode: boolean;
   now: Date;
 }): JSX.Element {
   const name = conversation.fanDisplayName.trim() === '' ? 'Fan sans nom' : conversation.fanDisplayName;
@@ -116,7 +124,7 @@ function Row({
         <span className="nv-convo__name">{name}</span>
         <span className="nv-convo__preview">
           {creatorName === undefined ? null : `${creatorName} · `}
-          {subline(conversation, now)}
+          {subline(conversation, now, withMode)}
         </span>
       </span>
       <span className="nv-convo__side">

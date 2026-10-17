@@ -1,7 +1,7 @@
 import { ConversationSummarySchema, type ConversationSummary } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { lastMessageAgo, mergeConversations, statusClass, subline } from './view';
+import { lastMessageAgo, mergeConversations, sharedMode, statusClass, subline } from './view';
 
 const NOW = new Date('2026-10-17T21:00:00Z');
 
@@ -47,12 +47,25 @@ describe('lastMessageAgo', () => {
   });
 });
 
-describe('subline and statusClass', () => {
-  it('reads the mode then the last message, and maps states to their pill', () => {
-    expect(subline(conversation('1'), NOW)).toBe('Copilote · pas encore de message');
-    expect(subline(conversation('1', { mode: 'auto', lastInboundAt: '2026-10-17T20:55:00Z' }), NOW)).toBe(
-      'Automatique · il y a 5 min',
-    );
+describe('subline, sharedMode and statusClass', () => {
+  it('says when he last wrote, with the mode only when the lines do not share one', () => {
+    expect(subline(conversation('1'), NOW, false)).toBe('N’a pas encore écrit');
+    const auto = conversation('2', { mode: 'auto', lastInboundAt: '2026-10-17T20:55:00Z' });
+    expect(subline(auto, NOW, false)).toBe('A écrit il y a 5 min');
+    expect(subline(auto, NOW, true)).toBe('Automatique · a écrit il y a 5 min');
+  });
+
+  it('finds the mode all lines share, or none', () => {
+    const line = (mode: 'copilot' | 'auto') => ({
+      conversation: conversation('1', { mode }),
+      creatorName: 'A',
+    });
+    expect(sharedMode([line('copilot'), line('copilot')])).toBe('copilot');
+    expect(sharedMode([line('copilot'), line('auto')])).toBeNull();
+    expect(sharedMode([])).toBeNull();
+  });
+
+  it('maps states to their pill', () => {
     expect(statusClass('awaiting_approval')).toBe('nv-status--awaiting-approval');
   });
 });
