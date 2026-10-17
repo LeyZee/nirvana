@@ -21,7 +21,7 @@ Le métier (Charles, 17/10) : le fan vient chercher une relation. L'agent fait d
 | L7 | Note client d'un fan | `getFanNote?()` (nouveau) | Mémoire longue partagée avec les chatteurs ; import des notes existantes | Lecture de la note, format (texte libre, champs), date de modification |
 | L8 | Scripts natifs : liste et contenu | `listPlatformScripts?()` (nouveau) | L'agent pioche dans les scripts de l'agence | Liste, dossiers, contenu d'un script : étapes, textes, médias, prix, délais |
 | L9 | Scripts déjà envoyés à un fan | `getScriptHistory?()` (nouveau) | Règle « jamais deux fois le même script au même fan » | Indicateur « déjà envoyé » dans le sélecteur, ou lien entre message envoyé et script ; sinon on le déduit de notre journal |
-| L10 | Coffre (médias de la créatrice) | `listVaultMedia?()` (nouveau) | Envoyer un PPV hors script ; décrire le catalogue | Liste paginée, dossiers, type, identifiant réutilisable à l'envoi |
+| L10 | Coffre (médias de la créatrice) | `listVaultMedia?()` (nouveau) | Décrire et indexer les médias des scripts (L15) | Liste paginée, dossiers, type, identifiant réutilisable à l'envoi |
 | L11 | Notes du modèle (panneau de droite d'une conversation) | `getCreatorNotes?()` (nouveau) | C'est la fiche persona de Messalina vue par Reveal (Charles, 17/10) : la garder alignée sur la persona versionnée | Lecture, format, si elles sont par compte ou par conversation |
 | L12 | Statistiques du fan (panneau de droite) | `getFanProfile?()` | Priorité, rythme de vente, fans à ménager | Chaque statistique affichée et l'appel qui la fournit |
 | L13 | Onglet PPV d'une conversation : PPV envoyés, achetés, prix, statistiques de vente | `getFanPpvStats?()` (nouveau) | Charles : « l'agent doit en avoir conscience absolument » ; prix à proposer, taux d'achat, ce qui a déjà été vendu | Appels de l'onglet PPV, champs, période couverte |
@@ -35,10 +35,10 @@ Toute écriture porte une clé d'idempotence et passe par `verifySent` (ADR 0008
 | # | Capacité | Méthode du port | Pourquoi | Ce que la capture doit montrer |
 |---|---|---|---|---|
 | E1 | Envoyer un texte | `sendText()` | Conversation, KYC, vie entre les étapes | Requête d'envoi, identifiant renvoyé, présence d'un identifiant client (nonce) réutilisable comme clé d'idempotence |
-| E2 | Envoyer un PPV (médias du coffre + prix + texte) | `sendMedia()` | Vente hors script | Corps de la requête (références de médias, prix, devise), bornes de prix |
+| E2 | Envoyer un PPV (médias du coffre + prix + texte) | `sendMedia()` | Non utilisé par l'agent (voir plus bas) ; à comprendre pour lire l'historique et pour les vocaux | Corps de la requête (références de médias, prix, devise), bornes de prix |
 | E3 | Envoyer une étape de script natif | `sendScriptStep?()` (nouveau) | Vente par script ; Reveal garde la trace de l'envoi | Endpoint dédié ou envoi ordinaire ; ce qui marque l'étape comme envoyée |
-| E4b | Écrire les notes du modèle | `setCreatorNotes?()` (nouveau) | Pousser la persona à jour dans Reveal, à la demande de Charles seulement | Remplacement ou ajout, portée |
 | E4 | Écrire la note client | `setFanNote?()` (nouveau) | Consigner le KYC | Remplacement complet ou ajout ; conflit si un chatteur écrit en même temps |
+| E4b | Écrire les notes du modèle | `setCreatorNotes?()` (nouveau) | Pousser la persona à jour dans Reveal, à la demande de Charles seulement | Remplacement ou ajout, portée |
 | E5 | Vérifier un envoi | `verifySent()` | Rejeu sans doublon après une erreur réseau | Retrouver le message par nonce, ou par texte et horodatage |
 | E6 | Marquer lu, indiquer « en train d'écrire » | `markRead?()`, `setTyping?()` | Rythme humain | Appels faits par le client officiel à l'ouverture et à la frappe |
 | E7 | Envoyer un vocal (gratuit, ou dans un bundle si Reveal l'accepte) | `sendMedia()` avec `kind: audio` | Vocaux dans la voix de la créatrice pour les fans qui doutent (fil Vocaux, 17/10) | Requête du bouton micro natif (upload, format et codec, durée max), import d'un fichier audio dans « Envoyer des médias » et dans un bundle, rendu côté fan (lecteur avec onde ou fichier joint) |
@@ -55,7 +55,7 @@ Le connecteur n'appelle aucun endpoint qui supprime, rembourse, bloque un fan, e
 
 ## Effets sur le port
 
-L5, L7 à L14, E3, E4 et E4b n'existent pas dans le port décrit par `docs/architecture/connectors.md`. Ce sont des méthodes **optionnelles**, annoncées par `capabilities` (`fanProfile`, `fanNotes`, `creatorNotes`, `ppvStats`, `platformScripts`, `vault`) : OnlyFans n'a pas de scripts natifs, notre plateforme les aura en interne, et le cœur s'adapte à ce que le connecteur déclare (ADR 0003). La forme exacte se fixe après la capture, dans la fiche proposée `docs/sessions/tasks/PROPOSED-reveal-connector.md`. Si le changement de contrat touche plusieurs modules, la session écrit une ADR `proposed`.
+L5, L7 à L15, E3, E4 et E4b n'existent pas dans le port décrit par `docs/architecture/connectors.md`. Ce sont des méthodes **optionnelles**, annoncées par `capabilities` (`fanProfile`, `fanNotes`, `creatorNotes`, `ppvStats`, `platformScripts`, `vault`) : OnlyFans n'a pas de scripts natifs, notre plateforme les aura en interne, et le cœur s'adapte à ce que le connecteur déclare (ADR 0003). La forme exacte se fixe après la capture, dans la fiche proposée `docs/sessions/tasks/PROPOSED-reveal-connector.md`. Si le changement de contrat touche plusieurs modules, la session écrit une ADR `proposed`.
 
 ## Questions ajoutées aux 10 de `connectors.md`
 
