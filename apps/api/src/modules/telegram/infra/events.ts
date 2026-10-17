@@ -20,8 +20,7 @@ const HandoffSchema = z.object({
   cause: HandoffCauseSchema.optional().catch(undefined),
 });
 
-// TODO(P3-07): `takeover_started` reaches the outbox without its conversation (controlPayload, #54); until the
-// contract carries `conversationId`, a takeover closes nothing.
+// `conversationId` since #60; a row written before it closes nothing.
 const TakeoverSchema = z.object({
   conversationId: ConversationIdSchema.optional().catch(undefined),
   userId: z.string().min(1).optional().catch(undefined),

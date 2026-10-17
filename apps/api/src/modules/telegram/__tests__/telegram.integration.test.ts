@@ -385,6 +385,26 @@ describe('telegram module on Postgres', () => {
     expect(rows.find((row) => row.sourceKey === 'digest:test')).toMatchObject({ status: 'unknown' });
   });
 
+  it('rewrites the alert « Pris en main par … » when someone takes the conversation', async () => {
+    const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
+    const userId = 'user-takeover-test';
+    await test.admin.db
+      .insert(schema.user)
+      .values({ id: userId, name: 'Lucas Martin', email: 'lucas@example.test' })
+      .onConflictDoNothing();
+    const conversationId = newId(ConversationIdSchema);
+    await publish('handoff_requested', { conversationId, cause: 'distress' });
+    await module.jobs.scan();
+    await module.jobs.flushChat(chatId);
+    await publish('takeover_started', { conversationId, userId });
+    await module.jobs.scan();
+    offsetMs = 4000;
+    await module.jobs.flushChat(chatId);
+    expect(telegram.edits).toMatchObject([{ chatId: '-100', messageId: telegram.sent[0]?.messageId }]);
+    expect(telegram.edits[0]?.text).toMatch(/✓ Pris en main par Lucas$/);
+    expect(await module.listDeliveries('urgent', 10)).toMatchObject([{ closedBy: 'Lucas', status: 'sent' }]);
+  });
+
   it('answers the original message when the trouble ends', async () => {
     const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
     await publish('session_state_changed', { platformAccountId: 'acc-1', from: 'valid', to: 'expired' });
