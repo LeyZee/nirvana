@@ -63,6 +63,29 @@ const controlPayload = z.object({
   mode: ConversationModeSchema.optional(),
 });
 
+/**
+ * Why the agent hands a conversation to a human. Closed list: alerts rank on it (urgent or important), never on the
+ * free `reason` text.
+ */
+export const HANDOFF_CAUSES = [
+  'minor',
+  'non_consent',
+  'distress',
+  'meeting',
+  'manipulation',
+  'guard',
+  'budget',
+  'other',
+] as const;
+export const HandoffCauseSchema = z.enum(HANDOFF_CAUSES);
+export type HandoffCause = z.infer<typeof HandoffCauseSchema>;
+
+const handoffPayload = z.object({
+  conversationId: ConversationIdSchema,
+  cause: HandoffCauseSchema,
+  reason: z.string().min(1).max(500).optional(),
+});
+
 const commercePayload = z.object({
   offerId: z.uuid().optional(),
   saleId: z.uuid().optional(),
@@ -113,6 +136,7 @@ export const EVENT_TYPES = [
   'script_step_sent',
   'script_ended',
   'session_state_changed',
+  'budget_threshold_crossed',
   'error',
 ] as const;
 export const EventTypeSchema = z.enum(EVENT_TYPES);
@@ -139,7 +163,7 @@ export const EVENT_PAYLOADS = {
   fact_confirmed: factPayload,
   fact_rejected: factPayload,
   summary_refreshed: factPayload,
-  handoff_requested: controlPayload,
+  handoff_requested: handoffPayload,
   /** The engine answered nothing (no reply needed, or no model reachable): the conversation goes back to `idle`. */
   reply_skipped: z.object({
     reason: z.enum(['no_reply', 'llm_unavailable']),
@@ -165,6 +189,15 @@ export const EVENT_PAYLOADS = {
     platformAccountId: PlatformAccountIdSchema,
     from: SessionStateSchema,
     to: SessionStateSchema,
+  }),
+  /** The day's LLM spend, all providers, crossed the alert threshold or reached the cap. Published with no creator. */
+  budget_threshold_crossed: z.object({
+    kind: z.enum(['alert', 'reached']),
+    spentMinor: z.number().int().min(0),
+    capMinor: z.number().int().min(0),
+    currency: CurrencySchema,
+    /** The budget's day, in its own time zone (Europe/Paris). */
+    day: z.iso.date(),
   }),
   error: z.object({
     code: z.string().min(1),
@@ -209,6 +242,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('script_step_sent'),
   typedEvent('script_ended'),
   typedEvent('session_state_changed'),
+  typedEvent('budget_threshold_crossed'),
   typedEvent('error'),
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;

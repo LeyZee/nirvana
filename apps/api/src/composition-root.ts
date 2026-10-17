@@ -50,7 +50,7 @@ interface Modules {
   readonly sales: SalesModule;
   readonly scripts: ScriptsModule;
   readonly providers: ProvidersModule;
-  /** Null when its persona cannot be read: the API starts without the playground and says why. */
+  /** Null in the worker, or when its persona cannot be read: the API starts without the playground and says why. */
   readonly playground: PlaygroundModule | null;
 }
 
@@ -94,6 +94,8 @@ export interface AppOptions {
   readonly connectorRegistry?: ConnectorRegistry;
   /** Tests plug a composer with fixed bubbles here; the agent's composer otherwise, on the app's gateway. */
   readonly composer?: DraftComposer;
+  /** The worker serves no HTTP, so it starts no playground (its sessions live in the API's memory). */
+  readonly withPlayground?: boolean;
 }
 
 /** Wires every business module by hand (no DI container, coding.md). Called once by each entry point. */
@@ -160,15 +162,18 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   });
   const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
   const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
-  const playground = await startPlaygroundModule({
-    ...llm.deps,
-    gateway: llm.gateway,
-    personaPath,
-    trainingDir,
-  }).catch((error: unknown) => {
-    logger.warn({ err: error }, 'playground not started: persona unreadable');
-    return null;
-  });
+  const playground =
+    options.withPlayground === false
+      ? null
+      : await startPlaygroundModule({
+          ...llm.deps,
+          gateway: llm.gateway,
+          personaPath,
+          trainingDir,
+        }).catch((error: unknown) => {
+          logger.warn({ err: error }, 'playground not started: persona unreadable');
+          return null;
+        });
   // Without a readable persona, drafts stay empty as before the engine (P0-05) and the dashboard says why. In
   // production the fictional demo persona never writes to real fans: no persona set, no composer.
   const isDemoPersonaInProduction = !mayComposeDrafts(config);

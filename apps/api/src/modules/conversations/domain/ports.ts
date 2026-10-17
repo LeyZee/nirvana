@@ -11,6 +11,7 @@ import type {
   EventBody,
   ExternalRef,
   FanId,
+  HandoffCause,
   JobName,
   JobPayload,
   MessageAuthor,
@@ -247,6 +248,8 @@ export type ComposeResult =
   | {
       readonly kind: 'held';
       readonly reason: HoldReason;
+      /** Why a human must answer, when the engine knows (vision, conversation checks); `other` otherwise. */
+      readonly cause?: HandoffCause;
       readonly detail: readonly string[];
       readonly costUsd: number;
     };

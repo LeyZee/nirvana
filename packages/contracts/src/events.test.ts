@@ -33,6 +33,23 @@ describe('events', () => {
     expect(event.type === 'message_received' && event.payload.author).toBe('fan');
   });
 
+  it('carries a closed cause on a handoff, and the daily budget crossing with no creator', () => {
+    const handoff = {
+      conversationId: newId(ConversationIdSchema),
+      cause: 'minor',
+      reason: 'âge déclaré : 16',
+    };
+    expect(EVENT_PAYLOADS.handoff_requested.safeParse(handoff).success).toBe(true);
+    expect(EVENT_PAYLOADS.handoff_requested.safeParse({ ...handoff, cause: 'tired' }).success).toBe(false);
+    const budget = DomainEventSchema.parse({
+      ...envelope(),
+      creatorId: null,
+      type: 'budget_threshold_crossed',
+      payload: { kind: 'alert', spentMinor: 1600, capMinor: 2000, currency: 'EUR', day: '2026-10-17' },
+    });
+    expect(budget.type).toBe('budget_threshold_crossed');
+  });
+
   it('refuses a payload that belongs to another type, and an unknown type', () => {
     const base = { ...envelope(), creatorId: null };
     expect(
