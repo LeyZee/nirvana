@@ -184,6 +184,7 @@ export function resealProviderCredentials(
         .where(eq(table.provider, row.provider));
       rewritten += 1;
     }
+    if (rewritten === 0 && unreadable.length === 0) return { rewritten, unreadable };
     await tx.insert(schema.auditLog).values({
       id: newId(AuditEntryIdSchema),
       userId: null,

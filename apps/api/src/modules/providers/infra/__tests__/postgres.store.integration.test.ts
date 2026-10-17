@@ -112,7 +112,8 @@ describe('Postgres credential store (ADR 0016)', () => {
     const audit = await withAdmin(test.admin.db, (tx) =>
       tx.select().from(schema.auditLog).where(eq(schema.auditLog.action, 'provider_key.reencrypted')),
     );
-    expect(audit).toHaveLength(2);
+    // One line for the run that re-sealed, none for the one with nothing left to do.
+    expect(audit).toHaveLength(1);
     expect(JSON.stringify(audit)).not.toContain(FAKE_KEY);
     await v2Only.remove('elevenlabs');
   });

@@ -73,7 +73,7 @@ export function createProvidersModule(deps: ProvidersDeps): ProvidersModule {
     },
     hasEnvironmentKey: (provider) => deps.environmentKeys?.(provider) !== undefined,
   };
-  const reportRefusedKey = createRefusalReporter(connections);
+  const reportRefusedKey = createRefusalReporter(connections, cache);
   const api: ProvidersApi = {
     list: () => listProviderStatuses(connections),
     connect: (provider, key) => connectProvider(connections, provider, key),

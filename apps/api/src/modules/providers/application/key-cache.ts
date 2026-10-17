@@ -8,6 +8,11 @@ import type { CredentialStore } from '../domain/ports';
  */
 export interface KeyCache {
   lookup(provider: AiProvider): string | undefined;
+  /**
+   * When this process last started handing out a different key for the service (ms), undefined if it has handed out
+   * the same one since start-up. Calls already running may still finish with the previous key for a while.
+   */
+  changedAt(provider: AiProvider): number | undefined;
   reload(): Promise<void>;
 }
 
@@ -18,16 +23,29 @@ export interface KeyCache {
 export function createKeyCache(
   store: CredentialStore,
   environmentFallback: ((provider: AiProvider) => string | undefined) | null,
+  now: () => number = Date.now,
 ): KeyCache {
   let keys = new Map<AiProvider, string | null>();
+  let loaded = false;
+  const changes = new Map<AiProvider, number>();
+  const lookup = (provider: AiProvider): string | undefined => {
+    if (keys.has(provider)) return keys.get(provider) ?? undefined;
+    return environmentFallback?.(provider);
+  };
   return {
-    lookup(provider) {
-      if (keys.has(provider)) return keys.get(provider) ?? undefined;
-      return environmentFallback?.(provider);
-    },
+    lookup,
+    changedAt: (provider) => changes.get(provider),
     async reload() {
       const saved = await store.list();
+      const before = new Map(saved.map((c) => [c.provider, lookup(c.provider)]));
+      for (const provider of keys.keys()) before.set(provider, lookup(provider));
       keys = new Map(saved.map((c) => [c.provider, c.state === 'needs_reconnect' ? null : c.key]));
+      if (loaded) {
+        for (const [provider, previous] of before) {
+          if (lookup(provider) !== previous) changes.set(provider, now());
+        }
+      }
+      loaded = true;
     },
   };
 }

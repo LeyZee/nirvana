@@ -84,15 +84,13 @@ describe('after the connection', () => {
     expect((await reverifyProvider(deps, 'xai')).state).toBe('needs_reconnect');
   });
 
-  it('turns red at once when a production call is refused and the provider confirms it', async () => {
-    const answer: { current: VerificationOutcome } = { current: works };
-    const { deps, store } = setup(answer);
+  it('turns red at once when a production call refuses the key it has used for a while', async () => {
+    const { deps, store } = setup({ current: works });
     const cache = createKeyCache(store, null);
     await connectProvider(deps, 'xai', OLD_KEY);
     await cache.reload();
     expect(cache.lookup('xai')).toBe(OLD_KEY);
-    answer.current = { ok: false, kind: 'unauthorized' };
-    await createRefusalReporter(deps)('xai', 'unauthorized');
+    await createRefusalReporter(deps, cache)('xai', 'unauthorized');
     await cache.reload();
     expect(cache.lookup('xai')).toBeUndefined();
     expect((await listProviderStatuses(deps))[0]).toMatchObject({ state: 'needs_reconnect' });
@@ -113,12 +111,17 @@ describe('after the connection', () => {
 });
 
 describe('a refusal reported for a key replaced since (recette, bug 2)', () => {
-  /** xAI refuses the old (leaked, revoked) key and accepts the new one; it counts the checks. */
-  function twoKeys() {
+  /**
+   * xAI refuses the old (leaked, revoked) key and accepts the new one; it counts the checks. The clock and the
+   * process's key cache are the test's: the cache loads before the new key is pasted, as in the worker.
+   */
+  async function twoKeys() {
     const checked: string[] = [];
+    let now = Date.parse('2026-10-17T19:00:00Z');
     const { deps, store } = setup({ current: works });
     const xai: ConnectionsDeps = {
       ...deps,
+      clock: { now: () => new Date(now) },
       verifiers: [
         {
           provider: 'xai',
@@ -129,33 +132,92 @@ describe('a refusal reported for a key replaced since (recette, bug 2)', () => {
         },
       ],
     };
-    return { deps: xai, store, checked };
+    const cache = createKeyCache(store, null, () => now);
+    await cache.reload();
+    await connectProvider(xai, 'xai', NEW_KEY);
+    checked.length = 0;
+    const later = (ms: number) => {
+      now += ms;
+    };
+    return { deps: xai, store, checked, cache, later };
   }
 
-  it('leaves the new key green when the worker still used the old one', async () => {
-    const { deps, store, checked } = twoKeys();
-    await connectProvider(deps, 'xai', NEW_KEY);
-    const report = createRefusalReporter(deps);
+  it('leaves the new key green while this process has not reloaded it yet', async () => {
+    const { deps, store, checked, cache } = await twoKeys();
+    const report = createRefusalReporter(deps, cache);
     // The worker, still holding the revoked key for a few seconds, sees three refusals.
     await Promise.all([report('xai', 'unauthorized'), report('xai', 'unauthorized')]);
     await report('xai', 'unauthorized');
     expect(await store.find('xai')).toMatchObject({ key: NEW_KEY, state: 'connected' });
     // One check for the concurrent pair, none for the third: the accepted key is trusted for a minute.
-    expect(checked.filter((key) => key === NEW_KEY)).toHaveLength(2);
+    expect(checked).toEqual([NEW_KEY]);
+  });
+
+  it('checks again after a minute, and trusts the refusal once no call can still hold the old key', async () => {
+    const { deps, store, checked, cache, later } = await twoKeys();
+    await cache.reload();
+    const report = createRefusalReporter(deps, cache);
+    await report('xai', 'unauthorized');
+    later(61_000);
+    await report('xai', 'unauthorized');
+    expect(checked).toEqual([NEW_KEY, NEW_KEY]);
+    expect(await store.find('xai')).toMatchObject({ state: 'connected' });
+
+    later(5 * 60_000);
+    await report('xai', 'missing_permission');
+    expect(checked).toHaveLength(2);
+    expect(await store.find('xai')).toMatchObject({
+      state: 'needs_reconnect',
+      lastErrorKind: 'missing_permission',
+    });
+  });
+
+  it('turns red on a spending limit the key check does not see (xAI answers its key endpoint, refuses calls)', async () => {
+    const { deps, store } = setup({ current: works });
+    const cache = createKeyCache(store, null);
+    await connectProvider(deps, 'xai', OLD_KEY);
+    await cache.reload();
+    await createRefusalReporter(deps, cache)('xai', 'missing_permission');
+    expect(await store.find('xai')).toMatchObject({
+      state: 'needs_reconnect',
+      lastErrorKind: 'missing_permission',
+    });
   });
 
   it('concludes nothing when the provider cannot be reached to confirm', async () => {
-    const answer: { current: VerificationOutcome } = { current: works };
-    const { deps, store } = setup(answer);
-    await connectProvider(deps, 'xai', OLD_KEY);
-    answer.current = { ok: false, kind: 'unreachable' };
-    await createRefusalReporter(deps)('xai', 'unauthorized');
+    const { deps, store, cache } = await twoKeys();
+    const unreachable: ConnectionsDeps = {
+      ...deps,
+      verifiers: [{ provider: 'xai', verify: () => Promise.resolve({ ok: false, kind: 'unreachable' }) }],
+    };
+    await createRefusalReporter(unreachable, cache)('xai', 'unauthorized');
     expect(await store.find('xai')).toMatchObject({ state: 'connected' });
+  });
+
+  it('decides again over a line changed meanwhile instead of dropping the refusal', async () => {
+    const { deps, store } = setup({ current: works });
+    const cache = createKeyCache(store, null);
+    await connectProvider(deps, 'xai', OLD_KEY);
+    await cache.reload();
+    let lost = false;
+    const racing: ConnectionsDeps = {
+      ...deps,
+      store: {
+        ...store,
+        update: (credential) => {
+          if (lost) return store.update(credential);
+          lost = true;
+          return Promise.resolve(false);
+        },
+      },
+    };
+    await createRefusalReporter(racing, cache)('xai', 'unauthorized');
+    expect(await store.find('xai')).toMatchObject({ state: 'needs_reconnect' });
   });
 
   it('ignores a service that has no saved key', async () => {
     const { deps, store } = setup({ current: works });
-    await createRefusalReporter(deps)('xai', 'unauthorized');
+    await createRefusalReporter(deps, createKeyCache(store, null))('xai', 'unauthorized');
     expect(await store.find('xai')).toBeNull();
   });
 });
