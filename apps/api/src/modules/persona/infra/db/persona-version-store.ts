@@ -7,7 +7,7 @@ import {
   PersonaVersionIdSchema,
   type PersonaVersionSummary,
 } from '@nirvana/contracts';
-import { eq, schema, sql, withTenant, type Database, type Transaction } from '@nirvana/db';
+import { and, eq, schema, sql, withTenant, type Database, type Transaction } from '@nirvana/db';
 
 import { canonicalJson } from '../../domain/canonical';
 import { PersonaVersionConflict } from '../../domain/errors';
@@ -15,6 +15,9 @@ import type { PersonaVersionStore } from '../../domain/versions';
 
 /** What `source_path` says of a version saved from the dashboard rather than loaded from a YAML file. */
 const FROM_DASHBOARD = 'dashboard';
+
+/** Who stored a version loaded by `pnpm persona:load` (no signed-in user on the command line). */
+const FROM_COMMAND = 'cli';
 
 const columns = {
   id: schema.personaVersions.id,
@@ -45,6 +48,10 @@ const newestFirst = sql`${schema.personaVersions.createdAt} desc, ${schema.perso
 const summaries = (tx: Transaction): Promise<SummaryRow[]> =>
   tx.select(columns).from(schema.personaVersions).orderBy(newestFirst);
 
+/** One save or load at a time per creator, so that two writers cannot both pass their checks. */
+const lockCreator = (tx: Transaction, creatorId: string): Promise<unknown> =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`persona:${creatorId}`}))`);
+
 const contentHash = (persona: unknown): string =>
   createHash('sha256').update(canonicalJson(persona)).digest('hex');
 
@@ -52,6 +59,22 @@ const contentHash = (persona: unknown): string =>
 const isUniqueViolation = (error: unknown): boolean =>
   error instanceof Error &&
   [error, error.cause].some((e) => typeof e === 'object' && e !== null && 'code' in e && e.code === '23505');
+
+/** One line of `audit_log`: identifiers and hashes only, never the content of a persona. */
+const audit = (
+  tx: Transaction,
+  action: string,
+  entityId: string,
+  details: Record<string, string>,
+): Promise<unknown> =>
+  tx.insert(schema.auditLog).values({
+    id: newId(AuditEntryIdSchema),
+    userId: null,
+    action,
+    entity: 'persona_version',
+    entityId,
+    details,
+  });
 
 export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionStore {
   return {
@@ -78,8 +101,7 @@ export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionSt
       const id = newId(PersonaVersionIdSchema);
       try {
         return await withTenant(db, creatorId, async (tx) => {
-          // One save at a time per creator, so two edits started from the same version cannot both pass.
-          await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`persona:${creatorId}`}))`);
+          await lockCreator(tx, creatorId);
           const [newest] = await summaries(tx);
           if ((newest?.contentHash ?? null) !== body.basedOn) throw new PersonaVersionConflict();
           const [row] = await tx
@@ -110,6 +132,61 @@ export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionSt
         if (isUniqueViolation(error)) throw new PersonaVersionConflict();
         throw error;
       }
+    },
+
+    async load(creatorId, input, { sourcePath, activate }) {
+      const persona = PersonaSchema.parse(input);
+      const hash = contentHash(persona);
+      const { version } = persona.meta;
+      return withTenant(db, creatorId, async (tx) => {
+        await lockCreator(tx, creatorId);
+        const [existing] = await tx
+          .select(columns)
+          .from(schema.personaVersions)
+          .where(eq(schema.personaVersions.version, version));
+        if (existing !== undefined && existing.contentHash !== hash) throw new PersonaVersionConflict();
+        let row = existing;
+        if (row === undefined) {
+          const id = newId(PersonaVersionIdSchema);
+          [row] = await tx
+            .insert(schema.personaVersions)
+            .values({
+              id,
+              creatorId,
+              version,
+              sourcePath,
+              content: persona,
+              contentHash: hash,
+              createdBy: FROM_COMMAND,
+            })
+            .returning(columns);
+          if (row === undefined) throw new Error('persona version insert returned nothing');
+          await audit(tx, 'persona_version.create', row.id, {
+            creatorId,
+            version,
+            contentHash: hash,
+            sourcePath,
+          });
+        }
+        const activated = activate && !row.isActive;
+        if (activated) {
+          // The unique index allows one active version per creator: the previous one goes first.
+          await tx
+            .update(schema.personaVersions)
+            .set({ isActive: false })
+            .where(
+              and(eq(schema.personaVersions.isActive, true), eq(schema.personaVersions.creatorId, creatorId)),
+            );
+          [row] = await tx
+            .update(schema.personaVersions)
+            .set({ isActive: true, activatedAt: new Date() })
+            .where(eq(schema.personaVersions.id, row.id))
+            .returning(columns);
+          if (row === undefined) throw new Error('persona version activation returned nothing');
+          await audit(tx, 'persona_version.activate', row.id, { creatorId, version, contentHash: hash });
+        }
+        return { version: toSummary(row), created: existing === undefined, activated };
+      });
     },
   };
 }
