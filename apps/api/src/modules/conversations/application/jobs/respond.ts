@@ -25,12 +25,18 @@ export interface RespondDeps {
 const HISTORY_LIMIT = 40;
 
 /** Holds that give the conversation to the chatters; the others put it back to `idle`. */
-const HANDOFF_REASONS: readonly HoldReason[] = ['guard_blocked', 'handoff', 'budget_reached'];
+const HANDOFF_REASONS: readonly HoldReason[] = [
+  'guard_blocked',
+  'handoff',
+  'budget_reached',
+  'llm_unavailable',
+];
 
 /** The cause a hold implies when the engine gives none: alerts rank on it. */
 const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
   guard_blocked: 'guard',
   budget_reached: 'budget',
+  llm_unavailable: 'llm_unavailable',
 };
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
@@ -137,7 +143,7 @@ export function createRespondJob({ uow, clock, composer }: RespondDeps) {
           {
             type: 'reply_skipped',
             payload: {
-              reason: result.reason === 'no_reply' ? 'no_reply' : 'llm_unavailable',
+              reason: 'no_reply',
               detail: result.detail.map((line) => line.slice(0, 500)).slice(0, 20),
             },
           },

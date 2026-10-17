@@ -21,9 +21,15 @@ describe('classification (ADR 0020 §2)', () => {
         link: { path: `/suivi?conversation=${conversationId}` },
       });
     }
-    for (const cause of ['guard', 'budget', 'other', null] as const) {
+    for (const cause of ['guard', 'budget', 'llm_unavailable', 'other', null] as const) {
       expect(classify({ kind: 'handoff', conversationId, cause })).toMatchObject({ topic: 'important' });
     }
+  });
+
+  it('says a silent model in the alert, without the fan’s text', () => {
+    expect(classify({ kind: 'handoff', conversationId, cause: 'llm_unavailable' })).toMatchObject({
+      body: 'Le modèle ne répond plus. Il n’écrit plus à ce fan et attend un humain.',
+    });
   });
 
   it('turns a takeover into an edit of the thread, and ignores one without its conversation', () => {

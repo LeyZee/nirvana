@@ -78,6 +78,8 @@ export const HANDOFF_CAUSES = [
   'guard',
   'budget',
   'keyword',
+  /** No model answered (provider down, no key): nobody else would answer the fan. */
+  'llm_unavailable',
   'other',
 ] as const;
 export const HandoffCauseSchema = z.enum(HANDOFF_CAUSES);
@@ -170,7 +172,10 @@ export const EVENT_PAYLOADS = {
   fact_rejected: factPayload,
   summary_refreshed: factPayload,
   handoff_requested: handoffPayload,
-  /** The engine answered nothing (no reply needed, or no model reachable): the conversation goes back to `idle`. */
+  /**
+   * The engine answered nothing: the conversation goes back to `idle`. `llm_unavailable` is only read from older
+   * journals; an unreachable model now hands the conversation to a human (`handoff_requested`, cause `llm_unavailable`).
+   */
   reply_skipped: z.object({
     reason: z.enum(['no_reply', 'llm_unavailable']),
     detail: z.array(z.string().max(500)).max(20),

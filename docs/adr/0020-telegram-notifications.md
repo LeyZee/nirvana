@@ -40,7 +40,7 @@ Faits Telegram qui contraignent le choix :
 
    | Événement (`domain_events`) | Sujet | Producteur | Existe ? |
    |---|---|---|---|
-   | `handoff_requested` { `conversationId`, `cause` } | urgent si `cause` ∈ minor, non_consent, distress, meeting, manipulation ; important pour guard, budget, keyword, other | contrat : Bilan ; `cause` remplie par l'agent (composeur, vision) | oui (#54, `keyword` par #56) |
+   | `handoff_requested` { `conversationId`, `cause` } | urgent si `cause` ∈ minor, non_consent, distress, meeting, manipulation ; important pour guard, budget, keyword, llm_unavailable, other | contrat : Bilan ; `cause` remplie par l'agent (composeur, vision) | oui (#54, `keyword` par #56) |
    | `budget_threshold_crossed` { `kind` : alert \| reached, `spentMinor`, `capMinor`, `currency`, `day` }, sans créatrice | important (les deux) | contrat : Bilan ; publié dans `onBudget` (`apps/api/src/llm.ts`) | oui (#54) |
    | `session_state_changed` | important, info | connecteurs | oui |
    | `kill_switch_toggled` | important, info | ops | oui |

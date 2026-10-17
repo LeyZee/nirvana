@@ -70,7 +70,7 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
-| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` |
+| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` |
 | `takeover_started` | `conversationId`, `userId?`, `reason?` |
 | `takeover_ended`, `mode_changed` | `userId?`, `reason?`, `mode?` |
 | `kill_switch_toggled` | `scope`, `scopeId`, `active`, `reason` |
