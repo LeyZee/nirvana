@@ -19,7 +19,7 @@ import {
 
 import {
   createJsonlCalibrationStore,
-  DEFAULT_GUARD_SETTINGS,
+  guardSettingsOf,
   describeSituation,
   isTimeZone,
   nextLocalTime,
@@ -105,7 +105,8 @@ const session = createPlaygroundSession({
   gateway,
   creatorName: persona.creatorName,
   personaSheet: persona.personaSheet,
-  guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: persona.forbiddenTerms },
+  guardSettings: guardSettingsOf(persona),
+  splitMessages: persona.splitMessages,
   voiceExamples: examples,
   timeZone: values.fuseau,
 });

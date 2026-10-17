@@ -48,8 +48,8 @@ export interface AgentDraftComposer {
 export interface DraftComposerDeps {
   readonly gateway: LlmGateway;
   readonly persona: ComposerPersona;
-  /** Her clock: day and night, the time she answers at. */
-  readonly timeZone: string;
+  /** Her clock (day and night, the time she answers at), from the creator of the conversation. */
+  readonly timeZoneOf: (creatorId: string) => Promise<string>;
   /** Version of the voice prompt, written on each draft with the model that answered (ADR 0019). */
   readonly voicePrompt: string;
 }
@@ -91,7 +91,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         fanNotes: input.fan.notes.join('\n'),
         situation: {
           now: input.now,
-          timeZone: deps.timeZone,
+          timeZone: await deps.timeZoneOf(input.creatorId),
           relationshipStartedAt: input.fan.firstMessageAt ?? input.now,
           spentCents: input.fan.spentMinor,
         },

@@ -17,7 +17,8 @@ export type GuardCode =
   | 'asks_for_nudes'
   | 'contempt'
   | 'payment_lie'
-  | 'guilt_trip';
+  | 'guilt_trip'
+  | 'pet_name';
 
 export interface GuardViolation {
   readonly code: GuardCode;
@@ -31,6 +32,8 @@ export interface GuardSettings {
   readonly maxBubbleChars: number;
   /** Persona disgusts and hard limits, with their variants (persona-schema.md: also security data). */
   readonly forbiddenTerms: readonly string[];
+  /** The only pet names she gives (`behavior.pet_names`); undefined: not checked. */
+  readonly petNames?: readonly string[];
 }
 
 export const DEFAULT_GUARD_SETTINGS: GuardSettings = {
@@ -89,6 +92,25 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
 ];
 
 // After a refusal she whines once, playfully, then lets go: no guilt (sales corpus, §2.4). A regeneration, not a block.
+// Pet names a girl may give a fan; one she never uses is a voice slip (persona `behavior.pet_names`).
+const COMMON_PET_NAMES = [
+  'bebe',
+  'cheri',
+  'mon cheri',
+  'mon coeur',
+  'mon amour',
+  'mon chou',
+  'chaton',
+  'mon ange',
+  'loulou',
+  'doudou',
+  'mon lapin',
+  'beau gosse',
+  'mon grand',
+  'mon beau',
+  'mon bel inconnu',
+];
+
 const GUILT_TRIP =
   /\b(tu me decois|ca m'a refroidie?|ca me rend (triste|malheureuse)|tu me fais de la peine|je suis (vexee|decue)|arrete de faire (le|ton) radin)\b(?! pas)/;
 
@@ -151,6 +173,14 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       if (new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(term)}($|[^\\p{L}\\p{N}])`, 'u').test(text)) {
         violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: term });
       }
+    }
+    if (settings.petNames !== undefined) {
+      const hers = settings.petNames.map(normalise);
+      const slip = COMMON_PET_NAMES.find(
+        (name) => !hers.includes(name) && new RegExp(`(^|[^\\p{L}])${name}($|[^\\p{L}])`, 'u').test(text),
+      );
+      if (slip !== undefined)
+        violations.push({ code: 'pet_name', severity: 'soft', bubbleIndex, match: slip });
     }
     const guilt = GUILT_TRIP.exec(text);
     if (guilt) violations.push({ code: 'guilt_trip', severity: 'soft', bubbleIndex, match: guilt[0] });

@@ -9,7 +9,7 @@ import type {
 import type { LlmGateway } from '@nirvana/llm';
 
 import {
-  DEFAULT_GUARD_SETTINGS,
+  guardSettingsOf,
   isNight,
   isTimeZone,
   nextLocalTime,
@@ -132,7 +132,8 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     gateway: deps.gateway,
     creatorName: deps.persona.creatorName,
     personaSheet: deps.persona.personaSheet,
-    guardSettings: { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: deps.persona.forbiddenTerms },
+    guardSettings: guardSettingsOf(deps.persona),
+    splitMessages: deps.persona.splitMessages,
     voiceExamples: voiceExamples(deps.records),
     ...(deps.timeZone !== undefined && { timeZone: deps.timeZone }),
     ...(deps.now !== undefined && { now: deps.now }),

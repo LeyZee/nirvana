@@ -105,6 +105,14 @@ describe('voice guards', () => {
     expect(codes(['Tu me déçois pas 😏'])).toEqual([]);
   });
 
+  it('asks for a regeneration on a pet name she never gives, and lets hers through', () => {
+    const settings = { ...DEFAULT_GUARD_SETTINGS, petNames: ['Beau gosse', 'Mon grand'] };
+    const slip = checkVoiceOutput(['Coucou mon bébé 😘'], settings);
+    expect(slip.map((v) => [v.code, v.severity, v.match])).toEqual([['pet_name', 'soft', 'bebe']]);
+    expect(checkVoiceOutput(['Coucou beau gosse 😘'], settings)).toEqual([]);
+    expect(checkVoiceOutput(['Le bébé de ma sœur est trop mignon'], DEFAULT_GUARD_SETTINGS)).toEqual([]);
+  });
+
   it('asks for a regeneration on AI tics, without blocking', () => {
     const violations = checkVoiceOutput(['Je comprends tout à fait, n’hésite pas'], DEFAULT_GUARD_SETTINGS);
     expect(violations.map((v) => v.code)).toEqual(['ai_tic']);
