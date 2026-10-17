@@ -95,6 +95,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:e2e
+      # Both fail without a key or with nothing to measure: a nightly run never looks green for nothing.
+      - run: pnpm probe
+        env:
+          LLM_XAI_API_KEY: ${{ secrets.LLM_XAI_API_KEY }}
+          LLM_MISTRAL_API_KEY: ${{ secrets.LLM_MISTRAL_API_KEY }}
       - run: pnpm evals
         env:
           LLM_XAI_API_KEY: ${{ secrets.LLM_XAI_API_KEY }}

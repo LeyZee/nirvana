@@ -8,6 +8,7 @@
 //  4. No forbidden file names (*.bak, *.orig, *.copy, *-v2.*, *_final*, tmp/, old/): docs/conventions/hygiene.md.
 //  5. Every TODO/FIXME in code carries a task card id: `TODO(P2-03): ...` (docs/conventions/coding.md).
 //  6. Every `pnpm <script>` cited in the docs exists in the root package.json.
+//  7. The nightly CI job still runs `pnpm probe` and `pnpm evals`: removing the quality gate is an error.
 // No dependency: Node 22 only.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -153,6 +154,18 @@ if (!stagedOnly) {
   }
   checkIndex('docs/sessions/tasks', 'docs/sessions/tasks/README.md', /^([A-Z]+\d*-\d+)-.*\.md$/, 'task card');
   checkIndex('docs/adr', 'docs/adr/README.md', /^(\d{4})-.*\.md$/, 'ADR');
+}
+
+// 7. The nightly quality gate stays in CI
+if (!stagedOnly) {
+  const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+  const nightly = ci.slice(ci.indexOf('\n  nightly:'));
+  for (const command of ['pnpm probe', 'pnpm evals']) {
+    if (ci.indexOf('\n  nightly:') === -1 || !nightly.includes(`run: ${command}`))
+      errors.push(
+        `.github/workflows/ci.yml: the nightly job must run \`${command}\` (docs/playbooks/write-an-eval.md)`,
+      );
+  }
 }
 
 for (const w of warnings) console.warn(`warning: ${w}`);
