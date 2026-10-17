@@ -1,0 +1,516 @@
+/*
+ * Dashboard layout only: the pieces (orb, todo rows, tiles, ring, funnel, tip…) are the design system's
+ * (docs/design/README.md, « Pièces du Dashboard »). Three levels: the state and what waits (big), the sales
+ * and the fans' path (medium), the best fans (small). Details live in the tips.
+ */
+
+.db {
+  --db-gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 0 4px 24px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nv-hairline) transparent;
+}
+.db > * {
+  flex: none;
+}
+
+/* ── Who and when ── */
+.db-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: -12px;
+}
+.db-top__av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--nv-radius-full);
+  background: linear-gradient(140deg, var(--nv-neon-soft), var(--nv-glass-fill-strong));
+  box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+  font: italic 600 17px/1 var(--nv-font-wordmark);
+}
+.db-top__name {
+  display: block;
+  font-size: 15px;
+  line-height: 19px;
+  font-weight: 650;
+}
+.db-top__when {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--nv-ink-faint);
+}
+
+/* ── Level 1: state and what waits ── */
+.db-hero {
+  --_radius: 34px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 26px 28px 22px;
+}
+.db-hero__glow {
+  position: absolute;
+  z-index: -1;
+  left: -120px;
+  top: -220px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--_c) 30%, transparent), transparent 65%);
+  transition: background var(--nv-dur-slow) var(--nv-ease-out);
+  pointer-events: none;
+}
+.db-hero__top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+}
+.db-hero h1 {
+  margin: 4px 0 0;
+  font-size: 30px;
+  line-height: 35px;
+  letter-spacing: -0.025em;
+  font-weight: 680;
+  text-wrap: balance;
+}
+.db-hero h1 em {
+  font-style: normal;
+  color: var(--_c);
+}
+.db-hero__lead {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: 15px;
+  line-height: 21px;
+  color: var(--nv-ink-muted);
+  text-wrap: pretty;
+}
+.db-fold {
+  margin: 0 -14px -8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nv-hairline);
+}
+.db-fold .nv-disclosure__sum {
+  color: var(--nv-ink-muted);
+}
+
+/* ── Sections ── */
+.db-sect {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.db-sect__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 4px;
+}
+.db-sect__head h2 {
+  margin: 0;
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nv-ink-faint);
+}
+.db-sect__sub {
+  margin-left: 10px;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Level 2: sales ── */
+.db-sales {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--db-gap);
+}
+.db-big {
+  --_radius: 30px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px 24px 14px;
+}
+.db-big__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.db-share {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.db-share .nv-legend b {
+  margin-left: 4px;
+  font-weight: 600;
+  color: var(--nv-ink);
+  font-variant-numeric: tabular-nums;
+}
+.db-chart {
+  /* Fills the card down to the levers' height. */
+  flex: 1 1 240px;
+  min-height: 240px;
+  margin-top: 12px;
+}
+.db-chart > svg {
+  height: 100%;
+}
+.db-levers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-gap);
+}
+.db-lever {
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 58px;
+}
+.db-lever__v {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.db-lever__v small {
+  font-size: 12px;
+  color: var(--nv-ink-faint);
+}
+.db-lever__v .nv-delta {
+  margin-left: auto;
+  align-self: center;
+}
+.db-lever .nv-stat__spark path:first-child {
+  animation: nv-chart-fade 700ms 350ms var(--nv-ease-out) both;
+}
+
+/* ── Level 2 bis: the fans' path ── */
+.db-funnel {
+  --_radius: 26px;
+  padding: 12px;
+}
+
+/* ── Level 3: best fans ── */
+.db-fans {
+  --_radius: 26px;
+  padding: 8px;
+}
+.db-fan {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: none;
+}
+.db-fan:hover {
+  transform: translateX(3px);
+}
+.db-fan__who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.db-fan__name {
+  font-size: 14.5px;
+  line-height: 19px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-fan__line {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--nv-ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-fan__spent {
+  min-width: 8.5ch;
+  font: 600 14px/18px var(--nv-font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.db-fan .nv-avatar {
+  transition: box-shadow var(--nv-dur-base) var(--nv-ease-out);
+}
+.db-fan:hover .nv-avatar {
+  box-shadow:
+    0 0 0 2px var(--nv-void),
+    0 0 0 3px var(--nv-neon);
+}
+.db-chev {
+  width: 16px;
+  height: 16px;
+  color: var(--nv-ink-faint);
+  transition:
+    transform var(--nv-dur-base) var(--nv-ease-spring),
+    color var(--nv-dur-base) var(--nv-ease-out);
+}
+.db-fan:hover .db-chev {
+  transform: translateX(3px);
+  color: var(--nv-ink);
+}
+
+/* ── Reader (read only). Overlays are portalled to the body; `.nv-glass` would make them relative, hence the doubled selectors. ── */
+.db-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--nv-void) 50%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--nv-dur-base) var(--nv-ease-out);
+}
+.db-scrim.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.db-reader.nv-glass {
+  --_radius: 30px;
+  position: fixed;
+  z-index: 21;
+  top: calc(var(--db-gap, 16px) + env(safe-area-inset-top, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  width: min(440px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  transform: translateX(calc(100% + 40px));
+  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.db-reader.nv-glass.is-on {
+  transform: none;
+}
+.db-reader__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--nv-hairline);
+}
+.db-reader__head .db-fan__who {
+  flex: 1;
+}
+.db-reader__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--nv-hairline);
+}
+.db-reader__notes .nv-tag {
+  background: var(--nv-glass-fill);
+  color: var(--nv-ink-muted);
+  animation: nv-swap var(--nv-dur-base) var(--nv-ease-out) both;
+  animation-delay: calc(var(--nv-i, 0) * 50ms);
+}
+.db-reader__alert {
+  background: color-mix(in srgb, var(--nv-danger) 18%, transparent);
+  color: var(--nv-ink);
+}
+.db-reader__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.db-reader__body .nv-thread {
+  gap: 6px;
+}
+.db-flag {
+  align-self: stretch;
+  margin: 6px 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 18px;
+  background: color-mix(in srgb, var(--nv-warning) 12%, transparent);
+}
+.db-flag b {
+  color: var(--nv-warning);
+}
+.db-reader__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--nv-hairline);
+}
+.db-reader__foot p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--nv-ink-faint);
+}
+
+@media (max-width: 1100px) {
+  .db-sales {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .db-levers {
+    flex-direction: row;
+  }
+  .db-lever {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+@media (max-width: 820px) {
+  .db-fan {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .db-fan .nv-split {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .db {
+    gap: 24px;
+    padding: 0;
+  }
+  .db-hero {
+    padding: 20px;
+  }
+  .db-hero__top {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .db-hero__top .nv-btn {
+    grid-column: 1 / -1;
+  }
+  .db-hero h1 {
+    font-size: 24px;
+    line-height: 29px;
+  }
+  .db-fold .nv-disclosure__sum {
+    display: none;
+  }
+  .db-levers {
+    flex-direction: column;
+  }
+  .db-lever {
+    flex: none;
+  }
+  .db-chart {
+    height: 200px;
+  }
+}
+
+.db-tip-note {
+  margin: 6px 0 0;
+  color: var(--nv-warning);
+}
+
+/* ── The agent's single control (Automatique, Copilote, Arrêt) and its stop dialog ── */
+.db-top {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.db-top__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.db-mode .nv-seg__opt {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.db-mode__dot {
+  margin-right: 7px;
+}
+.db-dialog.nv-glass {
+  --_radius: 30px;
+  position: fixed;
+  z-index: 31;
+  left: 50%;
+  top: 50%;
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -46%) scale(0.94);
+  transition:
+    opacity var(--nv-dur-base) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.db-dialog.nv-glass.is-on {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+.db-dialog h3 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 24px;
+}
+.db-dialog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--nv-ink-muted);
+}
+.db-dialog ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--nv-ink-muted);
+}
+.db-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.db-dialog__actions .nv-btn {
+  flex: 1 1 auto;
+}
+@media (max-width: 720px) {
+  .db-mode {
+    width: 100%;
+  }
+  .db-mode .nv-seg__opt {
+    padding: 0 6px;
+  }
+}

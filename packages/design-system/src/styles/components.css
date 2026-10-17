@@ -376,11 +376,13 @@
 .nv-seg__opt[data-state='on'] {
   color: var(--nv-ink);
 }
-.nv-seg__opt:hover:not(:disabled) {
+.nv-seg__opt:hover:not(:disabled, [aria-disabled='true']) {
   color: var(--nv-ink);
 }
-/* An option that cannot be picked yet (Automatique under 80 %): visible, quiet, says why on hover. */
-.nv-seg__opt:disabled {
+/* An option that cannot be picked yet (Automatique under 80 %): visible, quiet, says why on hover.
+   Prefer aria-disabled: a disabled button gets no pointer events, so it could not explain itself. */
+.nv-seg__opt:disabled,
+.nv-seg__opt[aria-disabled='true'] {
   cursor: not-allowed;
   color: var(--nv-ink-faint);
 }
@@ -1888,6 +1890,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* On a phone the kind goes above the title, and the title wraps instead of being cut. */
+@media (max-width: 720px) {
+  .nv-todo__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .nv-todo__title {
+    white-space: normal;
+  }
 }
 .nv-todo__time {
   font: 500 var(--nv-text-caption) / var(--nv-text-caption-leading) var(--nv-font-mono);
