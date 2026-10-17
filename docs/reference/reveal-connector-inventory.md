@@ -39,7 +39,7 @@ Toute écriture porte une clé d'idempotence et passe par `verifySent` (ADR 0008
 | E3 | Envoyer une étape de script natif | `sendScriptStep?()` (nouveau) | Vente par script ; Reveal garde la trace de l'envoi | Endpoint dédié ou envoi ordinaire ; ce qui marque l'étape comme envoyée |
 | E4 | Écrire la note client | `setFanNote?()` (nouveau) | Consigner le KYC | Remplacement complet ou ajout ; conflit si un chatteur écrit en même temps |
 | E4b | Écrire les notes du modèle | `setCreatorNotes?()` (nouveau) | Pousser la persona à jour dans Reveal, à la demande de Charles seulement | Remplacement ou ajout, portée |
-| E5 | Vérifier un envoi | `verifySent()` | Rejeu sans doublon après une erreur réseau | Retrouver le message par nonce, ou par texte et horodatage |
+| E5 | Vérifier un envoi | `verifySent()` | Rejeu sans doublon après une erreur réseau | Ce que Reveal renvoie à l'envoi (identifiant, horodatage, nonce client accepté ?) et si la relecture du fil retrouve le message : runbook étape 11a. Le job d'envoi appelle `verifySent` avant tout renvoi (revue 09, G2) |
 | E6 | Marquer lu, indiquer « en train d'écrire » | `markRead?()`, `setTyping?()` | Rythme humain | Appels faits par le client officiel à l'ouverture et à la frappe |
 | E7 | Envoyer un vocal (gratuit, ou dans un bundle si Reveal l'accepte) | `sendMedia()` avec `kind: audio` | Vocaux dans la voix de la créatrice pour les fans qui doutent (fil Vocaux, 17/10) | Requête du bouton micro natif (upload, format et codec, durée max), import d'un fichier audio dans « Envoyer des médias » et dans un bundle, rendu côté fan (lecteur avec onde ou fichier joint) |
 
