@@ -28,7 +28,7 @@
 
 1. Kill switch global.
 2. `rotate-secrets.md` pour tout secret potentiellement exposé.
-3. Révoquer les sessions dashboard (Better Auth : `pnpm ops:revoke-sessions`).
+3. Révoquer les sessions dashboard (Better Auth : `pnpm ops:revoke-sessions --all`).
 4. Conserver les preuves : exporter `audit_log`, logs, événements concernés dans `.scratch/incident-<date>/` puis dans un stockage hors serveur.
 5. Évaluer l'exposition : quels fans, quelles données. Charles décide des suites.
 

@@ -8,6 +8,7 @@ import {
   type SendResult,
 } from '@nirvana/contracts';
 
+import { SendRefused } from '../../domain/errors';
 import type {
   Clock,
   Conversation,
@@ -120,8 +121,11 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
         result = await sender.sendText(conversation, text, idempotencyKey);
       } catch (error) {
         failure = error;
-        // The platform may have taken it before the error: ask before counting it as failed.
-        const verified = await sender.verifySent(conversation, idempotencyKey, null).catch(() => null);
+        // The platform may have taken it before the error: ask before counting it as failed. A refused send never left.
+        const verified =
+          error instanceof SendRefused
+            ? null
+            : await sender.verifySent(conversation, idempotencyKey, null).catch(() => null);
         result =
           verified?.status === 'sent'
             ? { messageRef: verified.messageRef, sentAt: clock.now().toISOString() }
@@ -130,7 +134,7 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
 
       if (result === null) {
         const code = failure instanceof DomainError ? failure.code : 'send_error';
-        const isFinal = attempt >= MAX_SEND_ATTEMPTS;
+        const isFinal = attempt >= MAX_SEND_ATTEMPTS || failure instanceof SendRefused;
         await uow.inTenant(payload.creatorId, async (tx) => {
           const sendable = await lockSendable(tx, payload);
           if (sendable === null) return;

@@ -1,6 +1,6 @@
 import type { ExternalRef } from '@nirvana/contracts';
 
-import type { OutboundSender } from '../../conversations';
+import { SendRefused, type OutboundSender } from '../../conversations';
 import { ConnectorFailed, ConnectorUnavailable, PlatformAccountNotFound } from '../domain/errors';
 import { ConnectorError, type PlatformConnector } from '../domain/platform-connector';
 import type { AccountStore, Clock } from '../domain/ports';
@@ -12,7 +12,8 @@ type ConversationKey = Parameters<OutboundSender['sendText']>[0];
 /**
  * The `OutboundSender` port of `conversations` (modules.md, inversion): resolves the conversation's account and
  * connector, and turns a `ConnectorError` into a `DomainError` (`connector_rate_limited`…) the send job records.
- * An expired session also stops the account, as a poll would.
+ * An expired session also stops the account, as a poll would. Sends go through the account's write guard
+ * (`config.writes`, off by default); reading what was sent does not.
  */
 export function createOutboundSender(deps: {
   readonly accounts: AccountStore;
@@ -22,9 +23,13 @@ export function createOutboundSender(deps: {
   async function run<T>(
     conversation: ConversationKey,
     action: (connector: PlatformConnector, ref: ExternalRef) => Promise<T>,
+    writes: boolean,
   ): Promise<T> {
     const account = await deps.accounts.get(conversation.creatorId, conversation.platformAccountId);
     if (account === null) throw new PlatformAccountNotFound();
+    if (writes && !account.config.writes) {
+      throw new SendRefused('connector_writes_disabled', 'Envoi désactivé pour ce compte (garde d’écriture)');
+    }
     const connector = await deps.resolver.forAccount(account);
     if (connector === null) throw new ConnectorUnavailable();
     try {
@@ -42,8 +47,9 @@ export function createOutboundSender(deps: {
   }
 
   return {
-    sendText: (conversation, text, key) => run(conversation, (c, ref) => c.sendText(ref, text, key)),
-    sendMedia: (conversation, media, key) => run(conversation, (c, ref) => c.sendMedia(ref, media, key)),
-    verifySent: (conversation, key) => run(conversation, (c, ref) => c.verifySent(ref, key)),
+    sendText: (conversation, text, key) => run(conversation, (c, ref) => c.sendText(ref, text, key), true),
+    sendMedia: (conversation, media, key) =>
+      run(conversation, (c, ref) => c.sendMedia(ref, media, key), true),
+    verifySent: (conversation, key) => run(conversation, (c, ref) => c.verifySent(ref, key), false),
   };
 }

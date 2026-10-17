@@ -41,11 +41,15 @@ describe('connectors module (P0-06)', () => {
   const fakes = new Map<string, FakeConnector>();
   const sessionsSeen = new Map<string, string | null>();
 
-  async function account(handle: string, sessionState: SessionState): Promise<PlatformAccountId> {
+  async function account(
+    handle: string,
+    sessionState: SessionState,
+    writes = true,
+  ): Promise<PlatformAccountId> {
     const id = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.platformAccounts)
-      .values({ id, creatorId, platform: 'reveal', handle, sessionState });
+      .values({ id, creatorId, platform: 'reveal', handle, sessionState, connectorConfig: { writes } });
     fakes.set(id, new FakeConnector());
     return id;
   }
@@ -167,6 +171,39 @@ describe('connectors module (P0-06)', () => {
       .from(schema.conversations)
       .where(eq(schema.conversations.id, conversationId));
     expect(state?.state).toBe('idle');
+  });
+
+  it('refuses to send through an account whose write guard is off: no platform call, no retry', async () => {
+    const id = await account('read-only', 'valid', false);
+    fake(id).enqueueInbound({ conversationId: 'c-4', fanId: 'f-4', fanDisplayName: 'Léo', text: 'Salut' });
+    await poll(id);
+    const [row] = await test.admin.db
+      .select({ id: schema.conversations.id })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.platformAccountId, id));
+    const conversationId = ConversationIdSchema.parse(row?.id);
+    const job = { creatorId, conversationId, correlationId: 'test' };
+    await app.modules.conversations.jobs.respond(job, NO_LOG);
+    const [draft] = await test.admin.db
+      .select({ id: schema.drafts.id })
+      .from(schema.drafts)
+      .where(eq(schema.drafts.conversationId, conversationId));
+    const draftId = DraftIdSchema.parse(draft?.id);
+    await app.modules.conversations.approveDraft({ ...job, userId: USER, draftId, bubbles: ['Coucou'] });
+
+    // Attempt 1 of 5 and yet final: the job does not throw, so Graphile does not retry.
+    await app.modules.conversations.jobs.send({ ...job, draftId }, NO_LOG, 1);
+    expect(fake(id).calls.sendText).toBe(0);
+    expect(fake(id).sent).toHaveLength(0);
+    const [after] = await test.admin.db
+      .select({ status: schema.drafts.status })
+      .from(schema.drafts)
+      .where(eq(schema.drafts.id, draftId));
+    expect(after?.status).toBe('failed');
+    const failed = await test.admin.db.execute(
+      sql`select payload->>'error' as error from conversation_events where conversation_id = ${conversationId} and type = 'send_failed'`,
+    );
+    expect(failed.rows).toEqual([{ error: 'connector_writes_disabled' }]);
   });
 
   it('stops an account whose session expired: state, event, no ingestion, no answer, no more calls', async () => {

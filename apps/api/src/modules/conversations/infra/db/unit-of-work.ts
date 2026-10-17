@@ -1,4 +1,5 @@
 import {
+  AuditEntryIdSchema,
   EventIdSchema,
   JOB_PAYLOADS,
   MessageAuthorSchema,
@@ -226,6 +227,19 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
             job_key => ${options.jobKey ?? null}
           )`,
         );
+      },
+    },
+
+    audit: {
+      async record(entry) {
+        await tx.insert(schema.auditLog).values({
+          id: newId(AuditEntryIdSchema),
+          userId: entry.userId,
+          action: entry.action,
+          entity: 'conversation',
+          entityId: entry.entityId,
+          details: entry.details ?? {},
+        });
       },
     },
 
