@@ -82,7 +82,6 @@ export function ServicesSection(): JSX.Element {
   if (load.kind !== 'ready') {
     return (
       <section className="sv-page" aria-busy={load.kind === 'loading'}>
-        <Heading />
         {load.kind === 'failed' ? (
           <div className="nv-glass sv-next">
             <p className="sv-lead">Les services ne répondent pas</p>
@@ -110,7 +109,6 @@ export function ServicesSection(): JSX.Element {
 
   return (
     <section className="sv-page">
-      <Heading />
       <div className="nv-glass sv-next" aria-live="polite">
         <div className="sv-next__head">
           <span className="sv-dot sv-dot--big" data-dot={nextDot} />
@@ -362,13 +360,5 @@ function NextButton({
     >
       {next.kind === 'connect' ? `Connecter ${guide.name}` : 'Remplacer la clé'}
     </button>
-  );
-}
-
-function Heading(): JSX.Element {
-  return (
-    <header className="sv-heading">
-      <h2>Services</h2>
-    </header>
   );
 }
