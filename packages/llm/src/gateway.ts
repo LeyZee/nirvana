@@ -126,7 +126,7 @@ function toMessages(history: readonly ConversationTurn[]): ModelMessage[] {
 }
 
 function describeBrief(brief: Brief): string {
-  return [
+  const lines = [
     `Intention du fan : ${brief.intent} (humeur : ${brief.sentiment}).`,
     `À dire : ${brief.replyBrief}`,
     brief.toneHints.length > 0 ? `Ton : ${brief.toneHints.join(', ')}.` : '',
@@ -135,6 +135,7 @@ function describeBrief(brief: Brief): string {
   ]
     .filter((line) => line !== '')
     .join('\n');
+  return wrapUntrusted('brief', lines);
 }
 
 function notesBlock(fanNotes: string): string {
@@ -176,7 +177,8 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
       };
       const model = deps.resolveModel(ref);
       if (model === undefined) {
-        record('missing_key', 0);
+        // Not a call: kept in the failure trace, out of the journal, so health shows the real last error.
+        attempts.push({ provider: ref.provider, model: ref.model, outcome: 'missing_key' });
         continue;
       }
       let messages = toMessages(history);
@@ -271,9 +273,14 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
     },
 
     async testConnection(provider) {
-      const ref = MODELS.find((m) => m.provider === provider);
-      const model = ref && deps.resolveModel(ref);
-      if (ref === undefined || model === undefined) return { provider, isOk: false, outcome: 'missing_key' };
+      // Test the model the config actually uses for this provider, else the first one the catalog knows.
+      const configured = Object.values(deps.config.roles)
+        .flatMap((role) => [role, ...(role.fallback ? [role.fallback] : [])])
+        .find((ref) => ref.provider === provider);
+      const ref = configured ?? MODELS.find((m) => m.provider === provider);
+      if (ref === undefined) return { provider, isOk: false, outcome: 'unknown_model' };
+      const model = deps.resolveModel(ref);
+      if (model === undefined) return { provider, isOk: false, model: ref.model, outcome: 'missing_key' };
       const startedAt = now().getTime();
       try {
         await generateText({

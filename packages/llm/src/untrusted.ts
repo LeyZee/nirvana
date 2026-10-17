@@ -1,4 +1,5 @@
-export type UntrustedKind = 'fan_message' | 'fan_media_description' | 'fan_notes';
+/** `brief` is the brain's output: the fan can steer it, so the voice reads it as data too. */
+export type UntrustedKind = 'fan_message' | 'fan_media_description' | 'fan_notes' | 'brief';
 
 /**
  * Wraps content written by a fan (or derived from it) in a typed block that every system prompt

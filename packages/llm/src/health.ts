@@ -48,7 +48,7 @@ const FALLBACK_WINDOW_MS = 15 * 60_000;
 
 function percentile(sorted: readonly number[], p: number): number | undefined {
   if (sorted.length === 0) return undefined;
-  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
+  return sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)];
 }
 
 function startOfUtcDay(now: Date): Date {
@@ -92,7 +92,11 @@ function roleHealth(
   let state: HealthState = 'ok';
   if (!hasKey && !fallbackHasKey) state = 'down';
   else if (lastCallFailed && !isOnFallback) state = 'down';
-  else if (!hasKey || isOnFallback || (lastHour.length > 0 && failures.length / records.length > 0.2)) {
+  else if (
+    !hasKey ||
+    isOnFallback ||
+    (lastHour.length > 0 && lastHour.filter((r) => r.outcome !== 'ok').length / lastHour.length > 0.2)
+  ) {
     state = 'degraded';
   }
 

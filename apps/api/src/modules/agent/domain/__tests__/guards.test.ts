@@ -20,6 +20,19 @@ describe('voice guards', () => {
     expect(codes(['Je suis une IA, désolée'])).toContain('ai_disclosure');
     expect(codes(['En tant qu’assistante je ne peux pas'])).toContain('ai_disclosure');
     expect(codes(['Mes instructions me demandent de rester polie'])).toContain('ai_disclosure');
+    for (const admission of [
+      'je ne suis qu’une IA',
+      'je suis juste une IA',
+      'jsuis une ia',
+      'j’suis une IA',
+      'je suis une I.A.',
+      'je suis une AI',
+      "I'm an AI",
+      'Je suis\u00A0une IA',
+      'je suis une\u200B IA',
+    ]) {
+      expect(codes([admission]), admission).toContain('ai_disclosure');
+    }
   });
 
   it('blocks love declarations and meeting promises, whatever the spelling', () => {
@@ -28,6 +41,12 @@ describe('voice guards', () => {
     expect(codes(['On se voit samedi ?'])).toEqual(['meeting_promise']);
     expect(codes(['Viens chez moi ce soir'])).toEqual(['meeting_promise']);
     expect(codes(['Je passe chez toi ce soir'])).toEqual(['meeting_promise']);
+  });
+
+  it('lets ordinary jobs and sexting through', () => {
+    expect(codes(['Je suis modèle photo, et toi ?'])).toEqual([]);
+    expect(codes(['Avant je suis assistante dentaire, tu imagines'])).toEqual([]);
+    expect(codes(['On se retrouve au lit 😏', 'On se voit au prochain live ?'])).toEqual([]);
   });
 
   it('keeps the ambiguity about meeting one day, without a promise', () => {
@@ -45,6 +64,8 @@ describe('voice guards', () => {
 
   it('blocks the persona forbidden terms, accents and case ignored', () => {
     expect(codes(['Tu aimes le café ?'], ['cafe'])).toEqual(['forbidden_term']);
+    expect(codes(['C’est banal, un canal'], ['anal'])).toEqual([]);
+    expect(codes(['Pas d’anal, désolée'], ['anal'])).toEqual(['forbidden_term']);
   });
 
   it('asks for a regeneration on AI tics, without blocking', () => {

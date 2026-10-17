@@ -32,20 +32,31 @@ export const DEFAULT_GUARD_SETTINGS: GuardSettings = {
   forbiddenTerms: [],
 };
 
-/** Lowercase, no accents, straight apostrophes: « Je t’AIME » and « je t'aime » compare equal. */
+/**
+ * Lowercase, no accents, straight apostrophes, one plain space for any space or invisible character,
+ * « I.A. » read as « ia »: « Je t’AIME » and « je t'aime » compare equal.
+ */
 function normalise(text: string): string {
   return text
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
     .replace(/[’`´]/g, "'")
-    .toLowerCase();
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/\bi\.\s?a\.?(?=\W|$)/g, 'ia');
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   {
     code: 'ai_disclosure',
+    // « je suis modèle photo », « je suis assistante dentaire » are jobs: the article is required for those words.
     pattern:
-      /\b(je suis|moi c'est) (une? |l')?(ia|intelligence artificielle|bot|robot|chatbot|assistante?|programme|modele( de langage)?)\b/,
+      /\b(je (ne )?suis|j'?suis|jsuis|moi c'est|i'?m)( qu'| que | juste | seulement )?\s?(une? |l'|an? )?(ia|ai|intelligence artificielle|bot|robot|chatbot)\b|\b(je suis|jsuis|j'suis) (une?|un simple) (assistante?|programme|modele( de langage)?)\b/,
   },
   { code: 'ai_disclosure', pattern: /\ben tant qu'(ia|assistante?|modele|intelligence artificielle)\b/ },
   {
@@ -57,7 +68,7 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   {
     code: 'meeting_promise',
     pattern:
-      /\b(on se (voit|retrouve|rejoint) (demain|ce soir|ce week-end|samedi|dimanche|lundi|mardi|mercredi|jeudi|vendredi|a |au |chez )|je (viens|passe|monte) chez toi|viens chez moi|je te rejoins|mon adresse|rendez-vous (a |au |chez ))/,
+      /\b(on se (voit|retrouve|rejoint) (demain|ce soir|ce week-end|samedi|dimanche|lundi|mardi|mercredi|jeudi|vendredi|chez |a (la gare|l'hotel|paris|lyon)|au (cafe|bar|resto|restaurant))|je (viens|passe|monte) chez toi|viens chez moi|je te rejoins|mon adresse|rendez-vous (a |au |chez ))/,
   },
   { code: 'contact_info', pattern: /\b(https?:\/\/|www\.)\S+/ },
   { code: 'contact_info', pattern: /\b[\w.+-]+@[\w-]+\.[\w.]+\b/ },
@@ -88,8 +99,10 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
       if (match) violations.push({ code, severity: 'blocking', bubbleIndex, match: match[0] });
     }
     for (const term of forbidden) {
-      if (text.includes(term))
+      // Whole words only: the disgust « anal » must not block « banal » or « canal ».
+      if (new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(term)}($|[^\\p{L}\\p{N}])`, 'u').test(text)) {
         violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: term });
+      }
     }
     const tic = AI_TICS.map((pattern) => pattern.exec(text)).find((m) => m !== null);
     if (tic) violations.push({ code: 'ai_tic', severity: 'soft', bubbleIndex, match: tic[0] });

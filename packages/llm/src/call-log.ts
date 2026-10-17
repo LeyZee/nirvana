@@ -12,6 +12,7 @@ export type CallOutcome =
   | 'auth'
   | 'unavailable'
   | 'missing_key'
+  | 'unknown_model'
   | 'error';
 
 /** One provider call. Never holds prompt or message content: only what supervision and costs need. */
