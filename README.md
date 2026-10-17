@@ -42,7 +42,7 @@
 | ✅ **Sur `main`** | **Socle du monorepo** : pnpm + Turborepo, TypeScript strict, frontières de modules vérifiées par ESLint (et testées), CI verte, gitleaks et lefthook. Les neuf modules de `apps/api` existent en squelette, le serveur Fastify répond sur `/health`. | P0-01 · #12, #14 |
 | ✅ **Sur `main`** | **Premier agent, en terminal** : passerelle LLM multi-fournisseurs (`packages/llm`, Grok 4.7 par défaut, repli Mistral, coût de chaque appel, journal sans contenu), prompts voix et cerveau versionnés, message du fan isolé comme donnée (`wrapUntrusted`), gardes de sortie en code (aveu d'IA, « je t'aime », rencontre promise, coordonnées, tics d'IA, termes interdits de la persona, longueur), playground terminal et test express. | P3-01 · #16 |
 | ✅ **Sur `main`** | **Persona** : un seul schéma Zod calqué sur la fiche créatrice d'OnlyChat (Détails, Infos en plus, Comportement, Stratégies, Relances, Notifications) et un placeholder qui le valide. | P0-08 · #17 |
-| ✅ **Sur `main`** | **Design system** « Liquid Glass » (`packages/design-system`), logo et déclinaisons (`brand/`). | D-01 · #13 |
+| ✅ **Sur `main`** | **Design system** « Liquid Glass » (`packages/design-system`), logo et déclinaisons (`brand/`). | D-01 |
 | ✅ **Sur `main`** | **Fiches validées** : mémoire du fan sur les notes Reveal (P3-02), catalogue de vente = index des scripts, étapes et bundles (P6-01). Fiche proposée : vocaux avec la voix clonée. | #18, #20, #21 |
 | ✅ **Sur `main`** | **Connexion Reveal préparée** : inventaire de ce que Reveal expose, runbook de capture réseau, anonymiseur testé, spécification de `FakeReveal`. Aucune capture faite à ce jour : elle attend le chatteur « bot » dans Reveal. | #15 |
 | 🔶 **PR ouverte** | **Vision et anti-injection** : médias des fans décrits par Gemini 3.8 Flash avec bascule automatique vers Grok, fiche média par vidéo de bundle, pièges texte, image, vocal et caractères invisibles. | P3-04 · #19 (brouillon) |
@@ -56,7 +56,7 @@
 
 Une créatrice sur Reveal.me reçoit chaque jour des dizaines de conversations privées. Chaque fan attend une réponse personnelle, rapide, qui se souvient de lui. C'est ce qui fidélise, et c'est ce qui fait acheter les médias privés. Impossible à tenir seule, difficile à déléguer sans perdre sa voix.
 
-Nirvana incarne la créatrice (Messalina pour commencer) :
+Ce que Nirvana doit faire, en incarnant la créatrice (Messalina pour commencer) :
 
 - **la relation d'abord** : il fait connaissance (prénom, ville, métier, passions, envies) avant de proposer quoi que ce soit, et note ce qu'il apprend dans les notes client de Reveal ;
 - **il vend comme une vraie chatteuse** : scripts Jour et Nuit, bundles préparés à prix fixe, jamais de négociation, jamais deux fois le même média au même fan, aftercare après chaque vente ;
