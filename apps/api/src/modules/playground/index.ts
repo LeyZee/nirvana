@@ -1,15 +1,17 @@
 /** Public entry point of the `playground` module (ADR 0002): the training screen's API (P3-06). */
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { DEFAULT_LLM_CONFIG, loadPrompt, type LlmGateway } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
-import type { CalibrationRecord, CalibrationStore } from '../agent/index';
+import { createJsonlCalibrationStore, type CalibrationRecord, type CalibrationStore } from '../agent/index';
 
 import { createPlaygroundService } from './application/playground-service';
 import { createPlaygroundEngine } from './infra/engine';
 import { createPlaygroundGateway, createVoiceVariant, type PlaygroundGatewayDeps } from './infra/gateways';
-import type { PlaygroundPersona } from './infra/persona-file';
+import { readPersonaFile, type PlaygroundPersona } from './infra/persona-file';
 import { createPlaygroundRoutes, type PlaygroundRoutesOptions } from './infra/routes';
 
 export { FAN_PRESETS, findPreset } from './domain/fan-presets';
@@ -31,8 +33,9 @@ export interface PlaygroundDeps extends PlaygroundGatewayDeps {
   readonly records: CalibrationRecord[];
   readonly timeZone?: string;
   readonly now?: () => Date;
-  /** Tests only: fake gateways in place of the providers. */
+  /** The app's one gateway (or a fake in tests); built from the deps otherwise, as in the terminal. */
   readonly gateway?: LlmGateway;
+  /** Tests only: fake gateways for the comparison. */
   readonly gatewayForVoice?: (voiceModel: string) => LlmGateway | undefined;
 }
 
@@ -56,4 +59,20 @@ export function createPlaygroundModule(deps: PlaygroundDeps): PlaygroundModule {
     }),
   );
   return { name: 'playground', routes: (options) => createPlaygroundRoutes(service, options) };
+}
+
+export interface PlaygroundStartOptions extends PlaygroundGatewayDeps {
+  readonly gateway: LlmGateway;
+  /** A persona YAML (PersonaSchema); the real one lives outside the repository (ADR 0010). */
+  readonly personaPath: string;
+  /** Where the ratings are kept, outside the repository, until a table exists. */
+  readonly trainingDir: string;
+}
+
+/** Reads the persona and the ratings kept so far, then builds the module. Throws when the persona is unreadable. */
+export async function startPlaygroundModule(options: PlaygroundStartOptions): Promise<PlaygroundModule> {
+  const today = new Date().toISOString().slice(0, 10);
+  const persona = readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today);
+  const store = createJsonlCalibrationStore(join(options.trainingDir, 'ratings.jsonl'));
+  return createPlaygroundModule({ ...options, persona, store, records: [...(await store.list())] });
 }

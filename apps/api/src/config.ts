@@ -51,6 +51,10 @@ const configSchema = z
     SESSION_ENCRYPTION_KEYS: z.string().optional(),
     /** Device token of the extension's « Sync » (`POST /v1/connector/sessions`); `openssl rand -base64 32`. */
     EXTENSION_DEVICE_TOKEN: z.string().optional(),
+    /** Entraîner > Playground: the persona YAML to train on; the fictional demo persona when absent (ADR 0010). */
+    PLAYGROUND_PERSONA_PATH: z.string().min(1).optional(),
+    /** Where the playground ratings are kept, out of the repository; `.scratch/training` when absent. */
+    NIRVANA_TRAINING_DIR: z.string().min(1).optional(),
   })
   .refine(
     // `.env.example` placeholders are long enough to pass `min(32)`; production must not start with one.

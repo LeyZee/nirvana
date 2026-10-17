@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
 import type { LlmCallStore } from '@nirvana/llm';
@@ -8,6 +10,7 @@ import type { Pool } from 'pg';
 import { createAuth, createAuthRoutes, createRequireRole, type Auth, type RequireRole } from './auth';
 import { secretOrNull, type Config } from './config';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
+import { createAppLlm } from './llm';
 import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
 import { createAgentModule, type AgentModule } from './modules/agent';
@@ -16,6 +19,7 @@ import { createConversationsModule, type ConversationsModule } from './modules/c
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
+import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
 import { createSalesModule, type SalesModule } from './modules/sales';
 import { createScriptsModule, type ScriptsModule } from './modules/scripts';
@@ -34,6 +38,8 @@ interface Modules {
   readonly sales: SalesModule;
   readonly scripts: ScriptsModule;
   readonly providers: ProvidersModule;
+  /** Null when its persona cannot be read: the API starts without the playground and says why. */
+  readonly playground: PlaygroundModule | null;
 }
 
 /** What both entry points (API and worker) are built from. */
@@ -57,6 +63,9 @@ export interface App {
   /** Closes the queue and both pools; the server and the worker are stopped before. */
   shutdown(): Promise<void>;
 }
+
+/** From `src/` in development and from `dist/` once built: both sit two levels under the repository root. */
+const fromRepoRoot = (path: string): string => fileURLToPath(new URL(`../../../${path}`, import.meta.url));
 
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
@@ -102,6 +111,37 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     sender: connectors.outboundSender,
     requireRole,
   });
+  const providers = await startProvidersModule({
+    adminDb: adminDb.db,
+    // The `.env.example` placeholder counts as unset: keys stay in memory instead of crashing the start.
+    encryptionKeys: secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS) ?? undefined,
+    environmentKeys:
+      config.NODE_ENV === 'production'
+        ? null
+        : {
+            xai: config.LLM_XAI_API_KEY,
+            google: config.LLM_GOOGLE_API_KEY,
+            elevenlabs: config.SPEECH_ELEVENLABS_API_KEY,
+          },
+    onLoadError: (error) => {
+      logger.warn({ err: error }, 'AI service keys not loaded');
+    },
+  });
+  // TODO(P3-06): once the composer PR lands, `log: await createPersistentCallLog(<llm_calls store>, { timeZone, refreshEveryMs: 30_000 })`.
+  const llm = createAppLlm({
+    credentials: providers.apiKeySource,
+    reportRefusedKey: (provider, kind) => providers.reportRefusedKey(provider, kind),
+    logger,
+  });
+  const playground = await startPlaygroundModule({
+    ...llm.deps,
+    gateway: llm.gateway,
+    personaPath: config.PLAYGROUND_PERSONA_PATH ?? fromRepoRoot('personas/demo/v0.1.0.yaml'),
+    trainingDir: config.NIRVANA_TRAINING_DIR ?? fromRepoRoot('.scratch/training'),
+  }).catch((error: unknown) => {
+    logger.warn({ err: error }, 'playground not started: persona unreadable');
+    return null;
+  });
   const modules: Modules = {
     connectors,
     conversations,
@@ -112,22 +152,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     supervision: createSupervisionModule(),
     sales: createSalesModule(),
     scripts: createScriptsModule(),
-    providers: await startProvidersModule({
-      adminDb: adminDb.db,
-      // The `.env.example` placeholder counts as unset: keys stay in memory instead of crashing the start.
-      encryptionKeys: secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS) ?? undefined,
-      environmentKeys:
-        config.NODE_ENV === 'production'
-          ? null
-          : {
-              xai: config.LLM_XAI_API_KEY,
-              google: config.LLM_GOOGLE_API_KEY,
-              elevenlabs: config.SPEECH_ELEVENLABS_API_KEY,
-            },
-      onLoadError: (error) => {
-        logger.warn({ err: error }, 'AI service keys not loaded');
-      },
-    }),
+    providers,
+    playground,
   };
 
   const tasks: TaskList = {
@@ -188,6 +214,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.conversations.routes,
       modules.providers.routes({ guard: requireRole('owner') }),
       modules.connectors.routes,
+      ...(playground === null ? [] : [playground.routes({ guard: requireRole('owner') })]),
     ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
