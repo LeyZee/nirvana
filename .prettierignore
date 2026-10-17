@@ -1,5 +1,6 @@
 dist
 .output
+.wxt
 node_modules
 .scratch
 pnpm-lock.yaml
