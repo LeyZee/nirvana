@@ -9,9 +9,9 @@ import './tracking.css';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const REFRESH_MS = 30_000;
-/** The runbook step that creates a creator (docs/runbooks/local-dev.md). */
+/** The runbook step that creates a creator (docs/runbooks/local-dev.md, step 6). */
 const NO_CREATOR =
-  'Crée la créatrice avec pnpm creator:create, comme l’indique le runbook docs/runbooks/local-dev.md, puis recharge la page.';
+  'Crée-la avec pnpm creator:create --name "Prénom" (étape 6 du runbook docs/runbooks/local-dev.md, « Créer la créatrice »), puis recharge la page.';
 
 /**
  * Suivi, squelette (P0-07b) : la liste brute des conversations et leur état, en lecture seule. La file « à traiter »
