@@ -177,6 +177,7 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
           isPaid: false,
           platformCreatedAt: new Date(sent.sentAt),
           draftId: payload.draftId,
+          platformMedia: [],
         });
         if (!isNew) return;
         await appendEvent(

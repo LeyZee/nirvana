@@ -17,6 +17,8 @@ export interface AgentComposeInput {
     readonly direction: 'inbound' | 'outbound';
     readonly text: string;
     readonly at: Date;
+    /** The media the message carries (photo, video, voice note), as `conversations` read them. */
+    readonly media?: readonly { readonly kind: string }[];
   }[];
   readonly fan: {
     readonly notes: readonly string[];
@@ -57,9 +59,9 @@ export interface DraftComposerDeps {
 const failureDetail = (error: LlmFailure): readonly string[] =>
   error.attempts.map((a) => `${a.model}: ${a.outcome}`);
 
-// The fan's photos and videos do not reach the composer yet (history carries text only), and every media of his
-// must be seen before she answers (minor, consent, weapon): a message without text goes to a human.
-// TODO(P3-06): pass his media to the screening once `HistoryMessage` carries them.
+// Every media of his must be seen before she answers (minor, consent, weapon), and the screening is not wired yet:
+// a message with a media, captioned or not, or without text goes to a human (revue 09, B2).
+// TODO(P3-06): pass his media to the screening instead of handing over.
 
 /** No voice model with a key, main or fallback: no call is worth making. */
 function voiceUnavailable(gateway: LlmGateway): boolean {
@@ -72,7 +74,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
     async compose(input) {
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
       const sinceAnswer = input.history.slice(lastAnswer + 1);
-      if (sinceAnswer.some((m) => m.text.trim() === '')) {
+      if (sinceAnswer.some((m) => m.text.trim() === '' || (m.media?.length ?? 0) > 0)) {
         return { kind: 'held', reason: 'handoff', detail: ['media_unscreened'], costUsd: 0 };
       }
       if (voiceUnavailable(deps.gateway)) {

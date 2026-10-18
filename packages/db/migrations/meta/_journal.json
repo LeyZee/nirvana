@@ -50,6 +50,13 @@
       "when": 1792276126871,
       "tag": "0006_telegram",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792282050216,
+      "tag": "0007_message_platform_media",
+      "breakpoints": true
     }
   ]
 }

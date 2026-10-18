@@ -4,6 +4,7 @@ import {
   PlatformAccountIdSchema,
   type ConversationId,
   type CreatorId,
+  type ExternalMedia,
   type PlatformAccountId,
 } from '@nirvana/contracts';
 import { eq, schema } from '@nirvana/db';
@@ -46,7 +47,11 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
   const composer = new ScriptedComposer();
   let counter = 0;
 
-  async function fanWrites(conversation: string, text: string): Promise<ConversationId> {
+  async function fanWrites(
+    conversation: string,
+    text: string,
+    media: ExternalMedia[] = [],
+  ): Promise<ConversationId> {
     counter += 1;
     const { conversationId } = await conversations.ingestMessage({
       creatorId,
@@ -59,7 +64,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
         conversationRef: { platform: 'reveal', id: conversation },
         direction: 'inbound',
         text,
-        media: [],
+        media,
         priceMinor: null,
         currency: null,
         isPaid: false,
@@ -164,6 +169,22 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       .from(schema.domainEvents)
       .where(eq(schema.domainEvents.type, 'handoff_requested'));
     expect(outbox).toHaveLength(1);
+  });
+
+  it('gives the engine every media of the fan, captioned or not, even before the media module stores it', async () => {
+    const photo: ExternalMedia = {
+      ref: { platform: 'reveal', id: 'media-1' },
+      kind: 'image',
+      isLocked: false,
+    };
+    const id = await fanWrites('c-photo', 'regarde', [photo]);
+    composer.next = { kind: 'held', reason: 'handoff', detail: ['media_unscreened'], costUsd: 0 };
+    await respond(id);
+    expect(composer.inputs.at(-1)?.history.at(-1)).toMatchObject({
+      text: 'regarde',
+      media: [{ kind: 'image', platformMediaId: 'media-1', isLocked: false }],
+    });
+    expect(await state(id)).toBe('human');
   });
 
   it('keeps the cause the engine gives, so alerts rank on it', async () => {

@@ -138,6 +138,7 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           priceMinor: message.priceMinor,
           currency: message.currency,
           isPaid: message.isPaid,
+          platformMedia: message.media,
           platformCreatedAt: new Date(message.createdAt),
           draftId: null,
         });

@@ -49,7 +49,9 @@ conversations        id, creator_id, platform_account_id, fan_id, platform_conve
                      cooldowns jsonb, active_script_run_id (nullable), updated_at
 messages             id, creator_id, platform_account_id (dénormalisé pour l'unicité), conversation_id, platform_message_id,
                      direction (inbound|outbound), author (fan|human|ai), text, media_ids uuid[], price_minor, currency, is_paid,
-                     platform_created_at, created_at, draft_id (nullable)
+                     platform_created_at, created_at, draft_id (nullable),
+                     platform_media jsonb (médias listés par la plateforme : kind, ref, isLocked ; lus par le moteur
+                     avant que le module media ne les range dans media_ids)
                      UNIQUE (platform_account_id, platform_message_id)
 conversation_events  id, creator_id, conversation_id, seq bigint, type, payload jsonb, actor (system|ai|human:<user_id>|fan),
                      correlation_id, created_at      (append-only, UNIQUE (conversation_id, seq))
