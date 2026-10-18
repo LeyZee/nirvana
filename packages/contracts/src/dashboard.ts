@@ -101,9 +101,14 @@ export const DashboardSchema = z.object({
   guards: z.object({
     /** Handoffs of her day, by cause: every cause, 0 included. */
     today: z.record(HandoffCauseSchema, count),
-    /** Null until the Telegram alerts exist. */
+    /** Urgent and important Telegram alerts of her night (or of the last one, by day); null when Telegram is off. */
     telegramAlertsTonight: count.nullable(),
   }),
+  /**
+   * Whether a Telegram group gets her urgent alerts, as Réglages › Telegram computes it. Null when Telegram is off
+   * (no encryption key): the screen sends to Réglages › Telegram instead of saying no urgent alert gets through.
+   */
+  telegramCoverage: z.object({ urgentReachable: z.boolean() }).nullable(),
   budget: z.object({
     /** The day's AI spend, every creator together: the cap is one for the whole CRM. */
     spentToday: euros,

@@ -21,8 +21,9 @@ const dashboard = {
   replies: { medianReplyMinutes: 3.5, fansWaitingOver10Min: 1, conversationsOpen: 12 },
   guards: {
     today: { ...Object.fromEntries(HANDOFF_CAUSES.map((cause) => [cause, 0])), minor: 1, meeting: 2 },
-    telegramAlertsTonight: null,
+    telegramAlertsTonight: 2,
   },
+  telegramCoverage: { urgentReachable: true },
   budget: { spentToday: 3.2, cap: 20, alertAt: 16, costPerEuroSold: null },
   todos: [
     {

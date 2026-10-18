@@ -67,3 +67,14 @@ export interface DashboardReader {
     window: (timezone: string) => DashboardWindow,
   ): Promise<{ readonly facts: DashboardFacts; readonly window: DashboardWindow } | undefined>;
 }
+
+/** What the Dashboard shows of the Telegram alerts (module telegram, wired by the composition root). */
+export interface TelegramReading {
+  /** Urgent and important alerts of her night (20 h to 8 h in her time zone), or of the last one by day. */
+  readonly alertsTonight: number;
+  readonly urgentReachable: boolean;
+}
+
+export interface TelegramView {
+  read(creatorId: CreatorId): Promise<TelegramReading>;
+}

@@ -10,7 +10,12 @@ import {
 } from '@nirvana/contracts';
 
 import { asPercent, automaticGate, LIVE_TARGET, liveRate } from './automatic';
-import type { DashboardFacts, DashboardWindow, WaitingConversation } from './dashboard-ports';
+import type {
+  DashboardFacts,
+  DashboardWindow,
+  TelegramReading,
+  WaitingConversation,
+} from './dashboard-ports';
 
 /** The day's AI budget, every creator together (packages/llm `BudgetStatus`). */
 export interface BudgetReading {
@@ -93,6 +98,8 @@ export function assembleDashboard(input: {
   readonly window: DashboardWindow;
   readonly budget: BudgetReading;
   readonly isVoiceOk: boolean;
+  /** Undefined when Telegram is off. */
+  readonly telegram: TelegramReading | undefined;
 }): Dashboard {
   const { facts, window } = input;
   const reading = liveRate(facts.decided);
@@ -132,7 +139,12 @@ export function assembleDashboard(input: {
       fansWaitingOver10Min: facts.replies.fansWaitingOver10Min,
       conversationsOpen: facts.replies.conversationsOpen,
     },
-    guards: { today: guardsToday(facts.handoffsToday), telegramAlertsTonight: null },
+    guards: {
+      today: guardsToday(facts.handoffsToday),
+      telegramAlertsTonight: input.telegram?.alertsTonight ?? null,
+    },
+    telegramCoverage:
+      input.telegram === undefined ? null : { urgentReachable: input.telegram.urgentReachable },
     budget: {
       spentToday: cents(input.budget.spentEur),
       cap: input.budget.capEur,

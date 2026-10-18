@@ -2,7 +2,7 @@ import { CreatorIdSchema, DashboardSchema } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { assembleDashboard, todos } from '../dashboard';
-import type { DashboardFacts } from '../dashboard-ports';
+import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
 const CONVERSATION = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
@@ -33,7 +33,10 @@ const FACTS: DashboardFacts = {
   ],
 };
 
-const assemble = (facts: Partial<DashboardFacts> = {}) =>
+const assemble = (
+  facts: Partial<DashboardFacts> = {},
+  telegram: TelegramReading | 'off' = { alertsTonight: 3, urgentReachable: false },
+) =>
   assembleDashboard({
     creatorId: CreatorIdSchema.parse('0b9d4b7e-2f7a-4c1e-9a55-3d1f0c2b8e41'),
     period: 'day',
@@ -46,6 +49,7 @@ const assemble = (facts: Partial<DashboardFacts> = {}) =>
     },
     budget: { spentEur: 3.204, capEur: 20, alertAtEur: 16 },
     isVoiceOk: true,
+    telegram: telegram === 'off' ? undefined : telegram,
   });
 
 describe('dashboard', () => {
@@ -56,6 +60,14 @@ describe('dashboard', () => {
     expect(dashboard.budget.spentToday).toBe(3.2);
     expect(dashboard.guards.today.meeting).toBe(2);
     expect(dashboard.guards.today.minor).toBe(0);
+    expect(dashboard.guards.telegramAlertsTonight).toBe(3);
+    expect(dashboard.telegramCoverage).toEqual({ urgentReachable: false });
+  });
+
+  it('says Telegram is off rather than that no alert gets through', () => {
+    const dashboard = DashboardSchema.parse(assemble({}, 'off'));
+    expect(dashboard.guards.telegramAlertsTonight).toBeNull();
+    expect(dashboard.telegramCoverage).toBeNull();
   });
 
   it('keeps Automatique locked until the blind test is recorded, even at 100 %', () => {

@@ -250,6 +250,20 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         voicePrompt: loadPrompt('voice').header.version,
         voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
       },
+      ...(telegram !== null && {
+        telegram: {
+          read: async (creatorId) => {
+            const [night, { coverage }] = await Promise.all([
+              telegram.nightCounts(creatorId),
+              telegram.overview(),
+            ]);
+            return {
+              alertsTonight: night.urgent + night.important,
+              urgentReachable: coverage.find((c) => c.creatorId === creatorId)?.urgentReachable ?? false,
+            };
+          },
+        },
+      }),
     }),
     sales: createSalesModule(),
     scripts: createScriptsModule(),
