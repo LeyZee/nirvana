@@ -100,3 +100,4 @@ Suite : l'artifact de référence (lien dans `docs/design/README.md`) est align�
 Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux causes antérieures à D-01. (1) `check`, `test` et `audit` s'arrêtent à `actions/setup-node` (`cache: pnpm`) faute de `pnpm-lock.yaml` : relève de P0-01. (2) `gitleaks/gitleaks-action@v2` reçoit un 403 en listant les commits de la PR, car le workflow n'accorde que `contents: read` ; il lui faut aussi `pull-requests: read`. Relève de P0-07, non corrigé ici.
 | 2026-10-18 | Les médias du fan dans l'historique du moteur (B2) | done | `log/2026-10-18-history-media.md` |
 | 2026-10-17 | Identifiants UUID v7 pour llm_calls et kill_switches | done | `log/2026-10-17-uuid-v7-rows.md` |
+| 2026-10-18 | Règle d'évolution des payloads du journal (G13) | done | `log/2026-10-18-event-upcast.md` |
