@@ -2,6 +2,7 @@ import {
   ConversationDetailSchema,
   CreatorIdSchema,
   DashboardSchema,
+  EventIdSchema,
   MessageIdSchema,
   newId,
   PlatformAccountIdSchema,
@@ -149,8 +150,8 @@ describe('GET /v1/dashboard', () => {
     // Leo may be a minor: the agent handed him over.
     expect((await post(`/v1/conversations/${leo}/takeover?creatorId=${creatorId}`, {})).statusCode).toBe(204);
     await test.admin.db.execute(sql`
-      insert into conversation_events (creator_id, conversation_id, seq, type, payload, actor, correlation_id)
-      select ${creatorId}::uuid, ${leo}::uuid, max(seq) + 1, 'handoff_requested',
+      insert into conversation_events (id, creator_id, conversation_id, seq, type, payload, actor, correlation_id)
+      select ${newId(EventIdSchema)}::uuid, ${creatorId}::uuid, ${leo}::uuid, max(seq) + 1, 'handoff_requested',
              ${JSON.stringify({ conversationId: leo, cause: 'minor' })}::jsonb, 'ai', 'seed'
       from conversation_events where conversation_id = ${leo}::uuid`);
 
