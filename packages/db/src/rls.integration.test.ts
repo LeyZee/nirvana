@@ -13,7 +13,7 @@ import { eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
-import { withAdmin, withTenant, type Database } from './client';
+import { SNAPSHOT_READ, withAdmin, withTenant, type Database } from './client';
 import { MIGRATIONS_FOLDER, migrationStatus, runMigrations } from './migrate';
 import * as s from './schema';
 import { createTestDb, type TestDb } from './test/test-db';
@@ -412,5 +412,39 @@ describe('database (RLS, constraints, migrations)', () => {
         throw rolledBack;
       }),
     ).rejects.toBe(rolledBack);
+  });
+  it('reads one moment of the database in a snapshot read, and writes nothing there', async () => {
+    const countFans = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
+      const result = await tx.execute<{ n: number }>(sql`select count(*)::int as n from fans`);
+      return result.rows[0]?.n;
+    };
+    const seen = await withTenant(
+      test.app.db,
+      a.creatorId,
+      async (tx) => {
+        const before = await countFans(tx);
+        // Committed by someone else between the two reads: a snapshot does not see it.
+        await test.admin.db.insert(s.fans).values({
+          id: newId(FanIdSchema),
+          creatorId: a.creatorId,
+          platformAccountId: a.accountId,
+          platformFanId: 'snapshot-fan',
+          displayName: 'Fan',
+        });
+        return [before, await countFans(tx)];
+      },
+      SNAPSHOT_READ,
+    );
+    expect(seen[0]).toBe(seen[1]);
+    expect(
+      await failure(
+        withTenant(
+          test.app.db,
+          a.creatorId,
+          (tx) => tx.delete(s.fans).where(eq(s.fans.creatorId, a.creatorId)),
+          SNAPSHOT_READ,
+        ),
+      ),
+    ).toMatch(/read-only transaction/);
   });
 });

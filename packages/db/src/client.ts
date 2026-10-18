@@ -7,6 +7,18 @@ import * as schema from './schema';
 export type Database = NodePgDatabase<typeof schema>;
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+/** Isolation and access mode of a transaction, as Drizzle takes them. */
+export type TransactionConfig = NonNullable<Parameters<Database['transaction']>[1]>;
+
+/**
+ * A read that spans several queries and must see one moment of the database (revue 09, G4): a conversation's state
+ * and its drafts read in READ COMMITTED could straddle a commit and disagree.
+ */
+export const SNAPSHOT_READ: TransactionConfig = {
+  isolationLevel: 'repeatable read',
+  accessMode: 'read only',
+};
+
 export interface DbClient {
   readonly db: Database;
   readonly pool: Pool;
@@ -29,11 +41,12 @@ export function withTenant<T>(
   db: Database,
   creatorId: string,
   fn: (tx: Transaction) => Promise<T>,
+  config?: TransactionConfig,
 ): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.creator_id', ${creatorId}, true)`);
     return fn(tx);
-  });
+  }, config);
 }
 
 /**
