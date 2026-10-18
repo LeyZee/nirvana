@@ -11,7 +11,10 @@ const dashboard = {
   creator: { id: CREATOR, name: 'Lina', timezone: 'Europe/Paris', now: '2026-10-17T21:30:00.000Z' },
   period: 'day',
   mode: 'copilot',
-  automatic: { open: false, missing: ['decided', 'blind_test'] },
+  automatic: {
+    open: false,
+    missing: [{ kind: 'decided_drafts', value: 2, target: 100 }, { kind: 'blind_test' }],
+  },
   liveRate: { rate: 84, target: 80, decided: 37, threeWeeksAgo: null },
   reveal: { connected: true, lastReadAt: '2026-10-17T21:29:30.000Z', conversations: 42 },
   voice: { ok: true, medianWriteMs: 1400, outagesLast7d: 0 },

@@ -195,7 +195,14 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.period).toBe('week');
     expect(dashboard.mode).toBe('copilot');
     expect(dashboard.liveRate).toEqual({ rate: 50, target: 80, decided: 2, threeWeeksAgo: null });
-    expect(dashboard.automatic).toEqual({ open: false, missing: ['live_rate', 'decided', 'blind_test'] });
+    expect(dashboard.automatic).toEqual({
+      open: false,
+      missing: [
+        { kind: 'live_rate', value: null, target: 80 },
+        { kind: 'decided_drafts', value: 0, target: 100 },
+        { kind: 'blind_test' },
+      ],
+    });
     expect(dashboard.reveal).toMatchObject({ connected: true, conversations: 3 });
     expect(dashboard.guards.today.minor).toBe(1);
     expect(dashboard.budget).toMatchObject({ cap: 20, alertAt: 16, costPerEuroSold: null });

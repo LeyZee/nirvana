@@ -22,16 +22,16 @@ describe('automatic gate', () => {
       missing: [],
     });
     expect(automaticGate({ reading: liveRate(drafts(79, 21)), blindTestPassed: true }).missing).toEqual([
-      'live_rate',
+      { kind: 'live_rate', value: 79, target: 80 },
     ]);
     expect(automaticGate({ reading: liveRate(drafts(90, 9)), blindTestPassed: false }).missing).toEqual([
-      'decided',
-      'blind_test',
+      { kind: 'decided_drafts', value: 99, target: 100 },
+      { kind: 'blind_test' },
     ]);
     expect(automaticGate({ reading: liveRate([]), blindTestPassed: false }).missing).toEqual([
-      'live_rate',
-      'decided',
-      'blind_test',
+      { kind: 'live_rate', value: null, target: 80 },
+      { kind: 'decided_drafts', value: 0, target: 100 },
+      { kind: 'blind_test' },
     ]);
   });
 });

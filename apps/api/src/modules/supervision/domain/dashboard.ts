@@ -9,7 +9,7 @@ import {
   type HandoffCause,
 } from '@nirvana/contracts';
 
-import { automaticGate, LIVE_TARGET, liveRate } from './automatic';
+import { asPercent, automaticGate, LIVE_TARGET, liveRate } from './automatic';
 import type { DashboardFacts, DashboardWindow, WaitingConversation } from './dashboard-ports';
 
 /** The day's AI budget, every creator together (packages/llm `BudgetStatus`). */
@@ -65,8 +65,6 @@ function mode(facts: DashboardFacts): AgentMode {
   return facts.autoConversations > 0 ? 'auto' : 'copilot';
 }
 
-const percent = (rate: number | undefined): number | null =>
-  rate === undefined ? null : Math.round(rate * 1000) / 10;
 const euros = (minor: number): number => minor / 100;
 const cents = (amount: number): number => Math.round(amount * 100) / 100;
 
@@ -111,10 +109,10 @@ export function assembleDashboard(input: {
     mode: mode(facts),
     automatic: { open: gate.open, missing: [...gate.missing] },
     liveRate: {
-      rate: percent(reading.rate),
+      rate: asPercent(reading.rate),
       target: LIVE_TARGET * 100,
       decided: reading.decided,
-      threeWeeksAgo: percent(liveRate(facts.decidedThreeWeeksAgo).rate),
+      threeWeeksAgo: asPercent(liveRate(facts.decidedThreeWeeksAgo).rate),
     },
     reveal: {
       connected: facts.reveal.connected,

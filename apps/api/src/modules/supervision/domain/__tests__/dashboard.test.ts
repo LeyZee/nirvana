@@ -60,7 +60,7 @@ describe('dashboard', () => {
 
   it('keeps Automatique locked until the blind test is recorded, even at 100 %', () => {
     const dashboard = assemble({ decided: Array.from({ length: 150 }, () => ({ asIs: true })) });
-    expect(dashboard.automatic).toEqual({ open: false, missing: ['blind_test'] });
+    expect(dashboard.automatic).toEqual({ open: false, missing: [{ kind: 'blind_test' }] });
   });
 
   it('says Arrêt over everything, and Automatique when a conversation runs on its own', () => {
