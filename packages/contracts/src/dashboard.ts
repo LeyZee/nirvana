@@ -27,7 +27,11 @@ export type AgentMode = z.infer<typeof AgentModeSchema>;
  * `GET /v1/dashboard` gives it: Arrêt when the global switch stays on.
  */
 export const SetAgentModeBodySchema = z.object({ creatorId: CreatorIdSchema, mode: AgentModeSchema });
-export const AgentModeResultSchema = z.object({ mode: AgentModeSchema });
+export const AgentModeResultSchema = z.object({
+  mode: AgentModeSchema,
+  /** The global switch is on: Arrêt for every creator, whatever she asked, until an operator lifts it. */
+  globalStop: z.boolean(),
+});
 export type AgentModeResult = z.infer<typeof AgentModeResultSchema>;
 
 const percent = z.number().min(0).max(100);

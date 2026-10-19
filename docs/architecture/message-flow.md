@@ -103,7 +103,7 @@ Le contrôle du Dashboard passe par `PUT /v1/agent/mode { creatorId, mode }` (pr
 - **Copilote** le lève et repasse en copilote toute conversation restée en automatique.
 - **Automatique** est refusé (409 `agent_mode_conflict`) tant que le verrou de l'ADR 0019 n'est pas branché côté serveur.
 
-Chaque changement écrit sa ligne `kill_switches`, son événement `kill_switch_toggled` et sa ligne `audit_log` dans la même transaction. Un clic qui ne change rien n'écrit rien. Les changements d'une même créatrice passent l'un après l'autre (verrou de transaction), et la ligne prend l'heure de la base une fois le verrou tenu : le dernier clic appliqué reste la dernière ligne. La réponse donne le mode en vigueur, sous la forme de `GET /v1/dashboard` : Arrêt tant que l'interrupteur global reste posé.
+Chaque changement écrit sa ligne `kill_switches`, son événement `kill_switch_toggled` et sa ligne `audit_log` dans la même transaction. Un clic qui ne change rien n'écrit rien. Les changements d'une même créatrice passent l'un après l'autre (verrou de transaction), et la ligne prend l'heure de la base une fois le verrou tenu : le dernier clic appliqué reste la dernière ligne. La réponse donne le mode en vigueur, sous la forme de `GET /v1/dashboard` : Arrêt tant que l'interrupteur global reste posé, avec `globalStop: true` pour que l'écran dise pourquoi.
 
 ## 7. Réconciliation
 

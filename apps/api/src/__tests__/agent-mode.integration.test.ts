@@ -124,7 +124,7 @@ describe('PUT /v1/agent/mode', () => {
   it('Arrêt sets her kill switch at once, with its event and its audit line', async () => {
     const response = await setMode('stop');
     expect(response.statusCode).toBe(200);
-    expect(AgentModeResultSchema.parse(response.json())).toEqual({ mode: 'stop' });
+    expect(AgentModeResultSchema.parse(response.json())).toEqual({ mode: 'stop', globalStop: false });
     expect(await dashboardMode()).toBe('stop');
 
     const switches = await creatorSwitches();
@@ -148,7 +148,7 @@ describe('PUT /v1/agent/mode', () => {
     expect(audit).toMatchObject({ entity: 'kill_switch', entityId: creatorId });
 
     // A second Arrêt changes nothing: one row per change, not per click.
-    expect((await setMode('stop')).json()).toEqual({ mode: 'stop' });
+    expect((await setMode('stop')).json()).toEqual({ mode: 'stop', globalStop: false });
     expect(await creatorSwitches()).toHaveLength(1);
   });
 
@@ -159,7 +159,7 @@ describe('PUT /v1/agent/mode', () => {
     expect(toAuto.statusCode).toBe(204);
 
     const response = await setMode('copilot');
-    expect(response.json()).toEqual({ mode: 'copilot' });
+    expect(response.json()).toEqual({ mode: 'copilot', globalStop: false });
     expect(await dashboardMode()).toBe('copilot');
     expect((await creatorSwitches()).map((s) => s.active)).toEqual([true, false]);
     const [conversation] = await test.admin.db
@@ -171,7 +171,7 @@ describe('PUT /v1/agent/mode', () => {
 
   it('answers Arrêt to Copilote while the global switch stays on', async () => {
     await setKillSwitch(test.admin.db, { active: true, scope: 'global', scopeId: null, reason: 'test' });
-    expect((await setMode('copilot')).json()).toEqual({ mode: 'stop' });
+    expect((await setMode('copilot')).json()).toEqual({ mode: 'stop', globalStop: true });
     await setKillSwitch(test.admin.db, { active: false, scope: 'global', scopeId: null, reason: 'test' });
     expect(await dashboardMode()).toBe('copilot');
   });

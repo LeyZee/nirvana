@@ -5,7 +5,7 @@ Fait : `PUT /v1/agent/mode { creatorId, mode }` dans le module `conversations`.
 - Copilote le lève et repasse en copilote les conversations restées en automatique.
 - Automatique est refusé en 409 `agent_mode_conflict` jusqu'à B3.
 
-Chaque changement écrit sa ligne `kill_switches`, son événement `kill_switch_toggled` et sa ligne `audit_log`. Les clics d'une créatrice sont sérialisés par un verrou de transaction, et `set_at` prend `clock_timestamp()` une fois le verrou tenu. La réponse est `{ mode }`, comme `GET /v1/dashboard`. Contrat : `SetAgentModeBodySchema` et `AgentModeResultSchema` dans `contracts/dashboard.ts`. `message-flow.md` §6 est à jour.
+Chaque changement écrit sa ligne `kill_switches`, son événement `kill_switch_toggled` et sa ligne `audit_log`. Les clics d'une créatrice sont sérialisés par un verrou de transaction, et `set_at` prend `clock_timestamp()` une fois le verrou tenu. La réponse est `{ mode, globalStop }` : le mode comme `GET /v1/dashboard`, et si l’interrupteur global le tient (suggestion du fil Extension). Contrat : `SetAgentModeBodySchema` et `AgentModeResultSchema` dans `contracts/dashboard.ts`. `message-flow.md` §6 est à jour.
 
 Pas fait : le verrou Automatique (B3) ; le branchement de l'écran (fil Extension, après la fusion).
 

@@ -228,9 +228,7 @@ export function createConversationRoutes(
       async (request) => {
         const { creatorId, mode } = request.body;
         const { userId } = actorFor(request, creatorId);
-        return {
-          mode: await commands.setAgentMode({ creatorId, userId, mode, correlationId: request.id }),
-        };
+        return commands.setAgentMode({ creatorId, userId, mode, correlationId: request.id });
       },
     );
 

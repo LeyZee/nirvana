@@ -62,7 +62,9 @@ export interface ConversationCommands {
    * The Dashboard's control (Arrêt, Copilote, Automatique) for all her conversations. Returns the mode now in
    * force: Arrêt while the global switch stays on, whatever she asked.
    */
-  setAgentMode(input: Omit<ConversationCommand, 'conversationId'> & { mode: AgentMode }): Promise<AgentMode>;
+  setAgentMode(
+    input: Omit<ConversationCommand, 'conversationId'> & { mode: AgentMode },
+  ): Promise<{ mode: AgentMode; globalStop: boolean }>;
   /** Recomputes the projection columns from the journal (ADR 0007) and saves them. */
   rebuildProjection(creatorId: CreatorId, conversationId: ConversationId): Promise<ConversationProjection>;
 }
@@ -380,7 +382,7 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
             );
           }
         }
-        return stop || switches.global ? 'stop' : 'copilot';
+        return { mode: stop || switches.global ? 'stop' : 'copilot', globalStop: switches.global };
       });
     },
 
