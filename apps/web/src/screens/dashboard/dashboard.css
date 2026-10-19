@@ -539,6 +539,9 @@
   color: var(--nv-warning);
   text-align: right;
 }
+.db-notice--quiet {
+  color: var(--nv-ink-muted);
+}
 .db-pending {
   margin: 0;
   padding: 18px 20px;

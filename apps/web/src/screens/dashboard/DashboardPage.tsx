@@ -86,7 +86,7 @@ export function DashboardPage(): JSX.Element {
 }
 
 function Loaded({
-  view: { status, creatorId, globalStop, data, mode, automatic },
+  view: { status, creatorId, globalStop, readAt, data, mode, automatic },
   period,
   onPeriod,
 }: {
@@ -108,7 +108,7 @@ function Loaded({
   const close = useCallback(() => {
     setFanId(null);
   }, []);
-  const writer = useAgentModeWriter(creatorId);
+  const writer = useAgentModeWriter(creatorId, readAt);
   const { setMode } = writer;
   const resume = useCallback(() => {
     setMode('copilot');
@@ -147,7 +147,11 @@ function Loaded({
           readOnly={status === 'sample' ? SAMPLE_NOTE : globalStop ? GLOBAL_NOTE : null}
           onChange={setMode}
         />
-        {notice === null ? null : (
+        {writer.pending ? (
+          <p className="db-notice db-notice--quiet" role="status">
+            Envoi au serveur…
+          </p>
+        ) : notice === null ? null : (
           <p className="db-notice" role="alert">
             {notice}
           </p>

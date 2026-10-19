@@ -32,6 +32,8 @@ export type DashboardView =
       readonly creatorId: string | null;
       /** An operator's global switch holds every creator: Arrêt whatever she picks, until it is lifted. */
       readonly globalStop: boolean;
+      /** When the server last answered (0 on the sample): a notice about a change holds until the next answer. */
+      readonly readAt: number;
       readonly data: Dashboard;
       readonly mode: AgentMode;
       readonly automatic: AutomaticGate;
@@ -48,13 +50,21 @@ export function useDashboard(period: Period): DashboardView {
     case 'unavailable':
       return { status: 'offline', creatorName: live.creatorName };
     case 'empty':
-      return { status: 'sample', creatorId: null, globalStop: false, data: SAMPLE, ...SAMPLE_AGENT };
+      return {
+        status: 'sample',
+        creatorId: null,
+        globalStop: false,
+        readAt: 0,
+        data: SAMPLE,
+        ...SAMPLE_AGENT,
+      };
     case 'live':
       // The period's own read carries the mode too: the control follows the page it is on.
       return {
         status: 'live',
         creatorId: live.data.creator.id,
         globalStop: live.data.globalStop,
+        readAt: live.readAt,
         data: data ?? fromApi(live.data),
         mode: live.data.mode,
         automatic: live.data.automatic,

@@ -107,15 +107,15 @@ function serveModes(
   }),
   patch: Partial<ApiDashboard> = {},
 ): { creatorId: string; mode: AgentMode }[] {
-  let mode = first;
+  let state = { mode: first, globalStop: patch.globalStop ?? false };
   const writes: { creatorId: string; mode: AgentMode }[] = [];
   serveDashboard(
-    () => ({ status: 200, body: apiDashboard({ ...patch, mode }) }),
+    () => ({ status: 200, body: apiDashboard({ ...patch, ...state }) }),
     undefined,
     (body) => {
       writes.push(body);
       const reply = answer(body.mode);
-      if (reply.status === 200) mode = AgentModeResultSchema.parse(reply.body).mode;
+      if (reply.status === 200) state = AgentModeResultSchema.parse(reply.body);
       return reply;
     },
   );
@@ -208,6 +208,50 @@ describe('DashboardPage changing the mode', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('seul un opérateur peut le lever');
     expect(screen.getByRole('radio', { name: 'Copilote' }).getAttribute('aria-disabled')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Repasser en copilote' })).toBeNull();
+  });
+
+  it('says it is sending while the server has not answered', async () => {
+    serveModes('stop');
+    const server = globalThis.fetch;
+    let answer: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string, init?: RequestInit) =>
+        init?.method === 'PUT'
+          ? new Promise<Response>((resolve) => {
+              answer = () => {
+                resolve(
+                  new Response(JSON.stringify({ mode: 'copilot', globalStop: false }), { status: 200 }),
+                );
+              };
+            })
+          : server(input, init),
+      ),
+    );
+    renderDashboard();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Copilote' }));
+    expect(await screen.findByText('Envoi au serveur…')).toBeDefined();
+    expect(checked('Arrêt')).toBe('true');
+    await act(async () => {
+      answer?.();
+      await tick();
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Envoi au serveur…')).toBeNull();
+    });
+  });
+
+  it('drops a refusal once the page has read the server again', async () => {
+    serveModes('copilot', () => ({ status: 500 }));
+    const client = renderDashboard();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Arrêt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’agent' }));
+    expect(await screen.findByRole('alert')).toBeDefined();
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['dashboard'] });
+      await tick();
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows the server’s refusal of Automatique and changes nothing', async () => {

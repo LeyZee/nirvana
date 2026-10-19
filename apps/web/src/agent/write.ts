@@ -6,7 +6,7 @@ import {
   type Dashboard as ApiDashboard,
 } from '@nirvana/contracts';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 /** A change the server refused or could not make, with the sentence the screen shows. */
 class ModeNotChanged extends Error {}
@@ -35,12 +35,12 @@ async function putAgentMode(creatorId: string, mode: AgentMode): Promise<AgentMo
 }
 
 /** Puts the server's answer on every period of her Dashboard, then reads them again for the rest. */
-async function settle(client: QueryClient, creatorId: string, mode: AgentMode): Promise<void> {
+async function settle(client: QueryClient, creatorId: string, result: AgentModeResult): Promise<void> {
   const key = ['dashboard', creatorId];
   // A read sent before the change would land after it and put the old mode back (an Arrêt lost): dropped first.
   await client.cancelQueries({ queryKey: key });
   client.setQueriesData<ApiDashboard>({ queryKey: key }, (before) =>
-    before === undefined ? before : { ...before, mode },
+    before === undefined ? before : { ...before, mode: result.mode, globalStop: result.globalStop },
   );
   await client.invalidateQueries({ queryKey: key });
 }
@@ -48,28 +48,43 @@ async function settle(client: QueryClient, creatorId: string, mode: AgentMode): 
 export interface ModeWriter {
   readonly setMode: (mode: AgentMode) => void;
   readonly pending: boolean;
-  /** What the screen must say after a change: a refusal, or Arrêt kept by the global switch. */
+  /**
+   * What the screen must say after a change: a refusal, or Arrêt kept by the global switch. Gone once the page has
+   * read the server again, which then says what holds.
+   */
   readonly notice: string | null;
 }
 
-/** The Dashboard control's one door to the server: no change shows before the server has made it. */
-export function useAgentModeWriter(creatorId: string | null): ModeWriter {
+/**
+ * The Dashboard control's one door to the server: no change shows before the server has made it. `read` is when
+ * the server last answered the page: a notice holds only until the next answer.
+ */
+export function useAgentModeWriter(creatorId: string | null, read: number): ModeWriter {
   const client = useQueryClient();
-  const [notice, setNotice] = useState<string | null>(null);
+  // Each notice remembers the answer it was said on, and goes once the page holds a newer one.
+  const [said, setSaid] = useState<{ readonly text: string; readonly on: number } | null>(null);
   const mutation = useMutation({
-    mutationFn: async (mode: AgentMode) => {
+    mutationFn: async ({ mode }: { mode: AgentMode; on: number }) => {
       // The sample has no creator: nothing to write.
       if (creatorId === null) throw new ModeNotChanged(OFFLINE);
-      setNotice(null);
+      setSaid(null);
       return putAgentMode(creatorId, mode);
     },
-    onSuccess: async (result, asked) => {
-      if (result.globalStop && asked !== 'stop') setNotice(GLOBAL_STOP);
-      if (creatorId !== null) await settle(client, creatorId, result.mode);
+    onSuccess: async (result, { mode, on }) => {
+      if (result.globalStop && mode !== 'stop') setSaid({ text: GLOBAL_STOP, on });
+      if (creatorId !== null) await settle(client, creatorId, result);
     },
-    onError: (error) => {
-      setNotice(error instanceof ModeNotChanged ? error.message : OFFLINE);
+    onError: (error, { on }) => {
+      setSaid({ text: error instanceof ModeNotChanged ? error.message : OFFLINE, on });
     },
   });
-  return { setMode: mutation.mutate, pending: mutation.isPending, notice };
+  const { mutate } = mutation;
+  const setMode = useCallback(
+    (mode: AgentMode) => {
+      mutate({ mode, on: read });
+    },
+    [mutate, read],
+  );
+  const notice = said !== null && said.on === read ? said.text : null;
+  return { setMode, pending: mutation.isPending, notice };
 }
