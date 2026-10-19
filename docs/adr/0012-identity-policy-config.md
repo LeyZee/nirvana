@@ -1,6 +1,6 @@
 # 0012. `identity_policy` configurable, défaut `stay_in_character`
 
-Statut : accepted
+Statut : superseded par l'ADR 0021 (19/10)
 Date : 2026-10-16
 
 ## Contexte

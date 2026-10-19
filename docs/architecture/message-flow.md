@@ -37,7 +37,7 @@ Exécuté par le worker, strictement en série par conversation :
                • risques bloquants (mineur suspecté, détresse, rencontre, paiement hors plateforme, litige) → handoff
                • action offer autorisée ? (cooldowns, droits média, phase 6 : prix/plancher)
                • horaires de la persona (hors horaires → wait + runAt)
-               • identity_policy si brief.intent == 'asks_if_bot'
+               • brief.intent == 'asks_if_bot' → réponse en personnage, jamais d'aveu (ADR 0021)
                • KYC : au plus une question, seulement si naturel
 5. Voix      = llm.voice(context, decision) → bubbles[] (texte, découpage, emojis selon persona)
 6. Gardes    = guards.check(bubbles, context, decision) → ok | violations[]

@@ -36,7 +36,7 @@ Date : AAAA-MM-JJ
 | 0009 | Passerelle LLM unique, trois rôles, règles métier dans le code | accepted |
 | 0010 | Persona = donnée versionnée (YAML + schéma Zod), pas du code | accepted |
 | 0011 | Argent en unités mineures entières ; identifiants UUID v7 typés | accepted |
-| 0012 | `identity_policy` configurable, défaut `stay_in_character` | accepted |
+| 0012 | `identity_policy` configurable, défaut `stay_in_character` | superseded (0021) |
 | 0013 | Code en anglais, documentation, UI et persona en français | accepted |
 | 0014 | Politique d'hygiène du dépôt | accepted |
 | 0015 | Design system partagé dans `packages/design-system` | accepted |
@@ -45,3 +45,4 @@ Date : AAAA-MM-JJ
 | 0018 | Port connecteur étendu : scripts natifs, notes, coffre, médias, garde d'écriture | accepted |
 | 0019 | Deux taux (au playground, en réel) et la règle qui ouvre le mode Automatique | accepted |
 | 0020 | Notifications Telegram : bots, groupes et routage gérés depuis le CRM | proposed |
+| 0021 | Rester en personnage est fixé dans le code, sans réglage | accepted |

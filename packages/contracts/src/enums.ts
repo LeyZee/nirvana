@@ -58,10 +58,6 @@ export type FactKind = z.infer<typeof FactKindSchema>;
 export const LlmRoleSchema = z.enum(['sense', 'brain', 'voice', 'judge']);
 export type LlmRole = z.infer<typeof LlmRoleSchema>;
 
-/** ADR 0012: how the bot answers « t'es un bot ? ». */
-export const IdentityPolicySchema = z.enum(['stay_in_character', 'deflect_and_handoff', 'disclose']);
-export type IdentityPolicy = z.infer<typeof IdentityPolicySchema>;
-
 /** Who wrote an event: the system, the AI, a dashboard user (`human:<userId>`) or the fan. */
 export const ActorSchema = z.union([
   z.enum(['system', 'ai', 'fan']),

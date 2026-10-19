@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { IdentityPolicySchema, LlmRoleSchema } from './enums';
+import { LlmRoleSchema } from './enums';
 
 /**
  * Per-creator settings, stored in `creators.settings` (data-model.md). Follow-ups are not here: they live in the
@@ -17,7 +17,6 @@ const ModelOverrideSchema = z.object({
 });
 
 export const CreatorSettingsSchema = z.object({
-  identityPolicy: IdentityPolicySchema.default('stay_in_character'),
   llm: z
     .object({
       /** Per-role model override; a role left out uses the gateway default (ADR 0009). */
