@@ -44,10 +44,32 @@ export function toDraft(row: typeof schema.drafts.$inferSelect): Draft {
   };
 }
 
+const PayloadObjectSchema = z.record(z.string(), z.unknown());
+
+/**
+ * Payload shapes the journal still holds from before a contract change, brought to the current shape on read (ADR
+ * 0007, « Évolution des payloads »): the journal is never rewritten. A field the current shape requires and an old
+ * row lacks gets the value the old writer meant; what the row holds always wins.
+ */
+function upcast(row: typeof schema.conversationEvents.$inferSelect): unknown {
+  const payload = PayloadObjectSchema.safeParse(row.payload);
+  if (!payload.success) return row.payload;
+  switch (row.type) {
+    // Before #54: { userId?, reason?, mode? }, no cause (alerts rank an unknown cause as `other`).
+    case 'handoff_requested':
+      return { conversationId: row.conversationId, cause: 'other', ...payload.data };
+    // Before #60: without the conversation it belongs to.
+    case 'takeover_started':
+      return { conversationId: row.conversationId, ...payload.data };
+    default:
+      return row.payload;
+  }
+}
+
 export function toStoredEvent(row: typeof schema.conversationEvents.$inferSelect): StoredEvent {
   return {
     seq: row.seq,
-    body: EventBodySchema.parse({ type: row.type, payload: row.payload }),
+    body: EventBodySchema.parse({ type: row.type, payload: upcast(row) }),
     actor: ActorSchema.parse(row.actor),
     at: row.createdAt,
   };
