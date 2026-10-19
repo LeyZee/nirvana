@@ -8,9 +8,11 @@ import {
   DomainError,
   DraftIdSchema,
   MessageViewSchema,
+  AgentModeResultSchema,
   pageOf,
   PageQuerySchema,
   RejectDraftBodySchema,
+  SetAgentModeBodySchema,
   SetModeBodySchema,
   TakeoverBodySchema,
   UserIdSchema,
@@ -216,6 +218,19 @@ export function createConversationRoutes(
           mode: request.body.mode,
         });
         return reply.code(204).send();
+      },
+    );
+
+    // The Dashboard's control for every conversation of hers; Arrêt takes effect without a re-authentication.
+    app.put(
+      '/agent/mode',
+      { ...act, schema: { body: SetAgentModeBodySchema, response: { 200: AgentModeResultSchema } } },
+      async (request) => {
+        const { creatorId, mode } = request.body;
+        const { userId } = actorFor(request, creatorId);
+        return {
+          mode: await commands.setAgentMode({ creatorId, userId, mode, correlationId: request.id }),
+        };
       },
     );
 

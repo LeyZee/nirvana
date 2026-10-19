@@ -3,6 +3,7 @@ import type {
   ConversationDetail,
   ConversationEventView,
   ConversationId,
+  ConversationMode,
   ConversationSummary,
   CreatorId,
   Currency,
@@ -85,6 +86,8 @@ interface ConversationRepository {
   /** Locks an existing conversation, or `null`. */
   lock(id: ConversationId): Promise<Conversation | null>;
   saveProjection(id: ConversationId, projection: ConversationProjection): Promise<void>;
+  /** The creator's conversations in this mode. */
+  idsInMode(mode: ConversationMode): Promise<readonly ConversationId[]>;
 }
 
 interface MessageRepository {
@@ -163,6 +166,15 @@ interface RespondGate {
   blockedReason(conversation: ConversationKey): Promise<BlockedReason | null>;
 }
 
+/** The creator's kill switch and the global one (message-flow.md §6): the latest row of each scope decides. */
+interface KillSwitches {
+  /** Holds every other mode change of this creator until the transaction ends, so they apply in turn. */
+  lockCreator(): Promise<void>;
+  isOn(): Promise<{ readonly global: boolean; readonly creator: boolean }>;
+  /** Stamped by the database clock once the lock is held, so the later change is always the latest row. */
+  setCreator(entry: { active: boolean; reason: string; setBy: string }): Promise<void>;
+}
+
 /** Everything a command touches, bound to one tenant transaction. */
 export interface Transaction {
   readonly conversations: ConversationRepository;
@@ -171,6 +183,7 @@ export interface Transaction {
   readonly events: EventWriter;
   readonly jobs: JobEnqueuer;
   readonly gate: RespondGate;
+  readonly switches: KillSwitches;
   readonly audit: AuditTrail;
 }
 
@@ -179,6 +192,8 @@ interface AuditTrail {
   record(entry: {
     userId: UserId;
     action: string;
+    /** `conversation` unless named. */
+    entity?: 'conversation' | 'kill_switch';
     entityId: string;
     details?: Record<string, unknown>;
   }): Promise<void>;
