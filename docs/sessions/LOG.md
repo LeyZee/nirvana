@@ -104,3 +104,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-18 | Règle d'évolution des payloads du journal (G13) | done | `log/2026-10-18-event-upcast.md` |
 | 2026-10-19 | Route du mode de l'agent : Arrêt et Copilote depuis le CRM | done | `log/2026-10-19-agent-mode-route.md` |
 | 2026-10-19 | Vision sur tout média avant le brouillon (Opus) | done | `log/2026-10-19-vision-tout-media.md` |
+| 2026-10-18 | Fiche de conversation lue d'un seul instant (G4) | done | `log/2026-10-18-snapshot-read.md` |

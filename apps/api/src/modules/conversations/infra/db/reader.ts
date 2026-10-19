@@ -11,7 +11,16 @@ import {
   MessageIdSchema,
   type ConversationSummary,
 } from '@nirvana/contracts';
-import { and, eq, schema, sql, withTenant, type Database, type Transaction } from '@nirvana/db';
+import {
+  and,
+  eq,
+  schema,
+  SNAPSHOT_READ,
+  sql,
+  withTenant,
+  type Database,
+  type Transaction,
+} from '@nirvana/db';
 
 import type { ConversationReader, PageRequest } from '../../domain/ports';
 
@@ -77,28 +86,37 @@ export function createDrizzleConversationReader(db: Database): ConversationReade
         return paged(rows, page, (last) => encodeCursor(new Date(last.updatedAt), last.id));
       }),
 
+    // State and open drafts in one snapshot: read apart, a draft committed in between showed with the old state.
     get: (creatorId, id) =>
-      withTenant(db, creatorId, async (tx) => {
-        const [summary] = await summaries(tx, eq(schema.conversations.id, id), 1);
-        if (summary === undefined) return null;
-        const drafts = await tx
-          .select()
-          .from(schema.drafts)
-          .where(
-            and(eq(schema.drafts.conversationId, id), sql`${schema.drafts.status} in ${OPEN_DRAFT_STATUSES}`),
-          )
-          .orderBy(schema.drafts.createdAt);
-        return {
-          ...summary,
-          openDrafts: drafts.map((draft) => ({
-            id: DraftIdSchema.parse(draft.id),
-            status: DraftStatusSchema.parse(draft.status),
-            bubbles: draft.bubbles,
-            finalBubbles: draft.finalBubbles,
-            createdAt: draft.createdAt.toISOString(),
-          })),
-        };
-      }),
+      withTenant(
+        db,
+        creatorId,
+        async (tx) => {
+          const [summary] = await summaries(tx, eq(schema.conversations.id, id), 1);
+          if (summary === undefined) return null;
+          const drafts = await tx
+            .select()
+            .from(schema.drafts)
+            .where(
+              and(
+                eq(schema.drafts.conversationId, id),
+                sql`${schema.drafts.status} in ${OPEN_DRAFT_STATUSES}`,
+              ),
+            )
+            .orderBy(schema.drafts.createdAt);
+          return {
+            ...summary,
+            openDrafts: drafts.map((draft) => ({
+              id: DraftIdSchema.parse(draft.id),
+              status: DraftStatusSchema.parse(draft.status),
+              bubbles: draft.bubbles,
+              finalBubbles: draft.finalBubbles,
+              createdAt: draft.createdAt.toISOString(),
+            })),
+          };
+        },
+        SNAPSHOT_READ,
+      ),
 
     messages: (creatorId, id, page) =>
       withTenant(db, creatorId, async (tx) => {
