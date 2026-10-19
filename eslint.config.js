@@ -152,7 +152,7 @@ export default tseslint.config(
               allow: { to: anyOf(layer('index'), el('package'), el('api-root'), el('api-test')) },
             },
             { from: el('package'), allow: { to: el('package') } },
-            // design-system: ADR 0015 (proposed). Apps may import it next to contracts.
+            // design-system: ADR 0015. Apps may import it next to contracts.
             { from: el('web'), allow: { to: anyOf(pkg('contracts'), pkg('design-system'), el('web')) } },
             {
               from: el('extension'),

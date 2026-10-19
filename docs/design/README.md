@@ -1,6 +1,6 @@
 # Guide design : Nirvana « Liquid Glass »
 
-Dernière revue : 2026-10-17. Fiche : D-01. Code : `packages/design-system` (ADR 0015, proposed).
+Dernière revue : 2026-10-17. Fiche : D-01. Code : `packages/design-system` (ADR 0015).
 
 ## En images
 

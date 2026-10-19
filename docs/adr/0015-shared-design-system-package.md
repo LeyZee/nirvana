@@ -1,6 +1,6 @@
 # 0015. Design system partagé dans `packages/design-system`
 
-Statut : proposed
+Statut : accepted (coordination, 19/10 : appliquée dans main, aucune décision en suspens)
 Date : 2026-10-16
 
 ## Contexte
