@@ -318,10 +318,6 @@
 .ps-input:hover:not(:focus) {
   background-color: var(--nv-glass-fill-strong);
 }
-.ps-input[data-placeholder='true'] {
-  color: var(--nv-ink-faint);
-  font-style: italic;
-}
 .ps-input[type='date'] {
   color-scheme: dark;
 }
@@ -574,14 +570,6 @@
 }
 .ps-entry:hover {
   background: var(--nv-neon-soft);
-}
-.ps-entry[data-placeholder='true'] {
-  background: none;
-  outline: 1px dashed var(--nv-ink-faint);
-  outline-offset: -1px;
-  color: var(--nv-ink-faint);
-  font-style: italic;
-  font-weight: 400;
 }
 .ps-entry__text {
   min-width: 0;

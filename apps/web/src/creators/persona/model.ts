@@ -28,7 +28,7 @@ const isTab = (key: string): key is TabId => TABS.some((tab) => tab.id === key);
 
 /** Validates a draft; an empty list means it can be saved as a new version. */
 export function validate(draft: Persona): FieldIssue[] {
-  const result = PersonaSchema.safeParse(draft);
+  const result = PersonaSchema.safeParse(withoutPlaceholders(draft));
   if (result.success) return [];
   return result.error.issues.map((issue) => ({
     field: issue.path.map(String).join('.'),
@@ -96,6 +96,21 @@ function frenchMessage(issue: z.core.$ZodIssue): string {
 /** A placeholder of the repository's example persona (`<à remplir>`): shown as such, never as a real value. */
 export function isPlaceholder(value: string): boolean {
   return /^<[^>]*>$/.test(value.trim());
+}
+
+/**
+ * The persona as it is stored: a placeholder of the example is dropped from a list and emptied in a text, so that
+ * the agent never reads `<à remplir>` and a required field left as such is refused.
+ */
+export function withoutPlaceholders(value: unknown): unknown {
+  if (typeof value === 'string') return isPlaceholder(value) ? '' : value;
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item !== 'string' || !isPlaceholder(item)).map(withoutPlaceholders);
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withoutPlaceholders(item)]));
+  }
+  return value;
 }
 
 function labelOf<V extends string | number>(

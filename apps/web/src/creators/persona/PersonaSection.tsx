@@ -1,4 +1,4 @@
-import type { Persona, PersonaVersionSummary } from '@nirvana/contracts';
+import { PersonaSchema, type Persona, type PersonaVersionSummary } from '@nirvana/contracts';
 import { placeTabBarLens } from '@nirvana/design-system';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 
@@ -11,6 +11,7 @@ import {
   nextVersion,
   TABS,
   validate,
+  withoutPlaceholders,
   type FieldIssue,
   type TabId,
 } from './model';
@@ -164,11 +165,13 @@ function Editor({
     setProblem(null);
     const taken = [...ready.versions.map((v) => v.version), draft.meta.version];
     // The model reads the zone from the persona; the code goes by the creator's, so the copy follows hers.
-    const persona = {
-      ...draft,
-      details: { ...draft.details, timezone: timezone ?? draft.details.timezone },
-      meta: { ...draft.meta, version: nextVersion(taken), created_at: today() },
-    };
+    const persona = PersonaSchema.parse(
+      withoutPlaceholders({
+        ...draft,
+        details: { ...draft.details, timezone: timezone ?? draft.details.timezone },
+        meta: { ...draft.meta, version: nextVersion(taken), created_at: today() },
+      }),
+    );
     const result = await saveVersion(creatorId, persona, ready.basedOn).catch(() => ({
       kind: 'failed' as const,
     }));
