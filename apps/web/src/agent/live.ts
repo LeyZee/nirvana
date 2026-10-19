@@ -20,7 +20,7 @@ async function fetchDashboard(creatorId: string, period: DashboardPeriod): Promi
  */
 export type LiveDashboard =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'live'; readonly data: ApiDashboard }
+  | { readonly kind: 'live'; readonly data: ApiDashboard; readonly readAt: number }
   | { readonly kind: 'unavailable'; readonly creatorName: string | null }
   | { readonly kind: 'empty' };
 
@@ -50,6 +50,7 @@ export function useLiveDashboard(period: DashboardPeriod = 'day'): LiveDashboard
   if (creators.isError) return { kind: 'unavailable', creatorName: creator?.displayName ?? null };
   if (creators.isSuccess && creator === undefined) return { kind: 'empty' };
   if (dashboard.isError) return { kind: 'unavailable', creatorName: creator?.displayName ?? null };
-  if (dashboard.data !== undefined) return { kind: 'live', data: dashboard.data };
+  if (dashboard.data !== undefined)
+    return { kind: 'live', data: dashboard.data, readAt: dashboard.dataUpdatedAt };
   return { kind: 'loading' };
 }

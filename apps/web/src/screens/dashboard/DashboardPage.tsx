@@ -12,7 +12,13 @@ import { Section, TONE_COLOR, useFloatingTip } from './parts';
 import { useDashboard, type DashboardView } from './useDashboard';
 import './dashboard.css';
 
+import { useAgentModeWriter } from '@/agent/write';
 import { NightBanner } from '@/settings/telegram/NightBanner';
+
+/** Why the control cannot change the mode: on the sample, under an operator's global switch. */
+const SAMPLE_NOTE = 'Exemple : ce contrôle ne pilote aucun agent.';
+const GLOBAL_NOTE =
+  'Un arrêt général retient l’agent pour toutes les créatrices : seul un opérateur peut le lever.';
 
 const FUNNEL_SUB: Record<Period, string> = {
   day: 'les fans arrivés aujourd’hui, et combien passent chaque étape',
@@ -80,7 +86,7 @@ export function DashboardPage(): JSX.Element {
 }
 
 function Loaded({
-  view: { status, data, mode, automatic },
+  view: { status, creatorId, globalStop, readAt, data, mode, automatic },
   period,
   onPeriod,
 }: {
@@ -102,7 +108,12 @@ function Loaded({
   const close = useCallback(() => {
     setFanId(null);
   }, []);
-  const ignore = useCallback(() => undefined, []);
+  const writer = useAgentModeWriter(creatorId, readAt);
+  const { setMode } = writer;
+  const resume = useCallback(() => {
+    setMode('copilot');
+  }, [setMode]);
+  const notice = writer.notice ?? (globalStop ? GLOBAL_NOTE : null);
 
   const periodControl = <PeriodControl period={period} onChange={onPeriod} />;
   return (
@@ -127,15 +138,24 @@ function Loaded({
             </span>
           ) : null}
         </div>
-        {/* No route writes the mode yet (PUT /v1/agent/mode, PR à part): the control shows it, never changes it. */}
+        {/* The mode changes once the server has made the change (PUT /v1/agent/mode); the sample pilots nothing. */}
         <ModeControl
           mode={mode}
           automatic={automatic}
           creatorName={data.creator.name}
           tip={tip}
-          readOnly
-          onChange={ignore}
+          readOnly={status === 'sample' ? SAMPLE_NOTE : globalStop ? GLOBAL_NOTE : null}
+          onChange={setMode}
         />
+        {writer.pending ? (
+          <p className="db-notice db-notice--quiet" role="status">
+            Envoi au serveur…
+          </p>
+        ) : notice === null ? null : (
+          <p className="db-notice" role="alert">
+            {notice}
+          </p>
+        )}
       </header>
 
       <AgentHero
@@ -144,7 +164,7 @@ function Loaded({
         todos={data.todos}
         onOpen={openTodo}
         onDone={undefined}
-        onResume={undefined}
+        onResume={status === 'live' && !globalStop ? resume : undefined}
       />
 
       <NightBanner night={data.telegram} creatorName={data.creator.name} />

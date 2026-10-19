@@ -21,13 +21,19 @@ const SAMPLE_AGENT = {
  * - `loading` until the server answers;
  * - `live`, the server's data;
  * - `offline`, the server does not answer: no figure, nothing to act on, only that sentence;
- * - `sample`, no creator exists yet (first launch): the sample, marked « Exemple », where nothing can be acted on.
+ * - `sample`, no creator exists yet (first launch): the sample, marked « Exemple », whose control pilots nothing.
  */
 export type DashboardView =
   | { readonly status: 'loading' }
   | { readonly status: 'offline'; readonly creatorName: string | null }
   | {
       readonly status: 'live' | 'sample';
+      /** The creator the control writes for; null on the sample, which pilots nothing. */
+      readonly creatorId: string | null;
+      /** An operator's global switch holds every creator: Arrêt whatever she picks, until it is lifted. */
+      readonly globalStop: boolean;
+      /** When the server last answered (0 on the sample): a notice about a change holds until the next answer. */
+      readonly readAt: number;
       readonly data: Dashboard;
       readonly mode: AgentMode;
       readonly automatic: AutomaticGate;
@@ -44,11 +50,21 @@ export function useDashboard(period: Period): DashboardView {
     case 'unavailable':
       return { status: 'offline', creatorName: live.creatorName };
     case 'empty':
-      return { status: 'sample', data: SAMPLE, ...SAMPLE_AGENT };
+      return {
+        status: 'sample',
+        creatorId: null,
+        globalStop: false,
+        readAt: 0,
+        data: SAMPLE,
+        ...SAMPLE_AGENT,
+      };
     case 'live':
       // The period's own read carries the mode too: the control follows the page it is on.
       return {
         status: 'live',
+        creatorId: live.data.creator.id,
+        globalStop: live.data.globalStop,
+        readAt: live.readAt,
         data: data ?? fromApi(live.data),
         mode: live.data.mode,
         automatic: live.data.automatic,
