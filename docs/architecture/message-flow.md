@@ -79,6 +79,8 @@ conversation.send :
   • échec : retry borné (3) ; au-delà → draft failed, notification, conversation en error jusqu'à action humaine
 ```
 
+Avant toute approbation, retouchée ou non, les bulles repassent les gardes dures de l'agent (port `BubbleGuard`, `AgentBubbleGuard`) : jamais d'IA, pas de rencontre, pas de contact, limites de la créatrice, bulle par bulle et sur le message entier démasqué. Une garde bloquante refuse l'approbation (422 `draft_unprocessable`, `details.guards` donne les codes) et le brouillon reste en attente. Les gardes douces (longueur, nombre de bulles, tics) restent l'affaire du chatteur. Sans persona lisible, ce sont les gardes communes à toutes les créatrices : il n'y a jamais d'approbation sans garde (revue 09, G5).
+
 Mode auto : `CreatorSettings.auto_approve_categories` (ex. `['small_talk','kyc','media_reaction']`) ; tout le reste reste copilote. Le passage en auto est progressif (roadmap phase 5).
 
 ## 4. Après l'envoi

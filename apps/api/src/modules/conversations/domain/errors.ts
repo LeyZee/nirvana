@@ -39,6 +39,17 @@ export class AutomaticLocked extends DomainError {
   }
 }
 
+/** Bubbles a hard guard refuses (revue 09, G5): nothing is approved, the draft stays as it was. */
+export class DraftGuarded extends DomainError {
+  constructor(codes: readonly string[]) {
+    super(
+      'draft_unprocessable',
+      'Ce message ne peut pas partir : une garde le bloque (identité, rencontre, contact ou limite de la créatrice)',
+      { details: { guards: [...codes] } },
+    );
+  }
+}
+
 /** A command the conversation's state does not allow (approving while a human holds it, for instance). */
 export class TransitionConflict extends DomainError {
   constructor(state: ConversationState, command: ConversationCommand) {

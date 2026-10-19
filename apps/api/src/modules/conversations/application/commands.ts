@@ -19,8 +19,9 @@ import {
   type UserId,
 } from '@nirvana/contracts';
 
-import { AutomaticLocked, SendBlocked } from '../domain/errors';
+import { AutomaticLocked, DraftGuarded, SendBlocked } from '../domain/errors';
 import type {
+  BubbleGuard,
   Clock,
   Conversation,
   DraftVoice,
@@ -102,6 +103,8 @@ export interface CommandDeps {
   readonly fans: FanDirectory;
   /** The voice version the server writes with now (prompt and model): what Automatique is proved on. */
   readonly voice: DraftVoice;
+  /** The hard guards, read again on every approval: nothing leaves without them. */
+  readonly guard: BubbleGuard;
 }
 
 const NEW_FAN_MESSAGE = 'Nouveau message du fan';
@@ -133,7 +136,13 @@ async function requireAutomaticOpen(tx: Transaction, voice: DraftVoice): Promise
   if (!gate.open) throw new AutomaticLocked(gate.missing);
 }
 
-export function createConversationCommands({ uow, clock, fans, voice }: CommandDeps): ConversationCommands {
+export function createConversationCommands({
+  uow,
+  clock,
+  fans,
+  voice,
+  guard,
+}: CommandDeps): ConversationCommands {
   const humanMeta = (input: { userId: UserId; correlationId: string }): EventMeta => ({
     actor: `human:${input.userId}`,
     correlationId: input.correlationId,
@@ -244,6 +253,9 @@ export function createConversationCommands({ uow, clock, fans, voice }: CommandD
         if (bubbles.length === 0 || bubbles.some((bubble) => bubble.trim() === '')) {
           throw new DomainError('draft_invalid', 'Le brouillon est vide');
         }
+        // Rewritten or not, what leaves passes the hard guards again: a chatter's words speak for her too.
+        const verdict = guard.check(bubbles);
+        if (verdict.isBlocked) throw new DraftGuarded(verdict.codes);
         const meta = humanMeta(input);
         await appendEvent(
           tx,

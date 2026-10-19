@@ -7,6 +7,7 @@ import { createConversationCommands, type ConversationCommands } from './applica
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
 import type {
+  BubbleGuard,
   Clock,
   DraftComposer,
   DraftVoice,
@@ -44,6 +45,8 @@ export interface ConversationsDeps {
   readonly recentLogin: preHandlerAsyncHookHandler;
   /** The voice version the server writes with now (prompt and model): what Automatique is proved on (ADR 0019). */
   readonly voice: DraftVoice;
+  /** The agent's hard guards (`AgentBubbleGuard`), read again on every approval (revue 09, G5). */
+  readonly guard: BubbleGuard;
   /** The engine (agent module's adapter); without it drafts stay empty for the operator to write. */
   readonly composer?: DraftComposer;
   readonly clock?: Clock;
@@ -54,7 +57,13 @@ const systemClock: Clock = { now: () => new Date() };
 export function createConversationsModule(deps: ConversationsDeps): ConversationsModule {
   const uow = createDrizzleUnitOfWork(deps.db);
   const clock = deps.clock ?? systemClock;
-  const commands = createConversationCommands({ uow, clock, fans: deps.fans, voice: deps.voice });
+  const commands = createConversationCommands({
+    uow,
+    clock,
+    fans: deps.fans,
+    voice: deps.voice,
+    guard: deps.guard,
+  });
   return {
     name: 'conversations',
     ...commands,

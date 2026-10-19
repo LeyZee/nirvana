@@ -138,13 +138,27 @@ describe('/v1/conversations', () => {
     expect(messages.items.map((message) => message.text)).toEqual(["Salut, c'est Julien"]);
   });
 
-  it('approves an edited draft once; a second decision on it is a conflict', async () => {
+  it('refuses bubbles a hard guard blocks, then approves an edited draft once; a second decision is a conflict', async () => {
     const id = conversationIds[0]!;
     const detail = ConversationDetailSchema.parse(
       (await call('GET', `/v1/conversations/${id}?creatorId=${creatorId}`, ownerCookie)).json(),
     );
     const draftId = detail.openDrafts[0]!.id;
     const base = `/v1/conversations/${id}/drafts/${draftId}`;
+
+    // A chatter's words pass the hard guards too (revue 09, G5), split over two bubbles or not.
+    for (const bubbles of [['Je suis une IA'], ['Pour être honnête je suis une', 'IA']]) {
+      const refused = await call('POST', `${base}/approve?creatorId=${creatorId}`, ownerCookie, { bubbles });
+      expect(refused.statusCode, refused.body).toBe(422);
+      expect(refused.json()).toMatchObject({
+        error: { code: 'draft_unprocessable', details: { guards: ['ai_disclosure'] } },
+      });
+    }
+    const [stillOpen] = await test.admin.db
+      .select({ status: schema.drafts.status })
+      .from(schema.drafts)
+      .where(eq(schema.drafts.id, draftId));
+    expect(stillOpen?.status).toBe('pending');
 
     const approved = await call('POST', `${base}/approve?creatorId=${creatorId}`, ownerCookie, {
       bubbles: ['Coucou Julien'],

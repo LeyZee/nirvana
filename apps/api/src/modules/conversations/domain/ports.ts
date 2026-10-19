@@ -216,6 +216,14 @@ export interface UnitOfWork {
   inTenant<T>(creatorId: CreatorId, work: (tx: Transaction) => Promise<T>): Promise<T>;
 }
 
+/**
+ * The hard guards of the agent's output (ADR 0012: never an AI, no meeting, no contact; her hard limits), read
+ * again on the bubbles a chatter approves, rewritten or not (revue 09, G5). Implemented by the `agent` module.
+ */
+export interface BubbleGuard {
+  check(bubbles: readonly string[]): { readonly isBlocked: boolean; readonly codes: readonly string[] };
+}
+
 /** The fan as `conversations` needs it; implemented by the `fans` module. */
 export interface FanDirectory {
   upsertFanByPlatformId(sighting: {

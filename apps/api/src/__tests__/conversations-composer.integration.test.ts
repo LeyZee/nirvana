@@ -19,6 +19,8 @@ import {
 } from '../modules/conversations';
 import { createFansModule } from '../modules/fans';
 
+/** Lets every bubble through: the guards themselves are tested in `agent` and `approval-guard`. */
+const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 
 type ComposeInput = Parameters<DraftComposer['compose']>[0];
@@ -120,6 +122,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       requireRole: () => () => Promise.resolve(),
       recentLogin: () => Promise.resolve(),
       voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+      guard: PASS_GUARD,
       composer,
     });
   });
