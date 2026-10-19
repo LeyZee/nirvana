@@ -129,7 +129,7 @@ describe('playground session, calibration', () => {
     await session.handleFanMessage('Salut');
 
     expect(brainInputs[0]?.situation).toContain('23 h 00 (nuit)');
-    expect(voiceInputs[0]?.situation).toContain('30,00 $');
+    expect(voiceInputs[0]?.situation).toContain('30,00 €');
     expect(voiceInputs[0]?.personaSheet).toContain('- Okidoki toi ✨');
     expect(session.lastExchange?.moment.history).toHaveLength(1);
     expect(session.lastExchange?.moment.brief?.replyBrief).toBe(BRIEF.replyBrief);
