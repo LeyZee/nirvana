@@ -80,6 +80,8 @@ export function createRespondJob({ uow, clock, composer }: RespondDeps) {
         draftId,
         correlationId: payload.correlationId,
         now: clock.now(),
+        platformAccountId: conversation.platformAccountId,
+        platformConversationId: conversation.platformConversationId,
         history: await tx.messages.history(conversation.id, HISTORY_LIMIT),
         fan: await tx.messages.fanContext(conversation.fanId),
       };

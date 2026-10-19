@@ -245,6 +245,8 @@ interface HistoryMessage {
   readonly at: Date;
   readonly priceMinor: number | null;
   readonly isPaid: boolean;
+  /** Its id on the platform: the connector reads a fresh link to its media there (a link expires). */
+  readonly platformMessageId: string;
   /**
    * Every media the fan's message carries, screened or not: a message with a media is never answered on its text
    * alone (vision obligatoire). `kind` from the platform; locked when it sits behind a price.
@@ -268,6 +270,9 @@ export interface ComposeInput {
   readonly draftId: DraftId;
   readonly correlationId: string;
   readonly now: Date;
+  /** Where the conversation lives on the platform: the engine's vision fetches his media there. */
+  readonly platformAccountId: PlatformAccountId;
+  readonly platformConversationId: string;
   /** The last 40 messages, oldest first. */
   readonly history: readonly HistoryMessage[];
   readonly fan: FanContext;
