@@ -109,6 +109,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           at: row.platformCreatedAt,
           priceMinor: row.priceMinor,
           isPaid: row.isPaid,
+          platformMessageId: row.platformMessageId,
           // Written by ingestion only, through the contract's schema: read back through it too (a column is a boundary).
           media: PlatformMediaSchema.parse(row.platformMedia).map((media) => ({
             kind: media.kind,

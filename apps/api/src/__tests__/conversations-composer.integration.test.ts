@@ -180,7 +180,11 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     const id = await fanWrites('c-photo', 'regarde', [photo]);
     composer.next = { kind: 'held', reason: 'handoff', detail: ['media_unscreened'], costUsd: 0 };
     await respond(id);
-    expect(composer.inputs.at(-1)?.history.at(-1)).toMatchObject({
+    // Everything the vision needs to fetch it again on the platform: account, conversation, message, media.
+    const input = composer.inputs.at(-1);
+    expect(input).toMatchObject({ platformAccountId, platformConversationId: 'c-photo' });
+    expect(input?.history.at(-1)?.platformMessageId).toMatch(/^m-\d+$/);
+    expect(input?.history.at(-1)).toMatchObject({
       text: 'regarde',
       media: [{ kind: 'image', platformMediaId: 'media-1', isLocked: false }],
     });
