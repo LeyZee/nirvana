@@ -253,7 +253,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       budget: () => llm.gateway.health().budget,
       isVoiceOk: () => llm.gateway.health().roles.find((r) => r.role === 'voice')?.state === 'ok',
       voice: activeVoice,
-      automatic: { read: (creatorId) => conversations.automaticGate(creatorId) },
+      automatic: { read: (creatorId) => conversations.automaticLock(creatorId) },
       ...(telegram !== null && {
         telegram: {
           read: async (creatorId) => {

@@ -6,6 +6,7 @@ import {
   liveRate,
   type AgentMode,
   type AutomaticGate,
+  type LiveRateReading,
   type CreatorId,
   type Dashboard,
   type DashboardPeriod,
@@ -103,11 +104,14 @@ export function assembleDashboard(input: {
   readonly isVoiceOk: boolean;
   /** Undefined when Telegram is off. */
   readonly telegram: TelegramReading | undefined;
-  /** The server lock of Automatique, read by `conversations` (ADR 0019): shown as is, never recomputed here. */
-  readonly automatic: AutomaticGate;
+  /**
+   * The server lock of Automatique and the live rate it was decided on, read by `conversations` (ADR 0019): shown
+   * as is, never recomputed here.
+   */
+  readonly automatic: { readonly gate: AutomaticGate; readonly reading: LiveRateReading };
 }): Dashboard {
   const { facts, window } = input;
-  const reading = liveRate(facts.decided);
+  const { gate, reading } = input.automatic;
   return {
     creator: {
       id: input.creatorId,
@@ -118,7 +122,7 @@ export function assembleDashboard(input: {
     period: input.period,
     mode: mode(facts),
     globalStop: facts.switches.global,
-    automatic: { open: input.automatic.open, missing: [...input.automatic.missing] },
+    automatic: { open: gate.open, missing: [...gate.missing] },
     liveRate: {
       rate: asPercent(reading.rate),
       target: LIVE_TARGET * 100,
