@@ -19,6 +19,8 @@ L'agent voit et comprend les photos et vidéos qu'un fan envoie et celles des bu
 - [x] Prompts voix et cerveau 1.3.0 : médias, pièges, `off_topic_request`, `manipulation_attempt`, ordre stable puis variable pour le cache de prompt.
 - [x] Playground : `/media <fichier>` (il envoie) et `/envoi <fichier> [verrouillé]` (elle envoie).
 - [x] Test express : quatre tours pièges dans `pnpm probe`, `pnpm probe:vision` sur médias synthétiques.
+- [x] Vision sur tout média de fan avant le brouillon (`MediaSight`, revue 09 B2) ; cause du passage de main selon l'alerte.
+- [ ] Brancher `FetchMedia` dès que le connecteur Reveal sait récupérer un média de fan.
 - [ ] Lancer `pnpm probe:vision` avec `LLM_GOOGLE_API_KEY` et `LLM_XAI_API_KEY`, noter le taux de refus de Gemini et le verdict de Grok en bascule.
 - [ ] Comparer Gemini 3.8 Flash et Gemini 4 Argon sur une vingtaine de vidéos du catalogue (configurable dans `DEFAULT_LLM_CONFIG.roles.sense`).
 

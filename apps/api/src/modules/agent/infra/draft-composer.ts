@@ -1,6 +1,8 @@
+import type { HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
 import { holdDecision, type HoldDecision } from '../domain/hold';
+import { handoffCauseOf } from '../domain/traps';
 
 import { composeTurn, type ComposerPersona } from './compose';
 
@@ -18,13 +20,33 @@ export interface AgentComposeInput {
     readonly text: string;
     readonly at: Date;
     /** The media the message carries (photo, video, voice note), as `conversations` read them. */
-    readonly media?: readonly { readonly kind: string }[];
+    readonly media?: readonly HistoryMedia[];
   }[];
   readonly fan: {
     readonly notes: readonly string[];
     readonly spentMinor: number;
     readonly firstMessageAt: Date | null;
   };
+}
+
+interface HistoryMedia {
+  readonly kind: string;
+  readonly platformMediaId?: string;
+  /** Behind a price: nobody can open it to look. */
+  readonly isLocked?: boolean;
+}
+
+/** One media of his to look at: what the platform calls it, in the conversation it came in. */
+export interface MediaToSee {
+  readonly creatorId: string;
+  readonly conversationId: string;
+  readonly platformMediaId: string;
+  readonly kind: 'image' | 'video';
+}
+
+/** The vision seen by the composer: the file fetched from the platform, then described (`media` module). */
+export interface MediaSight {
+  see(media: MediaToSee): Promise<Result<MediaDescription, string>>;
 }
 
 type AgentComposeResult =
@@ -39,6 +61,8 @@ type AgentComposeResult =
   | {
       readonly kind: 'held';
       readonly reason: 'guard_blocked' | 'handoff' | 'budget_reached' | 'llm_unavailable' | 'no_reply';
+      /** Why a human must answer, when the vision knows it: the alert ranks on it. */
+      readonly cause?: HandoffCause;
       readonly detail: readonly string[];
       readonly costUsd: number;
     };
@@ -54,14 +78,56 @@ export interface DraftComposerDeps {
   readonly timeZoneOf: (creatorId: string) => Promise<string>;
   /** Version of the voice prompt, written on each draft with the model that answered (ADR 0019). */
   readonly voicePrompt: string;
+  /** Without it, any media of his goes to a human: nothing is answered unseen. */
+  readonly sight?: MediaSight;
 }
 
 const failureDetail = (error: LlmFailure): readonly string[] =>
   error.attempts.map((a) => `${a.model}: ${a.outcome}`);
 
-// Every media of his must be seen before she answers (minor, consent, weapon), and the screening is not wired yet:
-// a message with a media, captioned or not, or without text goes to a human (revue 09, B2).
-// TODO(P3-06): pass his media to the screening instead of handing over.
+const UNSEEN = (detail: readonly string[] = []): AgentComposeResult => ({
+  kind: 'held',
+  reason: 'handoff',
+  detail: ['media_unscreened', ...detail],
+  costUsd: 0,
+});
+
+/**
+ * Every media he sent since her last answer, described before anything is written (minor, consent, weapon:
+ * vision obligatoire). A media nobody can see (no vision wired, locked, a voice note, a message with nothing in
+ * it, a failed description) goes to a human: nothing is answered on a caption alone (revue 09, B2).
+ */
+async function seeHisMedia(
+  sight: MediaSight | undefined,
+  input: AgentComposeInput,
+  sinceAnswer: AgentComposeInput['history'],
+): Promise<
+  { readonly unseen: AgentComposeResult } | { readonly seen: readonly (readonly MediaDescription[])[] }
+> {
+  if (sinceAnswer.some((m) => m.text.trim() === '' && (m.media?.length ?? 0) === 0))
+    return { unseen: UNSEEN() };
+  if (sinceAnswer.every((m) => (m.media?.length ?? 0) === 0)) return { seen: sinceAnswer.map(() => []) };
+  if (sight === undefined) return { unseen: UNSEEN() };
+  const seen: MediaDescription[][] = [];
+  for (const message of sinceAnswer) {
+    const toSee: MediaToSee[] = [];
+    for (const m of message.media ?? []) {
+      if (m.isLocked === true) return { unseen: UNSEEN(['locked']) };
+      if ((m.kind !== 'image' && m.kind !== 'video') || m.platformMediaId === undefined) {
+        return { unseen: UNSEEN([m.kind]) };
+      }
+      const { kind, platformMediaId } = m;
+      toSee.push({ creatorId: input.creatorId, conversationId: input.conversationId, platformMediaId, kind });
+    }
+    const described: MediaDescription[] = [];
+    for (const result of await Promise.all(toSee.map((m) => sight.see(m)))) {
+      if (!result.ok) return { unseen: UNSEEN([result.error]) };
+      described.push(result.value);
+    }
+    seen.push(described);
+  }
+  return { seen };
+}
 
 /** No voice model with a key, main or fallback: no call is worth making. */
 function voiceUnavailable(gateway: LlmGateway): boolean {
@@ -74,22 +140,26 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
     async compose(input) {
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
       const sinceAnswer = input.history.slice(lastAnswer + 1);
-      if (sinceAnswer.some((m) => m.text.trim() === '' || (m.media?.length ?? 0) > 0)) {
-        return { kind: 'held', reason: 'handoff', detail: ['media_unscreened'], costUsd: 0 };
-      }
       if (voiceUnavailable(deps.gateway)) {
         return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
       }
-      const history: ConversationTurn[] = input.history.map((m) => ({
-        from: m.direction === 'inbound' ? 'fan' : 'creator',
-        text: m.text,
-      }));
+      const looked = await seeHisMedia(deps.sight, input, sinceAnswer);
+      if ('unseen' in looked) return looked.unseen;
+      const media = looked.seen.flat();
+      const history: ConversationTurn[] = input.history.map((m, i) => {
+        const described = i > lastAnswer ? (looked.seen[i - lastAnswer - 1] ?? []) : [];
+        return {
+          from: m.direction === 'inbound' ? 'fan' : 'creator',
+          text: m.text,
+          ...(described.length > 0 && { media: described.map((description) => ({ description })) }),
+        };
+      });
       // What he wrote since her last answer: the traps read it as one message.
       const fanText = sinceAnswer.map((m) => m.text).join('\n');
       const composed = await composeTurn(deps.gateway, deps.persona, {
         history,
         fanText,
-        media: [],
+        media,
         fanNotes: input.fan.notes.join('\n'),
         situation: {
           now: input.now,
@@ -104,7 +174,14 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       });
       const { costUsd } = composed;
       if (composed.handoff !== undefined) {
-        return { kind: 'held', reason: 'handoff', detail: composed.handoff, costUsd };
+        const flags = media.flatMap((d): MediaFlag[] => d.flags);
+        return {
+          kind: 'held',
+          reason: 'handoff',
+          cause: handoffCauseOf(flags),
+          detail: composed.handoff,
+          costUsd,
+        };
       }
       if (composed.brief === undefined) {
         const failure = composed.briefFailure;

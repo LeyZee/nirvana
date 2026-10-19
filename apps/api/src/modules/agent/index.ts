@@ -6,7 +6,7 @@ import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
-import { createDraftComposer, type AgentDraftComposer } from './infra/draft-composer';
+import { createDraftComposer, type AgentDraftComposer, type MediaSight } from './infra/draft-composer';
 import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 import { guardSettingsOf, readPersonaFile } from './infra/persona-file';
 
@@ -42,6 +42,10 @@ export { asSent, composeTurn, withExamples } from './infra/compose';
 export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
 export type { AgentDraftComposer } from './infra/draft-composer';
+/** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
+export type { MediaSight } from './infra/draft-composer';
+/** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
+export { createMediaSight, type FetchMedia } from './infra/media-sight';
 /** @public The `BubbleGuard` port of `conversations`, matched by shape. */
 export type { AgentBubbleGuard } from './infra/bubble-guard';
 
@@ -53,6 +57,8 @@ export interface DraftComposerStartOptions {
   readonly trainingDir: string;
   /** Her clock, read for each draft: the creator's time zone. */
   readonly timeZoneOf: (creatorId: string) => Promise<string>;
+  /** His media seen before she answers; without it, any media goes to a human. */
+  readonly sight?: MediaSight;
 }
 
 /** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
@@ -70,6 +76,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     },
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
+    ...(options.sight !== undefined && { sight: options.sight }),
   });
 }
 

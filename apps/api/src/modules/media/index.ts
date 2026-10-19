@@ -1,5 +1,5 @@
 /** Public entry point of the `media` module (ADR 0002). Other modules import this file only. */
-export { createMediaDescriber } from './application/describe-media';
+export { createMediaDescriber, type MediaDescriber } from './application/describe-media';
 export { createFfmpegMediaTools } from './infra/ffmpeg-media-tools';
 export {
   createGatewaySenser,
