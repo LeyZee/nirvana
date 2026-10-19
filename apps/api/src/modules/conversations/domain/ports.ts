@@ -9,6 +9,7 @@ import type {
   DraftId,
   DraftStatus,
   EventBody,
+  ExternalMedia,
   ExternalRef,
   FanId,
   HandoffCause,
@@ -56,6 +57,8 @@ interface NewMessage {
   readonly isPaid: boolean;
   readonly platformCreatedAt: Date;
   readonly draftId: DraftId | null;
+  /** The media the platform listed on it; empty for what we send. */
+  readonly platformMedia: readonly ExternalMedia[];
 }
 
 export interface Draft {
@@ -212,6 +215,13 @@ export interface OutboundSender {
   ): Promise<VerifyResult>;
 }
 
+/** A media of a message, as the platform listed it. */
+interface HistoryMedia {
+  readonly kind: ExternalMedia['kind'];
+  readonly platformMediaId: string;
+  readonly isLocked: boolean;
+}
+
 /** One message as the engine reads it. */
 interface HistoryMessage {
   readonly direction: MessageDirection;
@@ -220,6 +230,11 @@ interface HistoryMessage {
   readonly at: Date;
   readonly priceMinor: number | null;
   readonly isPaid: boolean;
+  /**
+   * Every media the fan's message carries, screened or not: a message with a media is never answered on its text
+   * alone (vision obligatoire). `kind` from the platform; locked when it sits behind a price.
+   */
+  readonly media: readonly HistoryMedia[];
 }
 
 interface FanContext {

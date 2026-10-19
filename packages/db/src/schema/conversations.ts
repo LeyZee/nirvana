@@ -6,6 +6,7 @@ import {
   EVENT_TYPES,
   MessageAuthorSchema,
   MessageDirectionSchema,
+  type ExternalMedia,
 } from '@nirvana/contracts';
 import { sql } from 'drizzle-orm';
 import {
@@ -123,6 +124,11 @@ export const messages = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::uuid[]`),
+    /**
+     * The media as the platform listed them on the message (kind, reference, locked), kept from ingestion on: the
+     * engine must know a fan sent a photo even before the media module stores it (`media_ids`). Data, never a URL.
+     */
+    platformMedia: jsonb('platform_media').$type<ExternalMedia[]>().notNull().default([]),
     priceMinor: integer('price_minor'),
     currency: char('currency', { length: 3 }),
     isPaid: boolean('is_paid').notNull().default(false),

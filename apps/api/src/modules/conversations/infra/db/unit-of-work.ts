@@ -1,6 +1,7 @@
 import {
   AuditEntryIdSchema,
   EventIdSchema,
+  ExternalMediaSchema,
   JOB_MAX_ATTEMPTS,
   JOB_PAYLOADS,
   MessageAuthorSchema,
@@ -16,12 +17,15 @@ import {
   type Database,
   type Transaction as DbTransaction,
 } from '@nirvana/db';
+import { z } from 'zod';
 
 import type { Transaction, UnitOfWork } from '../../domain/ports';
 
 import { toConversation, toDraft, toStoredEvent } from './rows';
 
 const OPEN_DRAFT_STATUSES = ['pending', 'approved', 'edited'];
+
+const PlatformMediaSchema = z.array(ExternalMediaSchema);
 
 /** The repositories of one tenant transaction (`withTenant`: RLS scopes every statement to the creator). */
 function bind(tx: DbTransaction, creatorId: string): Transaction {
@@ -67,7 +71,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
       async insertIfNew(message) {
         const inserted = await tx
           .insert(schema.messages)
-          .values({ ...message, creatorId })
+          .values({ ...message, platformMedia: [...message.platformMedia], creatorId })
           .onConflictDoNothing({
             target: [schema.messages.platformAccountId, schema.messages.platformMessageId],
           })
@@ -95,6 +99,12 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           at: row.platformCreatedAt,
           priceMinor: row.priceMinor,
           isPaid: row.isPaid,
+          // Written by ingestion only, through the contract's schema: read back through it too (a column is a boundary).
+          media: PlatformMediaSchema.parse(row.platformMedia).map((media) => ({
+            kind: media.kind,
+            platformMediaId: media.ref.id,
+            isLocked: media.isLocked,
+          })),
         }));
       },
       async fanContext(fanId) {
