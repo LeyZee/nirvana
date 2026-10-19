@@ -231,7 +231,7 @@ export function ConnectSheet({
                 onChange={(event) => void pickVoice(event.target.value)}
               >
                 {status.settings.voice === undefined ? (
-                  <option value="">Choisis la voix de Messa</option>
+                  <option value="">Choisis la voix de la créatrice</option>
                 ) : null}
                 {voices.map((voice) => (
                   <option key={voice.id} value={voice.id}>

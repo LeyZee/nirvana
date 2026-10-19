@@ -19,7 +19,7 @@ export function SettingsLayout(): JSX.Element {
                 { to: '/reglages/modeles-ia', label: 'Modèles IA' },
                 { to: '/reglages/telegram', label: 'Telegram' },
                 { to: '/reglages/appareils', label: 'Appareils' },
-                { to: '/reglages/mode', label: "Mode de l'agent" },
+                { to: '/reglages/mode', label: 'Mode de l’agent' },
               ]}
             />
             <button type="button" className="nv-btn nv-btn--plain nv-btn--sm md:hidden" onClick={onSignOut}>
@@ -47,8 +47,8 @@ export function DevicesPage(): JSX.Element {
   return (
     <ComingSoon
       title="Les extensions reliées"
-      what="Chaque navigateur où l'extension tourne, sa session Reveal et le moyen de le délier."
-      when="Avec l'extension"
+      what="Chaque navigateur où l’extension tourne, sa session Reveal et le moyen de le délier."
+      when="Avec l’extension"
     />
   );
 }
@@ -57,7 +57,7 @@ export function AgentModePage(): JSX.Element {
   return (
     <ComingSoon
       title="Copilote ou automatique"
-      what="Le mode se change en haut du Dashboard. L'automatique s'ouvre quand le taux en réel tient 80 % sur 100 brouillons validés ou refusés et que le test à l'aveugle est validé."
+      what="Le mode se change en haut du Dashboard. L’automatique s’ouvre quand le serveur valide le taux en réel et le test à l’aveugle ; le Dashboard dit ce qui manque, chiffres à l’appui."
       when="Après le copilote"
     />
   );

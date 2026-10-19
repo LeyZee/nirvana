@@ -52,7 +52,7 @@ export function PersonaSection({
         {load.kind === 'failed' ? (
           <div className="nv-glass ps-head">
             <p className="ps-title">La persona ne se charge pas</p>
-            <p className="ps-muted">Vérifie ta connexion, puis réessaie.</p>
+            <p className="ps-muted">Le serveur ne répond pas. Réessaie dans un instant.</p>
             <button type="button" className="nv-btn nv-btn--soft ps-self-start" onClick={reload}>
               Réessayer
             </button>
@@ -188,7 +188,7 @@ function Editor({
         break;
       case 'failed':
         setProblem({
-          text: 'L’enregistrement n’a pas abouti. Vérifie ta connexion, puis réessaie.',
+          text: 'L’enregistrement n’a pas abouti. Tes changements restent ici ; réessaie dans un instant.',
           reload: false,
         });
         break;

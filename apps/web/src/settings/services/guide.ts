@@ -85,7 +85,7 @@ export const GUIDES: Record<DashboardProvider, ServiceGuide> = {
     name: 'ElevenLabs',
     brand: 'Vocaux',
     vendor: 'ElevenLabs',
-    role: 'Parle avec la voix de Messa',
+    role: 'Parle avec la voix de la créatrice',
     isRequired: false,
     console: { label: 'Ouvrir ElevenLabs', url: 'https://elevenlabs.io/app/settings/api-keys' },
     where: 'Crée une clé avec :',

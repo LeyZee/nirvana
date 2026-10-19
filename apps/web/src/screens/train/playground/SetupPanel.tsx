@@ -204,7 +204,7 @@ function Spent({ cents, onSave }: { cents: number; onSave: (cents: number) => vo
         <input
           inputMode="decimal"
           value={value}
-          aria-label="Montant déjà dépensé, en dollars"
+          aria-label="Montant déjà dépensé, en euros"
           onChange={(event) => {
             setValue(event.target.value);
           }}
@@ -214,7 +214,7 @@ function Spent({ cents, onSave }: { cents: number; onSave: (cents: number) => vo
             else setValue(String(cents / 100));
           }}
         />
-        $
+        €
       </span>
       <span className="pg-spent__v">{cents === 0 ? 'jamais acheté' : money(cents)}</span>
     </label>

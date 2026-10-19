@@ -4,7 +4,7 @@ import { signIn, type SignInResult } from './session';
 
 const MESSAGES: Record<Exclude<SignInResult, 'ok'>, string> = {
   wrong_credentials: 'Email ou mot de passe incorrect.',
-  too_many_attempts: 'Trop de tentatives. Réessaie dans une minute.',
+  too_many_attempts: 'Trop de tentatives. Réessaie dans un quart d’heure.',
   unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
 };
 
