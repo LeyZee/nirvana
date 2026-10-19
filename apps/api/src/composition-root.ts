@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { CreatorIdSchema, JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
-import { createPersistentCallLog, DEFAULT_LLM_CONFIG, type LlmCallStore } from '@nirvana/llm';
+import { createPersistentCallLog, DEFAULT_LLM_CONFIG, loadPrompt, type LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
@@ -240,7 +240,31 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     persona,
     agent: createAgentModule(),
     media: createMediaModule(),
-    supervision: createSupervisionModule(),
+    supervision: createSupervisionModule({
+      db: db.db,
+      requireRole,
+      budget: () => llm.gateway.health().budget,
+      isVoiceOk: () => llm.gateway.health().roles.find((r) => r.role === 'voice')?.state === 'ok',
+      // The version whose live rate opens Automatique: the configured voice prompt and model (ADR 0019).
+      voice: {
+        voicePrompt: loadPrompt('voice').header.version,
+        voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
+      },
+      ...(telegram !== null && {
+        telegram: {
+          read: async (creatorId) => {
+            const [night, { coverage }] = await Promise.all([
+              telegram.nightCounts(creatorId),
+              telegram.overview(),
+            ]);
+            return {
+              alertsTonight: night.urgent + night.important,
+              urgentReachable: coverage.find((c) => c.creatorId === creatorId)?.urgentReachable ?? false,
+            };
+          },
+        },
+      }),
+    }),
     sales: createSalesModule(),
     scripts: createScriptsModule(),
     providers,
@@ -358,6 +382,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.persona.routes,
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
+      modules.supervision.routes,
       ...(playground === null ? [] : [playground.routes({ guard: requireRole('owner') })]),
       ...(telegram === null
         ? []
