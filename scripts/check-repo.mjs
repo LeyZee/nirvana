@@ -9,6 +9,8 @@
 //  5. Every TODO/FIXME in code carries a task card id: `TODO(P2-03): ...` (docs/conventions/coding.md).
 //  6. Every `pnpm <script>` cited in the docs exists in the root package.json.
 //  7. The nightly CI job still runs `pnpm probe` and `pnpm evals`: removing the quality gate is an error.
+//  8. Every root script that delegates with `pnpm --filter <package> [run] <script>` reaches a package of the
+//     workspace that has that script, and every `tsx <file>` of a package script names a file that exists.
 // No dependency: Node 22 only.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -154,6 +156,43 @@ if (!stagedOnly) {
   }
   checkIndex('docs/sessions/tasks', 'docs/sessions/tasks/README.md', /^([A-Z]+\d*-\d+)-.*\.md$/, 'task card');
   checkIndex('docs/adr', 'docs/adr/README.md', /^(\d{4})-.*\.md$/, 'ADR');
+}
+
+// 8. Delegated scripts reach something (revue 09, G14)
+if (!stagedOnly) {
+  const workspace = new Map();
+  for (const dir of ['apps', 'packages']) {
+    for (const name of readdirSync(join(root, dir))) {
+      const manifest = join(root, dir, name, 'package.json');
+      if (existsSync(manifest)) workspace.set(join(dir, name), manifest);
+    }
+  }
+  if (existsSync(join(root, 'evals/package.json'))) workspace.set('evals', join(root, 'evals/package.json'));
+  const packages = new Map();
+  for (const [dir, manifest] of workspace) {
+    const { name, scripts = {} } = JSON.parse(readFileSync(manifest, 'utf8'));
+    packages.set(name, { dir, scripts });
+    for (const [script, command] of Object.entries(scripts)) {
+      for (const m of command.matchAll(/\btsx(?: watch)?(?: --[\w-]+(?:=\S+)?)* (\S+\.(?:ts|mts|mjs|js))/g)) {
+        if (!existsSync(join(root, dir, m[1])))
+          errors.push(`${dir}/package.json: script \`${script}\` runs \`${m[1]}\`, which does not exist`);
+      }
+    }
+  }
+  const rootScripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts ?? {};
+  for (const [script, command] of Object.entries(rootScripts)) {
+    for (const m of command.matchAll(/pnpm --filter (\S+) (?:run )?([a-z][\w:-]*)/g)) {
+      const target = packages.get(m[1]);
+      if (target === undefined)
+        errors.push(
+          `package.json: script \`${script}\` filters on \`${m[1]}\`, which is not a workspace package`,
+        );
+      else if (!(m[2] in target.scripts))
+        errors.push(
+          `package.json: script \`${script}\` calls \`${m[2]}\`, missing from ${target.dir}/package.json`,
+        );
+    }
+  }
 }
 
 // 7. The nightly quality gate stays in CI
