@@ -199,8 +199,8 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.automatic).toEqual({
       open: false,
       missing: [
-        { kind: 'live_rate', value: null, target: 80 },
-        { kind: 'decided_drafts', value: 0, target: 100 },
+        { kind: 'live_rate', value: 50, target: 80 },
+        { kind: 'decided_drafts', value: 2, target: 100 },
         { kind: 'blind_test' },
       ],
     });
