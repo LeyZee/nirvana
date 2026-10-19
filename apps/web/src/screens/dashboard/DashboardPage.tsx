@@ -20,7 +20,10 @@ const FUNNEL_SUB: Record<Period, string> = {
   month: 'les fans arrivés ces 30 jours, et combien passent chaque étape',
 };
 
-/** The server does not answer: one sentence, no figure and nothing to act on, until it answers again. */
+/**
+ * The server does not answer: one sentence, no figure and nothing to act on, until it answers again. Amber, not red:
+ * a warning, the red stays the urgencies'.
+ */
 function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
   return (
     <div className="db">
@@ -36,12 +39,12 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
       )}
       <section
         className="db-hero nv-glass nv-enter"
-        style={{ '--_c': TONE_COLOR.bad, '--nv-i': 1 }}
+        style={{ '--_c': TONE_COLOR.warn, '--nv-i': 1 }}
         role="status"
         aria-live="polite"
       >
         <div className="db-hero__top">
-          <span className="nv-orb nv-tone--bad" aria-hidden="true" />
+          <span className="nv-orb nv-tone--warn" aria-hidden="true" />
           <div>
             <h1>
               {litParts('Le serveur **ne répond pas**').map((part) =>
