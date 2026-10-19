@@ -75,8 +75,6 @@ export function DashboardPage(): JSX.Element {
         />
       </header>
 
-      <NightBanner night={data.telegram} creatorName={data.creator.name} />
-
       <AgentHero
         agent={data.agent}
         mode={mode}
@@ -85,6 +83,8 @@ export function DashboardPage(): JSX.Element {
         onDone={markDone}
         onResume={resume}
       />
+
+      <NightBanner night={data.telegram} creatorName={data.creator.name} />
 
       <Section
         title="Ventes"

@@ -1,6 +1,7 @@
 /* The Dashboard's Telegram coverage banner (NightBanner.tsx): one glass row, a moon, the action on the right. */
 .tg-night {
-  --_c: var(--nv-danger);
+  /* Amber: a setting to make, not an urgency (the red stays the urgencies'). */
+  --_c: var(--nv-warning);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 14px;
@@ -8,7 +9,8 @@
   padding: 14px 16px 14px 14px;
 }
 .tg-night[data-state='off'] {
-  --_c: var(--nv-warning);
+  --_c: var(--nv-ink-muted);
+  grid-template-columns: auto minmax(0, 1fr);
 }
 .tg-night__orb {
   width: 40px;

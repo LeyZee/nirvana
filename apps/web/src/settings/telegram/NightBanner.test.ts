@@ -17,7 +17,9 @@ describe('the Dashboard’s night banner', () => {
   it('never reads Telegram off as « no group »: it says Telegram is off', () => {
     expect(nightBannerOf({ coverage: null }, 'Démo')).toMatchObject({
       state: 'off',
-      title: 'Les alertes Telegram sont éteintes',
+      title: 'Les alertes Telegram ne tournent pas',
+      // Nothing she can do from Réglages: no button.
+      action: null,
     });
   });
 

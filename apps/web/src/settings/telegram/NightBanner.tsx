@@ -19,7 +19,8 @@ interface Banner {
   readonly state: 'off' | 'uncovered';
   readonly title: string;
   readonly text: string;
-  readonly action: string;
+  /** Null when nothing on the page can fix it (the server's key is the owner's job). */
+  readonly action: string | null;
 }
 
 /**
@@ -31,9 +32,9 @@ export function nightBannerOf(night: TelegramNight | undefined, creatorName: str
   if (night.coverage === null) {
     return {
       state: 'off',
-      title: 'Les alertes Telegram sont éteintes',
-      text: 'La nuit, personne n’est prévenu d’une urgence : il manque au serveur sa clé de chiffrement.',
-      action: 'Voir',
+      title: 'Les alertes Telegram ne tournent pas',
+      text: 'Le serveur n’est pas encore réglé pour envoyer des alertes. La nuit, personne ne serait prévenu d’une urgence.',
+      action: null,
     };
   }
   if (night.coverage.urgentReachable) return null;
@@ -75,9 +76,11 @@ export function NightBanner({
         </p>
         <p className="tg-night__text">{banner.text}</p>
       </div>
-      <Link className="nv-btn nv-btn--soft nv-btn--sm tg-night__go" to="/reglages/telegram">
-        {banner.action}
-      </Link>
+      {banner.action === null ? null : (
+        <Link className="nv-btn nv-btn--soft nv-btn--sm tg-night__go" to="/reglages/telegram">
+          {banner.action}
+        </Link>
+      )}
     </aside>
   );
 }
