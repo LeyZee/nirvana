@@ -11,6 +11,8 @@ Pas fait : le verrou Automatique (B3) ; le branchement de l'écran (fil Extensio
 
 Décisions : la route vit dans `conversations`, propriétaire de l'interrupteur et du mode des conversations. Le mode rendu reprend la règle de `supervision` (Arrêt si un interrupteur global ou de la créatrice est posé), sans importer ce module. Rôles : propriétaire et opérateur de la créatrice, comme les autres commandes.
 
+Relectures : Extension (accord, `globalStop` ajouté à sa demande) et agent (accord ; `ops:kill-switch` prend désormais le même verrou et `clock_timestamp()` pour la portée créatrice, sa remarque 1).
+
 Découvertes : `POST /v1/conversations/:id/mode` accepte encore `auto` sans verrou. B3 doit le fermer aussi. La politique RLS de `kill_switches` laisse une transaction de créatrice écrire une ligne globale (`creator_id` nul accepté par `WITH CHECK`) : aucun code ne le fait, mais B3 ou G16 peut la resserrer.
 
 Candidats à suppression : aucun.
