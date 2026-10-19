@@ -1,4 +1,9 @@
-import { DomainError, type ConversationState, type DraftStatus } from '@nirvana/contracts';
+import {
+  DomainError,
+  type AutomaticMissing,
+  type ConversationState,
+  type DraftStatus,
+} from '@nirvana/contracts';
 
 import type { BlockedReason } from './ports';
 import type { ConversationCommand } from './state-machine';
@@ -23,12 +28,13 @@ export class DraftNotFound extends DomainError {
   }
 }
 
-/** Automatique stays locked until its server lock opens (ADR 0019); until then the agent only drafts. */
+/** Automatique stays locked until its server lock opens (ADR 0019); `details.missing` says what it waits for. */
 export class AutomaticLocked extends DomainError {
-  constructor() {
+  constructor(missing: readonly AutomaticMissing[]) {
     super(
       'agent_mode_conflict',
       'Le mode Automatique reste fermé tant que le taux en réel et le test à l’aveugle ne sont pas validés',
+      { details: { missing: [...missing] } },
     );
   }
 }

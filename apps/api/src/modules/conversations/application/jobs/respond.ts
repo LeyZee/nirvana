@@ -6,17 +6,21 @@ import type {
   ComposeResult,
   Conversation,
   DraftComposer,
+  DraftVoice,
   EventMeta,
   HoldReason,
   JobLogger,
   Transaction,
   UnitOfWork,
 } from '../../domain/ports';
+import { closeAutomaticIfLocked } from '../automatic';
 import { appendEvent } from '../journal';
 
 export interface RespondDeps {
   readonly uow: UnitOfWork;
   readonly clock: Clock;
+  /** The voice version the server writes with now: an answer in automatic needs its lock open (ADR 0019). */
+  readonly voice: DraftVoice;
   /** The engine; without it the draft stays empty and the operator writes it (P0-05 behaviour). */
   readonly composer?: DraftComposer;
 }
@@ -67,8 +71,15 @@ async function stillPending(tx: Transaction, conversation: Conversation | null, 
  * unless the fan wrote again meanwhile (the next debounce answers) or a gate closed. Never sends anything: the
  * draft waits for an operator (copilot). Replayed after a crash, it finds the conversation past `pending`.
  */
-export function createRespondJob({ uow, clock, composer }: RespondDeps) {
+export function createRespondJob({ uow, clock, voice, composer }: RespondDeps) {
   return async (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> => {
+    // Before the engine: if the lock closed (the live rate fell, the voice changed), automatic is over for her.
+    const closed = await closeAutomaticIfLocked(uow, payload.creatorId, voice, {
+      actor: 'system',
+      correlationId: payload.correlationId,
+      at: clock.now(),
+    });
+    if (closed) logger.info({}, 'respond: Automatique closed, back to the copilot');
     const draftId = newId(DraftIdSchema);
     const read = await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);

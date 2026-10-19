@@ -1,4 +1,4 @@
-import { CreatorIdSchema, DashboardSchema } from '@nirvana/contracts';
+import { CreatorIdSchema, DashboardSchema, type AutomaticGate } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { assembleDashboard, todos } from '../dashboard';
@@ -36,6 +36,7 @@ const FACTS: DashboardFacts = {
 const assemble = (
   facts: Partial<DashboardFacts> = {},
   telegram: TelegramReading | 'off' = { alertsTonight: 3, urgentReachable: false },
+  automatic: AutomaticGate = { open: false, missing: [{ kind: 'blind_test' }] },
 ) =>
   assembleDashboard({
     creatorId: CreatorIdSchema.parse('0b9d4b7e-2f7a-4c1e-9a55-3d1f0c2b8e41'),
@@ -50,6 +51,7 @@ const assemble = (
     budget: { spentEur: 3.204, capEur: 20, alertAtEur: 16 },
     isVoiceOk: true,
     telegram: telegram === 'off' ? undefined : telegram,
+    automatic,
   });
 
 describe('dashboard', () => {
@@ -70,9 +72,10 @@ describe('dashboard', () => {
     expect(dashboard.telegramCoverage).toBeNull();
   });
 
-  it('keeps Automatique locked until the blind test is recorded, even at 100 %', () => {
-    const dashboard = assemble({ decided: Array.from({ length: 150 }, () => ({ asIs: true })) });
-    expect(dashboard.automatic).toEqual({ open: false, missing: [{ kind: 'blind_test' }] });
+  it('shows the lock as conversations reads it, never recomputed from the live rate', () => {
+    const full = { decided: Array.from({ length: 150 }, () => ({ asIs: true })) };
+    expect(assemble(full).automatic).toEqual({ open: false, missing: [{ kind: 'blind_test' }] });
+    expect(assemble(full, 'off', { open: true, missing: [] }).automatic).toEqual({ open: true, missing: [] });
   });
 
   it('says Arrêt over everything, and Automatique when a conversation runs on its own', () => {

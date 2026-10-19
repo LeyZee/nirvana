@@ -13,6 +13,7 @@ import {
   bigint,
   boolean,
   char,
+  check,
   index,
   integer,
   jsonb,
@@ -169,6 +170,31 @@ export const conversationEvents = pgTable(
     enumCheck('conversation_events', t.type, EVENT_TYPES),
     unique('conversation_events_seq_unique').on(t.conversationId, t.seq),
     index('conversation_events_type_created_idx').on(t.type, t.createdAt),
+    tenantPolicy(t.creatorId),
+  ],
+);
+
+/**
+ * The blind tests with the creator (ADR 0019): one per run, recorded by the owner, for the voice version the server
+ * had then. The latest test of a version decides whether it passed. Append-only (migration 0008).
+ */
+export const blindTests = pgTable(
+  'blind_tests',
+  {
+    id: id(),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id),
+    voicePrompt: text('voice_prompt').notNull(),
+    voiceModel: text('voice_model').notNull(),
+    /** The rate « sans retouche » in tenths of a percent (800 = 80 %): no float on a threshold. */
+    ratePerMille: integer('rate_per_mille').notNull(),
+    recordedBy: text('recorded_by').notNull(),
+    recordedAt: timestampTz('recorded_at').notNull().defaultNow(),
+  },
+  (t) => [
+    check('blind_tests_rate_check', sql`${t.ratePerMille} between 0 and 1000`),
+    index('blind_tests_version_idx').on(t.creatorId, t.voicePrompt, t.voiceModel, t.recordedAt.desc()),
     tenantPolicy(t.creatorId),
   ],
 );

@@ -27,6 +27,13 @@ Le bot se mesure à deux endroits. Dans le playground, Charles et Messa notent d
 - Le test à l'aveugle devient une donnée : version, date, taux, enregistré par le propriétaire.
 - Changer de prompt ou de modèle de voix coûte un retour en copilote : c'est voulu.
 
+## Mise en œuvre (19/10, revue 09 B3)
+
+- Le verrou est lu à un seul endroit, le module `conversations`, avec la règle de `packages/contracts/src/automatic.ts` ; le Dashboard affiche cette lecture. Détail : `docs/architecture/message-flow.md` §6.
+- Le test à l'aveugle est la table `blind_tests` (append-only), enregistrée par le propriétaire avec une connexion de moins de 10 minutes ; le dernier test d'une version décide.
+- Passer en Automatique ne demande pas de ré-authentification : le verrou et les rôles (propriétaire, opérateur de la créatrice) suffisent. Choix par défaut, faute de décision de Charles ; il pourra le changer quand l'Automatique sera réellement possible.
+- L'événement du retour en copilote s'appelle `automatic_closed`. Son envoi sur Telegram reste à brancher par le module `telegram`.
+
 ## Alternatives rejetées
 
 - **Un seul taux, playground et réel mêlés** : l'entraîneur connaît ses situations, ce qui gonfle le chiffre, et le mélange cache l'écart.

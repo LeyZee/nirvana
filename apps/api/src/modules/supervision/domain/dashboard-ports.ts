@@ -1,8 +1,6 @@
-import type { CreatorId, HandoffCause } from '@nirvana/contracts';
+import type { AutomaticGate, CreatorId, DecidedDraft, HandoffCause } from '@nirvana/contracts';
 
-import type { DecidedDraft } from './automatic';
-
-/** The voice version whose live rate opens Automatique: the configured prompt and model (ADR 0019). */
+/** The voice version whose live rate the Dashboard shows: the one the composition root gives `conversations` too. */
 export interface VoiceVersion {
   readonly voicePrompt: string;
   readonly voiceModel: string;
@@ -66,6 +64,11 @@ export interface DashboardReader {
     creatorId: CreatorId,
     window: (timezone: string) => DashboardWindow,
   ): Promise<{ readonly facts: DashboardFacts; readonly window: DashboardWindow } | undefined>;
+}
+
+/** The server lock of Automatique, read by `conversations` (wired by the composition root, ADR 0019). */
+export interface AutomaticView {
+  read(creatorId: CreatorId): Promise<AutomaticGate>;
 }
 
 /** What the Dashboard shows of the Telegram alerts (module telegram, wired by the composition root). */

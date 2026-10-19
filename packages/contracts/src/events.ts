@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AutomaticMissingSchema } from './automatic';
 import {
   ActorSchema,
   ConversationModeSchema,
@@ -145,6 +146,7 @@ export const EVENT_TYPES = [
   'script_ended',
   'session_state_changed',
   'budget_threshold_crossed',
+  'automatic_closed',
   'error',
 ] as const;
 export const EventTypeSchema = z.enum(EVENT_TYPES);
@@ -210,6 +212,16 @@ export const EVENT_PAYLOADS = {
     /** The budget's day, in its own time zone (Europe/Paris). */
     day: z.iso.date(),
   }),
+  /**
+   * Automatique closed on its own (ADR 0019): the live rate fell under its target, or the voice version changed and
+   * has not proved itself yet. Every conversation in automatic went back to the copilot. Published once, for the owner.
+   */
+  automatic_closed: z.object({
+    voicePrompt: z.string().min(1),
+    voiceModel: z.string().min(1),
+    missing: z.array(AutomaticMissingSchema).min(1),
+    conversations: z.number().int().min(1),
+  }),
   error: z.object({
     code: z.string().min(1),
     jobName: z.string().min(1).optional(),
@@ -254,6 +266,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('script_ended'),
   typedEvent('session_state_changed'),
   typedEvent('budget_threshold_crossed'),
+  typedEvent('automatic_closed'),
   typedEvent('error'),
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;

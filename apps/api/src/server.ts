@@ -130,7 +130,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
         request.log.error({ err: error }, 'unmapped domain error');
         return reply.code(500).send(errorBody(request, 'internal_error', 'Erreur interne'));
       }
-      return reply.code(status).send(errorBody(request, error.code, error.message));
+      return reply.code(status).send(errorBody(request, error.code, error.message, { ...error.details }));
     }
     if (error.statusCode === 429) {
       return reply

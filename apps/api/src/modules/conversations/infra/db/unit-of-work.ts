@@ -1,11 +1,13 @@
 import {
   AuditEntryIdSchema,
+  BlindTestIdSchema,
   ConversationIdSchema,
   EventIdSchema,
   ExternalMediaSchema,
   JOB_MAX_ATTEMPTS,
   KillSwitchIdSchema,
   JOB_PAYLOADS,
+  LIVE_WINDOW,
   MessageAuthorSchema,
   MessageDirectionSchema,
   newId,
@@ -279,6 +281,51 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           setBy: entry.setBy,
           setAt: sql`clock_timestamp()`,
         });
+      },
+    },
+
+    automatic: {
+      async decided(voice) {
+        // Approved as is: neither edited nor rejected, and sent with the bubbles it was written with (ADR 0019).
+        const rows = await tx.execute<{ as_is: boolean }>(sql`
+          select (status not in ('rejected', 'edited') and final_bubbles is null) as as_is
+          from drafts
+          where decided_at is not null
+            and status in ('approved', 'edited', 'rejected', 'sent', 'failed')
+            and prompt_hashes->>'voicePrompt' = ${voice.voicePrompt}
+            and prompt_hashes->>'voiceModel' = ${voice.voiceModel}
+          order by decided_at desc, id desc limit ${LIVE_WINDOW}`);
+        return rows.rows.map((row) => ({ asIs: row.as_is }));
+      },
+      async latestBlindTest(voice) {
+        const [row] = await tx
+          .select({ ratePerMille: schema.blindTests.ratePerMille })
+          .from(schema.blindTests)
+          .where(
+            and(
+              eq(schema.blindTests.voicePrompt, voice.voicePrompt),
+              eq(schema.blindTests.voiceModel, voice.voiceModel),
+            ),
+          )
+          .orderBy(sql`${schema.blindTests.recordedAt} desc`)
+          .limit(1);
+        return row?.ratePerMille ?? null;
+      },
+      async recordBlindTest(entry) {
+        const [row] = await tx
+          .insert(schema.blindTests)
+          .values({
+            id: newId(BlindTestIdSchema),
+            creatorId,
+            voicePrompt: entry.voice.voicePrompt,
+            voiceModel: entry.voice.voiceModel,
+            ratePerMille: entry.ratePerMille,
+            recordedBy: entry.recordedBy,
+            recordedAt: sql`clock_timestamp()`,
+          })
+          .returning({ recordedAt: schema.blindTests.recordedAt });
+        if (row === undefined) throw new Error('blind test insert returned no row');
+        return row.recordedAt;
       },
     },
 

@@ -1,11 +1,19 @@
 import type { JobPayload } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
+import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createConversationCommands, type ConversationCommands } from './application/commands';
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
-import type { Clock, DraftComposer, FanDirectory, JobLogger, OutboundSender } from './domain/ports';
+import type {
+  Clock,
+  DraftComposer,
+  DraftVoice,
+  FanDirectory,
+  JobLogger,
+  OutboundSender,
+} from './domain/ports';
 import { createDrizzleConversationReader } from './infra/db/reader';
 import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
 import { createConversationRoutes, type RequireRole } from './infra/http/routes';
@@ -32,6 +40,10 @@ export interface ConversationsDeps {
   /** Implemented by the `connectors` module (P0-06). */
   readonly sender: OutboundSender;
   readonly requireRole: RequireRole;
+  /** `requireRecentLogin` (ADR 0016): recording a blind test needs a sign-in under 10 minutes. */
+  readonly recentLogin: preHandlerAsyncHookHandler;
+  /** The voice version the server writes with now (prompt and model): what Automatique is proved on (ADR 0019). */
+  readonly voice: DraftVoice;
   /** The engine (agent module's adapter); without it drafts stay empty for the operator to write. */
   readonly composer?: DraftComposer;
   readonly clock?: Clock;
@@ -42,15 +54,19 @@ const systemClock: Clock = { now: () => new Date() };
 export function createConversationsModule(deps: ConversationsDeps): ConversationsModule {
   const uow = createDrizzleUnitOfWork(deps.db);
   const clock = deps.clock ?? systemClock;
-  const commands = createConversationCommands({ uow, clock, fans: deps.fans });
+  const commands = createConversationCommands({ uow, clock, fans: deps.fans, voice: deps.voice });
   return {
     name: 'conversations',
     ...commands,
-    routes: createConversationRoutes(createDrizzleConversationReader(deps.db), commands, deps.requireRole),
+    routes: createConversationRoutes(createDrizzleConversationReader(deps.db), commands, {
+      requireRole: deps.requireRole,
+      recentLogin: deps.recentLogin,
+    }),
     jobs: {
       respond: createRespondJob({
         uow,
         clock,
+        voice: deps.voice,
         ...(deps.composer === undefined ? {} : { composer: deps.composer }),
       }),
       send: createSendJob({ uow, clock, sender: deps.sender }),

@@ -9,8 +9,10 @@ import {
   DraftIdSchema,
   MessageViewSchema,
   AgentModeResultSchema,
+  BlindTestResultSchema,
   pageOf,
   PageQuerySchema,
+  RecordBlindTestBodySchema,
   RejectDraftBodySchema,
   SetAgentModeBodySchema,
   SetModeBodySchema,
@@ -41,6 +43,7 @@ class CreatorForbidden extends DomainError {
 const CreatorQuerySchema = z.object({ creatorId: CreatorIdSchema });
 const ConversationParamsSchema = z.object({ id: ConversationIdSchema });
 const DraftParamsSchema = ConversationParamsSchema.extend({ draftId: DraftIdSchema });
+const CreatorParamsSchema = z.object({ id: CreatorIdSchema });
 
 /** The signed-in user, allowed on this creator: an owner sees every creator, anyone else their own list. */
 function actorFor(request: FastifyRequest, creatorId: CreatorId): { user: CurrentUser; userId: UserId } {
@@ -54,8 +57,9 @@ function actorFor(request: FastifyRequest, creatorId: CreatorId): { user: Curren
 export function createConversationRoutes(
   reader: ConversationReader,
   commands: ConversationCommands,
-  requireRole: RequireRole,
+  guards: { readonly requireRole: RequireRole; readonly recentLogin: preHandlerAsyncHookHandler },
 ): FastifyPluginAsyncZod {
+  const { requireRole } = guards;
   return (app) => {
     const read = { preHandler: requireRole('owner', 'operator', 'creator') };
     const act = { preHandler: requireRole('owner', 'operator') };
@@ -229,6 +233,30 @@ export function createConversationRoutes(
         const { creatorId, mode } = request.body;
         const { userId } = actorFor(request, creatorId);
         return commands.setAgentMode({ creatorId, userId, mode, correlationId: request.id });
+      },
+    );
+
+    // The blind test of ADR 0019: the owner only, with a recent sign-in; the server stamps the voice version.
+    app.post(
+      '/creators/:id/blind-tests',
+      {
+        preHandler: [requireRole('owner'), guards.recentLogin],
+        schema: {
+          params: CreatorParamsSchema,
+          body: RecordBlindTestBodySchema,
+          response: { 201: BlindTestResultSchema },
+        },
+      },
+      async (request, reply) => {
+        const creatorId = request.params.id;
+        const { userId } = actorFor(request, creatorId);
+        const result = await commands.recordBlindTest({
+          creatorId,
+          userId,
+          rate: request.body.rate,
+          correlationId: request.id,
+        });
+        return reply.code(201).send(result);
       },
     );
 

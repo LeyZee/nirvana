@@ -118,6 +118,8 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
         verifySent: () => Promise.resolve({ status: 'not_found' }),
       },
       requireRole: () => () => Promise.resolve(),
+      recentLogin: () => Promise.resolve(),
+      voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
       composer,
     });
   });

@@ -7,6 +7,7 @@ import type {
   ConversationSummary,
   CreatorId,
   Currency,
+  DecidedDraft,
   DraftId,
   DraftStatus,
   EventBody,
@@ -102,7 +103,7 @@ interface MessageRepository {
 }
 
 /** The voice prompt version and the model that wrote a draft: what the live rate is read by (ADR 0019). */
-interface DraftVoice {
+export interface DraftVoice {
   readonly voicePrompt: string;
   readonly voiceModel: string;
 }
@@ -175,6 +176,16 @@ interface KillSwitches {
   setCreator(entry: { active: boolean; reason: string; setBy: string }): Promise<void>;
 }
 
+/** What opens Automatique (ADR 0019), for one voice version of the creator. */
+interface AutomaticEvidence {
+  /** Her decided drafts of this version, newest first, at most `LIVE_WINDOW`: approved as is, edited or rejected. */
+  decided(voice: DraftVoice): Promise<readonly DecidedDraft[]>;
+  /** The rate of the latest blind test of this version, in tenths of a percent; null before the first. */
+  latestBlindTest(voice: DraftVoice): Promise<number | null>;
+  /** Stamped by the database clock; returns that date. */
+  recordBlindTest(entry: { voice: DraftVoice; ratePerMille: number; recordedBy: Actor }): Promise<Date>;
+}
+
 /** Everything a command touches, bound to one tenant transaction. */
 export interface Transaction {
   readonly conversations: ConversationRepository;
@@ -184,6 +195,7 @@ export interface Transaction {
   readonly jobs: JobEnqueuer;
   readonly gate: RespondGate;
   readonly switches: KillSwitches;
+  readonly automatic: AutomaticEvidence;
   readonly audit: AuditTrail;
 }
 
@@ -193,7 +205,7 @@ interface AuditTrail {
     userId: UserId;
     action: string;
     /** `conversation` unless named. */
-    entity?: 'conversation' | 'kill_switch';
+    entity?: 'conversation' | 'kill_switch' | 'creator';
     entityId: string;
     details?: Record<string, unknown>;
   }): Promise<void>;

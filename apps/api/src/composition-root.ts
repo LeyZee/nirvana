@@ -226,11 +226,18 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           logger.warn({ err: error }, 'draft composer not started: persona unreadable');
           return undefined;
         }));
+  // The voice version the server writes with now, the one Automatique is proved on (ADR 0019): defined here only.
+  const activeVoice = {
+    voicePrompt: loadPrompt('voice').header.version,
+    voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
+  };
   const conversations = createConversationsModule({
     db: db.db,
     fans,
     sender: connectors.outboundSender,
     requireRole,
+    recentLogin: createRequireRecentLogin(auth),
+    voice: activeVoice,
     ...(composer !== undefined && { composer }),
   });
   const modules: Modules = {
@@ -245,11 +252,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       requireRole,
       budget: () => llm.gateway.health().budget,
       isVoiceOk: () => llm.gateway.health().roles.find((r) => r.role === 'voice')?.state === 'ok',
-      // The version whose live rate opens Automatique: the configured voice prompt and model (ADR 0019).
-      voice: {
-        voicePrompt: loadPrompt('voice').header.version,
-        voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
-      },
+      voice: activeVoice,
+      automatic: { read: (creatorId) => conversations.automaticGate(creatorId) },
       ...(telegram !== null && {
         telegram: {
           read: async (creatorId) => {

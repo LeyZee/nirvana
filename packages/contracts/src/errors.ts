@@ -35,10 +35,17 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
 /** Base of the errors a module throws for the unexpected; each module subclasses it (`ConversationNotFound`). */
 export class DomainError extends Error {
   readonly code: string;
+  /** What the client needs to act on the error (`ApiError.details`); never a secret, a query or a fan's text. */
+  readonly details: Readonly<Record<string, unknown>>;
 
-  constructor(code: string, message: string, options?: { readonly cause?: unknown }) {
-    super(message, options);
+  constructor(
+    code: string,
+    message: string,
+    options?: { readonly cause?: unknown; readonly details?: Readonly<Record<string, unknown>> },
+  ) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.name = new.target.name;
     this.code = code;
+    this.details = options?.details ?? {};
   }
 }

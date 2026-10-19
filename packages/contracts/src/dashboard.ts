@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AutomaticGateSchema } from './automatic';
 import { HandoffCauseSchema } from './events';
 import { ConversationIdSchema, CreatorIdSchema, FanIdSchema } from './ids';
 
@@ -23,8 +24,9 @@ export type AgentMode = z.infer<typeof AgentModeSchema>;
 
 /**
  * `PUT /v1/agent/mode`: Arrêt sets her kill switch, Copilote lifts it and brings every conversation back to the
- * copilot, Automatique is refused (409) while ADR 0019 keeps it locked. The answer is the mode now in force, as
- * `GET /v1/dashboard` gives it: Arrêt when the global switch stays on.
+ * copilot, Automatique lifts it and puts every conversation in automatic, or is refused (409 `agent_mode_conflict`,
+ * `details.missing`) while ADR 0019 keeps it locked. The answer is the mode now in force, as `GET /v1/dashboard`
+ * gives it: Arrêt when the global switch stays on.
  */
 export const SetAgentModeBodySchema = z.object({ creatorId: CreatorIdSchema, mode: AgentModeSchema });
 export const AgentModeResultSchema = z.object({
@@ -38,17 +40,6 @@ const percent = z.number().min(0).max(100);
 const count = z.number().int().nonnegative();
 const euros = z.number().nonnegative();
 const at = z.iso.datetime();
-
-/**
- * What keeps Automatique locked (ADR 0019): the live rate, the number of decided drafts, the blind test. Each
- * missing condition carries where it stands; the thresholds live on the server only.
- */
-export const AutomaticMissingSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('live_rate'), value: percent.nullable(), target: percent }),
-  z.object({ kind: z.literal('decided_drafts'), value: count, target: count }),
-  z.object({ kind: z.literal('blind_test') }),
-]);
-export type AutomaticMissing = z.infer<typeof AutomaticMissingSchema>;
 
 export const DashboardToneSchema = z.enum(['ok', 'warn', 'bad']);
 
@@ -92,7 +83,7 @@ export const DashboardSchema = z.object({
   /** The global switch is on: Arrêt for every creator, whatever she sets, as `PUT /v1/agent/mode` answers it. */
   globalStop: z.boolean(),
   /** Automatique opens only when nothing is missing. */
-  automatic: z.object({ open: z.boolean(), missing: z.array(AutomaticMissingSchema) }),
+  automatic: AutomaticGateSchema,
   /** Taux en réel: drafts approved without an edit among the last 200 decided, for the active voice version. */
   liveRate: z.object({
     rate: percent.nullable(),

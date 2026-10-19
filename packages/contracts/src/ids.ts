@@ -48,6 +48,10 @@ export type LlmCallId = z.infer<typeof LlmCallIdSchema>;
 export const KillSwitchIdSchema = uuid.brand<'KillSwitchId'>();
 export type KillSwitchId = z.infer<typeof KillSwitchIdSchema>;
 
+/** A row of `blind_tests` (ADR 0019). */
+export const BlindTestIdSchema = uuid.brand<'BlindTestId'>();
+export type BlindTestId = z.infer<typeof BlindTestIdSchema>;
+
 /** A fresh UUID v7 branded by the given schema: `newId(FanIdSchema)`. */
 export function newId<S extends z.ZodType<string>>(schema: S): z.output<S> {
   return schema.parse(v7());

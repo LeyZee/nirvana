@@ -1,8 +1,7 @@
-import { HandoffCauseSchema } from '@nirvana/contracts';
+import { HandoffCauseSchema, LIVE_WINDOW, type DecidedDraft } from '@nirvana/contracts';
 import { sql, withTenant, type Database, type Transaction } from '@nirvana/db';
 import { z } from 'zod';
 
-import type { DecidedDraft } from '../../domain/automatic';
 import type { DashboardFacts, DashboardReader, DashboardWindow } from '../../domain/dashboard-ports';
 
 /**
@@ -11,7 +10,6 @@ import type { DashboardFacts, DashboardReader, DashboardWindow } from '../../dom
  */
 
 const DAY_MS = 86_400_000;
-const LIVE_WINDOW = 200;
 const TOP_FANS = 10;
 const NOTES_PER_FAN = 5;
 
