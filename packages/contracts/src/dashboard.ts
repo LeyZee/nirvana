@@ -21,19 +21,21 @@ export const DashboardQuerySchema = z.object({
 export const AgentModeSchema = z.enum(['auto', 'copilot', 'stop']);
 export type AgentMode = z.infer<typeof AgentModeSchema>;
 
-/** What keeps Automatique locked (ADR 0019): the live rate, the number of decided drafts, the blind test. */
 const percent = z.number().min(0).max(100);
 const count = z.number().int().nonnegative();
+const euros = z.number().nonnegative();
+const at = z.iso.datetime();
 
-/** One condition of ADR 0019 still missing, with where it stands: the thresholds live on the server only. */
+/**
+ * What keeps Automatique locked (ADR 0019): the live rate, the number of decided drafts, the blind test. Each
+ * missing condition carries where it stands; the thresholds live on the server only.
+ */
 export const AutomaticMissingSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('live_rate'), value: percent.nullable(), target: percent }),
   z.object({ kind: z.literal('decided_drafts'), value: count, target: count }),
   z.object({ kind: z.literal('blind_test') }),
 ]);
 export type AutomaticMissing = z.infer<typeof AutomaticMissingSchema>;
-const euros = z.number().nonnegative();
-const at = z.iso.datetime();
 
 export const DashboardToneSchema = z.enum(['ok', 'warn', 'bad']);
 
