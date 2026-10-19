@@ -1,5 +1,6 @@
-import { DashboardSchema, type Dashboard as ApiDashboard } from '@nirvana/contracts';
+import { AgentModeSchema, DashboardSchema, type Dashboard as ApiDashboard } from '@nirvana/contracts';
 import { vi } from 'vitest';
+import { z } from 'zod';
 
 /* Fakes shared by the screen tests: invented creators and fans, never real data (testing.md). */
 
@@ -79,22 +80,28 @@ interface Reply {
   readonly body?: unknown;
 }
 
+const MODE_BODY = z.object({ creatorId: z.string(), mode: AgentModeSchema });
+
 /**
- * Replaces `fetch` with a fake server: `/v1/creators` lists `creators` (`CREATOR` by default), `/v1/dashboard` answers `dashboard` (a
- * reply, or a function of the request for a server that changes its mind). Returns the mock, to count the calls.
+ * Replaces `fetch` with a fake server: `/v1/creators` lists `creators` (`CREATOR` by default), `/v1/dashboard`
+ * answers `dashboard` (a reply, or a function of the request for a server that changes its mind), `PUT
+ * /v1/agent/mode` answers `writeMode` (500 if absent). Returns the mock, to count the calls.
  */
 export function serveDashboard(
   dashboard: Reply | ((url: URL) => Reply),
   creators: readonly (typeof CREATOR)[] = [CREATOR],
+  writeMode: (body: z.infer<typeof MODE_BODY>) => Reply = () => ({ status: 500 }),
 ): ReturnType<typeof vi.fn> {
-  const fake = vi.fn((input: string) => {
+  const fake = vi.fn((input: string, init?: RequestInit) => {
     const url = new URL(input, 'http://localhost');
     const reply: Reply =
       url.pathname === '/v1/creators'
         ? { status: 200, body: { creators } }
-        : typeof dashboard === 'function'
-          ? dashboard(url)
-          : dashboard;
+        : url.pathname === '/v1/agent/mode'
+          ? writeMode(MODE_BODY.parse(JSON.parse(typeof init?.body === 'string' ? init.body : 'null')))
+          : typeof dashboard === 'function'
+            ? dashboard(url)
+            : dashboard;
     return Promise.resolve(new Response(JSON.stringify(reply.body ?? null), { status: reply.status }));
   });
   vi.stubGlobal('fetch', fake);

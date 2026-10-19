@@ -531,6 +531,14 @@
     animation: none;
   }
 }
+.db-notice {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-warning);
+  text-align: right;
+}
 .db-pending {
   margin: 0;
   padding: 18px 20px;

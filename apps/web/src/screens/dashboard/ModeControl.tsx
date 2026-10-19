@@ -26,7 +26,7 @@ export function ModeControl({
   automatic,
   creatorName,
   tip,
-  readOnly = false,
+  readOnly = null,
   onChange,
 }: {
   mode: AgentMode;
@@ -34,10 +34,10 @@ export function ModeControl({
   creatorName: string;
   tip: FloatingTip;
   /**
-   * The mode comes from the server and no route writes it yet: the control shows it, the other options say they
-   * cannot be picked from here.
+   * Why the mode cannot change from here, when it cannot (the sample, a global switch): the control shows the mode
+   * and the other options give this reason.
    */
-  readOnly?: boolean;
+  readOnly?: string | null;
   onChange: (mode: AgentMode) => void;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
@@ -50,9 +50,9 @@ export function ModeControl({
 
   /** Why an option cannot be picked, if it cannot: the lock of Automatique first, then a read-only control. */
   const blocked = (option: AgentMode): boolean =>
-    (option === 'auto' && locked) || (readOnly && option !== mode);
+    (option === 'auto' && locked) || (readOnly !== null && option !== mode);
   const noteFor = (option: AgentMode): { note?: string } =>
-    readOnly && option !== mode ? { note: 'Ne se change pas encore depuis le CRM.' } : {};
+    readOnly !== null && option !== mode ? { note: readOnly } : {};
   const pick = (next: AgentMode): void => {
     if (next === mode || blocked(next)) return;
     if (next === 'stop') {
@@ -64,7 +64,7 @@ export function ModeControl({
     const step = STEPS[event.key];
     if (step === undefined) return;
     event.preventDefault();
-    if (readOnly) return;
+    if (readOnly !== null) return;
     const next = nextMode(mode, step, automatic);
     ref.current?.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
     pick(next);

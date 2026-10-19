@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { AgentModeResultSchema, type AgentMode, type Dashboard as ApiDashboard } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -7,12 +8,12 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardPage } from './DashboardPage';
 
-import { apiDashboard, serveDashboard } from '@/test/fakes';
+import { apiDashboard, CREATOR, serveDashboard } from '@/test/fakes';
 
 /** The shared mode reaches its readers on the next tick. */
 const tick = (): Promise<void> =>
@@ -95,26 +96,150 @@ describe('DashboardPage on the server’s data', () => {
     renderDashboard();
     expect(await screen.findByText('Personne n’est prévenu la nuit')).toBeDefined();
   });
+});
 
-  it('shows the server’s mode and does not pretend to change it', async () => {
-    serveDashboard({ status: 200, body: apiDashboard({ mode: 'stop' }) });
-    renderDashboard();
-    const stop = await screen.findByRole('radio', { name: 'Arrêt' });
-    expect(stop.getAttribute('aria-checked')).toBe('true');
-    expect(headline()).toContain('arrêté');
-    // No route writes the mode yet: no « Repasser en copilote », and Copilote cannot be picked.
-    expect(screen.queryByRole('button', { name: 'Repasser en copilote' })).toBeNull();
-    const copilot = screen.getByRole('radio', { name: 'Copilote' });
-    expect(copilot.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(copilot);
-    expect(copilot.getAttribute('aria-checked')).toBe('false');
-  });
+/** A server that keeps her mode: `PUT /v1/agent/mode` changes what `GET /v1/dashboard` says next. */
+function serveModes(
+  first: AgentMode,
+  answer: (asked: AgentMode) => { status: number; body?: unknown } = (asked) => ({
+    status: 200,
+    body: { mode: asked, globalStop: false },
+  }),
+  patch: Partial<ApiDashboard> = {},
+): { creatorId: string; mode: AgentMode }[] {
+  let mode = first;
+  const writes: { creatorId: string; mode: AgentMode }[] = [];
+  serveDashboard(
+    () => ({ status: 200, body: apiDashboard({ ...patch, mode }) }),
+    undefined,
+    (body) => {
+      writes.push(body);
+      const reply = answer(body.mode);
+      if (reply.status === 200) mode = AgentModeResultSchema.parse(reply.body).mode;
+      return reply;
+    },
+  );
+  return writes;
+}
 
-  it('never opens the stop dialog when the mode cannot be written', async () => {
-    serveDashboard({ status: 200, body: apiDashboard() });
+const checked = (name: string): string | null =>
+  screen.getByRole('radio', { name }).getAttribute('aria-checked');
+
+describe('DashboardPage changing the mode', () => {
+  it('stops the agent after the confirmation, on the server, and resumes it in one click', async () => {
+    const writes = serveModes('copilot');
     renderDashboard();
     fireEvent.click(await screen.findByRole('radio', { name: 'Arrêt' }));
-    expect(dialog().getAttribute('aria-hidden')).toBe('true');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’agent' }));
+      await tick();
+    });
+    await waitFor(() => {
+      expect(checked('Arrêt')).toBe('true');
+    });
+    expect(headline()).toContain('arrêté');
+    expect(writes).toEqual([{ creatorId: CREATOR.id, mode: 'stop' }]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Repasser en copilote' }));
+      await tick();
+    });
+    await waitFor(() => {
+      expect(checked('Copilote')).toBe('true');
+    });
+  });
+
+  it('drops a read still in flight, so an Arrêt is never put back by an older answer', async () => {
+    let mode: AgentMode = 'copilot';
+    let reads = 0;
+    const held: (() => void)[] = [];
+    const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string, init?: RequestInit) => {
+        const path = new URL(input, 'http://localhost').pathname;
+        if (path === '/v1/creators') return Promise.resolve(json({ creators: [CREATOR] }));
+        if (init?.method === 'PUT') {
+          mode = 'stop';
+          return Promise.resolve(json({ mode, globalStop: false }));
+        }
+        reads += 1;
+        const answer = json(apiDashboard({ mode }));
+        // The second read, sent before the click, answers the old mode only once the click is done.
+        if (reads !== 2) return Promise.resolve(answer);
+        return new Promise<Response>((resolve) => {
+          held.push(() => {
+            resolve(answer);
+          });
+        });
+      }),
+    );
+    const client = renderDashboard();
+    await screen.findByRole('radio', { name: 'Arrêt' });
+    void client.refetchQueries({ queryKey: ['dashboard'] });
+    await waitFor(() => {
+      expect(held).toHaveLength(1);
+    });
+    fireEvent.click(screen.getByRole('radio', { name: 'Arrêt' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’agent' }));
+      await tick();
+    });
+    await act(async () => {
+      held.forEach((release) => {
+        release();
+      });
+      await tick();
+    });
+    expect(checked('Arrêt')).toBe('true');
+  });
+
+  it('says so when the global switch keeps the agent stopped', async () => {
+    serveModes('stop', () => ({ status: 200, body: { mode: 'stop', globalStop: true } }));
+    renderDashboard();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Copilote' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('arrêt général');
+    expect(checked('Arrêt')).toBe('true');
+  });
+
+  it('says from the start when a global switch holds the agent, and offers no way back it cannot give', async () => {
+    serveModes('stop', undefined, { globalStop: true });
+    renderDashboard();
+    expect((await screen.findByRole('alert')).textContent).toContain('seul un opérateur peut le lever');
+    expect(screen.getByRole('radio', { name: 'Copilote' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Repasser en copilote' })).toBeNull();
+  });
+
+  it('shows the server’s refusal of Automatique and changes nothing', async () => {
+    serveModes(
+      'copilot',
+      () => ({
+        status: 409,
+        body: {
+          error: {
+            code: 'agent_mode_conflict',
+            message: 'Le mode Automatique reste fermé',
+            details: {},
+            requestId: 'req-1',
+          },
+        },
+      }),
+      { automatic: { open: true, missing: [] } },
+    );
+    renderDashboard();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Automatique' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Le mode Automatique reste fermé');
+    expect(checked('Copilote')).toBe('true');
+  });
+
+  it('never shows a change the server did not make', async () => {
+    serveModes('copilot', () => ({ status: 500 }));
+    renderDashboard();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Arrêt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’agent' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Le mode n’a pas changé');
+    expect(checked('Copilote')).toBe('true');
+    expect(headline()).not.toContain('arrêté');
   });
 });
 
