@@ -18,6 +18,7 @@ export function apiDashboard(patch: Partial<ApiDashboard> = {}): ApiDashboard {
     creator: { id: CREATOR.id, name: 'Léa', timezone: 'Europe/Paris', now: '2026-10-19T12:00:00Z' },
     period: 'day',
     mode: 'copilot',
+    globalStop: false,
     automatic: {
       open: false,
       missing: [
