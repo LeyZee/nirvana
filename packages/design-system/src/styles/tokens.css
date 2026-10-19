@@ -12,40 +12,52 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* Grounds */
-  --nv-void: #07060a;
-  --nv-abyss: #100c13;
-  --nv-surface-raised: #1a1419;
+  /* Grounds: a near-black with a little warmth, so the single neon light reads as a glow, not a stain. */
+  --nv-void: #060508;
+  --nv-abyss: #0c0a0d;
+  --nv-surface-raised: #17131a;
 
   /* Text */
-  --nv-ink: #f6eef1;
-  --nv-ink-muted: #c2b7bc;
-  --nv-ink-faint: #9d9399;
+  --nv-ink: #f8f3f4;
+  --nv-ink-muted: #bfb4b9;
+  --nv-ink-faint: #9b9197;
 
-  /* Neon: the brand's single accent */
+  /* Neon: the brand's single accent. A light, never a fill: one primary action, the "on" state, urgency. */
   --nv-neon: #ff2a4d;
-  --nv-neon-solid: #e0103a;
+  --nv-neon-solid: #e3123f;
   --nv-on-neon: #ffffff;
-  --nv-neon-ink: #ff8a9b;
-  --nv-neon-soft: rgba(255, 42, 77, 0.12);
-  --nv-focus: #ff7a90;
+  --nv-neon-ink: #ff8fa0;
+  --nv-neon-soft: rgba(255, 42, 77, 0.14);
+  /* Focus is warm white: a red ring on every focused field read as an error (review 19/10). */
+  --nv-focus: #f6d4dc;
 
-  /* Liquid glass */
-  --nv-glass-veil: rgba(7, 6, 10, 0.6);
+  /* Selection: a neutral light, so choosing something never looks like an alert. */
+  --nv-select: rgba(255, 255, 255, 0.1);
+  --nv-select-strong: rgba(255, 255, 255, 0.16);
+
+  /* Content plates: the content layer. No blur, barely there; hierarchy comes from type and space. */
+  --nv-plate: rgba(255, 255, 255, 0.03);
+  --nv-plate-hover: rgba(255, 255, 255, 0.05);
+  --nv-plate-edge: rgba(255, 255, 255, 0.065);
+
+  /* Liquid glass: the control layer only (navigation, toolbars, controls, menus, sheets). Clear, not milky. */
+  --nv-glass-veil: rgba(8, 6, 10, 0.5);
   --nv-glass-fill: rgba(255, 255, 255, 0.05);
   --nv-glass-fill-strong: rgba(255, 255, 255, 0.09);
-  --nv-glass-thick: rgba(14, 10, 14, 0.78);
+  --nv-glass-thick: rgba(18, 14, 18, 0.74);
   --nv-glass-edge: rgba(255, 255, 255, 0.16);
-  --nv-glass-specular: rgba(255, 255, 255, 0.55);
-  --nv-glass-sheen: rgba(255, 255, 255, 0.1);
-  --nv-hairline: rgba(255, 255, 255, 0.08);
-  --nv-fill-track: rgba(255, 255, 255, 0.16);
+  --nv-glass-specular: rgba(255, 255, 255, 0.75);
+  --nv-glass-sheen: rgba(255, 255, 255, 0.09);
+  /* The thin dark ring that separates glass from what is behind it (iOS 27). */
+  --nv-glass-rim: rgba(0, 0, 0, 0.6);
+  --nv-hairline: rgba(255, 255, 255, 0.075);
+  --nv-fill-track: rgba(255, 255, 255, 0.14);
   --nv-thumb: #ffffff;
 
-  /* Aura: the light behind the glass */
-  --nv-aura-neon: rgba(255, 42, 77, 0.4);
-  --nv-aura-wine: rgba(128, 6, 42, 0.85);
-  --nv-aura-rose: rgba(255, 122, 150, 0.22);
+  /* Aura: one neon light source above the page, and its wine shadow. */
+  --nv-aura-neon: rgba(255, 42, 77, 0.34);
+  --nv-aura-wine: rgba(118, 8, 40, 0.5);
+  --nv-aura-rose: rgba(255, 150, 170, 0.1);
 
   /* Semantic */
   --nv-success: #5fd4ff;
@@ -53,23 +65,33 @@
   --nv-danger: #ff5a45;
   --nv-sale: #e8c37a;
 
+  /* Data: the first series is warm white; the neon only lights the one figure a screen is about. */
+  --nv-data-1: #f1e4e8;
+  --nv-data-2: #e8c37a;
+
   /* Shadows */
   --nv-shadow-glass:
-    inset 0 1px 1px rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.35),
-    0 24px 48px -16px rgba(0, 0, 0, 0.7);
+    0 0 0 0.5px var(--nv-glass-rim), inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.35),
+    0 14px 36px -10px rgba(0, 0, 0, 0.6);
+  /* Floating glass (sidebar, menus, sheets): bigger means deeper. */
+  --nv-shadow-float:
+    0 0 0 0.5px var(--nv-glass-rim), inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 30px 70px -18px rgba(0, 0, 0, 0.8);
   --nv-shadow-neon:
-    0 0 0 1px rgba(255, 42, 77, 0.55), 0 8px 24px -6px rgba(255, 42, 77, 0.6),
-    0 0 48px -12px rgba(255, 42, 77, 0.5);
+    0 0 0 0.5px rgba(255, 90, 118, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 6px 20px -6px rgba(255, 42, 77, 0.6), 0 0 40px -14px rgba(255, 42, 77, 0.55);
   --nv-shadow-neon-strong:
-    0 0 0 1px rgba(255, 42, 77, 0.8), 0 10px 32px -6px rgba(255, 42, 77, 0.8),
-    0 0 72px -8px rgba(255, 42, 77, 0.65);
-  --nv-shadow-neon-soft: 0 6px 20px -8px rgba(255, 42, 77, 0.55);
+    0 0 0 0.5px rgba(255, 110, 135, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 8px 26px -6px rgba(255, 42, 77, 0.75), 0 0 60px -12px rgba(255, 42, 77, 0.65);
+  --nv-shadow-neon-soft: 0 4px 16px -6px rgba(255, 42, 77, 0.55);
   --nv-shadow-thumb: 0 3px 8px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.16);
   --nv-shadow-focus: 0 0 0 2px var(--nv-focus);
   /* A floating card raised under the pointer (.nv-lift). */
   --nv-shadow-lift:
-    inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 4px 10px rgba(0, 0, 0, 0.35),
-    0 32px 64px -20px rgba(0, 0, 0, 0.75);
+    0 0 0 0.5px var(--nv-glass-rim), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 10px rgba(0, 0, 0, 0.35),
+    0 28px 60px -20px rgba(0, 0, 0, 0.75);
 }
 
 [data-theme='light'] {
@@ -87,7 +109,14 @@
   --nv-neon-solid: #d0002c;
   --nv-neon-ink: #b0002a;
   --nv-neon-soft: rgba(208, 0, 44, 0.09);
-  --nv-focus: #b3002a;
+  --nv-focus: #3a1a26;
+
+  --nv-select: rgba(60, 10, 30, 0.07);
+  --nv-select-strong: rgba(60, 10, 30, 0.11);
+
+  --nv-plate: rgba(255, 255, 255, 0.6);
+  --nv-plate-hover: rgba(255, 255, 255, 0.85);
+  --nv-plate-edge: rgba(60, 10, 30, 0.07);
 
   --nv-glass-veil: rgba(255, 255, 255, 0.22);
   --nv-glass-fill: rgba(255, 255, 255, 0.46);
@@ -96,6 +125,7 @@
   --nv-glass-edge: rgba(255, 255, 255, 0.9);
   --nv-glass-specular: rgba(255, 255, 255, 1);
   --nv-glass-sheen: rgba(255, 255, 255, 0.7);
+  --nv-glass-rim: rgba(60, 10, 30, 0.12);
   --nv-hairline: rgba(60, 10, 30, 0.09);
   --nv-fill-track: rgba(60, 10, 30, 0.14);
 
@@ -108,9 +138,15 @@
   --nv-danger: #c42a12;
   --nv-sale: #7a5a12;
 
+  --nv-data-1: #3a2630;
+  --nv-data-2: #a07a20;
+
   --nv-shadow-glass:
     inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(80, 10, 30, 0.07),
     0 24px 48px -20px rgba(80, 10, 30, 0.22);
+  --nv-shadow-float:
+    0 0 0 0.5px var(--nv-glass-rim), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 6px rgba(80, 10, 30, 0.06),
+    0 30px 60px -24px rgba(80, 10, 30, 0.3);
   --nv-shadow-neon: 0 0 0 1px rgba(208, 0, 44, 0.35), 0 8px 22px -8px rgba(208, 0, 44, 0.45);
   --nv-shadow-neon-strong: 0 0 0 1px rgba(208, 0, 44, 0.5), 0 10px 30px -8px rgba(208, 0, 44, 0.6);
   --nv-shadow-neon-soft: 0 6px 18px -8px rgba(208, 0, 44, 0.35);
@@ -150,46 +186,115 @@
   --nv-dur-instant: 90ms;
   --nv-dur-fast: 160ms;
   --nv-dur-base: 280ms;
-  --nv-dur-slow: 520ms;
+  --nv-dur-slow: 500ms;
+  /* A shape turning into another (a button into its menu, the lens between tabs). */
+  --nv-dur-morph: 560ms;
   --nv-dur-ambient: 18s;
   --nv-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --nv-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  /* Springs: slight overshoot then rest, like UIKit */
+  /* Springs, one family (SwiftUI's smooth / snappy / bouncy): everything that moves or resizes uses one of
+   * these, so motion feels like one material. Sampled from a damped spring that settles by the end. */
+  --nv-ease-spring-smooth: linear(
+    0,
+    0.075,
+    0.227,
+    0.39,
+    0.536,
+    0.656,
+    0.75,
+    0.821,
+    0.873,
+    0.911,
+    0.938,
+    0.957,
+    0.971,
+    0.98,
+    0.986,
+    0.991,
+    0.994,
+    0.996,
+    0.997,
+    0.998,
+    0.999,
+    0.999,
+    0.999,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  );
   --nv-ease-spring: linear(
     0,
-    0.035 2%,
-    0.14 4.4%,
-    0.72 12.9%,
-    0.94 16.7%,
-    1.02 20.3%,
-    1.06 24.4%,
-    1.067 27.2%,
-    1.05 31.6%,
-    1.012 41%,
-    0.998 51%,
+    0.08,
+    0.255,
+    0.452,
+    0.633,
+    0.78,
+    0.887,
+    0.958,
+    1.001,
+    1.023,
+    1.031,
+    1.031,
+    1.026,
+    1.02,
+    1.014,
+    1.009,
+    1.005,
+    1.002,
+    1,
+    0.999,
+    0.999,
+    0.999,
+    0.999,
+    0.999,
+    0.999,
+    1,
+    1,
+    1,
     1
   );
   --nv-ease-spring-bouncy: linear(
     0,
-    0.06 2%,
-    0.25 5%,
-    0.84 13%,
-    1.08 19%,
-    1.14 24%,
-    1.1 30%,
-    0.98 42%,
-    0.99 52%,
-    1.01 62%,
+    0.084,
+    0.278,
+    0.507,
+    0.723,
+    0.896,
+    1.018,
+    1.088,
+    1.117,
+    1.116,
+    1.098,
+    1.071,
+    1.044,
+    1.021,
+    1.004,
+    0.993,
+    0.987,
+    0.986,
+    0.987,
+    0.99,
+    0.993,
+    0.996,
+    0.999,
+    1,
+    1.001,
+    1.002,
+    1.002,
+    1.001,
     1
   );
 
   /* Type families (faces loaded by fonts.css) */
-  --nv-font-sans: 'Geist', -apple-system, 'SF Pro Text', system-ui, sans-serif;
-  --nv-font-display: 'Geist', -apple-system, 'SF Pro Display', system-ui, sans-serif;
+  --nv-font-sans: 'Geist Variable', 'Geist', -apple-system, 'SF Pro Text', system-ui, sans-serif;
+  --nv-font-display: 'Geist Variable', 'Geist', -apple-system, 'SF Pro Display', system-ui, sans-serif;
   --nv-font-serif: 'Instrument Serif', 'New York', Georgia, serif;
   --nv-font-wordmark:
     'Playfair Display', 'Didot', Georgia, serif; /* the name only, same face as the logo (brand/) */
-  --nv-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --nv-font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Type scale: size / line height / tracking. caption is the floor. */
   --nv-text-hero: 56px;
@@ -220,6 +325,9 @@
   --nv-text-whisper-leading: 32px;
   --nv-text-metric: 28px;
   --nv-text-metric-leading: 32px;
+
+  /* Film grain over the aura: kills gradient banding. An SVG noise tile, no network. */
+  --nv-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
   /* Minimum touch target (brief: >= 44px) */
   --nv-target-min: 44px;

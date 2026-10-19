@@ -34,3 +34,8 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Le design system sert aussi le popup de l'extension : tokens et classes dans `packages/design-system` au lieu de `apps/web/src/styles/` (ADR 0015 proposed). `apps/web` importera `tokens.css` et `theme.css` depuis le package.
 - Fait : tokens (Nuit, Jour), pont Tailwind v4, classes de composants (verre, boutons, segments, interrupteur, barre d'onglets, carte de conversation, pastilles d'état, bulles, panneau de brouillon, champ, faits, Island, popup), aides d'animation, test de contraste AA dans les deux thèmes, guide.
 - Reste, bloqué par P0-01 : restyler les composants shadcn/ui, `apps/web/src/routes/_playground.tsx`, test axe-core en CI. `pnpm check` non exécuté (pas de `pnpm install` avant P0-01) ; typecheck strict et tests (27) vérifiés à part.
+
+2026-10-19 (Opus 5.5, refonte demandée par Charles : « ça fait cheap et daté ») :
+- Revue onglet par onglet et lecture d'iOS 26 et 27 : cinq causes, consignées dans `docs/design/README.md` (« Refonte du 19/10 »).
+- Fait dans le package : verre clair réservé à la couche qui flotte, plaques de contenu (`nv-plate`), une seule lumière néon et un grain, sélection neutre (`select`), focus blanc chaud, chiffres en Geist tabulaire, une famille de ressorts (`ease-spring-smooth`, `ease-spring`, `ease-spring-bouncy`), pression en gel, `nv-materialize`, liste « À traiter » en liste groupée, mouvement réduit qui gagne enfin sur les boucles (recette A-03), polices embarquées par Fontsource (recette R-G17 ; ce sont des fichiers de police, pas une dépendance d'UI).
+- Reste : la coquille et les écrans dans `apps/web` (une PR par onglet, accord du fil Extension), puis les images du guide refaites à partir du CRM.

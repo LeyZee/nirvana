@@ -34,6 +34,13 @@
   --color-warning: var(--nv-warning);
   --color-danger: var(--nv-danger);
   --color-sale: var(--nv-sale);
+  --color-select: var(--nv-select);
+  --color-select-strong: var(--nv-select-strong);
+  --color-plate: var(--nv-plate);
+  --color-plate-hover: var(--nv-plate-hover);
+  --color-plate-edge: var(--nv-plate-edge);
+  --color-data-1: var(--nv-data-1);
+  --color-data-2: var(--nv-data-2);
 
   --radius-xs: var(--nv-radius-xs);
   --radius-sm: var(--nv-radius-sm);
@@ -46,6 +53,7 @@
   --shadow-neon-strong: var(--nv-shadow-neon-strong);
   --shadow-neon-soft: var(--nv-shadow-neon-soft);
   --shadow-lift: var(--nv-shadow-lift);
+  --shadow-float: var(--nv-shadow-float);
 
   --blur-thin: var(--nv-blur-thin);
   --blur-regular: var(--nv-blur-regular);
@@ -55,6 +63,7 @@
   --ease-in-out: var(--nv-ease-in-out);
   --ease-spring: var(--nv-ease-spring);
   --ease-spring-bouncy: var(--nv-ease-spring-bouncy);
+  --ease-spring-smooth: var(--nv-ease-spring-smooth);
 
   --font-sans: var(--nv-font-sans);
   --font-display: var(--nv-font-display);

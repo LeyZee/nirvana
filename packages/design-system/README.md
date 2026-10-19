@@ -10,7 +10,7 @@ Le design system « Liquid Glass » de Nirvana : tokens, pont Tailwind v4, class
 | `@nirvana/design-system/theme.css`      | `src/styles/theme.css`      | Pont Tailwind v4 (`@theme inline`) : utilitaires `bg-void`, `text-ink`, `rounded-lg`, `shadow-glass`…                               |
 | `@nirvana/design-system/components.css` | `src/styles/components.css` | Classes `nv-*` sans framework.                                                                                                      |
 | `@nirvana/design-system/base.css`       | `src/styles/base.css`       | Styles de page (`body`, sélection, focus). Jamais dans une page tierce.                                                             |
-| `@nirvana/design-system/fonts.css`      | `src/styles/fonts.css`      | Geist, Geist Mono, Instrument Serif, Playfair Display italique (le nom).                                                            |
+| `@nirvana/design-system/fonts.css`      | `src/styles/fonts.css`      | Geist, Geist Mono, Instrument Serif, Playfair Display italique (le nom), embarquées (Fontsource), sans appel tiers.             |
 | `@nirvana/design-system/styles.css`     | `src/styles/index.css`      | Les quatre précédents (sauf `theme.css`), dans l'ordre.                                                                             |
 | `@nirvana/design-system`                | `src/index.ts`              | `attachGlassLight`, `playLiquid`, `placeTabBarLens`, `placeSegmentThumb`, `collapseIsland`, `expandIsland`, `prefersReducedMotion`, `countUp` ; géométrie des graphiques `nv-chart` (`chartPoints`, `linePath`, `areaPath`, `niceTicks`, `nearestIndex`, dans `src/chart.ts`) et des pièces du Dashboard (`ringDash`, `funnelSteps`, `tipPlacement`, dans `src/dashboard.ts`). |
 
