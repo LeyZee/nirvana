@@ -32,7 +32,6 @@ const KIND_LABEL: Readonly<Record<HandoffCause | 'awaiting_approval', string>> =
   awaiting_approval: 'À valider dans Reveal',
 };
 
-/** The reader has no thread yet (it comes with Suivi's reader): it says where the conversation is read. */
 /**
  * The hero's sentence under an urgency: what it is and what it does to the conversation, without repeating the line
  * of « À traiter ». Nothing for the other natures: the line says it all.
@@ -45,6 +44,7 @@ const URGENT_LEAD: Readonly<Partial<Record<HandoffCause | 'awaiting_approval', s
   manipulation: 'Un fan essaie de manipuler l’agent : il s’est retiré de la conversation.',
 };
 
+/** The reader has no thread yet (it comes with Suivi's reader): it says where the conversation is read. */
 const NO_THREAD = 'Le fil de la conversation se lit dans Reveal en attendant le lecteur de Suivi.';
 
 const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
@@ -63,18 +63,20 @@ export function replyDelay(minutes: number): string {
     : `${String(Math.floor(seconds / 60))} min ${String(rest).padStart(2, '0')}`;
 }
 
-/** « 14 s », « 3 min », « 2 h », « 4 j »: how long since `iso`. */
-function elapsed(iso: string, now: Date): string {
-  const seconds = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 1000));
-  if (seconds < 60) return `${String(seconds)} s`;
-  if (seconds < 3600) return `${String(Math.floor(seconds / 60))} min`;
-  if (seconds < 86_400) return `${String(Math.floor(seconds / 3600))} h`;
-  return `${String(Math.floor(seconds / 86_400))} j`;
-}
-
 /** « il y a 14 s », « il y a 3 min », « il y a 2 h », « il y a 4 j ». */
 export function ago(iso: string, now: Date): string {
-  return `il y a ${elapsed(iso, now)}`;
+  const seconds = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return `il y a ${String(seconds)} s`;
+  if (seconds < 3600) return `il y a ${String(Math.floor(seconds / 60))} min`;
+  if (seconds < 86_400) return `il y a ${String(Math.floor(seconds / 3600))} h`;
+  return `il y a ${String(Math.floor(seconds / 86_400))} j`;
+}
+
+/** « 19 min », « 2 h », « 3 j »: how long a todo has waited, as the server measured it. */
+function waited(minutes: number): string {
+  if (minutes < 60) return `${String(Math.max(1, Math.round(minutes)))} min`;
+  if (minutes < 1440) return `${String(Math.floor(minutes / 60))} h`;
+  return `${String(Math.floor(minutes / 1440))} j`;
 }
 
 /** « 3 semaines », « 2 mois », « 5 jours »: how long ago a fan first wrote. */
@@ -267,11 +269,11 @@ function fanOf(fan: DashboardFan, now: Date): Fan {
 }
 
 /** The reader of a todo whose fan is not among the best fans: his name and why he waits. */
-function waitingFan(todo: DashboardTodo, now: Date): Fan {
+function waitingFan(todo: DashboardTodo): Fan {
   return {
     id: todo.fanId,
     name: todo.title,
-    line: `en attente depuis ${elapsed(todo.at, now)}`,
+    line: `en attente depuis ${waited(todo.waitingMinutes)}`,
     spent: 0,
     byAgent: 0,
     notes: [],
@@ -289,7 +291,7 @@ export function fromApi(api: ApiDashboard): Dashboard {
   const timeZone = api.creator.timezone;
   const best = api.fans.map((fan) => fanOf(fan, now));
   const known = new Set(best.map((fan) => fan.id));
-  const waiting = api.todos.filter((todo) => !known.has(todo.fanId)).map((todo) => waitingFan(todo, now));
+  const waiting = api.todos.filter((todo) => !known.has(todo.fanId)).map(waitingFan);
   return {
     creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
     agent: agentState(api, now),
