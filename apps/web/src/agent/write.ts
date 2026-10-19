@@ -1,12 +1,18 @@
 import {
   AgentModeResultSchema,
   ApiErrorSchema,
+  AutomaticMissingSchema,
   type AgentMode,
   type AgentModeResult,
   type Dashboard as ApiDashboard,
 } from '@nirvana/contracts';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+import { z } from 'zod';
+
+import { missingRows } from './mode';
+
+const MissingSchema = z.array(AutomaticMissingSchema);
 
 /** A change the server refused or could not make, with the sentence the screen shows. */
 class ModeNotChanged extends Error {}
@@ -27,9 +33,17 @@ async function putAgentMode(creatorId: string, mode: AgentMode): Promise<AgentMo
   if (response === null) throw new ModeNotChanged(OFFLINE);
   if (response.ok) return AgentModeResultSchema.parse(await response.json());
   if (response.status === 409) {
-    // Automatique still locked (ADR 0019): the server's own sentence says why.
+    // Automatique still locked (ADR 0019): what is missing, with the server's figures, or else its own sentence.
     const body = ApiErrorSchema.safeParse(await response.json().catch(() => null));
-    if (body.success) throw new ModeNotChanged(body.data.error.message);
+    if (body.success) {
+      const missing = MissingSchema.safeParse(body.data.error.details['missing']);
+      const rows = missing.success ? missingRows({ open: false, missing: missing.data }) : [];
+      throw new ModeNotChanged(
+        rows.length === 0
+          ? body.data.error.message
+          : `Automatique reste fermé : ${rows.map(([label, value]) => `${label.toLowerCase()} ${value}`).join(', ')}.`,
+      );
+    }
   }
   throw new ModeNotChanged(response.status === 403 ? FORBIDDEN : OFFLINE);
 }

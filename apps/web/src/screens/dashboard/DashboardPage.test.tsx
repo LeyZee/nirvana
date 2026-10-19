@@ -263,7 +263,9 @@ describe('DashboardPage changing the mode', () => {
           error: {
             code: 'agent_mode_conflict',
             message: 'Le mode Automatique reste fermé',
-            details: {},
+            details: {
+              missing: [{ kind: 'live_rate', value: 79.5, target: 80 }, { kind: 'blind_test' }],
+            },
             requestId: 'req-1',
           },
         },
@@ -272,7 +274,9 @@ describe('DashboardPage changing the mode', () => {
     );
     renderDashboard();
     fireEvent.click(await screen.findByRole('radio', { name: 'Automatique' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('Le mode Automatique reste fermé');
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Automatique reste fermé : taux en réel 79,5\u00a0% sur 80\u00a0%, test à l’aveugle pas encore validé.',
+    );
     expect(checked('Copilote')).toBe('true');
   });
 
