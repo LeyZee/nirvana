@@ -46,6 +46,6 @@ export const killSwitches = pgTable(
   (t) => [
     enumCheck('kill_switches', t.scope, KillSwitchScopeSchema.options),
     index('kill_switches_scope_idx').on(t.scope, t.scopeId),
-    tenantOrGlobalPolicy(t.creatorId),
+    ...tenantOrGlobalPolicy(t.creatorId),
   ],
 );

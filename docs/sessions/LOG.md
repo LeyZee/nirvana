@@ -115,3 +115,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Le Dashboard affiche le taux lu par le verrou | done | `log/2026-10-19-dashboard-lock-rate.md` |
 | 2026-10-19 | Gardes dures à l'approbation (G5) | done | `log/2026-10-19-approval-guard.md` |
 | 2026-10-19 | Commandes mortes vérifiées par check-repo (G14) | done | `log/2026-10-19-delegated-scripts.md` |
+| 2026-10-19 | Interrupteur global hors d'atteinte des créatrices (G16) | done | `log/2026-10-19-kill-switch-rls.md` |

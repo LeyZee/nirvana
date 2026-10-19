@@ -1,0 +1,3 @@
+-- Revue 09 : un tenant lit les interrupteurs globaux mais n'en écrit, modifie ni supprime aucun (withAdmin seulement).
+CREATE POLICY "global_read" ON "kill_switches" AS PERMISSIVE FOR SELECT TO public USING ("kill_switches"."creator_id" is null);--> statement-breakpoint
+ALTER POLICY "tenant_isolation" ON "kill_switches" TO public USING ("kill_switches"."creator_id" = nullif(current_setting('app.creator_id', true), '')::uuid) WITH CHECK ("kill_switches"."creator_id" = nullif(current_setting('app.creator_id', true), '')::uuid);
