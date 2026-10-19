@@ -66,7 +66,7 @@ export function todos(waiting: readonly WaitingConversation[], now: Date): Dashb
 
 /** Arrêt wins; otherwise Automatique as soon as one conversation runs on its own. */
 function mode(facts: DashboardFacts): AgentMode {
-  if (facts.isStopped) return 'stop';
+  if (facts.switches.global || facts.switches.creator) return 'stop';
   return facts.autoConversations > 0 ? 'auto' : 'copilot';
 }
 
@@ -114,6 +114,7 @@ export function assembleDashboard(input: {
     },
     period: input.period,
     mode: mode(facts),
+    globalStop: facts.switches.global,
     automatic: { open: gate.open, missing: [...gate.missing] },
     liveRate: {
       rate: asPercent(reading.rate),

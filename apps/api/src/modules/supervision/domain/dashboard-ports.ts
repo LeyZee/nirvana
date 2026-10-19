@@ -30,8 +30,8 @@ interface TopFan {
 /** What the database knows, read in one tenant transaction; the domain turns it into the Dashboard. */
 export interface DashboardFacts {
   readonly creator: { readonly name: string; readonly timezone: string };
-  /** A global or creator kill switch is on. */
-  readonly isStopped: boolean;
+  /** The latest row of each kill switch scope that stops her: the global one, and hers. */
+  readonly switches: { readonly global: boolean; readonly creator: boolean };
   readonly autoConversations: number;
   /** Decided drafts of the active voice version, newest first (at most 200), now and three weeks ago. */
   readonly decided: readonly DecidedDraft[];

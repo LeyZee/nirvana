@@ -39,8 +39,9 @@ describe('PUT /v1/agent/mode', () => {
     });
   const setMode = (mode: string, cookie = ownerCookie) =>
     send('PUT', '/v1/agent/mode', { creatorId, mode }, cookie);
-  const dashboardMode = async () =>
-    DashboardSchema.parse((await send('GET', `/v1/dashboard?creatorId=${creatorId}`)).json()).mode;
+  const dashboard = async () =>
+    DashboardSchema.parse((await send('GET', `/v1/dashboard?creatorId=${creatorId}`)).json());
+  const dashboardMode = async () => (await dashboard()).mode;
   const creatorSwitches = () =>
     test.admin.db
       .select({ active: schema.killSwitches.active, setBy: schema.killSwitches.setBy })
@@ -172,6 +173,8 @@ describe('PUT /v1/agent/mode', () => {
   it('answers Arrêt to Copilote while the global switch stays on', async () => {
     await setKillSwitch(test.admin.db, { active: true, scope: 'global', scopeId: null, reason: 'test' });
     expect((await setMode('copilot')).json()).toEqual({ mode: 'stop', globalStop: true });
+    // The Dashboard, reloaded, says the same and why.
+    expect(await dashboard()).toMatchObject({ mode: 'stop', globalStop: true });
     await setKillSwitch(test.admin.db, { active: false, scope: 'global', scopeId: null, reason: 'test' });
     expect(await dashboardMode()).toBe('copilot');
   });

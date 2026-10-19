@@ -195,6 +195,7 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.creator).toMatchObject({ name: 'Lina', timezone: 'America/Montreal' });
     expect(dashboard.period).toBe('week');
     expect(dashboard.mode).toBe('copilot');
+    expect(dashboard.globalStop).toBe(false);
     expect(dashboard.liveRate).toEqual({ rate: 50, target: 80, decided: 2, threeWeeksAgo: null });
     expect(dashboard.automatic).toEqual({
       open: false,

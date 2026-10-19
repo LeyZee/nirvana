@@ -53,8 +53,8 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
 
   const stopped = await rows(
     tx,
-    z.object({ active: z.boolean() }),
-    sql`select distinct on (scope) active from kill_switches
+    z.object({ scope: z.string(), active: z.boolean() }),
+    sql`select distinct on (scope) scope, active from kill_switches
         where scope = 'global' or (scope = 'creator' and scope_id = ${creatorId}::uuid)
         order by scope, set_at desc`,
   );
@@ -177,7 +177,10 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
     account?.paused_until !== undefined &&
     account.paused_until > window.now;
   return {
-    isStopped: stopped.some((s) => s.active),
+    switches: {
+      global: stopped.some((s) => s.scope === 'global' && s.active),
+      creator: stopped.some((s) => s.scope === 'creator' && s.active),
+    },
     autoConversations: counts.auto,
     decided: await decided(tx, window, window.now),
     decidedThreeWeeksAgo: await decided(tx, window, new Date(window.now.getTime() - 21 * DAY_MS)),

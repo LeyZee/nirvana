@@ -11,6 +11,7 @@ const dashboard = {
   creator: { id: CREATOR, name: 'Lina', timezone: 'Europe/Paris', now: '2026-10-17T21:30:00.000Z' },
   period: 'day',
   mode: 'copilot',
+  globalStop: false,
   automatic: {
     open: false,
     missing: [{ kind: 'decided_drafts', value: 2, target: 100 }, { kind: 'blind_test' }],

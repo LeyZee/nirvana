@@ -89,6 +89,8 @@ export const DashboardSchema = z.object({
   creator: z.object({ id: CreatorIdSchema, name: z.string().min(1), timezone: z.string().min(1), now: at }),
   period: DashboardPeriodSchema,
   mode: AgentModeSchema,
+  /** The global switch is on: Arrêt for every creator, whatever she sets, as `PUT /v1/agent/mode` answers it. */
+  globalStop: z.boolean(),
   /** Automatique opens only when nothing is missing. */
   automatic: z.object({ open: z.boolean(), missing: z.array(AutomaticMissingSchema) }),
   /** Taux en réel: drafts approved without an edit among the last 200 decided, for the active voice version. */
