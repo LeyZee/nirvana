@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +21,8 @@ const tick = (): Promise<void> =>
   });
 
 beforeEach(() => {
-  // What jsdom lacks and the screen uses only for motion and layout.
+  // What jsdom lacks and the screen uses only for motion, layout and the router's scroll restoration.
+  vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
@@ -42,9 +50,18 @@ afterEach(() => {
 function renderDashboard(): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+  // The night banner links to Réglages: the page needs a router around it.
+  const root = createRootRoute();
+  const router = createRouter({
+    routeTree: root.addChildren([
+      createRoute({ getParentRoute: () => root, path: '/', component: DashboardPage }),
+      createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
+    ]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
   render(
     <QueryClientProvider client={client}>
-      <DashboardPage />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return client;
@@ -54,10 +71,10 @@ const headline = (): string => document.querySelector('h1')?.textContent ?? '';
 const dialog = (): HTMLElement => screen.getByRole('dialog', { hidden: true });
 
 describe('DashboardPage on the server’s data', () => {
-  it('waits for the server without showing any figure', () => {
+  it('waits for the server without showing any figure', async () => {
     serveDashboard({ status: 200, body: apiDashboard() });
     renderDashboard();
-    expect(screen.getByRole('status', { name: 'Chargement du Dashboard' })).toBeDefined();
+    expect(await screen.findByRole('status', { name: 'Chargement du Dashboard' })).toBeDefined();
     expect(screen.queryByRole('radio')).toBeNull();
   });
 
