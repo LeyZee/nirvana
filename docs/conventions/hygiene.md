@@ -17,7 +17,7 @@ Tout fichier du dépôt doit avoir une raison d'exister que quelqu'un peut nomme
 1. `git status` : chaque fichier nouveau ou modifié est voulu, nommé selon les conventions, à sa place.
 2. Tu supprimes **ce que tu as créé** dans la session et qui ne sert plus : scripts d'exploration, fixtures d'essai, `console.log` de débogage, commentaires `TODO` que tu as traités, branches locales mortes.
 3. Tu vérifies que tu n'as pas laissé : de code commenté « au cas où », de fonctions inutilisées, de dépendance ajoutée puis abandonnée (`package.json`), d'export inutile.
-4. `pnpm check` passe `knip` (code et dépendances mortes) et `scripts/check-repo.mjs` (noms interdits, `TODO` sans fiche, fichiers lourds, index des fiches et ADR, commandes citées) : zéro nouveau signalement.
+4. `pnpm check` passe `knip` (code et dépendances mortes) et `scripts/check-repo.mjs` (noms interdits, `TODO` sans fiche, fichiers lourds, index des fiches et ADR, commandes citées, scripts délégués aux paquets et fichiers qu'ils lancent) : zéro nouveau signalement.
 5. Les docs que ta tâche rend fausses sont corrigées dans la même PR. Une doc périmée est pire qu'une doc absente.
 
 ## Supprimer un fichier que tu n'as pas créé
