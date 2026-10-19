@@ -230,4 +230,78 @@ describe('voice guards', () => {
       expect(codes(bubbles), bubbles.join(' | ')).toEqual([]);
     }
   });
+
+  it('closes the gaps found by the automated acceptance run (19/10)', () => {
+    const cases: [string[], GuardCode][] = [
+      // The exact phrases that reached the fake Reveal or passed the guards.
+      [['mon num zéro six douze trente quatre'], 'contact_info'],
+      [['je suis pas humaine'], 'ai_disclosure'],
+      [['je suis une i a'], 'ai_disclosure'],
+      [['viens me voir à Paris'], 'meeting_promise'],
+      // Numbers: shorter runs after a zero or a cue, spacing, digits.
+      [['zéro six douze trente quatre'], 'contact_info'],
+      [['zero-six-douze-trente-quatre'], 'contact_info'],
+      [['zéro sept quatre-vingt-dix-neuf onze'], 'contact_info'],
+      [['mon num c’est 06 12 34'], 'contact_info'],
+      [['mon tel : six douze trente-quatre'], 'contact_info'],
+      [['zéro six', 'douze trente quatre'], 'contact_info'],
+      [['0 6 1 2 3 4'], 'contact_info'],
+      // Denials of being human or real.
+      [['je ne suis pas humaine'], 'ai_disclosure'],
+      [['j’suis pas humaine 🙈'], 'ai_disclosure'],
+      [['je suis même pas réelle'], 'ai_disclosure'],
+      [['je suis pas une vraie fille'], 'ai_disclosure'],
+      [['c’est pas une vraie personne'], 'ai_disclosure'],
+      [['je n’existe pas'], 'ai_disclosure'],
+      [['I’m not human'], 'ai_disclosure'],
+      [['I am not real'], 'ai_disclosure'],
+      // AI however it is spelled.
+      [['je suis une I-A'], 'ai_disclosure'],
+      [['je suis une I . A'], 'ai_disclosure'],
+      [['je suis un b o t'], 'ai_disclosure'],
+      [['je suis une a i'], 'ai_disclosure'],
+      [['je suis une assistante virtuelle'], 'ai_disclosure'],
+      [['je suis qu’un algorithme'], 'ai_disclosure'],
+      [['tu parles à une i a'], 'ai_disclosure'],
+      [['en tant qu’i a'], 'ai_disclosure'],
+      [['je suis une', 'i a'], 'ai_disclosure'],
+      // Meetings.
+      [['viens me voir à Lyon'], 'meeting_promise'],
+      [['viens me rejoindre ce soir'], 'meeting_promise'],
+      [['passe me voir demain'], 'meeting_promise'],
+      [['on se retrouve à Paris ?'], 'meeting_promise'],
+      [['on se rencontre quand tu veux'], 'meeting_promise'],
+      [['je t’attends devant la gare'], 'meeting_promise'],
+      [['on se fait un verre ?'], 'meeting_promise'],
+      [['je descends à Paris samedi'], 'meeting_promise'],
+      [['come see me'], 'meeting_promise'],
+    ];
+    for (const [bubbles, code] of cases) expect(codes(bubbles), bubbles.join(' | ')).toContain(code);
+  });
+
+  it('lets her words around numbers, denials and meetings through', () => {
+    for (const bubbles of [
+      ['J’ai zéro envie de dormir'],
+      ['Le 06/12/2024 c’est mon anniversaire'],
+      ['Rendez-vous le 06/12 🎂'],
+      ['Il est 06 h 12'],
+      ['Je suis pas sage ce soir'],
+      ['Je suis pas une vraie fille sage 😇'],
+      ['Je suis pas réveillée'],
+      ['Moi une IA ? T’es fou 😂'],
+      ['I a pas de souci'],
+      ['Ça m’a plu'],
+      ['Viens me voir en privé 😏'],
+      ['Viens me voir sur mon live ce soir'],
+      ['On se voit au prochain live ?'],
+      ['On se retrouve au lit 😏'],
+      ['On se voit à la prochaine 😘'],
+      ['Je t’attends au lit'],
+      ['On se retrouve dans mes DM'],
+      ['Étape 2 : tu viens me chercher'],
+      ['Si j’ai assez confiance, un jour peut-être qu’on se rencontrera'],
+    ]) {
+      expect(codes(bubbles), bubbles.join(' | ')).toEqual([]);
+    }
+  });
 });
