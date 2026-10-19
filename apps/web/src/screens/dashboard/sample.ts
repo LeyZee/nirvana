@@ -1,7 +1,7 @@
 import type { Dashboard, Lever, Period, Sales, SalesSeries } from './model';
 
 /*
- * Sample data of the Dashboard, shown with the « Exemple » badge until `GET /v1/dashboard` exists.
+ * Sample data of the Dashboard, shown with the « Exemple » badge when `GET /v1/dashboard` does not answer.
  * Everything here is invented: the creator, the fans, their messages. No real fan, no real persona line.
  */
 
@@ -128,7 +128,7 @@ const SALES: Record<Period, Sales> = {
   },
 };
 
-export const SAMPLE: Dashboard = {
+export const SAMPLE = {
   creator: { name: 'Léa', platform: 'Reveal', now: 'vendredi 17 octobre, 23:45' },
   agent: {
     tone: 'warn',
@@ -309,4 +309,4 @@ export const SAMPLE: Dashboard = {
       ],
     },
   ],
-};
+} satisfies Dashboard;

@@ -1,42 +1,57 @@
-import { useCallback, useState } from 'react';
+import { useMemo } from 'react';
 
-import type { Dashboard, Todo } from './model';
+import { fromApi } from './live';
+import type { Dashboard, Period } from './model';
 import { SAMPLE } from './sample';
 
+import { useLiveDashboard } from '@/agent/live';
 import type { AgentMode, AutomaticGate } from '@/agent/mode';
-import { useAgentMode } from '@/agent/useAgentMode';
 
-export interface DashboardView {
-  readonly data: Dashboard;
-  /** True while the screen runs on sample data: the « Exemple » badge stays visible. */
-  readonly isSample: boolean;
-  readonly todos: readonly Todo[];
-  /** Marks a todo as handled. On sample data it only leaves the list. */
-  readonly markDone: (id: string) => void;
-  /** The agent's mode and whether Automatique may open, shared with the bar's pill (`useAgentMode`). */
-  readonly mode: AgentMode;
-  readonly automatic: AutomaticGate;
-  /** Switches the agent. On sample data nothing leaves the screen. */
-  readonly setMode: (mode: AgentMode) => void;
-}
+/** The sample's agent: copilot, Automatique closed on the live rate and the blind test. Invented figures. */
+const SAMPLE_AGENT = {
+  mode: 'copilot',
+  automatic: {
+    open: false,
+    missing: [{ kind: 'live_rate', value: 64, target: 80 }, { kind: 'blind_test' }],
+  },
+} as const satisfies { mode: AgentMode; automatic: AutomaticGate };
 
 /**
- * The one door of the Dashboard to its data. Sample data until `GET /v1/dashboard` (PR 3): only this hook
- * changes when the route arrives, the screen does not.
+ * What the Dashboard can show:
+ * - `loading` until the server answers;
+ * - `live`, the server's data;
+ * - `offline`, the server does not answer: no figure, nothing to act on, only that sentence;
+ * - `sample`, no creator exists yet (first launch): the sample, marked « Exemple », where nothing can be acted on.
  */
-export function useDashboard(): DashboardView {
-  const { mode, automatic, setMode } = useAgentMode();
-  const [done, setDone] = useState<ReadonlySet<string>>(new Set());
-  const markDone = useCallback((id: string) => {
-    setDone((before) => new Set(before).add(id));
-  }, []);
-  return {
-    data: SAMPLE,
-    isSample: true,
-    todos: SAMPLE.todos.filter((todo) => !done.has(todo.id)),
-    markDone,
-    mode,
-    automatic,
-    setMode,
-  };
+export type DashboardView =
+  | { readonly status: 'loading' }
+  | { readonly status: 'offline'; readonly creatorName: string | null }
+  | {
+      readonly status: 'live' | 'sample';
+      readonly data: Dashboard;
+      readonly mode: AgentMode;
+      readonly automatic: AutomaticGate;
+    };
+
+/** The one door of the Dashboard to its data: `GET /v1/dashboard` for the period. */
+export function useDashboard(period: Period): DashboardView {
+  const live = useLiveDashboard(period);
+  const liveData = live.kind === 'live' ? live.data : undefined;
+  const data = useMemo(() => (liveData === undefined ? null : fromApi(liveData)), [liveData]);
+  switch (live.kind) {
+    case 'loading':
+      return { status: 'loading' };
+    case 'unavailable':
+      return { status: 'offline', creatorName: live.creatorName };
+    case 'empty':
+      return { status: 'sample', data: SAMPLE, ...SAMPLE_AGENT };
+    case 'live':
+      // The period's own read carries the mode too: the control follows the page it is on.
+      return {
+        status: 'live',
+        data: data ?? fromApi(live.data),
+        mode: live.data.mode,
+        automatic: live.data.automatic,
+      };
+  }
 }

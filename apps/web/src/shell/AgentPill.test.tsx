@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { AgentMode } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -8,28 +9,19 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentPill } from './AgentPill';
 
-import type { AgentMode } from '@/agent/mode';
-import { useAgentMode } from '@/agent/useAgentMode';
-
-/** Stands for the Dashboard control: another reader of the same shared state. */
-let switchTo: (mode: AgentMode) => void = () => undefined;
-function Switcher(): null {
-  switchTo = useAgentMode().setMode;
-  return null;
-}
+import { apiDashboard, serveDashboard } from '@/test/fakes';
 
 async function renderPill(): Promise<HTMLElement> {
   const root = createRootRoute({
     component: (): JSX.Element => (
       <>
         <AgentPill />
-        <Switcher />
         <Outlet />
       </>
     ),
@@ -39,18 +31,16 @@ async function renderPill(): Promise<HTMLElement> {
     routeTree: root.addChildren(routes),
     history: createMemoryHistory({ initialEntries: ['/suivi'] }),
   });
+  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return screen.findByRole('link');
 }
 
-const tick = (): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+const live = (mode: AgentMode) => ({ status: 200, body: apiDashboard({ mode }) });
 
 beforeEach(() => {
   // The router restores the scroll on each navigation; jsdom has no layout to scroll.
@@ -63,28 +53,47 @@ afterEach(() => {
 });
 
 describe('AgentPill', () => {
-  it('says what the agent does and opens the Dashboard', async () => {
+  it('says nothing about the mode until the server answers', async () => {
+    serveDashboard(live('copilot'));
     const pill = await renderPill();
-    expect(pill.textContent).toBe('Copilote');
+    expect(pill.textContent).toBe('Agent');
+  });
+
+  it('says the server’s mode and opens the Dashboard', async () => {
+    serveDashboard(live('copilot'));
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Copilote');
+    });
     expect(pill.getAttribute('href')).toBe('/');
     expect(pill.dataset['tone']).toBe('ok');
   });
 
-  it('follows a switch made elsewhere, and never shows a refused Automatique', async () => {
+  it('turns red when the server says the agent is stopped', async () => {
+    serveDashboard(live('stop'));
     const pill = await renderPill();
-    // The cache tells its readers on the next tick: `act` waits for it.
-    await act(async () => {
-      switchTo('stop');
-      await tick();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Arrêt');
     });
-    expect(pill.textContent).toBe('Arrêt');
     expect(pill.dataset['tone']).toBe('bad');
+  });
 
-    // The sample gate is closed: the switch is refused and the pill keeps the last real mode.
-    await act(async () => {
-      switchTo('auto');
-      await tick();
+  it('says « Inconnu » when the server does not answer, never the sample’s Copilote', async () => {
+    serveDashboard({ status: 500 });
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Inconnu');
     });
-    expect(pill.textContent).toBe('Arrêt');
+    expect(pill.dataset['tone']).toBe('unknown');
+    expect(pill.getAttribute('title')).toContain('Le serveur ne répond pas');
+  });
+
+  it('says « Inconnu » before any creator exists, never the sample’s mode', async () => {
+    serveDashboard(live('copilot'), []);
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Inconnu');
+    });
+    expect(pill.getAttribute('title')).toContain('Aucune créatrice');
   });
 });

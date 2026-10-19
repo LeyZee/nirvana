@@ -1,0 +1,284 @@
+import {
+  HANDOFF_CAUSES,
+  type Dashboard as ApiDashboard,
+  type DashboardFan,
+  type DashboardTodo,
+  type HandoffCause,
+} from '@nirvana/contracts';
+
+import { eur } from './logic';
+import type { AgentState, Dashboard, Fan, Todo, Tone } from './model';
+
+import { percent } from '@/agent/mode';
+import { telegramNightOf } from '@/settings/telegram/NightBanner';
+
+/*
+ * `GET /v1/dashboard` in the screen's words. The server measured everything; this file only writes it in French,
+ * in the creator's time zone. Sales stay out until the Reveal connector observes purchases.
+ */
+
+/** What a handoff or a waiting draft is called on the screen, in the trade's words. */
+const KIND_LABEL: Readonly<Record<HandoffCause | 'awaiting_approval', string>> = {
+  minor: 'Mineur possible',
+  non_consent: 'Sans consentement',
+  distress: 'Détresse',
+  meeting: 'Demande de rencontre',
+  manipulation: 'Manipulation',
+  guard: 'Réponse bloquée',
+  budget: 'Plafond IA atteint',
+  keyword: 'Mot d’alerte',
+  llm_unavailable: 'IA indisponible',
+  other: 'À reprendre',
+  awaiting_approval: 'À valider dans Reveal',
+};
+
+/** The reader has no thread yet (it comes with Suivi's reader): it says where the conversation is read. */
+const NO_THREAD = 'Le fil de la conversation se lit dans Reveal en attendant le lecteur de Suivi.';
+
+const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
+
+/** « 7,40 € »: the AI spend is small, its cents matter. */
+const euroCents = (value: number): string =>
+  `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\u00a0€`;
+
+/** « 1 min 40 » from minutes with a tenth; « 45 s » under a minute. */
+export function replyDelay(minutes: number): string {
+  const seconds = Math.round(minutes * 60);
+  if (seconds < 60) return `${String(seconds)} s`;
+  const rest = seconds % 60;
+  return rest === 0
+    ? `${String(Math.floor(seconds / 60))} min`
+    : `${String(Math.floor(seconds / 60))} min ${String(rest).padStart(2, '0')}`;
+}
+
+/** « il y a 14 s », « il y a 3 min », « il y a 2 h », « il y a 4 j ». */
+export function ago(iso: string, now: Date): string {
+  const seconds = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return `il y a ${String(seconds)} s`;
+  if (seconds < 3600) return `il y a ${String(Math.floor(seconds / 60))} min`;
+  if (seconds < 86_400) return `il y a ${String(Math.floor(seconds / 3600))} h`;
+  return `il y a ${String(Math.floor(seconds / 86_400))} j`;
+}
+
+/** « 3 semaines », « 2 mois », « 5 jours »: how long ago a fan first wrote. */
+function since(iso: string, now: Date): string {
+  const days = Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000));
+  if (days < 14) return plural(Math.max(1, days), 'jour', 'jours');
+  if (days < 60) return plural(Math.floor(days / 7), 'semaine', 'semaines');
+  if (days < 365) return `${String(Math.floor(days / 30))} mois`;
+  return plural(Math.floor(days / 365), 'an', 'ans');
+}
+
+function clock(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone });
+}
+
+/** « lundi 19 octobre, 14:02 », in her time zone. */
+function today(iso: string, timeZone: string): string {
+  const date = new Date(iso).toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone,
+  });
+  return `${date}, ${clock(iso, timeZone)}`;
+}
+
+function agentState(api: ApiDashboard, now: Date): AgentState {
+  const { reveal, voice, replies, guards, budget, liveRate, todos } = api;
+  const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
+  const rateText = liveRate.rate === null ? 'pas encore mesuré' : `${percent(liveRate.rate)} sans retouche`;
+  const rateOk = liveRate.rate !== null && liveRate.rate >= liveRate.target;
+  const budgetTone: Tone =
+    budget.spentToday >= budget.cap ? 'bad' : budget.spentToday >= budget.alertAt ? 'warn' : 'ok';
+  const cards: AgentState['cards'] = [
+    {
+      id: 'reveal',
+      tone: reveal.connected ? 'ok' : 'bad',
+      title: 'Connexion à Reveal',
+      value: reveal.connected ? 'Connectée' : 'Déconnectée',
+      rows: [
+        ['Dernière lecture', reveal.lastReadAt === null ? 'jamais' : ago(reveal.lastReadAt, now)],
+        ['Conversations suivies', String(reveal.conversations)],
+      ],
+    },
+    {
+      id: 'voice',
+      tone: voice.ok ? 'ok' : 'bad',
+      title: 'IA qui écrit les messages',
+      value: voice.ok ? 'En service' : 'Ne répond plus',
+      rows: [
+        [
+          'Temps pour écrire',
+          voice.medianWriteMs === null
+            ? 'pas encore mesuré'
+            : `${(voice.medianWriteMs / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`,
+        ],
+        [
+          'Pannes',
+          voice.outagesLast7d === 0
+            ? 'aucune en 7 j'
+            : `${plural(voice.outagesLast7d, 'heure', 'heures')} en 7 j`,
+        ],
+      ],
+    },
+    {
+      id: 'activity',
+      tone: replies.fansWaitingOver10Min > 0 ? 'warn' : 'ok',
+      title: 'Délai de réponse habituel',
+      value:
+        replies.medianReplyMinutes === null ? 'pas encore mesuré' : replyDelay(replies.medianReplyMinutes),
+      rows: [
+        ['Conversations en cours', String(replies.conversationsOpen)],
+        ['Fans qui attendent plus de 10 min', String(replies.fansWaitingOver10Min)],
+      ],
+    },
+    {
+      id: 'guards',
+      tone: guardCount > 0 ? 'warn' : 'ok',
+      title: 'Gardes déclenchées',
+      value: guardCount === 0 ? 'aucune aujourd’hui' : `${String(guardCount)} aujourd’hui`,
+      rows: [
+        ...HANDOFF_CAUSES.filter((cause) => guards.today[cause] > 0).map((cause): [string, string] => [
+          KIND_LABEL[cause],
+          String(guards.today[cause]),
+        ]),
+        [
+          'Alertes Telegram cette nuit',
+          guards.telegramAlertsTonight === null ? 'Telegram éteint' : String(guards.telegramAlertsTonight),
+        ],
+      ],
+    },
+    {
+      id: 'budget',
+      tone: budgetTone,
+      title: 'Budget IA du jour',
+      value: `${euroCents(budget.spentToday)} sur ${eur(budget.cap)}`,
+      rows: [
+        ['Compté', 'pour toutes les créatrices'],
+        ['Alerte', `à ${eur(budget.alertAt)}`],
+        [`Au-delà de ${eur(budget.cap)}`, 'l’agent s’arrête'],
+      ],
+      gauge: {
+        kind: 'spend',
+        value: budget.cap > 0 ? Math.min(100, Math.round((budget.spentToday / budget.cap) * 100)) : 0,
+        mark: budget.cap > 0 ? Math.round((budget.alertAt / budget.cap) * 100) : 0,
+      },
+    },
+    {
+      id: 'live-rate',
+      tone: rateOk ? 'ok' : 'warn',
+      title: 'Taux en réel',
+      value: rateText,
+      rows: [
+        ['Sur', plural(liveRate.decided, 'brouillon décidé', 'brouillons décidés')],
+        [
+          'Il y a 3 semaines',
+          liveRate.threeWeeksAgo === null ? 'pas encore mesuré' : percent(liveRate.threeWeeksAgo),
+        ],
+        ['Automatique', `à partir de ${percent(liveRate.target)}`],
+      ],
+      gauge: { kind: 'rate', value: liveRate.rate ?? 0, mark: liveRate.target },
+    },
+  ];
+
+  const summary = [
+    `Reveal ${reveal.connected ? 'connecté' : 'déconnecté'}`,
+    plural(reveal.conversations, 'conversation', 'conversations'),
+    plural(guardCount, 'garde', 'gardes'),
+    `${euroCents(budget.spentToday)} sur ${eur(budget.cap)}`,
+    rateText,
+  ].join(' · ');
+  const base = {
+    eyebrow: plural(reveal.conversations, 'conversation', 'conversations'),
+    foldSummary: summary,
+    cards,
+  };
+  // An agent in trouble says so before anything that waits: Reveal first, it is what everything reads.
+  if (!reveal.connected) {
+    return {
+      ...base,
+      tone: 'bad',
+      headline: 'Reveal est **déconnecté**',
+      lead: 'L’agent ne lit plus les conversations. Reconnecte la session Reveal depuis l’extension.',
+      foldTitle: 'Quelque chose ne va pas',
+    };
+  }
+  if (!voice.ok) {
+    return {
+      ...base,
+      tone: 'bad',
+      headline: 'L’IA qui écrit **ne répond plus**',
+      lead: 'Les conversations passent aux chatteurs dans Reveal jusqu’à son retour.',
+      foldTitle: 'Quelque chose ne va pas',
+    };
+  }
+  const urgent = todos.find((todo) => todo.tone === 'bad');
+  return {
+    ...base,
+    tone: cards.some((card) => card.tone !== 'ok') ? 'warn' : 'ok',
+    headline: '',
+    lead: urgent?.why ?? '',
+    action: 'Voir l’urgence',
+    foldTitle: 'L’agent fonctionne normalement',
+  };
+}
+
+function todoOf(todo: DashboardTodo, timeZone: string): Todo {
+  return {
+    id: todo.id,
+    tone: todo.tone,
+    kind: KIND_LABEL[todo.kind],
+    title: todo.title,
+    why: todo.why,
+    at: clock(todo.at, timeZone),
+    fanId: todo.fanId,
+  };
+}
+
+function fanOf(fan: DashboardFan, now: Date): Fan {
+  return {
+    id: fan.id,
+    name: fan.name,
+    line: `premier message il y a ${since(fan.firstSeenAt, now)}`,
+    spent: fan.spent,
+    byAgent: fan.byAgent,
+    notes: fan.notes,
+    ...(fan.alert === undefined ? {} : { alert: KIND_LABEL[fan.alert] }),
+    thread: [{ from: 'flag', text: NO_THREAD }],
+  };
+}
+
+/** The reader of a todo whose fan is not among the best fans: his name and why he waits. */
+function waitingFan(todo: DashboardTodo): Fan {
+  return {
+    id: todo.fanId,
+    name: todo.title,
+    line: KIND_LABEL[todo.kind],
+    spent: 0,
+    byAgent: 0,
+    notes: [],
+    alert: KIND_LABEL[todo.kind],
+    thread: [
+      { from: 'flag', text: todo.why },
+      { from: 'flag', text: NO_THREAD },
+    ],
+  };
+}
+
+/** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
+export function fromApi(api: ApiDashboard): Dashboard {
+  const now = new Date(api.creator.now);
+  const timeZone = api.creator.timezone;
+  const best = api.fans.map((fan) => fanOf(fan, now));
+  const known = new Set(best.map((fan) => fan.id));
+  const waiting = api.todos.filter((todo) => !known.has(todo.fanId)).map(waitingFan);
+  return {
+    creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
+    agent: agentState(api, now),
+    todos: api.todos.map((todo) => todoOf(todo, timeZone)),
+    sales: null,
+    telegram: telegramNightOf(api),
+    fans: [...best, ...waiting.filter((fan, i) => waiting.findIndex((f) => f.id === fan.id) === i)],
+  };
+}

@@ -26,12 +26,18 @@ export function ModeControl({
   automatic,
   creatorName,
   tip,
+  readOnly = false,
   onChange,
 }: {
   mode: AgentMode;
   automatic: AutomaticGate;
   creatorName: string;
   tip: FloatingTip;
+  /**
+   * The mode comes from the server and no route writes it yet: the control shows it, the other options say they
+   * cannot be picked from here.
+   */
+  readOnly?: boolean;
   onChange: (mode: AgentMode) => void;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
@@ -42,8 +48,13 @@ export function ModeControl({
   const locked = !automatic.open;
   const index = MODES.indexOf(mode);
 
+  /** Why an option cannot be picked, if it cannot: the lock of Automatique first, then a read-only control. */
+  const blocked = (option: AgentMode): boolean =>
+    (option === 'auto' && locked) || (readOnly && option !== mode);
+  const noteFor = (option: AgentMode): { note?: string } =>
+    readOnly && option !== mode ? { note: 'Ne se change pas encore depuis le CRM.' } : {};
   const pick = (next: AgentMode): void => {
-    if (next === mode) return;
+    if (next === mode || blocked(next)) return;
     if (next === 'stop') {
       stopping.current = false;
       setConfirming(true);
@@ -53,6 +64,7 @@ export function ModeControl({
     const step = STEPS[event.key];
     if (step === undefined) return;
     event.preventDefault();
+    if (readOnly) return;
     const next = nextMode(mode, step, automatic);
     ref.current?.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
     pick(next);
@@ -88,16 +100,17 @@ export function ModeControl({
           data-mode="auto"
           tabIndex={mode === 'auto' ? 0 : -1}
           aria-checked={mode === 'auto'}
-          aria-disabled={locked}
+          aria-disabled={blocked('auto')}
           {...tip.bind({
             title: locked ? 'Automatique : verrouillé' : 'Automatique',
             text: locked
               ? 'L’agent enverrait seul, sans validation. Il s’ouvre quand tout ceci est rempli :'
               : 'L’agent envoie seul, sans validation, dans les limites réglées.',
             ...(locked ? { rows: missingRows(automatic) } : {}),
+            ...noteFor('auto'),
           })}
           onClick={() => {
-            if (!locked) pick('auto');
+            pick('auto');
           }}
         >
           {locked ? (
@@ -122,9 +135,11 @@ export function ModeControl({
           data-mode="copilot"
           tabIndex={mode === 'copilot' ? 0 : -1}
           aria-checked={mode === 'copilot'}
+          aria-disabled={blocked('copilot')}
           {...tip.bind({
             title: 'Copilote',
             text: 'L’agent écrit, un chatteur valide chaque message dans Reveal avant qu’il parte.',
+            ...noteFor('copilot'),
           })}
           onClick={() => {
             pick('copilot');
@@ -143,9 +158,11 @@ export function ModeControl({
           data-mode="stop"
           tabIndex={mode === 'stop' ? 0 : -1}
           aria-checked={mode === 'stop'}
+          aria-disabled={blocked('stop')}
           {...tip.bind({
             title: 'Arrêt',
             text: 'L’agent n’écrit plus rien. Les chatteurs reprennent comme avant.',
+            ...noteFor('stop'),
           })}
           onClick={() => {
             pick('stop');

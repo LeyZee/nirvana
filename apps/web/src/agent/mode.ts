@@ -2,21 +2,18 @@
  * The agent's single control (revue 08, ADR 0019): Automatique, Copilote or Arrêt, the same on the Dashboard and
  * in the bar. The server decides whether Automatique may open; the screen only says why it may not.
  */
-export type AgentMode = 'auto' | 'copilot' | 'stop';
+import type { AgentMode, AutomaticMissing } from '@nirvana/contracts';
 
-/** One condition of ADR 0019 that still keeps Automatique closed, with the figures the server measured. */
-type GateCondition =
-  | { readonly kind: 'live_rate'; readonly value: number | null; readonly target: number }
-  | { readonly kind: 'decided_drafts'; readonly value: number; readonly target: number }
-  | { readonly kind: 'blind_test' };
+export type { AgentMode };
 
 /**
- * Whether Automatique may open, as the server computes it (ADR 0019): live rate at the target, on enough decided
- * drafts of the active voice version, and the blind test passed. `missing` is empty when `open`.
+ * Whether Automatique may open, as the server computes it (ADR 0019, `GET /v1/dashboard`): live rate at the target,
+ * on enough decided drafts of the active voice version, and the blind test passed. Each missing condition carries
+ * the figures the server measured; `missing` is empty when `open`.
  */
 export interface AutomaticGate {
   readonly open: boolean;
-  readonly missing: readonly GateCondition[];
+  readonly missing: readonly AutomaticMissing[];
 }
 
 export const MODE_LABEL: Readonly<Record<AgentMode, string>> = {
@@ -28,7 +25,9 @@ export const MODE_LABEL: Readonly<Record<AgentMode, string>> = {
 /** The order of the control, left to right. */
 export const MODES: readonly AgentMode[] = ['auto', 'copilot', 'stop'];
 
-const percent = (value: number): string => `${String(value)}\u00a0%`;
+/** « 64,5 % »: the server rounds to the tenth, the screen writes it the French way. */
+export const percent = (value: number): string =>
+  `${value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}\u00a0%`;
 
 /** One tip row per missing condition, in the order of the ADR: what is measured, and where it stands. */
 export function missingRows(gate: AutomaticGate): [label: string, value: string][] {
@@ -70,13 +69,18 @@ export function nextMode(from: AgentMode, step: 1 | -1, gate: AutomaticGate): Ag
   return from;
 }
 
-/** The bar's read-only pill: what the agent does right now, in a word, and its tone. */
-export function pillOf(mode: AgentMode): {
+/**
+ * The bar's read-only pill: what the agent does right now, in a word, and its tone. `null` when the server has not
+ * said: the pill never shows a mode it does not know.
+ */
+export function pillOf(mode: AgentMode | null): {
   readonly label: string;
-  readonly tone: 'ok' | 'bad';
+  readonly tone: 'ok' | 'bad' | 'unknown';
   readonly live: boolean;
 } {
   switch (mode) {
+    case null:
+      return { label: 'Inconnu', tone: 'unknown', live: false };
     case 'auto':
       return { label: 'Automatique', tone: 'ok', live: true };
     case 'copilot':

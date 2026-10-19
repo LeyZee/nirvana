@@ -21,6 +21,12 @@ describe('missingRows', () => {
     ]);
   });
 
+  it('writes the tenth the server measured the French way', () => {
+    expect(missingRows({ open: false, missing: [{ kind: 'live_rate', value: 64.5, target: 80 }] })).toEqual([
+      ['Taux en réel', '64,5\u00a0% sur 80\u00a0%'],
+    ]);
+  });
+
   it('says when the live rate has not been measured yet', () => {
     expect(missingRows({ open: false, missing: [{ kind: 'live_rate', value: null, target: 80 }] })).toEqual([
       ['Taux en réel', 'pas encore mesuré, 80\u00a0% visés'],
@@ -59,5 +65,9 @@ describe('pillOf', () => {
     expect(pillOf('copilot')).toEqual({ label: 'Copilote', tone: 'ok', live: true });
     expect(pillOf('auto')).toEqual({ label: 'Automatique', tone: 'ok', live: true });
     expect(pillOf('stop')).toEqual({ label: 'Arrêt', tone: 'bad', live: false });
+  });
+
+  it('never shows a mode the server did not give', () => {
+    expect(pillOf(null)).toEqual({ label: 'Inconnu', tone: 'unknown', live: false });
   });
 });

@@ -1,51 +1,20 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
-
-import { isSelectable, type AgentMode, type AutomaticGate } from './mode';
-
-interface AgentControl {
-  readonly mode: AgentMode;
-  readonly automatic: AutomaticGate;
-}
+import { useLiveDashboard } from './live';
+import type { AgentMode, AutomaticGate } from './mode';
 
 /**
- * Sample state until the server serves the mode and its gate (ADR 0019, fil Bilan): copilot, Automatique closed
- * on the live rate and the blind test. Invented figures, shown with the « Exemple » badge of the Dashboard.
+ * The agent's mode as the server gives it, or why there is none: `loading` until it answers, `unavailable` when it
+ * fails, `empty` when no creator exists yet. Nothing here makes a mode up.
  */
-const SAMPLE: AgentControl = {
-  mode: 'copilot',
-  automatic: {
-    open: false,
-    missing: [{ kind: 'live_rate', value: 64, target: 80 }, { kind: 'blind_test' }],
-  },
-};
-
-const KEY = ['agent', 'control'] as const;
-
-export interface AgentModeView extends AgentControl {
-  /** True while the state is the sample: nothing leaves the screen. */
-  readonly isSample: boolean;
-  /** Switches the agent. Automatique is refused unless the gate is open; Arrêt is confirmed by the caller. */
-  readonly setMode: (mode: AgentMode) => void;
-}
+export type AgentModeView =
+  | { readonly source: 'live'; readonly mode: AgentMode; readonly automatic: AutomaticGate }
+  | { readonly source: 'loading' | 'unavailable' | 'empty' };
 
 /**
- * The one door to the agent's mode, shared by the Dashboard control and the bar's pill: both read the same cache,
- * so a switch on one shows on the other at once.
+ * The one door to the agent's mode for the bar's pill: it reads the same `GET /v1/dashboard` as the Dashboard, so
+ * both always say the same thing. No route writes the mode yet (`PUT /v1/agent/mode`, PR à part).
  */
 export function useAgentMode(): AgentModeView {
-  const client = useQueryClient();
-  const { data = SAMPLE } = useQuery({ queryKey: KEY, queryFn: () => SAMPLE, staleTime: Infinity });
-  const setMode = useCallback(
-    (mode: AgentMode) => {
-      // A read still in flight would land after the switch and silently put the old mode back (an Arrêt lost):
-      // it is dropped first.
-      void client.cancelQueries({ queryKey: KEY });
-      client.setQueryData<AgentControl>(KEY, (before = SAMPLE) =>
-        isSelectable(mode, before.automatic) ? { ...before, mode } : before,
-      );
-    },
-    [client],
-  );
-  return { ...data, isSample: true, setMode };
+  const live = useLiveDashboard();
+  if (live.kind === 'live') return { source: 'live', mode: live.data.mode, automatic: live.data.automatic };
+  return { source: live.kind };
 }

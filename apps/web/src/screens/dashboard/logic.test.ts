@@ -146,7 +146,7 @@ describe('heroState', () => {
 describe('sample data', () => {
   it('stays coherent: todos open a known fan, the series end on the totals', () => {
     const fanIds = new Set(SAMPLE.fans.map((fan) => fan.id));
-    for (const item of SAMPLE.todos) expect(item.fanId === undefined || fanIds.has(item.fanId)).toBe(true);
+    for (const item of SAMPLE.todos) expect(fanIds.has(item.fanId)).toBe(true);
     const day = SAMPLE.sales.day;
     expect(Math.round(day.series.agent.at(-1) ?? 0)).toBe(day.agent);
     expect(Math.round(day.series.chatters.at(-1) ?? 0)).toBe(day.chatters);
