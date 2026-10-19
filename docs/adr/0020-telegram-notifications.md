@@ -44,6 +44,7 @@ Faits Telegram qui contraignent le choix :
    | `budget_threshold_crossed` { `kind` : alert \| reached, `spentMinor`, `capMinor`, `currency`, `day` }, sans créatrice | important (les deux) | contrat : Bilan ; publié dans `onBudget` (`apps/api/src/llm.ts`) | oui (#54) |
    | `session_state_changed` | important, info | connecteurs | oui |
    | `kill_switch_toggled` | important, info | ops | oui |
+   | `automatic_closed` { `missing`, `conversations` ; la version de voix n'est pas lue } | important | Bilan, verrou de l'Automatique (ADR 0019, #91) | oui (migration 0009 pour le déclencheur) |
    | `takeover_started` avec `conversationId` | met à jour le message d'origine | Bilan (liste publiée de `journal.ts`) | oui (#54, `conversationId` par #60) |
    | `sale_detected` avec `conversationId`, l'auteur de la vente et le nom de l'offre | sale | connecteur Reveal, après la capture (lots A/B) ; contrat : Bilan | à compléter et publier |
    | `keyword_matched` { `conversationId`, `keywordId`, `word`, `action` } | keyword | l'agent, qui garde la liste des mots par créatrice et applique `action = stop` lui-même | à créer avec le fil agent |

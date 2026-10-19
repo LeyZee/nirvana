@@ -1,4 +1,5 @@
 import {
+  AutomaticMissingSchema,
   ConversationIdSchema,
   CreatorIdSchema,
   HandoffCauseSchema,
@@ -45,6 +46,12 @@ const KillSwitchSchema = z.object({
   reason: z.string(),
 });
 
+// The voice version (`voicePrompt`, `voiceModel`) stays out: Telegram never gets anything of the voice.
+const AutomaticClosedSchema = z.object({
+  missing: z.array(AutomaticMissingSchema).min(1),
+  conversations: z.number().int().min(1),
+});
+
 function signalOf(type: string, payload: unknown): Signal | null {
   switch (type) {
     case 'handoff_requested': {
@@ -87,6 +94,11 @@ function signalOf(type: string, payload: unknown): Signal | null {
       const parsed = KillSwitchSchema.safeParse(payload);
       if (!parsed.success) return null;
       return { kind: 'kill_switch', ...parsed.data };
+    }
+    case 'automatic_closed': {
+      const parsed = AutomaticClosedSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return { kind: 'automatic_closed', ...parsed.data };
     }
     default:
       return null;

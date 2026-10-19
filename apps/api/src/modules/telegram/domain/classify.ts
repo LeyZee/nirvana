@@ -1,4 +1,4 @@
-import type { HandoffCause } from '@nirvana/contracts';
+import type { AutomaticMissing, HandoffCause } from '@nirvana/contracts';
 
 import type { Outcome, Signal } from './signals';
 
@@ -21,6 +21,7 @@ export const SCANNED_EVENT_TYPES = [
   'keyword_matched',
   'validation_requested',
   'validation_resolved',
+  'automatic_closed',
 ] as const;
 
 const URGENT_CAUSES: ReadonlySet<HandoffCause> = new Set([
@@ -49,6 +50,24 @@ const KILL_REASON_MAX = 200;
 
 const euros = (minor: number): string =>
   `${(minor / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+
+/** « 74,5 % » for a rate, always to the tenth; « 80 % » for a target, the tenth only when it has one. */
+const percent = (value: number, minimumFractionDigits: 0 | 1): string =>
+  `${value.toLocaleString('fr-FR', { minimumFractionDigits, maximumFractionDigits: 1 })} %`;
+
+/** Why Automatique closed, in the owner's words; the figures are the server's, the thresholds too. */
+function missingText(missing: AutomaticMissing): string {
+  switch (missing.kind) {
+    case 'live_rate':
+      return missing.value === null
+        ? `le taux en réel n’est pas encore mesuré (objectif : ${percent(missing.target, 0)})`
+        : `le taux en réel est à ${percent(missing.value, 1)} (objectif : ${percent(missing.target, 0)})`;
+    case 'decided_drafts':
+      return `${String(missing.value)} brouillons décidés sur les ${String(missing.target)} demandés`;
+    case 'blind_test':
+      return 'le test à l’aveugle de cette version de la voix n’est pas validé';
+  }
+}
 
 const conversationLink = (conversationId: string | null): { label: string; path: string } => ({
   label: 'Ouvrir la conversation',
@@ -137,6 +156,19 @@ export function classify(signal: Signal): Outcome | null {
         title: 'Important',
         body: `Agent arrêté ${scopeLabel(signal)}${reason === '' ? '.' : ` : ${reason}`}`,
         link: { label: 'Ouvrir le CRM', path: '/' },
+      };
+    }
+    case 'automatic_closed': {
+      // Important, not urgent: no fan is at risk, the agent just asks a human to approve again (ADR 0019).
+      const reasons = signal.missing.map(missingText);
+      const count = `${String(signal.conversations)} conversation${signal.conversations === 1 ? '' : 's'}`;
+      return {
+        kind: 'notice',
+        topic: 'important',
+        threadKey: null,
+        title: 'Important',
+        body: `Automatique refermé : l’agent est repassé en copilote sur ${count}. ${reasons.length === 1 ? 'Raison' : 'Raisons'} : ${reasons.join(' ; ')}.`,
+        link: { label: 'Ouvrir le Dashboard', path: '/' },
       };
     }
   }

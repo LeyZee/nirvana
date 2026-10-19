@@ -1,4 +1,5 @@
 import type {
+  AutomaticMissing,
   ConversationId,
   CreatorId,
   HandoffCause,
@@ -38,6 +39,13 @@ export type Signal =
       readonly scopeId: string | null;
       /** Typed by someone of the agency in the CRM; escaped and cut when rendered. */
       readonly reason: string;
+    }
+  | {
+      /** Automatique closed on its own (ADR 0019): its conversations went back to the copilot. */
+      readonly kind: 'automatic_closed';
+      /** What the lock misses now, with the server's figures. */
+      readonly missing: readonly AutomaticMissing[];
+      readonly conversations: number;
     };
 
 export interface ScannedEvent {

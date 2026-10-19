@@ -64,6 +64,13 @@
       "when": 1792414798103,
       "tag": "0008_automatic_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792416799747,
+      "tag": "0009_telegram_automatic_closed",
+      "breakpoints": true
     }
   ]
 }
