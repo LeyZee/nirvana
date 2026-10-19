@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { describeVoiceAccount } from '../domain/messages';
 import type { ProviderVerifier, RefusedKey, VerificationOutcome } from '../domain/verification';
 
-import { getJson, isProviderTrouble, type FetchLike, type HttpReply } from './http';
+import { getJson, isProviderTrouble, unreachableFrom, type FetchLike, type HttpReply } from './http';
 
 const SubscriptionSchema = z.object({
   character_count: z.number().int().nonnegative(),
@@ -27,8 +27,7 @@ export interface ElevenLabsVerifierOptions {
 }
 
 function refusal(reply: HttpReply): RefusedKey | null {
-  if (reply.kind === 'unreachable' || isProviderTrouble(reply.status))
-    return { ok: false, kind: 'unreachable' };
+  if (reply.kind === 'unreachable' || isProviderTrouble(reply.status)) return unreachableFrom(reply);
   if (reply.status === 401 || reply.status === 403) {
     const detail = RefusalSchema.safeParse(reply.body);
     if (detail.success && detail.data.detail.status === 'missing_permissions') {
@@ -39,7 +38,7 @@ function refusal(reply: HttpReply): RefusedKey | null {
     }
     return { ok: false, kind: 'unauthorized' };
   }
-  if (reply.status !== 200) return { ok: false, kind: 'unreachable' };
+  if (reply.status !== 200) return unreachableFrom(reply);
   return null;
 }
 
@@ -64,12 +63,13 @@ export function createElevenLabsVerifier(options: ElevenLabsVerifierOptions): Pr
       const voicesReply = await getJson(options.fetch, `${baseUrl}/v1/voices`, headers);
       const voicesRefusal = refusal(voicesReply);
       if (voicesRefusal !== null) return voicesRefusal;
-      if (subscriptionReply.kind !== 'reply' || voicesReply.kind !== 'reply')
-        return { ok: false, kind: 'unreachable' };
+      if (subscriptionReply.kind !== 'reply') return unreachableFrom(subscriptionReply);
+      if (voicesReply.kind !== 'reply') return unreachableFrom(voicesReply);
 
       const subscription = SubscriptionSchema.safeParse(subscriptionReply.body);
       const voiceList = VoicesSchema.safeParse(voicesReply.body);
-      if (!subscription.success || !voiceList.success) return { ok: false, kind: 'unreachable' };
+      if (!subscription.success) return unreachableFrom(subscriptionReply);
+      if (!voiceList.success) return unreachableFrom(voicesReply);
 
       const { character_count: used, character_limit: limit } = subscription.data;
       const left = Math.max(0, limit - used);

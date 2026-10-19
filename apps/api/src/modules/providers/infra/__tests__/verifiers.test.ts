@@ -84,11 +84,13 @@ describe('xAI', () => {
     expect(await verifier().verify('xai-FAKE', {})).toEqual({ ok: false, kind: 'no_credit' });
 
     replies.set('/v1/api-key', { status: 503, body: 'upstream down' });
-    expect(await verifier().verify('xai-FAKE', {})).toEqual({ ok: false, kind: 'unreachable' });
-    expect(await createXaiVerifier({ fetch: unreachableFetch, baseUrl }).verify('xai-FAKE', {})).toEqual({
-      ok: false,
-      kind: 'unreachable',
-    });
+    const outage = { ok: false, kind: 'unreachable', reason: 'outage' };
+    expect(await verifier().verify('xai-FAKE', {})).toEqual(outage);
+    expect(await createXaiVerifier({ fetch: unreachableFetch, baseUrl }).verify('xai-FAKE', {})).toEqual(
+      outage,
+    );
+    replies.set('/v1/api-key', { status: 200, body: 'not json' });
+    expect(await verifier().verify('xai-FAKE', {})).toEqual(outage);
   });
 });
 
@@ -224,18 +226,24 @@ describe('Mistral', () => {
     replies.set('/v1/models', { status: 402, body: { message: 'Payment required' } });
     expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'no_credit' });
     replies.set('/v1/models', { status: 429, body: { message: 'Rate limit exceeded' } });
-    expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'unreachable' });
+    expect(await verifier().verify('FAKE', {})).toEqual({
+      ok: false,
+      kind: 'unreachable',
+      reason: 'rate_limited',
+    });
+    replies.set('/v1/models', { status: 502, body: 'Bad gateway' });
+    expect(await verifier().verify('FAKE', {})).toEqual({ ok: false, kind: 'unreachable', reason: 'outage' });
   });
 });
 
 describe('a rate limit (429) says nothing about the key', () => {
   const tooMany = { status: 429, body: { error: 'Too many requests, slow down' } };
 
-  it('reads as unreachable at xAI, Google and ElevenLabs, never as a refused key or an empty account', async () => {
+  it('reads as a rate limit at xAI, Google and ElevenLabs, never as a refused key or an empty account', async () => {
     replies.set('/v1/api-key', tooMany);
     replies.set('/v1beta/models', { status: 429, body: { error: { status: 'RESOURCE_EXHAUSTED' } } });
     replies.set('/v1/user/subscription', tooMany);
-    const unreachable = { ok: false, kind: 'unreachable' };
+    const unreachable = { ok: false, kind: 'unreachable', reason: 'rate_limited' };
     expect(await createXaiVerifier({ fetch: realFetch, baseUrl }).verify('xai-FAKE', {})).toEqual(
       unreachable,
     );
@@ -252,6 +260,23 @@ describe('a rate limit (429) says nothing about the key', () => {
     expect(await createXaiVerifier({ fetch: realFetch, baseUrl }).verify('xai-FAKE', {})).toEqual({
       ok: false,
       kind: 'unreachable',
+      reason: 'rate_limited',
+    });
+  });
+
+  it('is told apart from an outage at ElevenLabs, on either call', async () => {
+    replies.set('/v1/user/subscription', { status: 200, body: { character_count: 0, character_limit: 10 } });
+    replies.set('/v1/voices', { status: 500, body: 'oops' });
+    expect(await createElevenLabsVerifier({ fetch: realFetch, baseUrl }).verify('sk_FAKE', {})).toEqual({
+      ok: false,
+      kind: 'unreachable',
+      reason: 'outage',
+    });
+    replies.set('/v1/voices', tooMany);
+    expect(await createElevenLabsVerifier({ fetch: realFetch, baseUrl }).verify('sk_FAKE', {})).toEqual({
+      ok: false,
+      kind: 'unreachable',
+      reason: 'rate_limited',
     });
   });
 });

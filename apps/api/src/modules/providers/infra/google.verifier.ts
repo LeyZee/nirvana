@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { ProviderVerifier, VerificationOutcome } from '../domain/verification';
 
-import { getJson, isProviderTrouble, type FetchLike } from './http';
+import { getJson, isProviderTrouble, unreachableFrom, type FetchLike } from './http';
 
 const ModelsSchema = z.object({
   models: z.array(z.object({ name: z.string(), displayName: z.string().optional() })).default([]),
@@ -42,14 +42,13 @@ export function createGoogleVerifier(options: GoogleVerifierOptions): ProviderVe
       const reply = await getJson(options.fetch, `${baseUrl}/v1beta/models?pageSize=1000`, {
         'x-goog-api-key': key,
       });
-      if (reply.kind === 'unreachable' || isProviderTrouble(reply.status))
-        return { ok: false, kind: 'unreachable' };
+      if (reply.kind === 'unreachable' || isProviderTrouble(reply.status)) return unreachableFrom(reply);
       if (reply.status === 401 || (reply.status === 400 && isRefusedKey(reply.body))) {
         return { ok: false, kind: 'unauthorized' };
       }
       if (reply.status === 403) return { ok: false, kind: 'api_not_enabled' };
       const parsed = ModelsSchema.safeParse(reply.body);
-      if (reply.status !== 200 || !parsed.success) return { ok: false, kind: 'unreachable' };
+      if (reply.status !== 200 || !parsed.success) return unreachableFrom(reply);
 
       const models = parsed.data.models.map((m) => {
         const id = m.name.replace(/^models\//, '');

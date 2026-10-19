@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { ProviderVerifier, VerificationOutcome } from '../domain/verification';
 
-import { getJson, isProviderTrouble, type FetchLike } from './http';
+import { getJson, isProviderTrouble, unreachableFrom, type FetchLike } from './http';
 
 /** `GET /v1/api-key` describes the key itself: its name, its access lists, whether it is blocked. */
 const ApiKeyInfoSchema = z.object({
@@ -41,14 +41,13 @@ export function createXaiVerifier(options: XaiVerifierOptions): ProviderVerifier
     provider: 'xai',
     async verify(key): Promise<VerificationOutcome> {
       const reply = await getJson(options.fetch, `${baseUrl}/v1/api-key`, { authorization: `Bearer ${key}` });
-      if (reply.kind === 'unreachable' || isProviderTrouble(reply.status))
-        return { ok: false, kind: 'unreachable' };
+      if (reply.kind === 'unreachable' || isProviderTrouble(reply.status)) return unreachableFrom(reply);
       if (reply.status === 400 || reply.status === 401) return { ok: false, kind: 'unauthorized' };
       if (reply.status === 403) {
         return { ok: false, kind: mentionsCredit(reply.body) ? 'no_credit' : 'unauthorized' };
       }
       const info = ApiKeyInfoSchema.safeParse(reply.body);
-      if (reply.status !== 200 || !info.success) return { ok: false, kind: 'unreachable' };
+      if (reply.status !== 200 || !info.success) return unreachableFrom(reply);
       if (info.data.api_key_blocked === true || info.data.api_key_disabled === true) {
         return { ok: false, kind: 'unauthorized' };
       }
