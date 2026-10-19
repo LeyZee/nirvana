@@ -130,7 +130,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     ingest: (input) => conversations.ingestMessage(input),
     // Reveal's adapter arrives with phase 1 (ADR 0008); until then no account is polled.
     registry: options.connectorRegistry ?? {},
-    sessionKeys: sessionKeys === null ? null : parseEncryptionKeys(sessionKeys),
+    sessionKeys: sessionKeys === null ? null : parseEncryptionKeys(sessionKeys, 'SESSION_ENCRYPTION_KEYS'),
     deviceToken: secretOrNull(config.EXTENSION_DEVICE_TOKEN),
   });
   const providers = await startProvidersModule({
@@ -144,6 +144,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
             xai: config.LLM_XAI_API_KEY,
             google: config.LLM_GOOGLE_API_KEY,
             elevenlabs: config.SPEECH_ELEVENLABS_API_KEY,
+            mistral: config.LLM_MISTRAL_API_KEY,
+            venice: config.LLM_VENICE_API_KEY,
           },
     onLoadError: (error) => {
       logger.warn({ err: error }, 'AI service keys not loaded');

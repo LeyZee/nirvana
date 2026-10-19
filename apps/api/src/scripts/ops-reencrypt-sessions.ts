@@ -15,7 +15,10 @@ if (keys === null) {
 }
 const admin = createDbClient(config.DATABASE_ADMIN_URL);
 try {
-  const rewritten = await reencryptPlatformSessions(admin.db, parseEncryptionKeys(keys));
+  const rewritten = await reencryptPlatformSessions(
+    admin.db,
+    parseEncryptionKeys(keys, 'SESSION_ENCRYPTION_KEYS'),
+  );
   console.log(`${String(rewritten)} session(s) rechiffrée(s).`);
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);

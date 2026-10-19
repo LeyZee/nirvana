@@ -18,7 +18,7 @@ if (keys === null) {
 }
 const admin = createDbClient(config.DATABASE_ADMIN_URL);
 try {
-  const parsed = parseEncryptionKeys(keys);
+  const parsed = parseEncryptionKeys(keys, 'CREDENTIALS_ENCRYPTION_KEYS');
   const version = parsed[0]?.version ?? '?';
   const services = await resealProviderCredentials(admin.db, parsed);
   console.log(`${String(services.rewritten)} clé(s) de service IA rechiffrée(s) en ${version}.`);

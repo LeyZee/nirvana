@@ -35,6 +35,17 @@ describe('secret encryption', () => {
     expect(() => parseEncryptionKeys('')).toThrow();
     expect(() => parseEncryptionKeys('v1:c2hvcnQ=')).toThrow(/32 bytes/);
     expect(() => parseEncryptionKeys(`v1:${key()},v1:${key()}`)).toThrow(/duplicate/);
+  });
+
+  it('names the setting in the error, never the value', () => {
+    const value = 'v1:c2hvcnQ=';
+    expect(() => parseEncryptionKeys(value, 'CREDENTIALS_ENCRYPTION_KEYS')).toThrow(
+      /^CREDENTIALS_ENCRYPTION_KEYS: each key must be 32 bytes/,
+    );
+    expect(() => parseEncryptionKeys(value, 'CREDENTIALS_ENCRYPTION_KEYS')).not.toThrow(/c2hvcnQ/);
+    expect(() => parseEncryptionKeys(`v1:${key()},v1:${key()}`, 'SESSION_ENCRYPTION_KEYS')).toThrow(
+      'SESSION_ENCRYPTION_KEYS has a duplicate version',
+    );
     expect(() => parseEncryptionKeys('replace-with-openssl-rand-base64-32')).toThrow();
   });
 });

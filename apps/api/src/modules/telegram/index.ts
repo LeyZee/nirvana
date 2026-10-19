@@ -109,7 +109,7 @@ export interface TelegramStartOptions {
 export async function startTelegramModule(options: TelegramStartOptions): Promise<TelegramModule> {
   const store = createPostgresTelegramStore({
     adminDb: options.adminDb,
-    keys: parseEncryptionKeys(options.encryptionKeys),
+    keys: parseEncryptionKeys(options.encryptionKeys, 'CREDENTIALS_ENCRYPTION_KEYS'),
   });
   const module = createTelegramModule({
     bots: store.bots,
