@@ -23,8 +23,12 @@ export function createMediaSight(deps: {
         return err('fetch_failed');
       }
       if (file === undefined) return err('not_fetched');
-      const described = await deps.describer.describe({ origin: 'fan', ...file });
-      return described.ok ? ok(described.value) : err(described.error.code);
+      try {
+        const described = await deps.describer.describe({ origin: 'fan', ...file });
+        return described.ok ? ok(described.value) : err(described.error.code);
+      } catch {
+        return err('describe_failed');
+      }
     },
   };
 }

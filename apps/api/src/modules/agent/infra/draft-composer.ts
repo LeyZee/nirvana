@@ -95,7 +95,8 @@ const UNSEEN = (detail: readonly string[] = []): AgentComposeResult => ({
 /**
  * Every media he sent since her last answer, described before anything is written (minor, consent, weapon:
  * vision obligatoire). A media nobody can see (no vision wired, locked, a voice note, a message with nothing in
- * it, a failed description) goes to a human: nothing is answered on a caption alone (revue 09, B2).
+ * it, a failed or uncertain description) goes to a human: nothing is answered on a caption alone (revue 09, B2).
+ * Looked at before the voice key is checked: a possible minor ranks as such even when no voice could answer.
  */
 async function seeHisMedia(
   sight: MediaSight | undefined,
@@ -113,15 +114,17 @@ async function seeHisMedia(
     const toSee: MediaToSee[] = [];
     for (const m of message.media ?? []) {
       if (m.isLocked === true) return { unseen: UNSEEN(['locked']) };
-      if ((m.kind !== 'image' && m.kind !== 'video') || m.platformMediaId === undefined) {
-        return { unseen: UNSEEN([m.kind]) };
-      }
+      if (m.kind !== 'image' && m.kind !== 'video') return { unseen: UNSEEN([m.kind]) };
+      if (m.platformMediaId === undefined) return { unseen: UNSEEN(['no_media_id']) };
       const { kind, platformMediaId } = m;
       toSee.push({ creatorId: input.creatorId, conversationId: input.conversationId, platformMediaId, kind });
     }
     const described: MediaDescription[] = [];
     for (const result of await Promise.all(toSee.map((m) => sight.see(m)))) {
       if (!result.ok) return { unseen: UNSEEN([result.error]) };
+      // Described but not seen (black, blurred, cut) or seen without certainty: a minor could hide there.
+      if (result.value.notVisible) return { unseen: UNSEEN(['not_visible']) };
+      if (result.value.confidenceLow) return { unseen: UNSEEN(['confidence_low']) };
       described.push(result.value);
     }
     seen.push(described);
@@ -140,12 +143,16 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
     async compose(input) {
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
       const sinceAnswer = input.history.slice(lastAnswer + 1);
-      if (voiceUnavailable(deps.gateway)) {
-        return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
-      }
       const looked = await seeHisMedia(deps.sight, input, sinceAnswer);
       if ('unseen' in looked) return looked.unseen;
       const media = looked.seen.flat();
+      const flags = media.flatMap((d): MediaFlag[] => d.flags);
+      if (flags.length > 0) {
+        return { kind: 'held', reason: 'handoff', cause: handoffCauseOf(flags), detail: flags, costUsd: 0 };
+      }
+      if (voiceUnavailable(deps.gateway)) {
+        return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
+      }
       const history: ConversationTurn[] = input.history.map((m, i) => {
         const described = i > lastAnswer ? (looked.seen[i - lastAnswer - 1] ?? []) : [];
         return {
@@ -174,14 +181,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       });
       const { costUsd } = composed;
       if (composed.handoff !== undefined) {
-        const flags = media.flatMap((d): MediaFlag[] => d.flags);
-        return {
-          kind: 'held',
-          reason: 'handoff',
-          cause: handoffCauseOf(flags),
-          detail: composed.handoff,
-          costUsd,
-        };
+        return { kind: 'held', reason: 'handoff', detail: composed.handoff, costUsd };
       }
       if (composed.brief === undefined) {
         const failure = composed.briefFailure;

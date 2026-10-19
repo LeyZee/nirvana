@@ -376,4 +376,51 @@ describe('createDraftComposer', () => {
     expect((await draftComposer.compose(input)).kind).toBe('draft');
     expect(asked).toEqual([]);
   });
+
+  it('puts each description on the message that carried it', async () => {
+    const { draftComposer, seen } = composer({}, sightOf({ 'm-1': PHOTO }).sight);
+    const input: AgentComposeInput = {
+      ...INPUT,
+      history: [
+        ...INPUT.history,
+        {
+          direction: 'inbound',
+          text: 'tiens',
+          at: new Date('2026-10-17T09:59:20Z'),
+          media: [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }],
+        },
+        { direction: 'inbound', text: 'tu aimes ?', at: new Date('2026-10-17T09:59:40Z') },
+      ],
+    };
+    expect((await draftComposer.compose(input)).kind).toBe('draft');
+    const turns = seen.brainInputs?.[0]?.history ?? [];
+    expect(turns.map((t) => t.media?.length ?? 0)).toEqual([0, 0, 1, 0]);
+  });
+
+  it('hands over a media the vision could not make out, or not with certainty', async () => {
+    const { sight } = sightOf({
+      dark: { ...PHOTO, notVisible: true },
+      blurry: { ...PHOTO, confidenceLow: true },
+    });
+    const { draftComposer, seen } = composer({}, sight);
+    for (const [id, reason] of [
+      ['dark', 'not_visible'],
+      ['blurry', 'confidence_low'],
+    ] as const) {
+      expect(
+        await draftComposer.compose(withMedia('', [{ kind: 'image', platformMediaId: id, isLocked: false }])),
+      ).toEqual({ kind: 'held', reason: 'handoff', detail: ['media_unscreened', reason], costUsd: 0 });
+    }
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('ranks a flagged media as such even when no voice model has a key', async () => {
+    const flagged: MediaDescription = { ...PHOTO, flags: ['possible_minor'] };
+    const { draftComposer } = composer({ hasKey: false }, sightOf({ 'm-1': flagged }).sight);
+    expect(
+      await draftComposer.compose(
+        withMedia('', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]),
+      ),
+    ).toMatchObject({ kind: 'held', reason: 'handoff', cause: 'minor' });
+  });
 });

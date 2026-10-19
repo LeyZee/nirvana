@@ -47,7 +47,7 @@ describe('createMediaSight', () => {
     expect(files).toEqual([{ origin: 'fan', mediaType: 'image/jpeg', data }]);
   });
 
-  it('says why it saw nothing: not fetched, fetch failed, description failed', async () => {
+  it('says why it saw nothing: not fetched, fetch failed, description failed or crashed', async () => {
     const { value } = describer(err({ code: 'sense_failed' }));
     const gone = createMediaSight({ fetchMedia: () => Promise.resolve(undefined), describer: value });
     const broken = createMediaSight({ fetchMedia: () => Promise.reject(new Error('503')), describer: value });
@@ -58,5 +58,10 @@ describe('createMediaSight', () => {
     expect(await gone.see(MEDIA)).toEqual(err('not_fetched'));
     expect(await broken.see(MEDIA)).toEqual(err('fetch_failed'));
     expect(await blind.see(MEDIA)).toEqual(err('sense_failed'));
+    const crashing = createMediaSight({
+      fetchMedia: () => Promise.resolve({ mediaType: 'image/png', data: new Uint8Array() }),
+      describer: { describe: () => Promise.reject(new Error('store down')) },
+    });
+    expect(await crashing.see(MEDIA)).toEqual(err('describe_failed'));
   });
 });
