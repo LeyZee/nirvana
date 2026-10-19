@@ -1,4 +1,10 @@
-import type { AutomaticGate, CreatorId, DecidedDraft, HandoffCause } from '@nirvana/contracts';
+import type {
+  AutomaticGate,
+  CreatorId,
+  DecidedDraft,
+  HandoffCause,
+  LiveRateReading,
+} from '@nirvana/contracts';
 
 /** The voice version whose live rate the Dashboard shows: the one the composition root gives `conversations` too. */
 export interface VoiceVersion {
@@ -31,8 +37,10 @@ export interface DashboardFacts {
   /** The latest row of each kill switch scope that stops her: the global one, and hers. */
   readonly switches: { readonly global: boolean; readonly creator: boolean };
   readonly autoConversations: number;
-  /** Decided drafts of the active voice version, newest first (at most 200), now and three weeks ago. */
-  readonly decided: readonly DecidedDraft[];
+  /**
+   * Decided drafts of the active voice version as they stood three weeks ago, newest first (at most 200), for the
+   * trend. Today's rate is the one the lock reads (`AutomaticView`).
+   */
   readonly decidedThreeWeeksAgo: readonly DecidedDraft[];
   readonly reveal: {
     readonly connected: boolean;
@@ -66,9 +74,12 @@ export interface DashboardReader {
   ): Promise<{ readonly facts: DashboardFacts; readonly window: DashboardWindow } | undefined>;
 }
 
-/** The server lock of Automatique, read by `conversations` (wired by the composition root, ADR 0019). */
+/**
+ * The server lock of Automatique, read by `conversations` (wired by the composition root, ADR 0019), with the live
+ * rate it was decided on: the Dashboard shows that one, so its rate and the lock never disagree.
+ */
 export interface AutomaticView {
-  read(creatorId: CreatorId): Promise<AutomaticGate>;
+  read(creatorId: CreatorId): Promise<{ readonly gate: AutomaticGate; readonly reading: LiveRateReading }>;
 }
 
 /** What the Dashboard shows of the Telegram alerts (module telegram, wired by the composition root). */

@@ -4,6 +4,7 @@ import {
   liveRate,
   type AutomaticGate,
   type CreatorId,
+  type LiveRateReading,
 } from '@nirvana/contracts';
 
 import type { DraftVoice, EventMeta, Transaction, UnitOfWork } from '../domain/ports';
@@ -15,13 +16,21 @@ import { appendEvent, lockConversation } from './journal';
  * evidence (decided drafts, blind tests) is read here, for the voice version the server writes with now.
  */
 export async function readAutomaticGate(tx: Transaction, voice: DraftVoice): Promise<AutomaticGate> {
+  return (await readAutomaticLock(tx, voice)).gate;
+}
+
+/** The lock and the live rate it was decided on: the Dashboard shows that rate, not one read apart. */
+export async function readAutomaticLock(
+  tx: Transaction,
+  voice: DraftVoice,
+): Promise<{ readonly gate: AutomaticGate; readonly reading: LiveRateReading }> {
   const reading = liveRate(await tx.automatic.decided(voice));
   const blindTest = await tx.automatic.latestBlindTest(voice);
   const gate = automaticGate({
     reading,
     blindTestPassed: blindTest !== null && blindTest >= BLIND_TEST_TARGET * 10,
   });
-  return { open: gate.open, missing: [...gate.missing] };
+  return { gate: { open: gate.open, missing: [...gate.missing] }, reading };
 }
 
 /**

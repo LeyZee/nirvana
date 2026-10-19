@@ -28,7 +28,10 @@ async function first<T extends z.ZodType>(tx: Transaction, schema: T, query: Ret
   return row;
 }
 
-/** Decided drafts of one voice version, newest first: approved as is, edited or rejected (ADR 0019). */
+/**
+ * Decided drafts of one voice version before a date, newest first: approved as is, edited or rejected (ADR 0019).
+ * The same selection and order as the lock's reading in `conversations`, for the trend.
+ */
 async function decided(tx: Transaction, window: DashboardWindow, before: Date): Promise<DecidedDraft[]> {
   const list = await rows(
     tx,
@@ -39,7 +42,7 @@ async function decided(tx: Transaction, window: DashboardWindow, before: Date): 
           and status in ('approved', 'edited', 'rejected', 'sent', 'failed')
           and prompt_hashes->>'voicePrompt' = ${window.voice.voicePrompt}
           and prompt_hashes->>'voiceModel' = ${window.voice.voiceModel}
-        order by decided_at desc limit ${LIVE_WINDOW}`,
+        order by decided_at desc, id desc limit ${LIVE_WINDOW}`,
   );
   return list.map((row) => ({ asIs: row.as_is }));
 }
@@ -180,7 +183,6 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
       creator: stopped.some((s) => s.scope === 'creator' && s.active),
     },
     autoConversations: counts.auto,
-    decided: await decided(tx, window, window.now),
     decidedThreeWeeksAgo: await decided(tx, window, new Date(window.now.getTime() - 21 * DAY_MS)),
     reveal: {
       connected: account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused,

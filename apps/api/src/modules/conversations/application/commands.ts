@@ -9,6 +9,7 @@ import {
   type AgentMode,
   type AutomaticGate,
   type BlindTestResult,
+  type LiveRateReading,
   type ConversationId,
   type ConversationMode,
   type CreatorId,
@@ -32,7 +33,7 @@ import { rebuildProjection, type ConversationProjection } from '../domain/projec
 import { debounceFor } from '../domain/rules';
 import { MAX_SEND_ATTEMPTS } from '../domain/state-machine';
 
-import { closeAutomaticIfLocked, readAutomaticGate } from './automatic';
+import { closeAutomaticIfLocked, readAutomaticGate, readAutomaticLock } from './automatic';
 import { appendEvent, lockConversation, lockDraftFor, setDraftStatus } from './journal';
 
 interface IngestMessage {
@@ -77,8 +78,13 @@ export interface ConversationCommands {
   setAgentMode(
     input: Omit<ConversationCommand, 'conversationId'> & { mode: AgentMode },
   ): Promise<{ mode: AgentMode; globalStop: boolean }>;
-  /** Whether Automatique may open for her now, and what is missing (ADR 0019): what the Dashboard shows. */
-  automaticGate(creatorId: CreatorId): Promise<AutomaticGate>;
+  /**
+   * Whether Automatique may open for her now, what is missing (ADR 0019), and the live rate it was decided on:
+   * what the Dashboard shows.
+   */
+  automaticLock(
+    creatorId: CreatorId,
+  ): Promise<{ readonly gate: AutomaticGate; readonly reading: LiveRateReading }>;
   /** The owner records the blind test of the voice version the server writes with now. */
   recordBlindTest(input: {
     creatorId: CreatorId;
@@ -421,8 +427,8 @@ export function createConversationCommands({ uow, clock, fans, voice }: CommandD
       });
     },
 
-    automaticGate(creatorId) {
-      return uow.inTenant(creatorId, (tx) => readAutomaticGate(tx, voice));
+    automaticLock(creatorId) {
+      return uow.inTenant(creatorId, (tx) => readAutomaticLock(tx, voice));
     },
 
     async recordBlindTest(input) {

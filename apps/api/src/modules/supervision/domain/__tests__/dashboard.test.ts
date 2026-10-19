@@ -1,4 +1,9 @@
-import { CreatorIdSchema, DashboardSchema, type AutomaticGate } from '@nirvana/contracts';
+import {
+  CreatorIdSchema,
+  DashboardSchema,
+  type AutomaticGate,
+  type LiveRateReading,
+} from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { assembleDashboard, todos } from '../dashboard';
@@ -13,7 +18,6 @@ const FACTS: DashboardFacts = {
   creator: { name: 'Lina', timezone: 'Europe/Paris' },
   switches: { global: false, creator: false },
   autoConversations: 0,
-  decided: Array.from({ length: 10 }, (_, i) => ({ asIs: i < 8 })),
   decidedThreeWeeksAgo: [],
   reveal: { connected: true, lastReadAt: minutesAgo(1), conversations: 4 },
   voice: { medianWriteMs: 1412.5, outageHoursLast7d: 0 },
@@ -37,6 +41,7 @@ const assemble = (
   facts: Partial<DashboardFacts> = {},
   telegram: TelegramReading | 'off' = { alertsTonight: 3, urgentReachable: false },
   automatic: AutomaticGate = { open: false, missing: [{ kind: 'blind_test' }] },
+  reading: LiveRateReading = { rate: 0.8, decided: 10 },
 ) =>
   assembleDashboard({
     creatorId: CreatorIdSchema.parse('0b9d4b7e-2f7a-4c1e-9a55-3d1f0c2b8e41'),
@@ -51,7 +56,7 @@ const assemble = (
     budget: { spentEur: 3.204, capEur: 20, alertAtEur: 16 },
     isVoiceOk: true,
     telegram: telegram === 'off' ? undefined : telegram,
-    automatic,
+    automatic: { gate: automatic, reading },
   });
 
 describe('dashboard', () => {
@@ -73,9 +78,27 @@ describe('dashboard', () => {
   });
 
   it('shows the lock as conversations reads it, never recomputed from the live rate', () => {
-    const full = { decided: Array.from({ length: 150 }, () => ({ asIs: true })) };
-    expect(assemble(full).automatic).toEqual({ open: false, missing: [{ kind: 'blind_test' }] });
-    expect(assemble(full, 'off', { open: true, missing: [] }).automatic).toEqual({ open: true, missing: [] });
+    const full = { rate: 1, decided: 150 };
+    expect(assemble({}, 'off', undefined, full).automatic).toEqual({
+      open: false,
+      missing: [{ kind: 'blind_test' }],
+    });
+    expect(assemble({}, 'off', { open: true, missing: [] }, full).automatic).toEqual({
+      open: true,
+      missing: [],
+    });
+  });
+
+  it('shows the live rate the lock was decided on, and the trend from three weeks ago', () => {
+    const lock: AutomaticGate = { open: false, missing: [{ kind: 'live_rate', value: 79.5, target: 80 }] };
+    const dashboard = assemble(
+      { decidedThreeWeeksAgo: Array.from({ length: 4 }, (_, i) => ({ asIs: i < 3 })) },
+      'off',
+      lock,
+      { rate: 0.795, decided: 200 },
+    );
+    expect(dashboard.liveRate).toEqual({ rate: 79.5, target: 80, decided: 200, threeWeeksAgo: 75 });
+    expect(dashboard.automatic.missing).toEqual([{ kind: 'live_rate', value: 79.5, target: 80 }]);
   });
 
   it('says Arrêt over everything, and Automatique when a conversation runs on its own', () => {
