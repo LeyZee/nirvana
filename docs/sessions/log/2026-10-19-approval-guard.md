@@ -10,9 +10,9 @@ Pas fait : rien côté Bilan. La part de l'agent dans G5 (gardes sur le message 
 
 Décisions : les gardes s'appliquent à toute approbation, pas seulement aux bulles retouchées : un seul invariant, rien ne part sans elles. Les gardes douces restent l'affaire du chatteur.
 
-Relectures : agent (port et repli sur les gardes communes, qui reprend les quatre lignes de `createBubbleGuard` faute d'export).
+Relectures : agent (accord ; à sa demande, le repli appelle `startSharedBubbleGuard`, ajouté à l'index de l'agent avec son accord, au lieu de recopier `createBubbleGuard`).
 
-Découvertes : `createBubbleGuard` n'est pas exporté par l'index de l'agent. S'il l'était, le repli de la racine de composition l'appellerait directement au lieu de reprendre son code.
+Découvertes : aucune.
 
 Candidats à suppression : aucun.
 

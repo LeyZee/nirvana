@@ -23,10 +23,9 @@ import { createAppLlm } from './llm';
 import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
 import {
-  checkVoiceOutput,
   createAgentModule,
-  DEFAULT_GUARD_SETTINGS,
   startBubbleGuard,
+  startSharedBubbleGuard,
   startDraftComposer,
   type AgentModule,
 } from './modules/agent';
@@ -235,19 +234,13 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         }));
   // Every approval passes the hard guards again (revue 09, G5): her own limits when her persona is readable,
   // otherwise the ones every creator shares (never an AI, no meeting, no contact). Never no guard at all.
-  const guard = (isDemoPersonaInProduction
-    ? undefined
-    : await startBubbleGuard({ personaPath }).catch((error: unknown) => {
-        logger.warn({ err: error }, 'bubble guard without her persona: shared guards only');
-        return undefined;
-      })) ?? {
-    check: (bubbles: readonly string[]) => {
-      const codes = checkVoiceOutput(bubbles, DEFAULT_GUARD_SETTINGS)
-        .filter((v) => v.severity === 'blocking')
-        .map((v) => v.code);
-      return { isBlocked: codes.length > 0, codes: [...new Set(codes)] };
-    },
-  };
+  const guard =
+    (isDemoPersonaInProduction
+      ? undefined
+      : await startBubbleGuard({ personaPath }).catch((error: unknown) => {
+          logger.warn({ err: error }, 'bubble guard without her persona: shared guards only');
+          return undefined;
+        })) ?? startSharedBubbleGuard();
   // The voice version the server writes with now, the one Automatique is proved on (ADR 0019): defined here only.
   const activeVoice = {
     voicePrompt: loadPrompt('voice').header.version,
