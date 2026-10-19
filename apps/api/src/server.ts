@@ -86,6 +86,8 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     genReqId: requestIdFor,
     logController: new LogController({ requestIdLogLabel: 'requestId' }),
     bodyLimit: BODY_LIMIT_BYTES,
+    // Behind a proxy every request comes from its address: past the declared hops, `request.ip` is the client's.
+    trustProxy: (_address: string, hop: number) => hop < config.TRUST_PROXY_HOPS,
   }).withTypeProvider<ZodTypeProvider>();
 
   server.setValidatorCompiler(validatorCompiler);

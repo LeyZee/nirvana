@@ -13,7 +13,7 @@ import { eq, schema, type Database } from '@nirvana/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { fromNodeHeaders } from 'better-auth/node';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -32,6 +32,14 @@ const SESSION_SECONDS = 12 * 60 * 60;
 const SESSION_REFRESH_SECONDS = 60 * 60;
 /** Attempts per minute and per IP on `/v1/auth/*`, tighter than the API-wide limit. */
 const AUTH_RATE_LIMIT_PER_MINUTE = 20;
+/** Sign-in attempts per account, whatever the IP: guessing one password from many addresses stays slow. */
+const SIGN_IN_PER_ACCOUNT = 10;
+const SIGN_IN_ACCOUNT_WINDOW = '15 minutes';
+/**
+ * The client IP as Fastify resolved it (`trustProxy`, TRUST_PROXY_HOPS), handed to Better Auth under a header of
+ * our own: it never reads `x-forwarded-for`, which any client can write.
+ */
+const CLIENT_IP_HEADER = 'x-nirvana-client-ip';
 const MIN_PASSWORD_LENGTH = 12;
 /** A sensitive action needs a sign-in younger than this (ADR 0016). */
 const RECENT_LOGIN_MS = 10 * 60 * 1000;
@@ -45,6 +53,13 @@ class SessionUnauthenticated extends DomainError {
 class RoleForbidden extends DomainError {
   constructor() {
     super('role_forbidden', 'Action réservée à un autre rôle');
+  }
+}
+
+/** Too many sign-ins on one account (security.md §6), whatever the addresses they came from. */
+class SignInLimited extends DomainError {
+  constructor() {
+    super('sign_in_limited', 'Trop de tentatives sur ce compte : réessaie dans quelques minutes');
   }
 }
 
@@ -90,6 +105,7 @@ export function createAuth(config: Config, db: Database, logger: Logger) {
       defaultCookieAttributes: { httpOnly: true, sameSite: 'lax' },
       // UUID v7 like every other id (ADR 0011), so `human:<userId>` actors validate. Also used for sessions.
       database: { generateId: () => newId(UserIdSchema) },
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
     // The API-wide limiter (and the tighter one on these routes) already applies; no anonymous telemetry.
     rateLimit: { enabled: false },
@@ -116,9 +132,24 @@ export function createAuth(config: Config, db: Database, logger: Logger) {
 
 export type Auth = ReturnType<typeof createAuth>;
 
+/** The request's headers for Better Auth, with the client IP we resolved in place of any the client sent. */
+function authHeaders(request: FastifyRequest): Headers {
+  const headers = fromNodeHeaders(request.headers);
+  headers.set(CLIENT_IP_HEADER, request.ip);
+  return headers;
+}
+
+const SignInBodySchema = z.looseObject({ email: z.string().min(1) });
+
+/** The account a sign-in targets, for its own limit; a body without an email counts against the IP. */
+function signInAccountKey(request: FastifyRequest): string {
+  const parsed = SignInBodySchema.safeParse(request.body);
+  return parsed.success ? `account:${parsed.data.email.trim().toLowerCase()}` : `ip:${request.ip}`;
+}
+
 /** The signed-in user of a request, or `null`; the role and creators come from our columns, validated. */
 async function currentUser(auth: Auth, request: FastifyRequest): Promise<CurrentUser | null> {
-  const result = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
+  const result = await auth.api.getSession({ headers: authHeaders(request) });
   if (result === null) return null;
   const parsed = CurrentUserSchema.safeParse({
     id: result.user.id,
@@ -166,7 +197,7 @@ export function createRequireRecentLogin(
   now: () => Date = () => new Date(),
 ): preHandlerAsyncHookHandler {
   return async (request) => {
-    const result = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
+    const result = await auth.api.getSession({ headers: authHeaders(request) });
     if (result === null) throw new SessionUnauthenticated();
     if (now().getTime() - result.session.createdAt.getTime() > RECENT_LOGIN_MS)
       throw new ReauthenticationRequired();
@@ -182,35 +213,52 @@ export function createAuthRoutes(
   return (app) => {
     app.decorateRequest('user', null);
 
-    app.route({
-      method: ['GET', 'POST'],
-      url: '/auth/*',
-      config: { rateLimit: { max: AUTH_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } },
-      handler: async (request, reply) => {
-        const body =
-          request.body === undefined || request.body === null ? undefined : JSON.stringify(request.body);
-        const response = await auth.handler(
-          new Request(new URL(request.url, config.AUTH_BASE_URL), {
-            method: request.method,
-            headers: fromNodeHeaders(request.headers),
-            ...(body === undefined ? {} : { body }),
-          }),
-        );
-        reply.code(response.status);
-        response.headers.forEach((value, key) => {
-          if (!['set-cookie', 'content-length', 'content-encoding', 'transfer-encoding'].includes(key)) {
-            reply.header(key, value);
-          }
-        });
-        const cookies = response.headers.getSetCookie();
-        if (cookies.length > 0) reply.header('set-cookie', cookies);
-        if (response.body === null) return reply.send(null);
-        const text = await response.text();
-        return reply.send(
-          response.headers.get('content-type')?.includes('json') === true ? withoutToken(text) : text,
-        );
-      },
+    const perIp = { rateLimit: { max: AUTH_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } };
+    // Its own counter: the per-IP limiter has already run on this request, `rateLimit()` would stand down.
+    const perAccount = app.createRateLimit({
+      max: SIGN_IN_PER_ACCOUNT,
+      timeWindow: SIGN_IN_ACCOUNT_WINDOW,
+      keyGenerator: signInAccountKey,
     });
+    const forward = async (request: FastifyRequest, reply: FastifyReply) => {
+      const body =
+        request.body === undefined || request.body === null ? undefined : JSON.stringify(request.body);
+      const response = await auth.handler(
+        new Request(new URL(request.url, config.AUTH_BASE_URL), {
+          method: request.method,
+          headers: authHeaders(request),
+          ...(body === undefined ? {} : { body }),
+        }),
+      );
+      reply.code(response.status);
+      response.headers.forEach((value, key) => {
+        if (!['set-cookie', 'content-length', 'content-encoding', 'transfer-encoding'].includes(key)) {
+          reply.header(key, value);
+        }
+      });
+      const cookies = response.headers.getSetCookie();
+      if (cookies.length > 0) reply.header('set-cookie', cookies);
+      if (response.body === null) return reply.send(null);
+      const text = await response.text();
+      return reply.send(
+        response.headers.get('content-type')?.includes('json') === true ? withoutToken(text) : text,
+      );
+    };
+
+    // Sign-in has both limits: per IP like the rest of `/auth`, and per account (after the body is read).
+    app.route({
+      method: 'POST',
+      url: '/auth/sign-in/email',
+      config: perIp,
+      preHandler: async (request, reply) => {
+        const attempt = await perAccount(request);
+        if (attempt.isAllowed || !attempt.isExceeded) return;
+        void reply.header('retry-after', attempt.ttlInSeconds);
+        throw new SignInLimited();
+      },
+      handler: forward,
+    });
+    app.route({ method: ['GET', 'POST'], url: '/auth/*', config: perIp, handler: forward });
 
     app.get(
       '/me',

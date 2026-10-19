@@ -43,6 +43,11 @@ const configSchema = z
     AUTH_BASE_URL: z.url(),
     /** Requests per minute and per IP before `429` (security.md §6). */
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(300),
+    /**
+     * Reverse proxies in front of the API (Coolify's Traefik in production: 1). The client IP of the rate limits
+     * and of the audit is read from `x-forwarded-for` past that many hops only; 0 trusts no header.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     /** Jobs a worker runs at once; jobs of one conversation stay serial whatever this is (ADR 0006). */
     WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
     /** Development: run the worker inside the API process (`pnpm dev`). */
