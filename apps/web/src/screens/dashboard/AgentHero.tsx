@@ -51,7 +51,7 @@ export function AgentHero({
               part.lit ? <em key={part.text}>{part.text}</em> : part.text,
             )}
           </h1>
-          <p className="db-hero__lead">{hero.lead}</p>
+          {hero.lead === '' ? null : <p className="db-hero__lead">{hero.lead}</p>}
         </div>
         {hero.action === undefined || (stopped ? onResume === undefined : first === undefined) ? null : (
           <button

@@ -84,7 +84,7 @@ describe('DashboardPage on the server’s data', () => {
     renderDashboard();
     expect(await screen.findByText('Kévin')).toBeDefined();
     expect(screen.queryByText('Exemple')).toBeNull();
-    expect(headline()).toBe('Une chose t’attend, dont une urgente');
+    expect(headline()).toBe('Une urgence t’attend');
     expect(screen.getByText(/dès que la connexion à Reveal les observera/u)).toBeDefined();
     expect(screen.getByText('Théo')).toBeDefined();
     // A todo of the server leaves the list when its conversation is handled, not on a tick here.

@@ -137,6 +137,16 @@ describe('heroState', () => {
     });
   });
 
+  it('names urgencies as such when nothing else waits, and counts them', () => {
+    expect(heroState(agent, [todo('a', 'bad')], 'copilot').headline).toBe('**Une urgence** t’attend');
+    expect(heroState(agent, [todo('a', 'bad'), todo('b', 'bad')], 'copilot').headline).toBe(
+      '**2 urgences** t’attendent',
+    );
+    expect(
+      heroState(agent, [todo('a', 'bad'), todo('b', 'bad'), todo('c', 'warn')], 'copilot').headline,
+    ).toBe('**3 choses** t’attendent, dont 2 urgentes');
+  });
+
   it('keeps the sentence of an agent in trouble', () => {
     const broken: AgentState = { ...agent, tone: 'bad', headline: 'Reveal est **déconnecté**' };
     expect(heroState(broken, [], 'copilot').headline).toBe('Reveal est **déconnecté**');
