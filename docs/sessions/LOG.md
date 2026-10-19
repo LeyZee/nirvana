@@ -108,3 +108,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | `globalStop` dans GET /v1/dashboard | done | `log/2026-10-19-dashboard-global-stop.md` |
 | 2026-10-19 | Le Dashboard et la barre lisent GET /v1/dashboard | done | `log/2026-10-19-web-dashboard-reel.md` |
 | 2026-10-19 | Références plateforme du composeur pour la vision | done | `log/2026-10-19-compose-platform-refs.md` |
+| 2026-10-19 | IP réelle derrière le proxy, limite de connexion par compte (G6) | done | `log/2026-10-19-trust-proxy.md` |
