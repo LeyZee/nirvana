@@ -94,6 +94,11 @@ function guardsToday(handoffs: DashboardFacts['handoffsToday']): Record<HandoffC
   return counts;
 }
 
+export interface VoiceHealth {
+  readonly ok: boolean;
+  readonly keyMissing: boolean;
+}
+
 /** The Dashboard of one creator, from the facts of the database and the day's budget. */
 export function assembleDashboard(input: {
   readonly creatorId: CreatorId;
@@ -101,7 +106,10 @@ export function assembleDashboard(input: {
   readonly facts: DashboardFacts;
   readonly window: DashboardWindow;
   readonly budget: BudgetReading;
-  readonly isVoiceOk: boolean;
+  /** From the gateway's health: a voice model answers, and whether any key exists for it (main or fallback). */
+  readonly voice: VoiceHealth;
+  /** Jobs the worker gave up on, hers or of no creator; `null` when unreadable. */
+  readonly deadJobs: number | null;
   /** Undefined when Telegram is off. */
   readonly telegram: TelegramReading | undefined;
   /**
@@ -135,10 +143,12 @@ export function assembleDashboard(input: {
       conversations: facts.reveal.conversations,
     },
     voice: {
-      ok: input.isVoiceOk,
+      ok: input.voice.ok,
+      keyMissing: input.voice.keyMissing,
       medianWriteMs: facts.voice.medianWriteMs === null ? null : Math.round(facts.voice.medianWriteMs),
       outagesLast7d: facts.voice.outageHoursLast7d,
     },
+    jobs: { dead: input.deadJobs },
     replies: {
       medianReplyMinutes:
         facts.replies.medianReplyMinutes === null

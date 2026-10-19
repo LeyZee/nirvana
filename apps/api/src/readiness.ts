@@ -34,6 +34,24 @@ async function within<T>(promise: Promise<T>, fallback: T): Promise<T> {
 }
 
 /**
+ * Jobs Graphile gave up on that concern one creator: hers (payload `creatorId`) and the ones of no creator
+ * (cron, dispatch), which stop her too. `null` when the count could not be read in time.
+ */
+export function countDeadJobs(adminDb: Database, creatorId: string): Promise<number | null> {
+  return within(
+    adminDb
+      .execute<{ dead: number }>(
+        // The public `jobs` view has no payload: the table behind it does.
+        sql`select count(*)::int as dead from graphile_worker._private_jobs
+            where attempts >= max_attempts
+              and (payload->>'creatorId' is null or payload->>'creatorId' = ${creatorId})`,
+      )
+      .then((result) => result.rows[0]?.dead ?? null),
+    null,
+  );
+}
+
+/**
  * `/ready` (operations.md § Santé): the database answers, the shipped migrations are applied, and some worker
  * wrote its heartbeat recently. The age is computed by Postgres so that the API's clock does not matter.
  */

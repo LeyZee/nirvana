@@ -95,11 +95,21 @@ export const DashboardSchema = z.object({
   reveal: z.object({ connected: z.boolean(), lastReadAt: at.nullable(), conversations: count }),
   voice: z.object({
     ok: z.boolean(),
+    /**
+     * No key for the voice's model nor for its fallback (Services or environment): `ok` is false too, and the screen
+     * says « Clé manquante » rather than a breakdown.
+     */
+    keyMissing: z.boolean(),
     /** Median time the voice took to write, today, in milliseconds. */
     medianWriteMs: count.nullable(),
     /** Hours of the last 7 days with at least one failed voice call. */
     outagesLast7d: count,
   }),
+  /**
+   * Jobs the worker gave up on (attempts spent) for her or for no creator: work that will not happen until someone
+   * looks (operations.md). `null` when the count could not be read.
+   */
+  jobs: z.object({ dead: count.nullable() }),
   replies: z.object({
     /** Median time between a fan's message and her answer, over the period. */
     medianReplyMinutes: z.number().nonnegative().nullable(),

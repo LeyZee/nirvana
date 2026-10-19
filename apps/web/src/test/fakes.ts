@@ -29,7 +29,8 @@ export function apiDashboard(patch: Partial<ApiDashboard> = {}): ApiDashboard {
     },
     liveRate: { rate: 64.5, target: 80, decided: 37, threeWeeksAgo: null },
     reveal: { connected: true, lastReadAt: '2026-10-19T11:59:46Z', conversations: 12 },
-    voice: { ok: true, medianWriteMs: 3100, outagesLast7d: 0 },
+    voice: { ok: true, keyMissing: false, medianWriteMs: 3100, outagesLast7d: 0 },
+    jobs: { dead: 0 },
     replies: { medianReplyMinutes: 1.7, fansWaitingOver10Min: 0, conversationsOpen: 9 },
     guards: {
       today: {

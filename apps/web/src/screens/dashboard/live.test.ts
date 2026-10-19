@@ -55,7 +55,9 @@ describe('fromApi', () => {
   it('says first that Reveal is disconnected, then that the voice is down', () => {
     const offline = apiDashboard({ reveal: { connected: false, lastReadAt: null, conversations: 0 } });
     expect(fromApi(offline).agent).toMatchObject({ tone: 'bad', headline: 'Reveal est **déconnecté**' });
-    const mute = apiDashboard({ voice: { ok: false, medianWriteMs: null, outagesLast7d: 3 } });
+    const mute = apiDashboard({
+      voice: { ok: false, keyMissing: false, medianWriteMs: null, outagesLast7d: 3 },
+    });
     expect(fromApi(mute).agent).toMatchObject({ tone: 'bad', headline: 'L’IA qui écrit **ne répond plus**' });
     expect(card('voice', fromApi(mute))?.rows[1]).toEqual(['Pannes', '3 heures en 7 j']);
   });

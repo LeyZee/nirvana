@@ -54,7 +54,8 @@ const assemble = (
       voice: { voicePrompt: '1.5.0', voiceModel: 'grok-4.7' },
     },
     budget: { spentEur: 3.204, capEur: 20, alertAtEur: 16 },
-    isVoiceOk: true,
+    voice: { ok: true, keyMissing: false },
+    deadJobs: 0,
     telegram: telegram === 'off' ? undefined : telegram,
     automatic: { gate: automatic, reading },
   });

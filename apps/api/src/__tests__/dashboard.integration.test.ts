@@ -187,6 +187,23 @@ describe('GET /v1/dashboard', () => {
     );
   });
 
+  it('counts the jobs the worker gave up on, hers and those of no creator only', async () => {
+    const dead = async () => {
+      const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
+      return DashboardSchema.parse(response.json()).jobs.dead;
+    };
+    const before = (await dead()) ?? 0;
+    for (const payload of [{ creatorId }, { creatorId: '0190a000-0000-7000-8000-000000000000' }, {}]) {
+      await test.admin.db.execute(sql`
+        select graphile_worker.add_job('conversation.respond', ${JSON.stringify(payload)}::json,
+          max_attempts => 1, run_at => now() + interval '1 day')`);
+      await test.admin.db.execute(sql`
+        update graphile_worker._private_jobs set attempts = max_attempts, last_error = 'test'
+        where id = (select max(id) from graphile_worker._private_jobs)`);
+    }
+    expect(await dead()).toBe(before + 2);
+  });
+
   it('computes the dashboard of one creator from her conversations', async () => {
     const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
     expect(response.statusCode, response.body).toBe(200);
@@ -196,6 +213,8 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.period).toBe('week');
     expect(dashboard.mode).toBe('copilot');
     expect(dashboard.globalStop).toBe(false);
+    // No key in the environment nor in Services: the screen says « Clé manquante », not a breakdown.
+    expect(dashboard.voice).toMatchObject({ ok: false, keyMissing: true });
     expect(dashboard.liveRate).toEqual({ rate: 50, target: 80, decided: 2, threeWeeksAgo: null });
     expect(dashboard.automatic).toEqual({
       open: false,
