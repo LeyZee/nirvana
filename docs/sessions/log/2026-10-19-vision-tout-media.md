@@ -1,4 +1,4 @@
-# 2026-10-19 — Vision sur tout média avant le brouillon (revue 09, B2, part agent) — in_progress
+# 2026-10-19 — Vision sur tout média avant le brouillon (revue 09, B2, part agent) — done
 Fait :
 - `draft-composer.ts` : chaque média reçu depuis sa dernière réponse est vu (port `MediaSight`) avant le cerveau ; la description accompagne son message dans l'historique des modèles. Ce qui ne peut pas être vu (vision absente, verrouillé, note vocale, message vide, échec) passe la main à un humain (`media_unscreened` et la raison).
 - Une alerte de la vision donne la cause la plus grave du passage de main (`handoffCauseOf`) : mineur, consentement, détresse, sinon autre.

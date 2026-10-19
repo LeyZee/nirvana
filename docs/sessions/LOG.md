@@ -103,4 +103,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-17 | Identifiants UUID v7 pour llm_calls et kill_switches | done | `log/2026-10-17-uuid-v7-rows.md` |
 | 2026-10-18 | Règle d'évolution des payloads du journal (G13) | done | `log/2026-10-18-event-upcast.md` |
 | 2026-10-19 | Route du mode de l'agent : Arrêt et Copilote depuis le CRM | done | `log/2026-10-19-agent-mode-route.md` |
-| 2026-10-19 | Vision sur tout média avant le brouillon (Opus) | in_progress | `log/2026-10-19-vision-tout-media.md` |
+| 2026-10-19 | Vision sur tout média avant le brouillon (Opus) | done | `log/2026-10-19-vision-tout-media.md` |
