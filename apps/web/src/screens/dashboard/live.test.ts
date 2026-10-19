@@ -54,11 +54,16 @@ describe('fromApi', () => {
 
   it('says a Reveal never linked is a step to come, in no colour, not an outage', () => {
     const unlinked = fromApi(
-      apiDashboard({ reveal: { connected: false, lastReadAt: null, conversations: 0 } }),
+      apiDashboard({
+        reveal: { connected: false, lastReadAt: null, conversations: 0 },
+        voice: { ok: false, medianWriteMs: null, outagesLast7d: 0 },
+      }),
     );
     expect(unlinked.agent).toMatchObject({ tone: 'idle', headline: 'Reveal n’est **pas encore relié**' });
     expect(card('reveal', unlinked)).toMatchObject({ tone: 'idle', value: 'Pas encore reliée' });
     expect(unlinked.agent.foldSummary).toContain('Reveal pas encore relié');
+    // Reveal speaks first, the voice is said in the same lead, not only in the fold.
+    expect(unlinked.agent.lead).toContain('L’IA qui écrit ne répond pas non plus.');
   });
 
   it('says first that Reveal is disconnected, then that the voice is down', () => {

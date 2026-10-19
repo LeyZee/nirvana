@@ -1,5 +1,5 @@
 import { attachGlassLight, countUp, tipPlacement } from '@nirvana/design-system';
-import { useCallback, useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { Tone } from './model';
@@ -58,7 +58,8 @@ export interface FloatingTip {
   /** Spread on any element that explains itself on hover or focus. */
   readonly bind: (content: TipContent) => {
     onPointerMove: (event: React.PointerEvent) => void;
-    onPointerLeave: () => void;
+    onPointerDown: (event: React.PointerEvent) => void;
+    onPointerLeave: (event: React.PointerEvent) => void;
     onFocus: (event: React.FocusEvent) => void;
     onBlur: () => void;
   };
@@ -86,12 +87,33 @@ export function useFloatingTip(): FloatingTip {
   const hide = useCallback(() => {
     setTip(null);
   }, []);
+
+  // A tip opened by a tap stays until the next tap: caught before the element's own handler, which may reopen it.
+  const shown = tip !== null;
+  useEffect(() => {
+    if (!shown) return undefined;
+    const onDown = (event: PointerEvent): void => {
+      if (event.pointerType !== 'mouse') hide();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [shown, hide]);
   const bind = useCallback(
     (content: TipContent) => ({
       onPointerMove: (event: React.PointerEvent) => {
         setTip({ content, x: event.clientX, y: event.clientY });
       },
-      onPointerLeave: hide,
+      // A finger has no hover: a tap shows the tip under the element, and the next tap anywhere hides it.
+      onPointerDown: (event: React.PointerEvent) => {
+        if (event.pointerType === 'mouse') return;
+        const box = event.currentTarget.getBoundingClientRect();
+        setTip({ content, x: box.left, y: box.bottom });
+      },
+      onPointerLeave: (event: React.PointerEvent) => {
+        if (event.pointerType === 'mouse') hide();
+      },
       onFocus: (event: React.FocusEvent) => {
         const box = event.currentTarget.getBoundingClientRect();
         setTip({ content, x: box.left, y: box.bottom });

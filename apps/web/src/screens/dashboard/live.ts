@@ -207,12 +207,14 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     foldSummary: summary,
     cards,
   };
+  // Reveal speaks first, but a voice down too is said in the same sentence, never only in the fold.
+  const alsoVoice = voice.ok ? '' : ' L’IA qui écrit ne répond pas non plus.';
   if (unlinked) {
     return {
       ...base,
       tone: 'idle',
       headline: 'Reveal n’est **pas encore relié**',
-      lead: 'L’agent commencera à lire les conversations dès que la session Reveal sera capturée depuis l’extension.',
+      lead: `L’agent commencera à lire les conversations dès que la session Reveal sera capturée depuis l’extension.${alsoVoice}`,
       foldTitle: 'Rien ne tourne encore',
     };
   }
@@ -222,7 +224,7 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
       ...base,
       tone: 'bad',
       headline: 'Reveal est **déconnecté**',
-      lead: 'L’agent ne lit plus les conversations. Reconnecte la session Reveal depuis l’extension.',
+      lead: `L’agent ne lit plus les conversations. Reconnecte la session Reveal depuis l’extension.${alsoVoice}`,
       foldTitle: 'Quelque chose ne va pas',
     };
   }

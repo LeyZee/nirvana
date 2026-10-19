@@ -16,12 +16,15 @@ const TITLE = {
  */
 export function AgentPill(): JSX.Element {
   const view = useAgentMode();
-  const pill = pillOf(view.source === 'live' ? view.mode : null);
+  const stalled = view.source === 'live' ? view.stalled : null;
+  const pill = pillOf(view.source === 'live' ? view.mode : null, stalled === null);
   const label = view.source === 'loading' ? 'Agent' : pill.label;
   const title =
     view.source === 'unavailable' || view.source === 'empty'
       ? TITLE[view.source]
-      : `Agent : ${label}. Le changer sur le Dashboard.`;
+      : stalled !== null && view.source === 'live' && view.mode !== 'stop'
+        ? `Agent : ${label}, mais rien ne tourne : ${stalled}. Voir le Dashboard.`
+        : `Agent : ${label}. Le changer sur le Dashboard.`;
   return (
     <Link to="/" className="nv-rail__agent" data-tone={pill.tone} title={title} aria-label={title}>
       <span

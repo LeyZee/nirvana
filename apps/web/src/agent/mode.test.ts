@@ -67,6 +67,12 @@ describe('pillOf', () => {
     expect(pillOf('stop')).toEqual({ label: 'Arrêt', tone: 'bad', live: false });
   });
 
+  it('keeps the mode set but neither green nor alive when nothing runs', () => {
+    expect(pillOf('copilot', false)).toEqual({ label: 'Copilote', tone: 'unknown', live: false });
+    expect(pillOf('auto', false)).toEqual({ label: 'Automatique', tone: 'unknown', live: false });
+    expect(pillOf('stop', false)).toEqual({ label: 'Arrêt', tone: 'bad', live: false });
+  });
+
   it('never shows a mode the server did not give', () => {
     expect(pillOf(null)).toEqual({ label: 'Inconnu', tone: 'unknown', live: false });
   });
