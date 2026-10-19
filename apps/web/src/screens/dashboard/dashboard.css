@@ -514,3 +514,26 @@
     padding: 0 6px;
   }
 }
+
+/* Waiting for the server, and what stands in for data not observed yet (sales, purchases). */
+.db-loading {
+  min-height: 220px;
+  border-radius: var(--nv-radius-lg);
+  animation: db-breathe 1.6s ease-in-out infinite;
+}
+@keyframes db-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .db-loading {
+    animation: none;
+  }
+}
+.db-pending {
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: var(--nv-radius-lg);
+  color: var(--nv-ink-muted);
+}

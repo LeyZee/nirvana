@@ -17,6 +17,7 @@ const OPEN: AutomaticGate = { open: true, missing: [] };
 function Harness(props: {
   mode: AgentMode;
   automatic: AutomaticGate;
+  readOnly?: boolean;
   onChange: (mode: AgentMode) => void;
 }): JSX.Element {
   const tip = useFloatingTip();
@@ -28,9 +29,9 @@ function Harness(props: {
   );
 }
 
-function setup(mode: AgentMode, automatic: AutomaticGate) {
+function setup(mode: AgentMode, automatic: AutomaticGate, readOnly = false) {
   const onChange = vi.fn<(mode: AgentMode) => void>();
-  render(<Harness mode={mode} automatic={automatic} onChange={onChange} />);
+  render(<Harness mode={mode} automatic={automatic} readOnly={readOnly} onChange={onChange} />);
   return { onChange, option: (name: string) => screen.getByRole('radio', { name }) };
 }
 
@@ -111,5 +112,20 @@ describe('ModeControl', () => {
     fireEvent.keyDown(option('Copilote'), { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(option('Automatique'));
     expect(onChange).toHaveBeenCalledWith('auto');
+  });
+
+  it('shows a mode it cannot change: the others are greyed and say why, the keys and clicks do nothing', () => {
+    const { onChange, option } = setup('copilot', OPEN, true);
+    expect(option('Copilote').getAttribute('aria-disabled')).toBe('false');
+    expect(option('Arrêt').getAttribute('aria-disabled')).toBe('true');
+    expect(option('Automatique').getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.click(option('Arrêt'));
+    fireEvent.keyDown(option('Copilote'), { key: 'ArrowRight' });
+    expect(dialog().getAttribute('aria-hidden')).toBe('true');
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.focus(option('Arrêt'));
+    expect(screen.getByRole('tooltip').textContent).toContain('Ne se change pas encore depuis le CRM.');
   });
 });

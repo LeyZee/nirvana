@@ -16,6 +16,9 @@ export function TopFans({
 }): JSX.Element {
   const top = fans.filter((fan) => fan.spent > 0).slice(0, 4);
   const max = Math.max(1, ...top.map((fan) => fan.spent));
+  if (top.length === 0) {
+    return <p className="db-pending nv-glass">Aucun achat observé sur la période.</p>;
+  }
   return (
     <div className="nv-glass db-fans" ref={lightUp}>
       {top.map((fan) => (

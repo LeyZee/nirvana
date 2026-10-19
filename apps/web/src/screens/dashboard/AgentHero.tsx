@@ -22,9 +22,10 @@ export function AgentHero({
   mode: AgentMode;
   todos: readonly Todo[];
   onOpen: (todo: Todo) => void;
-  onDone: (id: string) => void;
-  /** The action of a stopped agent: back to Copilote. */
-  onResume: () => void;
+  /** Marks a todo as handled; absent when the list is the server's (it leaves the list when handled). */
+  onDone: ((id: string) => void) | undefined;
+  /** The action of a stopped agent: back to Copilote; absent while the screen cannot switch the mode. */
+  onResume: (() => void) | undefined;
 }): JSX.Element {
   const hero = heroState(agent, waiting, mode);
   const stopped = mode === 'stop';
@@ -52,12 +53,12 @@ export function AgentHero({
           </h1>
           <p className="db-hero__lead">{hero.lead}</p>
         </div>
-        {hero.action === undefined || (!stopped && first === undefined) ? null : (
+        {hero.action === undefined || (stopped ? onResume === undefined : first === undefined) ? null : (
           <button
             type="button"
             className={`nv-btn ${stopped ? 'nv-btn--soft' : 'nv-btn--neon'} nv-swap`}
             onClick={() => {
-              if (stopped) onResume();
+              if (stopped) onResume?.();
               else if (first !== undefined) onOpen(first);
             }}
           >
@@ -101,18 +102,20 @@ export function AgentHero({
               </div>
               <div className="nv-todo__side">
                 <span className="nv-todo__time">{todo.at}</span>
-                <button
-                  type="button"
-                  className="nv-todo__done"
-                  aria-label="Marquer comme traité"
-                  title="Traité"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDone(todo.id);
-                  }}
-                >
-                  <CheckIcon />
-                </button>
+                {onDone === undefined ? null : (
+                  <button
+                    type="button"
+                    className="nv-todo__done"
+                    aria-label="Marquer comme traité"
+                    title="Traité"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDone(todo.id);
+                    }}
+                  >
+                    <CheckIcon />
+                  </button>
+                )}
                 <Chevron className="nv-todo__go" />
               </div>
             </div>

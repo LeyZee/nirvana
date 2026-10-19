@@ -1,8 +1,8 @@
 import type { TelegramNight } from '@/settings/telegram/NightBanner';
 
 /**
- * What the Dashboard shows, in the shape the screen needs. Until `GET /v1/dashboard` exists (PR 3, contract in
- * `@nirvana/contracts`), `useDashboard` serves sample data of this shape and the screen says « Exemple ».
+ * What the Dashboard shows, in the shape the screen needs: `GET /v1/dashboard` written in French (`live.ts`), or
+ * the sample of this shape when the server does not answer, and the screen says « Exemple ».
  * Money is in euros, durations in minutes, rates in % (0 to 100).
  */
 
@@ -107,7 +107,8 @@ export interface Dashboard {
   readonly creator: { readonly name: string; readonly platform: string; readonly now: string };
   readonly agent: AgentState;
   readonly todos: readonly Todo[];
-  readonly sales: Readonly<Record<Period, Sales>>;
+  /** Null on the server's data until the Reveal connector observes purchases: nothing stands in for them. */
+  readonly sales: Readonly<Record<Period, Sales>> | null;
   /** Best fans first. */
   readonly fans: readonly Fan[];
   /** Telegram's coverage of her night (`telegramNightOf`); absent on sample data. */
