@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { descriptionKey, keyframeRate, mediaKindOf, needsConversion, spreadFrames } from '../media';
+import {
+  descriptionKey,
+  keyframeRate,
+  mediaKindOf,
+  needsConversion,
+  sniffMediaType,
+  spreadFrames,
+} from '../media';
 
 describe('media domain', () => {
   it('tells photos from videos and refuses the rest', () => {
@@ -41,5 +48,21 @@ describe('keyframeRate', () => {
     expect(keyframeRate(9)).toBe(1);
     expect(keyframeRate(240)).toBe(0.1);
     expect(keyframeRate(0)).toBe(1);
+  });
+
+  it('reads the type of a file from its first bytes, not from its name', () => {
+    const bytes = (...parts: (string | number[])[]) =>
+      new Uint8Array(parts.flatMap((p) => (typeof p === 'string' ? [...new TextEncoder().encode(p)] : p)));
+    expect(sniffMediaType(bytes([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
+    expect(sniffMediaType(bytes([0x89], 'PNG', [0x0d, 0x0a, 0x1a, 0x0a]))).toBe('image/png');
+    expect(sniffMediaType(bytes('GIF89a'))).toBe('image/gif');
+    expect(sniffMediaType(bytes('RIFF', [0, 0, 0, 0], 'WEBP'))).toBe('image/webp');
+    expect(sniffMediaType(bytes([0x1a, 0x45, 0xdf, 0xa3]))).toBe('video/webm');
+    expect(sniffMediaType(bytes([0, 0, 0, 0x18], 'ftypheic'))).toBe('image/heic');
+    expect(sniffMediaType(bytes([0, 0, 0, 0x18], 'ftypavif'))).toBe('image/avif');
+    expect(sniffMediaType(bytes([0, 0, 0, 0x14], 'ftypqt  '))).toBe('video/quicktime');
+    expect(sniffMediaType(bytes([0, 0, 0, 0x18], 'ftypisom'))).toBe('video/mp4');
+    expect(sniffMediaType(bytes('<html>'))).toBeUndefined();
+    expect(sniffMediaType(new Uint8Array())).toBeUndefined();
   });
 });

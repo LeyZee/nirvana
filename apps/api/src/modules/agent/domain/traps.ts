@@ -1,4 +1,4 @@
-import type { MediaDescription, MediaFlag } from '@nirvana/contracts';
+import type { HandoffCause, MediaDescription, MediaFlag } from '@nirvana/contracts';
 
 import { detectInjection, type InjectionSignal } from './injection';
 
@@ -69,4 +69,16 @@ export interface MediaScreening {
 export function screenMedia(media: readonly MediaDescription[]): MediaScreening {
   const flags = [...new Set(media.flatMap((d) => d.flags))];
   return { mustHandoff: flags.length > 0, flags };
+}
+
+// The gravest first: a possible minor outranks everything, then consent, then his safety.
+const FLAG_CAUSES: readonly (readonly [MediaFlag, HandoffCause])[] = [
+  ['possible_minor', 'minor'],
+  ['possible_non_consent', 'non_consent'],
+  ['self_harm', 'distress'],
+];
+
+/** Why a human takes over after the vision flagged his media: it ranks the alert (Suivi, Telegram). */
+export function handoffCauseOf(flags: readonly MediaFlag[]): HandoffCause {
+  return FLAG_CAUSES.find(([flag]) => flags.includes(flag))?.[1] ?? 'other';
 }

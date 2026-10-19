@@ -1,7 +1,7 @@
 import type { MediaDescription } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assessTrap, screenMedia } from '../traps';
+import { assessTrap, handoffCauseOf, screenMedia } from '../traps';
 
 const PHOTO: MediaDescription = {
   vocabularyVersion: '1.0.0',
@@ -89,5 +89,14 @@ describe('screenMedia', () => {
       mustHandoff: true,
       flags: ['possible_minor'],
     });
+  });
+});
+
+describe('handoffCauseOf', () => {
+  it('ranks the alert on the gravest flag of his media', () => {
+    expect(handoffCauseOf(['weapon', 'possible_minor', 'possible_non_consent'])).toBe('minor');
+    expect(handoffCauseOf(['drugs', 'possible_non_consent'])).toBe('non_consent');
+    expect(handoffCauseOf(['self_harm'])).toBe('distress');
+    expect(handoffCauseOf(['identifiable_third_party'])).toBe('other');
   });
 });
