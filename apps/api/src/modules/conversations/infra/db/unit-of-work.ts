@@ -1,8 +1,10 @@
 import {
   AuditEntryIdSchema,
+  ConversationIdSchema,
   EventIdSchema,
   ExternalMediaSchema,
   JOB_MAX_ATTEMPTS,
+  KillSwitchIdSchema,
   JOB_PAYLOADS,
   MessageAuthorSchema,
   MessageDirectionSchema,
@@ -64,6 +66,14 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .update(schema.conversations)
           .set({ ...projection, updatedAt: sql`now()` })
           .where(eq(schema.conversations.id, id));
+      },
+      async idsInMode(mode) {
+        const rows = await tx
+          .select({ id: schema.conversations.id })
+          .from(schema.conversations)
+          .where(eq(schema.conversations.mode, mode))
+          .orderBy(schema.conversations.id);
+        return rows.map((row) => ConversationIdSchema.parse(row.id));
       },
     },
 
@@ -242,13 +252,42 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
       },
     },
 
+    switches: {
+      async lockCreator() {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`agent_mode:${creatorId}`}, 0))`,
+        );
+      },
+      async isOn() {
+        const rows = await tx.execute<{ scope: string; active: boolean }>(sql`
+          select distinct on (scope) scope, active
+          from kill_switches
+          where scope = 'global' or (scope = 'creator' and scope_id = ${creatorId})
+          order by scope, set_at desc`);
+        const on = (scope: string) => rows.rows.some((row) => row.scope === scope && row.active);
+        return { global: on('global'), creator: on('creator') };
+      },
+      async setCreator(entry) {
+        await tx.insert(schema.killSwitches).values({
+          id: newId(KillSwitchIdSchema),
+          scope: 'creator',
+          scopeId: creatorId,
+          creatorId,
+          active: entry.active,
+          reason: entry.reason,
+          setBy: entry.setBy,
+          setAt: sql`clock_timestamp()`,
+        });
+      },
+    },
+
     audit: {
       async record(entry) {
         await tx.insert(schema.auditLog).values({
           id: newId(AuditEntryIdSchema),
           userId: entry.userId,
           action: entry.action,
-          entity: 'conversation',
+          entity: entry.entity ?? 'conversation',
           entityId: entry.entityId,
           details: entry.details ?? {},
         });

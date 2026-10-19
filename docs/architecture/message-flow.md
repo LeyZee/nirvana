@@ -97,6 +97,14 @@ Mode auto : `CreatorSettings.auto_approve_categories` (ex. `['small_talk','kyc',
 
 `kill_switches` à trois niveaux. Le job `respond` et le job `send` les relisent à chaque exécution. L'approbation d'un brouillon les relit aussi : interrupteur actif ou session expirée, elle est refusée (409 `kill_switch_conflict` ou `session_expired_conflict`) et le brouillon reste en attente. Le job `send` les relit avant chaque bulle : un brouillon arrêté ainsi expire, et rien ne repart tout seul quand l'interrupteur est levé. Un interrupteur « envois seulement » existe : le bot continue de proposer (copilote), rien ne part.
 
+Le contrôle du Dashboard passe par `PUT /v1/agent/mode { creatorId, mode }` (propriétaire ou opérateur de la créatrice) :
+
+- **Arrêt** pose l'interrupteur de la créatrice, sans ré-authentification : un arrêt d'urgence doit être immédiat.
+- **Copilote** le lève et repasse en copilote toute conversation restée en automatique.
+- **Automatique** est refusé (409 `agent_mode_conflict`) tant que le verrou de l'ADR 0019 n'est pas branché côté serveur.
+
+Chaque changement écrit sa ligne `kill_switches`, son événement `kill_switch_toggled` et sa ligne `audit_log` dans la même transaction. Un clic qui ne change rien n'écrit rien. Les changements d'une même créatrice passent l'un après l'autre (verrou de transaction), et la ligne prend l'heure de la base une fois le verrou tenu : le dernier clic appliqué reste la dernière ligne. La réponse donne le mode en vigueur, sous la forme de `GET /v1/dashboard` : Arrêt tant que l'interrupteur global reste posé, avec `globalStop: true` pour que l'écran dise pourquoi.
+
 ## 7. Réconciliation
 
 Job `connector.reconcile` toutes les 10 min : relit la liste des conversations et les N derniers messages de celles actives, compare avec la base, ingère ce qui manque (idempotent), marque les envois non retrouvés comme `send_failed` si plus vieux que 5 min. C'est le filet de sécurité contre les messages perdus et les envois fantômes.

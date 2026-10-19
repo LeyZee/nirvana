@@ -23,6 +23,16 @@ export class DraftNotFound extends DomainError {
   }
 }
 
+/** Automatique stays locked until its server lock opens (ADR 0019); until then the agent only drafts. */
+export class AutomaticLocked extends DomainError {
+  constructor() {
+    super(
+      'agent_mode_conflict',
+      'Le mode Automatique reste fermé tant que le taux en réel et le test à l’aveugle ne sont pas validés',
+    );
+  }
+}
+
 /** A command the conversation's state does not allow (approving while a human holds it, for instance). */
 export class TransitionConflict extends DomainError {
   constructor(state: ConversationState, command: ConversationCommand) {

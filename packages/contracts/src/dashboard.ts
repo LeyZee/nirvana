@@ -21,6 +21,19 @@ export const DashboardQuerySchema = z.object({
 export const AgentModeSchema = z.enum(['auto', 'copilot', 'stop']);
 export type AgentMode = z.infer<typeof AgentModeSchema>;
 
+/**
+ * `PUT /v1/agent/mode`: Arrêt sets her kill switch, Copilote lifts it and brings every conversation back to the
+ * copilot, Automatique is refused (409) while ADR 0019 keeps it locked. The answer is the mode now in force, as
+ * `GET /v1/dashboard` gives it: Arrêt when the global switch stays on.
+ */
+export const SetAgentModeBodySchema = z.object({ creatorId: CreatorIdSchema, mode: AgentModeSchema });
+export const AgentModeResultSchema = z.object({
+  mode: AgentModeSchema,
+  /** The global switch is on: Arrêt for every creator, whatever she asked, until an operator lifts it. */
+  globalStop: z.boolean(),
+});
+export type AgentModeResult = z.infer<typeof AgentModeResultSchema>;
+
 const percent = z.number().min(0).max(100);
 const count = z.number().int().nonnegative();
 const euros = z.number().nonnegative();

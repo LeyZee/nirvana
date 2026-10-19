@@ -5,6 +5,7 @@ import {
   MessageIdSchema,
   newId,
   queueNameFor,
+  type AgentMode,
   type ConversationId,
   type ConversationMode,
   type CreatorId,
@@ -14,7 +15,7 @@ import {
   type UserId,
 } from '@nirvana/contracts';
 
-import { ConversationNotFound, SendBlocked } from '../domain/errors';
+import { AutomaticLocked, ConversationNotFound, SendBlocked } from '../domain/errors';
 import type { Clock, Conversation, EventMeta, FanDirectory, Transaction, UnitOfWork } from '../domain/ports';
 import { rebuildProjection, type ConversationProjection } from '../domain/projection';
 import { debounceFor } from '../domain/rules';
@@ -57,6 +58,13 @@ export interface ConversationCommands {
   takeover(input: ConversationCommand & { reason?: string }): Promise<void>;
   release(input: ConversationCommand): Promise<void>;
   setMode(input: ConversationCommand & { mode: ConversationMode }): Promise<void>;
+  /**
+   * The Dashboard's control (Arrêt, Copilote, Automatique) for all her conversations. Returns the mode now in
+   * force: Arrêt while the global switch stays on, whatever she asked.
+   */
+  setAgentMode(
+    input: Omit<ConversationCommand, 'conversationId'> & { mode: AgentMode },
+  ): Promise<{ mode: AgentMode; globalStop: boolean }>;
   /** Recomputes the projection columns from the journal (ADR 0007) and saves them. */
   rebuildProjection(creatorId: CreatorId, conversationId: ConversationId): Promise<ConversationProjection>;
 }
@@ -331,6 +339,50 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           { type: 'mode_changed', payload: { userId: input.userId, mode: input.mode } },
           humanMeta(input),
         );
+      });
+    },
+
+    setAgentMode(input) {
+      // Automatique opens behind the server lock of ADR 0019 (B3); until then nothing here can turn it on.
+      if (input.mode === 'auto') return Promise.reject(new AutomaticLocked());
+      const stop = input.mode === 'stop';
+      return uow.inTenant(input.creatorId, async (tx) => {
+        // Two clicks in a row apply in the order they took the lock, and the later one stays the latest row.
+        await tx.switches.lockCreator();
+        const meta = humanMeta(input);
+        const switches = await tx.switches.isOn();
+        if (switches.creator !== stop) {
+          const reason = stop ? 'Arrêt depuis le Dashboard' : 'Reprise en copilote depuis le Dashboard';
+          await tx.switches.setCreator({ active: stop, reason, setBy: meta.actor });
+          await tx.events.publish(
+            input.creatorId,
+            {
+              type: 'kill_switch_toggled',
+              payload: { scope: 'creator', scopeId: input.creatorId, active: stop, reason },
+            },
+            meta,
+          );
+          await tx.audit.record({
+            userId: input.userId,
+            action: stop ? 'kill_switch.on' : 'kill_switch.off',
+            entity: 'kill_switch',
+            entityId: input.creatorId,
+            details: { scope: 'creator', correlationId: input.correlationId },
+          });
+        }
+        if (!stop) {
+          for (const id of await tx.conversations.idsInMode('auto')) {
+            const conversation = await lockConversation(tx, id);
+            if (conversation.mode !== 'auto') continue;
+            await appendEvent(
+              tx,
+              conversation,
+              { type: 'mode_changed', payload: { userId: input.userId, mode: 'copilot' } },
+              meta,
+            );
+          }
+        }
+        return { mode: stop || switches.global ? 'stop' : 'copilot', globalStop: switches.global };
       });
     },
 

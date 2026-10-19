@@ -63,6 +63,10 @@ export async function setKillSwitch(adminDb: Database, input: KillSwitchInput): 
   const parsed = KillSwitchInputSchema.parse(input);
   return withAdmin(adminDb, async (tx) => {
     const creatorId = await creatorOf(tx, parsed.scope, parsed.scopeId);
+    // Same lock and clock as the Dashboard's control (PUT /v1/agent/mode): a click and a command land in order.
+    if (parsed.scope === 'creator' && creatorId !== null) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`agent_mode:${creatorId}`}, 0))`);
+    }
     const at = new Date();
     await tx.insert(schema.killSwitches).values({
       id: newId(KillSwitchIdSchema),
@@ -72,7 +76,7 @@ export async function setKillSwitch(adminDb: Database, input: KillSwitchInput): 
       active: parsed.active,
       reason: parsed.reason,
       setBy: 'ops',
-      setAt: at,
+      setAt: sql`clock_timestamp()`,
     });
     await tx.insert(schema.domainEvents).values({
       id: newId(EventIdSchema),
