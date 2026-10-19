@@ -47,6 +47,7 @@ Voir ADR 0020 §3 pour les producteurs. Textes d'exemple, fictifs :
 | `session_state_changed` | `to = expired` | important | « La session Reveal a expiré : l'agent ne lit plus rien. » |
 | `session_state_changed` | retour à `valid` | info, en réponse | « Résolu : la session est revenue. » |
 | `kill_switch_toggled` | `active = true` / `false` | important / info en réponse | « Agent arrêté (global) : <raison>. » / « Résolu : agent relancé. » |
+| `automatic_closed` | l'Automatique s'est refermé seul (ADR 0019) | important | « Automatique refermé : l'agent est repassé en copilote sur 3 conversations. Raison : le taux en réel est à 74,5 % (objectif : 80 %). » |
 | `takeover_started` | un message existe pour la conversation | modification | « ✓ Pris en main par <prénom> » |
 | `sale_detected` | paiement confirmé, au-dessus du minimum | sale | « Vente · Messa · 45,00 € · pack « Soirée », vendu par l'agent » |
 | `keyword_matched` | mot surveillé | keyword | « « police » dans un message de fan. L'agent s'est arrêté pour ce fan. » |

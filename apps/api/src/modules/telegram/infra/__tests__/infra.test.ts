@@ -172,6 +172,23 @@ describe('reading the outbox', () => {
         payload: { kind: 'alert', spentMinor: 1600, capMinor: 2000, currency: 'EUR', day: '2026-10-17' },
       }),
     ).toMatchObject({ signal: { kind: 'budget', threshold: 'alert' } });
+    // The voice version stays in Nirvana: the signal carries only the reasons and the count.
+    const closed = toScannedEvent({
+      ...base,
+      type: 'automatic_closed',
+      payload: {
+        voicePrompt: 'sha256:abc',
+        voiceModel: 'demo-model',
+        missing: [{ kind: 'live_rate', value: 74.5, target: 80 }],
+        conversations: 2,
+      },
+    });
+    expect(closed?.signal).toEqual({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'live_rate', value: 74.5, target: 80 }],
+      conversations: 2,
+    });
+    expect(toScannedEvent({ ...base, type: 'automatic_closed', payload: { missing: [] } })).toBeNull();
     expect(toScannedEvent({ ...base, type: 'sale_detected', payload: {} })).toBeNull();
     expect(toScannedEvent({ ...base, type: 'kill_switch_toggled', payload: { nonsense: 1 } })).toBeNull();
   });

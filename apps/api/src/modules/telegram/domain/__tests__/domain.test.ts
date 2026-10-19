@@ -52,6 +52,32 @@ describe('classification (ADR 0020 §2)', () => {
     expect(reached?.kind === 'notice' ? reached.body : '').toContain('Plafond IA atteint (20 €)');
   });
 
+  it('says why Automatique closed, rates to the tenth in French, once and as important', () => {
+    const outcome = classify({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'live_rate', value: 74.5, target: 80 }],
+      conversations: 3,
+    });
+    expect(outcome).toMatchObject({ kind: 'notice', topic: 'important', threadKey: null });
+    expect(outcome?.kind === 'notice' ? outcome.body : '').toBe(
+      'Automatique refermé : l’agent est repassé en copilote sur 3 conversations. Raison : le taux en réel est à 74,5 % (objectif : 80 %).',
+    );
+    const changedVoice = classify({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'decided_drafts', value: 12, target: 100 }, { kind: 'blind_test' }],
+      conversations: 1,
+    });
+    expect(changedVoice?.kind === 'notice' ? changedVoice.body : '').toBe(
+      'Automatique refermé : l’agent est repassé en copilote sur 1 conversation. Raisons : 12 brouillons décidés sur les 100 demandés ; le test à l’aveugle de cette version de la voix n’est pas validé.',
+    );
+    const unmeasured = classify({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'live_rate', value: null, target: 80 }],
+      conversations: 2,
+    });
+    expect(unmeasured?.kind === 'notice' ? unmeasured.body : '').toContain('pas encore mesuré');
+  });
+
   it('opens a thread on an expired session and closes it with a reply when it comes back', () => {
     expect(classify({ kind: 'session_expired', platformAccountId: 'acc' })).toMatchObject({
       topic: 'important',

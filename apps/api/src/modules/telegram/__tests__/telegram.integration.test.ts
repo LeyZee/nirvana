@@ -299,6 +299,31 @@ describe('telegram module on Postgres', () => {
     expect(Object.keys(await module.nightCounts(creatorId)).sort()).toEqual(['important', 'info', 'urgent']);
   });
 
+  it('tells the groups once that Automatique closed, as important, without the voice', async () => {
+    const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
+    await publish('automatic_closed', {
+      voicePrompt: 'sha256:voix-qui-ne-sort-pas',
+      voiceModel: 'modele-qui-ne-sort-pas',
+      missing: [{ kind: 'live_rate', value: 74.5, target: 80 }],
+      conversations: 3,
+    });
+    // The trigger knows the new type (0009).
+    expect(await jobs('telegram.scan')).toMatchObject([{ key: 'telegram.scan' }]);
+
+    expect(await module.jobs.scan()).toBe(1);
+    expect(await module.jobs.scan()).toBe(1); // the window re-reads it: nothing new
+    const rows = await deliveryRows(chatId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ topic: 'important', isSilent: false, threadKey: null });
+
+    await module.jobs.flushChat(chatId);
+    const text = telegram.sent[0]?.text ?? '';
+    expect(text).toContain('🟠 <b>Important · Démo</b>');
+    expect(text).toContain('repassé en copilote sur 3 conversations');
+    expect(text).toContain('74,5 %');
+    expect(text).not.toContain('qui-ne-sort-pas');
+  });
+
   it('logs an urgent alert that no group can receive', async () => {
     const id = await publish('handoff_requested', {
       conversationId: newId(ConversationIdSchema),
