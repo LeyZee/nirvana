@@ -1,3 +1,5 @@
+import type { TelegramNight } from '@/settings/telegram/NightBanner';
+
 /**
  * What the Dashboard shows, in the shape the screen needs. Until `GET /v1/dashboard` exists (PR 3, contract in
  * `@nirvana/contracts`), `useDashboard` serves sample data of this shape and the screen says « Exemple ».
@@ -108,4 +110,6 @@ export interface Dashboard {
   readonly sales: Readonly<Record<Period, Sales>>;
   /** Best fans first. */
   readonly fans: readonly Fan[];
+  /** Telegram's coverage of her night (`telegramNightOf`); absent on sample data. */
+  readonly telegram?: TelegramNight;
 }

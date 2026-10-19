@@ -1,5 +1,5 @@
 # P3-07 Notifications Telegram : bots, groupes, routage, page Réglages › Telegram
-Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 fusionné (#59), branchement par Bilan (#71), lot 2 fusionné (#70) ; restent le bandeau du Dashboard et les réglages des ventes)
+Statut : in_progress (ID validé par Charles le 17/10 à 22h04 ; ADR 0020 proposed ; lot 1 fusionné (#59), branchement par Bilan (#71), lot 2 fusionné (#70) ; bandeau du Dashboard fait ; restent les réglages des ventes)
 Phase : 3
 Dépend de : P0-05, P0-07b, P3-03 (chiffrement des secrets du CRM, ré-auth #41), changements de contrat de Bilan et du fil agent (ADR 0020 §3)
 Branche : claude/telegram-alerts-3urhyn
@@ -105,7 +105,7 @@ Un onglet dont l'événement n'existe pas encore dit « bientôt » et pourquoi,
 - [x] `apps/web/src/settings/telegram/` (dossier propre, le fil Extension relit). Lignes de router et de navigation ajoutées dans la même PR, add-only, relues par le fil Extension.
 - [x] Page à cinq onglets et feuille de création en quatre étapes, d'après la maquette. Ventes et Validations : routage prêt, message « arrive avec … » tant que l'événement n'existe pas.
 - [x] Bandeau de couverture sur la page.
-- [ ] Bandeau de couverture sur le Dashboard : avec `GET /v1/dashboard` (fil agent), qui lit `nightCounts` et la couverture.
+- [x] Bandeau de couverture sur le Dashboard : lu dans `GET /v1/dashboard` (`telegramCoverage`, #76), composant `settings/telegram/NightBanner.tsx`, muet quand les urgences arrivent quelque part ; « Telegram éteint » quand le serveur n'a pas de clé de chiffrement (aussi sur Réglages › Telegram).
 - [ ] Ventes : réglages « ventes de l'agent ou toutes », montant minimum, bilan du soir (côté serveur d'abord, avec `sale_detected`).
 
 ## À faire, lots suivants (quand l'événement existe)

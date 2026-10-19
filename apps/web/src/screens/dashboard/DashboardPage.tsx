@@ -11,6 +11,8 @@ import { Section, useFloatingTip } from './parts';
 import { useDashboard } from './useDashboard';
 import './dashboard.css';
 
+import { NightBanner } from '@/settings/telegram/NightBanner';
+
 const FUNNEL_SUB: Record<Period, string> = {
   day: 'les fans arrivés aujourd’hui, et combien passent chaque étape',
   week: 'les fans arrivés ces 7 jours, et combien passent chaque étape',
@@ -81,6 +83,8 @@ export function DashboardPage(): JSX.Element {
         onDone={markDone}
         onResume={resume}
       />
+
+      <NightBanner night={data.telegram} creatorName={data.creator.name} />
 
       <Section
         title="Ventes"
