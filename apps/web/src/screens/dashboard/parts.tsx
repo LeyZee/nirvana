@@ -16,6 +16,7 @@ export const TONE_COLOR: Record<Tone, string> = {
   ok: 'var(--nv-success)',
   warn: 'var(--nv-warning)',
   bad: 'var(--nv-danger)',
+  idle: 'var(--nv-ink-faint)',
 };
 
 /** Ref callback: the glass light follows the pointer, the 110px halo fades in (`is-lit`). */

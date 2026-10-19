@@ -127,11 +127,13 @@ export function AgentHero({
         <details className="nv-disclosure">
           <summary>
             <span
-              className={`nv-dot nv-tone--${agent.tone === 'bad' ? 'bad' : 'ok'}${agent.tone === 'bad' ? ' nv-dot--live' : ''}`}
+              className={`nv-dot nv-tone--${agent.tone === 'warn' ? 'ok' : agent.tone}${agent.tone === 'bad' ? ' nv-dot--live' : ''}`}
               aria-hidden="true"
             />
             <span className="nv-disclosure__title">
-              {stopped && agent.tone !== 'bad' ? 'Le reste fonctionne normalement' : agent.foldTitle}
+              {stopped && (agent.tone === 'ok' || agent.tone === 'warn')
+                ? 'Le reste fonctionne normalement'
+                : agent.foldTitle}
             </span>
             <span className="nv-disclosure__sum">{agent.foldSummary}</span>
           </summary>

@@ -2196,7 +2196,7 @@
   position: fixed;
   z-index: 50;
   min-width: 180px;
-  max-width: 260px;
+  max-width: 300px;
   padding: 12px 14px;
   font-size: 12.5px;
   line-height: 18px;
@@ -2225,9 +2225,14 @@
   gap: 14px;
   font-variant-numeric: tabular-nums;
 }
+.nv-tip__row > span {
+  white-space: nowrap;
+}
+/* A long value wraps under itself, on the right, and never pushes its label to two lines. */
 .nv-tip__row > b {
   font-weight: 600;
   color: var(--nv-ink);
+  text-align: right;
 }
 .nv-tip > .nv-gauge {
   margin: 8px 0 2px;

@@ -97,6 +97,8 @@ function today(iso: string, timeZone: string): string {
 
 function agentState(api: ApiDashboard, now: Date): AgentState {
   const { reveal, voice, replies, guards, budget, liveRate, todos } = api;
+  // Never read once and not connected: no account was ever linked. A step to come, not an outage.
+  const unlinked = !reveal.connected && reveal.lastReadAt === null;
   const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
   const rateText = liveRate.rate === null ? 'pas encore mesuré' : `${percent(liveRate.rate)} sans retouche`;
   const rateOk = liveRate.rate !== null && liveRate.rate >= liveRate.target;
@@ -105,9 +107,9 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
   const cards: AgentState['cards'] = [
     {
       id: 'reveal',
-      tone: reveal.connected ? 'ok' : 'bad',
+      tone: reveal.connected ? 'ok' : unlinked ? 'idle' : 'bad',
       title: 'Connexion à Reveal',
-      value: reveal.connected ? 'Connectée' : 'Déconnectée',
+      value: reveal.connected ? 'Connectée' : unlinked ? 'Pas encore reliée' : 'Déconnectée',
       rows: [
         ['Dernière lecture', reveal.lastReadAt === null ? 'jamais' : ago(reveal.lastReadAt, now)],
         ['Conversations suivies', String(reveal.conversations)],
@@ -194,7 +196,7 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
   ];
 
   const summary = [
-    `Reveal ${reveal.connected ? 'connecté' : 'déconnecté'}`,
+    `Reveal ${reveal.connected ? 'connecté' : unlinked ? 'pas encore relié' : 'déconnecté'}`,
     plural(reveal.conversations, 'conversation', 'conversations'),
     plural(guardCount, 'garde', 'gardes'),
     `${euroCents(budget.spentToday)} sur ${eur(budget.cap)}`,
@@ -205,6 +207,15 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     foldSummary: summary,
     cards,
   };
+  if (unlinked) {
+    return {
+      ...base,
+      tone: 'idle',
+      headline: 'Reveal n’est **pas encore relié**',
+      lead: 'L’agent commencera à lire les conversations dès que la session Reveal sera capturée depuis l’extension.',
+      foldTitle: 'Rien ne tourne encore',
+    };
+  }
   // An agent in trouble says so before anything that waits: Reveal first, it is what everything reads.
   if (!reveal.connected) {
     return {
