@@ -113,7 +113,9 @@ describe('PUT /v1/agent/mode', () => {
   it('refuses Automatique while ADR 0019 keeps it locked, and writes nothing', async () => {
     const response = await setMode('auto');
     expect(response.statusCode).toBe(409);
-    expect(ApiErrorSchema.parse(response.json()).error.code).toBe('agent_mode_conflict');
+    const { error } = ApiErrorSchema.parse(response.json());
+    expect(error.code).toBe('agent_mode_conflict');
+    expect(error.details['missing']).toContainEqual({ kind: 'blind_test' });
     expect(await creatorSwitches()).toEqual([]);
   });
 
@@ -154,10 +156,11 @@ describe('PUT /v1/agent/mode', () => {
   });
 
   it('Copilote lifts the switch and brings a conversation in Automatique back to the copilot', async () => {
-    const toAuto = await send('POST', `/v1/conversations/${conversationId}/mode?creatorId=${creatorId}`, {
-      mode: 'auto',
-    });
-    expect(toAuto.statusCode).toBe(204);
+    // As if Automatique had opened (automatic-lock.integration.test.ts covers the lock itself).
+    await test.admin.db
+      .update(schema.conversations)
+      .set({ mode: 'auto' })
+      .where(eq(schema.conversations.id, conversationId));
 
     const response = await setMode('copilot');
     expect(response.json()).toEqual({ mode: 'copilot', globalStop: false });

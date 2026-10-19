@@ -1,4 +1,5 @@
 import {
+  BLIND_TEST_TARGET,
   ConversationIdSchema,
   DomainError,
   jobKeyFor,
@@ -6,6 +7,8 @@ import {
   newId,
   queueNameFor,
   type AgentMode,
+  type AutomaticGate,
+  type BlindTestResult,
   type ConversationId,
   type ConversationMode,
   type CreatorId,
@@ -15,13 +18,22 @@ import {
   type UserId,
 } from '@nirvana/contracts';
 
-import { AutomaticLocked, ConversationNotFound, SendBlocked } from '../domain/errors';
-import type { Clock, Conversation, EventMeta, FanDirectory, Transaction, UnitOfWork } from '../domain/ports';
+import { AutomaticLocked, SendBlocked } from '../domain/errors';
+import type {
+  Clock,
+  Conversation,
+  DraftVoice,
+  EventMeta,
+  FanDirectory,
+  Transaction,
+  UnitOfWork,
+} from '../domain/ports';
 import { rebuildProjection, type ConversationProjection } from '../domain/projection';
 import { debounceFor } from '../domain/rules';
 import { MAX_SEND_ATTEMPTS } from '../domain/state-machine';
 
-import { appendEvent, lockDraftFor, setDraftStatus } from './journal';
+import { closeAutomaticIfLocked, readAutomaticGate } from './automatic';
+import { appendEvent, lockConversation, lockDraftFor, setDraftStatus } from './journal';
 
 interface IngestMessage {
   readonly creatorId: CreatorId;
@@ -60,11 +72,20 @@ export interface ConversationCommands {
   setMode(input: ConversationCommand & { mode: ConversationMode }): Promise<void>;
   /**
    * The Dashboard's control (Arrêt, Copilote, Automatique) for all her conversations. Returns the mode now in
-   * force: Arrêt while the global switch stays on, whatever she asked.
+   * force: Arrêt while the global switch stays on, whatever she asked. Automatique only behind its lock (ADR 0019).
    */
   setAgentMode(
     input: Omit<ConversationCommand, 'conversationId'> & { mode: AgentMode },
   ): Promise<{ mode: AgentMode; globalStop: boolean }>;
+  /** Whether Automatique may open for her now, and what is missing (ADR 0019): what the Dashboard shows. */
+  automaticGate(creatorId: CreatorId): Promise<AutomaticGate>;
+  /** The owner records the blind test of the voice version the server writes with now. */
+  recordBlindTest(input: {
+    creatorId: CreatorId;
+    userId: UserId;
+    rate: number;
+    correlationId: string;
+  }): Promise<BlindTestResult>;
   /** Recomputes the projection columns from the journal (ADR 0007) and saves them. */
   rebuildProjection(creatorId: CreatorId, conversationId: ConversationId): Promise<ConversationProjection>;
 }
@@ -73,16 +94,12 @@ export interface CommandDeps {
   readonly uow: UnitOfWork;
   readonly clock: Clock;
   readonly fans: FanDirectory;
+  /** The voice version the server writes with now (prompt and model): what Automatique is proved on. */
+  readonly voice: DraftVoice;
 }
 
 const NEW_FAN_MESSAGE = 'Nouveau message du fan';
 const TAKEN_OVER = 'Conversation reprise par un humain';
-
-export async function lockConversation(tx: Transaction, id: ConversationId): Promise<Conversation> {
-  const conversation = await tx.conversations.lock(id);
-  if (conversation === null) throw new ConversationNotFound();
-  return conversation;
-}
 
 /** Expires every draft still open: they answer a conversation that has moved on. */
 async function expireOpenDrafts(
@@ -104,12 +121,21 @@ async function expireOpenDrafts(
   return current;
 }
 
-export function createConversationCommands({ uow, clock, fans }: CommandDeps): ConversationCommands {
+/** Opens the lock and holds it for the transaction, or refuses Automatique with what is missing. */
+async function requireAutomaticOpen(tx: Transaction, voice: DraftVoice): Promise<void> {
+  const gate = await readAutomaticGate(tx, voice);
+  if (!gate.open) throw new AutomaticLocked(gate.missing);
+}
+
+export function createConversationCommands({ uow, clock, fans, voice }: CommandDeps): ConversationCommands {
   const humanMeta = (input: { userId: UserId; correlationId: string }): EventMeta => ({
     actor: `human:${input.userId}`,
     correlationId: input.correlationId,
     at: clock.now(),
   });
+  /** After a chatter's decision: the live rate moved, Automatique may have to close (ADR 0019). */
+  const afterDecision = (creatorId: CreatorId, correlationId: string) =>
+    closeAutomaticIfLocked(uow, creatorId, voice, { actor: 'system', correlationId, at: clock.now() });
 
   return {
     async ingestMessage(input) {
@@ -199,8 +225,8 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
       });
     },
 
-    approveDraft(input) {
-      return uow.inTenant(input.creatorId, async (tx) => {
+    async approveDraft(input) {
+      await uow.inTenant(input.creatorId, async (tx) => {
         const conversation = await lockConversation(tx, input.conversationId);
         const isEdited = input.bubbles !== undefined;
         const status = isEdited ? 'edited' : 'approved';
@@ -243,10 +269,11 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           { queueName: queueNameFor(conversation.id), maxAttempts: MAX_SEND_ATTEMPTS },
         );
       });
+      await afterDecision(input.creatorId, input.correlationId);
     },
 
-    rejectDraft(input) {
-      return uow.inTenant(input.creatorId, async (tx) => {
+    async rejectDraft(input) {
+      await uow.inTenant(input.creatorId, async (tx) => {
         const conversation = await lockConversation(tx, input.conversationId);
         const draft = await lockDraftFor(tx, conversation, input.draftId, 'rejected');
         const meta = humanMeta(input);
@@ -266,6 +293,7 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
         );
         await setDraftStatus(tx, draft, 'rejected', { decidedBy: meta.actor, at: meta.at });
       });
+      await afterDecision(input.creatorId, input.correlationId);
     },
 
     expireDraft(input) {
@@ -331,6 +359,9 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
 
     setMode(input) {
       return uow.inTenant(input.creatorId, async (tx) => {
+        // The creator's lock first, as every mode change takes it: the lock cannot close in between.
+        await tx.switches.lockCreator();
+        if (input.mode === 'auto') await requireAutomaticOpen(tx, voice);
         const conversation = await lockConversation(tx, input.conversationId);
         if (conversation.mode === input.mode) return;
         await appendEvent(
@@ -343,16 +374,19 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
     },
 
     setAgentMode(input) {
-      // Automatique opens behind the server lock of ADR 0019 (B3); until then nothing here can turn it on.
-      if (input.mode === 'auto') return Promise.reject(new AutomaticLocked());
       const stop = input.mode === 'stop';
+      const target = input.mode === 'auto' ? 'auto' : 'copilot';
       return uow.inTenant(input.creatorId, async (tx) => {
         // Two clicks in a row apply in the order they took the lock, and the later one stays the latest row.
         await tx.switches.lockCreator();
+        // Automatique opens behind the server lock of ADR 0019, read under the creator's lock.
+        if (input.mode === 'auto') await requireAutomaticOpen(tx, voice);
         const meta = humanMeta(input);
         const switches = await tx.switches.isOn();
         if (switches.creator !== stop) {
-          const reason = stop ? 'Arrêt depuis le Dashboard' : 'Reprise en copilote depuis le Dashboard';
+          const reason = stop
+            ? 'Arrêt depuis le Dashboard'
+            : `Reprise en ${target === 'auto' ? 'automatique' : 'copilote'} depuis le Dashboard`;
           await tx.switches.setCreator({ active: stop, reason, setBy: meta.actor });
           await tx.events.publish(
             input.creatorId,
@@ -371,19 +405,52 @@ export function createConversationCommands({ uow, clock, fans }: CommandDeps): C
           });
         }
         if (!stop) {
-          for (const id of await tx.conversations.idsInMode('auto')) {
+          const from = target === 'auto' ? 'copilot' : 'auto';
+          for (const id of await tx.conversations.idsInMode(from)) {
             const conversation = await lockConversation(tx, id);
-            if (conversation.mode !== 'auto') continue;
+            if (conversation.mode !== from) continue;
             await appendEvent(
               tx,
               conversation,
-              { type: 'mode_changed', payload: { userId: input.userId, mode: 'copilot' } },
+              { type: 'mode_changed', payload: { userId: input.userId, mode: target } },
               meta,
             );
           }
         }
-        return { mode: stop || switches.global ? 'stop' : 'copilot', globalStop: switches.global };
+        return { mode: stop || switches.global ? 'stop' : target, globalStop: switches.global };
       });
+    },
+
+    automaticGate(creatorId) {
+      return uow.inTenant(creatorId, (tx) => readAutomaticGate(tx, voice));
+    },
+
+    async recordBlindTest(input) {
+      const ratePerMille = Math.round(input.rate * 10);
+      const recorded = await uow.inTenant(input.creatorId, async (tx) => {
+        const recordedAt = await tx.automatic.recordBlindTest({
+          voice,
+          ratePerMille,
+          recordedBy: `human:${input.userId}`,
+        });
+        await tx.audit.record({
+          userId: input.userId,
+          action: 'blind_test.record',
+          entity: 'creator',
+          entityId: input.creatorId,
+          details: { ...voice, ratePerMille, correlationId: input.correlationId },
+        });
+        return recordedAt;
+      });
+      // A failed test closes Automatique at once, like a fall of the live rate.
+      await afterDecision(input.creatorId, input.correlationId);
+      return {
+        ...voice,
+        rate: ratePerMille / 10,
+        passed: ratePerMille >= BLIND_TEST_TARGET * 10,
+        recordedAt: recorded.toISOString(),
+        automatic: await uow.inTenant(input.creatorId, (tx) => readAutomaticGate(tx, voice)),
+      };
     },
 
     rebuildProjection(creatorId, conversationId) {

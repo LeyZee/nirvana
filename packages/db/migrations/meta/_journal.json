@@ -57,6 +57,13 @@
       "when": 1792282050216,
       "tag": "0007_message_platform_media",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792414798103,
+      "tag": "0008_automatic_lock",
+      "breakpoints": true
     }
   ]
 }

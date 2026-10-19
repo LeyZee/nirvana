@@ -10,7 +10,12 @@ import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { assembleDashboard, type BudgetReading } from '../../domain/dashboard';
-import type { DashboardReader, TelegramView, VoiceVersion } from '../../domain/dashboard-ports';
+import type {
+  AutomaticView,
+  DashboardReader,
+  TelegramView,
+  VoiceVersion,
+} from '../../domain/dashboard-ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
 type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
@@ -23,6 +28,7 @@ export interface DashboardRouteDeps {
   /** A voice model answers, main or fallback. */
   readonly isVoiceOk: () => boolean;
   readonly voice: VoiceVersion;
+  readonly automatic: AutomaticView;
   /** Absent when Telegram is off (no encryption key): both Telegram fields are null. */
   readonly telegram?: TelegramView;
   readonly now?: () => Date;
@@ -58,7 +64,10 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           return { now, dayStart, periodStart: periodStart(period, now, dayStart), voice: deps.voice };
         });
         if (read === undefined) throw new DomainError('creator_not_found', 'Créatrice introuvable');
-        const telegram = await deps.telegram?.read(creatorId);
+        const [telegram, automatic] = await Promise.all([
+          deps.telegram?.read(creatorId),
+          deps.automatic.read(creatorId),
+        ]);
         return assembleDashboard({
           creatorId,
           period,
@@ -67,6 +76,7 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           budget: deps.budget(),
           isVoiceOk: deps.isVoiceOk(),
           telegram,
+          automatic,
         });
       },
     );

@@ -188,6 +188,8 @@ describe('conversations module (P0-05)', () => {
       fans: createFansModule({ db: test.app.db }),
       sender,
       requireRole: () => () => Promise.resolve(),
+      recentLogin: () => Promise.resolve(),
+      voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
       clock,
     });
   });
@@ -359,6 +361,19 @@ describe('conversations module (P0-05)', () => {
     draftId = await respond(conversationId);
     await conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Un', 'Deux'] });
     await conversations.jobs.send({ creatorId, conversationId, draftId, correlationId: 'test' }, NO_LOG, 1);
+    // Automatique opens behind its lock (ADR 0019): 100 drafts sent as is and a passed blind test.
+    await test.admin.db.insert(schema.drafts).values(
+      Array.from({ length: 100 }, (_, i) => ({
+        id: newId(DraftIdSchema),
+        creatorId,
+        conversationId,
+        status: 'sent',
+        promptHashes: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+        decidedAt: new Date(T0.getTime() - (i + 1) * 1_000),
+        idempotencyKey: `rebuild:${String(i)}`,
+      })),
+    );
+    await conversations.recordBlindTest({ creatorId, userId: USER, rate: 90, correlationId: 'test' });
     await conversations.setMode({ ...command(conversationId), mode: 'auto' });
     clock.advance(1);
     await ingest('c-rebuild');

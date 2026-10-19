@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { automaticGate, liveRate } from '../automatic';
+import { automaticGate, liveRate } from './automatic';
 
 const drafts = (asIs: number, edited: number) => [
   ...Array.from({ length: asIs }, () => ({ asIs: true })),

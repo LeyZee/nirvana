@@ -185,6 +185,14 @@ async function seedCreator(admin: Database, label: string) {
       bubbles: ['Salut toi'],
       moment: { history: [] },
     });
+    await tx.insert(s.blindTests).values({
+      id: newId(MessageIdSchema),
+      creatorId,
+      voicePrompt: 'voice@1',
+      voiceModel: 'model',
+      ratePerMille: 820,
+      recordedBy: 'human:u',
+    });
     await tx
       .insert(s.notifications)
       .values({ id: newId(MessageIdSchema), creatorId, userId: 'u', type: 'sale' });
@@ -217,6 +225,7 @@ const TENANT_TABLES = {
   media_sends: s.mediaSends,
   llm_calls: s.llmCalls,
   calibration_ratings: s.calibrationRatings,
+  blind_tests: s.blindTests,
   notifications: s.notifications,
   kill_switches: s.killSwitches,
 };

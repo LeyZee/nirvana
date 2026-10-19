@@ -1,7 +1,7 @@
-import type { DraftId, DraftStatus, EventBody, EventType } from '@nirvana/contracts';
+import type { ConversationId, DraftId, DraftStatus, EventBody, EventType } from '@nirvana/contracts';
 
 import { projectionOf } from '../domain/conversation';
-import { DraftConflict, DraftNotFound, TransitionConflict } from '../domain/errors';
+import { ConversationNotFound, DraftConflict, DraftNotFound, TransitionConflict } from '../domain/errors';
 import type { Conversation, Draft, DraftDecision, EventMeta, Transaction } from '../domain/ports';
 import { applyEvent, commandFor } from '../domain/projection';
 import { canDraftBecome, nextState } from '../domain/state-machine';
@@ -34,6 +34,13 @@ export async function appendEvent(
   await tx.conversations.saveProjection(conversation.id, projection);
   if (PUBLISHED.has(body.type)) await tx.events.publish(conversation.creatorId, body, meta);
   return { ...conversation, ...projection };
+}
+
+/** Locks the conversation for the rest of the transaction. */
+export async function lockConversation(tx: Transaction, id: ConversationId): Promise<Conversation> {
+  const conversation = await tx.conversations.lock(id);
+  if (conversation === null) throw new ConversationNotFound();
+  return conversation;
 }
 
 /** Locks a draft of this conversation and checks it may take `to`. */

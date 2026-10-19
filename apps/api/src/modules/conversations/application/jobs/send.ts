@@ -21,8 +21,7 @@ import type {
 } from '../../domain/ports';
 import { bubbleIdempotencyKey, canSend } from '../../domain/rules';
 import { MAX_SEND_ATTEMPTS } from '../../domain/state-machine';
-import { lockConversation } from '../commands';
-import { appendEvent, setDraftStatus } from '../journal';
+import { appendEvent, lockConversation, setDraftStatus } from '../journal';
 
 export interface SendDeps {
   readonly uow: UnitOfWork;

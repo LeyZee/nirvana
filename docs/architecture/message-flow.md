@@ -101,7 +101,16 @@ Le contrôle du Dashboard passe par `PUT /v1/agent/mode { creatorId, mode }` (pr
 
 - **Arrêt** pose l'interrupteur de la créatrice, sans ré-authentification : un arrêt d'urgence doit être immédiat.
 - **Copilote** le lève et repasse en copilote toute conversation restée en automatique.
-- **Automatique** est refusé (409 `agent_mode_conflict`) tant que le verrou de l'ADR 0019 n'est pas branché côté serveur.
+- **Automatique** n'ouvre que derrière le verrou de l'ADR 0019 : il lève l'interrupteur de la créatrice et passe en automatique toutes ses conversations en copilote. Verrou fermé, il est refusé (409 `agent_mode_conflict`, `details.missing` dit ce qui manque, sous la forme `automatic.missing` du Dashboard). Pas de ré-authentification pour y passer : le verrou et les rôles suffisent (choix par défaut du 19/10, à revoir par Charles quand l'Automatique sera réellement possible).
+
+### Le verrou de l'Automatique (ADR 0019)
+
+Une seule lecture, dans le module `conversations` (`readAutomaticGate`), avec la règle de `packages/contracts` (`automaticGate`) : taux en réel d'au moins 80 % sur au moins 100 brouillons décidés (fenêtre de 200) de la version active de la voix, et dernier test à l'aveugle de cette version d'au moins 80 %. La version active (prompt et modèle de la voix) est définie une seule fois, par la racine de composition ; un test à l'aveugle ne vaut que pour elle. Le Dashboard affiche ce que `conversations` lit, sans recalculer le verrou.
+
+- Les deux portes passent par lui : `PUT /v1/agent/mode` et `POST /v1/conversations/:id/mode`, chacune sous le verrou de transaction de la créatrice.
+- Le test à l'aveugle s'enregistre par `POST /v1/creators/:id/blind-tests { rate }` : propriétaire seulement, connexion de moins de 10 minutes, version et date posées par le serveur, ligne `audit_log` `blind_test.record`. Table `blind_tests`, append-only.
+- **Retour en copilote sans demander** : après chaque décision d'un chatteur (approuver, modifier, rejeter), après chaque test à l'aveugle, et au début de chaque `conversation.respond`, avant le moteur. Si une conversation est en automatique et que le verrou est fermé (taux tombé, ou voix changée qui n'a encore rien prouvé), toutes ses conversations en automatique repassent en copilote (`mode_changed`, acteur `system`) et un seul événement `automatic_closed` part pour le propriétaire. Le verrou de la créatrice est pris avant ceux des conversations, dans l'ordre de tout changement de mode.
+- Aujourd'hui rien ne part sans décision humaine : `send` n'envoie qu'un brouillon approuvé. Le jour où un brouillon partira en automatique, `send` relira le verrou avant de l'envoyer, sans quoi un brouillon en file partirait après la fermeture.
 
 Chaque changement écrit sa ligne `kill_switches`, son événement `kill_switch_toggled` et sa ligne `audit_log` dans la même transaction. Un clic qui ne change rien n'écrit rien. Les changements d'une même créatrice passent l'un après l'autre (verrou de transaction), et la ligne prend l'heure de la base une fois le verrou tenu : le dernier clic appliqué reste la dernière ligne. La réponse donne le mode en vigueur, sous la forme de `GET /v1/dashboard` : Arrêt tant que l'interrupteur global reste posé, avec `globalStop: true` pour que l'écran dise pourquoi. `GET /v1/dashboard` porte le même `globalStop`, pour que l'écran le dise encore après un rechargement.
 

@@ -1,7 +1,11 @@
 import {
+  asPercent,
   ConversationIdSchema,
   FanIdSchema,
+  LIVE_TARGET,
+  liveRate,
   type AgentMode,
+  type AutomaticGate,
   type CreatorId,
   type Dashboard,
   type DashboardPeriod,
@@ -9,7 +13,6 @@ import {
   type HandoffCause,
 } from '@nirvana/contracts';
 
-import { asPercent, automaticGate, LIVE_TARGET, liveRate } from './automatic';
 import type {
   DashboardFacts,
   DashboardWindow,
@@ -100,11 +103,11 @@ export function assembleDashboard(input: {
   readonly isVoiceOk: boolean;
   /** Undefined when Telegram is off. */
   readonly telegram: TelegramReading | undefined;
+  /** The server lock of Automatique, read by `conversations` (ADR 0019): shown as is, never recomputed here. */
+  readonly automatic: AutomaticGate;
 }): Dashboard {
   const { facts, window } = input;
   const reading = liveRate(facts.decided);
-  // The blind test is not recorded yet (ADR 0019): until it is, Automatique stays locked.
-  const gate = automaticGate({ reading, blindTestPassed: false });
   return {
     creator: {
       id: input.creatorId,
@@ -115,7 +118,7 @@ export function assembleDashboard(input: {
     period: input.period,
     mode: mode(facts),
     globalStop: facts.switches.global,
-    automatic: { open: gate.open, missing: [...gate.missing] },
+    automatic: { open: input.automatic.open, missing: [...input.automatic.missing] },
     liveRate: {
       rate: asPercent(reading.rate),
       target: LIVE_TARGET * 100,

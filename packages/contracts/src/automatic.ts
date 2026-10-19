@@ -1,12 +1,48 @@
-import type { AutomaticMissing } from '@nirvana/contracts';
+import { z } from 'zod';
 
 /**
  * Taux en réel and the rule that opens Automatique (ADR 0019). The thresholds are constants of the code, never
  * settings of a prompt; the server applies them and the screen only shows them.
  */
 export const LIVE_TARGET = 0.8;
-const LIVE_WINDOW = 200;
+/** The live rate reads this many decided drafts, newest first. */
+export const LIVE_WINDOW = 200;
 const MIN_DECIDED = 100;
+/** The blind test with the creator passes at this rate « sans retouche », in % (ADR 0019). */
+export const BLIND_TEST_TARGET = 80;
+
+const percent = z.number().min(0).max(100);
+const count = z.number().int().nonnegative();
+
+/**
+ * What keeps Automatique locked (ADR 0019): the live rate, the number of decided drafts, the blind test. Each
+ * missing condition carries where it stands; the thresholds live on the server only.
+ */
+export const AutomaticMissingSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('live_rate'), value: percent.nullable(), target: percent }),
+  z.object({ kind: z.literal('decided_drafts'), value: count, target: count }),
+  z.object({ kind: z.literal('blind_test') }),
+]);
+export type AutomaticMissing = z.infer<typeof AutomaticMissingSchema>;
+
+/** Whether Automatique may open for her, and what is missing when it may not. */
+export const AutomaticGateSchema = z.object({ open: z.boolean(), missing: z.array(AutomaticMissingSchema) });
+export type AutomaticGate = z.infer<typeof AutomaticGateSchema>;
+
+/**
+ * `POST /v1/creators/:id/blind-tests`: the owner records the blind test of the active voice version, with the rate
+ * « sans retouche » she got, in % (kept to one decimal). The server stamps the version and the date; the latest test of a version decides.
+ */
+export const RecordBlindTestBodySchema = z.object({ rate: percent });
+export const BlindTestResultSchema = z.object({
+  voicePrompt: z.string().min(1),
+  voiceModel: z.string().min(1),
+  rate: percent,
+  passed: z.boolean(),
+  recordedAt: z.iso.datetime(),
+  automatic: AutomaticGateSchema,
+});
+export type BlindTestResult = z.infer<typeof BlindTestResultSchema>;
 
 /** A draft a chatter approved or rejected; `asIs` when she sent it without changing a word. */
 export interface DecidedDraft {
@@ -35,7 +71,7 @@ export function asPercent(rate: number | undefined): number | null {
 export function automaticGate(input: {
   readonly reading: LiveRateReading;
   readonly blindTestPassed: boolean;
-}): { readonly open: boolean; readonly missing: readonly AutomaticMissing[] } {
+}): AutomaticGate {
   const { rate, decided } = input.reading;
   const missing: AutomaticMissing[] = [];
   if (rate === undefined || rate < LIVE_TARGET) {
