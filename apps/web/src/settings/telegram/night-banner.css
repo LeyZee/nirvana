@@ -1,0 +1,55 @@
+/* The Dashboard's Telegram coverage banner (NightBanner.tsx): one glass row, a moon, the action on the right. */
+.tg-night {
+  --_c: var(--nv-danger);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px 14px 14px;
+}
+.tg-night[data-state='off'] {
+  --_c: var(--nv-warning);
+}
+.tg-night__orb {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--_c);
+  background: color-mix(in srgb, var(--_c) 14%, transparent);
+}
+.tg-night__orb svg {
+  width: 20px;
+  height: 20px;
+}
+.tg-night__body {
+  min-width: 0;
+}
+.tg-night__title {
+  margin: 0;
+  font-size: var(--nv-text-body);
+  line-height: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.tg-night__text {
+  margin: 2px 0 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+  text-wrap: pretty;
+}
+.tg-night__go {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .tg-night {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .tg-night__go {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

@@ -14,7 +14,15 @@ import { ReauthRequired } from '../services/api';
 import { BotSheet, type SheetMode } from './BotSheet';
 import { GroupPreview, PreviewMessage } from './Preview';
 import { Reauth } from './Reauth';
-import { fetchAlertKeywords, fetchDeliveries, fetchOverview, removeBot, saveRoutes, sendTest } from './api';
+import {
+  TelegramOff,
+  fetchAlertKeywords,
+  fetchDeliveries,
+  fetchOverview,
+  removeBot,
+  saveRoutes,
+  sendTest,
+} from './api';
 import {
   ALERT_TOPICS,
   botLine,
@@ -40,7 +48,8 @@ import './telegram.css';
 const REFRESH_MS = 30_000;
 const OFFLINE = 'Nirvana ne répond pas. Réessaie dans un instant.';
 
-type Load = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; overview: TelegramOverview };
+type Load =
+  { kind: 'loading' } | { kind: 'failed' } | { kind: 'off' } | { kind: 'ready'; overview: TelegramOverview };
 type Tab = 'alerts' | 'sales' | 'keywords' | 'validations' | 'bots';
 
 const TABS: readonly { key: Tab; label: string }[] = [
@@ -78,8 +87,12 @@ export function TelegramSection(): JSX.Element {
       version.current = overview.version;
       setLoad({ kind: 'ready', overview });
       setNow(new Date());
-    } catch {
+    } catch (error) {
       if (ticket !== latest.current) return;
+      if (error instanceof TelegramOff) {
+        setLoad({ kind: 'off' });
+        return;
+      }
       setLoad((current) => (current.kind === 'ready' ? current : { kind: 'failed' }));
     }
     fetchDeliveries().then(setDeliveries, () => undefined);
@@ -145,6 +158,18 @@ export function TelegramSection(): JSX.Element {
               <button type="button" className="nv-btn nv-btn--soft tg-top" onClick={() => void refresh()}>
                 Réessayer
               </button>
+            </div>
+          </div>
+        ) : null}
+        {load.kind === 'off' ? (
+          <div className="nv-glass tg-cover" data-state="bad">
+            <div>
+              <p className="tg-cover__title">Telegram est éteint</p>
+              <p className="tg-cover__sub">
+                Il manque au serveur sa clé de chiffrement (CREDENTIALS_ENCRYPTION_KEYS), celle qui garde
+                aussi les clés des services IA. Une fois posée et Nirvana redémarré, tu pourras ajouter un bot
+                ici.
+              </p>
             </div>
           </div>
         ) : null}

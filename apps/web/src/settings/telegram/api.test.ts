@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReauthRequired } from '../services/api';
 
-import { addBot, fetchAlertKeywords, fetchOverview, removeBot, saveRoutes } from './api';
+import { TelegramOff, addBot, fetchAlertKeywords, fetchOverview, removeBot, saveRoutes } from './api';
 
 const bot = {
   id: newId(TelegramBotIdSchema),
@@ -50,6 +50,13 @@ describe('Telegram API client', () => {
       ok: false,
       refusal: { kind: 'routes_version_conflict' },
     });
+  });
+
+  it('tells a server without Telegram from one that fails', async () => {
+    answer(404, { error: 'Not Found' });
+    await expect(fetchOverview()).rejects.toBeInstanceOf(TelegramOff);
+    answer(500, null);
+    await expect(fetchOverview()).rejects.not.toBeInstanceOf(TelegramOff);
   });
 
   it('never takes a refused removal for a success', async () => {
