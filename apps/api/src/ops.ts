@@ -1,10 +1,9 @@
-import { randomUUID } from 'node:crypto';
-
 import {
   AuditEntryIdSchema,
   ConversationIdSchema,
   CreatorIdSchema,
   EventIdSchema,
+  KillSwitchIdSchema,
   KillSwitchScopeSchema,
   newId,
   type KillSwitchScope,
@@ -66,7 +65,7 @@ export async function setKillSwitch(adminDb: Database, input: KillSwitchInput): 
     const creatorId = await creatorOf(tx, parsed.scope, parsed.scopeId);
     const at = new Date();
     await tx.insert(schema.killSwitches).values({
-      id: randomUUID(),
+      id: newId(KillSwitchIdSchema),
       scope: parsed.scope,
       scopeId: parsed.scopeId,
       creatorId,

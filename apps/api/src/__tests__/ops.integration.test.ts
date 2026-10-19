@@ -60,6 +60,8 @@ describe('ops commands (P0-07b)', () => {
       [true, creatorId],
       [false, creatorId],
     ]);
+    // UUID v7 like every other row (ADR 0011): ids sort in the order the switches were set.
+    expect(switches.map((row) => row.id[14])).toEqual(['7', '7']);
     expect(await audit('kill_switch.on')).toHaveLength(1);
     expect(await audit('kill_switch.off')).toHaveLength(1);
     const events = await test.admin.db

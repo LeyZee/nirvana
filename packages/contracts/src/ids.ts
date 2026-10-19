@@ -41,6 +41,13 @@ export type EventId = z.infer<typeof EventIdSchema>;
 export const AuditEntryIdSchema = uuid.brand<'AuditEntryId'>();
 export type AuditEntryId = z.infer<typeof AuditEntryIdSchema>;
 
+/** A row of `llm_calls`, the journal of every model call. */
+export const LlmCallIdSchema = uuid.brand<'LlmCallId'>();
+export type LlmCallId = z.infer<typeof LlmCallIdSchema>;
+
+export const KillSwitchIdSchema = uuid.brand<'KillSwitchId'>();
+export type KillSwitchId = z.infer<typeof KillSwitchIdSchema>;
+
 /** A fresh UUID v7 branded by the given schema: `newId(FanIdSchema)`. */
 export function newId<S extends z.ZodType<string>>(schema: S): z.output<S> {
   return schema.parse(v7());

@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-
+import { LlmCallIdSchema, newId } from '@nirvana/contracts';
 import { schema, sql, type Database } from '@nirvana/db';
 import { CALL_OUTCOMES, type LlmCallRecord, type LlmCallStore } from '@nirvana/llm';
 import { z } from 'zod';
@@ -49,7 +48,7 @@ export function createDrizzleLlmCallStore(adminDb: Database): LlmCallStore {
   return {
     async insert(record) {
       await adminDb.insert(schema.llmCalls).values({
-        id: randomUUID(),
+        id: newId(LlmCallIdSchema),
         creatorId: record.creatorId ?? null,
         role: record.role,
         provider: record.provider,
