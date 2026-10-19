@@ -45,7 +45,12 @@ export function App(): JSX.Element {
   }, [session.status, refresh]);
 
   if (session.status === 'loading') {
-    return <main className="nv-aura min-h-dvh" aria-busy="true" />;
+    // A breathing dot while the session is read: the page is not blank, and says nothing it does not know yet.
+    return (
+      <main className="nv-aura grid min-h-dvh place-items-center" aria-busy="true">
+        <span className="nv-dot nv-dot--live" role="status" aria-label="Chargement de Nirvana" />
+      </main>
+    );
   }
   if (session.status === 'unreachable') return <Unreachable />;
   if (session.status === 'signed_out') {

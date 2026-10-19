@@ -21,6 +21,15 @@ afterEach(() => {
 });
 
 describe('App before any session', () => {
+  it('shows it is loading while the session is read', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => undefined)),
+    );
+    render(<App />);
+    expect(screen.getByRole('status', { name: 'Chargement de Nirvana' })).toBeDefined();
+  });
+
   it('asks to sign in only when the server says there is no session', async () => {
     serveMe(401);
     render(<App />);
@@ -31,7 +40,7 @@ describe('App before any session', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetch = serveMe(502, 401);
     render(<App />);
-    expect((await screen.findByRole('status')).textContent).toContain('ne répond pas');
+    expect(await screen.findByText('ne répond pas')).toBeDefined();
     expect(screen.queryByLabelText('Mot de passe')).toBeNull();
 
     await act(async () => {
@@ -47,6 +56,6 @@ describe('App before any session', () => {
       vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
     );
     render(<App />);
-    expect((await screen.findByRole('status')).textContent).toContain('ne répond pas');
+    expect(await screen.findByText('ne répond pas')).toBeDefined();
   });
 });
