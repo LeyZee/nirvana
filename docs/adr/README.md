@@ -39,9 +39,9 @@ Date : AAAA-MM-JJ
 | 0012 | `identity_policy` configurable, défaut `stay_in_character` | accepted |
 | 0013 | Code en anglais, documentation, UI et persona en français | accepted |
 | 0014 | Politique d'hygiène du dépôt | accepted |
-| 0015 | Design system partagé dans `packages/design-system` | proposed |
+| 0015 | Design system partagé dans `packages/design-system` | accepted |
 | 0016 | Clés des fournisseurs IA saisies dans le dashboard, chiffrées en base | accepted |
 | 0017 | Vision : Gemini en natif, bascule sur Grok en images clés | accepted |
-| 0018 | Port connecteur étendu : scripts natifs, notes, coffre, médias, garde d'écriture | proposed |
+| 0018 | Port connecteur étendu : scripts natifs, notes, coffre, médias, garde d'écriture | accepted |
 | 0019 | Deux taux (au playground, en réel) et la règle qui ouvre le mode Automatique | accepted |
 | 0020 | Notifications Telegram : bots, groupes et routage gérés depuis le CRM | proposed |

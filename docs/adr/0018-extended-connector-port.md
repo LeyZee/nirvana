@@ -1,6 +1,6 @@
 # 0018. Port connecteur étendu : scripts natifs, notes, coffre, médias, garde d'écriture
 
-Statut : proposed
+Statut : accepted (Charles, 17/10, #39)
 Date : 2026-10-17
 
 ## Contexte
