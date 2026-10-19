@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
+import { DEFAULT_GUARD_SETTINGS as SHARED_GUARD_SETTINGS } from './domain/guards';
 import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
@@ -88,6 +89,14 @@ export async function startBubbleGuard(options: { readonly personaPath: string }
   const today = new Date().toISOString().slice(0, 10);
   const persona = readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today);
   return createBubbleGuard(guardSettingsOf(persona));
+}
+
+/**
+ * The hard guards every creator shares (never an AI, no meeting, no contact), without her persona's own limits.
+ * @public The composition root's fallback when her persona is unreadable or is the demo one in production.
+ */
+export function startSharedBubbleGuard(): AgentBubbleGuard {
+  return createBubbleGuard(SHARED_GUARD_SETTINGS);
 }
 
 export interface AgentModule {

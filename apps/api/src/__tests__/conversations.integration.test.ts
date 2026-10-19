@@ -32,6 +32,8 @@ import {
 import { createFansModule } from '../modules/fans';
 
 const T0 = new Date('2026-10-17T20:00:00.000Z');
+/** Lets every bubble through: the guards themselves are tested in `agent` and `approval-guard`. */
+const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-000000000001');
 
@@ -190,6 +192,7 @@ describe('conversations module (P0-05)', () => {
       requireRole: () => () => Promise.resolve(),
       recentLogin: () => Promise.resolve(),
       voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+      guard: PASS_GUARD,
       clock,
     });
   });

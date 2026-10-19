@@ -22,7 +22,13 @@ import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import { createAppLlm } from './llm';
 import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
-import { createAgentModule, startDraftComposer, type AgentModule } from './modules/agent';
+import {
+  createAgentModule,
+  startBubbleGuard,
+  startSharedBubbleGuard,
+  startDraftComposer,
+  type AgentModule,
+} from './modules/agent';
 import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
 import {
   createConversationsModule,
@@ -226,6 +232,15 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           logger.warn({ err: error }, 'draft composer not started: persona unreadable');
           return undefined;
         }));
+  // Every approval passes the hard guards again (revue 09, G5): her own limits when her persona is readable,
+  // otherwise the ones every creator shares (never an AI, no meeting, no contact). Never no guard at all.
+  const guard =
+    (isDemoPersonaInProduction
+      ? undefined
+      : await startBubbleGuard({ personaPath }).catch((error: unknown) => {
+          logger.warn({ err: error }, 'bubble guard without her persona: shared guards only');
+          return undefined;
+        })) ?? startSharedBubbleGuard();
   // The voice version the server writes with now, the one Automatique is proved on (ADR 0019): defined here only.
   const activeVoice = {
     voicePrompt: loadPrompt('voice').header.version,
@@ -238,6 +253,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     requireRole,
     recentLogin: createRequireRecentLogin(auth),
     voice: activeVoice,
+    guard,
     ...(composer !== undefined && { composer }),
   });
   const modules: Modules = {

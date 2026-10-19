@@ -113,3 +113,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | IP réelle derrière le proxy, limite de connexion par compte (G6) | done | `log/2026-10-19-trust-proxy.md` |
 | 2026-10-19 | Verrou serveur de l'Automatique (B3) | done | `log/2026-10-19-automatic-lock.md` |
 | 2026-10-19 | Le Dashboard affiche le taux lu par le verrou | done | `log/2026-10-19-dashboard-lock-rate.md` |
+| 2026-10-19 | Gardes dures à l'approbation (G5) | done | `log/2026-10-19-approval-guard.md` |
