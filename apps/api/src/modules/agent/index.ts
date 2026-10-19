@@ -45,7 +45,7 @@ export type { AgentDraftComposer } from './infra/draft-composer';
 /** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
 export type { MediaSight } from './infra/draft-composer';
 /** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
-export { createMediaSight, type FetchMedia, type FetchRefusal } from './infra/media-sight';
+export { createMediaSight, type FetchMedia } from './infra/media-sight';
 /** @public The `BubbleGuard` port of `conversations`, matched by shape. */
 export type { AgentBubbleGuard } from './infra/bubble-guard';
 

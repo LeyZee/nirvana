@@ -5,7 +5,7 @@ import { mediaKindOf, sniffMediaType, type MediaDescriber } from '../../media';
 import type { MediaSight, MediaToSee } from './draft-composer';
 
 /** Why the platform gave no file: the handoff says it. */
-export type FetchRefusal = 'gone' | 'locked' | 'too_large' | 'unsupported';
+type FetchRefusal = 'gone' | 'locked' | 'too_large' | 'unsupported';
 
 /** The file of one of his media, as the platform serves it, or why it cannot be had. */
 export type FetchMedia = (
