@@ -41,7 +41,15 @@ describe('fromApi', () => {
   it('opens the reader on a waiting fan who is not among the best fans', () => {
     const fans = fromApi(apiDashboard()).fans;
     expect(fans.map((fan) => fan.name)).toEqual(['Théo', 'Kévin']);
-    expect(fans[1]).toMatchObject({ spent: 0, alert: 'Mineur possible' });
+    expect(fans[1]).toMatchObject({ spent: 0, alert: 'Mineur possible', line: 'en attente depuis 19 min' });
+  });
+
+  it('says what an urgency does to the conversation, without repeating its line', () => {
+    const { agent, todos } = fromApi(apiDashboard());
+    expect(agent.lead).toBe(
+      'Un fan est peut-être mineur : sa conversation est gelée jusqu’à ce que tu la regardes.',
+    );
+    expect(agent.lead).not.toBe(todos[0]?.why);
   });
 
   it('says first that Reveal is disconnected, then that the voice is down', () => {

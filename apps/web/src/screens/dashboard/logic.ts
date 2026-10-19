@@ -145,19 +145,26 @@ export function heroState(agent: AgentState, todos: readonly Todo[], mode: Agent
       lead: `${mode === 'auto' ? 'L’agent écrit seul' : 'L’agent propose, les chatteurs valident dans Reveal'}. Les alertes arrivent ici et sur ton téléphone.`,
     };
   }
-  const urgent = todos.some((todo) => todo.tone === 'bad');
+  const urgent = todos.filter((todo) => todo.tone === 'bad').length;
   const waiting =
     todos.length === 1 ? '**Une chose** t’attend' : `**${String(todos.length)} choses** t’attendent`;
-  if (!urgent) {
+  if (urgent === 0) {
     return {
       tone: 'warn',
       headline: waiting,
       lead: 'Rien d’urgent : l’agent continue sur les autres conversations.',
     };
   }
+  // Only urgencies: named as such. Otherwise how many of them are.
+  const headline =
+    urgent === todos.length
+      ? urgent === 1
+        ? '**Une urgence** t’attend'
+        : `**${String(urgent)} urgences** t’attendent`
+      : `${waiting}, dont ${urgent === 1 ? 'une urgente' : `${String(urgent)} urgentes`}`;
   return {
     tone: 'warn',
-    headline: `${waiting}, dont une urgente`,
+    headline,
     lead: agent.lead,
     ...(agent.action === undefined ? {} : { action: agent.action }),
   };
