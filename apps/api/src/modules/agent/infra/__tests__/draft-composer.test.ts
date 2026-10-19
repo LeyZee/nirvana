@@ -120,6 +120,8 @@ const INPUT: AgentComposeInput = {
   conversationId: 'conversation-1',
   draftId: 'draft-1',
   now: new Date('2026-10-17T10:00:00Z'),
+  platformAccountId: 'account-1',
+  platformConversationId: 'thread-1',
   history: [
     { direction: 'inbound', text: 'Salut', at: new Date('2026-10-17T09:58:00Z') },
     { direction: 'inbound', text: 'Ça va ?', at: new Date('2026-10-17T09:59:00Z') },
@@ -158,7 +160,16 @@ const withMedia = (
   media: NonNullable<AgentComposeInput['history'][number]['media']>,
 ): AgentComposeInput => ({
   ...INPUT,
-  history: [...INPUT.history, { direction: 'inbound', text, at: new Date('2026-10-17T09:59:30Z'), media }],
+  history: [
+    ...INPUT.history,
+    {
+      direction: 'inbound',
+      text,
+      at: new Date('2026-10-17T09:59:30Z'),
+      platformMessageId: 'message-1',
+      media,
+    },
+  ],
 });
 
 describe('createDraftComposer', () => {
@@ -303,7 +314,15 @@ describe('createDraftComposer', () => {
     );
     expect(result.kind).toBe('draft');
     expect(asked).toEqual([
-      { creatorId: 'creator-1', conversationId: 'conversation-1', platformMediaId: 'm-1', kind: 'image' },
+      {
+        creatorId: 'creator-1',
+        conversationId: 'conversation-1',
+        platformAccountId: 'account-1',
+        platformConversationId: 'thread-1',
+        platformMessageId: 'message-1',
+        platformMediaId: 'm-1',
+        kind: 'image',
+      },
     ]);
     expect(seen.brainInputs?.[0]?.history.at(-1)).toEqual({
       from: 'fan',
@@ -387,6 +406,7 @@ describe('createDraftComposer', () => {
           direction: 'inbound',
           text: 'tiens',
           at: new Date('2026-10-17T09:59:20Z'),
+          platformMessageId: 'message-1',
           media: [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }],
         },
         { direction: 'inbound', text: 'tu aimes ?', at: new Date('2026-10-17T09:59:40Z') },
@@ -395,6 +415,34 @@ describe('createDraftComposer', () => {
     expect((await draftComposer.compose(input)).kind).toBe('draft');
     const turns = seen.brainInputs?.[0]?.history ?? [];
     expect(turns.map((t) => t.media?.length ?? 0)).toEqual([0, 0, 1, 0]);
+  });
+
+  it('hands over a media it cannot find on the platform: no conversation, message or media id', async () => {
+    const { sight, asked } = sightOf({ 'm-1': PHOTO });
+    const { draftComposer } = composer({}, sight);
+    const photo = withMedia('', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]);
+    const { creatorId, conversationId, draftId, now, history, fan } = photo;
+    const noThread: AgentComposeInput = { creatorId, conversationId, draftId, now, history, fan };
+    const noMessageId = history.map((m) => ({
+      direction: m.direction,
+      text: m.text,
+      at: m.at,
+      ...(m.media !== undefined && { media: m.media }),
+    }));
+    const cases: AgentComposeInput[] = [
+      noThread,
+      { ...photo, history: noMessageId },
+      withMedia('', [{ kind: 'image', isLocked: false }]),
+    ];
+    for (const input of cases) {
+      expect(await draftComposer.compose(input)).toEqual({
+        kind: 'held',
+        reason: 'handoff',
+        detail: ['media_unscreened', 'no_platform_ref'],
+        costUsd: 0,
+      });
+    }
+    expect(asked).toEqual([]);
   });
 
   it('hands over a media the vision could not make out, or not with certainty', async () => {

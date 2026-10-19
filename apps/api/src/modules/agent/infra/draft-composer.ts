@@ -15,10 +15,15 @@ export interface AgentComposeInput {
   readonly conversationId: string;
   readonly draftId: string;
   readonly now: Date;
+  /** Where the conversation lives on the platform: the connector fetches his media there. */
+  readonly platformAccountId?: string;
+  readonly platformConversationId?: string;
   readonly history: readonly {
     readonly direction: 'inbound' | 'outbound';
     readonly text: string;
     readonly at: Date;
+    /** Its id on the platform: a media link expires, a fresh one is read on the message. */
+    readonly platformMessageId?: string;
     /** The media the message carries (photo, video, voice note), as `conversations` read them. */
     readonly media?: readonly HistoryMedia[];
   }[];
@@ -36,10 +41,13 @@ interface HistoryMedia {
   readonly isLocked?: boolean;
 }
 
-/** One media of his to look at: what the platform calls it, in the conversation it came in. */
+/** One media of his to look at: what the platform calls it, in the message and conversation it came in. */
 export interface MediaToSee {
   readonly creatorId: string;
   readonly conversationId: string;
+  readonly platformAccountId: string;
+  readonly platformConversationId: string;
+  readonly platformMessageId: string;
   readonly platformMediaId: string;
   readonly kind: 'image' | 'video';
 }
@@ -109,15 +117,29 @@ async function seeHisMedia(
     return { unseen: UNSEEN() };
   if (sinceAnswer.every((m) => (m.media?.length ?? 0) === 0)) return { seen: sinceAnswer.map(() => []) };
   if (sight === undefined) return { unseen: UNSEEN() };
+  const { platformAccountId, platformConversationId } = input;
+  if (platformAccountId === undefined || platformConversationId === undefined) {
+    return { unseen: UNSEEN(['no_platform_ref']) };
+  }
   const seen: MediaDescription[][] = [];
   for (const message of sinceAnswer) {
     const toSee: MediaToSee[] = [];
+    const { platformMessageId } = message;
     for (const m of message.media ?? []) {
       if (m.isLocked === true) return { unseen: UNSEEN(['locked']) };
       if (m.kind !== 'image' && m.kind !== 'video') return { unseen: UNSEEN([m.kind]) };
-      if (m.platformMediaId === undefined) return { unseen: UNSEEN(['no_media_id']) };
-      const { kind, platformMediaId } = m;
-      toSee.push({ creatorId: input.creatorId, conversationId: input.conversationId, platformMediaId, kind });
+      if (m.platformMediaId === undefined || platformMessageId === undefined) {
+        return { unseen: UNSEEN(['no_platform_ref']) };
+      }
+      toSee.push({
+        creatorId: input.creatorId,
+        conversationId: input.conversationId,
+        platformAccountId,
+        platformConversationId,
+        platformMessageId,
+        platformMediaId: m.platformMediaId,
+        kind: m.kind,
+      });
     }
     const described: MediaDescription[] = [];
     for (const result of await Promise.all(toSee.map((m) => sight.see(m)))) {

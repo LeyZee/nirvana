@@ -49,3 +49,32 @@ export function spreadFrames<T>(frames: readonly T[], max = 24): T[] {
     (frame): frame is T => frame !== undefined,
   );
 }
+
+const ascii = (data: Uint8Array, from: number, to: number): string =>
+  String.fromCharCode(...data.subarray(from, to));
+const startsWith = (data: Uint8Array, bytes: readonly number[]): boolean =>
+  bytes.every((b, i) => data[i] === b);
+
+// ISO base media (`ftyp` box) brands: still images (HEIF family) and videos.
+const HEIF_BRANDS: readonly string[] = ['heic', 'heix', 'hevc', 'heim', 'heis', 'mif1', 'msf1'];
+const AVIF_BRANDS: readonly string[] = ['avif', 'avis'];
+
+/**
+ * The type a file really is, read from its first bytes: a platform's name or extension is not trusted (a file
+ * called .jpg can be anything). Undefined: not an image or video the vision reads.
+ */
+export function sniffMediaType(data: Uint8Array): string | undefined {
+  if (startsWith(data, [0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (startsWith(data, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (ascii(data, 0, 6) === 'GIF87a' || ascii(data, 0, 6) === 'GIF89a') return 'image/gif';
+  if (ascii(data, 0, 4) === 'RIFF' && ascii(data, 8, 12) === 'WEBP') return 'image/webp';
+  if (startsWith(data, [0x1a, 0x45, 0xdf, 0xa3])) return 'video/webm';
+  if (ascii(data, 4, 8) === 'ftyp') {
+    const brand = ascii(data, 8, 12);
+    if (HEIF_BRANDS.includes(brand)) return 'image/heic';
+    if (AVIF_BRANDS.includes(brand)) return 'image/avif';
+    if (brand === 'qt  ') return 'video/quicktime';
+    return 'video/mp4';
+  }
+  return undefined;
+}
