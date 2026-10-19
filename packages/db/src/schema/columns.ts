@@ -33,11 +33,13 @@ export function tenantPolicy(creatorId: PgColumn) {
   });
 }
 
-/** Same, plus the rows that belong to nobody (global kill switch). */
+/**
+ * Same, plus reading the rows that belong to nobody (global kill switch). A tenant reads them but never writes,
+ * changes or removes one: a global row is written only with `withAdmin` (`pnpm ops:kill-switch`), revue 09.
+ */
 export function tenantOrGlobalPolicy(creatorId: PgColumn) {
-  return pgPolicy('tenant_isolation', {
-    for: 'all',
-    using: sql`${creatorId} is null or ${creatorId} = ${currentCreator}`,
-    withCheck: sql`${creatorId} is null or ${creatorId} = ${currentCreator}`,
-  });
+  return [
+    tenantPolicy(creatorId),
+    pgPolicy('global_read', { for: 'select', using: sql`${creatorId} is null` }),
+  ];
 }

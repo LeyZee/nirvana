@@ -179,7 +179,7 @@ Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.en
 
   Le second argument `true` (`missing_ok`) fait que, hors `withTenant`, la politique compare à `NULL` et retourne **zéro ligne** au lieu de lever « unrecognized configuration parameter ». C'est ce que le test de P0-03 vérifie.
 - `withTenant(creatorId, tx => …)` ouvre une transaction et fait `SET LOCAL app.creator_id = …`. Les jobs système multi-tenant (réconciliation, purge, dispatch des polls) passent par `withAdmin` (`DATABASE_ADMIN_URL`) dans des fonctions nommées `*Unscoped`.
-- **Hors RLS** (pas de `creator_id`) : `creators`, les tables Better Auth, `audit_log`, `worker_heartbeats`, les lignes `kill_switches` de scope `global` (politique : `creator_id IS NULL OR creator_id = …`), les tables `graphile_worker`.
+- **Hors RLS** (pas de `creator_id`) : `creators`, les tables Better Auth, `audit_log`, `worker_heartbeats`, les lignes `kill_switches` de scope `global` (lues par toutes les créatrices, politique `global_read` ; écrites, modifiées et supprimées seulement par `withAdmin`, migration 0010), les tables `graphile_worker`.
 
 ## Index de départ
 

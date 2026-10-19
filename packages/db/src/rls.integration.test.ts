@@ -264,6 +264,31 @@ describe('database (RLS, constraints, migrations)', () => {
     expect(rows.map((r) => r.scope).sort()).toEqual(['creator', 'global']);
   });
 
+  it('a creator reads the global kill switch but never writes, changes or removes one', async () => {
+    expect(
+      await failure(
+        withTenant(test.app.db, a.creatorId, (tx) =>
+          tx
+            .insert(s.killSwitches)
+            .values({ id: newId(MessageIdSchema), scope: 'global', active: true, reason: 'x', setBy: 'u' }),
+        ),
+      ),
+    ).toMatch(/row-level security/);
+    const changed = await withTenant(test.app.db, a.creatorId, (tx) =>
+      tx.update(s.killSwitches).set({ active: true }).where(eq(s.killSwitches.scope, 'global')).returning(),
+    );
+    expect(changed).toHaveLength(0);
+    const removed = await withTenant(test.app.db, a.creatorId, (tx) =>
+      tx.delete(s.killSwitches).where(eq(s.killSwitches.scope, 'global')).returning(),
+    );
+    expect(removed).toHaveLength(0);
+    const [global] = await test.admin.db
+      .select()
+      .from(s.killSwitches)
+      .where(eq(s.killSwitches.scope, 'global'));
+    expect(global?.active).toBe(false);
+  });
+
   it('outside withTenant the app role sees zero rows, without an error', async () => {
     const setting = await test.app.db.execute(sql`select current_setting('app.creator_id', true) as value`);
     expect([null, '']).toContain(setting.rows[0]?.['value']);
