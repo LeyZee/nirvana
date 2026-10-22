@@ -56,7 +56,7 @@ describe('fromApi', () => {
     const unlinked = fromApi(
       apiDashboard({
         reveal: { connected: false, lastReadAt: null, conversations: 0 },
-        voice: { ok: false, medianWriteMs: null, outagesLast7d: 0 },
+        voice: { ok: false, keyMissing: false, medianWriteMs: null, outagesLast7d: 0 },
       }),
     );
     expect(unlinked.agent).toMatchObject({ tone: 'idle', headline: 'Reveal n’est **pas encore relié**' });
