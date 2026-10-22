@@ -15,7 +15,7 @@ import {
   type FieldIssue,
   type TabId,
 } from './model';
-import { saveVersion, usePersona, type PersonaReady } from './source';
+import { activateVersion, saveVersion, usePersona, type PersonaReady } from './source';
 import {
   AdditionalInfoTab,
   BehaviorTab,
@@ -82,6 +82,10 @@ export function PersonaSection({
         setNotice(`Version ${version.version} enregistrée, pas encore active`);
         reload();
       }}
+      onActivated={(version) => {
+        setNotice(`Version ${version} active : l’agent écrit avec elle`);
+        reload();
+      }}
       onReload={reload}
     />
   );
@@ -103,6 +107,7 @@ function Editor({
   notice,
   onEdit,
   onSaved,
+  onActivated,
   onReload,
 }: {
   ready: PersonaReady;
@@ -112,6 +117,7 @@ function Editor({
   notice: string | null;
   onEdit: () => void;
   onSaved: (version: PersonaVersionSummary) => void;
+  onActivated: (version: string) => void;
   onReload: () => void;
 }): JSX.Element {
   const saved = ready.persona;
@@ -165,16 +171,17 @@ function Editor({
     setProblem(null);
     const taken = [...ready.versions.map((v) => v.version), draft.meta.version];
     // The model reads the zone from the persona; the code goes by the creator's, so the copy follows hers.
-    const persona = PersonaSchema.parse(
+    // Her zone and the new number do not go through `validate`: a refusal here is a failed save, never a throw.
+    const persona = PersonaSchema.safeParse(
       withoutPlaceholders({
         ...draft,
         details: { ...draft.details, timezone: timezone ?? draft.details.timezone },
         meta: { ...draft.meta, version: nextVersion(taken), created_at: today() },
       }),
     );
-    const result = await saveVersion(creatorId, persona, ready.basedOn).catch(() => ({
-      kind: 'failed' as const,
-    }));
+    const result = persona.success
+      ? await saveVersion(creatorId, persona.data, ready.basedOn).catch(() => ({ kind: 'failed' as const }))
+      : { kind: 'failed' as const };
     setSaving(false);
     switch (result.kind) {
       case 'saved':
@@ -195,6 +202,25 @@ function Editor({
           reload: false,
         });
         break;
+    }
+  };
+
+  const activate = async (): Promise<void> => {
+    const version = ready.versions[0];
+    if (creatorId === null || version === undefined) return;
+    setSaving(true);
+    setProblem(null);
+    const result = await activateVersion(creatorId, version.id).catch(() => 'failed' as const);
+    setSaving(false);
+    if (result === 'activated') onActivated(version.version);
+    else {
+      setProblem({
+        text:
+          result === 'forbidden'
+            ? 'Seuls le propriétaire et la créatrice peuvent activer sa persona.'
+            : 'Rien n’a été activé : Nirvana ne répond pas. Réessaie dans un instant.',
+        reload: false,
+      });
     }
   };
 
@@ -227,10 +253,14 @@ function Editor({
           changes={changed.length}
           saving={saving}
           blocked={blocked}
+          canActivate={canSave && changed.length === 0 && ready.versions[0]?.isActive === false}
           notice={notice}
           problem={problem}
           onSave={() => {
             void save();
+          }}
+          onActivate={() => {
+            void activate();
           }}
           onReload={onReload}
           onReset={() => {
@@ -275,6 +305,9 @@ function Editor({
   );
 }
 
+/** How long « Confirmer l'activation » waits for its second click. */
+const CONFIRM_MS = 4000;
+
 const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
 
 /** What the note under the head says: where this persona comes from and what a save does. */
@@ -284,7 +317,7 @@ function noteOf(ready: PersonaReady, known: boolean): string {
     return 'Elle n’a pas encore de persona enregistrée. Pars de cet exemple : ton premier enregistrement deviendra sa version 0.0.1.';
   }
   const active = ready.versions.find((v) => v.isActive);
-  return `Chaque enregistrement crée une nouvelle version, qui reste inactive tant qu’elle n’a pas été testée puis validée. ${
+  return `Chaque enregistrement crée une nouvelle version, inactive : l’agent écrit avec la version active, et tu actives la nouvelle quand elle est prête. ${
     active === undefined
       ? 'Aucune version n’est active pour l’instant.'
       : `Version active : ${active.version}.`
@@ -300,9 +333,11 @@ function Head({
   changes,
   saving,
   blocked,
+  canActivate,
   notice,
   problem,
   onSave,
+  onActivate,
   onReload,
   onReset,
   onShowIssue,
@@ -315,14 +350,28 @@ function Head({
   saving: boolean;
   /** Why saving is not possible now, or null when it is. */
   blocked: string | null;
+  /** Her newest version is stored, unchanged here and not yet the one the agent writes with. */
+  canActivate: boolean;
   notice: string | null;
   problem: { text: string; reload: boolean } | null;
   onSave: () => void;
+  onActivate: () => void;
   onReload: () => void;
   onReset: () => void;
   onShowIssue: (issue: FieldIssue) => void;
 }): JSX.Element {
   const name = draft.details.first_name.trim();
+  /** Activating changes what the agent writes: a second click confirms it. */
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = setTimeout(() => {
+      setConfirming(false);
+    }, CONFIRM_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [confirming]);
   const first = issues[0];
   const current = ready.versions[0];
   const state =
@@ -368,6 +417,22 @@ function Head({
           {changes > 0 && !saving ? (
             <button type="button" className="nv-btn nv-btn--plain nv-btn--sm ps-pop" onClick={onReset}>
               Tout annuler
+            </button>
+          ) : null}
+          {canActivate ? (
+            <button
+              type="button"
+              className="nv-btn nv-btn--soft ps-pop"
+              disabled={saving}
+              title="L’agent écrira avec cette version dès maintenant."
+              onClick={() => {
+                if (confirming) {
+                  setConfirming(false);
+                  onActivate();
+                } else setConfirming(true);
+              }}
+            >
+              {confirming ? 'Confirmer l’activation' : `Activer la version ${draft.meta.version}`}
             </button>
           ) : null}
           <button

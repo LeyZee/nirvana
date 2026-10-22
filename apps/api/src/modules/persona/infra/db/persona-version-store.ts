@@ -10,7 +10,7 @@ import {
 import { and, eq, schema, sql, withTenant, type Database, type Transaction } from '@nirvana/db';
 
 import { canonicalJson } from '../../domain/canonical';
-import { PersonaVersionConflict } from '../../domain/errors';
+import { PersonaVersionConflict, PersonaVersionNotFound } from '../../domain/errors';
 import type { PersonaVersionStore } from '../../domain/versions';
 
 /** What `source_path` says of a version saved from the dashboard rather than loaded from a YAML file. */
@@ -66,15 +66,47 @@ const audit = (
   action: string,
   entityId: string,
   details: Record<string, string>,
+  userId: string | null = null,
 ): Promise<unknown> =>
   tx.insert(schema.auditLog).values({
     id: newId(AuditEntryIdSchema),
-    userId: null,
+    userId,
     action,
     entity: 'persona_version',
     entityId,
     details,
   });
+
+/**
+ * Makes `row` her only active version, audited with who did it (null: the command line); an active one is left as
+ * it is. The unique index allows one active version per creator: the previous one goes first.
+ */
+async function activateRow(
+  tx: Transaction,
+  creatorId: string,
+  row: SummaryRow,
+  userId: string | null,
+): Promise<{ row: SummaryRow; activated: boolean }> {
+  if (row.isActive) return { row, activated: false };
+  await tx
+    .update(schema.personaVersions)
+    .set({ isActive: false })
+    .where(and(eq(schema.personaVersions.isActive, true), eq(schema.personaVersions.creatorId, creatorId)));
+  const [active] = await tx
+    .update(schema.personaVersions)
+    .set({ isActive: true, activatedAt: new Date() })
+    .where(eq(schema.personaVersions.id, row.id))
+    .returning(columns);
+  if (active === undefined) throw new Error('persona version activation returned nothing');
+  await audit(
+    tx,
+    'persona_version.activate',
+    active.id,
+    { creatorId, version: active.version, contentHash: active.contentHash },
+    userId,
+  );
+  return { row: active, activated: true };
+}
 
 export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionStore {
   return {
@@ -168,24 +200,24 @@ export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionSt
             sourcePath,
           });
         }
-        const activated = activate && !row.isActive;
-        if (activated) {
-          // The unique index allows one active version per creator: the previous one goes first.
-          await tx
-            .update(schema.personaVersions)
-            .set({ isActive: false })
-            .where(
-              and(eq(schema.personaVersions.isActive, true), eq(schema.personaVersions.creatorId, creatorId)),
-            );
-          [row] = await tx
-            .update(schema.personaVersions)
-            .set({ isActive: true, activatedAt: new Date() })
-            .where(eq(schema.personaVersions.id, row.id))
-            .returning(columns);
-          if (row === undefined) throw new Error('persona version activation returned nothing');
-          await audit(tx, 'persona_version.activate', row.id, { creatorId, version, contentHash: hash });
-        }
-        return { version: toSummary(row), created: existing === undefined, activated };
+        const result = activate ? await activateRow(tx, creatorId, row, null) : { row, activated: false };
+        return {
+          version: toSummary(result.row),
+          created: existing === undefined,
+          activated: result.activated,
+        };
+      });
+    },
+
+    activate(creatorId, versionId, userId) {
+      return withTenant(db, creatorId, async (tx) => {
+        await lockCreator(tx, creatorId);
+        const [row] = await tx
+          .select(columns)
+          .from(schema.personaVersions)
+          .where(eq(schema.personaVersions.id, versionId));
+        if (row === undefined) throw new PersonaVersionNotFound();
+        return toSummary((await activateRow(tx, creatorId, row, userId)).row);
       });
     },
   };

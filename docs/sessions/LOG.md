@@ -135,3 +135,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Dashboard : clé manquante en ambre, tâches bloquées, « À valider » ouvre Suivi | done | `log/2026-10-22-dashboard-key-missing.md` |
 | 2026-10-19 | Gardes de sortie : contournements de la recette (R-G1) | done | `log/2026-10-19-guards-acceptance.md` |
 | 2026-10-22 | Dashboard : chaque ligne de « À traiter » ouvre Suivi | done | `log/2026-10-22-dashboard-todos-to-suivi.md` |
+| 2026-10-22 | Créatrices : créer une créatrice, activer une version | done | `log/2026-10-22-persona-creer-activer.md` |

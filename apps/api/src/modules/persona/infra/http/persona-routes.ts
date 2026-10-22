@@ -1,4 +1,5 @@
 import {
+  ActivatePersonaVersionParamsSchema,
   CreatePersonaVersionBodySchema,
   CreatorIdSchema,
   DomainError,
@@ -32,8 +33,8 @@ function actorFor(request: FastifyRequest, creatorId: CreatorId): CurrentUser {
 }
 
 /**
- * `/v1/creators/:creatorId/persona` (ADR 0010): the dashboard reads her versions and stores a new one. A stored
- * version is never active: the activation, an audited event, stays outside the dashboard.
+ * `/v1/creators/:creatorId/persona` (ADR 0010): the dashboard reads her versions, stores a new one (never active),
+ * and activates one, an audited event.
  */
 export function createPersonaRoutes(
   store: PersonaVersionStore,
@@ -69,6 +70,23 @@ export function createPersonaRoutes(
         const user = actorFor(request, creatorId);
         const created = await store.create(creatorId, request.body, user.id);
         return reply.code(201).send(created);
+      },
+    );
+
+    app.post(
+      '/creators/:creatorId/persona/versions/:versionId/activate',
+      {
+        // The one the agent writes with: the same people who change her persona choose it.
+        preHandler: requireRole('owner', 'creator'),
+        schema: {
+          params: ActivatePersonaVersionParamsSchema,
+          response: { 200: PersonaVersionSummarySchema },
+        },
+      },
+      async (request) => {
+        const { creatorId, versionId } = request.params;
+        const user = actorFor(request, creatorId);
+        return store.activate(creatorId, versionId, user.id);
       },
     );
     return Promise.resolve();

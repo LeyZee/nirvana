@@ -183,4 +183,54 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
       .where(eq(schema.auditLog.action, 'persona_version.activate'));
     expect(actions).toHaveLength(2);
   });
+
+  it('activates a version from the dashboard, for her owner and herself only, audited with who did it', async () => {
+    const activate = (creatorId: string, versionId: string, cookie: string) =>
+      server.inject({
+        method: 'POST',
+        url: `/v1/creators/${creatorId}/persona/versions/${versionId}/activate`,
+        headers: { cookie, origin: DASHBOARD_ORIGIN },
+      });
+    const [newest, older] = (await get(anna, owner)).json<PersonaOverview>().versions;
+    if (newest === undefined || older === undefined) throw new Error('two versions expected');
+
+    expect((await activate(anna, older.id, operator)).statusCode).toBe(403);
+    expect((await activate(bea, older.id, owner)).statusCode).toBe(404);
+
+    const first = await activate(anna, older.id, owner);
+    expect(first.statusCode).toBe(200);
+    expect(first.json<PersonaVersionSummary>()).toMatchObject({ id: older.id, isActive: true });
+    const second = await activate(anna, newest.id, owner);
+    expect(second.json<PersonaVersionSummary>()).toMatchObject({ id: newest.id, isActive: true });
+    expect((await activate(anna, newest.id, owner)).statusCode).toBe(200);
+
+    const after = (await get(anna, owner)).json<PersonaOverview>().versions;
+    expect(after.filter((v) => v.isActive).map((v) => v.id)).toEqual([newest.id]);
+    const audit = await test.admin.db
+      .select({ action: schema.auditLog.action, userId: schema.auditLog.userId })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.entityId, newest.id));
+    const activations = audit.filter((row) => row.action === 'persona_version.activate');
+    expect(activations).toHaveLength(1);
+    expect(activations[0]?.userId).not.toBeNull();
+  });
+
+  it('lets the owner add a creator, and nobody else', async () => {
+    const create = (cookie: string, payload: object) =>
+      server.inject({
+        method: 'POST',
+        url: '/v1/creators',
+        headers: { cookie, origin: DASHBOARD_ORIGIN },
+        payload,
+      });
+    expect((await create(operator, { displayName: 'Cleo' })).statusCode).toBe(403);
+    expect((await create(owner, { displayName: 'Cleo', timezone: 'Mars/Olympus' })).statusCode).toBe(400);
+    const created = await create(owner, { displayName: 'Cleo' });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ displayName: 'Cleo', timezone: 'Europe/Paris' });
+    const list = await server.inject({ method: 'GET', url: '/v1/creators', headers: { cookie: owner } });
+    expect(list.json<{ creators: { displayName: string }[] }>().creators.map((c) => c.displayName)).toContain(
+      'Cleo',
+    );
+  });
 });

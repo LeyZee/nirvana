@@ -1,5 +1,5 @@
 # Écran Persona du CRM, dans Créatrices (ID à donner)
-Statut : in_progress (écran fusionné, #45 ; API et enregistrement en PR ; ID à valider par Charles)
+Statut : in_progress (écran, API, création et activation ; reste l'historique des versions ; ID à valider par Charles)
 Phase : 5 (éditeur de persona, ADR 0010), avancé par la revue 08, action 5
 Dépend de : P0-08 (`PersonaSchema`), coquille `apps/web` (#34) ; pour l'API, la PR créatrices du fil Bilan (`GET /v1/creators`)
 Branche : claude/persona-screen-jbetuh
@@ -21,7 +21,7 @@ Créatrices › Persona montre et édite la persona de la créatrice onglet par 
 - [x] L'écran lit la persona de la créatrice choisie ; la pastille « Exemple » disparaît, le bouton s'ouvre. La copie `details.timezone` envoyée au modèle est alignée sur `creators.timezone` à l'enregistrement ; les mots-clés d'alerte restent saisis ici, la page Telegram les lit. Enregistrer : propriétaire et créatrice seulement (les chatteurs lisent), numéro suivant calculé par l'écran (0.0.1 au-dessus du plus haut), 409 si une autre version est arrivée entre-temps.
 - [x] `pnpm persona:load <fichier> [--creator <id>] [--activate]` et `pnpm persona:validate <fichier>` (demande du coordinateur, relecture Bilan) : chargement idempotent, une seule version active, audit.
 - [x] Recette du 19/10 (A-13, A-14) : les `<à remplir>` de l'exemple ne s'affichent plus comme des valeurs (champ vide « À remplir », étiquettes masquées) et ne sont jamais enregistrés ; « Écris comme le fan… » dans le Playground.
-- [ ] Créer une créatrice et activer une version depuis l'écran Créatrices (demande de Charles relayée le 19/10, la CLI ne suffit pas) : `POST /v1/creators` et `POST …/persona/versions/:versionId/activate`, ajout seul, Bilan en relecture ; retour en Copilote au changement de version active (ADR 0019) selon Bilan.
+- [x] Créer une créatrice et activer une version depuis l'écran Créatrices (demande de Charles relayée le 19/10, la CLI ne suffit pas) : `POST /v1/creators` (propriétaire) et `POST …/persona/versions/:versionId/activate` (propriétaire et créatrice), ajout seul, Bilan en relecture. Le retour du verrou d'Automatique au changement de version active est porté par Bilan (R-G3, ADR 0019).
 - [ ] Historique des versions et comparaison (ADR 0010), plus tard.
 
 ## Critères d'acceptation

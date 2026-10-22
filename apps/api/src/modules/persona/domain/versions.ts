@@ -3,6 +3,7 @@ import type {
   CreatorId,
   Persona,
   PersonaOverview,
+  PersonaVersionId,
   PersonaVersionSummary,
 } from '@nirvana/contracts';
 
@@ -15,6 +16,11 @@ export interface PersonaVersionStore {
     body: CreatePersonaVersionBody,
     userId: string,
   ): Promise<PersonaVersionSummary>;
+  /**
+   * Makes a stored version her only active one, audited with who did it; the active one is returned as it is.
+   * Throws `PersonaVersionNotFound` when she has no version with this id.
+   */
+  activate(creatorId: CreatorId, versionId: PersonaVersionId, userId: string): Promise<PersonaVersionSummary>;
   /**
    * `pnpm persona:load`: stores a version read from a YAML file, or finds the same one already stored, and with
    * `activate` makes it her only active version. A number already stored with another content is a conflict.
