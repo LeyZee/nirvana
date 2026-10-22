@@ -1,0 +1,14 @@
+/* The mark beside the name, then one sentence: the popup keeps the design system's 16 px margin (.nv-popup). */
+body {
+  margin: 0;
+}
+.popup-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+}
+.popup-note {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+}
