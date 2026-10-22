@@ -46,6 +46,14 @@ const KillSwitchSchema = z.object({
   reason: z.string(),
 });
 
+// Only the last failure counts: the retries before it are the platform's hiccups, not news. No fallback on the
+// attempt count for rows without `isFinal`: the outbox never held `send_failed` before the flag existed. The
+// error code stays out, as anything the platform said.
+const SendFailedSchema = z.object({
+  conversationId: ConversationIdSchema.optional().catch(undefined),
+  isFinal: z.literal(true),
+});
+
 // The voice version (`voicePrompt`, `voiceModel`) stays out: Telegram never gets anything of the voice.
 const AutomaticClosedSchema = z.object({
   missing: z.array(AutomaticMissingSchema).min(1),
@@ -103,6 +111,11 @@ function signalOf(type: string, payload: unknown): Signal | null {
       const parsed = KillSwitchSchema.safeParse(payload);
       if (!parsed.success) return null;
       return { kind: 'kill_switch', ...parsed.data };
+    }
+    case 'send_failed': {
+      const parsed = SendFailedSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return { kind: 'send_failed', conversationId: parsed.data.conversationId ?? null };
     }
     case 'automatic_closed': {
       const parsed = AutomaticClosedSchema.safeParse(payload);

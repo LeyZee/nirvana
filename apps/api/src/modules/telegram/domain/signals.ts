@@ -47,6 +47,11 @@ export type Signal =
       readonly reason: string;
     }
   | {
+      /** A message of the agent will never leave (last attempt, or refused): the conversation is in `error`. */
+      readonly kind: 'send_failed';
+      readonly conversationId: ConversationId | null;
+    }
+  | {
       /** Automatique closed on its own (ADR 0019): its conversations went back to the copilot. */
       readonly kind: 'automatic_closed';
       /** What the lock misses now, with the server's figures. */

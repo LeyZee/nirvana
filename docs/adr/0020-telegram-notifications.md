@@ -45,6 +45,7 @@ Faits Telegram qui contraignent le choix :
    | `session_state_changed` | important, info | connecteurs | oui |
    | `kill_switch_toggled` | important, info | ops | oui |
    | `automatic_closed` { `missing`, `conversations` ; la version de voix n'est pas lue } | important | Bilan, verrou de l'Automatique (ADR 0019, #91) | oui (migration 0009 pour le déclencheur) |
+   | `send_failed` avec `isFinal` = true et `conversationId` (le code d'erreur n'est pas lu) | important, fil de la conversation (fermé par une prise en main ou un retour à l'agent) | Bilan (liste publiée de `journal.ts`) | lu par le module (migration 0012 pour le déclencheur, recette R-G5) ; publication à venir |
    | `takeover_started` avec `conversationId` | met à jour le message d'origine | Bilan (liste publiée de `journal.ts`) | oui (#54, `conversationId` par #60) |
    | `takeover_ended` avec `conversationId` | met à jour le message d'origine s'il n'est pas déjà fermé (après une remise à l'humain, la conversation est déjà aux humains : la rendre à l'agent ferme l'alerte) | Bilan (liste publiée de `journal.ts`, `conversationId` dans le payload) | lu par le module (migration 0011 pour le déclencheur) ; publication à venir (recette R-G4) |
    | `sale_detected` avec `conversationId`, l'auteur de la vente et le nom de l'offre | sale | connecteur Reveal, après la capture (lots A/B) ; contrat : Bilan | à compléter et publier |

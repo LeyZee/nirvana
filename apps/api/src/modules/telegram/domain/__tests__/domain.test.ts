@@ -63,6 +63,17 @@ describe('classification (ADR 0020 §2)', () => {
     expect(reached?.kind === 'notice' ? reached.body : '').toContain('Plafond IA atteint (20 €)');
   });
 
+  it('says a message could not leave, as important, in the conversation’s thread', () => {
+    expect(classify({ kind: 'send_failed', conversationId })).toEqual({
+      kind: 'notice',
+      topic: 'important',
+      threadKey: `conversation:${conversationId}`,
+      title: 'Important',
+      body: 'Un message de l’agent n’a pas pu partir. Il n’écrit plus à ce fan et attend un humain.',
+      link: { label: 'Ouvrir la conversation', path: `/suivi?conversation=${conversationId}` },
+    });
+  });
+
   it('says why Automatique closed, rates to the tenth in French, once and as important', () => {
     const outcome = classify({
       kind: 'automatic_closed',
