@@ -12,6 +12,14 @@ describe('fromApi', () => {
     expect(todo).toMatchObject({ kind: 'Mineur possible', title: 'Kévin', tone: 'bad', at: '13:41' });
   });
 
+  it('names a send that failed for good', () => {
+    const todos = apiDashboard().todos.map(
+      (t) => ({ ...t, tone: 'warn', kind: 'send_failed' }) satisfies typeof t,
+    );
+    const [todo] = fromApi(apiDashboard({ todos })).todos;
+    expect(todo).toMatchObject({ kind: 'Envoi échoué', tone: 'warn' });
+  });
+
   it('writes the server’s figures the French way, nothing more', () => {
     expect(card('budget')?.value).toBe('7,40 € sur 20 €');
     expect(card('budget')?.gauge).toEqual({ kind: 'spend', value: 37, mark: 80 });

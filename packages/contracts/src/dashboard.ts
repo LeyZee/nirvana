@@ -47,8 +47,8 @@ export const DashboardToneSchema = z.enum(['ok', 'warn', 'bad']);
 export const DashboardTodoSchema = z.object({
   id: z.string().min(1),
   tone: DashboardToneSchema,
-  /** A handoff cause, or a draft waiting for a chatter's approval. */
-  kind: z.union([HandoffCauseSchema, z.literal('awaiting_approval')]),
+  /** A handoff cause, a draft waiting for a chatter's approval, or a send that failed for good. */
+  kind: z.union([HandoffCauseSchema, z.literal('awaiting_approval'), z.literal('send_failed')]),
   /** The fan's name. */
   title: z.string().min(1),
   /** One sentence: why it waits for a human, and what the agent does meanwhile. */

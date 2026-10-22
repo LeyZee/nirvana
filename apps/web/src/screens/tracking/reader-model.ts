@@ -15,7 +15,9 @@ import { CAUSE_LABELS } from '@/agent/causes';
 
 /** A line of « À traiter », in the words of the todo the server computed. */
 export function todoLabel(todo: DashboardTodo): string {
-  return todo.kind === 'awaiting_approval' ? 'Brouillon à valider' : CAUSE_LABELS[todo.kind];
+  if (todo.kind === 'awaiting_approval') return 'Brouillon à valider';
+  if (todo.kind === 'send_failed') return 'Envoi échoué';
+  return CAUSE_LABELS[todo.kind];
 }
 
 export type ThreadItem =

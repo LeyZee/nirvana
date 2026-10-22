@@ -12,12 +12,15 @@ export interface VoiceVersion {
   readonly voiceModel: string;
 }
 
-/** A conversation waiting for a human: handed over, or with a draft unread for more than 10 minutes. */
+/**
+ * A conversation waiting for a human: handed over, with a draft unread for more than 10 minutes, or stopped by a
+ * send that failed for good (state `error`).
+ */
 export interface WaitingConversation {
   readonly conversationId: string;
   readonly fanId: string;
   readonly fanName: string;
-  readonly kind: HandoffCause | 'awaiting_approval';
+  readonly kind: HandoffCause | 'awaiting_approval' | 'send_failed';
   readonly since: Date;
 }
 

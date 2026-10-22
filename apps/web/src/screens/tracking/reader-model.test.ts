@@ -1,12 +1,13 @@
 import {
   ConversationEventViewSchema,
+  DashboardTodoSchema,
   MessageViewSchema,
   type ConversationEventView,
   type MessageView,
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { decisionError, lastHandoff, threadOf } from './reader-model';
+import { decisionError, lastHandoff, threadOf, todoLabel } from './reader-model';
 
 /* Invented messages: no real fan. */
 const CONVERSATION = '0192f3a0-0000-7000-8000-000000000001';
@@ -113,5 +114,24 @@ describe('decisionError', () => {
     expect(decisionError(0, null)).toBe(
       'Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.',
     );
+  });
+});
+
+describe('todoLabel', () => {
+  it('names each line of « À traiter », a send that failed for good included', () => {
+    const todo = (kind: string) =>
+      DashboardTodoSchema.parse({
+        id: `${kind}-1`,
+        tone: 'warn',
+        kind,
+        title: 'Fan',
+        why: 'Pourquoi.',
+        at: '2026-10-19T12:00:00Z',
+        waitingMinutes: 3,
+        conversationId: CONVERSATION,
+        fanId: '0192f3a0-0000-7000-8000-000000000002',
+      });
+    expect(todoLabel(todo('send_failed'))).toBe('Envoi échoué');
+    expect(todoLabel(todo('awaiting_approval'))).toBe('Brouillon à valider');
   });
 });

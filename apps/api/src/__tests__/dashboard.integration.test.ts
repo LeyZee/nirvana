@@ -2,6 +2,7 @@ import {
   ConversationDetailSchema,
   CreatorIdSchema,
   DashboardSchema,
+  DraftIdSchema,
   EventIdSchema,
   MessageIdSchema,
   newId,
@@ -229,5 +230,25 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.budget).toMatchObject({ cap: 20, alertAt: 16, costPerEuroSold: null });
     expect(dashboard.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
     expect(dashboard.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([['Julien', 25, 25]]);
+  });
+
+  it('asks a human to look at a send that failed for good', async () => {
+    // Marc's approved draft could not leave: the conversation stops in `error` and nothing retries it.
+    const marc = conversations.get('Marc')!;
+    await test.admin.db.execute(sql`
+      insert into conversation_events (id, creator_id, conversation_id, seq, type, payload, actor, correlation_id)
+      select ${newId(EventIdSchema)}::uuid, ${creatorId}::uuid, ${marc}::uuid, max(seq) + 1, 'send_failed',
+             ${JSON.stringify({ draftId: newId(DraftIdSchema), idempotencyKey: 'seed', attempt: 1, isFinal: true })}::jsonb,
+             'system', 'seed'
+      from conversation_events where conversation_id = ${marc}::uuid`);
+    await test.admin.db.execute(sql`update conversations set state = 'error' where id = ${marc}::uuid`);
+
+    const dashboard = DashboardSchema.parse(
+      (await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json(),
+    );
+    expect(dashboard.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([
+      ['Leo', 'minor', 'bad'],
+      ['Marc', 'send_failed', 'warn'],
+    ]);
   });
 });

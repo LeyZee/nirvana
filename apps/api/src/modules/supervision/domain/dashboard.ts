@@ -43,6 +43,7 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   llm_unavailable: 'Aucun modèle IA n’a répondu. Un chatteur prend le relais.',
   other: 'L’agent a passé la main. Un humain doit lui répondre.',
   awaiting_approval: 'Un brouillon attend d’être validé depuis plus de 10 minutes.',
+  send_failed: 'Un message n’a pas pu partir. L’agent ne réessaie plus, un humain doit le renvoyer.',
 };
 
 /** Safety first: a possible minor, consent or distress before everything else. */
