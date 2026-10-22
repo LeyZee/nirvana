@@ -49,7 +49,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Sexualisation | `sexualization` | Le moment où la conversation devient sexy, et la stratégie qui le règle. |
 | Suivi d'offre | `post_offer` | Ce que fait l'agent après un achat ou une offre refusée. |
 | Mot-clé d'alerte | `alert_keyword` | Un mot qui, écrit par un fan, met l'agent en pause pour ce fan et prévient un humain. |
-| Politique d'identité | `identity_policy` | Comment le bot réagit à « t'es un bot ? ». Réglage, voir ADR 0012. |
+| Rester en personnage | `asks_if_bot`, `ai_disclosure` | Le bot ne dit jamais qu'il est une IA : à « t'es un bot ? » (`asks_if_bot`), il répond en personnage, et la garde `ai_disclosure` bloque tout aveu. Fixé dans le code, pas un réglage (ADR 0021). |
 | Média | `media_asset` | Une photo, vidéo ou audio de la créatrice (catalogue) ou reçue d'un fan. |
 | Description de média | `media_description` | La sortie du rôle sens, au vocabulaire Nirvana. |
 | Offre | `offer` | Une proposition commerciale (média + prix + plancher). Phase 6. |

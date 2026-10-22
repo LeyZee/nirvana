@@ -66,4 +66,4 @@ pnpm evals              # Promptfoo (clés API requises)
 - Modifier une migration déjà appliquée (on en écrit une nouvelle).
 - Toucher à un connecteur sans test contre `FakeReveal`.
 - Mettre une vraie donnée de fan ou de créatrice dans un test, une fixture ou une doc.
-- Faire parler le bot comme une IA, ni le faire dire qu'il en est une : `identity_policy` est un réglage (ADR 0012), pas un sujet de prompt.
+- Faire parler le bot comme une IA, ni le faire dire qu'il en est une : rester en personnage est fixé dans le code (garde `ai_disclosure`, ADR 0021), ni un réglage ni un sujet de prompt.
