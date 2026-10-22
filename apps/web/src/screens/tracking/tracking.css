@@ -1,4 +1,4 @@
-/* Suivi, squelette : la liste des conversations (docs/design/README.md, « Listes » et « Pastilles d'état »). */
+/* Suivi : la file « à traiter », la liste et le lecteur (docs/design/README.md, « Listes » et « Pastilles d'état »). */
 
 .tr-panel {
   width: 100%;
@@ -15,26 +15,29 @@
 .tr-list > * + * {
   border-top: 0;
 }
-/* Read-only rows: the hover answers the pointer, but nothing pretends to open. */
+/* A row is a button that opens the reader: no button chrome, the row's own look. */
 .tr-row {
-  cursor: default;
+  width: 100%;
+  border: 0;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
-.tr-row:active {
-  transform: none;
-}
-.tr-list > .tr-row:nth-child(2) {
+.tr-list > li:nth-child(2) {
   --nv-i: 1;
 }
-.tr-list > .tr-row:nth-child(3) {
+.tr-list > li:nth-child(3) {
   --nv-i: 2;
 }
-.tr-list > .tr-row:nth-child(4) {
+.tr-list > li:nth-child(4) {
   --nv-i: 3;
 }
-.tr-list > .tr-row:nth-child(5) {
+.tr-list > li:nth-child(5) {
   --nv-i: 4;
 }
-.tr-list > .tr-row:nth-child(n + 6) {
+.tr-list > li:nth-child(n + 6) {
   --nv-i: 5;
 }
 .tr-unread {
@@ -42,6 +45,12 @@
   line-height: var(--nv-text-caption-leading);
   color: var(--nv-neon-ink);
   font-weight: 600;
+}
+.tr-wait {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-muted);
+  font-variant-numeric: tabular-nums;
 }
 .tr-more {
   margin: 0;
@@ -87,4 +96,129 @@
   .tr-skeleton i {
     animation: none;
   }
+}
+
+/* Two columns from tablet up: the list on the left, the reader on the right. On a phone, one at a time. */
+.tr-layout {
+  display: grid;
+  gap: var(--nv-space-4);
+  width: 100%;
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .tr-layout {
+    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  }
+}
+.tr-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+  min-width: 0;
+}
+.tr-side .tr-panel {
+  max-width: none;
+}
+@media (max-width: 899px) {
+  .tr-is-reading .tr-side {
+    display: none;
+  }
+}
+.tr-back {
+  align-self: flex-start;
+}
+@media (min-width: 900px) {
+  .tr-back {
+    display: none;
+  }
+}
+.tr-reader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-3);
+  min-width: 0;
+  padding: var(--nv-space-4);
+}
+.tr-reader__head {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  flex-wrap: wrap;
+}
+.tr-reader__who {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.tr-reader__who h2 {
+  margin: 0;
+  font-size: var(--nv-text-title-3, 18px);
+  line-height: 1.25;
+}
+.tr-reader__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  min-width: 0;
+}
+.tr-reader__empty {
+  margin: 0;
+  padding: var(--nv-space-4);
+  color: var(--nv-ink-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.tr-reader__empty p {
+  margin: 0;
+}
+/* Amber: the server does not answer, a decision did not go through. Red stays for urgencies. */
+.tr-warn {
+  margin: 0;
+  color: var(--nv-warning);
+  font-weight: 600;
+}
+.tr-line {
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+.tr-hand {
+  margin: 0;
+  padding: var(--nv-space-3);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+/* The agent's notes in the thread: where it stopped, who took the hand, a draft refused. */
+.tr-note {
+  align-self: center;
+  margin: 0;
+  max-width: 90%;
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-faint);
+  text-align: center;
+}
+.tr-ppv {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  opacity: 0.8;
+}
+.tr-draft {
+  align-self: stretch;
+  margin-top: var(--nv-space-2);
+}
+.tr-draft-sending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+}
+.tr-edit {
+  resize: vertical;
+  min-height: 72px;
 }

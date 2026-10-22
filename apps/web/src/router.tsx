@@ -11,6 +11,7 @@ import {
   TelegramPage,
 } from './screens/settings/SettingsLayout';
 import { TrackingPage } from './screens/tracking/TrackingPage';
+import { parseTrackingSearch } from './screens/tracking/view';
 import { CorrectionsPage } from './screens/train/CorrectionsPage';
 import { PlaygroundPage } from './screens/train/PlaygroundPage';
 import { TestsPage } from './screens/train/TestsPage';
@@ -36,7 +37,23 @@ const creators = createRoute({
   path: '/creatrices',
   component: CreatorsPage,
 });
-const tracking = createRoute({ getParentRoute: () => rootRoute, path: '/suivi', component: TrackingPage });
+const tracking = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/suivi',
+  validateSearch: parseTrackingSearch,
+  component: function Tracking() {
+    const { conversation } = tracking.useSearch();
+    const navigate = tracking.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <TrackingPage
+        selected={conversation ?? null}
+        onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
+        canDecide={user.role !== 'creator'}
+      />
+    );
+  },
+});
 
 const train = createRoute({ getParentRoute: () => rootRoute, path: '/entrainer', component: TrainLayout });
 const trainIndex = createRoute({

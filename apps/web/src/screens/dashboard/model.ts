@@ -19,7 +19,7 @@ export const PERIODS: readonly { readonly id: Period; readonly label: string }[]
 export interface Todo {
   readonly id: string;
   readonly tone: Tone;
-  /** The kind, in the trade's words: « Mineur possible », « Demande de rencontre », « À valider dans Reveal ». */
+  /** The kind, in the trade's words: « Mineur possible », « Demande de rencontre », « À valider dans Suivi ». */
   readonly kind: string;
   readonly title: string;
   /** One sentence: why it waits for a human, and what the agent does meanwhile. */

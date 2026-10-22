@@ -35,7 +35,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Images clés | `keyframes` | Images datées extraites d'une vidéo (une par seconde au plus, quasi-doublons retirés) pour un modèle de vision qui ne lit pas la vidéo. |
 | Canari | `canary` | Secret écrit dans chaque prompt système ; une sortie qui le contient a fuité le prompt et est rejetée. |
 | Passage à l'humain | `handoff` | La conversation est confiée à un humain ; le bot ne répond plus. |
-| Prise en main | `takeover` | Un humain prend la main volontairement. |
+| Prise en main | `takeover` | Un humain prend la main volontairement (« Reprendre la main » dans Suivi) ; il répond alors dans Reveal, l'agent n'écrit plus à ce fan. |
+| Rendre la main | `release` | Fin d'une prise en main ou d'un passage à l'humain : l'agent répond de nouveau à partir du prochain message du fan. |
 | Mode copilote | `copilot` | Le bot propose, un humain approuve. |
 | Mode auto | `auto` | Le bot envoie seul pour les catégories autorisées. |
 | Fait (mémoire) | `fan_fact` | Une information mémorisée sur un fan, avec source, date, confiance, `kind: declared | inferred`. |
@@ -91,7 +92,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Vitrine | `showcase` | Page de démonstration des composants du design system (dev seulement). Ne pas confondre avec le playground. |
 | Fan simulé | `simulated_fan` | Fan joué par une IA d'après un profil, dans le playground. |
 | Mode démo | `isDemo` | Écran du playground servi par des réponses écrites à l'avance, quand les routes `/v1/playground` ne sont pas en ligne sur le serveur. Signalé par la pastille « Démo » ; rien n'est noté pour de vrai. |
-| À traiter | `todo` | La file en tête du Dashboard : ce qui attend un humain (passage à l'humain, mot-clé d'alerte, fan sans réponse depuis plus de 10 min, proposition du copilote), le plus grave en premier. Ligne `nv-todo` du design system. |
+| À traiter | `todo` | La file en tête du Dashboard et de Suivi : ce qui attend un humain (passage à l'humain, mot-clé d'alerte, fan sans réponse depuis plus de 10 min, proposition du copilote), le plus grave en premier. Ligne `nv-todo` du design system. |
 | Parcours des fans | `funnel` | L'entonnoir du Dashboard : combien de fans passent chaque étape (nouveau, fan connu, conversation chaude, 1re offre, achat), et l'étape qui casse. |
 | Données d'exemple | `sample` | Données fictives d'un écran du CRM tant que sa route n'existe pas, signalées par la pastille « Exemple » (`nv-sample`). Distinct du mode démo du playground. |
 | Compte fan de test | `test_fan_account` | Vrai compte fan sur une plateforme, tenu par nous, pour tester envois et ventes sans toucher un vrai fan. |

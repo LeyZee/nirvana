@@ -1,14 +1,31 @@
 // @vitest-environment jsdom
-import { ConversationSummarySchema, type ConversationSummary } from '@nirvana/contracts';
+import {
+  ConversationDetailSchema,
+  ConversationSummarySchema,
+  MessageViewSchema,
+  type ConversationDetail,
+  type ConversationSummary,
+} from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TrackingPage } from './TrackingPage';
+import { parseTrackingSearch } from './view';
+
+import { apiDashboard } from '@/test/fakes';
 
 /* Invented creators and fans: no real data. */
 const LEA = { id: '0192f3a0-0000-7000-8000-0000000000c1', displayName: 'Léa', timezone: 'Europe/Paris' };
 const NINA = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Nina', timezone: 'Europe/Paris' };
+const DRAFT = '0192f3a0-0000-7000-8000-0000000000d1';
 
 function conversation(id: string, patch: Partial<ConversationSummary> = {}): ConversationSummary {
   return ConversationSummarySchema.parse({
@@ -25,39 +42,125 @@ function conversation(id: string, patch: Partial<ConversationSummary> = {}): Con
   });
 }
 
+/** Fan 1 waits for a draft: « Coucou toi » then « Tu fais quoi ? ». */
+function waiting(patch: Partial<ConversationDetail> = {}): ConversationDetail {
+  return ConversationDetailSchema.parse({
+    ...conversation('1', { state: 'awaiting_approval' }),
+    openDrafts: [
+      {
+        id: DRAFT,
+        status: 'pending',
+        bubbles: ['Coucou toi', 'Tu fais quoi ?'],
+        finalBubbles: null,
+        createdAt: '2026-10-17T20:01:00Z',
+      },
+    ],
+    ...patch,
+  });
+}
+
+const FAN_MESSAGE = MessageViewSchema.parse({
+  id: '0192f3a0-0000-7000-8000-000000000101',
+  direction: 'inbound',
+  author: 'fan',
+  text: 'Salut, ça va ?',
+  priceMinor: null,
+  currency: null,
+  isPaid: false,
+  draftId: null,
+  platformCreatedAt: '2026-10-17T20:00:00Z',
+});
+
 interface Reply {
   status: number;
   body?: unknown;
 }
 
-/** A fake server: one answer per path, `/v1/conversations` by creator id. */
+/** One POST the fake server received: the action (`approve`, `takeover`…) and its JSON body. */
+interface Posted {
+  readonly action: string;
+  readonly body: unknown;
+}
+
+/**
+ * A fake server: `/v1/creators`, `/v1/conversations` by creator id, `/v1/dashboard`, one conversation's detail,
+ * messages and events, and the commands, which answer `command` (204 by default) and are recorded in `posted`.
+ */
 function serve(routes: {
   creators: Reply | (() => Reply);
   conversations?: Record<string, { items: ConversationSummary[]; nextCursor: string | null }>;
-}): void {
+  dashboard?: Reply;
+  detail?: () => Reply;
+  command?: (action: string) => Reply;
+}): Posted[] {
+  const posted: Posted[] = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: string) => {
+    vi.fn((input: string, init?: RequestInit) => {
       const url = new URL(input, 'http://localhost');
-      const reply: Reply =
-        url.pathname === '/v1/creators'
-          ? typeof routes.creators === 'function'
-            ? routes.creators()
-            : routes.creators
-          : { status: 200, body: routes.conversations?.[url.searchParams.get('creatorId') ?? ''] };
+      const path = url.pathname;
+      let reply: Reply;
+      if (init?.method === 'POST') {
+        const action = path.split('/').at(-1) ?? '';
+        posted.push({ action, body: JSON.parse(typeof init.body === 'string' ? init.body : 'null') });
+        reply = routes.command?.(action) ?? { status: 204 };
+      } else if (path === '/v1/creators') {
+        reply = typeof routes.creators === 'function' ? routes.creators() : routes.creators;
+      } else if (path === '/v1/conversations') {
+        reply = { status: 200, body: routes.conversations?.[url.searchParams.get('creatorId') ?? ''] };
+      } else if (path === '/v1/dashboard') {
+        reply = routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) };
+      } else if (path.endsWith('/messages')) {
+        reply = { status: 200, body: { items: [FAN_MESSAGE], nextCursor: null } };
+      } else if (path.endsWith('/events')) {
+        reply = { status: 200, body: { items: [], nextCursor: null } };
+      } else {
+        reply = routes.detail?.() ?? { status: 404 };
+      }
+      if (reply.status === 204) return Promise.resolve(new Response(null, { status: 204 }));
       return Promise.resolve(new Response(JSON.stringify(reply.body ?? null), { status: reply.status }));
     }),
   );
+  return posted;
 }
 
-function renderPage(): void {
+/** Suivi as the app mounts it: the open conversation lives in the address. */
+function renderPage(at = '/suivi', canDecide = true): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const root = createRootRoute();
+  const tracking = createRoute({
+    getParentRoute: () => root,
+    path: '/suivi',
+    validateSearch: parseTrackingSearch,
+    component: function Tracking() {
+      const { conversation } = tracking.useSearch();
+      const navigate = tracking.useNavigate();
+      return (
+        <TrackingPage
+          selected={conversation ?? null}
+          onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
+          canDecide={canDecide}
+        />
+      );
+    },
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([tracking, createRoute({ getParentRoute: () => root, path: '/creatrices' })]),
+    history: createMemoryHistory({ initialEntries: [at] }),
+  });
   render(
     <QueryClientProvider client={client}>
-      <TrackingPage />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
 }
+
+const ONE = { creators: { status: 200, body: { creators: [LEA] } } };
+const OPEN = `/suivi?conversation=${conversation('1').id}`;
+
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
+});
 
 afterEach(() => {
   cleanup();
@@ -65,14 +168,15 @@ afterEach(() => {
 });
 
 describe('TrackingPage', () => {
-  it('says how to create the first creator when there is none', async () => {
+  it('sends to Créatrices when there is no creator yet, with no developer command', async () => {
     serve({ creators: { status: 200, body: { creators: [] } } });
     renderPage();
-    expect(await screen.findByText('Aucune créatrice reliée')).toBeDefined();
-    expect(screen.getByText(/pnpm creator:create/u)).toBeDefined();
+    expect(await screen.findByText('Aucune créatrice pour l’instant')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Aller à Créatrices' }).getAttribute('href')).toBe('/creatrices');
+    expect(screen.queryByText(/pnpm/u)).toBeNull();
   });
 
-  it('says the server did not answer, and Réessayer reads again', async () => {
+  it('says the server does not answer, and Réessayer reads again', async () => {
     let calls = 0;
     serve({
       creators: () => (++calls === 1 ? { status: 500 } : { status: 200, body: { creators: [LEA] } }),
@@ -81,12 +185,12 @@ describe('TrackingPage', () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
     expect(await screen.findByText('Fan 1')).toBeDefined();
-    expect(screen.queryByText('Le serveur n’a pas répondu')).toBeNull();
+    expect(screen.queryByText('Le serveur ne répond pas')).toBeNull();
   });
 
   it('lists the conversations of one creator, most recent first, with their state', async () => {
     serve({
-      creators: { status: 200, body: { creators: [LEA] } },
+      ...ONE,
       conversations: {
         [LEA.id]: {
           items: [
@@ -132,5 +236,135 @@ describe('TrackingPage', () => {
       .map((row) => row.textContent);
     expect(text.some((line) => line.includes('Léa · '))).toBe(true);
     expect(text.some((line) => line.includes('Nina · '))).toBe(true);
+  });
+
+  it('puts first what waits for a human, as the server computed it, and opens it', async () => {
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      // The default todo: Kévin, a possible minor, on conversation 1.
+      dashboard: { status: 200, body: apiDashboard() },
+      detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    expect(queue.textContent).toContain('Mineur possible · Kévin');
+    expect(queue.textContent).toContain('19 min');
+    fireEvent.click(within(queue).getByRole('button'));
+    expect(await screen.findByText('Salut, ça va ?')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Rendre la main à l’agent' })).toBeDefined();
+  });
+});
+
+describe('the reader of Suivi', () => {
+  const withDraft = {
+    ...ONE,
+    conversations: {
+      [LEA.id]: { items: [conversation('1', { state: 'awaiting_approval' })], nextCursor: null },
+    },
+  };
+
+  it('opens the conversation of a Telegram link, with the draft that waits', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    const draft = await screen.findByRole('region', { name: 'Brouillon à valider' });
+    expect(within(draft).getByText('Coucou toi')).toBeDefined();
+    expect(screen.getByText('Salut, ça va ?')).toBeDefined();
+  });
+
+  it('sends the draft as written on Valider, then reads the conversation again', async () => {
+    let approved = false;
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({
+        status: 200,
+        body: approved ? waiting({ state: 'idle', openDrafts: [] }) : waiting(),
+      }),
+      command: () => {
+        approved = true;
+        return { status: 204 };
+      },
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'Brouillon à valider' })).toBeNull();
+    });
+    expect(posted).toEqual([{ action: 'approve', body: {} }]);
+  });
+
+  it('sends the retouched bubbles, one per line', async () => {
+    const posted = serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retoucher' }));
+    fireEvent.change(screen.getByLabelText('Une bulle par ligne'), {
+      target: { value: 'Coucou toi\nTu fais quoi ce soir ?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la retouche' }));
+    await waitFor(() => {
+      expect(posted).toEqual([
+        { action: 'approve', body: { bubbles: ['Coucou toi', 'Tu fais quoi ce soir ?'] } },
+      ]);
+    });
+  });
+
+  it('keeps the draft and says which guard blocks it when the server refuses it', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      command: () => ({
+        status: 422,
+        body: {
+          error: {
+            code: 'draft_unprocessable',
+            message: 'x',
+            details: { guards: ['meeting_promise'] },
+            requestId: 'r',
+          },
+        },
+      }),
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Ce message ne peut pas partir : une promesse de rencontre. Retouche-le ou refuse-le.',
+    );
+    expect(screen.getByRole('region', { name: 'Brouillon à valider' })).toBeDefined();
+  });
+
+  it('refuses the draft with the reason given', async () => {
+    const posted = serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Refuser' }));
+    fireEvent.change(screen.getByLabelText(/Pourquoi/u), { target: { value: 'Trop froid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Refuser le brouillon' }));
+    await waitFor(() => {
+      expect(posted).toEqual([{ action: 'reject', body: { reason: 'Trop froid' } }]);
+    });
+  });
+
+  it('takes the hand over: a person answers in Reveal from then on', async () => {
+    const posted = serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la main' }));
+    await waitFor(() => {
+      expect(posted).toEqual([{ action: 'takeover', body: {} }]);
+    });
+  });
+
+  it('lets a creator read, never decide', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN, false);
+    expect(await screen.findByText(/Seuls le propriétaire et les chatteurs/u)).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reprendre la main' })).toBeNull();
+  });
+
+  it('says the server does not answer, in amber, with nothing to click', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 503 }) });
+    renderPage(OPEN);
+    // One retry first (a blip is not an outage), then the reader says so.
+    expect(await screen.findByText('Le serveur ne répond pas', undefined, { timeout: 4_000 })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
   });
 });
