@@ -198,7 +198,7 @@ function Loaded({
 
       <Section
         title="Meilleurs fans"
-        sub="ce qu’ils ont dépensé : en rouge par l’agent, en jaune par un chatteur"
+        sub="ce qu’ils ont dépensé : d’abord la part de l’agent, puis celle des chatteurs"
         index={4}
         control={sales === null ? periodControl : undefined}
       >

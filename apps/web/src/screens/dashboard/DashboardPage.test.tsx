@@ -93,6 +93,8 @@ describe('DashboardPage on the server’s data', () => {
     expect(headline()).toBe('Une urgence t’attend');
     expect(screen.getByText(/dès que la connexion à Reveal les observera/u)).toBeDefined();
     expect(screen.getByText('Théo')).toBeDefined();
+    // The best fans' bar names no colour: the agent's part is the data colour, not the urgencies' red.
+    expect(screen.getByText(/d’abord la part de l’agent, puis celle des chatteurs/u)).toBeDefined();
     // A todo of the server leaves the list when its conversation is handled, not on a tick here.
     expect(screen.queryByRole('button', { name: 'Marquer comme traité' })).toBeNull();
   });
