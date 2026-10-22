@@ -224,8 +224,9 @@
   color: var(--_c);
   background: color-mix(in srgb, var(--_c) 14%, transparent);
 }
-.tg-cover[data-state='bad'] .tg-cover__orb {
-  --_c: var(--nv-danger);
+/* Amber: a setting to make or a server that does not answer, never an urgency (the red stays the urgencies'). */
+.tg-cover[data-state='warn'] .tg-cover__orb {
+  --_c: var(--nv-warning);
 }
 .tg-cover__orb svg {
   width: 26px;

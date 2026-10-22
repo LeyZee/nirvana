@@ -149,7 +149,7 @@ export function TelegramSection(): JSX.Element {
     return (
       <section className="tg-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
-          <div className="nv-glass tg-cover" data-state="bad">
+          <div className="nv-glass tg-cover" data-state="warn">
             <div>
               <p className="tg-cover__title">Le serveur ne répond pas</p>
               <p className="tg-cover__sub">
@@ -162,7 +162,7 @@ export function TelegramSection(): JSX.Element {
           </div>
         ) : null}
         {load.kind === 'off' ? (
-          <div className="nv-glass tg-cover" data-state="bad">
+          <div className="nv-glass tg-cover" data-state="warn">
             <div>
               <p className="tg-cover__title">Telegram est éteint</p>
               <p className="tg-cover__sub">
@@ -546,7 +546,7 @@ function AlertsTab({
   const failed = shown.filter((d) => !deliveryLabel(d).isOk).length;
   return (
     <>
-      <section className="nv-glass tg-cover" data-state={cover.isOk ? 'ok' : 'bad'} aria-live="polite">
+      <section className="nv-glass tg-cover" data-state={cover.isOk ? 'ok' : 'warn'} aria-live="polite">
         <div className="tg-cover__orb">
           <svg
             viewBox="0 0 24 24"
