@@ -59,16 +59,16 @@ export function PlaygroundPage(): JSX.Element {
     setMode('lesson');
   };
 
-  const answerTo = async (call: () => Promise<boolean>): Promise<void> => {
+  const answerTo = async (call: () => Promise<boolean>): Promise<boolean> => {
     setWriting(true);
     reset();
-    await call();
+    const done = await call();
     setWriting(false);
+    return done;
   };
 
-  const send = (text: string, media: PlaygroundMedia[]): void => {
-    void answerTo(() => pg.run((c) => c.send(text, media)));
-  };
+  const send = (text: string, media: PlaygroundMedia[]): Promise<boolean> =>
+    answerTo(() => pg.run((c) => c.send(text, media)));
   const replay = (n: number): void => {
     void answerTo(() => pg.run((c) => c.branch(n)));
   };

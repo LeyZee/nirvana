@@ -42,7 +42,7 @@ export interface ConversationProps {
   readonly onHandoff: (wasRight: boolean) => void;
   readonly onPick: (side: 'a' | 'b') => void;
   readonly onReplay: (fanMessageNumber: number) => void;
-  readonly onSend: (text: string, media: Media[]) => void;
+  readonly onSend: (text: string, media: Media[]) => Promise<boolean>;
 }
 
 /** Index in the history of her answer still waiting for a rating (the engine keeps an answer that passed). */
@@ -117,7 +117,7 @@ function Empty({
   onSend,
 }: {
   opening: string | undefined;
-  onSend: (text: string, media: Media[]) => void;
+  onSend: (text: string, media: Media[]) => Promise<boolean>;
 }): JSX.Element {
   return (
     <div className="pg-empty">
@@ -129,7 +129,7 @@ function Empty({
           className="pg-empty__go nv-tap"
           title="Envoyer ce premier message"
           onClick={() => {
-            onSend(opening, []);
+            void onSend(opening, []);
           }}
         >
           <span>Commencer par</span>« {opening} »
@@ -463,7 +463,7 @@ export function Composer({
 }: {
   disabled: boolean;
   placeholder: string;
-  onSend: (text: string, media: Media[]) => void;
+  onSend: (text: string, media: Media[]) => Promise<boolean>;
 }): JSX.Element {
   const [text, setText] = useState('');
   const [attachOpen, setAttachOpen] = useState(false);
@@ -474,9 +474,10 @@ export function Composer({
 
   const ready = !disabled && (text.trim() !== '' || media.length > 0);
 
-  const send = (): void => {
+  const send = async (): Promise<void> => {
     if (!ready) return;
-    onSend(text.trim(), media);
+    // The message is cleared once it is sent: a failed send keeps it, ready to go again.
+    if (!(await onSend(text.trim(), media))) return;
     setText('');
     setDescribed('');
     setAttachOpen(false);
@@ -518,7 +519,7 @@ export function Composer({
         className="nv-composer nv-glass"
         onSubmit={(event) => {
           event.preventDefault();
-          send();
+          void send();
         }}
       >
         <button
@@ -558,7 +559,7 @@ export function Composer({
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
-              send();
+              void send();
             }
           }}
         />
