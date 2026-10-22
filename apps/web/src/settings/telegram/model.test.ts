@@ -191,7 +191,7 @@ describe('lines', () => {
       createdAt: '2026-10-17T22:00:00.000Z',
       sentAt: null,
     };
-    expect(deliveryLabel({ ...base, status: 'sent', closedBy: 'Lucas' }).text).toBe('Pris en main par Lucas');
+    expect(deliveryLabel({ ...base, status: 'sent', closedBy: 'Théo' }).text).toBe('Pris en main par Théo');
     expect(deliveryLabel({ ...base, status: 'failed', closedBy: null })).toEqual({
       text: 'Non livrée',
       isOk: false,

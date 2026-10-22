@@ -76,7 +76,7 @@ export function joinTexts(texts: readonly string[]): string {
   return `${kept.join('\n\n')}\n\n… et ${String(rest)} autre${rest > 1 ? 's' : ''} dans le CRM.`;
 }
 
-/** The original message, closed by a person: « ✓ Pris en main par Lucas », « ✓ Rendu à l’agent par Lucas ». */
+/** The original message, closed by a person: « ✓ Pris en main par Théo », « ✓ Rendu à l’agent par Théo ». */
 export function renderClosedBy(original: string, label: string, firstName: string | null): string {
   return `${original}\n✓ ${firstName === null ? escapeHtml(label) : `${escapeHtml(label)} par ${escapeHtml(firstName)}`}`;
 }

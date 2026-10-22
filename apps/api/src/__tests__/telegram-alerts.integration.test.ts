@@ -142,7 +142,7 @@ describe('Telegram alerts from the conversations module', () => {
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test' });
     await test.admin.db
       .insert(schema.user)
-      .values({ id: USER, name: 'Marie Ange', email: 'marie@example.test' })
+      .values({ id: USER, name: 'Nora Vidal', email: 'nora@example.test' })
       .onConflictDoNothing();
 
     // One group for the whole file, as in production: the scan re-reads a window behind its cursor, and a new
@@ -211,7 +211,7 @@ describe('Telegram alerts from the conversations module', () => {
     await conversations.takeover({ ...command(conversationId), reason: 'Je prends' });
     await deliver();
     expect(edits()).toHaveLength(1);
-    expect(edits()[0]).toMatch(/✓ Pris en main par Marie$/);
+    expect(edits()[0]).toMatch(/✓ Pris en main par Nora$/);
     expect(JSON.stringify(texts())).not.toContain('texte du fan');
   });
 
@@ -222,7 +222,7 @@ describe('Telegram alerts from the conversations module', () => {
     await conversations.release(command(conversationId));
     await deliver();
     expect(edits()).toHaveLength(1);
-    expect(edits()[0]).toMatch(/✓ Rendu à l’agent par Marie$/);
+    expect(edits()[0]).toMatch(/✓ Rendu à l’agent par Nora$/);
   });
 
   it('tells the group once when a message of the agent cannot leave, without the platform’s words', async () => {
@@ -243,7 +243,7 @@ describe('Telegram alerts from the conversations module', () => {
 
     await conversations.release(command(conversationId));
     await deliver();
-    expect(edits()[0]).toMatch(/✓ Rendu à l’agent par Marie$/);
+    expect(edits()[0]).toMatch(/✓ Rendu à l’agent par Nora$/);
   });
 
   it('tells the group once when Automatique closes on its own, without the voice', async () => {

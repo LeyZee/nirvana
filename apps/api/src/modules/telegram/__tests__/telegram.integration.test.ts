@@ -447,7 +447,7 @@ describe('telegram module on Postgres', () => {
     const userId = 'user-takeover-test';
     await test.admin.db
       .insert(schema.user)
-      .values({ id: userId, name: 'Lucas Martin', email: 'lucas@example.test' })
+      .values({ id: userId, name: 'Théo Brun', email: 'theo@example.test' })
       .onConflictDoNothing();
     const conversationId = newId(ConversationIdSchema);
     await publish('handoff_requested', { conversationId, cause: 'distress' });
@@ -458,8 +458,8 @@ describe('telegram module on Postgres', () => {
     offsetMs = 4000;
     await module.jobs.flushChat(chatId);
     expect(telegram.edits).toMatchObject([{ chatId: '-100', messageId: telegram.sent[0]?.messageId }]);
-    expect(telegram.edits[0]?.text).toMatch(/✓ Pris en main par Lucas$/);
-    expect(await module.listDeliveries('urgent', 10)).toMatchObject([{ closedBy: 'Lucas', status: 'sent' }]);
+    expect(telegram.edits[0]?.text).toMatch(/✓ Pris en main par Théo$/);
+    expect(await module.listDeliveries('urgent', 10)).toMatchObject([{ closedBy: 'Théo', status: 'sent' }]);
   });
 
   it('closes a handoff alert when the conversation goes back to the agent, and only once', async () => {
@@ -467,7 +467,7 @@ describe('telegram module on Postgres', () => {
     const userId = 'user-release-test';
     await test.admin.db
       .insert(schema.user)
-      .values({ id: userId, name: 'Marie Ange', email: 'marie@example.test' })
+      .values({ id: userId, name: 'Nora Vidal', email: 'nora@example.test' })
       .onConflictDoNothing();
     const conversationId = newId(ConversationIdSchema);
     await publish('handoff_requested', { conversationId, cause: 'llm_unavailable' });
@@ -478,7 +478,7 @@ describe('telegram module on Postgres', () => {
     offsetMs = 4000;
     await module.jobs.flushChat(chatId);
     expect(telegram.edits).toMatchObject([{ chatId: '-100', messageId: telegram.sent[0]?.messageId }]);
-    expect(telegram.edits[0]?.text).toMatch(/✓ Rendu à l’agent par Marie$/);
+    expect(telegram.edits[0]?.text).toMatch(/✓ Rendu à l’agent par Nora$/);
     // A second hand-back (taken, given back again) leaves the closed alert as it is.
     await publish('takeover_ended', { conversationId, userId });
     await module.jobs.scan();
@@ -486,7 +486,7 @@ describe('telegram module on Postgres', () => {
     await module.jobs.flushChat(chatId);
     expect(telegram.edits).toHaveLength(1);
     expect(await module.listDeliveries('important', 10)).toMatchObject([
-      { closedBy: 'Marie', status: 'sent' },
+      { closedBy: 'Nora', status: 'sent' },
     ]);
   });
 
