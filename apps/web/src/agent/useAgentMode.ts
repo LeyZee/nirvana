@@ -23,8 +23,11 @@ export function useAgentMode(): AgentModeView {
   const live = useLiveDashboard();
   if (live.kind === 'live') {
     const { reveal, voice } = live.data;
+    // The Dashboard's own rule: never read once means not linked yet, read then lost means disconnected.
     const stalled = !reveal.connected
-      ? 'Reveal n’est pas relié'
+      ? reveal.lastReadAt === null
+        ? 'Reveal n’est pas encore relié'
+        : 'Reveal est déconnecté'
       : voice.ok
         ? null
         : 'l’IA qui écrit ne répond pas';
