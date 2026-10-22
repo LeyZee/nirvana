@@ -103,7 +103,7 @@ function Loaded({
   const navigate = useNavigate();
   const openTodo = useCallback(
     (todo: Todo) => {
-      // A draft to validate opens in Suivi, where it is decided; anything else in the read-only reader.
+      // The server's lines open in Suivi, where a draft is decided and a handoff given back; the sample's in the reader.
       if (todo.conversationId !== undefined)
         void navigate({ to: '/suivi', search: { conversation: todo.conversationId } });
       else if (todo.fanId !== undefined) setFanId(todo.fanId);
