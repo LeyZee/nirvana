@@ -57,11 +57,12 @@ conversation_events  id, creator_id, conversation_id, seq bigint, type, payload 
                      correlation_id, created_at      (append-only, UNIQUE (conversation_id, seq))
 drafts               id, creator_id, conversation_id, status (pending|approved|edited|rejected|sent|failed|expired),
                      brief jsonb (sortie du cerveau), bubbles text[], final_bubbles text[] (après édition),
-                     persona_version_id, prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
+                     persona_version_id (la persona active quand il est écrit, ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
                      decided_by (nullable user_id), decided_at, idempotency_key, created_at
-blind_tests          id, creator_id, voice_prompt, voice_model, rate_per_mille (0 à 1000, 800 = 80 %), recorded_by,
+blind_tests          id, creator_id, voice_prompt, voice_model, persona_version_id (nullable), rate_per_mille (0 à 1000, 800 = 80 %), recorded_by,
                      recorded_at      (append-only : ni UPDATE ni DELETE pour nirvana_app)
-                     Le test à l'aveugle d'une version de la voix (ADR 0019) ; le dernier de la version décide.
+                     Le test à l'aveugle d'une version de la voix et de la persona active (ADR 0019, 0022) ; le dernier
+                     de la version décide.
 ```
 
 Types d'événements (liste fermée dans `packages/contracts/src/events.ts`) : `message_received`, `message_sent`, `send_attempted`, `send_failed`, `send_verified`, `media_described`, `draft_created`, `draft_approved`, `draft_edited`, `draft_rejected`, `draft_expired`, `fact_proposed`, `fact_confirmed`, `fact_rejected`, `summary_refreshed`, `handoff_requested`, `takeover_started`, `takeover_ended`, `mode_changed`, `kill_switch_toggled`, `follow_up_scheduled`, `follow_up_cancelled`, `offer_made`, `sale_detected`, `script_started`, `script_step_sent`, `script_ended`, `session_state_changed`, `budget_threshold_crossed`, `automatic_closed`, `error`.
@@ -189,4 +190,4 @@ Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.en
 - `conversations (platform_account_id, state)`, `(creator_id, last_inbound_at desc)`
 - `llm_calls (creator_id, created_at)`
 - `calibration_ratings (creator_id, rated_at desc)`, `(creator_id, voice_prompt, voice_model, rated_at desc)`
-- `blind_tests (creator_id, voice_prompt, voice_model, recorded_at desc)`
+- `blind_tests (creator_id, voice_prompt, voice_model, persona_version_id, recorded_at desc)`

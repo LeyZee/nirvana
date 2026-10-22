@@ -187,6 +187,8 @@ export const blindTests = pgTable(
       .references(() => creators.id),
     voicePrompt: text('voice_prompt').notNull(),
     voiceModel: text('voice_model').notNull(),
+    /** The persona active when the test was recorded: part of the version proved (ADR 0022); null without one. */
+    personaVersionId: uuid('persona_version_id').references(() => personaVersions.id),
     /** The rate « sans retouche » in tenths of a percent (800 = 80 %): no float on a threshold. */
     ratePerMille: integer('rate_per_mille').notNull(),
     recordedBy: text('recorded_by').notNull(),
@@ -194,7 +196,13 @@ export const blindTests = pgTable(
   },
   (t) => [
     check('blind_tests_rate_check', sql`${t.ratePerMille} between 0 and 1000`),
-    index('blind_tests_version_idx').on(t.creatorId, t.voicePrompt, t.voiceModel, t.recordedAt.desc()),
+    index('blind_tests_version_idx').on(
+      t.creatorId,
+      t.voicePrompt,
+      t.voiceModel,
+      t.personaVersionId,
+      t.recordedAt.desc(),
+    ),
     tenantPolicy(t.creatorId),
   ],
 );

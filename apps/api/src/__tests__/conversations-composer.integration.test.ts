@@ -1,6 +1,7 @@
 import {
   CreatorIdSchema,
   newId,
+  PersonaVersionIdSchema,
   PlatformAccountIdSchema,
   type ConversationId,
   type CreatorId,
@@ -155,6 +156,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       bubbles: ['Coucou toi', 'Je me pose'],
       guardTrace: { softViolations: ['emoji'] },
       promptHashes: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
+      personaVersionId: null,
     });
     expect(await state(id)).toBe('awaiting_approval');
   });
@@ -274,5 +276,30 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     composer.whileThinking = () => Promise.resolve();
     expect(await drafts(id)).toHaveLength(0);
     expect(await state(id)).toBe('pending');
+  });
+
+  it('stamps the draft with the persona active for her, the version Automatique is proved on (ADR 0022)', async () => {
+    const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: personaVersionId,
+      creatorId,
+      version: 'test-1',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'test',
+      isActive: true,
+      activatedAt: new Date(),
+    });
+    const id = await fanWrites('c-persona', 'Salut');
+    composer.next = {
+      kind: 'draft',
+      bubbles: ['Coucou'],
+      softViolations: [],
+      costUsd: 0,
+      voice: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
+    };
+    await respond(id);
+    const [draft] = await drafts(id);
+    expect(draft?.personaVersionId).toBe(personaVersionId);
   });
 });

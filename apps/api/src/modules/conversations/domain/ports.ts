@@ -179,7 +179,10 @@ interface KillSwitches {
   setCreator(entry: { active: boolean; reason: string; setBy: string }): Promise<void>;
 }
 
-/** What opens Automatique (ADR 0019), for one voice version of the creator. */
+/**
+ * What opens Automatique (ADR 0019), for one voice version of the creator and the persona active for her now
+ * (ADR 0022): the repository reads that persona itself, in the same statement.
+ */
 interface AutomaticEvidence {
   /** Her decided drafts of this version, newest first, at most `LIVE_WINDOW`: approved as is, edited or rejected. */
   decided(voice: DraftVoice): Promise<readonly DecidedDraft[]>;
