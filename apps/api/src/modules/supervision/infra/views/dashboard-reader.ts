@@ -140,6 +140,20 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
           and c.state = 'awaiting_approval'
         group by c.id, c.fan_id, f.display_name`,
   );
+  // A send that failed for good leaves the conversation in `error`: nothing retries it, a human must look.
+  const failed = await rows(
+    tx,
+    z.object({ conversation_id: z.string(), fan_id: z.string(), fan_name: z.string(), since: timestamp }),
+    sql`select c.id as conversation_id, c.fan_id, f.display_name as fan_name,
+               coalesce(s.created_at, c.updated_at) as since
+        from conversations c
+        join fans f on f.id = c.fan_id
+        left join lateral (
+          select created_at from conversation_events e
+          where e.conversation_id = c.id and e.type = 'send_failed'
+          order by e.seq desc limit 1) s on true
+        where c.state = 'error'`,
+  );
   // What she sold him over the period: her paid messages he unlocked, in euros (sales observed in EUR only).
   const fans = await rows(
     tx,
@@ -210,6 +224,13 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
         fanName: u.fan_name,
         kind: 'awaiting_approval' as const,
         since: u.since,
+      })),
+      ...failed.map((f) => ({
+        conversationId: f.conversation_id,
+        fanId: f.fan_id,
+        fanName: f.fan_name,
+        kind: 'send_failed' as const,
+        since: f.since,
       })),
     ],
     fans: fans.map((f) => ({

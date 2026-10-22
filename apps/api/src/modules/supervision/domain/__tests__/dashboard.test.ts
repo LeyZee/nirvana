@@ -145,4 +145,13 @@ describe('à traiter', () => {
       ['B', 'warn', 15],
     ]);
   });
+
+  it('says that a send failed for good and that a human must send it again', () => {
+    const [todo] = todos(
+      [{ conversationId: CONVERSATION, fanId: FAN, fanName: 'D', kind: 'send_failed', since: minutesAgo(3) }],
+      NOW,
+    );
+    expect(todo).toMatchObject({ kind: 'send_failed', tone: 'warn', waitingMinutes: 3 });
+    expect(todo?.why).toContain('un humain doit le renvoyer');
+  });
 });

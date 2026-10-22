@@ -19,16 +19,17 @@ import { telegramNightOf } from '@/settings/telegram/NightBanner';
  */
 
 /** What a handoff or a waiting draft is called on the screen, in the trade's words. */
-const KIND_LABEL: Readonly<Record<HandoffCause | 'awaiting_approval', string>> = {
+const KIND_LABEL: Readonly<Record<HandoffCause | 'awaiting_approval' | 'send_failed', string>> = {
   ...CAUSE_LABELS,
   awaiting_approval: 'À valider dans Suivi',
+  send_failed: 'Envoi échoué',
 };
 
 /**
  * The hero's sentence under an urgency: what it is and what it does to the conversation, without repeating the line
  * of « À traiter ». Nothing for the other natures: the line says it all.
  */
-const URGENT_LEAD: Readonly<Partial<Record<HandoffCause | 'awaiting_approval', string>>> = {
+const URGENT_LEAD: Readonly<Partial<Record<HandoffCause | 'awaiting_approval' | 'send_failed', string>>> = {
   minor: 'Un fan est peut-être mineur : sa conversation est gelée jusqu’à ce que tu la regardes.',
   non_consent: 'Un échange touche au consentement : la conversation est gelée jusqu’à ce que tu la regardes.',
   distress: 'Un fan semble en détresse : l’agent s’est retiré, il a besoin d’un humain.',
