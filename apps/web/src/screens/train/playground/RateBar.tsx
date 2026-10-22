@@ -1,8 +1,9 @@
 import type { PlaygroundState } from '@nirvana/contracts';
 import { countUp } from '@nirvana/design-system';
+import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, type JSX } from 'react';
 
-import { percent, rateTone, usd } from './logic';
+import { euros, percent, rateTone } from './logic';
 
 /**
  * The one number of the screen, and nothing that competes with it: what wrote the answers and what the
@@ -70,12 +71,23 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
           Démo
         </span>
       ) : null}
-      <span className="pg-bar__meta" title="La voix qui écrit, et ce que cette session a coûté">
-        <span className="pg-mono">
-          Voix {state.version.voicePrompt} · {state.version.voiceModel}
+      {/* With no key, a model name and a zero cost would read as a voice ready to write: the bar says the one thing. */}
+      {state.voice.reachable ? (
+        <span className="pg-bar__meta" title="La voix qui écrit, et ce que cette session a coûté">
+          <span className="pg-mono">
+            Voix {state.version.voicePrompt} · {state.version.voiceModel}
+          </span>
+          <span>{euros(state.sessionCostEur)} cette session</span>
         </span>
-        <span>{usd(state.sessionCostUsd)} cette session</span>
-      </span>
+      ) : (
+        <Link
+          to="/reglages/modeles-ia"
+          className="pg-key"
+          title="Aucune clé n’atteint le modèle de la voix : l’agent ne pourra pas répondre."
+        >
+          Clé manquante
+        </Link>
+      )}
     </div>
   );
 }
