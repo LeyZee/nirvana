@@ -363,7 +363,7 @@ export function createConversationCommands({
         await appendEvent(
           tx,
           conversation,
-          { type: 'takeover_ended', payload: { userId: input.userId } },
+          { type: 'takeover_ended', payload: { conversationId: conversation.id, userId: input.userId } },
           humanMeta(input),
         );
         await tx.audit.record({

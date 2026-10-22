@@ -58,8 +58,12 @@ function upcast(row: typeof schema.conversationEvents.$inferSelect): unknown {
     // Before #54: { userId?, reason?, mode? }, no cause (alerts rank an unknown cause as `other`).
     case 'handoff_requested':
       return { conversationId: row.conversationId, cause: 'other', ...payload.data };
-    // Before #60: without the conversation it belongs to.
+    // Before #60 (takeover_started) and R-G4 (the others): without the conversation it belongs to.
     case 'takeover_started':
+    case 'takeover_ended':
+    case 'send_attempted':
+    case 'send_failed':
+    case 'send_verified':
       return { conversationId: row.conversationId, ...payload.data };
     default:
       return row.payload;

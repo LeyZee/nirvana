@@ -49,8 +49,22 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
-      # The media module cuts videos with ffmpeg; its tests run the real binary on synthetic clips.
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg
+      # The media module cuts videos with ffmpeg; its tests run the real binary on synthetic clips. apt-get has hung
+      # for the whole job twice (before any test): each try is bounded, three tries, and man-db's trigger is skipped.
+      - name: Install ffmpeg
+        timeout-minutes: 10
+        run: |
+          if command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then exit 0; fi
+          sudo rm -f /var/lib/man-db/auto-update
+          for attempt in 1 2 3; do
+            if timeout 60 sudo apt-get update -qq &&
+              timeout 120 sudo apt-get install -y -qq --no-install-recommends ffmpeg; then
+              exit 0
+            fi
+            echo "ffmpeg install failed (attempt $attempt), retrying"
+            sleep 5
+          done
+          exit 1
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm test:integration

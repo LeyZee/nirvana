@@ -108,7 +108,15 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
         await appendEvent(
           tx,
           sendable.conversation,
-          { type: 'send_attempted', payload: { draftId: payload.draftId, idempotencyKey, attempt } },
+          {
+            type: 'send_attempted',
+            payload: {
+              conversationId: payload.conversationId,
+              draftId: payload.draftId,
+              idempotencyKey,
+              attempt,
+            },
+          },
           meta(payload),
         );
         return sendable.conversation;
@@ -146,7 +154,14 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
             sendable.conversation,
             {
               type: 'send_failed',
-              payload: { draftId: payload.draftId, idempotencyKey, attempt, error: code, isFinal },
+              payload: {
+                conversationId: payload.conversationId,
+                draftId: payload.draftId,
+                idempotencyKey,
+                attempt,
+                error: code,
+                isFinal,
+              },
             },
             meta(payload),
           );
@@ -205,7 +220,12 @@ export function createSendJob({ uow, clock, sender }: SendDeps) {
         sendable.conversation,
         {
           type: 'send_verified',
-          payload: { draftId: payload.draftId, idempotencyKey: payload.draftId, attempt },
+          payload: {
+            conversationId: payload.conversationId,
+            draftId: payload.draftId,
+            idempotencyKey: payload.draftId,
+            attempt,
+          },
         },
         meta(payload),
       );

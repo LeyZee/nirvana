@@ -5,6 +5,7 @@ import { applyEvent, INITIAL_PROJECTION, rebuildProjection } from '../projection
 
 const DRAFT = '0199f2a0-0000-7000-8000-0000000000d1';
 const MESSAGE = '0199f2a0-0000-7000-8000-0000000000a1';
+const CONVERSATION = '0199f2a0-0000-7000-8000-0000000000c1';
 const at = (minute: number) => new Date(`2026-10-17T20:${String(minute).padStart(2, '0')}:00Z`);
 
 const message = { messageId: MESSAGE, platformMessageId: 'p1', mediaIds: [] };
@@ -41,6 +42,7 @@ describe('conversation projection', () => {
       EventBodySchema.parse({
         type: 'send_failed',
         payload: {
+          conversationId: CONVERSATION,
           draftId: DRAFT,
           idempotencyKey: `${DRAFT}:0`,
           attempt,
