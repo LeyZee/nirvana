@@ -1,7 +1,15 @@
 import { ConversationSummarySchema, type ConversationSummary } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { lastMessageAgo, mergeConversations, sharedMode, statusClass, subline } from './view';
+import {
+  bubblesFromText,
+  lastMessageAgo,
+  mergeConversations,
+  parseTrackingSearch,
+  sharedMode,
+  statusClass,
+  subline,
+} from './view';
 
 const NOW = new Date('2026-10-17T21:00:00Z');
 
@@ -26,8 +34,8 @@ describe('mergeConversations', () => {
     const b = conversation('2', { updatedAt: '2026-10-17T20:30:00Z' });
     const c = conversation('3', { updatedAt: '2026-10-17T19:00:00Z' });
     const lines = mergeConversations([
-      { creatorName: 'Créatrice A', items: [a, b] },
-      { creatorName: 'Créatrice B', items: [c] },
+      { creatorId: 'a', creatorName: 'Créatrice A', items: [a, b] },
+      { creatorId: 'b', creatorName: 'Créatrice B', items: [c] },
     ]);
     expect(lines.map((l) => `${l.conversation.fanDisplayName} ${l.creatorName}`)).toEqual([
       'Fan 2 Créatrice A',
@@ -58,6 +66,7 @@ describe('subline, sharedMode and statusClass', () => {
   it('finds the mode all lines share, or none', () => {
     const line = (mode: 'copilot' | 'auto') => ({
       conversation: conversation('1', { mode }),
+      creatorId: 'a',
       creatorName: 'A',
     });
     expect(sharedMode([line('copilot'), line('copilot')])).toBe('copilot');
@@ -67,5 +76,24 @@ describe('subline, sharedMode and statusClass', () => {
 
   it('maps states to their pill', () => {
     expect(statusClass('awaiting_approval')).toBe('nv-status--awaiting-approval');
+  });
+});
+
+describe('parseTrackingSearch', () => {
+  it('opens the conversation of a Telegram link, and ignores anything else', () => {
+    const id = '0192f3a0-0000-7000-8000-000000000001';
+    expect(parseTrackingSearch({ conversation: id })).toEqual({ conversation: id });
+    expect(parseTrackingSearch({ conversation: '<script>' })).toEqual({});
+    expect(parseTrackingSearch({ conversation: 42 })).toEqual({});
+    expect(parseTrackingSearch({})).toEqual({});
+  });
+});
+
+describe('bubblesFromText', () => {
+  it('makes one bubble per line, and refuses what the server would refuse', () => {
+    expect(bubblesFromText('Coucou toi\n\n  Tu fais quoi ?  ')).toEqual(['Coucou toi', 'Tu fais quoi ?']);
+    expect(bubblesFromText('  \n ')).toBeNull();
+    expect(bubblesFromText(Array.from({ length: 11 }, (_, i) => `b${String(i)}`).join('\n'))).toBeNull();
+    expect(bubblesFromText('x'.repeat(2_001))).toBeNull();
   });
 });

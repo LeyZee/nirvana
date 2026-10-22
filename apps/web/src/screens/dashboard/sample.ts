@@ -229,7 +229,7 @@ export const SAMPLE = {
     {
       id: 't-wait',
       tone: 'warn',
-      kind: 'À valider dans Reveal',
+      kind: 'À valider dans Suivi',
       title: 'Lucas attend une réponse depuis 18 min',
       why: '6 messages de l’agent attendent un chatteur. Au-delà de 10 min, un fan refroidit.',
       at: '23:27',

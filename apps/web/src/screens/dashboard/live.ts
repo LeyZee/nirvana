@@ -9,6 +9,7 @@ import {
 import { eur } from './logic';
 import type { AgentState, Dashboard, Fan, Todo, Tone } from './model';
 
+import { CAUSE_LABELS } from '@/agent/causes';
 import { percent } from '@/agent/mode';
 import { telegramNightOf } from '@/settings/telegram/NightBanner';
 
@@ -19,17 +20,8 @@ import { telegramNightOf } from '@/settings/telegram/NightBanner';
 
 /** What a handoff or a waiting draft is called on the screen, in the trade's words. */
 const KIND_LABEL: Readonly<Record<HandoffCause | 'awaiting_approval', string>> = {
-  minor: 'Mineur possible',
-  non_consent: 'Sans consentement',
-  distress: 'Détresse',
-  meeting: 'Demande de rencontre',
-  manipulation: 'Manipulation',
-  guard: 'Réponse bloquée',
-  budget: 'Plafond IA atteint',
-  keyword: 'Mot d’alerte',
-  llm_unavailable: 'IA indisponible',
-  other: 'À reprendre',
-  awaiting_approval: 'À valider dans Reveal',
+  ...CAUSE_LABELS,
+  awaiting_approval: 'À valider dans Suivi',
 };
 
 /**

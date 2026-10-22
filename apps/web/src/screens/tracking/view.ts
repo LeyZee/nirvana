@@ -22,16 +22,24 @@ export const statusClass = (state: ConversationState): string => `nv-status--${s
 
 export interface Line {
   readonly conversation: ConversationSummary;
+  /** Whose conversation it is: every read and decision names the creator. */
+  readonly creatorId: string;
   /** Whose fan he is: shown only when the account sees several creators. */
   readonly creatorName: string;
 }
 
 /** Every creator's conversations in one list, the most recently changed first. */
 export function mergeConversations(
-  lists: readonly { readonly creatorName: string; readonly items: readonly ConversationSummary[] }[],
+  lists: readonly {
+    readonly creatorId: string;
+    readonly creatorName: string;
+    readonly items: readonly ConversationSummary[];
+  }[],
 ): Line[] {
   return lists
-    .flatMap(({ creatorName, items }) => items.map((conversation) => ({ conversation, creatorName })))
+    .flatMap(({ creatorId, creatorName, items }) =>
+      items.map((conversation) => ({ conversation, creatorId, creatorName })),
+    )
     .sort((a, b) => Date.parse(b.conversation.updatedAt) - Date.parse(a.conversation.updatedAt));
 }
 
@@ -66,4 +74,29 @@ export function subline(conversation: ConversationSummary, now: Date, withMode: 
   return withMode
     ? `${MODE_LABELS[conversation.mode]} · ${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}`
     : wrote;
+}
+
+/** `/suivi?conversation=<id>`: the conversation the reader opens (the link of a Telegram alert, a line of the list). */
+export interface TrackingSearch {
+  readonly conversation?: string;
+}
+
+/** Anything else in the address is ignored: a broken link opens the list, never an error. */
+export function parseTrackingSearch(search: Record<string, unknown>): TrackingSearch {
+  const { conversation } = search;
+  return typeof conversation === 'string' && /^[0-9a-f-]{36}$/iu.test(conversation) ? { conversation } : {};
+}
+
+/**
+ * One draft's bubbles as a person edits them: one bubble per line. `null` when the text is not a valid answer (no
+ * bubble, more than 10, or one too long), so the button stays off instead of the server refusing it.
+ */
+export function bubblesFromText(text: string): string[] | null {
+  const bubbles = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  return bubbles.length === 0 || bubbles.length > 10 || bubbles.some((b) => b.length > 2_000)
+    ? null
+    : bubbles;
 }
