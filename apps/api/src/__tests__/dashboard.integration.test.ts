@@ -188,7 +188,7 @@ describe('GET /v1/dashboard', () => {
     );
   });
 
-  it('counts the jobs the worker gave up on, hers and those of no creator only', async () => {
+  it('counts the jobs the worker gave up on or has no task for, hers and those of no creator only', async () => {
     const dead = async () => {
       const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
       return DashboardSchema.parse(response.json()).jobs.dead;
@@ -203,6 +203,17 @@ describe('GET /v1/dashboard', () => {
         where id = (select max(id) from graphile_worker._private_jobs)`);
     }
     expect(await dead()).toBe(before + 2);
+
+    // No worker task takes `fans.refresh_summary` yet: due for an hour, it never spends an attempt.
+    for (const [task, runAt] of [
+      ['fans.refresh_summary', sql`now() - interval '1 hour'`],
+      ['fans.refresh_summary', sql`now()`],
+      ['conversation.respond', sql`now() - interval '1 hour'`],
+    ] as const) {
+      await test.admin.db.execute(sql`
+        select graphile_worker.add_job(${task}, ${JSON.stringify({ creatorId })}::json, run_at => ${runAt})`);
+    }
+    expect(await dead()).toBe(before + 3);
   });
 
   it('computes the dashboard of one creator from her conversations', async () => {

@@ -148,3 +148,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Dashboard : prénom inventé pour un fan de l’exemple (ADR 0010) | done | `log/2026-10-22-dashboard-sample-names.md` |
 | 2026-10-22 | CI : paquets de ffmpeg en cache, installés sans réseau | done | `log/2026-10-22-ci-ffmpeg-cache.md` |
 | 2026-10-22 | Telegram : alertes vérifiées de bout en bout (conversations → Telegram) | done | `log/2026-10-22-telegram-alerts-e2e.md` |
+| 2026-10-22 | Dashboard : jobs sans tâche du worker comptés comme bloqués (suite de R-G6) | done | `log/2026-10-22-orphan-jobs.md` |
