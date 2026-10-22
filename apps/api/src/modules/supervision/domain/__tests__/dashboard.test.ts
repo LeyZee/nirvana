@@ -6,7 +6,7 @@ import {
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assembleDashboard, todos } from '../dashboard';
+import { assembleDashboard, todos, type VoiceHealth } from '../dashboard';
 import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
@@ -42,6 +42,7 @@ const assemble = (
   telegram: TelegramReading | 'off' = { alertsTonight: 3, urgentReachable: false },
   automatic: AutomaticGate = { open: false, missing: [{ kind: 'blind_test' }] },
   reading: LiveRateReading = { rate: 0.8, decided: 10 },
+  health: { voice?: VoiceHealth; deadJobs?: number | null } = {},
 ) =>
   assembleDashboard({
     creatorId: CreatorIdSchema.parse('0b9d4b7e-2f7a-4c1e-9a55-3d1f0c2b8e41'),
@@ -54,8 +55,8 @@ const assemble = (
       voice: { voicePrompt: '1.5.0', voiceModel: 'grok-4.7' },
     },
     budget: { spentEur: 3.204, capEur: 20, alertAtEur: 16 },
-    voice: { ok: true, keyMissing: false },
-    deadJobs: 0,
+    voice: health.voice ?? { ok: true, keyMissing: false },
+    deadJobs: health.deadJobs === undefined ? 0 : health.deadJobs,
     telegram: telegram === 'off' ? undefined : telegram,
     automatic: { gate: automatic, reading },
   });
@@ -70,6 +71,16 @@ describe('dashboard', () => {
     expect(dashboard.guards.today.minor).toBe(0);
     expect(dashboard.guards.telegramAlertsTonight).toBe(3);
     expect(dashboard.telegramCoverage).toEqual({ urgentReachable: false });
+  });
+
+  it('passes a missing key and the stuck jobs through as read, unknown included', () => {
+    const missing = DashboardSchema.parse(
+      assemble({}, 'off', undefined, undefined, { voice: { ok: false, keyMissing: true }, deadJobs: 2 }),
+    );
+    expect(missing.voice).toMatchObject({ ok: false, keyMissing: true });
+    expect(missing.jobs).toEqual({ dead: 2 });
+    const unknown = DashboardSchema.parse(assemble({}, 'off', undefined, undefined, { deadJobs: null }));
+    expect(unknown.jobs).toEqual({ dead: null });
   });
 
   it('says Telegram is off rather than that no alert gets through', () => {
