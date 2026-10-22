@@ -38,10 +38,8 @@ describe('fromApi', () => {
     expect(fromApi(apiDashboard()).sales).toBeNull();
   });
 
-  it('opens the reader on a waiting fan who is not among the best fans', () => {
-    const fans = fromApi(apiDashboard()).fans;
-    expect(fans.map((fan) => fan.name)).toEqual(['Théo', 'Kévin']);
-    expect(fans[1]).toMatchObject({ spent: 0, alert: 'Mineur possible', line: 'en attente depuis 19 min' });
+  it('keeps the best fans only, a waiting fan is read in Suivi', () => {
+    expect(fromApi(apiDashboard()).fans.map((fan) => fan.name)).toEqual(['Théo']);
   });
 
   it('says what an urgency does to the conversation, without repeating its line', () => {
@@ -102,12 +100,10 @@ describe('fromApi', () => {
     expect(unread.agent.foldSummary).not.toContain('bloquée');
   });
 
-  it('opens a draft to validate in Suivi, on its conversation', () => {
-    const [urgent] = fromApi(apiDashboard()).todos;
-    expect(urgent?.conversationId).toBeUndefined();
-    const base = apiDashboard();
-    const [draft] = base.todos;
+  it('opens every line in Suivi, on its conversation', () => {
+    const [draft] = apiDashboard().todos;
     if (draft === undefined) throw new Error('the fixture has a todo');
+    expect(fromApi(apiDashboard()).todos[0]?.conversationId).toBe(draft.conversationId);
     const [todo] = fromApi(
       apiDashboard({ todos: [{ ...draft, tone: 'warn', kind: 'awaiting_approval' }] }),
     ).todos;

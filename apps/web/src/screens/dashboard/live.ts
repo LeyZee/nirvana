@@ -36,8 +36,8 @@ const URGENT_LEAD: Readonly<Partial<Record<HandoffCause | 'awaiting_approval', s
   manipulation: 'Un fan essaie de manipuler l’agent : il s’est retiré de la conversation.',
 };
 
-/** The reader has no thread yet (it comes with Suivi's reader): it says where the conversation is read. */
-const NO_THREAD = 'Le fil de la conversation se lit dans Reveal en attendant le lecteur de Suivi.';
+/** The Dashboard's reader shows no thread: it says where the conversation is read. */
+const NO_THREAD = 'Le fil de la conversation se lit dans Suivi ou dans Reveal.';
 
 const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
 
@@ -62,13 +62,6 @@ export function ago(iso: string, now: Date): string {
   if (seconds < 3600) return `il y a ${String(Math.floor(seconds / 60))} min`;
   if (seconds < 86_400) return `il y a ${String(Math.floor(seconds / 3600))} h`;
   return `il y a ${String(Math.floor(seconds / 86_400))} j`;
-}
-
-/** « 19 min », « 2 h », « 3 j »: how long a todo has waited, as the server measured it. */
-function waited(minutes: number): string {
-  if (minutes < 60) return `${String(Math.max(1, Math.round(minutes)))} min`;
-  if (minutes < 1440) return `${String(Math.floor(minutes / 60))} h`;
-  return `${String(Math.floor(minutes / 1440))} j`;
 }
 
 /** « 3 semaines », « 2 mois », « 5 jours »: how long ago a fan first wrote. */
@@ -281,8 +274,8 @@ function todoOf(todo: DashboardTodo, timeZone: string): Todo {
     why: todo.why,
     at: clock(todo.at, timeZone),
     fanId: todo.fanId,
-    // A draft to validate is decided in Suivi, on its conversation.
-    ...(todo.kind === 'awaiting_approval' ? { conversationId: todo.conversationId } : {}),
+    // Every line is handled in Suivi, on its conversation: a draft is decided there, a handoff given back there.
+    conversationId: todo.conversationId,
   };
 }
 
@@ -299,36 +292,16 @@ function fanOf(fan: DashboardFan, now: Date): Fan {
   };
 }
 
-/** The reader of a todo whose fan is not among the best fans: his name and why he waits. */
-function waitingFan(todo: DashboardTodo): Fan {
-  return {
-    id: todo.fanId,
-    name: todo.title,
-    line: `en attente depuis ${waited(todo.waitingMinutes)}`,
-    spent: 0,
-    byAgent: 0,
-    notes: [],
-    alert: KIND_LABEL[todo.kind],
-    thread: [
-      { from: 'flag', text: todo.why },
-      { from: 'flag', text: NO_THREAD },
-    ],
-  };
-}
-
 /** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
 export function fromApi(api: ApiDashboard): Dashboard {
   const now = new Date(api.creator.now);
   const timeZone = api.creator.timezone;
-  const best = api.fans.map((fan) => fanOf(fan, now));
-  const known = new Set(best.map((fan) => fan.id));
-  const waiting = api.todos.filter((todo) => !known.has(todo.fanId)).map(waitingFan);
   return {
     creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
     agent: agentState(api, now),
     todos: api.todos.map((todo) => todoOf(todo, timeZone)),
     sales: null,
     telegram: telegramNightOf(api),
-    fans: [...best, ...waiting.filter((fan, i) => waiting.findIndex((f) => f.id === fan.id) === i)],
+    fans: api.fans.map((fan) => fanOf(fan, now)),
   };
 }

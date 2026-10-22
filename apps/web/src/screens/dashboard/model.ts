@@ -17,8 +17,8 @@ export const PERIODS: readonly { readonly id: Period; readonly label: string }[]
 ];
 
 /**
- * One line of « À traiter ». `conversationId` opens it in Suivi (a draft to validate), else `fanId` opens the reader;
- * without either, `where` says what to open instead.
+ * One line of « À traiter ». `conversationId` opens it in Suivi (the server's lines), else `fanId` opens the
+ * reader (the sample's); without either, `where` says what to open instead.
  */
 export interface Todo {
   readonly id: string;

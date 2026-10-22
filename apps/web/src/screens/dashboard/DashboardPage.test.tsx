@@ -111,6 +111,17 @@ describe('DashboardPage on the server’s data', () => {
     });
   });
 
+  it('opens an urgency in Suivi too, where the conversation is given back to the agent', async () => {
+    const [urgent] = apiDashboard().todos;
+    if (urgent === undefined) throw new Error('the fixture has a todo');
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir l’urgence' }));
+    await waitFor(() => {
+      expect(location()).toBe(`/suivi?conversation=${urgent.conversationId}`);
+    });
+  });
+
   it('says the voice waits for its key and leads to where it goes', async () => {
     serveDashboard({
       status: 200,
