@@ -6,7 +6,7 @@ import {
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { decisionError, lastHandoff, threadOf } from './reader';
+import { decisionError, lastHandoff, threadOf } from './reader-model';
 
 /* Invented messages: no real fan. */
 const CONVERSATION = '0192f3a0-0000-7000-8000-000000000001';

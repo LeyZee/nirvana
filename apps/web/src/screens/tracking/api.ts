@@ -10,7 +10,7 @@ import {
   type MessageView,
 } from '@nirvana/contracts';
 
-import { decisionError } from './reader';
+import { decisionError } from './reader-model';
 
 const PageSchema = pageOf(ConversationSummarySchema);
 
