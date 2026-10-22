@@ -150,3 +150,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Telegram : alertes vérifiées de bout en bout (conversations → Telegram) | done | `log/2026-10-22-telegram-alerts-e2e.md` |
 | 2026-10-22 | Dashboard : jobs sans tâche du worker comptés comme bloqués (suite de R-G6) | done | `log/2026-10-22-orphan-jobs.md` |
 | 2026-10-22 | ffmpeg vérifié au démarrage, messages clairs | done | `log/2026-10-22-ffmpeg-check.md` |
+| 2026-10-22 | ai-engine.md : « tu es un bot ? » renvoie à ADR 0021 | done | `log/2026-10-22-ai-engine-adr-0021.md` |

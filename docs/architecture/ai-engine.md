@@ -1,6 +1,6 @@
 # Moteur IA : sens, cerveau, voix, politique, gardes
 
-Dernière revue : 2026-10-17 (Grok 4.7, P3-01 ; Vision et pièges, P3-04). Décisions : ADR 0009, 0012.
+Dernière revue : 2026-10-17 (Grok 4.7, P3-01 ; Vision et pièges, P3-04). Décisions : ADR 0009, 0021.
 
 ## Les rôles
 
@@ -102,7 +102,7 @@ Entrée : contexte + brief. Sortie : `Decision` + `policy_trace`. Ordre d'évalu
 1. Risques bloquants → `handoff` (non contournable, même en auto) : `minor_suspected`, `distress`, `self_harm`, `dangerous_request`, `real_abuse` (`agent/domain/hold.ts`), décidé avant que la voix écrive.
 2. Interrupteurs, mode, session → `wait`.
 3. Horaires de la persona (avec jitter) → `wait` avec `runAt`.
-4. `asks_if_bot` → selon `identity_policy` : `stay_in_character` (défaut, ADR 0012) donne un `reply_brief` de déflexion en personnage ; `deflect_and_handoff` ; `disclose`.
+4. `asks_if_bot` → toujours une déflexion en personnage (`reply_brief`), fixée dans le code et non réglable : le prompt de voix et la garde bloquante `ai_disclosure` (ADR 0021, qui remplace ADR 0012).
 5. Offre (dès la phase 3, décision de Charles du 17/10) : autorisée seulement si cooldowns expirés, KYC minimal atteint (délai de sexualisation réglable, 24 à 48 h par défaut), étape de script Reveal disponible et jamais envoyée à ce fan, aucun risque `money_trouble`, `distress`, `self_harm` ou `minor_suspected`. Prix fixé par le script : jamais de négociation ni de remise. Rythme (`offerDecision`, `agent/domain/policy.ts`, Charles 17/10) : un script au plus toutes les 10 heures par fan (délai réglable par créatrice), puis seulement si le fan sexualise de nouveau ; rien sous le drapeau « budget nul » ; un fan qui redemande lui-même du payant lève le délai. Chaque brouillon garde la version du prompt de voix et le modèle qui l'a écrit (`drafts.prompt_hashes`), pour le taux en réel (ADR 0019). Bouderie (« chouinage ») au plus une fois par refus, jamais juste après un achat, jamais après un risque. Aftercare après chaque script. Détail métier : `/mnt/project-files/chatting/methode-chatting.md`.
 6. KYC : au plus une question, seulement si `intent` s'y prête et pas de question dans les 3 derniers envois.
 7. Relance : bornée par `persona.follow_ups` (délais, petits rappels par jour).
