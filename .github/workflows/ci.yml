@@ -43,28 +43,58 @@ jobs:
   test:
     name: Tests (unit + integration)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
-      # The media module cuts videos with ffmpeg; its tests run the real binary on synthetic clips. apt-get has hung
-      # for the whole job twice (before any test): each try is bounded, three tries, and man-db's trigger is skipped.
+      # The media module cuts videos with ffmpeg; its tests run the real binary on synthetic clips. The apt mirror has
+      # hung the job and timed out three tries in a row: the .deb files apt downloads are cached per runner image, so
+      # once one run got them, later runs install them with dpkg alone, without the network.
+      # The runner image's machine variables are not in the `env` context: read them in a shell for the cache key.
+      - name: Name the runner image
+        id: image
+        run: echo "key=ffmpeg-debs-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      - name: Restore ffmpeg packages
+        id: ffmpeg-debs
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/ffmpeg-debs
+          key: ${{ steps.image.outputs.key }}
       - name: Install ffmpeg
-        timeout-minutes: 10
+        id: ffmpeg
+        timeout-minutes: 15
         run: |
           if command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then exit 0; fi
+          debs="$HOME/ffmpeg-debs"
           sudo rm -f /var/lib/man-db/auto-update
+          if compgen -G "$debs/*.deb" >/dev/null && sudo dpkg -i "$debs"/*.deb >/dev/null; then
+            ffmpeg -version | head -1
+            exit 0
+          fi
+          # `-f` below also repairs a dpkg -i of the cache that stopped halfway.
+          mkdir -p "$debs/partial"
           for attempt in 1 2 3; do
-            if timeout 60 sudo apt-get update -qq &&
-              timeout 120 sudo apt-get install -y -qq --no-install-recommends ffmpeg; then
+            if timeout 90 sudo apt-get update -qq &&
+              timeout 180 sudo apt-get install -y -qq -f --no-install-recommends \
+                -o Dir::Cache::Archives="$debs" -o APT::Keep-Downloaded-Packages=true ffmpeg; then
+              sudo chown -R "$USER" "$debs"
+              rm -rf "$debs/partial" "$debs/lock"
+              if compgen -G "$debs/*.deb" >/dev/null; then echo "fresh=true" >> "$GITHUB_OUTPUT"; fi
               exit 0
             fi
             echo "ffmpeg install failed (attempt $attempt), retrying"
             sleep 5
           done
           exit 1
+      # Saved right away, not at the end of the job: a red test must not lose the packages.
+      - name: Save ffmpeg packages
+        if: steps.ffmpeg.outputs.fresh == 'true' && steps.ffmpeg-debs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/ffmpeg-debs
+          key: ${{ steps.image.outputs.key }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm test:integration
