@@ -1,4 +1,4 @@
-import { ConversationIdSchema, newId } from '@nirvana/contracts';
+import { ConversationIdSchema, DraftIdSchema, newId } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { FAKE_TOKEN } from '../../__tests__/support/fake-telegram';
@@ -159,6 +159,22 @@ describe('reading the outbox', () => {
     expect(toScannedEvent({ ...base, type: 'takeover_ended', payload: { userId: 'u1' } })).toMatchObject({
       signal: { kind: 'release', conversationId: null, userId: 'u1' },
     });
+  });
+
+  it('reads only the last send failure, and nothing of what the platform said', () => {
+    const failed = (payload: object) => toScannedEvent({ ...base, type: 'send_failed', payload });
+    const attempt = {
+      draftId: newId(DraftIdSchema),
+      idempotencyKey: 'k',
+      attempt: 3,
+      error: 'platform_said_x',
+    };
+    expect(failed({ ...attempt, conversationId, isFinal: true })?.signal).toEqual({
+      kind: 'send_failed',
+      conversationId,
+    });
+    expect(failed({ ...attempt, conversationId, isFinal: false })).toBeNull();
+    expect(failed({ ...attempt, conversationId })).toBeNull();
   });
 
   it('keeps only the session changes that open or close a thread', () => {

@@ -24,6 +24,7 @@ export const SCANNED_EVENT_TYPES = [
   'validation_requested',
   'validation_resolved',
   'automatic_closed',
+  'send_failed',
 ] as const;
 
 const URGENT_CAUSES: ReadonlySet<HandoffCause> = new Set([
@@ -100,6 +101,16 @@ export function classify(signal: Signal): Outcome | null {
         link: conversationLink(signal.conversationId),
       };
     }
+    // Same thread as a handoff: a takeover or a hand-back closes it.
+    case 'send_failed':
+      return {
+        kind: 'notice',
+        topic: 'important',
+        threadKey: signal.conversationId === null ? null : `conversation:${signal.conversationId}`,
+        title: 'Important',
+        body: 'Un message de l’agent n’a pas pu partir. Il n’écrit plus à ce fan et attend un humain.',
+        link: conversationLink(signal.conversationId),
+      };
     case 'takeover':
       return signal.conversationId === null
         ? null

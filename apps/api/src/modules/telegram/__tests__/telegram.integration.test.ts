@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import {
   ConversationIdSchema,
   CreatorIdSchema,
+  DraftIdSchema,
   EventIdSchema,
   newId,
   type CreatorId,
@@ -322,6 +323,34 @@ describe('telegram module on Postgres', () => {
     expect(text).toContain('repassé en copilote sur 3 conversations');
     expect(text).toContain('74,5 %');
     expect(text).not.toContain('qui-ne-sort-pas');
+  });
+
+  it('tells the groups once that a message of the agent could not leave, and closes it on a takeover', async () => {
+    const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
+    const conversationId = newId(ConversationIdSchema);
+    const attempt = {
+      draftId: newId(DraftIdSchema),
+      idempotencyKey: 'k',
+      error: 'send_error',
+      conversationId,
+    };
+    await publish('send_failed', { ...attempt, attempt: 1, isFinal: false });
+    await publish('send_failed', { ...attempt, attempt: 3, isFinal: true });
+    // The trigger knows the new type.
+    expect(await jobs('telegram.scan')).toMatchObject([{ key: 'telegram.scan' }]);
+    await module.jobs.scan();
+    const rows = await deliveryRows(chatId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ topic: 'important', threadKey: `conversation:${conversationId}` });
+    await module.jobs.flushChat(chatId);
+    expect(telegram.sent[0]?.text).toContain('n’a pas pu partir');
+    expect(telegram.sent[0]?.text).not.toContain('send_error');
+
+    await publish('takeover_started', { conversationId });
+    await module.jobs.scan();
+    offsetMs = 4000;
+    await module.jobs.flushChat(chatId);
+    expect(telegram.edits[0]?.text).toMatch(/✓ Pris en main$/);
   });
 
   it('logs an urgent alert that no group can receive', async () => {

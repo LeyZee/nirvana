@@ -123,3 +123,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Clés IA : texte vrai quand la vérification échoue (quota ou panne) | done | `log/2026-10-19-cles-texte-injoignable.md` |
 | 2026-10-19 | Telegram : alerte de remise à l'humain fermée au retour à l'agent (recette R-G4) | done | `log/2026-10-19-telegram-takeover-ended.md` |
 | 2026-10-19 | Réglages › Telegram : « Le serveur ne répond pas » (recette R-C2) | done | `log/2026-10-19-telegram-server-down-text.md` |
+| 2026-10-22 | Telegram : alerte quand un message de l'agent ne part pas (recette R-G5) | done | `log/2026-10-22-telegram-send-failed.md` |

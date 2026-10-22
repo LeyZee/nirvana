@@ -85,6 +85,13 @@
       "when": 1792420994577,
       "tag": "0011_telegram_takeover_ended",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792682011645,
+      "tag": "0012_telegram_send_failed",
+      "breakpoints": true
     }
   ]
 }
