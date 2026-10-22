@@ -113,6 +113,7 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Textes du CRM relevés par la recette | done | `log/2026-10-19-web-textes-recette.md` |
 | 2026-10-22 | Suivi : file « à traiter », lecteur et décisions sur les brouillons | done | `log/2026-10-22-web-suivi-lecteur.md` |
 | 2026-10-22 | Playground : le message reste quand l'envoi échoue (recette R-G12) | done | `log/2026-10-22-web-playground-message-garde.md` |
+| 2026-10-22 | Extension : icônes, paquet zip, marge du popup (recette) | done | `log/2026-10-22-extension-icones-popup.md` |
 | 2026-10-19 | Références plateforme du composeur pour la vision | done | `log/2026-10-19-compose-platform-refs.md` |
 | 2026-10-19 | IP réelle derrière le proxy, limite de connexion par compte (G6) | done | `log/2026-10-19-trust-proxy.md` |
 | 2026-10-19 | Verrou serveur de l'Automatique (B3) | done | `log/2026-10-19-automatic-lock.md` |
