@@ -126,7 +126,7 @@ export const TelegramDeliverySchema = z.object({
   status: TelegramDeliveryStatusSchema,
   createdAt: z.iso.datetime(),
   sentAt: z.iso.datetime().nullable(),
-  /** « Pris en main par Lucas », once someone took the conversation. */
+  /** « Pris en main par Théo », once someone took the conversation. */
   closedBy: z.string().min(1).nullable(),
 });
 export type TelegramDelivery = z.infer<typeof TelegramDeliverySchema>;

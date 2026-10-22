@@ -586,7 +586,7 @@ function AlertsTab({
           'Plusieurs alertes d’un coup sont regroupées en un message.',
         ]}
       >
-        <PreviewMessage from="Nirvana Alertes" time="02:38" edit="✓ Pris en main par Lucas">
+        <PreviewMessage from="Nirvana Alertes" time="02:38" edit="✓ Pris en main par Théo">
           🔴 <b>URGENT · Créatrice</b>
           <br />
           Possible mineur sur une photo envoyée par un fan. L’agent n’écrit plus à ce fan et attend un humain.

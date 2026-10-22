@@ -152,7 +152,7 @@ describe('rendering (ADR 0020 §10)', () => {
   });
 
   it('closes a message with the first name of who took it', () => {
-    expect(renderClosedBy('texte', 'Pris en main', 'Lucas')).toBe('texte\n✓ Pris en main par Lucas');
+    expect(renderClosedBy('texte', 'Pris en main', 'Théo')).toBe('texte\n✓ Pris en main par Théo');
     expect(renderClosedBy('texte', 'Pris en main', null)).toBe('texte\n✓ Pris en main');
     expect(renderClosedBy('texte', 'Rendu à l’agent', '<b>')).toBe('texte\n✓ Rendu à l’agent par &lt;b&gt;');
   });
