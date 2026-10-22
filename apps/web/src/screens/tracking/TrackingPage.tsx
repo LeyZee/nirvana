@@ -201,7 +201,7 @@ function QueueRow({
           </span>
           <span className="nv-convo__preview">{todo.why}</span>
         </span>
-        <span className="nv-convo__side tr-unread">
+        <span className="nv-convo__side tr-wait">
           {todo.waitingMinutes < 60
             ? `${String(todo.waitingMinutes)} min`
             : `${String(Math.floor(todo.waitingMinutes / 60))} h`}

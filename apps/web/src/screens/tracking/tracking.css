@@ -46,6 +46,12 @@
   color: var(--nv-neon-ink);
   font-weight: 600;
 }
+.tr-wait {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
 .tr-more {
   margin: 0;
   padding: var(--nv-space-3) var(--nv-space-4);
