@@ -41,7 +41,11 @@ export function createCreatorRoutes(
         preHandler: requireRole('owner'),
         schema: { body: NewCreatorSchema, response: { 201: CreatorSummarySchema } },
       },
-      async (request, reply) => reply.code(201).send(await directory.create(request.body)),
+      async (request, reply) => {
+        const { user } = request;
+        if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
+        return reply.code(201).send(await directory.create(request.body, user.id));
+      },
     );
     return Promise.resolve();
   };

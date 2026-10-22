@@ -228,6 +228,11 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
     const created = await create(owner, { displayName: 'Cleo' });
     expect(created.statusCode).toBe(201);
     expect(created.json()).toMatchObject({ displayName: 'Cleo', timezone: 'Europe/Paris' });
+    const audit = await test.admin.db
+      .select({ action: schema.auditLog.action, userId: schema.auditLog.userId })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.entityId, created.json<{ id: string }>().id));
+    expect(audit.map((row) => [row.action, row.userId !== null])).toEqual([['creator.create', true]]);
     const list = await server.inject({ method: 'GET', url: '/v1/creators', headers: { cookie: owner } });
     expect(list.json<{ creators: { displayName: string }[] }>().creators.map((c) => c.displayName)).toContain(
       'Cleo',
