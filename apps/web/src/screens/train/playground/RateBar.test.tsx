@@ -27,7 +27,6 @@ const STATE: PlaygroundState = {
   rate: { rate: null, rated: 0, validated: 0, target: 0.8, trendPoints: null, previousVersion: null },
   version: { voicePrompt: '1.4.0', voiceModel: 'grok-4.7' },
   rejectReasons: [],
-  sessionCostUsd: 1.62,
   sessionCostEur: 1.5,
   voice: { reachable: true },
   pending: null,

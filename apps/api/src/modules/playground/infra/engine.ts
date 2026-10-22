@@ -120,7 +120,6 @@ function toAnswer(turn: PlaygroundTurn, usdPerEur: number): PlaygroundAnswer {
     }),
     ...(turn.model !== undefined && { model: turn.model }),
     latencyMs: turn.latencyMs,
-    costUsd: turn.costUsd,
     costEur: turn.costUsd / usdPerEur,
     isFallback: turn.isFallback,
     ...((turn.voiceFailure ?? turn.briefFailure) !== undefined && {
@@ -202,7 +201,6 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
       rate: rate(),
       version: deps.version,
       rejectReasons: REJECT_REASONS.map((id) => ({ id, label: REJECT_REASON_LABELS[id] })),
-      sessionCostUsd,
       sessionCostEur: sessionCostUsd / deps.usdPerEur,
       voice: { reachable: isVoiceReachable() },
       pending: lastExchange !== undefined && !isRated ? toAnswer(lastExchange.turn, deps.usdPerEur) : null,
@@ -316,7 +314,6 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
           })),
           isBlocked: comparison.isBlocked,
           ...(comparison.model !== undefined && { model: comparison.model }),
-          costUsd: comparison.costUsd,
           costEur: comparison.costUsd / deps.usdPerEur,
           ...(comparison.failure !== undefined && { failure: comparison.failure }),
         };
