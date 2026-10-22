@@ -10,6 +10,7 @@ const answer = (patch: Partial<Answer> = {}): Answer => ({
   violations: [],
   latencyMs: 1000,
   costUsd: 0.001,
+  costEur: 0.0009,
   isFallback: false,
   ...patch,
 });
@@ -113,6 +114,8 @@ describe('stepOf', () => {
     version: { voicePrompt: '1.4.0', voiceModel: 'grok-4.7' },
     rejectReasons: [],
     sessionCostUsd: 0,
+    sessionCostEur: 0,
+    voice: { reachable: true },
     pending,
   });
 
