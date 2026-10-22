@@ -103,6 +103,13 @@ describe('decisionError', () => {
     expect(decisionError(409, apiError('session_expired_conflict'))).toContain('La session Reveal a expiré');
     expect(decisionError(409, apiError('draft_conflict'))).toContain('a changé entre-temps');
     expect(decisionError(403, apiError('forbidden'))).toContain('Seuls le propriétaire et les chatteurs');
+    expect(decisionError(400, apiError('draft_invalid'))).toBe(
+      'Ce message ne peut pas partir tel quel : une bulle est vide ou trop longue (2 000 caractères au plus, 10 bulles au plus).',
+    );
+    expect(decisionError(401, apiError('unauthorized'))).toBe('Ta session a expiré : reconnecte-toi.');
+    expect(decisionError(503, null)).toBe(
+      'Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.',
+    );
     expect(decisionError(0, null)).toBe(
       'Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.',
     );

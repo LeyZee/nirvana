@@ -127,6 +127,9 @@ export function decisionError(status: number, body: unknown): string {
     return 'La session Reveal a expiré : rien ne part tant qu’elle n’est pas reconnectée depuis l’extension.';
   if (code === 'draft_conflict' || code === 'transition_conflict')
     return 'La conversation a changé entre-temps : ce brouillon n’attend plus de décision.';
+  if (status === 400)
+    return 'Ce message ne peut pas partir tel quel : une bulle est vide ou trop longue (2 000 caractères au plus, 10 bulles au plus).';
+  if (status === 401) return 'Ta session a expiré : reconnecte-toi.';
   if (status === 403) return 'Seuls le propriétaire et les chatteurs décident des brouillons.';
   if (status === 404) return 'Cette conversation ou ce brouillon n’existe plus.';
   return 'Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.';
