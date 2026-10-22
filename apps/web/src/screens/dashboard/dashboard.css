@@ -6,15 +6,11 @@
 
 .db {
   --db-gap: 16px;
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
+  /* The page (.nv-stage) scrolls, not the Dashboard: the hero's light is never cut by a scroll box. */
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 0 4px 24px 2px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--nv-hairline) transparent;
+  gap: 40px;
+  padding: 0 4px 32px 2px;
 }
 .db > * {
   flex: none;
@@ -26,7 +22,8 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  margin-bottom: -12px;
+  padding-top: 14px;
+  margin-bottom: -16px;
 }
 .db-top__av {
   flex: none;
@@ -35,7 +32,7 @@
   width: 36px;
   height: 36px;
   border-radius: var(--nv-radius-full);
-  background: linear-gradient(140deg, var(--nv-neon-soft), var(--nv-glass-fill-strong));
+  background: linear-gradient(160deg, var(--nv-select-strong), var(--nv-plate));
   box-shadow: inset 0 1px 0 var(--nv-glass-edge);
   font: italic 600 17px/1 var(--nv-font-wordmark);
 }
@@ -51,24 +48,22 @@
   color: var(--nv-ink-faint);
 }
 
-/* ── Level 1: state and what waits ── */
+/* ── Level 1: state and what waits. No card: the sentence sits on the page, lit by its tone. ── */
 .db-hero {
-  --_radius: 34px;
-  overflow: hidden;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 26px 28px 22px;
+  gap: 24px;
 }
 .db-hero__glow {
   position: absolute;
   z-index: -1;
-  left: -120px;
-  top: -220px;
-  width: 420px;
+  left: -80px;
+  top: -150px;
+  width: 720px;
   height: 420px;
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--_c) 30%, transparent), transparent 65%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--_c) 22%, transparent), transparent);
   transition: background var(--nv-dur-slow) var(--nv-ease-out);
   pointer-events: none;
 }
@@ -79,29 +74,35 @@
   align-items: center;
 }
 .db-hero h1 {
-  margin: 4px 0 0;
-  font-size: 30px;
-  line-height: 35px;
-  letter-spacing: -0.025em;
-  font-weight: 680;
+  margin: 6px 0 0;
+  font-size: 40px;
+  line-height: 44px;
+  letter-spacing: -0.03em;
+  font-weight: 700;
   text-wrap: balance;
 }
 .db-hero h1 em {
   font-style: normal;
   color: var(--_c);
+  text-shadow: 0 0 28px color-mix(in srgb, var(--_c) 45%, transparent);
 }
 .db-hero__lead {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   max-width: 62ch;
-  font-size: 15px;
-  line-height: 21px;
+  font-size: 16px;
+  line-height: 23px;
   color: var(--nv-ink-muted);
   text-wrap: pretty;
 }
+.db-hero .nv-calm {
+  padding: 16px 20px;
+  border-radius: var(--nv-radius-lg);
+  background: var(--nv-plate);
+  box-shadow: inset 0 0 0 1px var(--nv-plate-edge);
+}
+/* The agent's health: one quiet line under the list, its tiles folded. */
 .db-fold {
-  margin: 0 -14px -8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--nv-hairline);
+  margin: -12px -14px 0;
 }
 .db-fold .nv-disclosure__sum {
   color: var(--nv-ink-muted);
@@ -115,7 +116,7 @@
 }
 .db-sect__head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
@@ -123,19 +124,24 @@
 }
 .db-sect__head h2 {
   margin: 0;
-  font-size: var(--nv-text-caption);
-  line-height: var(--nv-text-caption-leading);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--nv-text-title-2);
+  line-height: var(--nv-text-title-2-leading);
+  letter-spacing: var(--nv-text-title-2-tracking);
   font-weight: 650;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--nv-ink-faint);
+  color: var(--nv-ink);
 }
 .db-sect__sub {
-  margin-left: 10px;
-  font-size: 12.5px;
+  font-size: 14px;
+  line-height: 19px;
   font-weight: 400;
   letter-spacing: 0;
-  text-transform: none;
+  color: var(--nv-ink-faint);
+}
+.db-sect__sub::first-letter {
+  text-transform: uppercase;
 }
 
 /* ── Level 2: sales ── */
@@ -233,9 +239,7 @@
   border-radius: 18px;
   background: none;
 }
-.db-fan:hover {
-  transform: translateX(3px);
-}
+
 .db-fan__who {
   min-width: 0;
   display: flex;
@@ -259,7 +263,7 @@
 }
 .db-fan__spent {
   min-width: 8.5ch;
-  font: 600 14px/18px var(--nv-font-mono);
+  font: 600 15px/18px var(--nv-font-sans);
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
@@ -270,7 +274,7 @@
 .db-fan:hover .nv-avatar {
   box-shadow:
     0 0 0 2px var(--nv-void),
-    0 0 0 3px var(--nv-neon);
+    0 0 0 3px var(--nv-ink-faint);
 }
 .db-chev {
   width: 16px;
@@ -404,9 +408,7 @@
     gap: 24px;
     padding: 0;
   }
-  .db-hero {
-    padding: 20px;
-  }
+
   .db-hero__top {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -414,8 +416,8 @@
     grid-column: 1 / -1;
   }
   .db-hero h1 {
-    font-size: 24px;
-    line-height: 29px;
+    font-size: 28px;
+    line-height: 33px;
   }
   .db-fold .nv-disclosure__sum {
     display: none;
@@ -455,6 +457,12 @@
 }
 .db-mode__dot {
   margin-right: 7px;
+}
+/* A mode not set keeps its dot, unlit: only the chosen mode shows its colour (red is for a real stop). */
+.db-mode__dot--rest {
+  --_c: var(--nv-ink-faint);
+  box-shadow: none;
+  opacity: 0.55;
 }
 .db-dialog.nv-glass {
   --_radius: 30px;

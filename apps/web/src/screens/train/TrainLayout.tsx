@@ -1,11 +1,13 @@
-import { Outlet } from '@tanstack/react-router';
+import { Outlet, useRouterState } from '@tanstack/react-router';
 import type { JSX } from 'react';
 
 import { Page, PageHeader, SubNav } from '@/shell/layout';
 
 export function TrainLayout(): JSX.Element {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // The Playground scrolls its thread inside and keeps the composer in view: its page fills the stage.
   return (
-    <Page>
+    <Page className={pathname.startsWith('/entrainer/playground') ? 'nv-page--fill' : undefined}>
       <PageHeader
         title="Entraîner"
         actions={

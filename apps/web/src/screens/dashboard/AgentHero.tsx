@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 
 import { heroState, gaugeClass, litParts } from './logic';
 import type { AgentState, Todo } from './model';
-import { CheckIcon, Chevron, lightUp, TONE_COLOR } from './parts';
+import { CheckIcon, Chevron, TONE_COLOR } from './parts';
 
 import { MODE_LABEL, type AgentMode } from '@/agent/mode';
 
@@ -35,9 +35,8 @@ export function AgentHero({
   const first = todos[0];
   return (
     <section
-      className="db-hero nv-glass nv-enter"
+      className="db-hero nv-enter"
       style={{ '--_c': TONE_COLOR[hero.tone], '--nv-i': 1 }}
-      ref={lightUp}
       aria-live="polite"
     >
       <span className="db-hero__glow" aria-hidden="true" />

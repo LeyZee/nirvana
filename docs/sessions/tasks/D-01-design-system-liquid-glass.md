@@ -39,3 +39,8 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Revue onglet par onglet et lecture d'iOS 26 et 27 : cinq causes, consignées dans `docs/design/README.md` (« Refonte du 19/10 »).
 - Fait dans le package : verre clair réservé à la couche qui flotte, plaques de contenu (`nv-plate`), une seule lumière néon et un grain, sélection neutre (`select`), focus blanc chaud, chiffres en Geist tabulaire, une famille de ressorts (`ease-spring-smooth`, `ease-spring`, `ease-spring-bouncy`), pression en gel, `nv-materialize`, liste « À traiter » en liste groupée, mouvement réduit qui gagne enfin sur les boucles (recette A-03), polices embarquées par Fontsource (recette R-G17 ; ce sont des fichiers de police, pas une dépendance d'UI).
 - Reste : la coquille et les écrans dans `apps/web` (une PR par onglet, accord du fil Extension), puis les images du guide refaites à partir du CRM.
+
+2026-10-22 (Opus 5.5, suite de la refonte) :
+- Nouvelle direction publiée dans l'artefact du design system (même lien), avec le Dashboard maquetté sur bureau et téléphone, données d'exemple.
+- Fait dans `apps/web` : coquille (barre latérale flottante en verre, icônes seules entre 821 et 1 100 px, capsule d'onglets en bas sur téléphone, la page défile sous la barre), en-têtes et panneaux en plaques, Dashboard sans cartes de verre (héros posé sur le fond, sections séparées par l'espace), point d'Arrêt rouge seulement quand l'agent est arrêté (recette R-C3).
+- Reste : Créatrices, Entraîner (dont le `main` imbriqué du playground, recette R-C5), Suivi, Réglages, connexion (erreur en néon), une PR par onglet ; images du guide.

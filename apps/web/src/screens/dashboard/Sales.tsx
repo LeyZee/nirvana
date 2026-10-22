@@ -11,7 +11,7 @@ import { useLayoutEffect, useRef, useState, type JSX } from 'react';
 
 import { changePercent, chartTip, eur, leverView, sharePercent, signed, trendSeries } from './logic';
 import { PERIODS, type Lever, type Period, type Sales, type SalesSeries } from './model';
-import { CountUp, lightUp, type FloatingTip } from './parts';
+import { CountUp, type FloatingTip } from './parts';
 
 const SUB: Record<Period, string> = {
   day: 'cumulé depuis minuit, l’agent hier en pointillés',
@@ -89,7 +89,7 @@ export function SalesPanel({
   const share = sharePercent(sales.agent, sales.chatters);
   return (
     <div className="db-sales">
-      <div className="db-big nv-glass" ref={lightUp}>
+      <div className="db-big nv-plate">
         <div className="db-big__row">
           <div className="nv-figure">
             <span className="nv-figure__label">Vendu par l’agent</span>
@@ -317,12 +317,7 @@ function LeverCard({ lever, seed, tip }: { lever: Lever; seed: number; tip: Floa
   );
   const [title, text] = lever.tip;
   return (
-    <div
-      className="nv-stat nv-glass nv-lift db-lever"
-      ref={lightUp}
-      tabIndex={0}
-      {...tip.bind({ title, text })}
-    >
+    <div className="nv-stat nv-plate db-lever" tabIndex={0} {...tip.bind({ title, text })}>
       <span className="nv-stat__label">{lever.label}</span>
       <span className="db-lever__v">
         <span className="nv-stat__value">{view.value}</span>

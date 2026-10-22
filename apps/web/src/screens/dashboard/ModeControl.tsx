@@ -146,7 +146,7 @@ export function ModeControl({
           }}
         >
           <span
-            className={`nv-dot nv-tone--ok${mode === 'copilot' ? ' nv-dot--live' : ''} db-mode__dot`}
+            className={`nv-dot db-mode__dot${mode === 'copilot' ? ' nv-tone--ok nv-dot--live' : ' db-mode__dot--rest'}`}
             aria-hidden="true"
           />
           Copilote
@@ -168,7 +168,10 @@ export function ModeControl({
             pick('stop');
           }}
         >
-          <span className="nv-dot nv-tone--bad db-mode__dot" aria-hidden="true" />
+          <span
+            className={`nv-dot db-mode__dot${mode === 'stop' ? ' nv-tone--bad' : ' db-mode__dot--rest'}`}
+            aria-hidden="true"
+          />
           Arrêt
         </button>
       </div>

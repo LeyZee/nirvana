@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { eur } from './logic';
 import type { Fan } from './model';
-import { Chevron, lightUp, type FloatingTip } from './parts';
+import { Chevron, type FloatingTip } from './parts';
 
 /** Level 3: the best fans by what they spent, split agent / chatters. Each one opens the reader. */
 export function TopFans({
@@ -17,10 +17,10 @@ export function TopFans({
   const top = fans.filter((fan) => fan.spent > 0).slice(0, 4);
   const max = Math.max(1, ...top.map((fan) => fan.spent));
   if (top.length === 0) {
-    return <p className="db-pending nv-glass">Aucun achat observé sur la période.</p>;
+    return <p className="db-pending nv-plate">Aucun achat observé sur la période.</p>;
   }
   return (
-    <div className="nv-glass db-fans" ref={lightUp}>
+    <div className="nv-plate db-fans">
       {top.map((fan) => (
         <button
           key={fan.id}
