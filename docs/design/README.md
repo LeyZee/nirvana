@@ -1,10 +1,10 @@
 # Guide design : Nirvana « Liquid Glass »
 
-Dernière revue : 2026-10-17. Fiche : D-01. Code : `packages/design-system` (ADR 0015).
+Dernière revue : 2026-10-19 (refonte). Fiche : D-01. Code : `packages/design-system` (ADR 0015).
 
 ## En images
 
-Rendus du package lui-même (`tokens.css`, `components.css`, polices du design system) dans Chromium, à 2×, mouvement réduit ; textes fictifs. Ce ne sont pas des captures de l'application, qui n'existe pas encore. Si une image et le CSS divergent, le CSS a raison et l'image est à refaire.
+Rendus du package lui-même (`tokens.css`, `components.css`, polices du design system) dans Chromium, à 2×, mouvement réduit ; textes fictifs. Ils datent d'avant la refonte du 19/10 et seront remplacés par des captures du CRM refait. Si une image et le CSS divergent, le CSS a raison et l'image est à refaire.
 
 ![Composants, thème Nuit](images/composants-nuit.jpg)
 
@@ -15,6 +15,19 @@ Rendus du package lui-même (`tokens.css`, `components.css`, polices du design s
 ![Typographie](images/typographie.jpg)
 
 ![Logo et déclinaisons](images/marque.png)
+
+## Refonte du 19/10 : le Liquid Glass d'Apple
+
+Demandée par Charles le 19/10 : le CRM faisait « cheap » et « daté ». La revue a trouvé cinq causes : tout était en verre, ce verre était laiteux et plat, le rouge servait à tout, aucun bloc ne dominait, et la barre latérale avait l'allure d'un tube à libellés. La refonte suit ce qu'Apple fait dans iOS 26 et 27 (HIG Materials, WWDC25 « Meet Liquid Glass » et « Get to know the new design system », changements d'iOS 27) et garde l'identité : nuit chaude, néon rouge, Geist, flamme.
+
+- **Deux couches.** Le verre (`nv-glass`) est réservé à la couche qui flotte : navigation, barres d'outils, contrôles (segments, sous-onglets), menus, info-bulles, feuilles, dialogues. Le contenu (listes, chiffres, formulaires, graphiques) n'est pas en verre : il se pose sur le fond, groupé par l'espace, ou sur une plaque (`nv-plate`), un souffle de lumière et un filet, sans flou ni ombre.
+- **Un verre clair, pas laiteux.** Voile léger, saturation forte (les couleurs derrière restent vivantes), reflet spéculaire sur le bord haut et, plus doux, sur le bord bas, et un fin anneau sombre qui le détache du fond (iOS 27). Plus il est grand, plus il est profond (`nv-glass--thick`, `nv-glass--float`).
+- **Une seule lumière.** Le fond est une nuit presque noire avec une seule source néon au-dessus de la page et son ombre lie-de-vin très loin dessous, plus un grain fin qui empêche les dégradés de faire des bandes.
+- **Le néon est une lumière, pas une couleur d'interface.** Il sert à l'action principale de l'écran (une seule), à l'état « allumé » (interrupteur), au chiffre dont parle l'écran, à l'icône de l'onglet actif et aux urgences. Il ne sert plus à sélectionner : une sélection est une lumière neutre (`select`, `select-strong`), une puce cochée est remplie d'encre. L'anneau de focus est blanc chaud : un anneau rouge sur chaque champ actif se lisait comme une erreur.
+- **De grands titres.** Titre de page en `large-title` gras, aligné à gauche ; titres de section en `title-2`, phrase en minuscules avec sa ligne de lecture dessous. Plus de sourcils en capitales espacées. Les chiffres et les heures sont en Geist à chiffres tabulaires, plus en police de code.
+- **Un seul ressort.** Trois courbes d'une même famille (`ease-spring-smooth`, `ease-spring`, `ease-spring-bouncy`, comme les ressorts de SwiftUI) ; ce qui se déplace ou change de taille prend l'une d'elles. Un bouton pressé cède comme un gel (plus large que haut) et revient. Le verre se matérialise (`nv-materialize` : flou qui se lève et petite échelle) au lieu d'apparaître en fondu ; un menu naît du bouton qui l'ouvre.
+- **La coquille.** Barre latérale flottante en verre (icône et libellé côte à côte, comme macOS 26), réduite aux icônes sous 1 100 px, capsule d'onglets flottante en bas sur téléphone. La page défile sous elle, contenu limité à 1 240 px.
+- **Polices embarquées.** Geist, Geist Mono, Instrument Serif et Playfair Display viennent avec l'application (paquets Fontsource), plus de Google Fonts : aucun appel tiers, l'extension marche hors ligne.
 
 ## Décisions de Charles (2026-10-16)
 
@@ -66,8 +79,8 @@ Les consommateurs et l'ordre d'import sont dans `packages/design-system/README.m
 ## Principes
 
 1. **La nuit d'abord.** Nuit est le thème par défaut (usage le soir) ; Jour existe pour le bureau en plein jour.
-2. **Un seul néon.** `neon` est une lumière, pas un remplissage. Une action néon par écran (`nv-btn--neon`), une surface teintée par écran (`nv-glass--neon`).
-3. **Le verre a besoin de lumière.** Une surface de verre est posée sur `nv-aura` ou sur du contenu, jamais sur un aplat.
+2. **Un seul néon.** `neon` est une lumière, pas un remplissage ni une couleur de sélection. Une action néon par écran (`nv-btn--neon`), une surface teintée par écran (`nv-glass--neon`).
+3. **Le verre flotte, le contenu se pose.** Le verre est pour les contrôles et la navigation, posé sur `nv-aura` ou sur du contenu, jamais sur un aplat ; le contenu va sur le fond ou sur une plaque (`nv-plate`).
 4. **La matière bouge, l'interface reste calme.** Ce qui se déplace (pouce, lentille, Island) se déforme sur un ressort ; le reste ne fait que des fondus.
 5. **Le travail de l'IA se voit dans le dashboard.** Un brouillon garde son pointillé et son étiquette jusqu'à l'envoi vérifié (`send_verified`). C'est une information pour l'opérateur, pas un texte montré au fan (la politique d'identité, ADR 0012, ne change pas).
 
@@ -84,7 +97,7 @@ Règles pratiques :
 - Une information secondaire se montre au survol ou en dépliant, pas en permanence (version, coût, latence, modèle).
 - Une liste de choix longue se replie sur le choix fait ; on la déplie pour changer.
 - Pas plus de trois chiffres secondaires côte à côte ; au-delà, une bande `nv-meta` ou un pli.
-- Les titres de section sont des sourcils (`nv-eyebrow`, capitales espacées, `ink-faint`) : ils guident l'œil, ils ne l'attirent pas.
+- Les titres de section sont en `title-2`, avec une ligne de lecture en `ink-faint` dessous. `nv-eyebrow` (petit, en minuscules, `ink-faint`) ne sert qu'au-dessus d'un titre, pour dire où l'on est : jamais de capitales espacées.
 - Un état vide dit quoi faire et propose l'action (un bouton ou une suggestion cliquable), pas seulement « rien ici ».
 
 ## Clarté
@@ -106,11 +119,14 @@ Chaque écran se relit à la place d'un nouvel utilisateur, qui connaît le chat
 | `ink`, `ink-muted`, `ink-faint`                                                                               | Texte principal ; secondaire ; métadonnées (heures, sources de faits, placeholders), jamais sous 11px.       |
 | `neon`                                                                                                        | Halos, icônes actives, curseur, point « Rédaction ». Texte seulement à partir de 15px.                       |
 | `neon-solid` + `on-neon`                                                                                      | Bouton principal, interrupteur activé, bulle de la créatrice.                                                |
-| `neon-ink` sur `neon-soft`                                                                                    | Petites étiquettes néon : « Brouillon », onglet actif, fait déclaré.                                         |
+| `neon-ink` sur `neon-soft`                                                                                    | Petites étiquettes néon : « Brouillon », fait déclaré.                                                       |
+| `select`, `select-strong`                                                                                     | Sélection : ligne ouverte, onglet actif, pouce d'un segment. Une lumière neutre, jamais du néon.            |
+| `plate`, `plate-hover`, `plate-edge`                                                                          | Plaques de contenu (`nv-plate`), champs de saisie, puces au repos.                                          |
+| `data-1`, `data-2`                                                                                            | Séries de données : blanc chaud, puis doré. Le néon ne dessine que le chiffre dont parle l'écran.            |
 | `glass-veil`, `glass-fill`, `glass-fill-strong`, `glass-thick`, `glass-edge`, `glass-specular`, `glass-sheen` | Matière du verre (voir plus bas).                                                                            |
 | `aura-neon`, `aura-wine`, `aura-rose`                                                                         | Lueurs floues derrière le verre.                                                                             |
 | `success` (cyan), `warning`, `danger`, `sale`                                                                 | Envoi vérifié ; à valider ; erreur ; vente. Toujours avec un mot ou une icône : `danger` est proche du néon. |
-| `focus`                                                                                                       | Anneau de focus, 2px plein, décalé de 3px.                                                                   |
+| `focus`                                                                                                       | Anneau de focus blanc chaud, 2px plein, décalé de 3px.                                                       |
 
 Contraste garanti par le test : `ink`, `ink-muted`, `ink-faint` ≥ 4,5:1 sur `void`, `abyss`, `surface-raised` et sur le verre au pire cas (au-dessus du point le plus lumineux de l'aura) ; `neon`, `neon-ink`, `danger`, `success`, `warning`, `sale` ≥ 4,5:1 sur `void` ; `on-neon` ≥ 4,5:1 sur `neon-solid` ; `focus` ≥ 3:1 sur `void` et `surface-raised`. Modifier un token qui casse une paire fait échouer `pnpm test`.
 
@@ -122,7 +138,8 @@ Contraste garanti par le test : `ink`, `ink-muted`, `ink-faint` ≥ 4,5:1 sur `v
 | Régulier  | `nv-glass`                 | Barre latérale, en-têtes, cartes flottantes, conteneur de liste, panneau de brouillon, champ de saisie. |
 | Épais     | `nv-glass nv-glass--thick` | Island (notification), menus, dialogues.                                                                |
 
-- **Oui** : les surfaces de chrome (barres, panneaux, cartes flottantes, conteneurs).
+- **Oui** : la couche qui flotte (barre latérale, barres d'outils, segments et sous-onglets, menus, info-bulles, feuilles, dialogues, Island).
+- **Non** : le contenu. Un panneau, une liste, une carte de chiffres, un champ de saisie sont des plaques (`nv-plate`, `nv-field__control`) ou rien du tout. `Panel` (apps/web) pose une plaque.
 - **Non** : chaque ligne d'une liste (`nv-convo` n'a pas de `backdrop-filter`, c'est le conteneur qui est vitré) ; chaque bulle d'un fil (`nv-bubble--fan` imite le verre sans flou : un fil peut compter des centaines de bulles).
 - Deux couches de verre empilées au plus. Pas de bordure ajoutée : le liseré spéculaire fait le contour.
 - **Un contrôle posé sur du verre n'est pas du verre** : boutons secondaires `nv-btn--soft`, onglets et segments en `glass-fill`. Deux liserés spéculaires l'un dans l'autre se lisent comme un double bouton (relevé par Charles le 17/10).
@@ -132,7 +149,7 @@ Contraste garanti par le test : `ink`, `ink-muted`, `ink-faint` ≥ 4,5:1 sur `v
 
 ## Typographie, espacement, rayons
 
-- **Geist** pour l'interface (`text-body` 15/21 par défaut), titres serrés (`large-title`, `title-1`, `title-2`). **Playfair Display italique 600** pour le nom seul (`nv-wordmark`, `font-wordmark`). **Instrument Serif italique** pour les états vides (`whisper`). Ni l'une ni l'autre pour un bouton ou un message. **Geist Mono** pour les chiffres et métadonnées, chiffres tabulaires. Plancher : `caption` 11px.
+- **Geist** pour l'interface (`text-body` 15/21 par défaut), titres serrés et gras (`large-title` en 700 pour le titre de page, `title-1`, `title-2` pour les sections). **Playfair Display italique 600** pour le nom seul (`nv-wordmark`, `font-wordmark`). **Instrument Serif italique** pour les états vides (`whisper`). Ni l'une ni l'autre pour un bouton ou un message. **Geist** à chiffres tabulaires (`nv-num`) pour les chiffres, heures et métadonnées ; **Geist Mono** seulement pour une touche de clavier (`nv-kbd`) ou un identifiant technique replié. Plancher : `caption` 11px.
 - Grille de 4px (`space-1` à `space-12`).
 - Tout ce qui se touche est une capsule (`radius-full`) ; bulles `radius-md`, cartes `radius-lg`, Island et dialogues `radius-xl`. Rayons concentriques : rayon intérieur = rayon extérieur − padding.
 
@@ -142,8 +159,8 @@ Tout élément cliquable a les quatre états ; un écran prend la classe qui con
 
 - **Survol** : bouton néon, halo `shadow-neon` → `shadow-neon-strong` et +8 % de lumière ; autres boutons, teinte `glass-fill` ; bouton rond `nv-iconbtn`, grossit de 6 % ; ligne ou carte cliquable (`nv-tap`), `glass-fill` ; carte flottante (`nv-lift`), monte de 2px avec `shadow-lift`.
 - **Focus clavier** : anneau `focus` sur tout élément interactif, champs compris (`shadow-focus`). Visible sur verre dans les deux thèmes.
-- **Actif** : `scale(0.96)` (boutons), `0.95` (puces), `0.985` (lignes) en `dur-instant`, retour sur `ease-spring`.
-- **Sélection** : `neon-soft` (conversation ouverte, onglet actif, puce cochée `aria-checked`).
+- **Actif** : pression en gel `scale(1.03, 0.95)` (boutons), `0.95` (puces), `0.985` (lignes) en `dur-instant`, retour sur `ease-spring`.
+- **Sélection** : `select` (conversation ouverte, ligne active), `select-strong` (pouce d'un segment, onglet actif) ; une puce cochée (`aria-checked`) est remplie d'`ink`.
 - **Désactivé** : opacité 0,4, sans ombre ni survol. Pendant un envoi, le bouton reste visible avec un libellé d'état.
 
 Classes communes : `nv-btn` (actions), `nv-chip` (un choix parmi quelques-uns), `nv-tap` (ligne, carte, élément de liste), `nv-lift` (carte flottante, pas un grand panneau), `nv-disclosure` (pli `<details>` avec titre `__title`, résumé `__sum` et contenu `__body`), `nv-enter` (entrée en fondu montant, décalée par `--nv-i`).
@@ -153,7 +170,7 @@ Pastilles d'état (`nv-status--<état>`) : une par valeur de `conversations.stat
 ## Mouvement
 
 - Durées : `dur-instant` (pression), `dur-fast` (couleurs), `dur-base` (états), `dur-slow` (déplacement de matière), `dur-ambient` (aura).
-- Courbes : `ease-spring` pour ce qui se déplace ou change de taille, `ease-spring-bouncy` pour les pouces d'interrupteur et l'Island, `ease-out` pour les apparitions.
+- Courbes : une famille de ressorts. `ease-spring-smooth` (sans rebond) pour ce qui grandit ou se replie, `ease-spring` (léger dépassement) pour ce qui se déplace, `ease-spring-bouncy` pour les pouces d'interrupteur et l'Island, `ease-out` pour les fondus de couleur. `dur-morph` pour une forme qui en devient une autre (la lentille entre deux onglets).
 - Signature : pression à ressort ; pouces et lentilles qui s'écrasent pendant leur trajet (`playLiquid`) ; bulles qui montent de 8px en entrant ; Island qui naît d'une capsule ; aura qui dérive.
 - **Le verre ne ralentit jamais le clavier** : approuver, éditer, rejeter, suivant, précédent ne déclenchent aucune animation bloquante ; le focus passe au brouillon suivant immédiatement.
 - **Changement de page** : la lentille de la barre de navigation glisse et s'étire sur son trajet (`playLiquid`), la page entre en fondu en montant de 10px, ses blocs décalés de 40ms.
@@ -200,7 +217,7 @@ Un seul composant, `nv-chart` : un SVG dessiné avec les aides de `@nirvana/desi
 - **Survol** : `is-hovering` sur le conteneur montre un curseur vertical (`__cursor`), un point sur la courbe (`__dot`) et une bulle de verre avec la valeur et sa date (`__tip`, placée par `--nv-tip-x` / `--nv-tip-y` d'après `nearestIndex`). Survoler une barre l'éclaire et met les autres en retrait. Au doigt, toucher et glisser fait de même.
 - **Comparer des séries** : `__tip--table`, la période (`__tip-l`) puis une ligne par série (`__tip-k` avec sa couleur `--_c`, `__tip-n` aligné à droite) et une ligne de pied (`__tip-ft`).
 - **Série en cours** : le dernier point de la journée envoie une pulsation lente (`__end`) : la journée n'est pas finie.
-- **Couleur** : `--_c`, le néon par défaut ; une seconde série en `sale`, puis `ink` à 60 % et 25 %. Jamais deux rouges. Grille en `hairline`, axes en `caption` mono `ink-faint`.
+- **Couleur** : `--_c`, le néon par défaut pour la série dont parle l'écran ; une seconde série en `sale`, puis `ink` à 60 % et 25 %. Une barre de parts (`nv-split`) part de `data-1`. Jamais deux rouges. Grille en `hairline`, axes en `caption` `ink-faint` à chiffres tabulaires.
 - **Mouvement réduit** : tout est dessiné d'emblée ; le survol reste.
 
 ## Copilote et raccourcis
@@ -233,4 +250,4 @@ Le popup (capture de session, enregistreur) importe `@nirvana/design-system/styl
 
 ## Ce qui reste (fiche D-01)
 
-Débloqué depuis P0-01 (#14, `apps/web` et `apps/extension` initialisées), pas encore fait : restylage des composants shadcn/ui, page `_playground.tsx`, test axe-core en CI, `brand/favicon.svg` dans `public/` des apps, auto-hébergement des polices si la politique réseau du dashboard l'exige.
+Débloqué depuis P0-01 (#14, `apps/web` et `apps/extension` initialisées), pas encore fait : restylage des composants shadcn/ui, page `_playground.tsx`, test axe-core en CI, `brand/favicon.svg` dans `public/` des apps. Les polices sont embarquées depuis le 19/10.

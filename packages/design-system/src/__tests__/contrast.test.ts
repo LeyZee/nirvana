@@ -113,6 +113,19 @@ describe.each<Theme>(['dark', 'light'])('%s theme', (theme) => {
     expect(contrast(token(theme, 'on-neon'), token(theme, 'neon-solid'))).toBeGreaterThanOrEqual(AA_TEXT);
   });
 
+  it('ink reads at AA on a selected fill and on a plate over glass', () => {
+    for (const fill of ['select-strong', 'plate-hover']) {
+      expect(
+        contrast(token(theme, 'ink'), over(ground.glassOverAura, token(theme, fill))),
+        fill,
+      ).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it.each(['data-1', 'data-2'])('%s, a data series, stands out from void', (series) => {
+    expect(contrast(token(theme, series), ground.void)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+  });
+
   it('the focus ring stands out from void and from neon-solid', () => {
     expect(contrast(token(theme, 'focus'), token(theme, 'void'))).toBeGreaterThanOrEqual(AA_NON_TEXT);
     expect(contrast(token(theme, 'focus'), token(theme, 'surface-raised'))).toBeGreaterThanOrEqual(
