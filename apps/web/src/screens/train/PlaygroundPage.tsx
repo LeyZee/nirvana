@@ -10,6 +10,9 @@ import { fanMessageCount, needsAttention, stepOf } from './playground/logic';
 import { isHandoff, suggestedDestination } from './playground/model';
 import { usePlayground } from './playground/usePlayground';
 
+/** The fan's name while the scenario gives none. */
+const FALLBACK_NAME = 'Le fan';
+
 const ERRORS: Readonly<Record<PlaygroundErrorCode, string>> = {
   llm_unavailable: 'Grok ne répond pas : ajoute ou vérifie sa clé dans Réglages, Modèles IA.',
   not_deployed: 'Le playground n’est pas encore en ligne sur ce serveur.',
@@ -127,7 +130,7 @@ export function PlaygroundPage(): JSX.Element {
       ?.split(':')[1]
       ?.trim() ??
     preset?.label ??
-    'Le fan';
+    FALLBACK_NAME;
   const fans = fanMessageCount(state);
 
   return (
@@ -213,7 +216,9 @@ export function PlaygroundPage(): JSX.Element {
           <Composer
             disabled={pg.busy || pending !== null}
             placeholder={
-              pending === null ? `Écris comme ${name} le ferait…` : 'Note d’abord la réponse de l’agent'
+              pending === null
+                ? `Écris comme ${name === FALLBACK_NAME ? 'le fan' : name} le ferait…`
+                : 'Note d’abord la réponse de l’agent'
             }
             onSend={send}
           />

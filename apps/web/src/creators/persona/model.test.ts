@@ -1,10 +1,11 @@
-import { PERSONA_OPTIONS, type Persona } from '@nirvana/contracts';
+import { PERSONA_OPTIONS, PersonaSchema, type Persona } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import demoYaml from '../../../../../personas/demo/v0.1.0.yaml?raw';
 import exampleYaml from '../../../../../personas/messalina/v0.0.0.yaml?raw';
 
 import {
+  withoutPlaceholders,
   followUpsSummary,
   issueCountByTab,
   issuesOf,
@@ -41,10 +42,10 @@ describe('Persona screen rules', () => {
     expect(JSON.stringify(TABS).toLowerCase()).not.toContain('négociation');
   });
 
-  it('loads the example of the repository, which passes the schema', async () => {
+  it('loads the example of the repository, which passes the schema once she has a first name', async () => {
     const persona = await example();
     expect(persona.meta.version).toBe('0.0.0');
-    expect(validate(persona)).toEqual([]);
+    expect(validate(persona).map((issue) => issue.field)).toEqual(['details.first_name']);
   });
 
   it('refuses a file that does not pass the schema', async () => {
@@ -78,7 +79,7 @@ describe('Persona screen rules', () => {
   });
 
   it('asks for the instructions of a custom strategy, and only then', async () => {
-    const persona = await example();
+    const persona = await demo();
     const custom = (instructions: string | null): Persona => ({
       ...persona,
       strategies: {
@@ -128,6 +129,14 @@ describe('Persona screen rules', () => {
     expect(isPlaceholder(" <à remplir : ce qu'elle refuse de faire> ")).toBe(true);
     expect(isPlaceholder('Chaton')).toBe(false);
     expect(isPlaceholder('<3 toi')).toBe(false);
+  });
+
+  it('never stores a placeholder: dropped from the lists, and a first name left as such is refused', async () => {
+    const persona = await example();
+    const stored = withoutPlaceholders({ ...persona, details: { ...persona.details, first_name: 'Léa' } });
+    expect(JSON.stringify({ ...PersonaSchema.parse(stored), meta: null })).not.toContain('<à remplir');
+    expect(validate({ ...persona, details: { ...persona.details, first_name: 'Léa' } })).toEqual([]);
+    expect(validate(persona).map((issue) => issue.field)).toEqual(['details.first_name']);
   });
 
   it('lists the fields a draft changed, a list counting as one field', async () => {

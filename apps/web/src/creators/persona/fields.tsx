@@ -13,6 +13,9 @@ import {
 
 import { hasChange, isPlaceholder, issuesOf, matchOptions, togglePick, type FieldIssue } from './model';
 
+/** What an empty text field says, and what a placeholder of the example (`<à remplir>`) shows as. */
+const TO_FILL = 'À remplir';
+
 /**
  * The controls of the persona form, all on the design-system classes: a field with its label and its errors,
  * text, numbers with their unit, chips, a segment, a switch row and a list of entries.
@@ -114,14 +117,10 @@ export function TextInput({
       id={id}
       type={type}
       className="nv-glass nv-field__control ps-input"
-      data-placeholder={isPlaceholder(value) ? 'true' : undefined}
-      value={value}
+      value={isPlaceholder(value) ? '' : value}
       maxLength={maxLength}
-      placeholder={placeholder}
+      placeholder={placeholder ?? TO_FILL}
       list={list}
-      onFocus={(event) => {
-        if (isPlaceholder(event.target.value)) event.target.select();
-      }}
       onChange={(event) => {
         onChange(event.target.value);
       }}
@@ -144,21 +143,22 @@ export function TextArea({
   rows?: number;
   placeholder?: string;
 }): JSX.Element {
+  const shown = isPlaceholder(value) ? '' : value;
   return (
     <div className="ps-area">
       <textarea
         id={id}
         className="nv-glass nv-field__control ps-input ps-area__input"
-        value={value}
+        value={shown}
         rows={rows}
         maxLength={maxLength}
-        placeholder={placeholder}
+        placeholder={placeholder ?? TO_FILL}
         onChange={(event) => {
           onChange(event.target.value);
         }}
       />
-      <span className="ps-area__count" data-near={value.length > maxLength * 0.9 ? 'true' : undefined}>
-        {value.length.toLocaleString('fr-FR')} / {maxLength.toLocaleString('fr-FR')}
+      <span className="ps-area__count" data-near={shown.length > maxLength * 0.9 ? 'true' : undefined}>
+        {shown.length.toLocaleString('fr-FR')} / {maxLength.toLocaleString('fr-FR')}
       </span>
     </div>
   );
@@ -380,7 +380,7 @@ export function SwitchRow({
 
 /**
  * A list of short entries (hobbies, pet names, keywords): Entrée or a comma adds, × removes, a double is refused
- * here already (the schema refuses it too). Placeholders of the example show dashed; the first real entry replaces them.
+ * here already (the schema refuses it too). Placeholders of the example are not shown; the first real entry replaces them.
  */
 export function Entries({
   id,
@@ -398,6 +398,8 @@ export function Entries({
   const [text, setText] = useState('');
   const [refused, setRefused] = useState(false);
 
+  const shown = values.filter((v) => !isPlaceholder(v));
+
   const add = (): void => {
     const entry = text.trim();
     if (entry === '') return;
@@ -405,7 +407,7 @@ export function Entries({
       setRefused(true);
       return;
     }
-    onChange([...values.filter((v) => !isPlaceholder(v)), entry]);
+    onChange([...shown, entry]);
     setText('');
   };
 
@@ -413,26 +415,22 @@ export function Entries({
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
       add();
-    } else if (event.key === 'Backspace' && text === '' && values.length > 0) {
-      onChange(values.slice(0, -1));
+    } else if (event.key === 'Backspace' && text === '' && shown.length > 0) {
+      onChange(shown.slice(0, -1));
     }
   };
 
   return (
     <div className="nv-glass nv-field__control ps-entries" data-refused={refused ? 'true' : undefined}>
-      {values.map((value, index) => (
-        <span
-          key={`${value}-${String(index)}`}
-          className="ps-entry"
-          data-placeholder={isPlaceholder(value) ? 'true' : undefined}
-        >
+      {shown.map((value, index) => (
+        <span key={`${value}-${String(index)}`} className="ps-entry">
           <span className="ps-entry__text">{value}</span>
           <button
             type="button"
             className="ps-entry__remove"
             aria-label={`Retirer ${value}`}
             onClick={() => {
-              onChange(values.filter((_, i) => i !== index));
+              onChange(shown.filter((_, i) => i !== index));
             }}
           >
             ×
