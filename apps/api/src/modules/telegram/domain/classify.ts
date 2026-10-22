@@ -8,8 +8,9 @@ import type { Outcome, Signal } from './signals';
  */
 
 /**
- * The event types the module reads. Mirrored by the trigger of migration 0006 (a test compares them); types that
- * do not exist yet in the contract are listed so that their producers light their tab up without a new migration.
+ * The event types the module reads. Mirrored by the trigger `domain_events_telegram_scan`, recreated by each
+ * migration that changes the list (a test compares them); types that do not exist yet in the contract are listed so
+ * that their producers light their tab up without a new migration.
  */
 export const SCANNED_EVENT_TYPES = [
   'handoff_requested',
@@ -17,6 +18,7 @@ export const SCANNED_EVENT_TYPES = [
   'session_state_changed',
   'kill_switch_toggled',
   'takeover_started',
+  'takeover_ended',
   'sale_detected',
   'keyword_matched',
   'validation_requested',
@@ -106,6 +108,17 @@ export function classify(signal: Signal): Outcome | null {
             threadKey: `conversation:${signal.conversationId}`,
             mode: 'edit',
             text: 'Pris en main',
+            userId: signal.userId,
+          };
+    // After a handoff the conversation is already the humans': giving it back is how the alert gets closed.
+    case 'release':
+      return signal.conversationId === null
+        ? null
+        : {
+            kind: 'closure',
+            threadKey: `conversation:${signal.conversationId}`,
+            mode: 'edit',
+            text: 'Rendu à l’agent',
             userId: signal.userId,
           };
     case 'budget':

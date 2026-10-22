@@ -418,6 +418,7 @@ export function createPostgresTelegramStore(deps: TelegramStoreDeps): {
           creatorId: row.creatorId,
           topic: row.topic,
           text: row.text,
+          closedBy: row.closedBy,
         });
       }
       return [...byChat.values()];

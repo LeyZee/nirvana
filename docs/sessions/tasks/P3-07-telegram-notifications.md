@@ -49,6 +49,7 @@ Voir ADR 0020 §3 pour les producteurs. Textes d'exemple, fictifs :
 | `kill_switch_toggled` | `active = true` / `false` | important / info en réponse | « Agent arrêté (global) : <raison>. » / « Résolu : agent relancé. » |
 | `automatic_closed` | l'Automatique s'est refermé seul (ADR 0019) | important | « Automatique refermé : l'agent est repassé en copilote sur 3 conversations. Raison : le taux en réel est à 74,5 % (objectif : 80 %). » |
 | `takeover_started` | un message existe pour la conversation | modification | « ✓ Pris en main par <prénom> » |
+| `takeover_ended` | un message existe pour la conversation et n'est pas encore fermé | modification | « ✓ Rendu à l'agent par <prénom> » |
 | `sale_detected` | paiement confirmé, au-dessus du minimum | sale | « Vente · Messa · 45,00 € · pack « Soirée », vendu par l'agent » |
 | `keyword_matched` | mot surveillé | keyword | « « police » dans un message de fan. L'agent s'est arrêté pour ce fan. » |
 | `validation_requested` | vocal ou brouillon en attente | validation | « Vocal de 14 s à valider » + bouton-lien « Écouter et valider » |

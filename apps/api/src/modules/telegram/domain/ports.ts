@@ -73,6 +73,8 @@ export interface ThreadRoot {
   readonly creatorId: CreatorId | null;
   readonly topic: TelegramTopic;
   readonly text: string;
+  /** Who closed it already; an edit never closes a message twice. */
+  readonly closedBy: string | null;
 }
 
 export interface CreatorRecord {

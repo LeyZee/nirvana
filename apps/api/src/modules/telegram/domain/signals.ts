@@ -25,6 +25,12 @@ export type Signal =
       readonly userId: string | null;
     }
   | {
+      /** A person gave the conversation back to the agent: whatever needed a human was dealt with. */
+      readonly kind: 'release';
+      readonly conversationId: ConversationId | null;
+      readonly userId: string | null;
+    }
+  | {
       readonly kind: 'budget';
       readonly threshold: 'alert' | 'reached';
       readonly spentMinor: number;

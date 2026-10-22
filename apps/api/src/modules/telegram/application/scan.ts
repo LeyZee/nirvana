@@ -3,7 +3,7 @@ import type { CreatorId, TelegramChatId } from '@nirvana/contracts';
 import { classify } from '../domain/classify';
 import { chatsFor } from '../domain/coverage';
 import type { Clock, CreatorRecord, DeliveriesStore, NewDelivery, BotsStore } from '../domain/ports';
-import { isSilentTopic, renderNotice, renderPlain, renderTakenOver } from '../domain/render';
+import { isSilentTopic, renderNotice, renderClosedBy, renderPlain } from '../domain/render';
 import { SCAN_OVERLAP_MS } from '../domain/schedule';
 import type { Closure, Notice, ScannedEvent } from '../domain/signals';
 
@@ -87,7 +87,10 @@ async function closureDeliveries(
   event: ScannedEvent,
   closure: Closure,
 ): Promise<readonly NewDelivery[]> {
-  const roots = await deps.deliveries.threadRoots(closure.threadKey);
+  // A takeover then a release close the same alert: only the first one rewrites it.
+  const roots = (await deps.deliveries.threadRoots(closure.threadKey)).filter(
+    (root) => closure.mode !== 'edit' || root.closedBy === null,
+  );
   if (roots.length === 0) return [];
   const name = closure.userId === null ? null : await deps.bots.userName(closure.userId);
   const firstName = name?.trim().split(/\s+/)[0] ?? null;
@@ -104,8 +107,8 @@ async function closureDeliveries(
           action: 'edit',
           parentId: root.id,
           threadKey: closure.threadKey,
-          text: renderTakenOver(root.text, firstName),
-          summary: `Pris en main par ${closedBy}`,
+          text: renderClosedBy(root.text, closure.text, firstName),
+          summary: `${closure.text} par ${closedBy}`,
           isSilent: true,
           closedBy,
         } satisfies NewDelivery;
