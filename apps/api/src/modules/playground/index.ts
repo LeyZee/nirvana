@@ -61,6 +61,7 @@ export function createPlaygroundModule(deps: PlaygroundDeps): PlaygroundModule {
       records: deps.records,
       version,
       sessionId: `api-${randomUUID()}`,
+      usdPerEur: DEFAULT_LLM_CONFIG.dailyBudget.usdPerEur,
       ...(deps.creatorId !== undefined && { creatorId: deps.creatorId }),
       ...(deps.timeZone !== undefined && { timeZone: deps.timeZone }),
       ...(deps.now !== undefined && { now: deps.now }),

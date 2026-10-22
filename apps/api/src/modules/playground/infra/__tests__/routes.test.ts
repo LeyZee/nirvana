@@ -4,7 +4,13 @@ import {
   PlaygroundRatingResultSchema,
   PlaygroundStateSchema,
 } from '@nirvana/contracts';
-import type { Brief, HealthReport, LlmGateway, VoiceOutput } from '@nirvana/llm';
+import {
+  DEFAULT_LLM_CONFIG,
+  type Brief,
+  type HealthReport,
+  type LlmGateway,
+  type VoiceOutput,
+} from '@nirvana/llm';
 import type { LightMyRequestResponse, preHandlerAsyncHookHandler } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
@@ -146,13 +152,19 @@ describe('/v1/playground', () => {
     expect(state.presets).toHaveLength(9);
     expect(state.rejectReasons).toContainEqual({ id: 'too_long', label: 'trop long' });
     expect(state).toMatchObject({ pending: null, rate: { rate: null, target: 0.8 }, presetId: null });
+    expect(state).toMatchObject({ sessionCostEur: 0, voice: { reachable: true } });
     expect(state.situation).toMatchObject({ timeZone: 'Europe/Paris', isNight: false });
   });
 
   it('answers, rates once, and counts the rate', async () => {
-    const { post, stored } = await server();
+    const { app, headers, post, stored } = await server();
     const answer = await post('/messages', { text: 'Salut' });
     expect(answer.json()).toMatchObject({ bubbles: ['Coucou toi ✨'], isBlocked: false, model: 'grok-4.7' });
+    // Costs are journaled in USD and shown in euros, at the daily budget's rate (ADR 0011).
+    const usdPerEur = DEFAULT_LLM_CONFIG.dailyBudget.usdPerEur;
+    expect(PlaygroundAnswerSchema.parse(answer.json()).costEur).toBeCloseTo(0.002 / usdPerEur);
+    const after = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers }));
+    expect(after.sessionCostEur).toBeCloseTo(after.sessionCostUsd / usdPerEur);
 
     const rating = await post('/rating', { verdict: { kind: 'validated' } });
     expect(rating.json()).toMatchObject({ rate: { rate: 1, rated: 1 }, destination: null });
@@ -203,7 +215,9 @@ describe('/v1/playground', () => {
   });
 
   it('asks for the Grok key when no voice model is reachable', async () => {
-    const { post } = await server({ control: { hasKey: false } });
+    const { app, headers, post } = await server({ control: { hasKey: false } });
+    const state = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers }));
+    expect(state.voice).toEqual({ reachable: false });
     const response = await post('/messages', { text: 'Salut' });
     expect(response.statusCode).toBe(503);
     expect(codeOf(response)).toBe('llm_unavailable');
