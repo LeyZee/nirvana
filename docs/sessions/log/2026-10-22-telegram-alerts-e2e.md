@@ -4,4 +4,4 @@ Pas fait : rien.
 Décisions : un seul groupe pour tout le fichier, comme en production : la relecture de fenêtre du scan redonnerait les alertes des tests précédents à un groupe neuf.
 Découvertes : aucune ; les quatre chemins marchent sur `main` après #114.
 Candidats à suppression : aucun.
-Vérifié : `pnpm check` ✓ ; toute l'intégration de l'API (23 fichiers, 118 tests) ✓ sur un Postgres 16 local (`NIRVANA_TEST_PG_URL`), la CI GitHub étant à l'arrêt (minutes épuisées).
+Vérifié : `pnpm check` ✓ ; toute l'intégration de l'API (23 fichiers, 118 tests) ✓ sur un Postgres 16 local (`NIRVANA_TEST_PG_URL`).
