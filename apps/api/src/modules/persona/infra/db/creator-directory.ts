@@ -31,14 +31,14 @@ export function createDrizzleCreatorDirectory(db: Database): CreatorDirectory {
       return rows.map(toSummary);
     },
 
-    async create(input) {
+    async create(input, userId) {
       const parsed = NewCreatorSchema.parse(input);
       const id = newId(CreatorIdSchema);
       await db.transaction(async (tx) => {
         await tx.insert(schema.creators).values({ id, ...parsed });
         await tx.insert(schema.auditLog).values({
           id: newId(AuditEntryIdSchema),
-          userId: null,
+          userId: userId ?? null,
           action: 'creator.create',
           entity: 'creator',
           entityId: id,

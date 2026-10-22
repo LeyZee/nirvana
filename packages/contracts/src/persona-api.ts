@@ -38,3 +38,14 @@ export const CreatePersonaVersionBodySchema = z.strictObject({
   basedOn: ContentHashSchema.nullable(),
 });
 export type CreatePersonaVersionBody = z.infer<typeof CreatePersonaVersionBodySchema>;
+
+/**
+ * `POST /v1/creators/:creatorId/persona/versions/:versionId/activate` → 200 `PersonaVersionSummary`: makes that
+ * version her only active one, the one the agent writes with (an audited event, ADR 0010). Activating the active
+ * version changes nothing; a version that is not hers is 404 `persona_version_not_found`.
+ */
+export const ActivatePersonaVersionParamsSchema = z.strictObject({
+  creatorId: CreatorIdSchema,
+  versionId: PersonaVersionIdSchema,
+});
+export type ActivatePersonaVersionParams = z.infer<typeof ActivatePersonaVersionParamsSchema>;

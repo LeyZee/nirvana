@@ -11,3 +11,10 @@ export class PersonaVersionConflict extends DomainError {
     );
   }
 }
+
+/** No version of hers has this id (404). */
+export class PersonaVersionNotFound extends DomainError {
+  constructor() {
+    super('persona_version_not_found', 'Version de persona introuvable');
+  }
+}

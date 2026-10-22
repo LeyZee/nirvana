@@ -4,5 +4,6 @@ import type { CreatorId, CreatorSummary, NewCreator } from '@nirvana/contracts';
 export interface CreatorDirectory {
   /** Every creator when `ids` is `'all'` (an owner), the given ones otherwise; ordered by name. */
   list(ids: readonly CreatorId[] | 'all'): Promise<readonly CreatorSummary[]>;
-  create(input: NewCreator): Promise<CreatorSummary>;
+  /** Audited with `userId`, the owner who added her from the dashboard; none from `pnpm creator:create`. */
+  create(input: NewCreator, userId?: string): Promise<CreatorSummary>;
 }

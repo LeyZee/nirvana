@@ -4,7 +4,7 @@
 
 **Peut dépendre de.** aucun
 
-**Règles propres.** Propriétaire de `creators` et de `persona_versions`. Routes : `GET /v1/creators`, `GET /v1/creators/:creatorId/persona` (ses versions, la plus récente en entier) et `POST /v1/creators/:creatorId/persona/versions` (nouvelle version, jamais active ; 409 `persona_version_conflict` si une autre version est arrivée depuis `basedOn` ou si le numéro existe). Commandes : `pnpm persona:validate <fichier>` et `pnpm persona:load <fichier> [--creator <id>] [--activate]` (une seule version active par créatrice, `audit_log`, jamais de contenu de persona dans les journaux). Erreurs du module : `domain/errors.ts`. Jamais de logique de génération ici.
+**Règles propres.** Propriétaire de `creators` et de `persona_versions`. Routes : `GET /v1/creators`, `POST /v1/creators` (propriétaire seul, `audit_log` `creator.create` avec l’auteur), `GET /v1/creators/:creatorId/persona` (ses versions, la plus récente en entier), `POST /v1/creators/:creatorId/persona/versions` (nouvelle version, jamais active ; 409 `persona_version_conflict` si une autre version est arrivée depuis `basedOn` ou si le numéro existe) et `POST /v1/creators/:creatorId/persona/versions/:versionId/activate` (propriétaire et créatrice : sa seule version active, `audit_log` `persona_version.activate` avec l'auteur ; 404 `persona_version_not_found`). Le verrou d'Automatique tient compte de la version active (ADR 0019, porté par Bilan). Commandes : `pnpm persona:validate <fichier>` et `pnpm persona:load <fichier> [--creator <id>] [--activate]` (une seule version active par créatrice, `audit_log`, jamais de contenu de persona dans les journaux). Erreurs du module : `domain/errors.ts`. Jamais de logique de génération ici.
 
 ## Structure
 

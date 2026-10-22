@@ -117,3 +117,15 @@ export async function saveVersion(
   if (response.status === 403) return { kind: 'forbidden' };
   return { kind: 'failed' };
 }
+
+export type ActivateResult = 'activated' | 'forbidden' | 'failed';
+
+/** `POST /v1/creators/:id/persona/versions/:versionId/activate`: the agent writes with this version from now on. */
+export async function activateVersion(creatorId: string, versionId: string): Promise<ActivateResult> {
+  const response = await fetch(
+    `/v1/creators/${encodeURIComponent(creatorId)}/persona/versions/${encodeURIComponent(versionId)}/activate`,
+    { method: 'POST', credentials: 'include' },
+  );
+  if (response.ok) return 'activated';
+  return response.status === 403 ? 'forbidden' : 'failed';
+}
