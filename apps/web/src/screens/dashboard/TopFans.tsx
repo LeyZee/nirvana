@@ -37,7 +37,8 @@ export function TopFans({
             <span className="db-fan__name">{fan.name}</span>
             <span className="db-fan__line">{fan.line}</span>
           </span>
-          {/* Every bar starts at the same place: widths are shares of the best fan's total. */}
+          {/* Every bar starts at the same place: widths are shares of the best fan's total. Data colours, not the
+              neon: a fan's spend is no urgency (the agent's part takes the split's first colour). */}
           <span
             className="nv-split"
             {...tip.bind({
@@ -53,7 +54,7 @@ export function TopFans({
               className="nv-split__part"
               style={{
                 '--nv-w': `${String(((fan.spent - fan.byAgent) / max) * 100)}%`,
-                '--_c': 'var(--nv-sale)',
+                '--_c': 'var(--nv-data-2)',
               }}
             />
           </span>

@@ -137,3 +137,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Dashboard : chaque ligne de « À traiter » ouvre Suivi | done | `log/2026-10-22-dashboard-todos-to-suivi.md` |
 | 2026-10-22 | Créatrices : créer une créatrice, activer une version | done | `log/2026-10-22-persona-creer-activer.md` |
 | 2026-10-19 | Refonte du design system : jetons et composants (D-01) | done | `log/2026-10-19-d-01-refonte.md` |
+| 2026-10-22 | Dashboard : part agent des Meilleurs fans en couleur de données (A-11) | done | `log/2026-10-22-dashboard-top-fans-data.md` |
