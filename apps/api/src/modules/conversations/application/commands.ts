@@ -422,6 +422,17 @@ export function createConversationCommands({
             details: { scope: 'creator', correlationId: input.correlationId },
           });
         }
+        if (switches.creator && !stop && !switches.global) {
+          // A fan who wrote during the stop was left `pending` (respond saw the switch and did nothing): each of
+          // them gets an answer now, instead of waiting for the fan to write again (recette R-G2).
+          for (const id of await tx.conversations.idsInState('pending')) {
+            await tx.jobs.enqueue(
+              'conversation.respond',
+              { creatorId: input.creatorId, conversationId: id, correlationId: input.correlationId },
+              { queueName: queueNameFor(id), jobKey: jobKeyFor('conversation.respond', id) },
+            );
+          }
+        }
         if (!stop) {
           const from = target === 'auto' ? 'copilot' : 'auto';
           for (const id of await tx.conversations.idsInMode(from)) {

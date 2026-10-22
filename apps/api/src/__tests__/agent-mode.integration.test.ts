@@ -8,7 +8,7 @@ import {
   type ConversationId,
   type CreatorId,
 } from '@nirvana/contracts';
-import { and, eq, schema } from '@nirvana/db';
+import { and, eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
@@ -173,13 +173,48 @@ describe('PUT /v1/agent/mode', () => {
     expect(conversation?.mode).toBe('copilot');
   });
 
+  it('answers, after the stop, a fan who wrote during it (recette R-G2)', async () => {
+    const respondJobs = async () =>
+      (
+        await test.admin.db.execute<{ due: boolean }>(sql`
+          select run_at <= now() + interval '1 second' as due from graphile_worker._private_jobs
+          where key = ${`conversation.respond:${conversationId}`}`)
+      ).rows;
+    expect((await setMode('stop')).statusCode).toBe(200);
+    // Julien is still waiting (pending) and his answer already ran during the stop: it found the switch, did nothing.
+    await test.admin.db.execute(
+      sql`delete from graphile_worker._private_jobs where key = ${`conversation.respond:${conversationId}`}`,
+    );
+    expect(await respondJobs()).toEqual([]);
+
+    expect((await setMode('copilot')).statusCode).toBe(200);
+    expect(await respondJobs()).toEqual([{ due: true }]);
+
+    // A click that lifts nothing enqueues nothing more.
+    await test.admin.db.execute(
+      sql`delete from graphile_worker._private_jobs where key = ${`conversation.respond:${conversationId}`}`,
+    );
+    expect((await setMode('copilot')).statusCode).toBe(200);
+    expect(await respondJobs()).toEqual([]);
+  });
+
   it('answers Arrêt to Copilote while the global switch stays on', async () => {
     await setKillSwitch(test.admin.db, { active: true, scope: 'global', scopeId: null, reason: 'test' });
     expect((await setMode('copilot')).json()).toEqual({ mode: 'stop', globalStop: true });
     // The Dashboard, reloaded, says the same and why.
     expect(await dashboard()).toMatchObject({ mode: 'stop', globalStop: true });
+    await test.admin.db.execute(
+      sql`delete from graphile_worker._private_jobs where key = ${`conversation.respond:${conversationId}`}`,
+    );
     await setKillSwitch(test.admin.db, { active: false, scope: 'global', scopeId: null, reason: 'test' });
     expect(await dashboardMode()).toBe('copilot');
+    // Lifted from the terminal too, the fan who waited gets his answer.
+    const [job] = (
+      await test.admin.db.execute<{ due: boolean }>(sql`
+        select run_at <= now() + interval '1 second' as due from graphile_worker._private_jobs
+        where key = ${`conversation.respond:${conversationId}`}`)
+    ).rows;
+    expect(job).toEqual({ due: true });
   });
 
   it('applies clicks sent together one after the other', async () => {

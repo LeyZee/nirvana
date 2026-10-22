@@ -4,6 +4,7 @@ import type {
   ConversationEventView,
   ConversationId,
   ConversationMode,
+  ConversationState,
   ConversationSummary,
   CreatorId,
   Currency,
@@ -89,6 +90,8 @@ interface ConversationRepository {
   saveProjection(id: ConversationId, projection: ConversationProjection): Promise<void>;
   /** The creator's conversations in this mode. */
   idsInMode(mode: ConversationMode): Promise<readonly ConversationId[]>;
+  /** The creator's conversations in this state. */
+  idsInState(state: ConversationState): Promise<readonly ConversationId[]>;
 }
 
 interface MessageRepository {
