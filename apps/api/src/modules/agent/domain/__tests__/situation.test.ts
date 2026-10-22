@@ -40,6 +40,6 @@ describe('situation', () => {
     });
     expect(text).toContain('samedi 23 h 30 (nuit)');
     expect(text).toContain('depuis 3 jours');
-    expect(text).toContain('45,00 $');
+    expect(text).toContain('45,00 €');
   });
 });

@@ -46,14 +46,31 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// An AI, however it is written once normalised: « IA », « I.A », « i a », « i-a », « A.I », « b o t », and the
+// words around it (« assistante virtuelle », « agent conversationnel »). Read after an article only: alone, « i a »
+// is « il y a ».
+const AI_WORD =
+  '(ia|ai|i ?[ .-] ?a|a ?[ .-] ?i|intelligence artificielle|bot|b ?o ?t|robot|chatbot|chat bot|assistante? virtuelle?|agent conversationnel|algorithme|programme informatique|ordinateur)';
+
+// What follows « viens me voir », « on se retrouve au » or « je t'attends au » when it stays on the platform or in
+// bed: « en privé », « au prochain live », « au lit », « à 20 h ».
+const ONLINE =
+  " ?(\\d|(le |un |mon |ton |ma |ta |mes |tes |la |du )?(lit|live|prochain|prochaine|plus|tout a l'heure|tout de suite|tchat|chat|prive|dm|mp|messages?|story|video|appel|sur|ici|en (live|prive|dm|mp|story|video))\\b)";
+const CITY =
+  '(paris|lyon|marseille|geneve|bruxelles|lausanne|bordeaux|lille|nice|toulouse|nantes|montpellier|strasbourg)';
+
 const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   {
     code: 'ai_disclosure',
     // « je suis modèle photo », « je suis assistante dentaire » are jobs: the article is required for those words.
-    pattern:
-      /\b(je (ne )?suis|j'?suis|jsuis|moi c'est|i'?m)( qu'| que | juste | seulement )?\s?(une? |l'|an? )?(ia|ai|intelligence artificielle|bot|robot|chatbot)\b|\b(je suis|jsuis|j'suis) (une?|un simple) (assistante?|programme|modele( de langage)?)\b/,
+    pattern: new RegExp(
+      `\\b(je (ne )?suis|j'?suis|jsuis|moi c'est|i'?m)( qu'| que | juste | seulement | rien qu'| rien d'autre qu')?\\s?(une? |l'|an? )?${AI_WORD}(?![a-z])|\\b(je suis|jsuis|j'suis) (une?|un simple) (assistante?|programme|modele( de langage)?)\\b`,
+    ),
   },
-  { code: 'ai_disclosure', pattern: /\ben tant qu'(ia|assistante?|modele|intelligence artificielle)\b/ },
+  {
+    code: 'ai_disclosure',
+    pattern: new RegExp(`\\ben tant qu'(une? )?(${AI_WORD.slice(1, -1)}|assistante?|modele)(?![a-z])`),
+  },
   {
     code: 'ai_disclosure',
     pattern:
@@ -62,15 +79,23 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   // Said of herself in the third person: « tu parles à une IA », « c'est un bot qui te répond ».
   {
     code: 'ai_disclosure',
+    pattern: new RegExp(
+      `\\btu (ne )?(parles|discutes|ecris|chattes?) (pas )?(a|avec) (une?|l') ?(${AI_WORD.slice(1, -1)}|machine|programme)(?![a-z])|\\bc'?est (une?|l') ?${AI_WORD} qui\\b`,
+    ),
+  },
+  // Denying being human or real: « je suis pas humaine », « je ne suis pas réelle », « pas une vraie fille ». A
+  // « vraie fille » followed by a word (« pas une vraie fille sage ») is something else.
+  {
+    code: 'ai_disclosure',
     pattern:
-      /\btu (parles|discutes|ecris|chattes?) (a|avec) (une?|l') ?(ia|ai|bot|robot|chatbot|machine|programme|intelligence artificielle)\b|\bc'?est (une?|l') ?(ia|ai|bot|robot|chatbot|programme|intelligence artificielle) qui\b/,
+      /\b(je (ne )?suis|j'?suis|jsuis|chui|chuis|chu) (meme )?pas (une? )?(vraie?( | ?- ?))?(humaine?|etre humain|personne (reelle|humaine)|reelle?|vivante?|en chair et en os)(?![a-z])|\b(je (ne )?suis|j'?suis|jsuis|chui|chuis|chu|c'?est) (meme )?pas une vraie (fille|femme|personne|meuf)(?! ?[a-z])|\b(je n'?existe pas|j'?existe pas)\b|\b(i'?m|i am|im) not (a )?(real|human|a real (person|girl|woman))\b/,
   },
   // « une lA » typed with a lowercase L, or a Cyrillic palochka read as one.
   { code: 'ai_disclosure', pattern: /\b(je suis|jsuis|j'?suis|chuis?|chu) (qu'|juste )?une la\b/ },
   // Spoken and other-language admissions: « chui une IA », « I am an AI », « soy una IA ».
   {
     code: 'ai_disclosure',
-    pattern: /\b(chui|chuis|chu) (qu'|juste |seulement )?(une?|l') ?(ia|ai|bot|robot|chatbot)\b/,
+    pattern: new RegExp(`\\b(chui|chuis|chu) (qu'|juste |seulement )?(une?|l') ?${AI_WORD}(?![a-z])`),
   },
   {
     code: 'ai_disclosure',
@@ -86,11 +111,25 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
     code: 'love_declaration',
     pattern: /\b(je t'?\s?aime|j'?t'?aime|jtm|je suis amoureuse de toi|i love you|te (quiero|amo))\b/,
   },
-  // A concrete meeting (a day, a place, a visit) is blocked; the playful « un jour, peut-être » stays allowed.
+  // A concrete meeting (a day, a place, a visit) is blocked; the playful « un jour, peut-être » stays allowed, and
+  // so do the live, the DMs and the bed: « on se voit au prochain live », « viens me voir en privé ».
   {
     code: 'meeting_promise',
     pattern:
       /\b(on se (voit|retrouve|rejoint) (demain|ce soir|ce week-end|samedi|dimanche|lundi|mardi|mercredi|jeudi|vendredi|chez |a (la gare|l'hotel|paris|lyon)|au (cafe|bar|resto|restaurant))|je (viens|passe|monte) chez toi|viens chez moi|je te rejoins|mon adresse|rendez-vous (a |au |chez ))/,
+  },
+  {
+    code: 'meeting_promise',
+    pattern: new RegExp(
+      [
+        `\\b(viens|venez|tu (peux|pourrais|veux) venir|passe|passes) me (voir|rejoindre|retrouver)(?!${ONLINE})\\b`,
+        `\\bon (se|pourrait se|peut se|va se) (voit|voir|retrouve|retrouver|rejoint|rejoindre|rencontre|rencontrer) (a|au|aux|chez|dans|devant|en ville|quand tu veux|ou tu veux|ce soir|demain|cette semaine|ce week-end)(?!${ONLINE})\\b`,
+        `\\bje t'?attends? (a|au|chez|devant)(?!${ONLINE})\\b`,
+        `\\bon (se fait|prend|boit) (un|une) (cafe|verre|resto|date|diner|apero|biere)\\b`,
+        `\\bje (viens|descends|monte|serai) (a|sur) ${CITY}\\b`,
+        `\\b(come|coming) (to )?see me\\b|\\b(let'?s|we (can|could|should)) meet\\b|\\bmeet me\\b`,
+      ].join('|'),
+    ),
   },
   { code: 'contact_info', pattern: /\b(https?:\/\/|www\.)\S+/ },
   { code: 'contact_info', pattern: /\b[\w.+-]+ ?@ ?[\w-]+ ?\. ?[\w.]+\b/ },
@@ -228,11 +267,58 @@ const NUMBER_WORDS: Readonly<Record<string, number | undefined>> = {
 };
 /** Digits weigh their count, a word one: a number is about ten of them. */
 const NUMBER_WEIGHT = 7;
+/**
+ * The start of a number or a cue before it is enough for a shorter run: « zéro six douze trente quatre » is already
+ * six digits of a mobile, « mon num c'est 06 12 34 » too. Counted in digits as the fan writes them down.
+ */
+const LEADING_ZERO_DIGITS = 6;
+const CUED_DIGITS = 4;
 const CONTACT_CUE =
-  /\b(num|numero|tel|telephone|portable|phone|appelle|appel|whatsapp|sms|texto|joindre|plus)\s?$/;
+  /\b(num|numero|tel|telephone|portable|phone|appelle|appel|whatsapp|sms|texto|joindre|plus)( (c'?est|cest|:|est|=|le|au))*\s?$/;
+
+const TENS = new Set([
+  'vingt',
+  'trente',
+  'quarante',
+  'cinquante',
+  'soixante',
+  'septante',
+  'huitante',
+  'octante',
+  'nonante',
+]);
+const TEENS = new Set(['dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize']);
 
 function isNumberToken(token: string): boolean {
   return /^\d+$/.test(token) || Object.hasOwn(NUMBER_WORDS, token);
+}
+
+/**
+ * The digits a run stands for: « trente quatre » and « soixante dix huit » are two, « quatre vingt » two, « zéro »
+ * and « six » one each.
+ */
+function digitCount(run: readonly string[]): number {
+  let digits = 0;
+  let inTens = false;
+  run.forEach((token, i) => {
+    const previous = run[i - 1];
+    if (/^\d+$/.test(token)) {
+      digits += token.length;
+      inTens = false;
+    } else if (token === 'et' || token === 'cent') {
+      // « vingt et un » stays two digits; a hundred in a phone number is rare enough to count as nothing.
+    } else if (TENS.has(token)) {
+      digits += token === 'vingt' && previous === 'quatre' ? 1 : 2;
+      inTens = true;
+    } else if (TEENS.has(token)) {
+      if (!inTens) digits += 2;
+      inTens = token === 'dix';
+    } else {
+      if (!inTens) digits += 1;
+      inTens = false;
+    }
+  });
+  return digits;
 }
 
 /** « dix neuf huit… un », « un deux trois… »: single numbers going up or down by one. */
@@ -257,11 +343,20 @@ function spelledNumber(text: string): string | undefined {
       end += 1;
     }
     const run = tokens.slice(start, end).map((m) => m[0]);
-    const hasWord = run.some((token) => !/^\d+$/.test(token));
-    if (weight >= NUMBER_WEIGHT && hasWord) {
+    if (run.length > 0) {
+      const hasWord = run.some((token) => !/^\d+$/.test(token));
       const first = run[0] ?? '';
-      const before = text.slice(0, tokens[start]?.index ?? 0);
-      if (first === 'zero' || first.startsWith('0') || CONTACT_CUE.test(before) || !isCount(run)) {
+      const cued = CONTACT_CUE.test(text.slice(0, tokens[start]?.index ?? 0));
+      // « le 06/12/2024 » is a date, not the start of a number.
+      const span = text.slice(tokens[start]?.index ?? 0, tokens[end - 1]?.index ?? 0);
+      const isDate = !hasWord && run.length <= 3 && span.includes('/');
+      const leadingZero = first === 'zero' || (first.startsWith('0') && !isDate);
+      const digits = digitCount(run);
+      if (
+        (weight >= NUMBER_WEIGHT && hasWord && (leadingZero || cued || !isCount(run))) ||
+        (leadingZero && digits >= LEADING_ZERO_DIGITS) ||
+        (cued && digits >= CUED_DIGITS && !isCount(run))
+      ) {
         return run.join(' ');
       }
     }

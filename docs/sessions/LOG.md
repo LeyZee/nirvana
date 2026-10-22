@@ -133,3 +133,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Persona : textes de la recette (A-13, A-14) | done | `log/2026-10-19-persona-recette.md` |
 | 2026-10-19 | Dashboard : Reveal jamais relié en neutre, info-bulle d'Automatique | done | `log/2026-10-19-dashboard-not-outages.md` |
 | 2026-10-22 | Dashboard : clé manquante en ambre, tâches bloquées, « À valider » ouvre Suivi | done | `log/2026-10-22-dashboard-key-missing.md` |
+| 2026-10-19 | Gardes de sortie : contournements de la recette (R-G1) | done | `log/2026-10-19-guards-acceptance.md` |

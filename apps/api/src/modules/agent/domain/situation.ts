@@ -86,7 +86,7 @@ export function describeSituation(situation: Situation): string {
     `Chez elle, on est ${time.label} (${dayPart(time.hour) === 'night' ? 'nuit' : 'jour'}).`,
     `Ils se parlent depuis ${duration(situation.now.getTime() - situation.relationshipStartedAt.getTime())}.`,
     spent > 0
-      ? `Il a déjà dépensé ${spent.toFixed(2).replace('.', ',')} $ chez elle.`
+      ? `Il a déjà dépensé ${spent.toFixed(2).replace('.', ',')} € chez elle.`
       : 'Il n’a encore rien acheté.',
   ].join('\n');
 }
