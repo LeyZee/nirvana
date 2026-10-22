@@ -5,7 +5,7 @@ import { useEffect, useState, type JSX } from 'react';
 
 import { Reader } from './Reader';
 import { fetchConversations } from './api';
-import { todoLabel } from './reader';
+import { todoLabel } from './reader-model';
 import { MODE_MEANINGS, mergeConversations, sharedMode, STATE_LABELS, statusClass, subline } from './view';
 import './tracking.css';
 

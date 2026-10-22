@@ -12,7 +12,7 @@ import {
   type ConversationRead,
   type Decision,
 } from './api';
-import { lastHandoff, threadOf } from './reader';
+import { lastHandoff, threadOf } from './reader-model';
 import { bubblesFromText, STATE_LABELS, statusClass } from './view';
 
 /** The reader follows the conversation more closely than the list: a draft or a fan's message shows up quickly. */
