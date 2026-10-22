@@ -131,3 +131,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Dashboard : clé manquante et jobs bloqués (R-G6) | done | `log/2026-10-19-dashboard-health.md` |
 | 2026-10-22 | Réponse au fan qui a écrit pendant un Arrêt (R-G2) | done | `log/2026-10-22-resume-after-stop.md` |
 | 2026-10-19 | Persona : textes de la recette (A-13, A-14) | done | `log/2026-10-19-persona-recette.md` |
+| 2026-10-19 | Dashboard : Reveal jamais relié en neutre, info-bulle d'Automatique | done | `log/2026-10-19-dashboard-not-outages.md` |

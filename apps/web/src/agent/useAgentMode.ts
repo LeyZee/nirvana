@@ -6,7 +6,13 @@ import type { AgentMode, AutomaticGate } from './mode';
  * fails, `empty` when no creator exists yet. Nothing here makes a mode up.
  */
 export type AgentModeView =
-  | { readonly source: 'live'; readonly mode: AgentMode; readonly automatic: AutomaticGate }
+  | {
+      readonly source: 'live';
+      readonly mode: AgentMode;
+      readonly automatic: AutomaticGate;
+      /** Why nothing runs whatever the mode, or null when Reveal is read and a voice answers. */
+      readonly stalled: string | null;
+    }
   | { readonly source: 'loading' | 'unavailable' | 'empty' };
 
 /**
@@ -15,6 +21,17 @@ export type AgentModeView =
  */
 export function useAgentMode(): AgentModeView {
   const live = useLiveDashboard();
-  if (live.kind === 'live') return { source: 'live', mode: live.data.mode, automatic: live.data.automatic };
+  if (live.kind === 'live') {
+    const { reveal, voice } = live.data;
+    // The Dashboard's own rule: never read once means not linked yet, read then lost means disconnected.
+    const stalled = !reveal.connected
+      ? reveal.lastReadAt === null
+        ? 'Reveal n’est pas encore relié'
+        : 'Reveal est déconnecté'
+      : voice.ok
+        ? null
+        : 'l’IA qui écrit ne répond pas';
+    return { source: 'live', mode: live.data.mode, automatic: live.data.automatic, stalled };
+  }
   return { source: live.kind };
 }

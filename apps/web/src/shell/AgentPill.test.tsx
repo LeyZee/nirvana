@@ -69,6 +69,42 @@ describe('AgentPill', () => {
     expect(pill.dataset['tone']).toBe('ok');
   });
 
+  it('keeps the mode but no live green dot when nothing runs, and says why', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({
+        mode: 'copilot',
+        reveal: { connected: false, lastReadAt: null, conversations: 0 },
+      }),
+    });
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Copilote');
+    });
+    expect(pill.dataset['tone']).toBe('unknown');
+    expect(pill.querySelector('.nv-dot--live')).toBeNull();
+    expect(pill.title).toBe(
+      'Agent : Copilote, mais rien ne tourne : Reveal n’est pas encore relié. Voir le Dashboard.',
+    );
+  });
+
+  it('says a session that read then dropped is disconnected, not « not linked yet »', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({
+        mode: 'copilot',
+        reveal: { connected: false, lastReadAt: '2026-10-19T11:00:00Z', conversations: 0 },
+      }),
+    });
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.title).toBe(
+        'Agent : Copilote, mais rien ne tourne : Reveal est déconnecté. Voir le Dashboard.',
+      );
+    });
+    expect(pill.dataset['tone']).toBe('unknown');
+  });
+
   it('turns red when the server says the agent is stopped', async () => {
     serveDashboard(live('stop'));
     const pill = await renderPill();

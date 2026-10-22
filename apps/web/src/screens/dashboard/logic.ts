@@ -137,7 +137,7 @@ export function heroState(agent: AgentState, todos: readonly Todo[], mode: Agent
       action: 'Repasser en copilote',
     };
   }
-  if (agent.tone === 'bad') return agent;
+  if (agent.tone === 'bad' || agent.tone === 'idle') return agent;
   if (todos.length === 0) {
     return {
       tone: 'ok',

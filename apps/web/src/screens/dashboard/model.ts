@@ -6,7 +6,8 @@ import type { TelegramNight } from '@/settings/telegram/NightBanner';
  * Money is in euros, durations in minutes, rates in % (0 to 100).
  */
 
-export type Tone = 'ok' | 'warn' | 'bad';
+/** `idle`: nothing wrong, nothing running yet (Reveal never linked): neutral, no colour. */
+export type Tone = 'ok' | 'warn' | 'bad' | 'idle';
 export type Period = 'day' | 'week' | 'month';
 
 export const PERIODS: readonly { readonly id: Period; readonly label: string }[] = [

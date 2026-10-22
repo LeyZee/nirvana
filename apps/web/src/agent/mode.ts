@@ -71,9 +71,13 @@ export function nextMode(from: AgentMode, step: 1 | -1, gate: AutomaticGate): Ag
 
 /**
  * The bar's read-only pill: what the agent does right now, in a word, and its tone. `null` when the server has not
- * said: the pill never shows a mode it does not know.
+ * said: the pill never shows a mode it does not know. `running` false (Reveal not read, or no voice answering): the
+ * mode is still the one set, but nothing runs, so the dot is neither green nor alive.
  */
-export function pillOf(mode: AgentMode | null): {
+export function pillOf(
+  mode: AgentMode | null,
+  running = true,
+): {
   readonly label: string;
   readonly tone: 'ok' | 'bad' | 'unknown';
   readonly live: boolean;
@@ -82,9 +86,13 @@ export function pillOf(mode: AgentMode | null): {
     case null:
       return { label: 'Inconnu', tone: 'unknown', live: false };
     case 'auto':
-      return { label: 'Automatique', tone: 'ok', live: true };
+      return running
+        ? { label: 'Automatique', tone: 'ok', live: true }
+        : { label: 'Automatique', tone: 'unknown', live: false };
     case 'copilot':
-      return { label: 'Copilote', tone: 'ok', live: true };
+      return running
+        ? { label: 'Copilote', tone: 'ok', live: true }
+        : { label: 'Copilote', tone: 'unknown', live: false };
     case 'stop':
       return { label: MODE_LABEL.stop, tone: 'bad', live: false };
   }
