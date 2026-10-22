@@ -54,6 +54,19 @@ describe('ModeControl', () => {
     expect(tip.textContent).toContain('pas encore validé');
   });
 
+  it('lights only the chosen mode: Arrêt turns red only when the agent is stopped', () => {
+    const dot = (name: string): Element | null =>
+      screen.getByRole('radio', { name }).querySelector('.db-mode__dot');
+    render(<Harness mode="copilot" automatic={OPEN} onChange={vi.fn()} />);
+    expect(dot('Copilote')?.classList.contains('nv-tone--ok')).toBe(true);
+    expect(dot('Arrêt')?.classList.contains('nv-tone--bad')).toBe(false);
+    expect(dot('Arrêt')?.classList.contains('db-mode__dot--rest')).toBe(true);
+    cleanup();
+    render(<Harness mode="stop" automatic={OPEN} onChange={vi.fn()} />);
+    expect(dot('Arrêt')?.classList.contains('nv-tone--bad')).toBe(true);
+    expect(dot('Copilote')?.classList.contains('db-mode__dot--rest')).toBe(true);
+  });
+
   it('opens Automatique when the server says so', () => {
     const { onChange, option } = setup('copilot', OPEN);
     expect(option('Automatique').getAttribute('aria-disabled')).toBe('false');

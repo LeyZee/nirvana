@@ -1,24 +1,24 @@
 /*
- * Dashboard shell: navigation rail on the left, the page on the right; a tab bar at the bottom on a phone.
- * Ported from the approved prototype (docs/design/README.md). Colors and motion come from the design system tokens.
+ * Dashboard shell (refonte 19/10, docs/design/README.md « Coquille »): a floating glass sidebar over one neon
+ * light, the page on the right with a large title. A capsule tab bar floats at the bottom on a phone.
+ * Colors and motion come from the design system tokens.
  */
 :root {
-  --nv-rail-w: 92px;
-  --nv-gap: 14px;
+  --nv-side-w: 236px;
+  --nv-gap: 12px;
 }
 
 .nv-app {
   height: 100dvh;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: var(--nv-rail-w) minmax(0, 1fr);
-  gap: var(--nv-gap);
-  padding-block: var(--nv-gap);
+  grid-template-columns: var(--nv-side-w) minmax(0, 1fr);
+  padding: var(--nv-gap);
   padding-left: max(var(--nv-gap), env(safe-area-inset-left, 0px));
-  padding-right: max(var(--nv-gap), env(safe-area-inset-right, 0px));
+  padding-right: 0;
 }
 
-/* Slow glows behind the glass, or the glass has nothing to refract. */
+/* One neon light above the page, a wine shadow far below, a fine grain: the glass has something to bend. */
 .nv-ambient {
   position: fixed;
   inset: 0;
@@ -30,110 +30,117 @@
 .nv-ambient i {
   position: absolute;
   border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.55;
 }
 .nv-ambient i:nth-child(1) {
-  width: 46vw;
+  width: 90vw;
   height: 46vw;
-  left: -12vw;
-  top: -18vw;
-  background: radial-gradient(circle, var(--nv-aura-neon), transparent 65%);
-  animation: nv-shell-drift-a 26s var(--nv-ease-in-out) infinite alternate;
+  left: 5vw;
+  top: -30vw;
+  background: radial-gradient(closest-side, var(--nv-aura-neon), transparent);
+  filter: blur(20px);
+  animation: nv-shell-breathe 14s var(--nv-ease-in-out) infinite alternate;
 }
 .nv-ambient i:nth-child(2) {
-  width: 52vw;
-  height: 52vw;
-  right: -16vw;
-  bottom: -24vw;
-  background: radial-gradient(circle, var(--nv-aura-wine), transparent 65%);
-  animation: nv-shell-drift-b 32s var(--nv-ease-in-out) infinite alternate;
+  width: 60vw;
+  height: 40vw;
+  right: -18vw;
+  bottom: -26vw;
+  background: radial-gradient(closest-side, var(--nv-aura-wine), transparent);
+  opacity: 0.7;
 }
 .nv-ambient i:nth-child(3) {
-  width: 30vw;
-  height: 30vw;
-  right: 18vw;
-  top: -10vw;
-  background: radial-gradient(circle, var(--nv-aura-rose), transparent 65%);
-  animation: nv-shell-drift-a 38s var(--nv-ease-in-out) infinite alternate-reverse;
+  inset: 0;
+  border-radius: 0;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: var(--nv-grain);
 }
-@keyframes nv-shell-drift-a {
+@keyframes nv-shell-breathe {
   to {
-    transform: translate(8vw, 6vw) scale(1.15);
-  }
-}
-@keyframes nv-shell-drift-b {
-  to {
-    transform: translate(-6vw, -8vw) scale(1.1);
+    opacity: 0.7;
+    transform: scale(1.06);
   }
 }
 
-/* ── Rail ── */
+/* ── Sidebar: floating glass, rows of icon and label (macOS 26) ── */
 .nv-rail {
-  --_radius: var(--nv-radius-xl);
+  --_radius: 26px;
   position: relative;
   /* Above the page, so the account menu opens over it. */
   z-index: 5;
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  padding: 18px 10px 10px;
+  box-shadow: var(--nv-shadow-float);
+}
+.nv-rail__brand {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 16px 0 12px;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px;
+  margin-bottom: 18px;
+  text-decoration: none;
+  color: var(--nv-ink);
 }
 .nv-rail__mark {
-  width: 44px;
-  height: 44px;
-  margin-bottom: 18px;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--nv-neon) 45%, transparent));
+}
+.nv-rail__name {
+  font-family: var(--nv-font-wordmark);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.01em;
 }
 .nv-rail__lens {
   position: absolute;
   left: 10px;
   right: 10px;
   top: 0;
-  height: 64px;
-  border-radius: 20px;
-  background: linear-gradient(170deg, var(--nv-glass-fill-strong), var(--nv-glass-fill));
+  height: 40px;
+  border-radius: 13px;
+  background: var(--nv-select-strong);
   box-shadow:
     inset 0 1px 0 var(--nv-glass-edge),
-    0 8px 24px rgb(0 0 0 / 0.35);
+    0 4px 14px rgb(0 0 0 / 0.3);
   pointer-events: none;
-  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
-}
-.nv-rail__lens::before {
-  content: '';
-  position: absolute;
-  left: -10px;
-  top: 20px;
-  bottom: 20px;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--nv-neon);
-  box-shadow: 0 0 12px var(--nv-neon);
+  transition: transform var(--nv-dur-morph) var(--nv-ease-spring);
 }
 .nv-rail__item {
   position: relative;
   z-index: 1;
-  width: 72px;
-  height: 64px;
-  border-radius: 20px;
+  height: 40px;
+  border-radius: 13px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  color: var(--nv-ink-faint);
-  font-size: 11px;
-  font-weight: 600;
+  gap: 12px;
+  padding: 0 12px;
+  color: var(--nv-ink-muted);
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
   text-decoration: none;
+  white-space: nowrap;
   transition:
     color var(--nv-dur-fast),
-    background-color var(--nv-dur-fast);
+    background-color var(--nv-dur-fast),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
 }
 .nv-rail__item:hover {
-  color: var(--nv-ink-muted);
+  color: var(--nv-ink);
 }
 .nv-rail__item:hover:not([aria-current='page']) {
   background: var(--nv-glass-fill);
+}
+.nv-rail__item:active {
+  transform: scale(0.97);
+  transition-duration: var(--nv-dur-instant);
 }
 .nv-rail__item:focus-visible {
   outline: none;
@@ -141,6 +148,7 @@
 }
 .nv-rail__item[aria-current='page'] {
   color: var(--nv-ink);
+  font-weight: 600;
 }
 .nv-rail__sp {
   flex: 1;
@@ -149,13 +157,15 @@
 .nv-rail__agent {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  padding: 5px 9px;
+  gap: 8px;
+  height: 32px;
+  margin: 0 2px 6px;
+  padding: 0 10px;
   border-radius: var(--nv-radius-full);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--nv-ink-muted);
+  background: var(--nv-glass-fill);
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -163,9 +173,14 @@
     color var(--nv-dur-fast),
     transform var(--nv-dur-slow) var(--nv-ease-spring);
 }
+.nv-rail__agent::before {
+  content: 'Agent';
+  color: var(--nv-ink-faint);
+  font-weight: 500;
+}
 .nv-rail__agent:hover {
   color: var(--nv-ink);
-  background: var(--nv-glass-fill);
+  background: var(--nv-glass-fill-strong);
 }
 .nv-rail__agent:active {
   transform: scale(0.96);
@@ -180,8 +195,9 @@
 
 /* Icons: a readable rest state, and a gesture played once on activation (`is-playing`). */
 .nav-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+  flex: none;
   transition:
     transform var(--nv-dur-base) var(--nv-ease-spring),
     color var(--nv-dur-base),
@@ -315,47 +331,82 @@
 /* ── Who is signed in ── */
 .nv-user {
   position: relative;
-  margin-top: 10px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--nv-hairline);
 }
 .nv-user__btn {
   appearance: none;
   border: 0;
+  margin: 0;
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 8px;
+  border-radius: 14px;
   cursor: pointer;
+  text-align: left;
+  color: var(--nv-ink);
+  background: transparent;
+  transition:
+    background-color var(--nv-dur-fast),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-user__btn:hover {
+  background: var(--nv-glass-fill);
+}
+.nv-user__btn:active {
+  transform: scale(0.97);
 }
 .nv-user__btn:focus-visible {
   outline: none;
   box-shadow: var(--nv-shadow-focus);
 }
-.nv-user__menu {
-  --_radius: var(--nv-radius-lg);
-  position: absolute;
-  left: calc(100% + 14px);
-  bottom: 0;
-  z-index: 20;
-  min-width: 200px;
+.nv-user__id {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  animation: nv-shell-pop 280ms var(--nv-ease-spring) both;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 600;
 }
-.nv-user__who {
-  margin: 0;
+.nv-user__id small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nv-ink-faint);
+}
+.nv-user__id span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nv-user__menu {
+  --_radius: 20px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
-  color: var(--nv-ink-muted);
+  padding: 6px;
+  transform-origin: 50% 100%;
+  animation: nv-shell-pop var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
-.nv-user__who b {
-  font-size: 14px;
-  color: var(--nv-ink);
-  font-weight: 600;
+.nv-user__menu .nv-btn {
+  justify-content: flex-start;
+  width: 100%;
 }
+/* Glass materializes out of the button that opened it. */
 @keyframes nv-shell-pop {
   0% {
     opacity: 0;
-    transform: scale(0.94) translateY(4px);
+    transform: scale(0.9) translateY(8px);
+    filter: blur(6px);
   }
 }
 
@@ -364,29 +415,37 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+  overflow: auto;
+  padding: 10px max(28px, env(safe-area-inset-right, 0px)) 40px 36px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nv-hairline) transparent;
+}
+.nv-stage > * {
+  max-width: 1240px;
+  margin-inline: auto;
 }
 .nv-page {
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
   display: grid;
   /* minmax(0, 1fr): a header wider than a phone (the Réglages sub-nav) scrolls inside itself, never the page. */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--nv-gap);
+  gap: 28px;
 }
 .nv-page > * {
-  animation: nv-shell-rise 460ms var(--nv-ease-spring) both;
+  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
 .nv-page > *:nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: 50ms;
 }
 .nv-page > *:nth-child(3) {
-  animation-delay: 80ms;
+  animation-delay: 100ms;
 }
 @keyframes nv-shell-rise {
   0% {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
+    filter: blur(4px);
   }
 }
 .nv-page__head {
@@ -394,25 +453,26 @@
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 14px;
-  padding: 2px 4px 0 6px;
+  gap: 16px;
+  padding-top: 18px;
 }
 .nv-page__title {
   min-width: 0;
 }
+/* Large title, bold and left-aligned: the one thing that says where you are. */
 .nv-page__title h1 {
   margin: 2px 0 0;
-  font-size: var(--nv-text-title-1);
-  line-height: var(--nv-text-title-1-leading);
-  letter-spacing: var(--nv-text-title-1-tracking);
-  font-weight: 650;
+  font-size: var(--nv-text-large-title);
+  line-height: var(--nv-text-large-title-leading);
+  letter-spacing: var(--nv-text-large-title-tracking);
+  font-weight: 700;
   text-wrap: balance;
 }
 .nv-page__lead {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   max-width: 62ch;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 21px;
   color: var(--nv-ink-muted);
 }
 .nv-page__actions {
@@ -423,17 +483,16 @@
   max-width: 100%;
   min-width: 0;
 }
+/* A quiet label above a title or a block: sentence case, never shouted in capitals. */
 .nv-eyebrow {
   margin: 0;
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--nv-ink-faint);
 }
 
-/* ── Panels ── */
+/* ── Panels: content plates, not glass ── */
 .nv-panel {
   --_radius: var(--nv-radius-xl);
   min-width: 0;
@@ -446,19 +505,20 @@
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  padding: 18px 22px 12px;
+  padding: 20px 24px 12px;
 }
 .nv-panel__head h2 {
   margin: 2px 0 0;
-  font-size: var(--nv-text-headline);
-  line-height: var(--nv-text-headline-leading);
+  font-size: var(--nv-text-title-2);
+  line-height: var(--nv-text-title-2-leading);
+  letter-spacing: var(--nv-text-title-2-tracking);
   font-weight: 650;
 }
 .nv-panel__sec {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px 22px;
+  padding: 18px 24px;
   border-top: 1px solid var(--nv-hairline);
 }
 .nv-panel__head + .nv-panel__sec,
@@ -472,14 +532,13 @@
   scrollbar-color: var(--nv-hairline) transparent;
 }
 
-/* ── Section tabs ── */
+/* ── Section tabs: one glass capsule, a lit thumb that slides ── */
 .nv-subnav {
+  --_radius: var(--nv-radius-full);
   position: relative;
   display: inline-flex;
   gap: 2px;
-  padding: 3px;
-  border-radius: var(--nv-radius-full);
-  background: var(--nv-glass-fill);
+  padding: 4px;
 }
 .nv-subnav__item {
   position: relative;
@@ -512,21 +571,23 @@
 .nv-subnav__item[aria-current='page'] {
   color: var(--nv-ink);
 }
-/* The active tab's glass, moved by placeTabBarLens; it stretches as it travels (playLiquid). */
+/* The active tab's light, moved by placeTabBarLens; it stretches as it travels (playLiquid). */
 .nv-subnav__thumb {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: 4px;
+  bottom: 4px;
   left: 0;
   width: var(--nv-lens-width, 0px);
   transform: translateX(var(--nv-lens-x, 0px));
   border-radius: var(--nv-radius-full);
-  background: var(--nv-glass-fill-strong);
-  box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+  background: var(--nv-select-strong);
+  box-shadow:
+    inset 0 1px 0 var(--nv-glass-edge),
+    0 2px 10px rgb(0 0 0 / 0.3);
   pointer-events: none;
   transition:
-    transform var(--nv-dur-slow) var(--nv-ease-spring),
-    width var(--nv-dur-slow) var(--nv-ease-spring);
+    transform var(--nv-dur-morph) var(--nv-ease-spring),
+    width var(--nv-dur-morph) var(--nv-ease-spring);
 }
 .nv-subnav__count {
   min-width: 18px;
@@ -549,7 +610,7 @@
 .nv-coming__in {
   max-width: 46ch;
   margin: 0 auto;
-  padding: 48px 24px;
+  padding: 64px 24px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -570,25 +631,71 @@
   line-height: 20px;
 }
 
-/* ── Phone: the rail becomes a tab bar at the bottom, the page scrolls ── */
+/* ── Narrow screens: the sidebar keeps its icons only ── */
+@media (max-width: 1100px) and (min-width: 821px) {
+  :root {
+    --nv-side-w: 72px;
+  }
+  .nv-rail {
+    padding-inline: 8px;
+    align-items: stretch;
+  }
+  .nv-rail__name,
+  .nv-rail__label,
+  .nv-user__id,
+  .nv-rail__agent::before {
+    display: none;
+  }
+  .nv-rail__brand,
+  .nv-rail__item,
+  .nv-user__btn {
+    justify-content: center;
+    padding: 0;
+  }
+  .nv-rail__lens {
+    left: 8px;
+    right: 8px;
+  }
+  .nv-rail__agent {
+    justify-content: center;
+    padding: 0;
+    font-size: 0;
+    margin-inline: 0;
+  }
+  .nv-user__menu {
+    left: 0;
+    right: auto;
+    min-width: 200px;
+  }
+  .nv-stage {
+    padding-left: 24px;
+  }
+}
+
+/* ── Phone: a floating capsule tab bar at the bottom, the page scrolls ── */
 @media (max-width: 820px) {
   .nv-app {
     height: auto;
     min-height: 100dvh;
     grid-template-columns: minmax(0, 1fr);
-    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    padding: 0;
+  }
+  .nv-stage {
+    overflow: visible;
+    padding: 8px 16px calc(110px + env(safe-area-inset-bottom, 0px));
   }
   .nv-rail {
+    --_radius: var(--nv-radius-full);
     position: fixed;
     z-index: 30;
-    left: max(12px, env(safe-area-inset-left, 0px));
-    right: max(12px, env(safe-area-inset-right, 0px));
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    left: max(14px, env(safe-area-inset-left, 0px));
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     flex-direction: row;
     justify-content: space-around;
-    padding: 6px;
+    padding: 5px;
   }
-  .nv-rail__mark,
+  .nv-rail__brand,
   .nv-rail__sp,
   .nv-rail__lens,
   .nv-rail__agent,
@@ -597,14 +704,25 @@
   }
   .nv-rail__item {
     flex: 1;
-    width: auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
     height: 54px;
+    padding: 0;
+    border-radius: var(--nv-radius-full);
+    font-size: 10px;
+    font-weight: 600;
   }
   .nv-rail__item[aria-current='page'] {
-    background: var(--nv-glass-fill-strong);
+    background: var(--nv-select-strong);
+    box-shadow: inset 0 1px 0 var(--nv-glass-edge);
   }
   .nv-page {
-    height: auto;
+    gap: 20px;
+  }
+  .nv-page__title h1 {
+    font-size: 30px;
+    line-height: 36px;
   }
   .nv-subnav {
     max-width: 100%;
@@ -620,7 +738,7 @@
   .nv-ambient i,
   .nv-page > *,
   .nv-user__menu {
-    animation: none;
+    animation: none !important;
   }
   .nv-rail__lens,
   .nv-subnav__thumb,

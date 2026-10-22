@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * Layout pieces shared by every screen of the dashboard. A screen is a `Page`: a header that says where
- * you are and what to do, then glass `Panel`s. Sections with several screens put a `SubNav` in the header.
+ * you are and what to do, then content `Panel`s (plates, not glass). Sections with several screens put a `SubNav` in the header.
  */
 
 export function Page({ children, className }: { children: ReactNode; className?: string }): JSX.Element {
@@ -55,7 +55,7 @@ export function Panel({
 }): JSX.Element {
   const hasHead = title !== undefined || eyebrow !== undefined || actions !== undefined;
   return (
-    <Tag className={cn('nv-glass nv-panel', className)}>
+    <Tag className={cn('nv-plate nv-panel', className)}>
       {hasHead ? (
         <div className="nv-panel__head">
           <div className="min-w-0 flex-1">
@@ -120,7 +120,7 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
   }, [pathname]);
 
   return (
-    <nav className="nv-subnav" aria-label={label} ref={navRef}>
+    <nav className="nv-subnav nv-glass nv-glass--thin" aria-label={label} ref={navRef}>
       <span className="nv-subnav__thumb" ref={thumbRef} aria-hidden="true" />
       {items.map((item) => (
         <Link key={item.to} to={item.to} className="nv-subnav__item" activeProps={{ 'aria-current': 'page' }}>

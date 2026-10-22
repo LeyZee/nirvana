@@ -62,9 +62,10 @@ export function AppShell({ user, onSignOut }: { user: CurrentUser; onSignOut: ()
       data-section={item.to}
       className="nv-rail__item"
       aria-current={item.to === current ? 'page' : undefined}
+      title={item.label}
     >
       <NavIcon name={item.icon} />
-      {item.label}
+      <span className="nv-rail__label">{item.label}</span>
     </Link>
   );
 
@@ -76,7 +77,10 @@ export function AppShell({ user, onSignOut }: { user: CurrentUser; onSignOut: ()
         <i />
       </div>
       <nav className="nv-rail nv-glass" ref={railRef} aria-label="Navigation">
-        <img className="nv-rail__mark" src="/nirvana-mark.svg" alt="Nirvana" width={44} height={44} />
+        <Link to="/" className="nv-rail__brand" aria-label="Nirvana, Dashboard">
+          <img className="nv-rail__mark" src="/nirvana-mark.svg" alt="" width={30} height={30} />
+          <span className="nv-rail__name">Nirvana</span>
+        </Link>
         <span className="nv-rail__lens" ref={lensRef} aria-hidden="true" />
         {NAV.map(link)}
         <span className="nv-rail__sp" />
@@ -113,7 +117,7 @@ function UserMenu({ user, onSignOut }: { user: CurrentUser; onSignOut: () => voi
     <div className="nv-user" ref={ref}>
       <button
         type="button"
-        className="nv-avatar nv-avatar--sm nv-user__btn"
+        className="nv-user__btn"
         aria-haspopup="menu"
         aria-expanded={open}
         title={user.name}
@@ -121,14 +125,16 @@ function UserMenu({ user, onSignOut }: { user: CurrentUser; onSignOut: () => voi
           setOpen(!open);
         }}
       >
-        {user.name.slice(0, 1).toUpperCase()}
+        <span className="nv-avatar nv-avatar--sm" aria-hidden="true">
+          {user.name.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="nv-user__id">
+          <span>{user.name}</span>
+          <small>{ROLE_LABELS[user.role]}</small>
+        </span>
       </button>
       {open ? (
         <div className="nv-user__menu nv-glass nv-glass--thick" role="menu">
-          <p className="nv-user__who">
-            <b>{user.name}</b>
-            {ROLE_LABELS[user.role]}
-          </p>
           <button
             type="button"
             role="menuitem"

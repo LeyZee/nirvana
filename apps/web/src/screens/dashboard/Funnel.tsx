@@ -2,7 +2,7 @@ import { funnelSteps } from '@nirvana/design-system';
 import type { JSX } from 'react';
 
 import { signed } from './logic';
-import { CountUp, lightUp, type FloatingTip } from './parts';
+import { CountUp, type FloatingTip } from './parts';
 
 /** The steps of the fans' path, in the trade's words, with what each one means. */
 const STEPS: readonly { readonly name: string; readonly hint: string; readonly meaning: string }[] = [
@@ -39,7 +39,7 @@ export function FunnelPanel({
 }): JSX.Element {
   const { steps, breakIndex } = funnelSteps(counts, before);
   return (
-    <div className="nv-funnel nv-glass db-funnel" ref={lightUp}>
+    <div className="nv-funnel nv-plate db-funnel">
       {steps.map((step, i) => {
         const label = STEPS[i];
         const previous = steps[i - 1];

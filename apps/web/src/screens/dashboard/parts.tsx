@@ -89,6 +89,7 @@ export function useFloatingTip(): FloatingTip {
   }, []);
 
   // A tip opened by a tap stays until the next tap: caught before the element's own handler, which may reopen it.
+  // The page scrolls under a tip placed in viewport coordinates: any scroll, wherever it happens, hides it too.
   const shown = tip !== null;
   useEffect(() => {
     if (!shown) return undefined;
@@ -96,8 +97,10 @@ export function useFloatingTip(): FloatingTip {
       if (event.pointerType !== 'mouse') hide();
     };
     document.addEventListener('pointerdown', onDown, true);
+    addEventListener('scroll', hide, { capture: true, passive: true });
     return () => {
       document.removeEventListener('pointerdown', onDown, true);
+      removeEventListener('scroll', hide, { capture: true });
     };
   }, [shown, hide]);
   const bind = useCallback(

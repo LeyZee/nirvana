@@ -45,7 +45,7 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
         </header>
       )}
       <section
-        className="db-hero nv-glass nv-enter"
+        className="db-hero nv-enter"
         style={{ '--_c': TONE_COLOR.warn, '--nv-i': 1 }}
         role="status"
         aria-live="polite"
@@ -78,7 +78,7 @@ export function DashboardPage(): JSX.Element {
   if (view.status === 'loading') {
     return (
       <div className="db" aria-busy="true">
-        <div className="db-loading nv-glass" aria-label="Chargement du Dashboard" role="status" />
+        <div className="db-loading nv-plate" aria-label="Chargement du Dashboard" role="status" />
       </div>
     );
   }
@@ -125,7 +125,7 @@ function Loaded({
 
   const periodControl = <PeriodControl period={period} onChange={onPeriod} />;
   return (
-    <div className="db" onScroll={tip.hide}>
+    <div className="db">
       <header className="db-top nv-enter">
         <div className="db-top__who">
           <span className="db-top__av" aria-hidden="true">
@@ -179,7 +179,7 @@ function Loaded({
 
       {sales === null ? (
         <Section title="Ventes" sub="ce que l’agent et les chatteurs vendent" index={2}>
-          <p className="db-pending nv-glass">
+          <p className="db-pending nv-plate">
             Les ventes s’afficheront ici dès que la connexion à Reveal les observera. En attendant, elles se
             lisent dans Reveal.
           </p>
