@@ -91,7 +91,7 @@ Mode auto : `CreatorSettings.auto_approve_categories` (ex. `['small_talk','kyc',
 
 ## 5. Prise en main humaine
 
-- `takeover(conversationId, by)` : state `human`, event, le bot ne génère plus. L'humain écrit depuis le dashboard (envoi via le même `conversation.send`, `author: human`).
+- `takeover(conversationId, by)` : state `human`, event, le bot ne génère plus. Permis aussi sur une conversation déjà à `human` (après une remise à l'humain) : la prise en main ferme l'alerte Telegram. L'humain écrit depuis le dashboard (envoi via le même `conversation.send`, `author: human`).
 - `release(conversationId, by, note?)` : state `idle`, la note est ajoutée en `fan_fact` catégorie `operator_note`, le bot relit tout l'historique à sa prochaine réponse.
 - `handoff` demandé par la politique : state `human` + notification urgente ; la conversation ne redevient automatique qu'à `release`.
 

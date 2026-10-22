@@ -39,6 +39,7 @@ const TRANSITIONS: Readonly<Record<ConversationCommand, Transitions>> = {
   expire: { awaiting_approval: 'idle', pending: 'pending', sending: 'idle' },
   send_verified: { sending: 'idle', pending: 'pending' },
   send_failed_final: { sending: 'error', pending: 'error' },
+  // From `human` too: a chatter takes a conversation the engine handed over, which closes its alert (ADR 0020).
   takeover: {
     idle: 'human',
     pending: 'human',
@@ -47,8 +48,10 @@ const TRANSITIONS: Readonly<Record<ConversationCommand, Transitions>> = {
     sending: 'human',
     paused: 'human',
     error: 'human',
+    human: 'human',
   },
-  // The engine hands the conversation to the chatters (guard, budget, its own call): same reach as a takeover.
+  // The engine hands the conversation to the chatters (guard, budget, its own call): same reach as a takeover,
+  // except a conversation a human already holds.
   handoff: {
     idle: 'human',
     pending: 'human',

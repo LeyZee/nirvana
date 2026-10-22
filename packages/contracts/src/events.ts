@@ -36,6 +36,8 @@ const messagePayload = z.object({
 });
 
 const sendPayload = z.object({
+  /** The conversation it belongs to: `send_failed` reaches the alerts, which close per conversation (ADR 0020). */
+  conversationId: ConversationIdSchema,
   draftId: DraftIdSchema,
   idempotencyKey: z.string().min(1),
   attempt: z.number().int().min(1),
@@ -183,7 +185,7 @@ export const EVENT_PAYLOADS = {
     detail: z.array(z.string().max(500)).max(20),
   }),
   takeover_started: takeoverPayload,
-  takeover_ended: controlPayload,
+  takeover_ended: takeoverPayload,
   mode_changed: controlPayload,
   kill_switch_toggled: z.object({
     scope: KillSwitchScopeSchema,

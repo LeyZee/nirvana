@@ -147,6 +147,16 @@ describe('conversations module (P0-05)', () => {
     return rows.map((row) => row.type);
   }
 
+  /** The outbox copies of this conversation's events, oldest first. */
+  async function outboxOf(conversationId: ConversationId) {
+    const rows = await test.admin.db
+      .select({ type: schema.domainEvents.type, payload: schema.domainEvents.payload })
+      .from(schema.domainEvents)
+      .where(sql`${schema.domainEvents.payload}->>'conversationId' = ${conversationId}`)
+      .orderBy(schema.domainEvents.createdAt);
+    return rows;
+  }
+
   async function conversationRow(conversationId: ConversationId) {
     const [row] = await test.admin.db
       .select()
@@ -351,6 +361,21 @@ describe('conversations module (P0-05)', () => {
     expect(await conversationRow(conversationId)).toMatchObject({ state: 'error' });
     await conversations.release(command(conversationId));
     expect(await conversationRow(conversationId)).toMatchObject({ state: 'idle' });
+    // Only the last failure reaches the outbox, and both alerts' events name the conversation (ADR 0020).
+    const published = await outboxOf(conversationId);
+    const failures = published.filter((event) => event.type === 'send_failed');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.payload).toMatchObject({ attempt: 3, isFinal: true });
+    expect(published.map((event) => event.type)).toContain('takeover_ended');
+  });
+
+  it('lets a human take a conversation a human already holds, as after a handoff', async () => {
+    const { conversationId } = await ingest('c-handed');
+    await conversations.takeover({ ...command(conversationId), reason: 'Je prends' });
+    await conversations.takeover({ ...command(conversationId), reason: 'Je reprends' });
+    expect(await conversationRow(conversationId)).toMatchObject({ state: 'human' });
+    const published = await outboxOf(conversationId);
+    expect(published.filter((event) => event.type === 'takeover_started')).toHaveLength(2);
   });
 
   it('rebuilds the projection from a journal of 20 varied events', async () => {

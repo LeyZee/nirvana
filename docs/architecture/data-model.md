@@ -71,13 +71,13 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | Événements | Payload |
 |---|---|
 | `message_received`, `message_sent` | `messageId`, `platformMessageId`, `direction`, `author`, `mediaIds` |
-| `send_attempted`, `send_failed`, `send_verified` | `draftId`, `idempotencyKey`, `attempt`, `error?` (code) |
+| `send_attempted`, `send_failed`, `send_verified` | `conversationId`, `draftId`, `idempotencyKey`, `attempt`, `error?` (code), `isFinal?` (`send_failed` : aucun essai ne suit ; seul celui-là va dans l'outbox) |
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
 | `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` |
-| `takeover_started` | `conversationId`, `userId?`, `reason?` |
-| `takeover_ended`, `mode_changed` | `userId?`, `reason?`, `mode?` |
+| `takeover_started`, `takeover_ended` | `conversationId`, `userId?`, `reason?` |
+| `mode_changed` | `userId?`, `reason?`, `mode?` |
 | `kill_switch_toggled` | `scope`, `scopeId`, `active`, `reason` |
 | `follow_up_scheduled`, `follow_up_cancelled` | `jobKey`, `runAt?` |
 | `offer_made`, `sale_detected` | `offerId?`, `saleId?`, `amountMinor`, `currency` |

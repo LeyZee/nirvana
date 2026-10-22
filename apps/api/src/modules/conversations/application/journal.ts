@@ -6,13 +6,23 @@ import type { Conversation, Draft, DraftDecision, EventMeta, Transaction } from 
 import { applyEvent, commandFor } from '../domain/projection';
 import { canDraftBecome, nextState } from '../domain/state-machine';
 
-/** Events other modules react to (`supervision` notifies on a new draft): also written to the outbox. */
+/**
+ * Events other modules react to (`supervision` notifies on a new draft, `telegram` opens and closes alerts): also
+ * written to the outbox. Only the last failure of a send is news; the retries before it stay in the journal.
+ */
 const PUBLISHED: ReadonlySet<EventType> = new Set([
   'draft_created',
   'message_sent',
   'handoff_requested',
   'takeover_started',
+  'takeover_ended',
+  'send_failed',
 ]);
+
+function isPublished(body: EventBody): boolean {
+  if (body.type === 'send_failed') return body.payload.isFinal === true;
+  return PUBLISHED.has(body.type);
+}
 
 /**
  * The only way the module writes an event (ADR 0007): checks the transition, appends to the journal, writes the
@@ -32,7 +42,7 @@ export async function appendEvent(
   await tx.events.append(conversation, body, meta);
   const projection = applyEvent(projectionOf(conversation), body, meta.at);
   await tx.conversations.saveProjection(conversation.id, projection);
-  if (PUBLISHED.has(body.type)) await tx.events.publish(conversation.creatorId, body, meta);
+  if (isPublished(body)) await tx.events.publish(conversation.creatorId, body, meta);
   return { ...conversation, ...projection };
 }
 

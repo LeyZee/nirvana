@@ -25,12 +25,12 @@ describe('conversation state machine', () => {
     expect(nextState('idle', 'approve')).toBeNull();
     expect(nextState('human', 'create_draft')).toBeNull();
     expect(nextState('idle', 'release')).toBeNull();
-    expect(nextState('human', 'takeover')).toBeNull();
+    expect(nextState('human', 'handoff')).toBeNull();
   });
 
-  it('lets a human take over from anywhere but human, and release only human or error', () => {
+  it('lets a human take over from anywhere, and release only human or error', () => {
     for (const state of ConversationStateSchema.options) {
-      expect(nextState(state, 'takeover')).toBe(state === 'human' ? null : 'human');
+      expect(nextState(state, 'takeover')).toBe('human');
       const released = nextState(state, 'release');
       expect(released).toBe(state === 'human' || state === 'error' ? 'idle' : null);
     }
@@ -38,7 +38,7 @@ describe('conversation state machine', () => {
 
   it('lets the engine hand over from anywhere a takeover could, and stand down only while answering', () => {
     for (const state of ConversationStateSchema.options) {
-      expect(nextState(state, 'handoff')).toBe(nextState(state, 'takeover'));
+      expect(nextState(state, 'handoff')).toBe(state === 'human' ? null : 'human');
       const skipped = nextState(state, 'skip_reply');
       expect(skipped).toBe(state === 'pending' || state === 'drafting' ? 'idle' : null);
     }
