@@ -127,3 +127,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Telegram : alerte quand un message de l'agent ne part pas (recette R-G5) | done | `log/2026-10-22-telegram-send-failed.md` |
 | 2026-10-19 | identity_policy retiré, rester en personnage fixé dans le code (ADR 0021) | done | `log/2026-10-19-remove-identity-policy.md` |
 | 2026-10-19 | Dashboard : clé manquante et jobs bloqués (R-G6) | done | `log/2026-10-19-dashboard-health.md` |
+| 2026-10-22 | Réponse au fan qui a écrit pendant un Arrêt (R-G2) | done | `log/2026-10-22-resume-after-stop.md` |

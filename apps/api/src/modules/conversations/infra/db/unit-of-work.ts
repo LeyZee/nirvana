@@ -77,6 +77,14 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .orderBy(schema.conversations.id);
         return rows.map((row) => ConversationIdSchema.parse(row.id));
       },
+      async idsInState(state) {
+        const rows = await tx
+          .select({ id: schema.conversations.id })
+          .from(schema.conversations)
+          .where(eq(schema.conversations.state, state))
+          .orderBy(schema.conversations.id);
+        return rows.map((row) => ConversationIdSchema.parse(row.id));
+      },
     },
 
     messages: {

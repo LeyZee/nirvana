@@ -3,12 +3,16 @@ import {
   ConversationIdSchema,
   CreatorIdSchema,
   EventIdSchema,
+  JOB_MAX_ATTEMPTS,
+  jobKeyFor,
   KillSwitchIdSchema,
   KillSwitchScopeSchema,
   newId,
+  queueNameFor,
   type KillSwitchScope,
 } from '@nirvana/contracts';
 import {
+  and,
   decryptSecret,
   encryptSecret,
   eq,
@@ -95,7 +99,40 @@ export async function setKillSwitch(adminDb: Database, input: KillSwitchInput): 
       entityId: parsed.scopeId,
       details: { scope: parsed.scope, reason: parsed.reason },
     });
+    if (!parsed.active) await answerWhoWaited(tx, parsed, creatorId, `ops:${at.toISOString()}`);
   });
+}
+
+/**
+ * A fan who wrote while a switch was on stays `pending`: `respond` ran, saw the switch and did nothing. Lifting it
+ * answers each of them now (recette R-G2); a switch still on elsewhere keeps `respond` doing nothing, as before.
+ */
+async function answerWhoWaited(
+  tx: Transaction,
+  input: KillSwitchInput,
+  creatorId: string | null,
+  correlationId: string,
+): Promise<void> {
+  const pending = eq(schema.conversations.state, 'pending');
+  const waiting = await tx
+    .select({ id: schema.conversations.id, creatorId: schema.conversations.creatorId })
+    .from(schema.conversations)
+    .where(
+      input.scope === 'global'
+        ? pending
+        : input.scope === 'creator' && creatorId !== null
+          ? and(pending, eq(schema.conversations.creatorId, creatorId))
+          : and(pending, eq(schema.conversations.id, ConversationIdSchema.parse(input.scopeId))),
+    );
+  for (const conversation of waiting) {
+    await tx.execute(sql`select public.enqueue_job(
+      task => 'conversation.respond',
+      payload => ${JSON.stringify({ creatorId: conversation.creatorId, conversationId: conversation.id, correlationId })}::jsonb,
+      queue_name => ${queueNameFor(conversation.id)},
+      max_attempts => ${JOB_MAX_ATTEMPTS['conversation.respond']}::int,
+      job_key => ${jobKeyFor('conversation.respond', conversation.id)}
+    )`);
+  }
 }
 
 /** Signs out every dashboard session, or one user's (by e-mail). Returns how many were revoked. */
