@@ -44,7 +44,7 @@ import { createSalesModule, type SalesModule } from './modules/sales';
 import { createScriptsModule, type ScriptsModule } from './modules/scripts';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
-import { checkReadiness, type Readiness } from './readiness';
+import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
 
 /** Every business module, wired. */
 interface Modules {
@@ -267,8 +267,15 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       db: db.db,
       requireRole,
       budget: () => llm.gateway.health().budget,
-      isVoiceOk: () => llm.gateway.health().roles.find((r) => r.role === 'voice')?.state === 'ok',
+      voiceHealth: () => {
+        const voice = llm.gateway.health().roles.find((r) => r.role === 'voice');
+        return {
+          ok: voice?.state === 'ok',
+          keyMissing: voice === undefined || (!voice.hasKey && voice.fallback?.hasKey !== true),
+        };
+      },
       voice: activeVoice,
+      deadJobs: (creatorId) => countDeadJobs(adminDb.db, creatorId),
       automatic: { read: (creatorId) => conversations.automaticLock(creatorId) },
       ...(telegram !== null && {
         telegram: {

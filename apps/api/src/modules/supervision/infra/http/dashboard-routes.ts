@@ -2,6 +2,7 @@ import {
   DashboardQuerySchema,
   DashboardSchema,
   DomainError,
+  type CreatorId,
   type DashboardPeriod,
   type UserRole,
 } from '@nirvana/contracts';
@@ -9,7 +10,7 @@ import { startOfLocalDay } from '@nirvana/llm';
 import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
-import { assembleDashboard, type BudgetReading } from '../../domain/dashboard';
+import { assembleDashboard, type BudgetReading, type VoiceHealth } from '../../domain/dashboard';
 import type {
   AutomaticView,
   DashboardReader,
@@ -25,8 +26,10 @@ export interface DashboardRouteDeps {
   readonly requireRole: RequireRole;
   /** The day's AI spend and cap, every creator together (the gateway's health). */
   readonly budget: () => BudgetReading;
-  /** A voice model answers, main or fallback. */
-  readonly isVoiceOk: () => boolean;
+  /** A voice model answers, main or fallback; `keyMissing` when neither has a key. */
+  readonly voiceHealth: () => VoiceHealth;
+  /** Jobs the worker gave up on, hers or of no creator (read with the admin role: Graphile's schema). */
+  readonly deadJobs: (creatorId: CreatorId) => Promise<number | null>;
   readonly voice: VoiceVersion;
   readonly automatic: AutomaticView;
   /** Absent when Telegram is off (no encryption key): both Telegram fields are null. */
@@ -64,9 +67,10 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           return { now, dayStart, periodStart: periodStart(period, now, dayStart), voice: deps.voice };
         });
         if (read === undefined) throw new DomainError('creator_not_found', 'Créatrice introuvable');
-        const [telegram, automatic] = await Promise.all([
+        const [telegram, automatic, deadJobs] = await Promise.all([
           deps.telegram?.read(creatorId),
           deps.automatic.read(creatorId),
+          deps.deadJobs(creatorId),
         ]);
         return assembleDashboard({
           creatorId,
@@ -74,7 +78,8 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           facts: read.facts,
           window: read.window,
           budget: deps.budget(),
-          isVoiceOk: deps.isVoiceOk(),
+          voice: deps.voiceHealth(),
+          deadJobs,
           telegram,
           automatic,
         });
