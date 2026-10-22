@@ -71,6 +71,20 @@ describe('connecting a key', () => {
     expect(result.ok).toBe(false);
     expect((await store.find('xai'))?.key).toBe(OLD_KEY);
   });
+
+  it('says a quota stopped the check, without vouching for the key', async () => {
+    const { deps, store } = setup({ current: { ok: false, kind: 'unreachable', reason: 'rate_limited' } });
+    const result = await connectProvider(deps, 'xai', NEW_KEY);
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: 'unreachable',
+        message:
+          'xAI limite les appels pour l’instant (quota ou trop de requêtes). La clé n’a pas pu être vérifiée ; réessaie dans une minute.',
+      },
+    });
+    expect(await store.find('xai')).toBeNull();
+  });
 });
 
 describe('after the connection', () => {

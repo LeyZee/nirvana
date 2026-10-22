@@ -101,6 +101,7 @@ export async function connectProvider(
     const details = {
       ...(outcome.availableModels === undefined ? {} : { availableModels: outcome.availableModels }),
       ...(outcome.permission === undefined ? {} : { permission: outcome.permission }),
+      ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
       ...(settings.visionModel === undefined ? {} : { visionModel: settings.visionModel }),
     };
     return err({ kind: outcome.kind, message: describeRefusal(provider, outcome.kind, details) });

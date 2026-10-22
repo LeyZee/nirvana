@@ -119,3 +119,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Interrupteur global hors d'atteinte des créatrices (G16) | done | `log/2026-10-19-kill-switch-rls.md` |
 | 2026-10-19 | ADR 0015 et 0018 acceptées (G16) | done | `log/2026-10-19-adr-status.md` |
 | 2026-10-19 | Dashboard : phrase des urgences, sous-titre, lecteur | done | `log/2026-10-19-dashboard-details.md` |
+| 2026-10-19 | Clés IA : texte vrai quand la vérification échoue (quota ou panne) | done | `log/2026-10-19-cles-texte-injoignable.md` |

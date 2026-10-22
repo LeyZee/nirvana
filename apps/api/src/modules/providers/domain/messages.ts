@@ -1,6 +1,7 @@
 import type { AiProvider, ProviderErrorKind, ProviderFact, ProviderVoice } from '@nirvana/contracts';
 
 import { profileOf } from './catalog';
+import type { UnreachableReason } from './verification';
 
 /**
  * The single translation table (fiche P3-03, § Quand ça ne marche pas): the sheet, the Services line, the Dashboard
@@ -11,6 +12,7 @@ export interface RefusalDetails {
   readonly availableModels?: readonly string[];
   readonly permission?: string;
   readonly visionModel?: string;
+  readonly reason?: UnreachableReason;
 }
 
 const PERMISSION_LABELS: Readonly<Record<string, string>> = {
@@ -57,8 +59,11 @@ export function describeRefusal(
         ? `La clé n’a pas tous les accès nécessaires. Vérifie ses accès dans ${vendor}.`
         : `La clé ne peut pas lire tout ce qu’il faut. Ajoute ${label} à ses accès.`;
     }
+    // The key was never checked: neither text says whether it is good (recette du 19/10).
     case 'unreachable':
-      return `${vendor} ne répond pas ou freine les vérifications. Ta clé n’est pas en cause ; réessaie dans une minute.`;
+      return details.reason === 'rate_limited'
+        ? `${vendor} limite les appels pour l’instant (quota ou trop de requêtes). La clé n’a pas pu être vérifiée ; réessaie dans une minute.`
+        : `${vendor} ne répond pas normalement pour l’instant. La clé n’a pas pu être vérifiée ; réessaie dans une minute.`;
   }
 }
 

@@ -89,6 +89,19 @@ describe('the single translation table', () => {
     );
   });
 
+  it('never vouches for a key it could not check: a quota and an outage each say what happened', () => {
+    expect(describeRefusal('xai', 'unreachable', { reason: 'rate_limited' })).toBe(
+      'xAI limite les appels pour l’instant (quota ou trop de requêtes). La clé n’a pas pu être vérifiée ; réessaie dans une minute.',
+    );
+    expect(describeRefusal('mistral', 'unreachable', { reason: 'outage' })).toBe(
+      'Mistral ne répond pas normalement pour l’instant. La clé n’a pas pu être vérifiée ; réessaie dans une minute.',
+    );
+    for (const reason of [undefined, 'rate_limited', 'outage'] as const) {
+      const sentence = describeRefusal('google', 'unreachable', reason === undefined ? {} : { reason });
+      expect(sentence).not.toMatch(/pas en cause|clé est bonne|clé fonctionne/);
+    }
+  });
+
   it('counts low credit in voice notes', () => {
     expect(describeLowCredit(4_000)).toBe('Plus que 40 vocaux ce mois. Recharge avant d’en manquer.');
   });

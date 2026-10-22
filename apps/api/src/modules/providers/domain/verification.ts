@@ -28,7 +28,11 @@ export interface RefusedKey {
   readonly availableModels?: readonly string[];
   /** For `missing_permission`: the provider's own permission name, when it says. */
   readonly permission?: string;
+  /** For `unreachable`: a quota or rate limit (429) is not a provider that is down, and the screen says which. */
+  readonly reason?: UnreachableReason;
 }
+
+export type UnreachableReason = 'rate_limited' | 'outage';
 
 export type VerificationOutcome = VerifiedKey | RefusedKey;
 

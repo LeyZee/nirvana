@@ -1,3 +1,5 @@
+import type { RefusedKey } from '../domain/verification';
+
 /**
  * One read-only GET for a verifier. No retry: verification is driven by Charles pasting a key or by the 15-minute
  * job, and an unreachable provider is reported as such (`unreachable`) without touching the saved key.
@@ -45,4 +47,14 @@ function parseBody(text: string): unknown {
  */
 export function isProviderTrouble(status: number): boolean {
   return status >= 500 || status === 408 || status === 429;
+}
+
+/**
+ * The `unreachable` outcome with what the provider actually did: a 429 is a quota or a rate limit; a 5xx, a timeout,
+ * a network error or an answer Nirvana cannot read is a provider that is not answering normally. Neither says
+ * anything about the key, so the text must not claim it is fine either.
+ */
+export function unreachableFrom(reply: HttpReply): RefusedKey {
+  const reason = reply.kind === 'reply' && reply.status === 429 ? 'rate_limited' : 'outage';
+  return { ok: false, kind: 'unreachable', reason };
 }
