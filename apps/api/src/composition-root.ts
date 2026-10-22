@@ -36,7 +36,7 @@ import {
   type DraftComposer,
 } from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
-import { createMediaModule, type MediaModule } from './modules/media';
+import { createMediaModule, missingMediaBinaries, type MediaModule } from './modules/media';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
@@ -173,6 +173,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           },
         });
   if (telegram === null) logger.warn('Telegram notifications off: CREDENTIALS_ENCRYPTION_KEYS is not set');
+  // A fan's video needs ffmpeg and ffprobe: said at start-up, not on the first video.
+  const mediaMissing = await missingMediaBinaries();
+  if (mediaMissing.length > 0) {
+    logger.warn({ missing: mediaMissing }, 'ffmpeg missing: fan videos and voice notes cannot be read');
+  }
   const llmCalls = createDrizzleLlmCallStore(adminDb.db);
   // The day's calls of both processes, reloaded every 30 s: one daily cap for the API and the worker.
   const llmLog = await createPersistentCallLog(llmCalls, {

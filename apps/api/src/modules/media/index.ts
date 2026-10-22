@@ -2,6 +2,8 @@
 export { createMediaDescriber, type MediaDescriber } from './application/describe-media';
 export { mediaKindOf, sniffMediaType } from './domain/media';
 export { createFfmpegMediaTools } from './infra/ffmpeg-media-tools';
+/** @public Read once by the composition root at start-up: a missing ffmpeg is said in the log. */
+export { missingMediaBinaries } from './infra/ffmpeg-media-tools';
 export {
   createGatewaySenser,
   createGatewayTranscriber,
