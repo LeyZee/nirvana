@@ -9,7 +9,13 @@ import { cn } from '@/lib/utils';
  * you are and what to do, then content `Panel`s (plates, not glass). Sections with several screens put a `SubNav` in the header.
  */
 
-export function Page({ children, className }: { children: ReactNode; className?: string }): JSX.Element {
+export function Page({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+}): JSX.Element {
   return <div className={cn('nv-page', className)}>{children}</div>;
 }
 

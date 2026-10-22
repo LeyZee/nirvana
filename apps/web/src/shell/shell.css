@@ -432,6 +432,10 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: 28px;
 }
+/* A screen that holds its own scroller (the Playground thread, composer pinned below) fills the stage instead. */
+.nv-page--fill {
+  height: 100%;
+}
 .nv-page > * {
   animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
