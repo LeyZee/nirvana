@@ -4,8 +4,8 @@ import { confirmPassword } from '../services/api';
 
 const MESSAGES = {
   wrong_credentials: 'Ce n’est pas le bon mot de passe.',
-  too_many_attempts: 'Trop d’essais. Attends une minute.',
-  unavailable: 'Nirvana ne répond pas. Réessaie dans un instant.',
+  too_many_attempts: 'Trop d’essais. Réessaie dans quelques minutes.',
+  unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
   session_expired: 'Ta session a expiré. Reconnecte-toi.',
 } as const;
 

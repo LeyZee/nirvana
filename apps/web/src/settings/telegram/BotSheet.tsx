@@ -36,7 +36,7 @@ const POLL_MS = 2000;
 const RELISTEN_MS = 18_000;
 const TOKEN_HINT =
   'Ce n’est pas un jeton de bot. Il ressemble à 123456789:AAF… : des chiffres, deux-points, puis une longue suite de lettres.';
-const OFFLINE = 'Nirvana ne répond pas. Réessaie dans un instant.';
+const OFFLINE = 'Le serveur ne répond pas. Réessaie dans un instant.';
 
 export function BotSheet({
   mode,
@@ -387,7 +387,7 @@ function ListenStep({
           <div className="tg-whisper">J’attends le groupe…</div>
           <span className="tg-hint">
             {isOffline
-              ? 'Nirvana ne répond pas pour l’instant. Il continue d’écouter.'
+              ? 'Le serveur ne répond pas pour l’instant. La page réessaie toute seule.'
               : 'Garde cette fenêtre ouverte pendant que tu l’ajoutes.'}
           </span>
         </div>

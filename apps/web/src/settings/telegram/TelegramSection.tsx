@@ -46,7 +46,7 @@ import './telegram.css';
 
 /** The page refreshes on its own: a bot removed from a group turns orange without a reload. */
 const REFRESH_MS = 30_000;
-const OFFLINE = 'Nirvana ne répond pas. Réessaie dans un instant.';
+const OFFLINE = 'Le serveur ne répond pas. Réessaie dans un instant.';
 
 type Load =
   { kind: 'loading' } | { kind: 'failed' } | { kind: 'off' } | { kind: 'ready'; overview: TelegramOverview };
@@ -149,11 +149,11 @@ export function TelegramSection(): JSX.Element {
     return (
       <section className="tg-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
-          <div className="nv-glass tg-cover" data-state="bad">
+          <div className="nv-glass tg-cover" data-state="warn">
             <div>
-              <p className="tg-cover__title">Telegram ne répond pas</p>
+              <p className="tg-cover__title">Le serveur ne répond pas</p>
               <p className="tg-cover__sub">
-                Nirvana n’a pas pu lire les bots et les groupes. Réessaie dans un instant.
+                Les bots et les groupes n’ont pas pu être lus. Réessaie dans un instant.
               </p>
               <button type="button" className="nv-btn nv-btn--soft tg-top" onClick={() => void refresh()}>
                 Réessayer
@@ -162,7 +162,7 @@ export function TelegramSection(): JSX.Element {
           </div>
         ) : null}
         {load.kind === 'off' ? (
-          <div className="nv-glass tg-cover" data-state="bad">
+          <div className="nv-glass tg-cover" data-state="warn">
             <div>
               <p className="tg-cover__title">Telegram est éteint</p>
               <p className="tg-cover__sub">
@@ -546,7 +546,7 @@ function AlertsTab({
   const failed = shown.filter((d) => !deliveryLabel(d).isOk).length;
   return (
     <>
-      <section className="nv-glass tg-cover" data-state={cover.isOk ? 'ok' : 'bad'} aria-live="polite">
+      <section className="nv-glass tg-cover" data-state={cover.isOk ? 'ok' : 'warn'} aria-live="polite">
         <div className="tg-cover__orb">
           <svg
             viewBox="0 0 24 24"
