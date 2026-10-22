@@ -275,7 +275,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         };
       },
       voice: activeVoice,
-      deadJobs: (creatorId) => countDeadJobs(adminDb.db, creatorId),
+      deadJobs: (creatorId) => countDeadJobs(adminDb.db, creatorId, Object.keys(tasks)),
       automatic: { read: (creatorId) => conversations.automaticLock(creatorId) },
       ...(telegram !== null && {
         telegram: {

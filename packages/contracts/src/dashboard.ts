@@ -106,8 +106,8 @@ export const DashboardSchema = z.object({
     outagesLast7d: count,
   }),
   /**
-   * Jobs the worker gave up on (attempts spent) for her or for no creator: work that will not happen until someone
-   * looks (operations.md). `null` when the count could not be read.
+   * Stuck jobs for her or for no creator: given up on (attempts spent), or due for 15 minutes under a name no worker
+   * task takes. Work that will not happen until someone looks (operations.md). `null` when the count could not be read.
    */
   jobs: z.object({ dead: count.nullable() }),
   replies: z.object({
