@@ -144,3 +144,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Refonte du design system : coquille et Dashboard (D-01) | done | `log/2026-10-22-d-01-coquille-dashboard.md` |
 | 2026-10-22 | Dashboard : envoi échoué pour de bon dans À traiter (R-G5) | done | `log/2026-10-22-dashboard-send-failed.md` |
 | 2026-10-22 | Playground : voix joignable et coûts en euros dans l'état | done | `log/2026-10-22-playground-state-euros.md` |
+| 2026-10-22 | Dashboard : prénom inventé pour un fan de l’exemple (ADR 0010) | done | `log/2026-10-22-dashboard-sample-names.md` |
