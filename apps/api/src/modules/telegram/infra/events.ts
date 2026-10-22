@@ -21,7 +21,7 @@ const HandoffSchema = z.object({
   cause: HandoffCauseSchema.optional().catch(undefined),
 });
 
-// `conversationId` since #60; a row written before it closes nothing.
+// `conversationId` since #60 on `takeover_started`; a row without it (an older one) closes nothing.
 const TakeoverSchema = z.object({
   conversationId: ConversationIdSchema.optional().catch(undefined),
   userId: z.string().min(1).optional().catch(undefined),
@@ -68,6 +68,15 @@ function signalOf(type: string, payload: unknown): Signal | null {
       if (!parsed.success) return null;
       return {
         kind: 'takeover',
+        conversationId: parsed.data.conversationId ?? null,
+        userId: parsed.data.userId ?? null,
+      };
+    }
+    case 'takeover_ended': {
+      const parsed = TakeoverSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return {
+        kind: 'release',
         conversationId: parsed.data.conversationId ?? null,
         userId: parsed.data.userId ?? null,
       };

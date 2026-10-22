@@ -152,6 +152,15 @@ describe('reading the outbox', () => {
     });
   });
 
+  it('reads the hand-back to the agent, with or without its conversation', () => {
+    expect(
+      toScannedEvent({ ...base, type: 'takeover_ended', payload: { conversationId, userId: 'u1' } }),
+    ).toMatchObject({ signal: { kind: 'release', conversationId, userId: 'u1' } });
+    expect(toScannedEvent({ ...base, type: 'takeover_ended', payload: { userId: 'u1' } })).toMatchObject({
+      signal: { kind: 'release', conversationId: null, userId: 'u1' },
+    });
+  });
+
   it('keeps only the session changes that open or close a thread', () => {
     const session = (from: string, to: string) =>
       toScannedEvent({

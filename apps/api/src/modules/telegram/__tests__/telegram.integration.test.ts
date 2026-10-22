@@ -433,6 +433,34 @@ describe('telegram module on Postgres', () => {
     expect(await module.listDeliveries('urgent', 10)).toMatchObject([{ closedBy: 'Lucas', status: 'sent' }]);
   });
 
+  it('closes a handoff alert when the conversation goes back to the agent, and only once', async () => {
+    const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
+    const userId = 'user-release-test';
+    await test.admin.db
+      .insert(schema.user)
+      .values({ id: userId, name: 'Marie Ange', email: 'marie@example.test' })
+      .onConflictDoNothing();
+    const conversationId = newId(ConversationIdSchema);
+    await publish('handoff_requested', { conversationId, cause: 'llm_unavailable' });
+    await module.jobs.scan();
+    await module.jobs.flushChat(chatId);
+    await publish('takeover_ended', { conversationId, userId });
+    await module.jobs.scan();
+    offsetMs = 4000;
+    await module.jobs.flushChat(chatId);
+    expect(telegram.edits).toMatchObject([{ chatId: '-100', messageId: telegram.sent[0]?.messageId }]);
+    expect(telegram.edits[0]?.text).toMatch(/✓ Rendu à l’agent par Marie$/);
+    // A second hand-back (taken, given back again) leaves the closed alert as it is.
+    await publish('takeover_ended', { conversationId, userId });
+    await module.jobs.scan();
+    offsetMs = 8000;
+    await module.jobs.flushChat(chatId);
+    expect(telegram.edits).toHaveLength(1);
+    expect(await module.listDeliveries('important', 10)).toMatchObject([
+      { closedBy: 'Marie', status: 'sent' },
+    ]);
+  });
+
   it('answers the original message when the trouble ends', async () => {
     const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
     await publish('session_state_changed', { platformAccountId: 'acc-1', from: 'valid', to: 'expired' });

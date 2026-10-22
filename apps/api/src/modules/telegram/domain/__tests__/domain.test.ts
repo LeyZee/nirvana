@@ -5,7 +5,7 @@ import { nextBatch, type Pending } from '../batch';
 import { classify } from '../classify';
 import { chatsFor, computeCoverage } from '../coverage';
 import { describeTelegramError } from '../messages';
-import { MAX_TEXT, escapeHtml, joinTexts, renderNotice, renderTakenOver } from '../render';
+import { MAX_TEXT, escapeHtml, joinTexts, renderClosedBy, renderNotice } from '../render';
 import { morningDigestKey, nightOf, retryDelayMs, shouldRetry } from '../schedule';
 import { botIdOfToken } from '../token';
 
@@ -41,6 +41,17 @@ describe('classification (ADR 0020 §2)', () => {
       userId: 'u1',
     });
     expect(classify({ kind: 'takeover', conversationId: null, userId: 'u1' })).toBeNull();
+  });
+
+  it('closes the handoff alert when someone gives the conversation back to the agent', () => {
+    expect(classify({ kind: 'release', conversationId, userId: 'u1' })).toEqual({
+      kind: 'closure',
+      threadKey: `conversation:${conversationId}`,
+      mode: 'edit',
+      text: 'Rendu à l’agent',
+      userId: 'u1',
+    });
+    expect(classify({ kind: 'release', conversationId: null, userId: 'u1' })).toBeNull();
   });
 
   it('says the budget alert and the cap reached', () => {
@@ -130,8 +141,9 @@ describe('rendering (ADR 0020 §10)', () => {
   });
 
   it('closes a message with the first name of who took it', () => {
-    expect(renderTakenOver('texte', 'Lucas')).toBe('texte\n✓ Pris en main par Lucas');
-    expect(renderTakenOver('texte', null)).toBe('texte\n✓ Pris en main');
+    expect(renderClosedBy('texte', 'Pris en main', 'Lucas')).toBe('texte\n✓ Pris en main par Lucas');
+    expect(renderClosedBy('texte', 'Pris en main', null)).toBe('texte\n✓ Pris en main');
+    expect(renderClosedBy('texte', 'Rendu à l’agent', '<b>')).toBe('texte\n✓ Rendu à l’agent par &lt;b&gt;');
   });
 
   it('keeps a grouped message under Telegram’s limit and says how many are left out', () => {
