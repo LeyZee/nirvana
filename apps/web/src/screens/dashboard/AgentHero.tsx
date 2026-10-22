@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import type { JSX } from 'react';
 
 import { heroState, gaugeClass, litParts } from './logic';
@@ -53,7 +54,11 @@ export function AgentHero({
           </h1>
           {hero.lead === '' ? null : <p className="db-hero__lead">{hero.lead}</p>}
         </div>
-        {hero.action === undefined || (stopped ? onResume === undefined : first === undefined) ? null : (
+        {hero.action !== undefined && hero.actionTo !== undefined && !stopped ? (
+          <Link to={hero.actionTo} className="nv-btn nv-btn--soft nv-swap">
+            {hero.action}
+          </Link>
+        ) : hero.action === undefined || (stopped ? onResume === undefined : first === undefined) ? null : (
           <button
             type="button"
             className={`nv-btn ${stopped ? 'nv-btn--soft' : 'nv-btn--neon'} nv-swap`}
@@ -127,11 +132,11 @@ export function AgentHero({
         <details className="nv-disclosure">
           <summary>
             <span
-              className={`nv-dot nv-tone--${agent.tone === 'warn' ? 'ok' : agent.tone}${agent.tone === 'bad' ? ' nv-dot--live' : ''}`}
+              className={`nv-dot nv-tone--${agent.tone === 'warn' && agent.stalled !== true ? 'ok' : agent.tone}${agent.tone === 'bad' ? ' nv-dot--live' : ''}`}
               aria-hidden="true"
             />
             <span className="nv-disclosure__title">
-              {stopped && (agent.tone === 'ok' || agent.tone === 'warn')
+              {stopped && (agent.tone === 'ok' || agent.tone === 'warn') && agent.stalled !== true
                 ? 'Le reste fonctionne normalement'
                 : agent.foldTitle}
             </span>

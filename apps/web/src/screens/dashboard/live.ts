@@ -96,7 +96,7 @@ function today(iso: string, timeZone: string): string {
 }
 
 function agentState(api: ApiDashboard, now: Date): AgentState {
-  const { reveal, voice, replies, guards, budget, liveRate, todos } = api;
+  const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
   // Never read once and not connected: no account was ever linked. A step to come, not an outage.
   const unlinked = !reveal.connected && reveal.lastReadAt === null;
   const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
@@ -117,10 +117,12 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     },
     {
       id: 'voice',
-      tone: voice.ok ? 'ok' : 'bad',
+      // No key is a step to take, not an outage: amber, and the tip says where the key goes.
+      tone: voice.ok ? 'ok' : voice.keyMissing ? 'warn' : 'bad',
       title: 'IA qui écrit les messages',
-      value: voice.ok ? 'En service' : 'Ne répond plus',
+      value: voice.ok ? 'En service' : voice.keyMissing ? 'Clé manquante' : 'Ne répond plus',
       rows: [
+        ...(voice.keyMissing ? [['À poser dans', 'Réglages › Modèles IA'] as const] : []),
         [
           'Temps pour écrire',
           voice.medianWriteMs === null
@@ -137,13 +139,18 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     },
     {
       id: 'activity',
-      tone: replies.fansWaitingOver10Min > 0 ? 'warn' : 'ok',
+      // A job the worker gave up on is work that will not happen until someone looks: amber.
+      tone: replies.fansWaitingOver10Min > 0 || (jobs.dead ?? 0) > 0 ? 'warn' : 'ok',
       title: 'Délai de réponse habituel',
       value:
         replies.medianReplyMinutes === null ? 'pas encore mesuré' : replyDelay(replies.medianReplyMinutes),
       rows: [
         ['Conversations en cours', String(replies.conversationsOpen)],
         ['Fans qui attendent plus de 10 min', String(replies.fansWaitingOver10Min)],
+        [
+          'Tâches bloquées',
+          jobs.dead === null ? 'pas lu' : jobs.dead === 0 ? 'aucune' : `${String(jobs.dead)}, à regarder`,
+        ],
       ],
     },
     {
@@ -199,6 +206,7 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     `Reveal ${reveal.connected ? 'connecté' : unlinked ? 'pas encore relié' : 'déconnecté'}`,
     plural(reveal.conversations, 'conversation', 'conversations'),
     plural(guardCount, 'garde', 'gardes'),
+    ...(jobs.dead !== null && jobs.dead > 0 ? [plural(jobs.dead, 'tâche bloquée', 'tâches bloquées')] : []),
     `${euroCents(budget.spentToday)} sur ${eur(budget.cap)}`,
     rateText,
   ].join(' · ');
@@ -208,7 +216,11 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     cards,
   };
   // Reveal speaks first, but a voice down too is said in the same sentence, never only in the fold.
-  const alsoVoice = voice.ok ? '' : ' L’IA qui écrit ne répond pas non plus.';
+  const alsoVoice = voice.ok
+    ? ''
+    : voice.keyMissing
+      ? ' L’IA qui écrit attend aussi sa clé.'
+      : ' L’IA qui écrit ne répond pas non plus.';
   if (unlinked) {
     return {
       ...base,
@@ -226,6 +238,18 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
       headline: 'Reveal est **déconnecté**',
       lead: `L’agent ne lit plus les conversations. Reconnecte la session Reveal depuis l’extension.${alsoVoice}`,
       foldTitle: 'Quelque chose ne va pas',
+    };
+  }
+  if (voice.keyMissing) {
+    return {
+      ...base,
+      tone: 'warn',
+      stalled: true,
+      headline: 'L’IA qui écrit **attend sa clé**',
+      lead: 'Pose-la dans Réglages › Modèles IA › Services. D’ici là, les conversations restent aux chatteurs dans Reveal.',
+      action: 'Poser la clé',
+      actionTo: '/reglages/modeles-ia',
+      foldTitle: 'Une étape reste à faire',
     };
   }
   if (!voice.ok) {
@@ -257,6 +281,8 @@ function todoOf(todo: DashboardTodo, timeZone: string): Todo {
     why: todo.why,
     at: clock(todo.at, timeZone),
     fanId: todo.fanId,
+    // A draft to validate is decided in Suivi, on its conversation.
+    ...(todo.kind === 'awaiting_approval' ? { conversationId: todo.conversationId } : {}),
   };
 }
 

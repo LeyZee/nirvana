@@ -48,6 +48,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** Where the page's router is, once a test has rendered it. */
+let location = (): string => '';
+
 function renderDashboard(): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
@@ -57,9 +60,12 @@ function renderDashboard(): QueryClient {
     routeTree: root.addChildren([
       createRoute({ getParentRoute: () => root, path: '/', component: DashboardPage }),
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
+      createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
+      createRoute({ getParentRoute: () => root, path: '/suivi' }),
     ]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   });
+  location = () => router.state.location.href;
   render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
@@ -89,6 +95,35 @@ describe('DashboardPage on the server’s data', () => {
     expect(screen.getByText('Théo')).toBeDefined();
     // A todo of the server leaves the list when its conversation is handled, not on a tick here.
     expect(screen.queryByRole('button', { name: 'Marquer comme traité' })).toBeNull();
+  });
+
+  it('opens a draft to validate in Suivi, on its conversation', async () => {
+    const [draft] = apiDashboard().todos;
+    if (draft === undefined) throw new Error('the fixture has a todo');
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({ todos: [{ ...draft, tone: 'warn', kind: 'awaiting_approval' }] }),
+    });
+    renderDashboard();
+    fireEvent.click(await screen.findByRole('button', { name: 'À valider dans Suivi : Kévin' }));
+    await waitFor(() => {
+      expect(location()).toBe(`/suivi?conversation=${draft.conversationId}`);
+    });
+  });
+
+  it('says the voice waits for its key and leads to where it goes', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({ voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 } }),
+    });
+    renderDashboard();
+    await waitFor(() => {
+      expect(headline()).toBe('L’IA qui écrit attend sa clé');
+    });
+    fireEvent.click(screen.getByRole('link', { name: 'Poser la clé' }));
+    await waitFor(() => {
+      expect(location()).toBe('/reglages/modeles-ia');
+    });
   });
 
   it('says under the hero when nobody is warned at night', async () => {

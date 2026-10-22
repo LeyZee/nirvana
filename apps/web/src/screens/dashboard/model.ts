@@ -16,7 +16,10 @@ export const PERIODS: readonly { readonly id: Period; readonly label: string }[]
   { id: 'month', label: '30 jours' },
 ];
 
-/** One line of « À traiter ». `fanId` opens the reader; without it, `where` says what to open instead. */
+/**
+ * One line of « À traiter ». `conversationId` opens it in Suivi (a draft to validate), else `fanId` opens the reader;
+ * without either, `where` says what to open instead.
+ */
 export interface Todo {
   readonly id: string;
   readonly tone: Tone;
@@ -28,6 +31,7 @@ export interface Todo {
   /** « 23:41 », creator's time. */
   readonly at: string;
   readonly fanId?: string;
+  readonly conversationId?: string;
   readonly where?: string;
 }
 
@@ -51,6 +55,10 @@ export interface AgentState {
   readonly lead: string;
   /** The one action of the screen, when there is one (« Voir l'urgence »). */
   readonly action?: string;
+  /** Nothing is written, in a tone that is not red (its key is missing): its sentence still leads the hero. */
+  readonly stalled?: true;
+  /** Where the action leads, when it is a page and not the first todo (« Poser la clé » › Réglages). */
+  readonly actionTo?: '/reglages/modeles-ia';
   /** The fold's title (« L'agent fonctionne normalement ») and its one-line summary. */
   readonly foldTitle: string;
   readonly foldSummary: string;

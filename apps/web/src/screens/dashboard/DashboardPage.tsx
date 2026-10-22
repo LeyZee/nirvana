@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type JSX } from 'react';
 
 import { AgentHero } from './AgentHero';
@@ -99,9 +100,16 @@ function Loaded({
   const sales = data.sales?.[period] ?? null;
   const fan = data.fans.find((f) => f.id === fanId) ?? null;
 
-  const openTodo = useCallback((todo: Todo) => {
-    if (todo.fanId !== undefined) setFanId(todo.fanId);
-  }, []);
+  const navigate = useNavigate();
+  const openTodo = useCallback(
+    (todo: Todo) => {
+      // A draft to validate opens in Suivi, where it is decided; anything else in the read-only reader.
+      if (todo.conversationId !== undefined)
+        void navigate({ to: '/suivi', search: { conversation: todo.conversationId } });
+      else if (todo.fanId !== undefined) setFanId(todo.fanId);
+    },
+    [navigate],
+  );
   const openFan = useCallback((f: Fan) => {
     setFanId(f.id);
   }, []);
