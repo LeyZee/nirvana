@@ -1,7 +1,7 @@
 import type { PlaygroundAnswer, PlaygroundState } from '@nirvana/contracts';
 import type { JSX, ReactNode } from 'react';
 
-import { needsAttention, usd } from './logic';
+import { euros, needsAttention } from './logic';
 import { actionLabel, handoffReasons, intentLabel, isHandoff, riskLabel, sentimentLabel } from './model';
 
 type Level = 'none' | 'ok' | 'warn' | 'bad';
@@ -134,7 +134,7 @@ export function WhyPanel({
                 <dt>Latence</dt>
                 <dd>{(answer.latencyMs / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s</dd>
                 <dt>Coût</dt>
-                <dd>{usd(answer.costUsd)}</dd>
+                <dd>{euros(answer.costEur)}</dd>
               </dl>
               {answer.failure === undefined ? null : <p className="pg-why__fail">{answer.failure}</p>}
             </details>

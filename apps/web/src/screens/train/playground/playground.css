@@ -140,7 +140,8 @@
   font-size: 11px;
   color: var(--nv-ink-muted);
 }
-.pg-demo {
+.pg-demo,
+.pg-key {
   padding: 3px 9px;
   border-radius: 99px;
   font-size: 11px;
@@ -148,6 +149,13 @@
   color: var(--nv-warning);
   background: color-mix(in srgb, var(--nv-warning) 14%, transparent);
   cursor: help;
+}
+.pg-key {
+  text-decoration: none;
+  cursor: pointer;
+}
+.pg-key:hover {
+  background: color-mix(in srgb, var(--nv-warning) 22%, transparent);
 }
 
 /* ── Situation: the fan stays in view, the rest folds to one line each ── */

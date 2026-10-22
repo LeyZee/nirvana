@@ -36,8 +36,13 @@ export function money(cents: number): string {
   return `${(cents / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}\u00a0€`;
 }
 
-export function usd(value: number): string {
-  return `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+/**
+ * What the models cost, in euros like every amount on screen (ADR 0011). One answer costs a fraction of a
+ * cent: it says so rather than rounding to a misleading « 0,00 € ».
+ */
+export function euros(value: number): string {
+  if (value > 0 && value < 0.01) return 'moins de 0,01\u00a0€';
+  return `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\u00a0€`;
 }
 
 /** Her answer is stored as one turn; each line is a bubble. */
