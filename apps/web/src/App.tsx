@@ -10,12 +10,16 @@ import { createAppRouter, type RouterContext } from './router';
 
 type Session =
   | { status: 'loading' }
-  | { status: 'unreachable' }
+  /** `attempt` counts the failed reads in a row, so the next one waits a little longer. */
+  | { status: 'unreachable'; attempt: number }
   | { status: 'signed_out' }
   | { status: 'signed_in'; user: CurrentUser };
 
-/** How often the app asks again while the server does not answer, as the Dashboard does. */
-const RETRY_MS = 30_000;
+/**
+ * When the app asks again while the server does not answer: quickly at first (a local server still starting), then
+ * every 30 s, as the Dashboard does.
+ */
+const RETRY_MS = [3_000, 10_000, 30_000] as const;
 
 /**
  * Route guard: nothing of the dashboard renders without a session (P0-07a). Only a 401 means « no session »: a server
@@ -30,7 +34,10 @@ export function App(): JSX.Element {
         setSession(user === null ? { status: 'signed_out' } : { status: 'signed_in', user });
       },
       () => {
-        setSession({ status: 'unreachable' });
+        setSession((before) => ({
+          status: 'unreachable',
+          attempt: before.status === 'unreachable' ? before.attempt + 1 : 0,
+        }));
       },
     );
   }, []);
@@ -38,11 +45,11 @@ export function App(): JSX.Element {
   useEffect(refresh, [refresh]);
   useEffect(() => {
     if (session.status !== 'unreachable') return undefined;
-    const timer = setInterval(refresh, RETRY_MS);
+    const timer = setTimeout(refresh, RETRY_MS[Math.min(session.attempt, RETRY_MS.length - 1)]);
     return () => {
-      clearInterval(timer);
+      clearTimeout(timer);
     };
-  }, [session.status, refresh]);
+  }, [session, refresh]);
 
   if (session.status === 'loading') {
     // A breathing dot while the session is read: the page is not blank, and says nothing it does not know yet.

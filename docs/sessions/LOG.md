@@ -110,6 +110,7 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-19 | Le Dashboard et la barre lisent GET /v1/dashboard | done | `log/2026-10-19-web-dashboard-reel.md` |
 | 2026-10-19 | Le contrôle du Dashboard change vraiment le mode | done | `log/2026-10-19-web-mode-ecriture.md` |
 | 2026-10-19 | Serveur muet au chargement : plus d'écran de connexion à tort | done | `log/2026-10-19-web-serveur-muet-connexion.md` |
+| 2026-10-19 | Textes du CRM relevés par la recette | done | `log/2026-10-19-web-textes-recette.md` |
 | 2026-10-19 | Références plateforme du composeur pour la vision | done | `log/2026-10-19-compose-platform-refs.md` |
 | 2026-10-19 | IP réelle derrière le proxy, limite de connexion par compte (G6) | done | `log/2026-10-19-trust-proxy.md` |
 | 2026-10-19 | Verrou serveur de l'Automatique (B3) | done | `log/2026-10-19-automatic-lock.md` |

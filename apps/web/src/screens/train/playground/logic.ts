@@ -31,8 +31,9 @@ export function clockAt(iso: string, timeZone: string): string {
   );
 }
 
+/** What a fan spent, in euros as on Reveal and on the Dashboard. */
 export function money(cents: number): string {
-  return `${(cents / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} $`;
+  return `${(cents / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}\u00a0€`;
 }
 
 export function usd(value: number): string {

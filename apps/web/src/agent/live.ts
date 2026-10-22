@@ -25,7 +25,7 @@ export type LiveDashboard =
   | { readonly kind: 'empty' };
 
 /**
- * The Dashboard of the first creator (the screen has no creator picker yet: Messa is the only one), shared by the
+ * The Dashboard of the first creator (the screen has no creator picker yet), shared by the
  * Dashboard and the bar's pill through the query cache. A failed read is never covered by an older answer: the
  * screen says the server does not answer until it does again.
  */

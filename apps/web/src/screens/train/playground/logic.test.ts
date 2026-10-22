@@ -1,7 +1,7 @@
 import type { PlaygroundAnswer as Answer, PlaygroundState } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { bubblesOf, duration, needsAttention, percent, rateTone, stepOf } from './logic';
+import { bubblesOf, duration, money, needsAttention, percent, rateTone, stepOf } from './logic';
 import { handoffReasons, suggestedDestination } from './model';
 
 const answer = (patch: Partial<Answer> = {}): Answer => ({
@@ -31,6 +31,11 @@ describe('formatting', () => {
     expect(duration(3 * 3_600_000)).toBe('3 h');
     expect(duration(74 * 3_600_000)).toBe('3 j 2 h');
     expect(duration(48 * 3_600_000)).toBe('2 j');
+  });
+
+  it('counts what a fan spent in euros, as Reveal and the Dashboard do', () => {
+    expect(money(4500)).toBe('45\u00a0€');
+    expect(money(1999)).toBe('19,99\u00a0€');
   });
 
   it('turns her answer into one bubble per line', () => {
