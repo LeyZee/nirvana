@@ -122,6 +122,7 @@ export interface Hero {
   readonly headline: string;
   readonly lead: string;
   readonly action?: string;
+  readonly actionTo?: AgentState['actionTo'];
 }
 
 /**
@@ -137,7 +138,8 @@ export function heroState(agent: AgentState, todos: readonly Todo[], mode: Agent
       action: 'Repasser en copilote',
     };
   }
-  if (agent.tone === 'bad' || agent.tone === 'idle') return agent;
+  // An agent that writes nothing says so before what waits (Reveal, the voice, its key): its own sentence leads.
+  if (agent.tone === 'bad' || agent.tone === 'idle' || agent.stalled === true) return agent;
   if (todos.length === 0) {
     return {
       tone: 'ok',

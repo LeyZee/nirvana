@@ -105,6 +105,22 @@ describe('AgentPill', () => {
     expect(pill.dataset['tone']).toBe('unknown');
   });
 
+  it('says the voice waits for its key, not that it is down', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({
+        mode: 'copilot',
+        voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 },
+      }),
+    });
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.title).toBe(
+        'Agent : Copilote, mais rien ne tourne : l’IA qui écrit attend sa clé. Voir le Dashboard.',
+      );
+    });
+  });
+
   it('turns red when the server says the agent is stopped', async () => {
     serveDashboard(live('stop'));
     const pill = await renderPill();

@@ -30,7 +30,9 @@ export function useAgentMode(): AgentModeView {
         : 'Reveal est déconnecté'
       : voice.ok
         ? null
-        : 'l’IA qui écrit ne répond pas';
+        : voice.keyMissing
+          ? 'l’IA qui écrit attend sa clé'
+          : 'l’IA qui écrit ne répond pas';
     return { source: 'live', mode: live.data.mode, automatic: live.data.automatic, stalled };
   }
   return { source: live.kind };

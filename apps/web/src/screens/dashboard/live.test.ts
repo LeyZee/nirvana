@@ -66,6 +66,54 @@ describe('fromApi', () => {
     expect(unlinked.agent.lead).toContain('L’IA qui écrit ne répond pas non plus.');
   });
 
+  it('says a missing key is a step to take, in amber, and where the key goes', () => {
+    const noKey = fromApi(
+      apiDashboard({ voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 } }),
+    );
+    expect(noKey.agent).toMatchObject({
+      tone: 'warn',
+      stalled: true,
+      headline: 'L’IA qui écrit **attend sa clé**',
+      action: 'Poser la clé',
+      actionTo: '/reglages/modeles-ia',
+    });
+    expect(noKey.agent.lead).toContain('Réglages › Modèles IA › Services');
+    expect(card('voice', noKey)).toMatchObject({ tone: 'warn', value: 'Clé manquante' });
+    expect(card('voice', noKey)?.rows[0]).toEqual(['À poser dans', 'Réglages › Modèles IA']);
+    // Never linked and no key: Reveal leads, the key is said in the same lead.
+    const both = fromApi(
+      apiDashboard({
+        reveal: { connected: false, lastReadAt: null, conversations: 0 },
+        voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 },
+      }),
+    );
+    expect(both.agent.lead).toContain('L’IA qui écrit attend aussi sa clé.');
+  });
+
+  it('says jobs the worker gave up on in amber, and none when it could not count them', () => {
+    const stuck = fromApi(apiDashboard({ jobs: { dead: 3 } }));
+    expect(card('activity', stuck)).toMatchObject({ tone: 'warn' });
+    expect(card('activity', stuck)?.rows).toContainEqual(['Tâches bloquées', '3, à regarder']);
+    expect(stuck.agent.foldSummary).toContain('3 tâches bloquées');
+    expect(card('activity')?.rows).toContainEqual(['Tâches bloquées', 'aucune']);
+    const unread = fromApi(apiDashboard({ jobs: { dead: null } }));
+    expect(card('activity', unread)?.rows).toContainEqual(['Tâches bloquées', 'pas lu']);
+    expect(card('activity', unread)?.tone).toBe('ok');
+    expect(unread.agent.foldSummary).not.toContain('bloquée');
+  });
+
+  it('opens a draft to validate in Suivi, on its conversation', () => {
+    const [urgent] = fromApi(apiDashboard()).todos;
+    expect(urgent?.conversationId).toBeUndefined();
+    const base = apiDashboard();
+    const [draft] = base.todos;
+    if (draft === undefined) throw new Error('the fixture has a todo');
+    const [todo] = fromApi(
+      apiDashboard({ todos: [{ ...draft, tone: 'warn', kind: 'awaiting_approval' }] }),
+    ).todos;
+    expect(todo).toMatchObject({ kind: 'À valider dans Suivi', conversationId: draft.conversationId });
+  });
+
   it('says first that Reveal is disconnected, then that the voice is down', () => {
     const offline = apiDashboard({
       reveal: { connected: false, lastReadAt: '2026-10-19T11:00:00Z', conversations: 0 },
