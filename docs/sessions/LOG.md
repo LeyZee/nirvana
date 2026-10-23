@@ -163,6 +163,7 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-23 | Mémoire du fan : les faits du brief deviennent des faits à l’approbation, note du chatteur (P3-02, PR 3) | done | `log/2026-10-23-fan-facts-conversations.md` |
 | 2026-10-23 | Refonte du design system : lueur, ressort unique, thème Jour (D-01) | done | `log/2026-10-23-d-01-lueur-ressort-jour.md` |
 | 2026-10-23 | Refonte : onglet Entraîner (D-01) | done | `log/2026-10-23-d-01-entrainer.md` |
+| 2026-10-23 | Refonte : onglet Suivi (D-01) | done | `log/2026-10-23-d-01-suivi.md` |
 | 2026-10-23 | Mémoire du fan : poser et lever les limites d’un fan (P3-02, PR 4c) | done | `log/2026-10-23-fan-flags.md` |
 | 2026-10-23 | Mémoire du fan : routes des drapeaux pour l’humain (P3-02, PR 5) | done | `log/2026-10-23-fan-flags-routes.md` |
 | 2026-10-23 | Mémoire du fan : la politique pose les drapeaux sur un risque (P3-02, PR 6) | done | `log/2026-10-23-fan-flags-policy.md` |
