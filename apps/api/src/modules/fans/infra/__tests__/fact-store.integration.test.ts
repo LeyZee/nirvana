@@ -1,0 +1,110 @@
+import {
+  CreatorIdSchema,
+  FanIdSchema,
+  newId,
+  PlatformAccountIdSchema,
+  type CreatorId,
+  type FanId,
+} from '@nirvana/contracts';
+import { eq, schema, withAdmin } from '@nirvana/db';
+import { createTestDb, type TestDb } from '@nirvana/db/testing';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+
+import { createFansModule, type FactProposal, type FansModule } from '../../index';
+
+const may = new Date('2026-05-10T10:00:00Z');
+const august = new Date('2026-08-10T10:00:00Z');
+
+const city = (value: string, observedAt: Date): FactProposal => ({
+  category: 'identity',
+  key: 'city',
+  value,
+  kind: 'declared',
+  confidence: 0.9,
+  sourceMessageId: null,
+  observedAt,
+});
+
+describe('fan facts (P3-02), as the application role sees them', () => {
+  let test: TestDb;
+  let fans: FansModule;
+
+  /** One creator, one account, and as many fans as asked; invented data only (ADR 0010). */
+  const seed = async (label: string, fanCount: number) => {
+    const creatorId = newId(CreatorIdSchema);
+    const accountId = newId(PlatformAccountIdSchema);
+    const fanIds = Array.from({ length: fanCount }, () => newId(FanIdSchema));
+    await withAdmin(test.admin.db, async (tx) => {
+      await tx
+        .insert(schema.creators)
+        .values({ id: creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+      await tx
+        .insert(schema.platformAccounts)
+        .values({ id: accountId, creatorId, platform: 'reveal', handle: `handle-${label}` });
+      for (const [i, fanId] of fanIds.entries()) {
+        await tx.insert(schema.fans).values({
+          id: fanId,
+          creatorId,
+          platformAccountId: accountId,
+          platformFanId: `fan-${String(i)}`,
+          displayName: `Fan ${label} ${String(i)}`,
+        });
+      }
+    });
+    return { creatorId, fanIds };
+  };
+
+  let her: { creatorId: CreatorId; fanIds: FanId[] };
+  let other: { creatorId: CreatorId; fanIds: FanId[] };
+
+  beforeAll(async () => {
+    test = await createTestDb(inject('pgSuperuserUrl'));
+    fans = createFansModule({ db: test.app.db });
+    her = await seed('a', 2);
+    other = await seed('b', 1);
+  });
+
+  afterAll(async () => {
+    await test.close();
+  });
+
+  it('keeps the history: Paris supersedes Lyon, and only Paris is active', async () => {
+    const [fanId] = her.fanIds;
+    if (fanId === undefined) throw new Error('seed');
+    const [lyon] = await fans.proposeFacts(her.creatorId, fanId, [city('Lyon', may)]);
+    const [paris] = await fans.proposeFacts(her.creatorId, fanId, [city('Paris', august)]);
+    expect((await fans.activeFacts(her.creatorId, fanId)).map((fact) => fact.value)).toEqual(['Paris']);
+
+    const rows = await withAdmin(test.admin.db, (tx) =>
+      tx.select().from(schema.fanFacts).where(eq(schema.fanFacts.fanId, fanId)),
+    );
+    expect(rows.map((row) => [row.value, row.supersededBy])).toEqual(
+      expect.arrayContaining([
+        ['Lyon', paris?.id],
+        ['Paris', null],
+      ]),
+    );
+    expect(lyon?.id).not.toBe(paris?.id);
+  });
+
+  it('writes nothing when a job is replayed', async () => {
+    const [, fanId] = her.fanIds;
+    if (fanId === undefined) throw new Error('seed');
+    await fans.proposeFacts(her.creatorId, fanId, [city('Nice', may)]);
+    expect(await fans.proposeFacts(her.creatorId, fanId, [city('Nice', may)])).toEqual([]);
+    expect(await fans.activeFacts(her.creatorId, fanId)).toHaveLength(1);
+  });
+
+  it('never shows a fan the facts of another fan, nor another creator those of hers', async () => {
+    const [first, second] = her.fanIds;
+    const [theirs] = other.fanIds;
+    if (first === undefined || second === undefined || theirs === undefined) throw new Error('seed');
+    expect((await fans.activeFacts(her.creatorId, second)).map((fact) => fact.value)).toEqual(['Nice']);
+    expect(await fans.activeFacts(other.creatorId, first)).toEqual([]);
+    expect(await fans.activeFacts(other.creatorId, theirs)).toEqual([]);
+    // Her fan is out of sight for the other creator: nothing can be written about him.
+    await expect(fans.proposeFacts(other.creatorId, first, [city('Brest', august)])).rejects.toThrow(
+      'Fan not found for this creator',
+    );
+  });
+});
