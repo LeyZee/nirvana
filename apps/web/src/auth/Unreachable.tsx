@@ -7,7 +7,7 @@ import type { JSX } from 'react';
 export function Unreachable(): JSX.Element {
   return (
     <main className="nv-aura grid min-h-dvh place-items-center px-4">
-      <section className="nv-glass nv-glass--pad flex w-full max-w-sm items-start gap-4" role="status">
+      <section className="nv-plate nv-plate--pad flex w-full max-w-sm items-start gap-4" role="status">
         <span className="nv-orb nv-tone--warn shrink-0" aria-hidden="true" />
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold">
