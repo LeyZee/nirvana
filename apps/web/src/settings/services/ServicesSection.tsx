@@ -129,7 +129,7 @@ export function ServicesSection(): JSX.Element {
     return (
       <section className="sv-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
-          <div className="nv-glass sv-next">
+          <div className="nv-plate sv-next">
             <p className="sv-lead">L’état des clés n’a pas pu être lu</p>
             <p className="sv-muted">{load.error.message}</p>
             {load.error.isSessionExpired ? (
@@ -159,7 +159,7 @@ export function ServicesSection(): JSX.Element {
 
   return (
     <section className="sv-page">
-      <div className="nv-glass sv-next" aria-live="polite">
+      <div className="nv-plate sv-next" aria-live="polite">
         <div className="sv-next__head">
           <span className="sv-dot sv-dot--big" data-dot={nextDot} />
           <div className="sv-next__text">
@@ -179,7 +179,7 @@ export function ServicesSection(): JSX.Element {
         </div>
       </div>
 
-      <div className="nv-glass sv-list">
+      <div className="nv-plate sv-list">
         {lines.map((status, index) => {
           const provider = status.provider;
           const guide = GUIDES[provider];

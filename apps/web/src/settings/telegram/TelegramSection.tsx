@@ -149,7 +149,7 @@ export function TelegramSection(): JSX.Element {
     return (
       <section className="tg-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
-          <div className="nv-glass tg-cover" data-state="warn">
+          <div className="nv-plate tg-cover" data-state="warn">
             <div>
               <p className="tg-cover__title">Le serveur ne répond pas</p>
               <p className="tg-cover__sub">
@@ -162,7 +162,7 @@ export function TelegramSection(): JSX.Element {
           </div>
         ) : null}
         {load.kind === 'off' ? (
-          <div className="nv-glass tg-cover" data-state="warn">
+          <div className="nv-plate tg-cover" data-state="warn">
             <div>
               <p className="tg-cover__title">Telegram est éteint</p>
               <p className="tg-cover__sub">
@@ -266,7 +266,7 @@ export function TelegramSection(): JSX.Element {
 function HealthStrip({ overview }: { overview: TelegramOverview }): JSX.Element {
   const health = healthOf(overview);
   return (
-    <div className="nv-glass tg-health" aria-label="État de Telegram">
+    <div className="nv-plate tg-health" aria-label="État de Telegram">
       <span className="tg-health__item">
         <span className="tg-state-dot" data-tone={health.tone} />
         <b>{health.label}</b>
@@ -511,7 +511,7 @@ function RoutingList({
   ...routing
 }: RoutingProps & { topics: readonly TelegramTopic[]; scope: Scope }): JSX.Element {
   return (
-    <div className="nv-glass">
+    <div className="nv-plate">
       <div className="nv-list">
         {topics.map((topic) => (
           <div className="tg-route" key={topic}>
@@ -546,7 +546,7 @@ function AlertsTab({
   const failed = shown.filter((d) => !deliveryLabel(d).isOk).length;
   return (
     <>
-      <section className="nv-glass tg-cover" data-state={cover.isOk ? 'ok' : 'warn'} aria-live="polite">
+      <section className="nv-plate tg-cover" data-state={cover.isOk ? 'ok' : 'warn'} aria-live="polite">
         <div className="tg-cover__orb">
           <svg
             viewBox="0 0 24 24"
@@ -600,7 +600,7 @@ function AlertsTab({
 
       {shown.length === 0 ? null : (
         <section>
-          <details className="nv-disclosure nv-glass">
+          <details className="nv-disclosure nv-plate">
             <summary>
               <span className="nv-disclosure__title">Dernières alertes</span>
               <span className="nv-disclosure__sum">
@@ -757,7 +757,7 @@ function CreatorKeywords({
         Mots surveillés · {name}
         <span>{words.kind === 'ready' ? plural(words.words.length, 'mot') : ''}</span>
       </p>
-      <div className="nv-glass tg-words" aria-busy={words.kind === 'loading'}>
+      <div className="nv-plate tg-words" aria-busy={words.kind === 'loading'}>
         {words.kind === 'failed' ? (
           <p className="tg-hint">Les mots n’ont pas pu être lus. Réessaie dans un instant.</p>
         ) : words.kind === 'ready' && words.words.length === 0 ? (
@@ -869,7 +869,7 @@ function BotsTab({
 
   if (overview.bots.length === 0) {
     return (
-      <section className="nv-glass tg-empty">
+      <section className="nv-plate tg-empty">
         <div className="tg-bot__icon" aria-hidden="true">
           <TelegramGlyph />
         </div>
@@ -891,7 +891,7 @@ function BotsTab({
           Bots{' '}
           <span>{`${plural(overview.bots.length, 'bot')} · ${plural(active, 'groupe')} actif${active > 1 ? 's' : ''}`}</span>
         </p>
-        <div className="nv-glass">
+        <div className="nv-plate">
           <div className="nv-list">
             {overview.bots.map((bot) => {
               const line = botLine(bot, now);
