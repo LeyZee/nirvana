@@ -12,6 +12,7 @@ describe('the fan’s limits', () => {
         spendingLimitMinor: 5000,
       }),
     ).toBe('Ventes gelées · fan fragile · plafond de 50\u00a0€');
+    expect(flagsSummary({ spendingLimitMinor: 4990 })).toBe('Plafond de 49,90\u00a0€');
   });
 
   it('writes cents in full, and a round amount without them', () => {

@@ -56,7 +56,10 @@ export function flagsSummary(flags: FanFlags): string {
   if (flags.spendingLimitMinor !== undefined) on.push(`plafond de ${euros(flags.spendingLimitMinor)}`);
   if (on.length === 0) return 'Aucune';
   const [first = '', ...rest] = on;
-  return [first, ...rest.map((label) => label.charAt(0).toLowerCase() + label.slice(1))].join(' · ');
+  return [
+    first.charAt(0).toUpperCase() + first.slice(1),
+    ...rest.map((label) => label.charAt(0).toLowerCase() + label.slice(1)),
+  ].join(' · ');
 }
 
 /** « 50 », « 49,90 », « 49.9 € »: cents, or null when it is not an amount. */
