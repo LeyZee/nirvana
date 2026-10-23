@@ -1,6 +1,7 @@
-import type { CreatorId, FanId, PlatformAccountId } from '@nirvana/contracts';
+import type { CreatorId, FanFlagName, FanFlags, FanId, PlatformAccountId } from '@nirvana/contracts';
 
 import type { FactWrite, StoredFact } from './facts';
+import type { FlagAuthor } from './flags';
 
 /** A fan as the rest of the system sees it; her facts about him are read apart (`activeFacts`). */
 export interface Fan {
@@ -45,4 +46,28 @@ export interface FactStore {
 export interface FactPurge {
   /** Deletes every fact of each fan last seen before `cutoff`, history included; returns how many. */
   dropFactsOfFansLastSeenBefore(cutoff: Date): Promise<number>;
+}
+
+/** A limit set or lifted, with who did it and why (`fan_flag_set` / `fan_flag_cleared`). */
+interface FlagWrite {
+  readonly type: 'fan_flag_set' | 'fan_flag_cleared';
+  readonly flag: FanFlagName;
+  readonly author: FlagAuthor;
+  readonly reason?: string;
+  readonly correlationId: string;
+}
+
+/** His limits (`fans.flags`), implemented in `infra/` with `withTenant`. */
+export interface FlagStore {
+  read(creatorId: CreatorId, fanId: FanId): Promise<FanFlags>;
+  /**
+   * Locks the fan, applies `change` to his flags and, when they changed, writes them and the event in the same
+   * transaction. Returns his flags after the call.
+   */
+  change(
+    creatorId: CreatorId,
+    fanId: FanId,
+    change: (flags: FanFlags) => FanFlags | null,
+    event: FlagWrite,
+  ): Promise<FanFlags>;
 }

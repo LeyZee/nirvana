@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_ACTIVE_FACTS,
   MAX_FACT_VALUE_LENGTH,
+  MAX_OPERATOR_NOTE_LENGTH,
   planFacts,
   selectActiveFacts,
   type FactProposal,
@@ -88,6 +89,18 @@ describe('planFacts', () => {
     expect(planFacts([], [proposal({ key: '  ' }), proposal({ value: ' ' })], now)).toEqual([]);
     const [write] = planFacts([], [proposal({ value: 'a'.repeat(1000) })], now);
     expect(write?.fact.value).toHaveLength(MAX_FACT_VALUE_LENGTH);
+    const [note] = planFacts(
+      [],
+      [proposal({ category: 'operator_note', key: 'note_1', value: 'a'.repeat(900) })],
+      now,
+    );
+    expect(note?.fact.value).toHaveLength(900);
+    const [long] = planFacts(
+      [],
+      [proposal({ category: 'operator_note', key: 'note_2', value: 'a'.repeat(2000) })],
+      now,
+    );
+    expect(long?.fact.value).toHaveLength(MAX_OPERATOR_NOTE_LENGTH);
   });
 
   it('writes again a slot whose fact has expired, without superseding it', () => {
@@ -119,6 +132,14 @@ describe('selectActiveFacts', () => {
       'job-low',
       'likes',
     ]);
+  });
+
+  it("puts a chatter's notes first, so the cap never drops them", () => {
+    const facts = [
+      ...Array.from({ length: 45 }, (_, i) => stored({ id: `f-${String(i)}`, key: `k${String(i)}` })),
+      stored({ id: 'note', category: 'operator_note', key: 'note_1', confidence: 1 }),
+    ];
+    expect(selectActiveFacts(facts, now)[0]?.id).toBe('note');
   });
 
   it('keeps 40 facts at most', () => {

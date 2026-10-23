@@ -5,6 +5,7 @@ import { factRetentionCutoff } from './domain/facts';
 import { createDrizzleFactPurge } from './infra/fact-purge';
 import { createDrizzleFactStore } from './infra/fact-store';
 import { createDrizzleFanStore } from './infra/fan-store';
+import { createDrizzleFlagStore } from './infra/flag-store';
 
 export type { FactProposal } from './domain/facts';
 
@@ -28,7 +29,11 @@ export function createFansModule(deps: FansDeps): FansModule {
   const purge = createDrizzleFactPurge(deps.adminDb);
   return {
     name: 'fans',
-    ...createFansService(createDrizzleFanStore(deps.db), createDrizzleFactStore(deps.db)),
+    ...createFansService(
+      createDrizzleFanStore(deps.db),
+      createDrizzleFactStore(deps.db),
+      createDrizzleFlagStore(deps.db),
+    ),
     jobs: { purgeFacts: () => purge.dropFactsOfFansLastSeenBefore(factRetentionCutoff(new Date())) },
   };
 }
