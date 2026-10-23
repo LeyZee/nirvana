@@ -879,7 +879,7 @@
     0 0 / 300% 100%;
   animation:
     nv-bubble-in var(--nv-dur-slow) var(--nv-ease-spring) both,
-    nv-sheen 1.6s linear infinite;
+    nv-sheen var(--nv-dur-breathe) linear infinite;
 }
 @keyframes nv-sheen {
   from {
