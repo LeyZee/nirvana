@@ -1,3 +1,5 @@
+import type { FanFlags } from '@nirvana/contracts';
+
 /**
  * When she may offer a script (docs/sessions/tasks/PROPOSED-sales-policy.md, Charles 17/10 22h00): one script per
  * cooldown, only when he sexualizes again, and none once he says he has no money. Pure code: the brain may suggest
@@ -20,11 +22,20 @@ export interface OfferContext {
   /** Set by code when he says he cannot pay; lifted only when he comes back to paid content himself. */
   readonly hasNoBudget: boolean;
   readonly risks: readonly string[];
+  /** His limits (`fans.flags`, P3-02), set by the policy or a human: none of them is lifted by his asking. */
+  readonly flags: FanFlags;
   /** Hers, read from her persona (`PersonaForModels.offerLimits`). */
   readonly limits: OfferLimits;
 }
 
-type OfferBlock = 'risk' | 'no_budget' | 'cooldown' | 'not_sexualizing';
+type OfferBlock =
+  | 'do_not_contact'
+  | 'risk'
+  | 'sales_frozen'
+  | 'age_unconfirmed'
+  | 'no_budget'
+  | 'cooldown'
+  | 'not_sexualizing';
 
 export type OfferDecision =
   { readonly allowed: true } | { readonly allowed: false; readonly reason: OfferBlock };
@@ -44,8 +55,12 @@ const NO_SALE_RISKS = [
 const HOUR_MS = 3_600_000;
 
 export function offerDecision(context: OfferContext): OfferDecision {
-  const { limits } = context;
+  const { flags, limits } = context;
+  if (flags.doNotContact === true) return { allowed: false, reason: 'do_not_contact' };
   if (context.risks.some((risk) => NO_SALE_RISKS.includes(risk))) return { allowed: false, reason: 'risk' };
+  if (flags.salesFrozen !== undefined) return { allowed: false, reason: 'sales_frozen' };
+  // A script is explicit content: never before he is confirmed an adult.
+  if (flags.ageConfirmedAt === undefined) return { allowed: false, reason: 'age_unconfirmed' };
   // He came back to paid content himself: no waiting on the cooldown or on his budget.
   if (context.fanAsksForPaid) return { allowed: true };
   if (context.hasNoBudget) return { allowed: false, reason: 'no_budget' };
@@ -68,4 +83,9 @@ export function offerableScripts<T extends { readonly id: string }>(
   refusedIds: ReadonlySet<string>,
 ): T[] {
   return scripts.filter((script) => !refusedIds.has(script.id));
+}
+
+/** Whether she may sulk after a refusal (méthode §4): never with sales frozen, a fragile fan, or one not to write to. */
+export function maySulk(flags: FanFlags): boolean {
+  return flags.salesFrozen === undefined && flags.fragile !== true && flags.doNotContact !== true;
 }
