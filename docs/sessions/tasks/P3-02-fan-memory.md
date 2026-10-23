@@ -1,6 +1,6 @@
 # P3-02 Mémoire par fan : coder le module `fans`
 
-Statut : in_progress (PR 1 sur 4 : module `fans`, faits)
+Statut : in_progress (PR 1 dans main, PR 2 : contrats)
 Phase : 3
 Dépend de : P0-03, P0-05, P0-08, P1-02 (forme des notes Reveal)
 Branche : task/p3-02-fan-memory
@@ -64,3 +64,4 @@ Tables `scripts`, `bundles`, `sales` (fiche catalogue), la forme exacte des note
 ## Notes de session
 
 - 2026-10-23 (agent) : découpage en quatre PR, sans la capture Reveal. 1) module `fans` : `proposeFacts`, `activeFacts`, règle pure `domain/facts.ts`, tests unitaires et Testcontainers (fait). 2) contracts : `KycSlot`, `operator_note`, `FanFlagsSchema`, migration du check de catégorie si besoin (accord et migration de Bilan). 3) `conversations` : les `factsProposed` du brief deviennent des faits, `fanContext` lit `activeFacts` (Bilan). 4) drapeaux lus par la politique, purge à 12 mois du dernier contact. Attend la capture : notes et statistiques Reveal (`readFanNotes`, `purchaseSummary`).
+- 2026-10-23 (agent) : PR 1 fusionnée (#134). PR 2 : `KycSlotSchema` et `KYC_SLOT_LABELS`, `FanFlagsSchema` (clés jsonb en camelCase, convention du dépôt, au lieu des noms snake_case de cette fiche). `operator_note` attend la migration 0014 de Bilan, avec `release(…, note)` (PR 3).
