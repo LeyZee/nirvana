@@ -18,6 +18,9 @@ import { bubblesFromText, STATE_LABELS, statusClass } from './view';
 /** The reader follows the conversation more closely than the list: a draft or a fan's message shows up quickly. */
 const REFRESH_MS = 10_000;
 
+/** What `ReleaseBodySchema` accepts for the note left when giving the hand back. */
+const NOTE_MAX = 300;
+
 /**
  * One conversation, read in Nirvana (decided by Charles on 19/10, « Valider dans Suivi »): the thread, the drafts
  * waiting for a person, and who has the hand. Nobody writes to a fan from here: a person who takes over answers in
@@ -106,10 +109,18 @@ function Loaded({
     error: null,
   });
 
+  const [note, setNote] = useState('');
+
   const toggleHand = async (): Promise<void> => {
     setHand({ pending: true, error: null });
-    const result = await (isHuman ? giveBack(creatorId, detail.id) : takeOver(creatorId, detail.id));
-    if (result.ok) await settle();
+    const kept = note.trim();
+    const result = await (isHuman
+      ? giveBack(creatorId, detail.id, kept === '' ? undefined : kept)
+      : takeOver(creatorId, detail.id));
+    if (result.ok) {
+      setNote('');
+      await settle();
+    }
     setHand({ pending: false, error: result.ok ? null : result.message });
   };
 
@@ -150,6 +161,21 @@ function Loaded({
           {handoff === null ? 'Un humain a la main.' : `${handoff}.`} Il répond dans Reveal ; l’agent n’écrit
           plus à ce fan jusqu’à ce qu’on lui rende la main.
         </p>
+      ) : null}
+      {isHuman && canDecide ? (
+        <label className="nv-field">
+          <span className="nv-field__label">À retenir sur ce fan (facultatif, l’agent s’en souviendra)</span>
+          <input
+            className="nv-field__control"
+            maxLength={NOTE_MAX}
+            value={note}
+            disabled={hand.pending}
+            placeholder="Par exemple : il fête son anniversaire le 12 mars"
+            onChange={(event) => {
+              setNote(event.target.value);
+            }}
+          />
+        </label>
       ) : null}
       <div className="tr-reader__body">
         {read.isPartial ? (
