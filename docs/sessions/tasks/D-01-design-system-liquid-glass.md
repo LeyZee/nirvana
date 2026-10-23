@@ -51,3 +51,4 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Fait (demande de Charles du 23/10) : lueur du titre réservée à ce qui demande une action, un seul ressort (jetons `stagger` et `dur-data`, plus aucune durée en dur dans la coquille, le Dashboard et le Playground), thème Jour vérifié écran par écran.
 - Fait : Entraîner sur plaques, un seul `main` (recette R-C5), sélection neutre, ambre pour une mauvaise note. Reste : Suivi, Réglages, connexion (erreur en néon) ; images du guide.
 - Fait : Suivi, lecteur sur plaque, brouillon en teinte calme, non-lus sans néon. Reste : Réglages, connexion (erreur en néon) ; images du guide.
+- Fait : Réglages (Modèles IA, Telegram) sur plaques, alignés sur le titre, sélection neutre, ambre pour ce qui reste à régler. Reste : connexion (erreur en néon) ; images du guide.

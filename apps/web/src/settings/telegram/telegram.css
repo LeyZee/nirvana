@@ -1,13 +1,14 @@
 /*
  * Réglages › Telegram (fiche P3-07), drawn after the validated mockup. Built on the design-system tokens and nv-*
- * classes; only what the package has no class for lives here, prefixed `tg-`. Containers are glass, rows are not.
+ * classes; only what the package has no class for lives here, prefixed `tg-`. Content sits on plates; the tab bar and
+ * the sheets, which float, are glass. Selection is neutral, a refused input or a failed save is amber (docs/design).
  */
 
 .tg-page {
   width: 100%;
   min-width: 0;
   max-width: 760px;
-  margin: 0 auto;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -59,7 +60,7 @@
   color: var(--nv-ink-faint);
 }
 .tg-hint[data-error='true'] {
-  color: var(--nv-danger);
+  color: var(--nv-warning);
 }
 .tg-pad {
   padding: 10px 4px 0;
@@ -87,7 +88,7 @@
   padding: 12px 16px;
   border-radius: var(--nv-radius-md);
   font-size: var(--nv-text-callout);
-  background: color-mix(in srgb, var(--nv-danger) 10%, var(--nv-glass-fill));
+  background: color-mix(in srgb, var(--nv-warning) 12%, var(--nv-glass-fill));
 }
 .tg-sent {
   color: var(--nv-success);
@@ -198,8 +199,8 @@
   outline-offset: -2px;
 }
 .tg-tab[aria-selected='true'] {
-  color: var(--nv-neon-ink);
-  background: var(--nv-neon-soft);
+  color: var(--nv-ink);
+  background: var(--nv-select-strong);
 }
 .tg-tab svg {
   width: 16px;
@@ -349,12 +350,12 @@
   white-space: nowrap;
 }
 .tg-gchip[aria-checked='true'] {
-  color: var(--nv-neon-ink);
-  background: var(--nv-neon-soft);
+  color: var(--nv-ink);
+  background: var(--nv-select-strong);
 }
 .tg-gchip[aria-checked='true'] .tg-av {
-  background: var(--nv-neon-solid);
-  color: var(--nv-on-neon);
+  background: var(--nv-ink);
+  color: var(--nv-void);
 }
 /* Already sent for every creator: shown on, but quiet and not clickable here. */
 .tg-gchip[data-inherited='true'] {
@@ -703,7 +704,7 @@
 }
 .tg-steps i[data-state='on'] {
   width: 34px;
-  background: var(--nv-neon);
+  background: var(--nv-ink);
 }
 .tg-steps i[data-state='done'] {
   background: var(--nv-ink-faint);
@@ -821,7 +822,7 @@
   background: var(--nv-glass-fill);
 }
 .tg-verify[data-state='error'] {
-  background: color-mix(in srgb, var(--nv-danger) 10%, var(--nv-glass-fill));
+  background: color-mix(in srgb, var(--nv-warning) 12%, var(--nv-glass-fill));
 }
 .tg-verify[data-state='ok'] {
   background: color-mix(in srgb, var(--nv-success) 10%, var(--nv-glass-fill));
@@ -836,8 +837,8 @@
   flex: none;
   border-radius: 50%;
   border: 2px solid var(--nv-fill-track);
-  border-top-color: var(--nv-neon);
-  animation: tg-spin 800ms linear infinite;
+  border-top-color: var(--nv-ink);
+  animation: tg-spin var(--nv-dur-data) linear infinite;
 }
 @keyframes tg-spin {
   to {

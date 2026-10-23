@@ -47,7 +47,7 @@ describe('Services view rules', () => {
     expect(nextAfter([status('xai', 'connected')], 'xai')).toEqual({ label: 'Terminé', provider: null });
   });
 
-  it('rings Grok in neon while it is missing, the others in grey', () => {
+  it('rings Grok in amber while it is missing, the others in grey', () => {
     expect(dotOf(status('xai', 'not_connected'), false)).toBe('must');
     expect(dotOf(status('google', 'not_connected'), false)).toBe('off');
     expect(dotOf(status('google', 'connected'), true)).toBe('busy');
