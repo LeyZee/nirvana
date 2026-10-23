@@ -574,7 +574,7 @@
   transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
 }
 .ps-entry:hover {
-  background: var(--nv-select-strong);
+  background: color-mix(in srgb, var(--nv-ink) 22%, transparent);
 }
 .ps-entry__text {
   min-width: 0;
