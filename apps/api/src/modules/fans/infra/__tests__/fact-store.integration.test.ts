@@ -127,4 +127,53 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     expect((await fans.activeFacts(stale.creatorId, kept)).map((fact) => fact.value)).toEqual(['Nantes']);
     expect(await fans.jobs.purgeFacts()).toBe(0);
   });
+
+  it('sets and lifts a limit with its author, one event per real change', async () => {
+    const [fanId] = her.fanIds;
+    if (fanId === undefined) throw new Error('seed');
+    const command = {
+      author: 'system',
+      reason: 'il dit ne plus pouvoir payer',
+      correlationId: 'flags-1',
+    } as const;
+    const frozen = { reason: 'money_trouble', since: '2026-10-02T10:00:00.000Z' } as const;
+
+    expect(await fans.flags(her.creatorId, fanId)).toEqual({});
+    expect(await fans.setFlag(her.creatorId, fanId, { flag: 'salesFrozen', value: frozen }, command)).toEqual(
+      {
+        salesFrozen: frozen,
+      },
+    );
+    await fans.setFlag(her.creatorId, fanId, { flag: 'salesFrozen', value: frozen }, command);
+    expect(
+      await fans.clearFlag(her.creatorId, fanId, 'salesFrozen', { ...command, correlationId: 'flags-2' }),
+    ).toEqual({});
+    await fans.clearFlag(her.creatorId, fanId, 'salesFrozen', command);
+
+    const events = await withAdmin(test.admin.db, (tx) =>
+      tx.select().from(schema.domainEvents).where(eq(schema.domainEvents.creatorId, her.creatorId)),
+    );
+    expect(events.map((event) => [event.type, event.actor, event.payload])).toEqual([
+      [
+        'fan_flag_set',
+        'system',
+        { fanId, flag: 'salesFrozen', flags: { salesFrozen: frozen }, reason: command.reason },
+      ],
+      ['fan_flag_cleared', 'system', { fanId, flag: 'salesFrozen', flags: {}, reason: command.reason }],
+    ]);
+  });
+
+  it('never lets another creator read or change his limits', async () => {
+    const [fanId] = her.fanIds;
+    if (fanId === undefined) throw new Error('seed');
+    await expect(
+      fans.setFlag(
+        other.creatorId,
+        fanId,
+        { flag: 'fragile', value: true },
+        { author: 'system', correlationId: 'x' },
+      ),
+    ).rejects.toThrow('Fan not found for this creator');
+    await expect(fans.flags(other.creatorId, fanId)).rejects.toThrow('Fan not found for this creator');
+  });
 });

@@ -6,6 +6,9 @@ export const MAX_ACTIVE_FACTS = 40;
 /** Longest value kept: a fact is a line of the fan's notes, not a message. */
 export const MAX_FACT_VALUE_LENGTH = 300;
 
+/** A chatter's note is kept whole, as long as `release` accepts it. */
+export const MAX_OPERATOR_NOTE_LENGTH = 1_000;
+
 /** A fact as stored (`fan_facts`): never changed in place, a newer one supersedes it. */
 export interface StoredFact {
   readonly id: string;
@@ -44,8 +47,9 @@ function normalizeKey(key: string): string {
   return key.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
-function normalizeValue(value: string): string {
-  return value.trim().replace(/\s+/g, ' ').slice(0, MAX_FACT_VALUE_LENGTH);
+function normalizeValue(value: string, category: FactCategory): string {
+  const max = category === 'operator_note' ? MAX_OPERATOR_NOTE_LENGTH : MAX_FACT_VALUE_LENGTH;
+  return value.trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
 const slot = (fact: { readonly category: FactCategory; readonly key: string }) =>
@@ -76,7 +80,7 @@ export function planFacts(
   const writes = new Map<string, FactWrite>();
   for (const proposal of proposals) {
     const key = normalizeKey(proposal.key);
-    const value = normalizeValue(proposal.value);
+    const value = normalizeValue(proposal.value, proposal.category);
     if (key === '' || value === '') continue;
     const fact: FactWrite['fact'] = {
       category: proposal.category,
@@ -105,9 +109,17 @@ export function planFacts(
   return [...writes.values()];
 }
 
-const CATEGORY_ORDER = new Map(FactCategorySchema.options.map((category, index) => [category, index]));
+// A chatter's notes come first: a human wrote them for her, the 40-fact cap never drops them before a guess.
+const CATEGORY_ORDER = new Map(
+  ['operator_note', ...FactCategorySchema.options.filter((category) => category !== 'operator_note')].map(
+    (category, index) => [category, index],
+  ),
+);
 
-/** What the context gets (data-model.md): active facts by category, then confidence, then the newest; 40 at most. */
+/**
+ * What the context gets (data-model.md): active facts by category (a chatter's notes first), then confidence, then
+ * the newest; 40 at most.
+ */
 export function selectActiveFacts(facts: readonly StoredFact[], now: Date): StoredFact[] {
   return facts
     .filter((fact) => isActive(fact, now))
