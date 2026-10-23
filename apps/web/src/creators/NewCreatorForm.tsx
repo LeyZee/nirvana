@@ -50,7 +50,7 @@ export function NewCreatorForm({
 
   return (
     <form
-      className="nv-glass ps-head"
+      className="nv-plate ps-head"
       onSubmit={(event) => {
         void submit(event);
       }}

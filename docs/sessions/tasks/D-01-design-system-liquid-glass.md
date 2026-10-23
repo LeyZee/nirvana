@@ -44,3 +44,7 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Nouvelle direction publiée dans l'artefact du design system (même lien), avec le Dashboard maquetté sur bureau et téléphone, données d'exemple.
 - Fait dans `apps/web` : coquille (barre latérale flottante en verre, icônes seules entre 821 et 1 100 px, capsule d'onglets en bas sur téléphone, la page défile sous la barre), en-têtes et panneaux en plaques, Dashboard sans cartes de verre (héros posé sur le fond, sections séparées par l'espace), point d'Arrêt rouge seulement quand l'agent est arrêté (recette R-C3).
 - Reste : Créatrices, Entraîner (dont le `main` imbriqué du playground, recette R-C5), Suivi, Réglages, connexion (erreur en néon), une PR par onglet ; images du guide.
+
+2026-10-23 (suite de la refonte) :
+- Fait : Créatrices en plaques, alignée sur le titre, ambre pour ce qui reste à corriger, néon seulement sur « Enregistrer une version ».
+- Reste : Entraîner (dont le `main` imbriqué du playground, recette R-C5), Suivi, Réglages, connexion (erreur en néon), une PR par onglet ; images du guide.
