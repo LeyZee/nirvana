@@ -138,7 +138,10 @@ export function takeOver(creatorId: string, conversationId: string): Promise<Dec
   return command(creatorId, conversationId, 'takeover');
 }
 
-/** The agent answers again from the fan's next message. */
-export function giveBack(creatorId: string, conversationId: string): Promise<Decision> {
-  return command(creatorId, conversationId, 'release');
+/**
+ * The agent answers again from the fan's next message. The note, when given, is what the chatter wants the agent to
+ * remember about the fan: the server keeps it as a fact the agent reads (`ReleaseBodySchema`, 300 characters).
+ */
+export function giveBack(creatorId: string, conversationId: string, note?: string): Promise<Decision> {
+  return command(creatorId, conversationId, 'release', note === undefined ? {} : { note });
 }

@@ -352,6 +352,34 @@ describe('the reader of Suivi', () => {
     });
   });
 
+  it('gives the hand back with what the chatter wants the agent to remember', async () => {
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
+    });
+    renderPage(OPEN);
+    fireEvent.change(await screen.findByLabelText(/À retenir sur ce fan/u), {
+      target: { value: '  Il fête son anniversaire le 12 mars  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Rendre la main à l’agent' }));
+    await waitFor(() => {
+      expect(posted).toEqual([{ action: 'release', body: { note: 'Il fête son anniversaire le 12 mars' } }]);
+    });
+  });
+
+  it('gives the hand back with no note when none is written', async () => {
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
+    });
+    renderPage(OPEN);
+    expect((await screen.findByLabelText(/À retenir sur ce fan/u)).getAttribute('maxlength')).toBe('300');
+    fireEvent.click(screen.getByRole('button', { name: 'Rendre la main à l’agent' }));
+    await waitFor(() => {
+      expect(posted).toEqual([{ action: 'release', body: {} }]);
+    });
+  });
+
   it('lets a creator read, never decide', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
     renderPage(OPEN, false);
