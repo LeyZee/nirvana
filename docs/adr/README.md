@@ -46,4 +46,4 @@ Date : AAAA-MM-JJ
 | 0019 | Deux taux (au playground, en réel) et la règle qui ouvre le mode Automatique | accepted |
 | 0020 | Notifications Telegram : bots, groupes et routage gérés depuis le CRM | proposed |
 | 0021 | Rester en personnage est fixé dans le code, sans réglage | accepted |
-| 0022 | La persona fait partie de la version qui ouvre l'Automatique | proposed |
+| 0022 | La persona fait partie de la version qui ouvre l'Automatique | accepted |

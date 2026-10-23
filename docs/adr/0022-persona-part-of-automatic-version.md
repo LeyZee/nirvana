@@ -1,6 +1,6 @@
 # 0022. La persona fait partie de la version qui ouvre l'Automatique
 
-Statut : proposed (défaut de Bilan, annoncé à Charles par le coordinateur le 19/10 ; en attente de son accord)
+Statut : accepted (Charles, carte de décision du 23/10/2026)
 Date : 2026-10-22
 Complète : ADR 0019
 
