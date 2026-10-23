@@ -36,6 +36,7 @@ export function AgentHero({
   return (
     <section
       className="db-hero nv-enter"
+      data-tone={hero.tone}
       style={{ '--_c': TONE_COLOR[hero.tone], '--nv-i': 1 }}
       aria-live="polite"
     >

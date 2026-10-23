@@ -14,13 +14,13 @@
   animation: nv-enter var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
 .pg > :nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: var(--nv-stagger);
 }
 .pg > :nth-child(3) {
-  animation-delay: 80ms;
+  animation-delay: calc(2 * var(--nv-stagger));
 }
 .pg > :nth-child(4) {
-  animation-delay: 120ms;
+  animation-delay: calc(3 * var(--nv-stagger));
 }
 .pg-loading {
   --_radius: var(--nv-radius-xl);
@@ -112,7 +112,7 @@
   inset: 0 auto 0 0;
   border-radius: 99px;
   background: var(--_c);
-  transition: width 520ms var(--nv-ease-spring);
+  transition: width var(--nv-dur-morph) var(--nv-ease-spring);
 }
 .pg-meter b {
   position: absolute;
@@ -554,7 +554,7 @@
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
-  animation: nv-shell-rise 360ms var(--nv-ease-spring) both;
+  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
 .pg-gest .nv-kbd {
   margin-left: 4px;
@@ -651,7 +651,7 @@
   gap: 10px;
   flex-wrap: wrap;
   padding: 10px 12px 10px 14px;
-  animation: nv-shell-rise 380ms var(--nv-ease-spring) both;
+  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
 .pg-lesson__q {
   flex: 1;
@@ -695,7 +695,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 420ms var(--nv-ease-spring);
+  transition: width var(--nv-dur-morph) var(--nv-ease-spring);
 }
 .pg-why[data-open='true'] {
   width: 340px;
@@ -820,13 +820,13 @@
   animation: nv-enter var(--nv-dur-base) var(--nv-ease-out) both;
 }
 .pg-why[data-open='true'] .pg-why__sec:nth-child(2) {
-  animation-delay: 30ms;
+  animation-delay: var(--nv-stagger);
 }
 .pg-why[data-open='true'] .pg-why__sec:nth-child(3) {
-  animation-delay: 60ms;
+  animation-delay: calc(2 * var(--nv-stagger));
 }
 .pg-why[data-open='true'] .pg-why__sec:nth-child(n + 4) {
-  animation-delay: 90ms;
+  animation-delay: calc(3 * var(--nv-stagger));
 }
 .pg-why__b {
   font-size: 14px;

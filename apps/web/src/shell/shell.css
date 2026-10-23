@@ -38,7 +38,7 @@
   top: -30vw;
   background: radial-gradient(closest-side, var(--nv-aura-neon), transparent);
   filter: blur(20px);
-  animation: nv-shell-breathe 14s var(--nv-ease-in-out) infinite alternate;
+  animation: nv-shell-breathe var(--nv-dur-ambient) var(--nv-ease-in-out) infinite alternate;
 }
 .nv-ambient i:nth-child(2) {
   width: 60vw;
@@ -223,7 +223,7 @@
 .nav-needle {
   transform-origin: 12px 14px;
   transform: rotate(-45deg);
-  transition: transform 600ms var(--nv-ease-spring);
+  transition: transform var(--nv-dur-morph) var(--nv-ease-spring);
 }
 [aria-current='page'] .nav-needle {
   transform: rotate(0);
@@ -236,13 +236,13 @@
 .is-playing .nav-b2,
 .is-playing .nav-b3 {
   transform-origin: 50% 17px;
-  animation: nv-nav-grow 560ms var(--nv-ease-spring) both;
+  animation: nv-nav-grow var(--nv-dur-morph) var(--nv-ease-spring) both;
 }
 .is-playing .nav-b2 {
-  animation-delay: 70ms;
+  animation-delay: var(--nv-stagger);
 }
 .is-playing .nav-b3 {
-  animation-delay: 140ms;
+  animation-delay: calc(2 * var(--nv-stagger));
 }
 @keyframes nv-nav-grow {
   0% {
@@ -252,11 +252,11 @@
 /* Créatrices: the two of them lean towards each other. */
 .is-playing .nav-h1 {
   transform-origin: 9px 20px;
-  animation: nv-nav-lean 600ms var(--nv-ease-spring) both;
+  animation: nv-nav-lean var(--nv-dur-morph) var(--nv-ease-spring) both;
 }
 .is-playing .nav-h2 {
   transform-origin: 17px 20px;
-  animation: nv-nav-lean 600ms 90ms var(--nv-ease-spring) reverse both;
+  animation: nv-nav-lean var(--nv-dur-morph) var(--nv-stagger) var(--nv-ease-spring) reverse both;
 }
 @keyframes nv-nav-lean {
   50% {
@@ -266,14 +266,14 @@
 /* Entraîner: the big star turns, the small ones twinkle after it. */
 .is-playing .nav-big {
   transform-origin: 12px 10px;
-  animation: nv-nav-spin 700ms var(--nv-ease-spring) both;
+  animation: nv-nav-spin var(--nv-dur-morph) var(--nv-ease-spring) both;
 }
 .is-playing .nav-small {
   transform-origin: 19px 18px;
-  animation: nv-nav-twinkle 600ms 160ms var(--nv-ease-spring) both;
+  animation: nv-nav-twinkle var(--nv-dur-morph) calc(2 * var(--nv-stagger)) var(--nv-ease-spring) both;
 }
 .is-playing .nav-tiny {
-  animation: nv-nav-twinkle 600ms 300ms var(--nv-ease-spring) both;
+  animation: nv-nav-twinkle var(--nv-dur-morph) calc(4 * var(--nv-stagger)) var(--nv-ease-spring) both;
 }
 @keyframes nv-nav-spin {
   0% {
@@ -298,7 +298,7 @@
 }
 /* Suivi: the needle sweeps the dial and settles. */
 .is-playing .nav-needle {
-  animation: nv-nav-sweep 900ms var(--nv-ease-spring) both;
+  animation: nv-nav-sweep var(--nv-dur-morph) var(--nv-ease-spring) both;
 }
 @keyframes nv-nav-sweep {
   0% {
@@ -317,7 +317,7 @@
 /* Réglages: the gear turns one notch. */
 .is-playing .nav-gear {
   transform-origin: 12px 12px;
-  animation: nv-nav-gear 800ms var(--nv-ease-spring) both;
+  animation: nv-nav-gear var(--nv-dur-morph) var(--nv-ease-spring) both;
 }
 @keyframes nv-nav-gear {
   70% {
@@ -440,10 +440,10 @@
   animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
 }
 .nv-page > *:nth-child(2) {
-  animation-delay: 50ms;
+  animation-delay: var(--nv-stagger);
 }
 .nv-page > *:nth-child(3) {
-  animation-delay: 100ms;
+  animation-delay: calc(2 * var(--nv-stagger));
 }
 @keyframes nv-shell-rise {
   0% {
