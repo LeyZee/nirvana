@@ -24,7 +24,7 @@ export function SetupPanel({ state, pg }: { state: PlaygroundState; pg: Playgrou
   ].join(' · ');
 
   return (
-    <aside className="pg-setup nv-glass" aria-label="Mise en situation">
+    <aside className="pg-setup nv-plate" aria-label="Mise en situation">
       <div className="nv-scroll">
         <FanPicker state={state} pg={pg} />
 

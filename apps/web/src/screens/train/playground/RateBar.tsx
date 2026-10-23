@@ -30,7 +30,7 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
   }, [rate]);
 
   return (
-    <div className="pg-bar nv-glass">
+    <div className="pg-bar nv-plate">
       <div
         className={`pg-rate pg-rate--${tone}`}
         title={`Réponses gardées telles quelles sur les ${String(rated)} dernières notées de cette version.`}

@@ -49,3 +49,4 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Fait : Créatrices en plaques, alignée sur le titre, ambre pour ce qui reste à corriger, néon seulement sur « Enregistrer une version ».
 - Reste : Entraîner (dont le `main` imbriqué du playground, recette R-C5), Suivi, Réglages, connexion (erreur en néon), une PR par onglet ; images du guide.
 - Fait (demande de Charles du 23/10) : lueur du titre réservée à ce qui demande une action, un seul ressort (jetons `stagger` et `dur-data`, plus aucune durée en dur dans la coquille, le Dashboard et le Playground), thème Jour vérifié écran par écran.
+- Fait : Entraîner sur plaques, un seul `main` (recette R-C5), sélection neutre, ambre pour une mauvaise note. Reste : Suivi, Réglages, connexion (erreur en néon) ; images du guide.

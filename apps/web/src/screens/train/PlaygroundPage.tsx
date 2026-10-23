@@ -110,7 +110,7 @@ export function PlaygroundPage(): JSX.Element {
 
   if (state === undefined) {
     return (
-      <div className="pg-loading nv-glass" aria-busy={pg.isLoading}>
+      <div className="pg-loading nv-plate" aria-busy={pg.isLoading}>
         {pg.isLoading ? null : (
           <div className="pg-loading__in">
             <p>{ERRORS[pg.error ?? 'failed']}</p>
@@ -137,7 +137,8 @@ export function PlaygroundPage(): JSX.Element {
     <div className="pg">
       <RateBar state={state} isDemo={pg.client.isDemo} />
       <SetupPanel state={state} pg={pg} />
-      <main className="pg-main nv-glass" aria-label="Conversation">
+      {/* A section, not a <main>: the shell already holds the page's one landmark (recette R-C5). */}
+      <section className="pg-main nv-plate" aria-label="Conversation">
         <div className="pg-top">
           <span className="nv-avatar nv-avatar--sm">{name.slice(0, 1).toUpperCase()}</span>
           <span className="pg-top__t">
@@ -217,13 +218,13 @@ export function PlaygroundPage(): JSX.Element {
             disabled={pg.busy || pending !== null}
             placeholder={
               pending === null
-                ? `Écris comme ${name === FALLBACK_NAME ? 'le fan' : name} le ferait…`
-                : 'Note d’abord la réponse de l’agent'
+                ? `Écris comme ${name === FALLBACK_NAME ? 'le fan' : name}…`
+                : 'Note d’abord la réponse'
             }
             onSend={send}
           />
         </div>
-      </main>
+      </section>
       <WhyPanel
         state={state}
         open={whyOpen}
