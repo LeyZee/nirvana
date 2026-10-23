@@ -57,7 +57,7 @@ export const JOB_PAYLOADS = {
       z.object({ kind: z.literal('draft'), draftId: DraftIdSchema }),
       z.object({
         kind: z.literal('operator_note'),
-        note: z.string().min(1).max(1_000),
+        note: z.string().min(1).max(300),
         at: z.iso.datetime(),
       }),
     ]),

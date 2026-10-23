@@ -10,6 +10,7 @@ import {
   MessageDirectionSchema,
   SessionStateSchema,
 } from './enums';
+import { FanFlagNameSchema, FanFlagsSchema } from './fans';
 import {
   ConversationIdSchema,
   CreatorIdSchema,
@@ -60,6 +61,18 @@ const factPayload = z.object({
   factId: z.uuid().optional(),
   summaryId: z.uuid().optional(),
   category: FactCategorySchema.optional(),
+});
+
+/**
+ * A limit of a fan set or lifted (P3-02). Its author is the event's actor: a human (`human:<id>`) or the policy
+ * (`system`), never a model alone. `flags` is the whole set after the change, so the journal alone tells his limits
+ * at any date.
+ */
+const fanFlagPayload = z.object({
+  fanId: FanIdSchema,
+  flag: FanFlagNameSchema,
+  flags: FanFlagsSchema,
+  reason: z.string().min(1).max(500).optional(),
 });
 
 const controlPayload = z.object({
@@ -149,6 +162,8 @@ export const EVENT_TYPES = [
   'session_state_changed',
   'budget_threshold_crossed',
   'automatic_closed',
+  'fan_flag_set',
+  'fan_flag_cleared',
   'error',
 ] as const;
 export const EventTypeSchema = z.enum(EVENT_TYPES);
@@ -224,6 +239,8 @@ export const EVENT_PAYLOADS = {
     missing: z.array(AutomaticMissingSchema).min(1),
     conversations: z.number().int().min(1),
   }),
+  fan_flag_set: fanFlagPayload,
+  fan_flag_cleared: fanFlagPayload,
   error: z.object({
     code: z.string().min(1),
     jobName: z.string().min(1).optional(),
@@ -269,6 +286,8 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('session_state_changed'),
   typedEvent('budget_threshold_crossed'),
   typedEvent('automatic_closed'),
+  typedEvent('fan_flag_set'),
+  typedEvent('fan_flag_cleared'),
   typedEvent('error'),
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;

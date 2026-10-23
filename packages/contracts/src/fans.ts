@@ -50,3 +50,7 @@ export const FanFlagsSchema = z
   })
   .strict();
 export type FanFlags = z.infer<typeof FanFlagsSchema>;
+
+/** The name of one flag of a fan: what `fan_flag_set` and `fan_flag_cleared` say changed. */
+export const FanFlagNameSchema = FanFlagsSchema.keyof();
+export type FanFlagName = z.infer<typeof FanFlagNameSchema>;

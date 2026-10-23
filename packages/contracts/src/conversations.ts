@@ -80,6 +80,6 @@ export const ApproveDraftBodySchema = z.object({
 });
 export const RejectDraftBodySchema = z.object({ reason: z.string().trim().min(1).max(500).optional() });
 export const TakeoverBodySchema = z.object({ reason: z.string().trim().min(1).max(500).optional() });
-/** `note`: what the chatter wants her to remember about the fan, kept as an `operator_note` fact (P3-02). */
-export const ReleaseBodySchema = z.object({ note: z.string().trim().min(1).max(1_000).optional() });
+/** `note`: what the chatter wants her to remember about the fan, kept as an `operator_note` fact (P3-02), one line. */
+export const ReleaseBodySchema = z.object({ note: z.string().trim().min(1).max(300).optional() });
 export const SetModeBodySchema = z.object({ mode: ConversationModeSchema });

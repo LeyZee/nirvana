@@ -49,6 +49,13 @@ const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 
+/** One line of her notes about the fan; a chatter's note reads as such, its dated key says nothing to the engine. */
+const noteLine = (fact: {
+  readonly category: string;
+  readonly key: string;
+  readonly value: string;
+}): string => (fact.category === 'operator_note' ? `Note : ${fact.value}` : `${fact.key} : ${fact.value}`);
+
 const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
 
 /** The conversation still waits for this answer: same state, no fan message since, nothing blocking. */
@@ -109,7 +116,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
       platformAccountId: read.conversation.platformAccountId,
       platformConversationId: read.conversation.platformConversationId,
       history: read.history,
-      fan: { ...read.stats, notes: notes.map((fact) => `${fact.key} : ${fact.value}`) },
+      fan: { ...read.stats, notes: notes.map(noteLine) },
     };
     const source = read.history.findLast((message) => message.author === 'fan') ?? null;
 

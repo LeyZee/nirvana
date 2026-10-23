@@ -252,6 +252,11 @@ describe('fan facts from the conversations', () => {
     ]);
     expect(await factEvents(id)).toHaveLength(1);
 
+    // The engine reads it as a note, not by its dated slot.
+    await fanWrites('c-note', 'Alors ?');
+    await respond(id);
+    expect(composer.inputs.at(-1)?.fan.notes).toEqual(['Note : Aime qu’on lui parle de foot']);
+
     // Without a note, giving back enqueues nothing.
     await conversations.takeover(command(id));
     await conversations.release(command(id));

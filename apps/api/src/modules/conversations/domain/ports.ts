@@ -267,7 +267,7 @@ export interface FanDirectory {
   activeFacts(
     creatorId: CreatorId,
     fanId: FanId,
-  ): Promise<readonly { readonly key: string; readonly value: string }[]>;
+  ): Promise<readonly { readonly category: FactCategory; readonly key: string; readonly value: string }[]>;
 }
 
 /**
