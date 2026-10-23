@@ -57,7 +57,7 @@ export function Reader({
   };
 
   return (
-    <section className="nv-glass tr-reader" aria-label="Conversation">
+    <section className="nv-plate tr-reader" aria-label="Conversation">
       <button type="button" className="nv-btn nv-btn--plain nv-btn--sm tr-back" onClick={onClose}>
         ← Toutes les conversations
       </button>
@@ -263,7 +263,7 @@ function DraftPanel({
   };
 
   return (
-    <section className="nv-glass nv-draft-panel tr-draft" aria-label="Brouillon à valider">
+    <section className="nv-draft-panel tr-draft" aria-label="Brouillon à valider">
       <span className="nv-draft-label">Brouillon de l’agent</span>
       {step === 'editing' ? (
         <label className="nv-field">

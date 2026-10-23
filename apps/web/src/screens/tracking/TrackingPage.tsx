@@ -156,7 +156,7 @@ export function TrackingPage({
             )}
           </div>
           {selected === null ? null : open === null ? (
-            <section className="nv-glass tr-reader" aria-label="Conversation">
+            <section className="nv-plate tr-reader" aria-label="Conversation">
               <p className="tr-reader__empty">Cette conversation n’est pas dans la liste.</p>
             </section>
           ) : (
