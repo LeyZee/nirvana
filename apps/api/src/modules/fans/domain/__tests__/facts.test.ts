@@ -1,0 +1,130 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  MAX_ACTIVE_FACTS,
+  MAX_FACT_VALUE_LENGTH,
+  planFacts,
+  selectActiveFacts,
+  type FactProposal,
+  type StoredFact,
+} from '../facts';
+
+const may = new Date('2026-05-10T10:00:00Z');
+const august = new Date('2026-08-10T10:00:00Z');
+const now = new Date('2026-09-01T10:00:00Z');
+
+const stored = (over: Partial<StoredFact> = {}): StoredFact => ({
+  id: 'f-1',
+  category: 'identity',
+  key: 'city',
+  value: 'Lyon',
+  kind: 'declared',
+  confidence: 0.9,
+  sourceMessageId: null,
+  observedAt: may,
+  expiresAt: null,
+  supersededBy: null,
+  ...over,
+});
+
+const proposal = (over: Partial<FactProposal> = {}): FactProposal => ({
+  category: 'identity',
+  key: 'city',
+  value: 'Paris',
+  kind: 'declared',
+  confidence: 0.9,
+  sourceMessageId: null,
+  observedAt: august,
+  ...over,
+});
+
+describe('planFacts', () => {
+  it('writes a new slot, with a normalized key and value', () => {
+    expect(planFacts([], [proposal({ key: ' Home City ', value: '  Paris   centre ' })], now)).toEqual([
+      {
+        fact: {
+          category: 'identity',
+          key: 'home_city',
+          value: 'Paris centre',
+          kind: 'declared',
+          confidence: 0.9,
+          sourceMessageId: null,
+          observedAt: august,
+          expiresAt: null,
+        },
+        supersedes: null,
+      },
+    ]);
+  });
+
+  it('supersedes the old value: Lyon in May, Paris in August', () => {
+    const [write] = planFacts([stored()], [proposal()], now);
+    expect(write).toMatchObject({ fact: { value: 'Paris' }, supersedes: 'f-1' });
+  });
+
+  it('does not write the same value again, whatever its case', () => {
+    expect(planFacts([stored()], [proposal({ value: 'lyon' })], now)).toEqual([]);
+  });
+
+  it('lets a declared fact confirm an inferred one, never the reverse', () => {
+    expect(planFacts([stored({ kind: 'inferred' })], [proposal({ value: 'Lyon' })], now)).toMatchObject([
+      { fact: { kind: 'declared' }, supersedes: 'f-1' },
+    ]);
+    expect(planFacts([stored()], [proposal({ kind: 'inferred', value: 'Marseille' })], now)).toEqual([]);
+  });
+
+  it('changes nothing for a proposal older than the active fact (a replayed job)', () => {
+    expect(
+      planFacts([stored({ observedAt: august })], [proposal({ value: 'Nice', observedAt: may })], now),
+    ).toEqual([]);
+  });
+
+  it('keeps the last value of a slot named twice in one batch, superseding the stored fact once', () => {
+    const writes = planFacts([stored()], [proposal(), proposal({ value: 'Nice' })], now);
+    expect(writes).toMatchObject([{ fact: { value: 'Nice' }, supersedes: 'f-1' }]);
+  });
+
+  it('skips empty keys and values and cuts long values', () => {
+    expect(planFacts([], [proposal({ key: '  ' }), proposal({ value: ' ' })], now)).toEqual([]);
+    const [write] = planFacts([], [proposal({ value: 'a'.repeat(1000) })], now);
+    expect(write?.fact.value).toHaveLength(MAX_FACT_VALUE_LENGTH);
+  });
+
+  it('writes again a slot whose fact has expired, without superseding it', () => {
+    const expired = stored({ expiresAt: new Date('2026-08-01T00:00:00Z') });
+    expect(planFacts([expired], [proposal({ value: 'Lyon' })], now)).toMatchObject([{ supersedes: null }]);
+  });
+});
+
+describe('selectActiveFacts', () => {
+  it('drops superseded and expired facts', () => {
+    const facts = [
+      stored({ id: 'old', supersededBy: 'new' }),
+      stored({ id: 'gone', key: 'trip', expiresAt: new Date('2026-08-31T00:00:00Z') }),
+      stored({ id: 'new', value: 'Paris', observedAt: august }),
+    ];
+    expect(selectActiveFacts(facts, now).map((fact) => fact.id)).toEqual(['new']);
+  });
+
+  it('sorts by category, then confidence, then the newest', () => {
+    const facts = [
+      stored({ id: 'likes', category: 'preferences', key: 'likes' }),
+      stored({ id: 'job-low', category: 'identity', key: 'job', confidence: 0.4 }),
+      stored({ id: 'city-old', category: 'identity', key: 'city', observedAt: may }),
+      stored({ id: 'age-new', category: 'identity', key: 'age', observedAt: august }),
+    ];
+    expect(selectActiveFacts(facts, now).map((fact) => fact.id)).toEqual([
+      'age-new',
+      'city-old',
+      'job-low',
+      'likes',
+    ]);
+  });
+
+  it('keeps 40 facts at most', () => {
+    const facts = Array.from({ length: 50 }, (_, i) =>
+      stored({ id: `f-${String(i)}`, key: `k${String(i)}` }),
+    );
+    expect(selectActiveFacts(facts, now)).toHaveLength(MAX_ACTIVE_FACTS);
+  });
+});
