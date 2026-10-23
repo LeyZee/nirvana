@@ -1,6 +1,7 @@
 import { EventIdSchema, FanFlagsSchema, newId, type EventPayload } from '@nirvana/contracts';
 import { and, eq, schema, withTenant, type Database } from '@nirvana/db';
 
+import { FanNotFound } from '../domain/errors';
 import type { FlagStore } from '../domain/fan';
 
 export function createDrizzleFlagStore(db: Database): FlagStore {
@@ -11,7 +12,7 @@ export function createDrizzleFlagStore(db: Database): FlagStore {
           .select({ flags: schema.fans.flags })
           .from(schema.fans)
           .where(and(eq(schema.fans.id, fanId), eq(schema.fans.creatorId, creatorId)));
-        if (row === undefined) throw new Error('Fan not found for this creator');
+        if (row === undefined) throw new FanNotFound();
         // Written by this module only, through the contract: read back through it too (a column is a boundary).
         return FanFlagsSchema.parse(row.flags);
       }),
@@ -22,7 +23,7 @@ export function createDrizzleFlagStore(db: Database): FlagStore {
           .from(schema.fans)
           .where(and(eq(schema.fans.id, fanId), eq(schema.fans.creatorId, creatorId)))
           .for('update');
-        if (row === undefined) throw new Error('Fan not found for this creator');
+        if (row === undefined) throw new FanNotFound();
         const before = FanFlagsSchema.parse(row.flags);
         const after = change(before);
         if (after === null) return before;

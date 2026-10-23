@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { FanIdSchema } from './ids';
+
 /**
  * What she tries to learn about a fan (P3-02): the lines of the agency's notes canvas on Reveal, as they are.
  * A slot is filled by an active fact of the same key (`fan_facts.key`).
@@ -54,3 +56,35 @@ export type FanFlags = z.infer<typeof FanFlagsSchema>;
 /** The name of one flag of a fan: what `fan_flag_set` and `fan_flag_cleared` say changed. */
 export const FanFlagNameSchema = FanFlagsSchema.keyof();
 export type FanFlagName = z.infer<typeof FanFlagNameSchema>;
+
+/** `GET /v1/fans/:id/flags`, and the answer of `PUT`: his limits now. */
+export const FanFlagsViewSchema = z.object({ fanId: FanIdSchema, flags: FanFlagsSchema });
+export type FanFlagsView = z.infer<typeof FanFlagsViewSchema>;
+
+const flagReason = z.string().trim().min(1).max(500).exactOptional();
+
+/**
+ * `PUT /v1/fans/:id/flags`: a human sets or lifts one limit. The server dates `ageConfirmedAt` and the start of a
+ * freeze itself; a freeze says why, a ceiling says how much.
+ */
+export const SetFanFlagBodySchema = z.union([
+  z.object({
+    flag: z.enum(['ageConfirmedAt', 'fragile', 'noExplicit', 'doNotContact']),
+    set: z.literal(true),
+    reason: flagReason,
+  }),
+  z.object({
+    flag: z.literal('salesFrozen'),
+    set: z.literal(true),
+    freezeReason: SalesFreezeReasonSchema,
+    reason: flagReason,
+  }),
+  z.object({
+    flag: z.literal('spendingLimitMinor'),
+    set: z.literal(true),
+    limitMinor: z.number().int().nonnegative(),
+    reason: flagReason,
+  }),
+  z.object({ flag: FanFlagNameSchema, set: z.literal(false), reason: flagReason }),
+]);
+export type SetFanFlagBody = z.infer<typeof SetFanFlagBodySchema>;

@@ -1,0 +1,96 @@
+import {
+  CreatorIdSchema,
+  DomainError,
+  FanFlagsViewSchema,
+  FanIdSchema,
+  SetFanFlagBodySchema,
+  UserIdSchema,
+  type CreatorId,
+  type UserId,
+  type UserRole,
+} from '@nirvana/contracts';
+import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+
+import type { FansService } from '../../application/fans';
+import { requestedChange, type FlagAuthor } from '../../domain/flags';
+
+/** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
+export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+
+class CreatorForbidden extends DomainError {
+  constructor() {
+    super('creator_forbidden', 'Créatrice hors de ton périmètre');
+  }
+}
+
+const FanParamsSchema = z.object({ id: FanIdSchema });
+const CreatorQuerySchema = z.object({ creatorId: CreatorIdSchema });
+
+/** The signed-in user, allowed on this creator: an owner sees every creator, anyone else their own list. */
+function actorFor(request: FastifyRequest, creatorId: CreatorId): UserId {
+  const { user } = request;
+  if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
+  if (user.role !== 'owner' && !user.creatorIds.includes(creatorId)) throw new CreatorForbidden();
+  return UserIdSchema.parse(user.id);
+}
+
+/**
+ * `/v1/fans/:id/flags` (P3-02): the dashboard reads a fan's limits, and a chatter sets or lifts one; the session's
+ * user is the author of the `fan_flag_set` or `fan_flag_cleared` event.
+ */
+export function createFlagRoutes(
+  fans: FansService,
+  requireRole: RequireRole,
+  now: () => Date = () => new Date(),
+): FastifyPluginAsyncZod {
+  return (app) => {
+    app.get(
+      '/fans/:id/flags',
+      {
+        preHandler: requireRole('owner', 'operator', 'creator'),
+        schema: {
+          params: FanParamsSchema,
+          querystring: CreatorQuerySchema,
+          response: { 200: FanFlagsViewSchema },
+        },
+      },
+      async (request) => {
+        const { creatorId } = request.query;
+        actorFor(request, creatorId);
+        return { fanId: request.params.id, flags: await fans.flags(creatorId, request.params.id) };
+      },
+    );
+
+    app.put(
+      '/fans/:id/flags',
+      {
+        // His limits are a chatter's call, like the drafts: the creator reads them.
+        preHandler: requireRole('owner', 'operator'),
+        schema: {
+          params: FanParamsSchema,
+          querystring: CreatorQuerySchema,
+          body: SetFanFlagBodySchema,
+          response: { 200: FanFlagsViewSchema },
+        },
+      },
+      async (request) => {
+        const { creatorId } = request.query;
+        const fanId = request.params.id;
+        const { body } = request;
+        const author: FlagAuthor = `human:${actorFor(request, creatorId)}`;
+        const command = {
+          author,
+          correlationId: request.id,
+          ...(body.reason !== undefined && { reason: body.reason }),
+        };
+        const flags = body.set
+          ? await fans.setFlag(creatorId, fanId, requestedChange(body, now()), command)
+          : await fans.clearFlag(creatorId, fanId, body.flag, command);
+        return { fanId, flags };
+      },
+    );
+    return Promise.resolve();
+  };
+}
