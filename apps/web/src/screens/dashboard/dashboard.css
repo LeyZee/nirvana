@@ -84,7 +84,22 @@
 .db-hero h1 em {
   font-style: normal;
   color: var(--_c);
+}
+/* Only what asks for a hand glows: a calm « tout va bien » stays quiet, and so does an agent at rest. */
+.db-hero[data-tone='warn'] h1 em,
+.db-hero[data-tone='bad'] h1 em {
   text-shadow: 0 0 28px color-mix(in srgb, var(--_c) 45%, transparent);
+}
+.db-hero[data-tone='ok'] .db-hero__glow,
+.db-hero[data-tone='idle'] .db-hero__glow {
+  opacity: 0.45;
+}
+/* By day a coloured halo behind dark ink reads as a stain: the glow fades and the words stay plain. */
+:root[data-theme='light'] .db-hero__glow {
+  opacity: 0.35;
+}
+:root[data-theme='light'] .db-hero h1 em {
+  text-shadow: none;
 }
 .db-hero__lead {
   margin: 8px 0 0;
@@ -209,7 +224,7 @@
   align-self: center;
 }
 .db-lever .nv-stat__spark path:first-child {
-  animation: nv-chart-fade 700ms 350ms var(--nv-ease-out) both;
+  animation: nv-chart-fade var(--nv-dur-slow) calc(6 * var(--nv-stagger)) var(--nv-ease-out) both;
 }
 
 /* ── Level 2 bis: the fans' path ── */
@@ -342,7 +357,7 @@
   background: var(--nv-glass-fill);
   color: var(--nv-ink-muted);
   animation: nv-swap var(--nv-dur-base) var(--nv-ease-out) both;
-  animation-delay: calc(var(--nv-i, 0) * 50ms);
+  animation-delay: calc(var(--nv-i, 0) * var(--nv-stagger));
 }
 .db-reader__alert {
   background: color-mix(in srgb, var(--nv-danger) 18%, transparent);
@@ -527,7 +542,7 @@
 .db-loading {
   min-height: 220px;
   border-radius: var(--nv-radius-lg);
-  animation: db-breathe 1.6s ease-in-out infinite;
+  animation: db-breathe var(--nv-dur-breathe) var(--nv-ease-in-out) infinite;
 }
 @keyframes db-breathe {
   50% {

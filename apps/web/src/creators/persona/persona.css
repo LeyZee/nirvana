@@ -38,7 +38,7 @@
 /* While loading: the shapes of the page, breathing, so nothing jumps when it arrives. */
 .ps-skeleton {
   min-height: 150px;
-  animation: ps-skeleton 1.6s var(--nv-ease-out) infinite;
+  animation: ps-skeleton var(--nv-dur-breathe) var(--nv-ease-in-out) infinite;
 }
 .ps-skeleton--tall {
   min-height: 420px;

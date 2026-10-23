@@ -159,3 +159,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-23 | Refonte du design system : onglet Créatrices (D-01) | done | `log/2026-10-23-d-01-creatrices.md` |
 | 2026-10-23 | Mémoire du fan : purge des faits un an après le dernier contact (P3-02, PR 4b) | done | `log/2026-10-23-fan-facts-purge.md` |
 | 2026-10-23 | Mémoire du fan : les faits du brief deviennent des faits à l’approbation, note du chatteur (P3-02, PR 3) | done | `log/2026-10-23-fan-facts-conversations.md` |
+| 2026-10-23 | Refonte du design system : lueur, ressort unique, thème Jour (D-01) | done | `log/2026-10-23-d-01-lueur-ressort-jour.md` |
