@@ -154,3 +154,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Automatique : la persona active fait partie de la version prouvée (R-G3, ADR 0022) | done | `log/2026-10-22-automatic-persona.md` |
 | 2026-10-22 | Playground : le contrat ne donne plus que des euros | done | `log/2026-10-22-playground-usd-out.md` |
 | 2026-10-23 | Mémoire du fan : le module `fans` écrit et lit les faits (P3-02, PR 1) | done | `log/2026-10-23-fan-facts.md` |
+| 2026-10-23 | Mémoire du fan : contrats des slots KYC et des drapeaux (P3-02, PR 2) | done | `log/2026-10-23-fan-contracts.md` |

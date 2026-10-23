@@ -38,6 +38,8 @@ fan_facts       id, creator_id, fan_id, category (identity|life|interests|prefer
 fan_summaries   id, creator_id, fan_id, version, content text, based_on_message_id, created_at
 ```
 
+`fans.flags` suit `FanFlagsSchema` (contracts, clés fermées) : `ageConfirmedAt`, `salesFrozen` (`reason` : `money_trouble`, `spending_limit`, `distress`, `operator` ; `since`), `spendingLimitMinor`, `fragile`, `noExplicit`, `doNotContact`. Les slots KYC sont les clés `KycSlotSchema` (lignes du canevas de notes de Reveal) ; un slot est rempli par un fait actif de même clé.
+
 Un fait n'est jamais mis à jour en place : un nouveau fait remplace l'ancien (`superseded_by`), ce qui garde l'historique (« il a dit Lyon en mai, Paris en août »). Le contexte LLM reçoit les faits actifs (non remplacés, non expirés) triés par catégorie et confiance.
 
 ## Conversations (module `conversations`)

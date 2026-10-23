@@ -41,7 +41,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Mode auto | `auto` | Le bot envoie seul pour les catégories autorisées. |
 | Fait (mémoire) | `fan_fact` | Une information mémorisée sur un fan, avec source, date, confiance, `kind: declared | inferred`. |
 | Résumé fan | `fan_summary` | Résumé opérationnel régénéré. |
-| Slot KYC | `kyc_slot` | Une information qu'on cherche à apprendre (prénom, âge, métier…). |
+| Slot KYC | `kyc_slot` | Une information qu'on cherche à apprendre : une ligne du canevas de notes de Reveal (Prénom, Localisation, Âge, Métier, Passions, Envies, Situation), liste fermée `KycSlotSchema`. |
+| Drapeau du fan | `fan_flag` | Une limite du fan (`fans.flags`, `FanFlagsSchema`) : âge confirmé, ventes gelées et leur raison, plafond de dépense, fragile, pas d'explicite, ne plus écrire. Lue par la politique avant toute offre, posée par la politique ou un humain, jamais par un modèle seul. |
 | Persona | `persona` | La fiche versionnée de la créatrice, calquée sur la fiche OnlyChat (détails, infos en plus, comportement, stratégies, relances, notifications), plus ses limites. |
 | Version de persona | `persona_version` | Un état enregistré de la persona d'une créatrice. Une seule est active, celle avec laquelle l'agent écrit ; le CRM enregistre des versions qui restent inactives tant qu'elles ne sont pas activées (ADR 0010). |
 | Infos en plus | `additional_info` | Le texte libre de la persona (6 000 caractères au plus). |
