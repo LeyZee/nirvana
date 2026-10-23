@@ -29,10 +29,15 @@ async function first<T extends z.ZodType>(tx: Transaction, schema: T, query: Ret
 }
 
 /**
- * Decided drafts of one voice version before a date, newest first: approved as is, edited or rejected (ADR 0019).
- * The same selection and order as the lock's reading in `conversations`, for the trend.
+ * Decided drafts of one voice version and her active persona (ADR 0022) before a date, newest first: approved as
+ * is, edited or rejected (ADR 0019). The same selection and order as the lock's reading in `conversations`, for the trend.
  */
-async function decided(tx: Transaction, window: DashboardWindow, before: Date): Promise<DecidedDraft[]> {
+async function decided(
+  tx: Transaction,
+  creatorId: string,
+  window: DashboardWindow,
+  before: Date,
+): Promise<DecidedDraft[]> {
   const list = await rows(
     tx,
     z.object({ as_is: z.boolean() }),
@@ -42,6 +47,8 @@ async function decided(tx: Transaction, window: DashboardWindow, before: Date): 
           and status in ('approved', 'edited', 'rejected', 'sent', 'failed')
           and prompt_hashes->>'voicePrompt' = ${window.voice.voicePrompt}
           and prompt_hashes->>'voiceModel' = ${window.voice.voiceModel}
+          and persona_version_id is not distinct from
+            (select id from persona_versions where creator_id = ${creatorId}::uuid and is_active)
         order by decided_at desc, id desc limit ${LIVE_WINDOW}`,
   );
   return list.map((row) => ({ asIs: row.as_is }));
@@ -197,7 +204,7 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
       creator: stopped.some((s) => s.scope === 'creator' && s.active),
     },
     autoConversations: counts.auto,
-    decidedThreeWeeksAgo: await decided(tx, window, new Date(window.now.getTime() - 21 * DAY_MS)),
+    decidedThreeWeeksAgo: await decided(tx, creatorId, window, new Date(window.now.getTime() - 21 * DAY_MS)),
     reveal: {
       connected: account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused,
       lastReadAt: account?.last_poll_at ?? null,

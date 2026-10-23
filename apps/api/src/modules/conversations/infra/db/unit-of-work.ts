@@ -33,6 +33,8 @@ const PlatformMediaSchema = z.array(ExternalMediaSchema);
 
 /** The repositories of one tenant transaction (`withTenant`: RLS scopes every statement to the creator). */
 function bind(tx: DbTransaction, creatorId: string): Transaction {
+  // Her active persona, read inside the statement that needs it: part of the version Automatique is proved on (ADR 0022).
+  const activePersona = sql`(select id from persona_versions where creator_id = ${creatorId} and is_active)`;
   return {
     conversations: {
       async lockOrCreate(key) {
@@ -182,7 +184,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           creatorId,
           bubbles: [...(bubbles ?? [])],
           guardTrace: { softViolations: [...(softViolations ?? [])] },
-          ...(voice !== undefined && { promptHashes: { ...voice } }),
+          ...(voice !== undefined && { promptHashes: { ...voice }, personaVersionId: activePersona }),
         });
       },
       async setStatus(id, status, decision) {
@@ -302,6 +304,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
             and status in ('approved', 'edited', 'rejected', 'sent', 'failed')
             and prompt_hashes->>'voicePrompt' = ${voice.voicePrompt}
             and prompt_hashes->>'voiceModel' = ${voice.voiceModel}
+            and persona_version_id is not distinct from ${activePersona}
           order by decided_at desc, id desc limit ${LIVE_WINDOW}`);
         return rows.rows.map((row) => ({ asIs: row.as_is }));
       },
@@ -313,6 +316,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
             and(
               eq(schema.blindTests.voicePrompt, voice.voicePrompt),
               eq(schema.blindTests.voiceModel, voice.voiceModel),
+              sql`${schema.blindTests.personaVersionId} is not distinct from ${activePersona}`,
             ),
           )
           .orderBy(sql`${schema.blindTests.recordedAt} desc`)
@@ -327,6 +331,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
             creatorId,
             voicePrompt: entry.voice.voicePrompt,
             voiceModel: entry.voice.voiceModel,
+            personaVersionId: activePersona,
             ratePerMille: entry.ratePerMille,
             recordedBy: entry.recordedBy,
             recordedAt: sql`clock_timestamp()`,

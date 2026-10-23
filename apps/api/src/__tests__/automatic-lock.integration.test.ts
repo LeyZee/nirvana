@@ -5,11 +5,12 @@ import {
   DashboardSchema,
   DraftIdSchema,
   newId,
+  PersonaVersionIdSchema,
   PlatformAccountIdSchema,
   type ConversationId,
   type CreatorId,
 } from '@nirvana/contracts';
-import { and, eq, schema } from '@nirvana/db';
+import { and, eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { DEFAULT_LLM_CONFIG, loadPrompt } from '@nirvana/llm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -68,8 +69,13 @@ describe('the server lock of Automatique (ADR 0019)', () => {
         and(eq(schema.domainEvents.creatorId, creatorId), eq(schema.domainEvents.type, 'automatic_closed')),
       );
 
-  /** Drafts a chatter decided, each newer than the last; `voice` defaults to the active version. */
-  const decide = async (count: number, status: 'sent' | 'rejected', voice = VOICE) => {
+  /** Drafts a chatter decided, each newer than the last; `voice` defaults to the active version, without persona. */
+  const decide = async (
+    count: number,
+    status: 'sent' | 'rejected',
+    voice = VOICE,
+    personaVersionId: string | null = null,
+  ) => {
     for (let i = 0; i < count; i += 1) {
       decidedAt += 1_000;
       await test.admin.db.insert(schema.drafts).values({
@@ -79,6 +85,7 @@ describe('the server lock of Automatique (ADR 0019)', () => {
         status,
         bubbles: ['Coucou'],
         promptHashes: { ...voice },
+        personaVersionId,
         decidedBy: 'human:seed',
         decidedAt: new Date(decidedAt),
         idempotencyKey: `seed:${String(decidedAt)}`,
@@ -231,5 +238,44 @@ describe('the server lock of Automatique (ADR 0019)', () => {
     expect(BlindTestResultSchema.parse((await recordBlindTest(60)).json()).automatic.open).toBe(false);
     expect(await conversationMode()).toBe('copilot');
     expect(await closedEvents()).toHaveLength(2);
+  });
+
+  it('proves nothing for a new persona: activating one closes Automatique until she proves it (ADR 0022)', async () => {
+    expect(BlindTestResultSchema.parse((await recordBlindTest(90)).json()).automatic.open).toBe(true);
+    expect((await setConversationMode('auto')).statusCode).toBe(204);
+
+    const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: personaVersionId,
+      creatorId,
+      version: 'test-1',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'test',
+      isActive: true,
+      activatedAt: new Date(),
+    });
+    expect((await dashboard()).automatic.missing).toEqual([
+      { kind: 'live_rate', value: null, target: 80 },
+      { kind: 'decided_drafts', value: 0, target: 100 },
+      { kind: 'blind_test' },
+    ]);
+    await app.modules.conversations.jobs.respond(
+      { creatorId, conversationId, correlationId: 'persona' },
+      NO_LOG,
+    );
+    expect(await conversationMode()).toBe('copilot');
+    expect(await closedEvents()).toHaveLength(3);
+
+    // Her drafts and blind test with this persona open it again; the test is stamped with the persona.
+    await decide(120, 'sent', VOICE, personaVersionId);
+    expect(BlindTestResultSchema.parse((await recordBlindTest(85)).json()).automatic.open).toBe(true);
+    const [latest] = await test.admin.db
+      .select({ personaVersionId: schema.blindTests.personaVersionId })
+      .from(schema.blindTests)
+      .where(eq(schema.blindTests.creatorId, creatorId))
+      .orderBy(sql`${schema.blindTests.recordedAt} desc`)
+      .limit(1);
+    expect(latest?.personaVersionId).toBe(personaVersionId);
   });
 });
