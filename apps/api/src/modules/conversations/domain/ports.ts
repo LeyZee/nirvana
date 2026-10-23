@@ -14,6 +14,8 @@ import type {
   EventBody,
   ExternalMedia,
   ExternalRef,
+  FactCategory,
+  FactKind,
   FanId,
   HandoffCause,
   JobName,
@@ -71,6 +73,20 @@ export interface Draft {
   readonly bubbles: readonly string[];
   readonly finalBubbles: readonly string[] | null;
   readonly createdAt: Date;
+  /** What the brief learnt about the fan for this draft, written as facts once a human approves it (P3-02). */
+  readonly facts: readonly DraftFact[];
+}
+
+/** A fact read in the fan's messages, kept with the draft until a human approves it (P3-02). */
+export interface DraftFact {
+  readonly category: FactCategory;
+  readonly key: string;
+  readonly value: string;
+  readonly kind: FactKind;
+  readonly confidence: number;
+  /** The fan's message it was read in. */
+  readonly sourceMessageId: MessageId | null;
+  readonly observedAt: Date;
 }
 
 export interface DraftDecision {
@@ -101,8 +117,8 @@ interface MessageRepository {
   countForDraft(draftId: DraftId): Promise<number>;
   /** The conversation's last `limit` messages, oldest first: what the engine reads. */
   history(conversationId: ConversationId, limit: number): Promise<readonly HistoryMessage[]>;
-  /** What the fan's messages tell about them across the creator's conversations. */
-  fanContext(fanId: FanId): Promise<FanContext>;
+  /** What the fan bought and since when he writes, across the creator's conversations. */
+  fanStats(fanId: FanId): Promise<FanStats>;
 }
 
 /** The voice prompt version and the model that wrote a draft: what the live rate is read by (ADR 0019). */
@@ -125,6 +141,8 @@ interface DraftRepository {
     softViolations?: readonly string[];
     /** The voice that wrote it, for the live rate (ADR 0019). */
     voice?: DraftVoice;
+    /** Facts the brief proposed, confirmed when a human approves the draft (P3-02). */
+    facts?: readonly DraftFact[];
   }): Promise<void>;
   setStatus(id: DraftId, status: DraftStatus, decision?: DraftDecision): Promise<void>;
 }
@@ -239,6 +257,17 @@ export interface FanDirectory {
     displayName: string;
     seenAt: Date;
   }): Promise<{ readonly id: FanId }>;
+  /** Writes what is new in these facts (append-only, the `fans` module decides); returns those written, none on a replay. */
+  proposeFacts(
+    creatorId: CreatorId,
+    fanId: FanId,
+    facts: readonly DraftFact[],
+  ): Promise<readonly { readonly id: string; readonly category: FactCategory }[]>;
+  /** Her active facts about this fan, as the engine reads them (sorted, 40 at most). */
+  activeFacts(
+    creatorId: CreatorId,
+    fanId: FanId,
+  ): Promise<readonly { readonly key: string; readonly value: string }[]>;
 }
 
 /**
@@ -265,6 +294,7 @@ interface HistoryMedia {
 
 /** One message as the engine reads it. */
 interface HistoryMessage {
+  readonly id: MessageId;
   readonly direction: MessageDirection;
   readonly author: MessageAuthor;
   readonly text: string;
@@ -280,12 +310,24 @@ interface HistoryMessage {
   readonly media: readonly HistoryMedia[];
 }
 
-interface FanContext {
-  /** Confirmed facts about the fan, current ones only (`fan_facts`), as « key : value ». */
-  readonly notes: readonly string[];
+interface FanStats {
   /** Paid messages (PPV bought), in minor units. */
   readonly spentMinor: number;
   readonly firstMessageAt: Date | null;
+}
+
+interface FanContext extends FanStats {
+  /** Her active facts about the fan (`fans.activeFacts`), as « key : value ». */
+  readonly notes: readonly string[];
+}
+
+/** A fact as the brief proposes it: its category is the model's word until `conversations` reads it (P3-02). */
+export interface ProposedFact {
+  readonly category: string;
+  readonly key: string;
+  readonly value: string;
+  readonly kind: FactKind;
+  readonly confidence: number;
 }
 
 export interface ComposeInput {
@@ -314,6 +356,8 @@ export type ComposeResult =
       readonly softViolations: readonly string[];
       readonly costUsd: number;
       readonly voice?: DraftVoice;
+      /** What the brief read about the fan in his messages. */
+      readonly factsProposed?: readonly ProposedFact[];
     }
   | {
       readonly kind: 'held';

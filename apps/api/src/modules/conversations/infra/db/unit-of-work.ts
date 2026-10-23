@@ -10,6 +10,7 @@ import {
   LIVE_WINDOW,
   MessageAuthorSchema,
   MessageDirectionSchema,
+  MessageIdSchema,
   newId,
 } from '@nirvana/contracts';
 import {
@@ -25,7 +26,7 @@ import { z } from 'zod';
 
 import type { Transaction, UnitOfWork } from '../../domain/ports';
 
-import { toConversation, toDraft, toStoredEvent } from './rows';
+import { toConversation, toDraft, toStoredBrief, toStoredEvent } from './rows';
 
 const OPEN_DRAFT_STATUSES = ['pending', 'approved', 'edited'];
 
@@ -115,6 +116,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .orderBy(sql`${schema.messages.platformCreatedAt} desc, ${schema.messages.id} desc`)
           .limit(limit);
         return rows.reverse().map((row) => ({
+          id: MessageIdSchema.parse(row.id),
           direction: MessageDirectionSchema.parse(row.direction),
           author: MessageAuthorSchema.parse(row.author),
           text: row.text,
@@ -130,18 +132,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           })),
         }));
       },
-      async fanContext(fanId) {
-        const facts = await tx
-          .select({ key: schema.fanFacts.key, value: schema.fanFacts.value })
-          .from(schema.fanFacts)
-          .where(
-            and(
-              eq(schema.fanFacts.fanId, fanId),
-              sql`${schema.fanFacts.supersededBy} is null`,
-              sql`(${schema.fanFacts.expiresAt} is null or ${schema.fanFacts.expiresAt} > now())`,
-            ),
-          )
-          .orderBy(schema.fanFacts.observedAt);
+      async fanStats(fanId) {
         const [totals] = await tx
           .select({
             spentMinor: sql<number>`coalesce(sum(${schema.messages.priceMinor}) filter (where ${schema.messages.isPaid}), 0)::int`,
@@ -152,7 +143,6 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .where(eq(schema.conversations.fanId, fanId));
         const firstMessageAt = totals?.firstMessageAt ?? null;
         return {
-          notes: facts.map((fact) => `${fact.key} : ${fact.value}`),
           spentMinor: totals?.spentMinor ?? 0,
           firstMessageAt: firstMessageAt === null ? null : new Date(firstMessageAt),
         };
@@ -178,10 +168,11 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .for('update');
         return rows.map(toDraft);
       },
-      async insert({ bubbles, softViolations, voice, ...draft }) {
+      async insert({ bubbles, softViolations, voice, facts, ...draft }) {
         await tx.insert(schema.drafts).values({
           ...draft,
           creatorId,
+          ...(facts !== undefined && facts.length > 0 && { brief: toStoredBrief(facts) }),
           bubbles: [...(bubbles ?? [])],
           guardTrace: { softViolations: [...(softViolations ?? [])] },
           ...(voice !== undefined && { promptHashes: { ...voice }, personaVersionId: activePersona }),

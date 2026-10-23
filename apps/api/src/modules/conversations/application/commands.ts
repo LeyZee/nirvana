@@ -70,7 +70,8 @@ export interface ConversationCommands {
     input: Omit<ConversationCommand, 'userId'> & { draftId: DraftId; reason: string },
   ): Promise<void>;
   takeover(input: ConversationCommand & { reason?: string }): Promise<void>;
-  release(input: ConversationCommand): Promise<void>;
+  /** `note`: what the chatter wants her to remember about the fan, kept as an `operator_note` fact (P3-02). */
+  release(input: ConversationCommand & { note?: string }): Promise<void>;
   setMode(input: ConversationCommand & { mode: ConversationMode }): Promise<void>;
   /**
    * The Dashboard's control (Arrêt, Copilote, Automatique) for all her conversations. Returns the mode now in
@@ -286,6 +287,20 @@ export function createConversationCommands({
           },
           { queueName: queueNameFor(conversation.id), maxAttempts: MAX_SEND_ATTEMPTS },
         );
+        // A human approved what the brief read about him: it becomes facts, on a queue of its own so the send
+        // never waits for it (P3-02).
+        if (draft.facts.length > 0) {
+          await tx.jobs.enqueue(
+            'conversation.record_facts',
+            {
+              creatorId: input.creatorId,
+              conversationId: conversation.id,
+              correlationId: input.correlationId,
+              source: { kind: 'draft', draftId: draft.id },
+            },
+            {},
+          );
+        }
       });
       await afterDecision(input.creatorId, input.correlationId);
     },
@@ -360,12 +375,25 @@ export function createConversationCommands({
     release(input) {
       return uow.inTenant(input.creatorId, async (tx) => {
         const conversation = await lockConversation(tx, input.conversationId);
+        const meta = humanMeta(input);
         await appendEvent(
           tx,
           conversation,
           { type: 'takeover_ended', payload: { conversationId: conversation.id, userId: input.userId } },
-          humanMeta(input),
+          meta,
         );
+        if (input.note !== undefined) {
+          await tx.jobs.enqueue(
+            'conversation.record_facts',
+            {
+              creatorId: input.creatorId,
+              conversationId: conversation.id,
+              correlationId: input.correlationId,
+              source: { kind: 'operator_note', note: input.note, at: meta.at.toISOString() },
+            },
+            {},
+          );
+        }
         await tx.audit.record({
           userId: input.userId,
           action: 'conversation.release',

@@ -8,13 +8,16 @@ import {
   DomainError,
   DraftStatusSchema,
   EventBodySchema,
+  FactCategorySchema,
+  FactKindSchema,
   FanIdSchema,
+  MessageIdSchema,
   PlatformAccountIdSchema,
 } from '@nirvana/contracts';
 import type { schema } from '@nirvana/db';
 import { z } from 'zod';
 
-import type { Conversation, Draft, StoredEvent } from '../../domain/ports';
+import type { Conversation, Draft, DraftFact, StoredEvent } from '../../domain/ports';
 
 /** Rows read back from Postgres are validated like any other boundary (CLAUDE.md rule 6). */
 
@@ -33,6 +36,36 @@ export function toConversation(row: typeof schema.conversations.$inferSelect): C
   };
 }
 
+/** What `drafts.brief` holds today: the facts the brief proposed (P3-02). */
+const StoredBriefSchema = z.object({
+  factsProposed: z.array(
+    z.object({
+      category: FactCategorySchema,
+      key: z.string().min(1),
+      value: z.string().min(1),
+      kind: FactKindSchema,
+      confidence: z.number().min(0).max(1),
+      sourceMessageId: MessageIdSchema.nullable(),
+      observedAt: z.iso.datetime(),
+    }),
+  ),
+});
+
+export function toStoredBrief(facts: readonly DraftFact[]): z.input<typeof StoredBriefSchema> {
+  return { factsProposed: facts.map((fact) => ({ ...fact, observedAt: fact.observedAt.toISOString() })) };
+}
+
+/**
+ * A brief that does not read back gives no facts rather than an error: facts are what she remembers, never a
+ * reason to block an approval.
+ */
+function readFacts(brief: unknown): DraftFact[] {
+  if (brief === null) return [];
+  const parsed = StoredBriefSchema.safeParse(brief);
+  if (!parsed.success) return [];
+  return parsed.data.factsProposed.map((fact) => ({ ...fact, observedAt: new Date(fact.observedAt) }));
+}
+
 export function toDraft(row: typeof schema.drafts.$inferSelect): Draft {
   return {
     id: DraftIdSchema.parse(row.id),
@@ -41,6 +74,7 @@ export function toDraft(row: typeof schema.drafts.$inferSelect): Draft {
     bubbles: row.bubbles,
     finalBubbles: row.finalBubbles,
     createdAt: row.createdAt,
+    facts: readFacts(row.brief),
   };
 }
 

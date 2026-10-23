@@ -25,6 +25,7 @@ export const JOB_NAMES = [
   'conversation.respond',
   'conversation.send',
   'conversation.follow_up',
+  'conversation.record_facts',
   'connector.dispatch',
   'connector.poll',
   'connector.reconcile',
@@ -46,6 +47,21 @@ export const JOB_PAYLOADS = {
   'conversation.respond': conversationJob,
   'conversation.send': conversationJob.extend({ draftId: DraftIdSchema }),
   'conversation.follow_up': conversationJob,
+  /**
+   * What she learnt about the fan becomes facts (P3-02): the facts the brief proposed for a draft a human approved,
+   * or the note a chatter left on giving the conversation back. `at` fixes the note's slot, so a replay rewrites
+   * nothing.
+   */
+  'conversation.record_facts': conversationJob.extend({
+    source: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('draft'), draftId: DraftIdSchema }),
+      z.object({
+        kind: z.literal('operator_note'),
+        note: z.string().min(1).max(1_000),
+        at: z.iso.datetime(),
+      }),
+    ]),
+  }),
   'connector.dispatch': z.object({}),
   'connector.poll': z.object({
     creatorId: CreatorIdSchema,
@@ -79,6 +95,7 @@ export const JOB_MAX_ATTEMPTS = {
   'conversation.respond': 3,
   'conversation.send': 3,
   'conversation.follow_up': 3,
+  'conversation.record_facts': 3,
   'connector.dispatch': 1,
   'connector.poll': 3,
   'connector.reconcile': 3,

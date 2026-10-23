@@ -32,7 +32,7 @@ Les tables d'authentification sont **générées par la CLI de Better Auth** (ad
 fans            id, creator_id, platform_account_id, platform_fan_id, display_name, person_id (nullable, futur),
                 first_seen_at, last_seen_at, kyc_state jsonb (slots remplis), tags text[], flags jsonb,
                 platform_meta jsonb (données propres à la plateforme, ex. abonnement ; vide pour Reveal, voir own-platform.md)
-fan_facts       id, creator_id, fan_id, category (identity|life|interests|preferences|commercial|intimate|events),
+fan_facts       id, creator_id, fan_id, category (identity|life|interests|preferences|commercial|intimate|events|operator_note),
                 key, value, kind (declared|inferred), confidence (0..1), source_message_id,
                 observed_at, expires_at, superseded_by (nullable), created_at   (append-only : on remplace, on ne modifie pas)
 fan_summaries   id, creator_id, fan_id, version, content text, based_on_message_id, created_at
@@ -41,6 +41,8 @@ fan_summaries   id, creator_id, fan_id, version, content text, based_on_message_
 `fans.flags` suit `FanFlagsSchema` (contracts, clés fermées) : `ageConfirmedAt`, `salesFrozen` (`reason` : `money_trouble`, `spending_limit`, `distress`, `operator` ; `since`), `spendingLimitMinor`, `fragile`, `noExplicit`, `doNotContact`. Les slots KYC sont les clés `KycSlotSchema` (lignes du canevas de notes de Reveal) ; un slot est rempli par un fait actif de même clé.
 
 Un fait n'est jamais mis à jour en place : un nouveau fait remplace l'ancien (`superseded_by`), ce qui garde l'historique (« il a dit Lyon en mai, Paris en août »). Le contexte LLM reçoit les faits actifs (non remplacés, non expirés) triés par catégorie et confiance.
+
+D'où viennent les faits (P3-02) : les `factsProposed` du brief restent sur le brouillon (`drafts.brief`), datés par le message du fan où ils ont été lus ; une catégorie inconnue est ignorée, et `operator_note` n'est jamais acceptée d'un modèle. Quand un humain approuve le brouillon, le job `conversation.record_facts` les fait écrire par le module `fans`, puis écrit un `fact_confirmed` par fait nouveau dans le journal de la conversation ; un brouillon refusé ou expiré n'écrit rien. La note qu'un chatteur laisse en rendant la main (`release`, `note`) devient un fait `operator_note`, une clé par note (sa date) : les notes s'ajoutent sans se remplacer. Rejoué, le job ne réécrit rien.
 
 ## Conversations (module `conversations`)
 

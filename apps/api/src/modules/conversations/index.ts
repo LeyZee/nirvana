@@ -4,6 +4,7 @@ import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createConversationCommands, type ConversationCommands } from './application/commands';
+import { createRecordFactsJob } from './application/jobs/record-facts';
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
 import type {
@@ -31,6 +32,7 @@ export interface ConversationsModule extends ConversationCommands {
   readonly jobs: {
     respond(payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void>;
     send(payload: JobPayload<'conversation.send'>, logger: JobLogger, attempt: number): Promise<void>;
+    recordFacts(payload: JobPayload<'conversation.record_facts'>, logger: JobLogger): Promise<void>;
   };
 }
 
@@ -76,9 +78,11 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
         uow,
         clock,
         voice: deps.voice,
+        fans: deps.fans,
         ...(deps.composer === undefined ? {} : { composer: deps.composer }),
       }),
       send: createSendJob({ uow, clock, sender: deps.sender }),
+      recordFacts: createRecordFactsJob({ uow, clock, fans: deps.fans }),
     },
   };
 }

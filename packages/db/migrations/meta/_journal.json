@@ -99,6 +99,13 @@
       "when": 1792707502728,
       "tag": "0013_automatic_persona_version",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792755184681,
+      "tag": "0014_fan_fact_operator_note",
+      "breakpoints": true
     }
   ]
 }
