@@ -52,3 +52,4 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Fait : Entraîner sur plaques, un seul `main` (recette R-C5), sélection neutre, ambre pour une mauvaise note. Reste : Suivi, Réglages, connexion (erreur en néon) ; images du guide.
 - Fait : Suivi, lecteur sur plaque, brouillon en teinte calme, non-lus sans néon. Reste : Réglages, connexion (erreur en néon) ; images du guide.
 - Fait : Réglages (Modèles IA, Telegram) sur plaques, alignés sur le titre, sélection neutre, ambre pour ce qui reste à régler. Reste : connexion (erreur en néon) ; images du guide.
+- Fait : connexion sur plaque, erreur en ambre, flamme du logo. Reste : images du guide.
