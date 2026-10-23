@@ -108,8 +108,7 @@ export const PlaygroundAnswerSchema = z.object({
     .exactOptional(),
   model: z.string().exactOptional(),
   latencyMs: z.number().nonnegative(),
-  costUsd: z.number().nonnegative(),
-  /** The same cost in euros, at the daily budget's rate (ADR 0011): what the screen shows. */
+  /** The cost in euros, at the daily budget's rate (ADR 0011); the journal keeps dollars. */
   costEur: z.number().nonnegative(),
   isFallback: z.boolean(),
   /** Why nothing was written: the models that failed, or the daily cap reached. */
@@ -142,7 +141,6 @@ export const PlaygroundStateSchema = z.object({
   rate: PlaygroundRateSchema,
   version: AnswerVersionSchema,
   rejectReasons: z.array(z.object({ id: RejectReasonSchema, label: z.string() })),
-  sessionCostUsd: z.number().nonnegative(),
   /** The session's cost in euros, at the daily budget's rate (ADR 0011). */
   sessionCostEur: z.number().nonnegative(),
   /** Whether a key reaches the voice model, main or fallback: without one, sending a message answers 503. */
@@ -157,7 +155,6 @@ export const PlaygroundComparisonSchema = z.object({
   violations: z.array(GuardViolationSchema),
   isBlocked: z.boolean(),
   model: z.string().exactOptional(),
-  costUsd: z.number().nonnegative(),
   costEur: z.number().nonnegative(),
   failure: z.string().exactOptional(),
 });

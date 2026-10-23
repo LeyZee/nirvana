@@ -113,7 +113,6 @@ const ok = (bubbles: readonly string[], brief: Brief, extra: Partial<Answer> = {
   },
   model: 'grok-4.7',
   latencyMs: 2900,
-  costUsd: 0.004,
   costEur: 0.0036,
   isFallback: false,
   ...extra,
@@ -133,7 +132,6 @@ const handoff = (risks: readonly string[], intent: string): Answer => ({
     kycMissing: [],
   },
   latencyMs: 1200,
-  costUsd: 0.001,
   costEur: 0.0009,
   isFallback: false,
 });
@@ -369,7 +367,6 @@ export function createDemoClient(start: Date = new Date('2026-10-17T22:40:00+02:
   let history: Omit<Turn, 'index'>[] = [];
   let pending: Answer | null = null;
   let answered = 0;
-  let cost = 0;
   let costEur = 0;
 
   const setup = (): PresetSetup =>
@@ -401,7 +398,6 @@ export function createDemoClient(start: Date = new Date('2026-10-17T22:40:00+02:
       },
       version: { voicePrompt: '1.4.0', voiceModel: 'grok-4.7' },
       rejectReasons: [...REJECT_REASONS],
-      sessionCostUsd: cost,
       sessionCostEur: costEur,
       voice: { reachable: true },
       pending,
@@ -410,7 +406,6 @@ export function createDemoClient(start: Date = new Date('2026-10-17T22:40:00+02:
 
   const reply = (answer: Answer): void => {
     pending = answer;
-    cost += answer.costUsd;
     costEur += answer.costEur;
     if (!answer.isBlocked && answer.bubbles.length > 0) {
       history.push({ from: 'creator', text: answer.bubbles.join('\n') });
@@ -522,7 +517,6 @@ export function createDemoClient(start: Date = new Date('2026-10-17T22:40:00+02:
           isBlocked: false,
           violations: [],
           model: voiceModel,
-          costUsd: 0.003,
           costEur: 0.0027,
         };
       }, 900),

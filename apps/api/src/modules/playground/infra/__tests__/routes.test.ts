@@ -162,9 +162,10 @@ describe('/v1/playground', () => {
     expect(answer.json()).toMatchObject({ bubbles: ['Coucou toi ✨'], isBlocked: false, model: 'grok-4.7' });
     // Costs are journaled in USD and shown in euros, at the daily budget's rate (ADR 0011).
     const usdPerEur = DEFAULT_LLM_CONFIG.dailyBudget.usdPerEur;
-    expect(PlaygroundAnswerSchema.parse(answer.json()).costEur).toBeCloseTo(0.002 / usdPerEur);
+    const { costEur } = PlaygroundAnswerSchema.parse(answer.json());
+    expect(costEur).toBeCloseTo(0.002 / usdPerEur);
     const after = stateOf(await app.inject({ method: 'GET', url: '/v1/playground', headers }));
-    expect(after.sessionCostEur).toBeCloseTo(after.sessionCostUsd / usdPerEur);
+    expect(after.sessionCostEur).toBeCloseTo(costEur);
 
     const rating = await post('/rating', { verdict: { kind: 'validated' } });
     expect(rating.json()).toMatchObject({ rate: { rate: 1, rated: 1 }, destination: null });
