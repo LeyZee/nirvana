@@ -228,6 +228,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           gateway: llm.gateway,
           personaPath,
           trainingDir,
+          fans,
           // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
           timeZoneOf: async (creatorId) => {
             const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);

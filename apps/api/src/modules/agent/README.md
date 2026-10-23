@@ -16,6 +16,8 @@ Retenue (`held`), décidée dans le code :
 - `budget_reached` : plafond du jour ; `llm_unavailable` : aucune clé de voix ou tous les modèles en échec ;
 - `guard_blocked` : une garde bloquante sur la réponse écrite.
 
+Limites du fan (P3-02, `fans` passé à `startDraftComposer`) : avant tout appel, un fan « ne plus écrire » (`doNotContact`) part chez un chatteur sans rien écrire (`do_not_contact`), comme un fan dont les limites ne se lisent pas (`limits_unreadable`). Sur un `handoff` dû à un risque, la politique pose elle-même ses limites (`protectionFor`, `domain/hold.ts`), auteur `system`, jusqu'à ce qu'un humain décide : un mineur présumé (`minor_suspected`, `possible_minor`) perd son âge confirmé ; la détresse ou une menace (`distress`, `self_harm`, `real_abuse`, `harassment`, `dangerous_request`, `weapon`) pose « ne plus écrire ». Rien n'est posé quand elle répond. Si l'écriture échoue, la main passe quand même, avec `limits_not_saved` dans le détail.
+
 ## Structure
 
 - `domain/` : types, règles pures, machines d'état. Zéro I/O, zéro import de framework.

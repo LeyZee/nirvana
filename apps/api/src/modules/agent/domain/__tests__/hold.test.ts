@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { holdDecision } from '../hold';
+import { holdDecision, protectionFor } from '../hold';
 
 describe('holdDecision', () => {
   it('hands a possible minor, distress or self-harm to a chatter, whatever the brain suggests', () => {
@@ -35,5 +35,29 @@ describe('holdDecision', () => {
 
   it('answers otherwise, a meeting request included (the voice declines it)', () => {
     expect(holdDecision({ risks: ['meet_request'], action: 'reply' })).toEqual({ kind: 'answer' });
+  });
+});
+
+describe('protectionFor', () => {
+  it('takes back his age on a possible minor, from the brain or from a media', () => {
+    expect(protectionFor(['minor_suspected', 'possible_minor'])).toEqual({
+      unconfirmAge: true,
+      stopContact: false,
+      because: ['minor_suspected', 'possible_minor'],
+    });
+  });
+
+  it('stops writing to him on distress or a threat', () => {
+    for (const sign of ['distress', 'self_harm', 'real_abuse', 'harassment', 'dangerous_request', 'weapon']) {
+      expect(protectionFor([sign]).stopContact).toBe(true);
+    }
+  });
+
+  it('changes nothing for the other risks', () => {
+    expect(protectionFor(['money_trouble', 'meet_request', 'drugs'])).toEqual({
+      unconfirmAge: false,
+      stopContact: false,
+      because: [],
+    });
   });
 });
