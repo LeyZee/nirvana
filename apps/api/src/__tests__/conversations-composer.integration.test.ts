@@ -114,7 +114,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'composer' });
     conversations = createConversationsModule({
       db: test.app.db,
-      fans: createFansModule({ db: test.app.db }),
+      fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
       sender: {
         sendText: () => Promise.reject(new Error('not used')),
         sendMedia: () => Promise.reject(new Error('not used')),

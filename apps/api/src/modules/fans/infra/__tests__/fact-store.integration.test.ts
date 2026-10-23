@@ -59,7 +59,7 @@ describe('fan facts (P3-02), as the application role sees them', () => {
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
-    fans = createFansModule({ db: test.app.db });
+    fans = createFansModule({ db: test.app.db, adminDb: test.admin.db });
     her = await seed('a', 2);
     other = await seed('b', 1);
   });
@@ -106,5 +106,25 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     await expect(fans.proposeFacts(other.creatorId, first, [city('Brest', august)])).rejects.toThrow(
       'Fan not found for this creator',
     );
+  });
+
+  it('drops every fact of a fan last seen a year ago, history included, and nothing else', async () => {
+    const stale = await seed('c', 2);
+    const [gone, kept] = stale.fanIds;
+    if (gone === undefined || kept === undefined) throw new Error('seed');
+    await fans.proposeFacts(stale.creatorId, gone, [city('Lyon', may)]);
+    await fans.proposeFacts(stale.creatorId, gone, [city('Paris', august)]);
+    await fans.proposeFacts(stale.creatorId, kept, [city('Nantes', august)]);
+    await withAdmin(test.admin.db, (tx) =>
+      tx
+        .update(schema.fans)
+        .set({ lastSeenAt: new Date(Date.now() - 400 * 86_400_000) })
+        .where(eq(schema.fans.id, gone)),
+    );
+
+    expect(await fans.jobs.purgeFacts()).toBe(2);
+    expect(await fans.activeFacts(stale.creatorId, gone)).toEqual([]);
+    expect((await fans.activeFacts(stale.creatorId, kept)).map((fact) => fact.value)).toEqual(['Nantes']);
+    expect(await fans.jobs.purgeFacts()).toBe(0);
   });
 });

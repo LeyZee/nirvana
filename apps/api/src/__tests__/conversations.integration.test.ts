@@ -197,7 +197,7 @@ describe('conversations module (P0-05)', () => {
     sender = new FakeSender();
     conversations = createConversationsModule({
       db: test.app.db,
-      fans: createFansModule({ db: test.app.db }),
+      fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
       sender,
       requireRole: () => () => Promise.resolve(),
       recentLogin: () => Promise.resolve(),

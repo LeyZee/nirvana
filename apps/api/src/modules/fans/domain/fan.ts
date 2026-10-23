@@ -40,3 +40,9 @@ export interface FactStore {
     plan: (current: readonly StoredFact[]) => readonly FactWrite[],
   ): Promise<StoredFact[]>;
 }
+
+/** Retention across every creator (owner role, no tenant): facts of fans not seen since `cutoff` are dropped. */
+export interface FactPurge {
+  /** Deletes every fact of each fan last seen before `cutoff`, history included; returns how many. */
+  dropFactsOfFansLastSeenBefore(cutoff: Date): Promise<number>;
+}

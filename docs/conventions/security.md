@@ -22,7 +22,7 @@ Ce qu'on protège, par ordre d'importance : (1) les médias et conversations int
 ## 3. Données
 
 - **Minimisation** : on ne stocke d'un fan que ce qui sert à la conversation. Jamais de coordonnées, de localisation précise, d'identifiant de paiement. Le cerveau a une liste blanche de catégories de faits ; tout le reste est ignoré.
-- **Rétention** : chaque `fan_fact` et chaque média reçu d'un fan a une date d'expiration (défaut : faits 12 mois après dernier contact, médias fan 30 jours). Un job purge. Les médias de la créatrice vivent selon ses droits (`media_assets.rights`).
+- **Rétention** : chaque `fan_fact` et chaque média reçu d'un fan a une date d'expiration (défaut : faits 12 mois après dernier contact, médias fan 30 jours). Un job purge : `fans.purge_facts` (chaque nuit) supprime tous les faits d'un fan qu'on n'a plus vu depuis un an (`fans.last_seen_at`). Les médias de la créatrice vivent selon ses droits (`media_assets.rights`).
 - **Effacement** : une commande `erase-fan <id>` supprime tout ce qui concerne un fan (faits, résumés, médias, messages anonymisés dans le journal). Elle existe dès la phase 2, même si personne ne la demande : la construire après coup est dix fois plus cher.
 - **Chiffrement au repos** : disques VPS chiffrés, base chiffrée (Neon par défaut), bucket chiffré. Les champs les plus sensibles (sessions, faits de catégorie `intimate`) chiffrés applicativement en plus.
 - **Logs sans contenu** : par défaut, on logue des identifiants et des métadonnées, pas le texte des messages. Le contenu n'est consultable que dans le dashboard, authentifié, et dans Langfuse (accès restreint, rétention courte).
