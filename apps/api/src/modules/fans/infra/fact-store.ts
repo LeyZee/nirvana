@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { FactCategorySchema, FactKindSchema, MessageIdSchema } from '@nirvana/contracts';
 import { and, eq, schema, sql, withTenant, type Database, type Transaction } from '@nirvana/db';
 
+import { FanNotFound } from '../domain/errors';
 import type { StoredFact } from '../domain/facts';
 import type { FactStore } from '../domain/fan';
 
@@ -48,7 +49,7 @@ export function createDrizzleFactStore(db: Database): FactStore {
           .from(schema.fans)
           .where(and(eq(schema.fans.id, fanId), eq(schema.fans.creatorId, creatorId)))
           .for('update');
-        if (fan === undefined) throw new Error('Fan not found for this creator');
+        if (fan === undefined) throw new FanNotFound();
         const written: StoredFact[] = [];
         for (const { fact, supersedes } of plan(await current(tx, creatorId, fanId))) {
           const [row] = await tx

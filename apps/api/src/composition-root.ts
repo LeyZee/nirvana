@@ -429,6 +429,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       createAuthRoutes(auth, config, requireRole),
       modules.conversations.routes,
       modules.persona.routes,
+      modules.fans.routes(requireRole),
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
       modules.supervision.routes,

@@ -10,6 +10,7 @@ import { eq, schema, withAdmin } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
+import { FanNotFound } from '../../domain/errors';
 import { createFansModule, type FactProposal, type FansModule } from '../../index';
 
 const may = new Date('2026-05-10T10:00:00Z');
@@ -104,7 +105,7 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     expect(await fans.activeFacts(other.creatorId, theirs)).toEqual([]);
     // Her fan is out of sight for the other creator: nothing can be written about him.
     await expect(fans.proposeFacts(other.creatorId, first, [city('Brest', august)])).rejects.toThrow(
-      'Fan not found for this creator',
+      FanNotFound,
     );
   });
 
@@ -173,7 +174,7 @@ describe('fan facts (P3-02), as the application role sees them', () => {
         { flag: 'fragile', value: true },
         { author: 'system', correlationId: 'x' },
       ),
-    ).rejects.toThrow('Fan not found for this creator');
-    await expect(fans.flags(other.creatorId, fanId)).rejects.toThrow('Fan not found for this creator');
+    ).rejects.toThrow(FanNotFound);
+    await expect(fans.flags(other.creatorId, fanId)).rejects.toThrow(FanNotFound);
   });
 });
