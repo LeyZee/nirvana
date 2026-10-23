@@ -353,8 +353,8 @@
   height: 14px;
 }
 .sv-step[data-state='now'] .sv-num {
-  background: var(--nv-neon-soft);
-  color: var(--nv-neon-ink);
+  background: var(--nv-select-strong);
+  color: var(--nv-ink);
 }
 .sv-step[data-state='done'] .sv-num {
   background: color-mix(in srgb, var(--nv-success) 16%, transparent);

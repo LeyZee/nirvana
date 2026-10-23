@@ -861,7 +861,7 @@
   height: 56px;
   display: grid;
   place-items: center;
-  color: var(--nv-neon-ink);
+  color: var(--nv-ink);
 }
 .tg-radar::before,
 .tg-radar::after {
@@ -869,12 +869,12 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1.5px solid var(--nv-neon);
+  border: 1.5px solid var(--nv-ink-muted);
   opacity: 0;
-  animation: tg-ping 2.2s var(--nv-ease-out) infinite;
+  animation: tg-ping var(--nv-dur-breathe) var(--nv-ease-out) infinite;
 }
 .tg-radar::after {
-  animation-delay: 1.1s;
+  animation-delay: calc(var(--nv-dur-breathe) / 2);
 }
 @keyframes tg-ping {
   0% {
