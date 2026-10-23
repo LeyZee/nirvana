@@ -5,6 +5,7 @@ import {
   MessageViewSchema,
   type ConversationDetail,
   type ConversationSummary,
+  type FanFlags,
 } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -92,6 +93,8 @@ function serve(routes: {
   dashboard?: Reply;
   detail?: () => Reply;
   command?: (action: string) => Reply;
+  /** The fan's limits read first, and after a `PUT` (the same when not given). */
+  flags?: { before?: FanFlags; after?: FanFlags };
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -100,10 +103,18 @@ function serve(routes: {
       const url = new URL(input, 'http://localhost');
       const path = url.pathname;
       let reply: Reply;
-      if (init?.method === 'POST') {
+      const flagsView = (flags: FanFlags = {}): Reply => ({
+        status: 200,
+        body: { fanId: path.split('/')[3], flags },
+      });
+      if (init?.method === 'POST' || init?.method === 'PUT') {
         const action = path.split('/').at(-1) ?? '';
         posted.push({ action, body: JSON.parse(typeof init.body === 'string' ? init.body : 'null') });
-        reply = routes.command?.(action) ?? { status: 204 };
+        reply =
+          routes.command?.(action) ??
+          (init.method === 'PUT' ? flagsView(routes.flags?.after ?? routes.flags?.before) : { status: 204 });
+      } else if (path.startsWith('/v1/fans/')) {
+        reply = flagsView(routes.flags?.before);
       } else if (path === '/v1/creators') {
         reply = typeof routes.creators === 'function' ? routes.creators() : routes.creators;
       } else if (path === '/v1/conversations') {
@@ -380,12 +391,98 @@ describe('the reader of Suivi', () => {
     });
   });
 
+  it('folds the fan’s limits to one line, in amber when one stops the agent', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { doNotContact: true } },
+    });
+    renderPage(OPEN);
+    const line = await screen.findByText('Ne plus lui écrire', { selector: '.tr-limits__sum' });
+    expect(line.className).toContain('tr-warn');
+  });
+
+  it('opens when a limit blocks, and stays open once it is lifted', async () => {
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { doNotContact: true }, after: {} },
+    });
+    renderPage(OPEN);
+    const lift = await screen.findByRole('switch', { name: /Ne plus lui écrire/u });
+    const section = lift.closest('details');
+    expect(section).toHaveProperty('open', true);
+    fireEvent.click(lift);
+    expect(await screen.findByText('Aucune', { selector: '.tr-limits__sum' })).toBeDefined();
+    expect(posted).toEqual([{ action: 'flags', body: { flag: 'doNotContact', set: false } }]);
+    expect(section).toHaveProperty('open', true);
+  });
+
+  it('freezes sales as a human’s call, and shows the limits the server answers', async () => {
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { after: { salesFrozen: { reason: 'operator', since: '2026-10-23T10:00:00.000Z' } } },
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('switch', { name: /Ventes gelées/u }));
+    expect(await screen.findByText('Depuis le 23 octobre : décision d’un humain.')).toBeDefined();
+    expect(posted).toEqual([
+      { action: 'flags', body: { flag: 'salesFrozen', set: true, freezeReason: 'operator' } },
+    ]);
+  });
+
+  it('confirms his age in two clicks only', async () => {
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { after: { ageConfirmedAt: '2026-10-23T10:00:00.000Z' } },
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
+    expect(posted).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Oui, il est majeur' }));
+    expect(await screen.findByText('Majeur, confirmé le 23 octobre.')).toBeDefined();
+    expect(posted).toEqual([{ action: 'flags', body: { flag: 'ageConfirmedAt', set: true } }]);
+  });
+
+  it('sets a ceiling typed in euros, in cents', async () => {
+    const posted = serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fixer un plafond' }));
+    fireEvent.change(screen.getByLabelText('Plafond en euros'), { target: { value: '49,90' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => {
+      expect(posted).toEqual([
+        { action: 'flags', body: { flag: 'spendingLimitMinor', set: true, limitMinor: 4990 } },
+      ]);
+    });
+  });
+
+  it('keeps the limits as they were and says why when the server refuses', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      command: () => ({ status: 403 }),
+    });
+    renderPage(OPEN);
+    const fragile = await screen.findByRole('switch', { name: /Fan fragile/u });
+    fireEvent.click(fragile);
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Seuls le propriétaire et les chatteurs changent les limites d’un fan.',
+    );
+    expect(fragile).toHaveProperty('checked', false);
+  });
+
   it('lets a creator read, never decide', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
     renderPage(OPEN, false);
     expect(await screen.findByText(/Seuls le propriétaire et les chatteurs/u)).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reprendre la main' })).toBeNull();
+    // Her fan's limits: read, never changed.
+    expect(await screen.findByRole('switch', { name: /Ventes gelées/u })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Confirmer son âge' })).toBeNull();
   });
 
   it('says the server does not answer, in amber, with nothing to click', async () => {

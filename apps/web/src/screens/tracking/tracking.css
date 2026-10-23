@@ -192,6 +192,76 @@
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
 }
+/* The fan's limits: one folded line, amber when one stops the agent; the rows on a quiet tint, never a second glass. */
+.tr-limits {
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+}
+.tr-limits > summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nv-space-3);
+  padding: var(--nv-space-3);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+.tr-limits > summary::-webkit-details-marker {
+  display: none;
+}
+.tr-limits__title {
+  flex: none;
+  font-weight: 600;
+  color: var(--nv-ink);
+}
+.tr-limits__sum {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nv-ink-muted);
+}
+.tr-limits__sum.tr-warn {
+  color: var(--nv-warning);
+}
+.tr-limits__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-3);
+  padding: 0 var(--nv-space-3) var(--nv-space-3);
+}
+.tr-limit {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+}
+.tr-limit__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-1);
+}
+.tr-limit__label {
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+}
+.tr-limit__hint {
+  font-size: var(--nv-text-caption);
+  color: var(--nv-ink-muted);
+}
+.tr-limit__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.tr-limit__amount {
+  width: 6.5rem;
+}
 /* The agent's notes in the thread: where it stopped, who took the hand, a draft refused. */
 .tr-note {
   align-self: center;
