@@ -51,7 +51,7 @@ export function PersonaSection({
     return (
       <section className="ps-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
-          <div className="nv-glass ps-head">
+          <div className="nv-plate ps-head">
             <p className="ps-title">La persona ne se charge pas</p>
             <p className="ps-muted">Le serveur ne répond pas. Réessaie dans un instant.</p>
             <button type="button" className="nv-btn nv-btn--soft ps-self-start" onClick={reload}>
@@ -60,8 +60,8 @@ export function PersonaSection({
           </div>
         ) : (
           <>
-            <div className="nv-glass ps-head ps-skeleton" />
-            <div className="nv-glass ps-panel ps-skeleton ps-skeleton--tall" />
+            <div className="nv-plate ps-head ps-skeleton" />
+            <div className="nv-plate ps-panel ps-skeleton ps-skeleton--tall" />
           </>
         )}
       </section>
@@ -284,7 +284,7 @@ function Editor({
         />
 
         <div
-          className="nv-glass ps-panel"
+          className="nv-plate ps-panel"
           role="tabpanel"
           id={`ps-panel-${tab}`}
           aria-labelledby={`ps-tab-${tab}`}
@@ -391,7 +391,7 @@ function Head({
   });
 
   return (
-    <div className="nv-glass ps-head">
+    <div className="nv-plate ps-head">
       <div className="ps-head__top">
         <div className="ps-head__who">
           <p className="ps-head__meta">
