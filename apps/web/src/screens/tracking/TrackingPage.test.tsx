@@ -402,6 +402,22 @@ describe('the reader of Suivi', () => {
     expect(line.className).toContain('tr-warn');
   });
 
+  it('opens when a limit blocks, and stays open once it is lifted', async () => {
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { doNotContact: true }, after: {} },
+    });
+    renderPage(OPEN);
+    const lift = await screen.findByRole('switch', { name: /Ne plus lui écrire/u });
+    const section = lift.closest('details');
+    expect(section).toHaveProperty('open', true);
+    fireEvent.click(lift);
+    expect(await screen.findByText('Aucune', { selector: '.tr-limits__sum' })).toBeDefined();
+    expect(posted).toEqual([{ action: 'flags', body: { flag: 'doNotContact', set: false } }]);
+    expect(section).toHaveProperty('open', true);
+  });
+
   it('freezes sales as a human’s call, and shows the limits the server answers', async () => {
     const posted = serve({
       ...withDraft,

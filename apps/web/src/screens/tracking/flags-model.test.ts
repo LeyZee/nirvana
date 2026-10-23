@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ageLine, centsOf, flagError, flagsSummary, isBlocking, switchDetail } from './flags-model';
+import { ageLine, centsOf, euros, flagError, flagsSummary, isBlocking, switchDetail } from './flags-model';
 
 describe('the fan’s limits', () => {
   it('folds to one line, and says when there is none', () => {
@@ -12,6 +12,12 @@ describe('the fan’s limits', () => {
         spendingLimitMinor: 5000,
       }),
     ).toBe('Ventes gelées · fan fragile · plafond de 50\u00a0€');
+  });
+
+  it('writes cents in full, and a round amount without them', () => {
+    expect(euros(4990)).toBe('49,90\u00a0€');
+    expect(euros(1250)).toBe('12,50\u00a0€');
+    expect(euros(5000)).toBe('50\u00a0€');
   });
 
   it('is amber only when it stops the agent from writing or selling', () => {

@@ -34,6 +34,8 @@ export function FanLimits({
   const client = useQueryClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Opened at first sight when a limit blocks, then left to the user: lifting the last one must not fold it away. */
+  const [open, setOpen] = useState<boolean | null>(null);
 
   const change = async (body: SetFanFlagBody): Promise<boolean> => {
     setPending(true);
@@ -47,8 +49,15 @@ export function FanLimits({
 
   const flags = query.data;
   const blocking = flags !== undefined && isBlocking(flags);
+  if (open === null && flags !== undefined) setOpen(blocking);
   return (
-    <details className="tr-limits" open={blocking ? true : undefined}>
+    <details
+      className="tr-limits"
+      open={open ?? false}
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+      }}
+    >
       <summary>
         <span className="tr-limits__title">Limites du fan</span>
         <span className={`tr-limits__sum${blocking ? ' tr-warn' : ''}`}>

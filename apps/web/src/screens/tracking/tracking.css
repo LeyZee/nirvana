@@ -242,7 +242,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--nv-space-1);
 }
 .tr-limit__label {
   font-size: var(--nv-text-footnote);

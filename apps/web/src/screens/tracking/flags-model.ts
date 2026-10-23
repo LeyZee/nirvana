@@ -32,8 +32,12 @@ export const isBlocking = (flags: FanFlags): boolean =>
 const dayOf = (iso: string): string =>
   new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(iso));
 
+/** « 50 € » for a round amount, « 49,90 € » otherwise: never « 49,9 € » (ADR 0011). */
 export const euros = (minor: number): string =>
-  `${(minor / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}\u00a0€`;
+  `${(minor / 100).toLocaleString('fr-FR', {
+    minimumFractionDigits: minor % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}\u00a0€`;
 
 /** What a switch adds once it is on: since when sales stopped, and why. */
 export function switchDetail(flags: FanFlags, flag: SwitchFlag): string | null {
