@@ -16,6 +16,7 @@ import {
   RejectDraftBodySchema,
   SetAgentModeBodySchema,
   SetModeBodySchema,
+  ReleaseBodySchema,
   TakeoverBodySchema,
   UserIdSchema,
   type CreatorId,
@@ -199,9 +200,19 @@ export function createConversationRoutes(
 
     app.post(
       '/conversations/:id/release',
-      { ...act, schema: { params: ConversationParamsSchema, querystring: CreatorQuerySchema } },
+      {
+        ...act,
+        schema: {
+          params: ConversationParamsSchema,
+          querystring: CreatorQuerySchema,
+          body: ReleaseBodySchema,
+        },
+      },
       async (request, reply) => {
-        await commands.release(command(request, request.query.creatorId, request.params.id));
+        await commands.release({
+          ...command(request, request.query.creatorId, request.params.id),
+          ...(request.body.note === undefined ? {} : { note: request.body.note }),
+        });
         return reply.code(204).send();
       },
     );

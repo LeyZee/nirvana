@@ -328,6 +328,12 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger,
       (payload, context) => modules.conversations.jobs.send(payload, context.logger, context.attempt),
     ),
+    'conversation.record_facts': defineTask(
+      'conversation.record_facts',
+      JOB_PAYLOADS['conversation.record_facts'],
+      logger,
+      (payload, context) => modules.conversations.jobs.recordFacts(payload, context.logger),
+    ),
     'connector.dispatch': defineTask(
       'connector.dispatch',
       JOB_PAYLOADS['connector.dispatch'],

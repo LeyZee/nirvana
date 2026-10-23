@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ConversationEventSchema, DomainEventSchema, EVENT_PAYLOADS, EVENT_TYPES } from './events';
-import { ConversationIdSchema, CreatorIdSchema, MessageIdSchema, newId } from './ids';
+import { ConversationIdSchema, CreatorIdSchema, FanIdSchema, MessageIdSchema, newId } from './ids';
 
 const envelope = () => ({
   id: newId(MessageIdSchema),
@@ -62,6 +62,20 @@ describe('events', () => {
     expect(DomainEventSchema.safeParse({ ...base, type: 'fan_fact_recorded', payload: {} }).success).toBe(
       false,
     );
+  });
+
+  it('journals a flag of a fan with the whole set after the change', () => {
+    const fanId = newId(FanIdSchema);
+    const body = {
+      fanId,
+      flag: 'salesFrozen',
+      flags: { salesFrozen: { reason: 'money_trouble', since: '2026-10-23T10:00:00Z' } },
+    };
+    expect(EVENT_PAYLOADS.fan_flag_set.parse(body)).toEqual(body);
+    expect(EVENT_PAYLOADS.fan_flag_cleared.parse({ fanId, flag: 'fragile', flags: {} })).toMatchObject({
+      flags: {},
+    });
+    expect(EVENT_PAYLOADS.fan_flag_set.safeParse({ ...body, flag: 'vip' }).success).toBe(false);
   });
 
   it('accepts a human actor only with a user id', () => {

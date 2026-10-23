@@ -67,7 +67,8 @@ Le job n'envoie jamais rien lui-même.
 ## 3. Approbation et envoi
 
 ```
-approveDraft(draftId, by)  [transaction]  → status approved|edited, event, addJob('conversation.send', …, queueName conv)
+approveDraft(draftId, by)  [transaction]  → status approved|edited, event, addJob('conversation.send', …, queueName conv),
+                                           addJob('conversation.record_facts') si le brief a proposé des faits (P3-02)
 rejectDraft(draftId, by, reason)          → status rejected, event ; raison stockée pour les évals
 
 conversation.send :

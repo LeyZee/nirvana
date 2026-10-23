@@ -181,6 +181,7 @@ describe('createDraftComposer', () => {
       softViolations: [],
       costUsd: 0.004,
       voice: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
+      factsProposed: [],
     });
     expect(seen.traces[0]).toEqual({
       creatorId: 'creator-1',

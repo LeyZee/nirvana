@@ -65,6 +65,14 @@ type AgentComposeResult =
       readonly costUsd: number;
       /** Absent when no model is known: no voice is better than a false one on the live rate (ADR 0019). */
       readonly voice?: { readonly voicePrompt: string; readonly voiceModel: string };
+      /** What the brief read about the fan; `conversations` keeps the categories it knows (P3-02). */
+      readonly factsProposed: readonly {
+        readonly category: string;
+        readonly key: string;
+        readonly value: string;
+        readonly kind: 'declared' | 'inferred';
+        readonly confidence: number;
+      }[];
     }
   | {
       readonly kind: 'held';
@@ -227,6 +235,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         bubbles: composed.bubbles,
         softViolations: composed.violations.map((v) => v.code),
         costUsd,
+        factsProposed: composed.brief.factsProposed,
         ...(composed.model !== undefined && {
           voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
         }),

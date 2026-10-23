@@ -8,12 +8,14 @@ import type {
   DraftComposer,
   DraftVoice,
   EventMeta,
+  FanDirectory,
   HoldReason,
   JobLogger,
   Transaction,
   UnitOfWork,
 } from '../../domain/ports';
 import { closeAutomaticIfLocked } from '../automatic';
+import { readProposedFacts } from '../facts';
 import { appendEvent } from '../journal';
 
 export interface RespondDeps {
@@ -21,6 +23,8 @@ export interface RespondDeps {
   readonly clock: Clock;
   /** The voice version the server writes with now: an answer in automatic needs its lock open (ADR 0019). */
   readonly voice: DraftVoice;
+  /** Her facts about the fan, read for the engine (P3-02). */
+  readonly fans: Pick<FanDirectory, 'activeFacts'>;
   /** The engine; without it the draft stays empty and the operator writes it (P0-05 behaviour). */
   readonly composer?: DraftComposer;
 }
@@ -44,6 +48,13 @@ const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
 };
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
+
+/** One line of her notes about the fan; a chatter's note reads as such, its dated key says nothing to the engine. */
+const noteLine = (fact: {
+  readonly category: string;
+  readonly key: string;
+  readonly value: string;
+}): string => (fact.category === 'operator_note' ? `Note : ${fact.value}` : `${fact.key} : ${fact.value}`);
 
 const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
 
@@ -71,7 +82,7 @@ async function stillPending(tx: Transaction, conversation: Conversation | null, 
  * unless the fan wrote again meanwhile (the next debounce answers) or a gate closed. Never sends anything: the
  * draft waits for an operator (copilot). Replayed after a crash, it finds the conversation past `pending`.
  */
-export function createRespondJob({ uow, clock, voice, composer }: RespondDeps) {
+export function createRespondJob({ uow, clock, voice, fans, composer }: RespondDeps) {
   return async (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> => {
     // Before the engine: if the lock closed (the live rate fell, the voice changed), automatic is over for her.
     const closed = await closeAutomaticIfLocked(uow, payload.creatorId, voice, {
@@ -84,25 +95,34 @@ export function createRespondJob({ uow, clock, voice, composer }: RespondDeps) {
     const read = await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);
       if (conversation === null || !(await stillPending(tx, conversation, logger))) return null;
-      const input: ComposeInput = {
-        creatorId: conversation.creatorId,
-        conversationId: conversation.id,
-        fanId: conversation.fanId,
-        draftId,
-        correlationId: payload.correlationId,
-        now: clock.now(),
-        platformAccountId: conversation.platformAccountId,
-        platformConversationId: conversation.platformConversationId,
+      return {
+        conversation,
         history: await tx.messages.history(conversation.id, HISTORY_LIMIT),
-        fan: await tx.messages.fanContext(conversation.fanId),
+        stats: await tx.messages.fanStats(conversation.fanId),
+        lastInbound: lastInboundKey(conversation),
       };
-      return { input, lastInbound: lastInboundKey(conversation) };
     });
     if (read === null) return;
+    // Her facts come from the `fans` module, which reads them in its own transaction: outside the lock above.
+    const notes = await fans.activeFacts(read.conversation.creatorId, read.conversation.fanId);
+    const now = clock.now();
+    const input: ComposeInput = {
+      creatorId: read.conversation.creatorId,
+      conversationId: read.conversation.id,
+      fanId: read.conversation.fanId,
+      draftId,
+      correlationId: payload.correlationId,
+      now,
+      platformAccountId: read.conversation.platformAccountId,
+      platformConversationId: read.conversation.platformConversationId,
+      history: read.history,
+      fan: { ...read.stats, notes: notes.map(noteLine) },
+    };
+    const source = read.history.findLast((message) => message.author === 'fan') ?? null;
 
     let result: ComposeResult;
     try {
-      result = composer === undefined ? EMPTY_DRAFT : await composer.compose(read.input);
+      result = composer === undefined ? EMPTY_DRAFT : await composer.compose(input);
     } catch (error) {
       // The engine is expected to answer `held`; anything thrown counts as no model reachable.
       logger.warn({ err: error instanceof Error ? error.name : 'unknown' }, 'respond: composer failed');
@@ -127,6 +147,7 @@ export function createRespondJob({ uow, clock, voice, composer }: RespondDeps) {
           bubbles: result.bubbles,
           softViolations: result.softViolations,
           ...(result.voice !== undefined && { voice: result.voice }),
+          facts: readProposedFacts(result.factsProposed ?? [], source, now),
         });
         await appendEvent(
           tx,

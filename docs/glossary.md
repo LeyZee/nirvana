@@ -40,6 +40,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Mode copilote | `copilot` | Le bot propose, un humain approuve. |
 | Mode auto | `auto` | Le bot envoie seul pour les catégories autorisées. |
 | Fait (mémoire) | `fan_fact` | Une information mémorisée sur un fan, avec source, date, confiance, `kind: declared | inferred`. |
+| Note du chatteur | `operator_note` | Ce qu'un chatteur veut qu'elle retienne d'un fan, laissé en rendant la main ; gardé comme un fait de cette catégorie, jamais proposé par un modèle. |
 | Résumé fan | `fan_summary` | Résumé opérationnel régénéré. |
 | Slot KYC | `kyc_slot` | Une information qu'on cherche à apprendre : une ligne du canevas de notes de Reveal (Prénom, Localisation, Âge, Métier, Passions, Envies, Situation), liste fermée `KycSlotSchema`. |
 | Drapeau du fan | `fan_flag` | Une limite du fan (`fans.flags`, `FanFlagsSchema`) : âge confirmé, ventes gelées et leur raison, plafond de dépense, fragile, pas d'explicite, ne plus écrire. Lue par la politique avant toute offre, posée par la politique ou un humain, jamais par un modèle seul. |
