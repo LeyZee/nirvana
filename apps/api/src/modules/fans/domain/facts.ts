@@ -119,3 +119,11 @@ export function selectActiveFacts(facts: readonly StoredFact[], now: Date): Stor
     )
     .slice(0, MAX_ACTIVE_FACTS);
 }
+
+/** Her facts about a fan are kept this long after his last contact (security.md), then the purge drops them. */
+const FACT_RETENTION_DAYS = 365;
+
+/** Fans last seen before this date lose their facts. */
+export function factRetentionCutoff(now: Date): Date {
+  return new Date(now.getTime() - FACT_RETENTION_DAYS * 86_400_000);
+}

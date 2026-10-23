@@ -183,7 +183,7 @@ describe('Telegram alerts from the conversations module', () => {
   });
 
   beforeEach(() => {
-    const fans = createFansModule({ db: test.app.db });
+    const fans = createFansModule({ db: test.app.db, adminDb: test.admin.db });
     const deps = {
       db: test.app.db,
       fans,

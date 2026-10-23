@@ -157,3 +157,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-23 | Mémoire du fan : contrats des slots KYC et des drapeaux (P3-02, PR 2) | done | `log/2026-10-23-fan-contracts.md` |
 | 2026-10-23 | Politique de vente : les drapeaux du fan passent avant tout (P3-02, PR 4a) | done | `log/2026-10-23-policy-fan-flags.md` |
 | 2026-10-23 | Refonte du design system : onglet Créatrices (D-01) | done | `log/2026-10-23-d-01-creatrices.md` |
+| 2026-10-23 | Mémoire du fan : purge des faits un an après le dernier contact (P3-02, PR 4b) | done | `log/2026-10-23-fan-facts-purge.md` |

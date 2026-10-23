@@ -127,7 +127,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   const auth = createAuth(config, db.db, logger);
   const requireRole = createRequireRole(auth);
 
-  const fans = createFansModule({ db: db.db });
+  const fans = createFansModule({ db: db.db, adminDb: adminDb.db });
   const sessionKeys = secretOrNull(config.SESSION_ENCRYPTION_KEYS);
   const connectors = createConnectorsModule({
     db: db.db,
@@ -391,6 +391,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       JOB_PAYLOADS['telegram.morning_digest'],
       logger,
       withTelegram((module) => module.jobs.morningDigest()),
+    ),
+    'fans.purge_facts': defineTask(
+      'fans.purge_facts',
+      JOB_PAYLOADS['fans.purge_facts'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { removed: await modules.fans.jobs.purgeFacts() },
+          'fans: facts past retention dropped',
+        );
+      },
     ),
     'telegram.purge': defineTask(
       'telegram.purge',
