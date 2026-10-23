@@ -388,6 +388,13 @@
   box-shadow: inset 0 -1px 0 var(--nv-hairline);
   opacity: 0.85;
 }
+/* On the neon button the key is a lighter tint of the button itself: a white key cap on red, by day, read as pink on
+   pink. */
+.nv-btn--neon .nv-kbd {
+  background: color-mix(in srgb, var(--nv-on-neon) 22%, transparent);
+  box-shadow: none;
+  opacity: 1;
+}
 
 /* ───────────── Segmented control ───────────── */
 
