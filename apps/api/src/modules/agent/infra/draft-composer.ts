@@ -1,10 +1,11 @@
 import type { HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
-import { holdDecision, type HoldDecision } from '../domain/hold';
+import { holdDecision, protectionFor, type HoldDecision } from '../domain/hold';
 import { handoffCauseOf } from '../domain/traps';
 
 import { composeTurn, type ComposerPersona } from './compose';
+import type { FanLimits } from './fan-limits';
 
 /**
  * The agent seen by `conversation.respond` (conversations' `DraftComposer` port, matched by shape: `agent` does
@@ -13,7 +14,10 @@ import { composeTurn, type ComposerPersona } from './compose';
 export interface AgentComposeInput {
   readonly creatorId: string;
   readonly conversationId: string;
+  readonly fanId: string;
   readonly draftId: string;
+  /** Carried to the events the policy writes (a limit set on a risk). */
+  readonly correlationId: string;
   readonly now: Date;
   /** Where the conversation lives on the platform: the connector fetches his media there. */
   readonly platformAccountId?: string;
@@ -96,6 +100,8 @@ export interface DraftComposerDeps {
   readonly voicePrompt: string;
   /** Without it, any media of his goes to a human: nothing is answered unseen. */
   readonly sight?: MediaSight;
+  /** His limits: read before anything is written, set on a detected risk (P3-02). */
+  readonly limits?: FanLimits;
 }
 
 const failureDetail = (error: LlmFailure): readonly string[] =>
@@ -168,9 +174,48 @@ function voiceUnavailable(gateway: LlmGateway): boolean {
   return voice === undefined || (!voice.hasKey && voice.fallback?.hasKey !== true);
 }
 
+type Held = Extract<AgentComposeResult, { kind: 'held' }>;
+
+const HANDOFF: Held = { kind: 'held', reason: 'handoff', detail: [], costUsd: 0 };
+
+/**
+ * A handoff on a risk also sets his limits until a human decides (P3-02): a possible minor is no longer
+ * age-confirmed, distress or a threat stops everything written to him. The handoff goes out even when the limits
+ * could not be saved: the chatter sees it in the detail.
+ */
+async function protect(
+  limits: FanLimits | undefined,
+  input: AgentComposeInput,
+  signs: readonly string[],
+  held: Held,
+) {
+  const protection = protectionFor(signs);
+  if (limits === undefined || protection.because.length === 0) return held;
+  try {
+    await limits.protect(input.creatorId, input.fanId, protection, input.correlationId);
+    return held;
+  } catch {
+    return { ...held, detail: [...held.detail, 'limits_not_saved'] };
+  }
+}
+
+/** Nothing is written to a fan a human stopped, or the policy did: a new message of his goes to a chatter. */
+async function stopped(limits: FanLimits | undefined, input: AgentComposeInput): Promise<Held | null> {
+  if (limits === undefined) return null;
+  try {
+    const flags = await limits.flags(input.creatorId, input.fanId);
+    return flags.doNotContact === true ? { ...HANDOFF, detail: ['do_not_contact'] } : null;
+  } catch {
+    // His limits unknown, nothing is written: a chatter answers.
+    return { ...HANDOFF, detail: ['limits_unreadable'] };
+  }
+}
+
 export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer {
   return {
     async compose(input) {
+      const stop = await stopped(deps.limits, input);
+      if (stop !== null) return stop;
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
       const sinceAnswer = input.history.slice(lastAnswer + 1);
       const looked = await seeHisMedia(deps.sight, input, sinceAnswer);
@@ -178,7 +223,8 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       const media = looked.seen.flat();
       const flags = media.flatMap((d): MediaFlag[] => d.flags);
       if (flags.length > 0) {
-        return { kind: 'held', reason: 'handoff', cause: handoffCauseOf(flags), detail: flags, costUsd: 0 };
+        const held: Held = { ...HANDOFF, cause: handoffCauseOf(flags), detail: flags };
+        return protect(deps.limits, input, flags, held);
       }
       if (voiceUnavailable(deps.gateway)) {
         return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
@@ -211,7 +257,11 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       });
       const { costUsd } = composed;
       if (composed.handoff !== undefined) {
-        return { kind: 'held', reason: 'handoff', detail: composed.handoff, costUsd };
+        return protect(deps.limits, input, composed.handoff, {
+          ...HANDOFF,
+          detail: composed.handoff,
+          costUsd,
+        });
       }
       if (composed.brief === undefined) {
         const failure = composed.briefFailure;
@@ -219,8 +269,11 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         return { kind: 'held', reason, detail: failure === undefined ? [] : failureDetail(failure), costUsd };
       }
       const decision: HoldDecision = holdDecision(composed.brief);
-      if (decision.kind !== 'answer') {
-        return { kind: 'held', reason: decision.kind, detail: decision.detail, costUsd };
+      if (decision.kind === 'no_reply')
+        return { kind: 'held', reason: 'no_reply', detail: decision.detail, costUsd };
+      if (decision.kind === 'handoff') {
+        const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
+        return protect(deps.limits, input, composed.brief.risks, held);
       }
       if (composed.voiceFailure !== undefined) {
         const reason = composed.voiceFailure.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';

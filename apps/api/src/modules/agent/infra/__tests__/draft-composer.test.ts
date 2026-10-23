@@ -1,4 +1,4 @@
-import { err, ok, type MediaDescription } from '@nirvana/contracts';
+import { err, ok, type FanFlags, type MediaDescription } from '@nirvana/contracts';
 import type {
   Brief,
   ConversationInput,
@@ -10,12 +10,14 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_GUARD_SETTINGS } from '../../domain/guards';
+import type { Protection } from '../../domain/hold';
 import {
   createDraftComposer,
   type AgentComposeInput,
   type MediaSight,
   type MediaToSee,
 } from '../draft-composer';
+import type { FanLimits } from '../fan-limits';
 
 const PHOTO: MediaDescription = {
   vocabularyVersion: '1.0.0',
@@ -118,7 +120,9 @@ function gateway(script: Script, seen: Seen): LlmGateway {
 const INPUT: AgentComposeInput = {
   creatorId: 'creator-1',
   conversationId: 'conversation-1',
+  fanId: 'fan-1',
   draftId: 'draft-1',
+  correlationId: 'correlation-1',
   now: new Date('2026-10-17T10:00:00Z'),
   platformAccountId: 'account-1',
   platformConversationId: 'thread-1',
@@ -129,7 +133,7 @@ const INPUT: AgentComposeInput = {
   fan: { notes: [], spentMinor: 0, firstMessageAt: new Date('2026-10-17T09:58:00Z') },
 };
 
-function composer(script: Script = {}, sight?: MediaSight) {
+function composer(script: Script = {}, sight?: MediaSight, limits?: FanLimits) {
   const traces: unknown[] = [];
   const seen: Seen = { voiceCalls: 0, traces, brainInputs: [] };
   const draftComposer = createDraftComposer({
@@ -138,6 +142,7 @@ function composer(script: Script = {}, sight?: MediaSight) {
     timeZoneOf: () => Promise.resolve('Europe/Paris'),
     voicePrompt: '1.2.0',
     ...(sight !== undefined && { sight }),
+    ...(limits !== undefined && { limits }),
   });
   return { draftComposer, seen };
 }
@@ -422,8 +427,17 @@ describe('createDraftComposer', () => {
     const { sight, asked } = sightOf({ 'm-1': PHOTO });
     const { draftComposer } = composer({}, sight);
     const photo = withMedia('', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]);
-    const { creatorId, conversationId, draftId, now, history, fan } = photo;
-    const noThread: AgentComposeInput = { creatorId, conversationId, draftId, now, history, fan };
+    const { creatorId, conversationId, fanId, draftId, correlationId, now, history, fan } = photo;
+    const noThread: AgentComposeInput = {
+      creatorId,
+      conversationId,
+      fanId,
+      draftId,
+      correlationId,
+      now,
+      history,
+      fan,
+    };
     const noMessageId = history.map((m) => ({
       direction: m.direction,
       text: m.text,
@@ -471,5 +485,104 @@ describe('createDraftComposer', () => {
         withMedia('', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]),
       ),
     ).toMatchObject({ kind: 'held', reason: 'handoff', cause: 'minor' });
+  });
+});
+
+/** His limits in memory, and what the policy asked to set: invented fan only (ADR 0010). */
+function limitsOf(
+  flags: FanFlags,
+  options: { readonly failWrite?: boolean; readonly failRead?: boolean } = {},
+) {
+  const protections: { fanId: string; protection: Protection; correlationId: string }[] = [];
+  const limits: FanLimits = {
+    flags: () => (options.failRead === true ? Promise.reject(new Error('down')) : Promise.resolve(flags)),
+    protect: (_creatorId, fanId, protection, correlationId) => {
+      if (options.failWrite === true) return Promise.reject(new Error('down'));
+      protections.push({ fanId, protection, correlationId });
+      return Promise.resolve();
+    },
+  };
+  return { limits, protections };
+}
+
+describe('createDraftComposer, his limits (P3-02)', () => {
+  it('writes nothing to a fan who must not be contacted, without calling any model', async () => {
+    const { limits } = limitsOf({ doNotContact: true });
+    const { draftComposer, seen } = composer({}, undefined, limits);
+    expect(await draftComposer.compose(INPUT)).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['do_not_contact'],
+      costUsd: 0,
+    });
+    expect(seen.traces).toHaveLength(0);
+  });
+
+  it('hands over when his limits cannot be read', async () => {
+    const { limits } = limitsOf({}, { failRead: true });
+    const { draftComposer, seen } = composer({}, undefined, limits);
+    expect(await draftComposer.compose(INPUT)).toMatchObject({
+      reason: 'handoff',
+      detail: ['limits_unreadable'],
+    });
+    expect(seen.traces).toHaveLength(0);
+  });
+
+  it('takes back his age on a possible minor, and stops writing to him on distress', async () => {
+    const minor = limitsOf({ ageConfirmedAt: '2026-10-01T09:00:00Z' });
+    await composer(
+      { brief: { ...BRIEF, risks: ['minor_suspected'] } },
+      undefined,
+      minor.limits,
+    ).draftComposer.compose(INPUT);
+    expect(minor.protections).toEqual([
+      {
+        fanId: 'fan-1',
+        protection: { unconfirmAge: true, stopContact: false, because: ['minor_suspected'] },
+        correlationId: 'correlation-1',
+      },
+    ]);
+    const distress = limitsOf({});
+    const held = await composer(
+      { brief: { ...BRIEF, risks: ['distress', 'money_trouble'] } },
+      undefined,
+      distress.limits,
+    ).draftComposer.compose(INPUT);
+    expect(held).toMatchObject({ kind: 'held', reason: 'handoff', detail: ['distress'] });
+    expect(distress.protections.map((p) => p.protection)).toEqual([
+      { unconfirmAge: false, stopContact: true, because: ['distress'] },
+    ]);
+  });
+
+  it('sets his limits from a media flag too', async () => {
+    const { sight } = sightOf({ 'm-1': { ...PHOTO, flags: ['possible_minor', 'weapon'] } });
+    const { limits, protections } = limitsOf({});
+    const { draftComposer } = composer({}, sight, limits);
+    const photo = withMedia('', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]);
+    expect(await draftComposer.compose(photo)).toMatchObject({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'minor',
+    });
+    expect(protections.map((p) => p.protection)).toEqual([
+      { unconfirmAge: true, stopContact: true, because: ['possible_minor', 'weapon'] },
+    ]);
+  });
+
+  it('sets nothing when she answers, even on a risk that alone does not hand over', async () => {
+    const { limits, protections } = limitsOf({});
+    const { draftComposer } = composer({ brief: { ...BRIEF, risks: ['harassment'] } }, undefined, limits);
+    expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
+    expect(protections).toEqual([]);
+  });
+
+  it('still hands over when his limits cannot be saved, and says so', async () => {
+    const { limits } = limitsOf({}, { failWrite: true });
+    const { draftComposer } = composer({ brief: { ...BRIEF, risks: ['self_harm'] } }, undefined, limits);
+    expect(await draftComposer.compose(INPUT)).toMatchObject({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['self_harm', 'limits_not_saved'],
+    });
   });
 });

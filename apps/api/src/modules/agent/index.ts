@@ -3,11 +3,14 @@ import { join } from 'node:path';
 
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
+import type { FansModule } from '../fans';
+
 import { DEFAULT_GUARD_SETTINGS as SHARED_GUARD_SETTINGS } from './domain/guards';
 import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
 import { createDraftComposer, type AgentDraftComposer, type MediaSight } from './infra/draft-composer';
+import { createFanLimits } from './infra/fan-limits';
 import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 import { guardSettingsOf, readPersonaFile } from './infra/persona-file';
 
@@ -60,6 +63,8 @@ export interface DraftComposerStartOptions {
   readonly timeZoneOf: (creatorId: string) => Promise<string>;
   /** His media seen before she answers; without it, any media goes to a human. */
   readonly sight?: MediaSight;
+  /** His limits: nothing is written to a stopped fan, and a risk sets them itself (P3-02). */
+  readonly fans?: Pick<FansModule, 'flags' | 'setFlag' | 'clearFlag'>;
 }
 
 /** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
@@ -78,6 +83,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
     ...(options.sight !== undefined && { sight: options.sight }),
+    ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
   });
 }
 

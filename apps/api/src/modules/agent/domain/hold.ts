@@ -31,3 +31,34 @@ export function holdDecision(brief: {
   if (brief.action === 'wait') return { kind: 'no_reply', detail: ['wait'] };
   return { kind: 'answer' };
 }
+
+/** What a detected risk changes in his limits by itself, until a human decides (P3-02). */
+export interface Protection {
+  /** A possible minor: whatever was confirmed before, his age is not anymore. */
+  readonly unconfirmAge: boolean;
+  /** Distress or a threat: nothing more is written to him. */
+  readonly stopContact: boolean;
+  /** The risks and media flags behind it, for the event's reason. */
+  readonly because: readonly string[];
+}
+
+const MINOR_SIGNS: readonly string[] = ['minor_suspected', 'possible_minor'];
+// Distress (his, or a story of real abuse) and threats (harassment, a dangerous request, a weapon shown).
+const STOP_SIGNS: readonly string[] = [
+  'distress',
+  'self_harm',
+  'real_abuse',
+  'harassment',
+  'dangerous_request',
+  'weapon',
+];
+
+/** The limits the policy sets itself from the brain's risks and the media flags; code decides, the brain reports. */
+export function protectionFor(signs: readonly string[]): Protection {
+  const because = [...new Set(signs.filter((s) => MINOR_SIGNS.includes(s) || STOP_SIGNS.includes(s)))];
+  return {
+    unconfirmAge: because.some((s) => MINOR_SIGNS.includes(s)),
+    stopContact: because.some((s) => STOP_SIGNS.includes(s)),
+    because,
+  };
+}
