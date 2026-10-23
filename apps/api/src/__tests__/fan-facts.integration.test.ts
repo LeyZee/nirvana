@@ -138,7 +138,7 @@ describe('fan facts from the conversations', () => {
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'facts' });
-    fans = createFansModule({ db: test.app.db });
+    fans = createFansModule({ db: test.app.db, adminDb: test.admin.db });
     conversations = createConversationsModule({
       db: test.app.db,
       fans,
