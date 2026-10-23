@@ -117,6 +117,7 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-22 | Suivi : `reader.ts` renommé, typecheck sous Windows et macOS | done | `log/2026-10-22-web-suivi-casse.md` |
 | 2026-10-22 | Playground : « Clé manquante » dès l’ouverture, coûts en euros | done | `log/2026-10-22-web-playground-euros.md` |
 | 2026-10-23 | Suivi : une note à l’agent en rendant la main | done | `log/2026-10-23-web-suivi-note-release.md` |
+| 2026-10-23 | Suivi : les limites du fan, lues et changées dans le lecteur | done | `log/2026-10-23-web-suivi-drapeaux.md` |
 | 2026-10-19 | Références plateforme du composeur pour la vision | done | `log/2026-10-19-compose-platform-refs.md` |
 | 2026-10-19 | IP réelle derrière le proxy, limite de connexion par compte (G6) | done | `log/2026-10-19-trust-proxy.md` |
 | 2026-10-19 | Verrou serveur de l'Automatique (B3) | done | `log/2026-10-19-automatic-lock.md` |

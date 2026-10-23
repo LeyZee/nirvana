@@ -2,14 +2,18 @@ import {
   ConversationDetailSchema,
   ConversationEventViewSchema,
   ConversationSummarySchema,
+  FanFlagsViewSchema,
   MessageViewSchema,
   pageOf,
   type ConversationDetail,
   type ConversationEventView,
   type ConversationSummary,
+  type FanFlags,
   type MessageView,
+  type SetFanFlagBody,
 } from '@nirvana/contracts';
 
+import { flagError } from './flags-model';
 import { decisionError } from './reader-model';
 
 const PageSchema = pageOf(ConversationSummarySchema);
@@ -144,4 +148,38 @@ export function takeOver(creatorId: string, conversationId: string): Promise<Dec
  */
 export function giveBack(creatorId: string, conversationId: string, note?: string): Promise<Decision> {
   return command(creatorId, conversationId, 'release', note === undefined ? {} : { note });
+}
+
+const flagsPath = (creatorId: string, fanId: string): string =>
+  `/v1/fans/${encodeURIComponent(fanId)}/flags?${new URLSearchParams({ creatorId }).toString()}`;
+
+/** `GET /v1/fans/:id/flags`: the fan's limits, as the policy reads them before any offer. */
+export async function fetchFanFlags(creatorId: string, fanId: string): Promise<FanFlags> {
+  const response = await fetch(flagsPath(creatorId, fanId), { credentials: 'include' });
+  if (!response.ok) throw new Error(`GET flags: ${String(response.status)}`);
+  return FanFlagsViewSchema.parse(await response.json()).flags;
+}
+
+/** His limits after a change, or why it was refused (they stay as they were). */
+export type FlagChange =
+  { readonly ok: true; readonly flags: FanFlags } | { readonly ok: false; readonly message: string };
+
+/** `PUT /v1/fans/:id/flags`: a person sets or lifts one limit; the server dates an age confirmation and a freeze. */
+export async function setFanFlag(
+  creatorId: string,
+  fanId: string,
+  body: SetFanFlagBody,
+): Promise<FlagChange> {
+  try {
+    const response = await fetch(flagsPath(creatorId, fanId), {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return { ok: false, message: flagError(response.status) };
+    return { ok: true, flags: FanFlagsViewSchema.parse(await response.json()).flags };
+  } catch {
+    return { ok: false, message: flagError(0) };
+  }
 }
