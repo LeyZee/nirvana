@@ -4,11 +4,15 @@ Dernière revue : 2026-10-19 (refonte). Fiche : D-01. Code : `packages/design-sy
 
 ## En images
 
-Rendus du package lui-même (`tokens.css`, `components.css`, polices du design system) dans Chromium, à 2×, mouvement réduit ; textes fictifs. Ils datent d'avant la refonte du 19/10 et seront remplacés par des captures du CRM refait. Si une image et le CSS divergent, le CSS a raison et l'image est à refaire.
+Captures du CRM refait (23/10), prises dans Chromium à 2×, mouvement réduit, avec des données inventées (prénoms fictifs, aucune vraie conversation). La palette et la typographie sont rendues depuis le package lui-même : les valeurs affichées sont lues dans `tokens.css` au moment de la capture. Si une image et le CSS divergent, le CSS a raison et l'image est à refaire.
 
-![Composants, thème Nuit](images/composants-nuit.jpg)
+![Dashboard, thème Nuit](images/crm-dashboard-nuit.jpg)
 
-![Composants, thème Jour](images/composants-jour.jpg)
+![Dashboard, thème Jour](images/crm-dashboard-jour.jpg)
+
+![Suivi : le lecteur, les limites du fan et le brouillon de l'agent, thème Nuit](images/crm-suivi-nuit.jpg)
+
+![Sur téléphone : Dashboard, Suivi, Entraîner](images/crm-telephone.jpg)
 
 ![Palette des thèmes Nuit et Jour](images/palette.jpg)
 
