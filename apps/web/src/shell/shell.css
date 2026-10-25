@@ -686,6 +686,9 @@
 /* ── Phone: a floating capsule tab bar at the bottom, the page scrolls ── */
 @media (max-width: 820px) {
   .nv-app {
+    /* The room the stage keeps under the page for the tab bar, and above it. */
+    --nv-tabbar-room: calc(110px + env(safe-area-inset-bottom, 0px));
+    --nv-stage-top: 8px;
     height: auto;
     min-height: 100dvh;
     grid-template-columns: minmax(0, 1fr);
@@ -693,11 +696,11 @@
   }
   .nv-stage {
     overflow: visible;
-    padding: 8px 16px calc(110px + env(safe-area-inset-bottom, 0px));
+    padding: var(--nv-stage-top) 16px var(--nv-tabbar-room);
   }
   /* A fill page takes exactly the screen above the tab bar: its own column scrolls, never the composer away. */
   .nv-page--fill {
-    height: calc(100dvh - 118px - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - var(--nv-stage-top) - var(--nv-tabbar-room));
     min-height: 0;
   }
   .nv-rail {

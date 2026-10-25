@@ -933,6 +933,14 @@
   .pg-top__t {
     flex-basis: 0;
   }
+  .pg-top .nv-btn {
+    padding-inline: 10px;
+  }
+  .pg-top__t b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .pg-why {
     order: 2;
     width: auto;
