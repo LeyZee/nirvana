@@ -58,3 +58,4 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Fait : images du guide refaites depuis le CRM (Dashboard Nuit et Jour, Suivi, téléphone), palette et typographie rendues depuis `tokens.css`.
 - Reste : passe téléphone (Playground) ; choix du thème Jour, en attente de Charles.
 - Fait (choix de Charles du 25/10) : Réglages › Apparence, Nuit / Jour / Appareil, Nuit par défaut, gardé par le navigateur et posé avant le premier affichage. Reste : passe téléphone (Playground).
+- Fait : passe téléphone. Le Playground tient l'écran au-dessus de la barre d'onglets, champ en pied comme dans Messages ; le pourquoi, le fan et le taux viennent dessous, dans le défilement de la colonne. Le taux sous l'objectif n'a plus qu'un ton (ambre). Les onglets d'une section trop larges pour le téléphone défilent dans leur capsule, bord estompé. Reste : rien sur D-01.

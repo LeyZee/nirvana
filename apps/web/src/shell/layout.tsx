@@ -1,6 +1,6 @@
 import { placeTabBarLens } from '@nirvana/design-system';
 import { Link, useRouterState, type LinkProps } from '@tanstack/react-router';
-import { useLayoutEffect, useRef, type JSX, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type JSX, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -125,18 +125,52 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
     placed.current = true;
   }, [pathname]);
 
+  // On a phone a section's tabs can be wider than the screen: the nav scrolls, keeps the active tab in view and fades
+  // the edge that hides more tabs, so none is cut off without a sign.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (nav === null || !(active instanceof HTMLElement) || nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+  }, [pathname]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (nav === null) return;
+    const mark = (): void => {
+      const start = nav.scrollLeft > 1;
+      const end = nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1;
+      nav.dataset['more'] = start && end ? 'both' : start ? 'start' : end ? 'end' : 'none';
+    };
+    mark();
+    nav.addEventListener('scroll', mark, { passive: true });
+    const observer = new ResizeObserver(mark);
+    observer.observe(nav);
+    return () => {
+      nav.removeEventListener('scroll', mark);
+      observer.disconnect();
+    };
+  }, []);
+
   return (
-    <nav className="nv-subnav nv-glass nv-glass--thin" aria-label={label} ref={navRef}>
-      <span className="nv-subnav__thumb" ref={thumbRef} aria-hidden="true" />
-      {items.map((item) => (
-        <Link key={item.to} to={item.to} className="nv-subnav__item" activeProps={{ 'aria-current': 'page' }}>
-          {item.label}
-          {item.count === undefined || item.count === 0 ? null : (
-            <span className="nv-subnav__count">{item.count}</span>
-          )}
-        </Link>
-      ))}
-    </nav>
+    <div className="nv-subnav-pill nv-glass nv-glass--thin">
+      <nav className="nv-subnav" aria-label={label} ref={navRef}>
+        <span className="nv-subnav__thumb" ref={thumbRef} aria-hidden="true" />
+        {items.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className="nv-subnav__item"
+            activeProps={{ 'aria-current': 'page' }}
+          >
+            {item.label}
+            {item.count === undefined || item.count === 0 ? null : (
+              <span className="nv-subnav__count">{item.count}</span>
+            )}
+          </Link>
+        ))}
+      </nav>
+    </div>
   );
 }
 

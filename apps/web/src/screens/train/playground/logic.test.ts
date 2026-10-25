@@ -15,10 +15,10 @@ const answer = (patch: Partial<Answer> = {}): Answer => ({
 });
 
 describe('rateTone', () => {
-  it('is neutral at the target, amber under it, red under 60 %', () => {
+  it('is neutral at the target, amber under it, never red', () => {
     expect(rateTone(0.8, 0.8)).toBe('ok');
     expect(rateTone(0.64, 0.8)).toBe('warn');
-    expect(rateTone(0.59, 0.8)).toBe('bad');
+    expect(rateTone(0.2, 0.8)).toBe('warn');
     expect(rateTone(null, 0.8)).toBe('ok');
   });
 });
