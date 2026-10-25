@@ -170,3 +170,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-23 | Mémoire du fan : poser et lever les limites d’un fan (P3-02, PR 4c) | done | `log/2026-10-23-fan-flags.md` |
 | 2026-10-23 | Mémoire du fan : routes des drapeaux pour l’humain (P3-02, PR 5) | done | `log/2026-10-23-fan-flags-routes.md` |
 | 2026-10-23 | Mémoire du fan : la politique pose les drapeaux sur un risque (P3-02, PR 6) | done | `log/2026-10-23-fan-flags-policy.md` |
+| 2026-10-25 | security.md : les compteurs des limites de débit vivent en mémoire | done | `log/2026-10-25-security-limiter-memory.md` |
