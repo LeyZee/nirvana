@@ -66,10 +66,6 @@
 .pg-rate--warn {
   --_c: var(--nv-warning);
 }
-.pg-rate--bad {
-  /* Far from the target is still a warning, not an urgency: the red stays the urgencies'. */
-  --_c: var(--nv-warning);
-}
 .pg-rate__v {
   min-width: 2.9em;
   font:
@@ -909,14 +905,33 @@
     bottom: 0;
   }
 }
-/* Phone: one column, the conversation first. */
+/*
+ * Phone: one column. The conversation fills the screen above the tab bar, composer at its foot, as in Messages;
+ * the explanation, the fan and the rate come under it, in the column's own scroll.
+ */
 @media (max-width: 820px) {
   .pg {
+    container-type: size;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
     grid-template-columns: minmax(0, 1fr);
+    /* max-content: the column's height is fixed, so auto rows would never grow past their minimum. */
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+    align-content: start;
   }
   .pg-main {
     order: 1;
-    min-height: 72vh;
+    height: 100cqh;
+  }
+  .pg-top {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 10px 10px 10px 14px;
+  }
+  .pg-top__t {
+    flex-basis: 0;
   }
   .pg-why {
     order: 2;
@@ -942,6 +957,9 @@
   }
   .pg-setup {
     order: 3;
+  }
+  .pg-bar {
+    order: 4;
   }
   .pg-bar__sp {
     display: none;

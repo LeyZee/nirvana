@@ -537,6 +537,13 @@
 }
 
 /* ── Section tabs: one glass capsule, a lit thumb that slides ── */
+/* The glass pill around a section's tabs: it stays put while the tabs scroll inside it on a phone. */
+.nv-subnav-pill {
+  --_radius: var(--nv-radius-full);
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
 .nv-subnav {
   --_radius: var(--nv-radius-full);
   position: relative;
@@ -688,6 +695,11 @@
     overflow: visible;
     padding: 8px 16px calc(110px + env(safe-area-inset-bottom, 0px));
   }
+  /* A fill page takes exactly the screen above the tab bar: its own column scrolls, never the composer away. */
+  .nv-page--fill {
+    height: calc(100dvh - 118px - env(safe-area-inset-bottom, 0px));
+    min-height: 0;
+  }
   .nv-rail {
     --_radius: var(--nv-radius-full);
     position: fixed;
@@ -732,6 +744,16 @@
     max-width: 100%;
     overflow-x: auto;
     scrollbar-width: none;
+  }
+  /* More tabs past an edge: that edge fades out instead of cutting a tab in two. */
+  .nv-subnav[data-more='end'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  }
+  .nv-subnav[data-more='start'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  }
+  .nv-subnav[data-more='both'] {
+    mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
   }
   .nv-subnav__item {
     padding: 0 12px;

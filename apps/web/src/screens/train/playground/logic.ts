@@ -2,12 +2,14 @@ import type { PlaygroundAnswer, PlaygroundState } from '@nirvana/contracts';
 
 import { isHandoff } from './model';
 
-/** Under 60 % the rate is red, under the target amber, at the target neutral: the eye goes where work is. */
-export type RateTone = 'ok' | 'warn' | 'bad';
+/**
+ * Under the target the rate is amber, at the target neutral: the eye goes where work is. Far under it is still a
+ * warning, not an urgency: the red stays the urgencies' (docs/design).
+ */
+export type RateTone = 'ok' | 'warn';
 
 export function rateTone(rate: number | null, target: number): RateTone {
-  if (rate === null || rate >= target) return 'ok';
-  return rate >= 0.6 ? 'warn' : 'bad';
+  return rate === null || rate >= target ? 'ok' : 'warn';
 }
 
 export function percent(rate: number | null): string {

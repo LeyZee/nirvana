@@ -175,3 +175,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-25 | Refonte : images du guide refaites depuis le CRM (D-01) | done | `log/2026-10-25-d-01-images-guide.md` |
 | 2026-10-25 | Refonte : Réglages › Apparence, Nuit / Jour / Appareil (D-01) | done | `log/2026-10-25-d-01-apparence.md` |
 | 2026-10-25 | Reprise après un Arrêt : les réponses dues partent l’une après l’autre | done | `log/2026-10-25-resume-spacing.md` |
+| 2026-10-25 | Refonte : passe téléphone du Playground, taux en un seul ton (D-01) | done | `log/2026-10-25-d-01-telephone.md` |

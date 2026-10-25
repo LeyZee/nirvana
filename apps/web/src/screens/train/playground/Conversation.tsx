@@ -56,15 +56,17 @@ export function Conversation(props: ConversationProps): JSX.Element {
   const { state, busy, writing } = props;
   const pending = state.pending;
   const draftAt = pendingIndex(state.history, pending);
-  const endRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   let fanCount = 0;
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    // The thread scrolls itself, never the page around it (on a phone the Playground's column scrolls too).
+    const thread = threadRef.current;
+    if (thread !== null) thread.scrollTop = thread.scrollHeight;
   }, [state.history.length, pending, props.mode, writing]);
 
   return (
-    <div className="pg-thread nv-scroll">
+    <div className="pg-thread nv-scroll" ref={threadRef}>
       <div className="nv-thread">
         {state.history.length === 0 && pending === null && !writing ? (
           <Empty
@@ -105,7 +107,6 @@ export function Conversation(props: ConversationProps): JSX.Element {
             {props.error}
           </p>
         )}
-        <div ref={endRef} />
       </div>
     </div>
   );
