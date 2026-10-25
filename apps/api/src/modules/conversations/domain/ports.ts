@@ -106,7 +106,7 @@ interface ConversationRepository {
   saveProjection(id: ConversationId, projection: ConversationProjection): Promise<void>;
   /** The creator's conversations in this mode. */
   idsInMode(mode: ConversationMode): Promise<readonly ConversationId[]>;
-  /** The creator's conversations in this state. */
+  /** The creator's conversations in this state, the one whose fan wrote first at the head. */
   idsInState(state: ConversationState): Promise<readonly ConversationId[]>;
 }
 

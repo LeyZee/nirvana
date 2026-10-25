@@ -85,7 +85,7 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .select({ id: schema.conversations.id })
           .from(schema.conversations)
           .where(eq(schema.conversations.state, state))
-          .orderBy(schema.conversations.id);
+          .orderBy(sql`${schema.conversations.lastInboundAt} asc nulls last`, schema.conversations.id);
         return rows.map((row) => ConversationIdSchema.parse(row.id));
       },
     },
