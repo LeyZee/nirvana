@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import indexHtml from '../../index.html?raw';
+import earlyScript from '../../public/appearance.js?raw';
 
 import { APPEARANCE_KEY, isDay, parseAppearance } from './appearance';
 
@@ -19,7 +20,8 @@ describe('appearance', () => {
     expect(isDay('device', false)).toBe(false);
   });
 
-  it('is applied before the first paint with the same key', () => {
-    expect(indexHtml).toContain(`'${APPEARANCE_KEY}'`);
+  it('is applied before the first paint, by a file read with the same key', () => {
+    expect(indexHtml).toContain('<script src="/appearance.js"></script>');
+    expect(earlyScript).toContain(`localStorage.getItem('${APPEARANCE_KEY}')`);
   });
 });

@@ -1,7 +1,8 @@
 /**
  * The theme of the CRM, chosen in Réglages › Apparence: Nuit (the default), Jour, or as the device is set.
  * The choice belongs to the browser, not to the account: the office screen can be in Jour and the phone in Nuit.
- * `index.html` applies it before the first paint with the same key; keep both in step.
+ * `public/appearance.js`, loaded first by `index.html`, applies it before the first paint with the same key (a test
+ * keeps both in step).
  */
 
 export const APPEARANCES = ['night', 'day', 'device'] as const;
