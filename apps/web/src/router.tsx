@@ -3,6 +3,7 @@ import { createRootRouteWithContext, createRoute, createRouter, redirect } from 
 
 import { CreatorsPage } from './creators/CreatorsPage';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { AppearancePage } from './screens/settings/AppearancePage';
 import {
   DevicesPage,
   AgentModePage,
@@ -100,6 +101,11 @@ const telegram = createRoute({
   component: TelegramPage,
 });
 const devices = createRoute({ getParentRoute: () => settings, path: '/appareils', component: DevicesPage });
+const appearance = createRoute({
+  getParentRoute: () => settings,
+  path: '/apparence',
+  component: AppearancePage,
+});
 const agentMode = createRoute({ getParentRoute: () => settings, path: '/mode', component: AgentModePage });
 
 const routeTree = rootRoute.addChildren([
@@ -107,7 +113,7 @@ const routeTree = rootRoute.addChildren([
   creators,
   train.addChildren([trainIndex, playground, corrections, tests]),
   tracking,
-  settings.addChildren([settingsIndex, aiModels, telegram, devices, agentMode]),
+  settings.addChildren([settingsIndex, aiModels, telegram, devices, appearance, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext) =>

@@ -19,6 +19,7 @@ export function SettingsLayout(): JSX.Element {
                 { to: '/reglages/modeles-ia', label: 'Modèles IA' },
                 { to: '/reglages/telegram', label: 'Telegram' },
                 { to: '/reglages/appareils', label: 'Appareils' },
+                { to: '/reglages/apparence', label: 'Apparence' },
                 { to: '/reglages/mode', label: 'Mode de l’agent' },
               ]}
             />
