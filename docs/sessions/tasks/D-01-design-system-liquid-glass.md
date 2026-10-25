@@ -53,3 +53,7 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 - Fait : Suivi, lecteur sur plaque, brouillon en teinte calme, non-lus sans néon. Reste : Réglages, connexion (erreur en néon) ; images du guide.
 - Fait : Réglages (Modèles IA, Telegram) sur plaques, alignés sur le titre, sélection neutre, ambre pour ce qui reste à régler. Reste : connexion (erreur en néon) ; images du guide.
 - Fait : connexion sur plaque, erreur en ambre, flamme du logo. Reste : images du guide.
+
+2026-10-25 (suite de la refonte) :
+- Fait : images du guide refaites depuis le CRM (Dashboard Nuit et Jour, Suivi, téléphone), palette et typographie rendues depuis `tokens.css`.
+- Reste : passe téléphone (Playground) ; choix du thème Jour, en attente de Charles.
