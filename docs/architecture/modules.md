@@ -30,7 +30,7 @@ media ──▶ packages/llm
 sales ──▶ conversations, media            (phase 6)
 scripts ──▶ sales, media, conversations   (phase 6)
 playground ──▶ agent, packages/llm        (écran Entraîner, P3-06)
-fans, persona, providers ──▶ (feuilles)
+fans, persona, providers, telegram ──▶ (feuilles)
 ```
 
 Ce graphe est **sans cycle**, et `import-x/no-cycle` le vérifie. Deux inversions le rendent possible :
@@ -61,17 +61,18 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 
 | Module | Phase d'apparition | État |
 |---|---|---|
-| connectors | 0 (Fake), 2 (Reveal) | squelette |
-| conversations | 0 | squelette |
-| fans | 3 | squelette |
-| persona | 3 | squelette |
-| agent | 3 | squelette |
-| media | 3 (sens), 6 (catalogue) | squelette |
-| supervision | 4 | squelette |
+| connectors | 0 (Fake), 2 (Reveal) | `FakeConnector` et enregistreur `/v1/connector/sessions` ; Reveal attend la capture (ADR 0018) |
+| conversations | 0 | ingestion, machine d'état, brouillons, envoi vérifié, mode de l'agent et verrou de l'Automatique (ADR 0019, 0022), faits du brief à l'approbation (`conversation.record_facts`) |
+| fans | 3 | faits (P3-02), drapeaux et routes `/v1/fans/:id/flags`, purge à 12 mois (`fans.purge_facts`) |
+| persona | 3 | versions de persona, créatrices et activation d'une version (`/v1/creators`) |
+| agent | 3 | composeur sens → cerveau → politique → voix → gardes, drapeaux posés sur un risque ; aucun message réel tant que les clés manquent |
+| media | 3 (sens), 6 (catalogue) | descriptions au vocabulaire Nirvana, ffmpeg vérifié au démarrage ; la lecture des médias Reveal attend la capture |
+| supervision | 4 | Dashboard (`/v1/dashboard`) : santé, jobs bloqués, taux en réel |
 | sales | 6 | réservé |
 | scripts | 6 | réservé |
 | playground | 3 | API de l'écran Entraîner (P3-06) |
 | providers (clés des services IA, ADR 0016) | 3 | clés vérifiées et scellées, routes `/v1/settings/providers`, page Services, revérification toutes les 15 minutes (P3-03) |
+| telegram (alertes de l'équipe, ADR 0020) | 3 | bots et groupes depuis Réglages › Telegram (`/v1/settings/telegram`), alertes vérifiées de bout en bout (P3-07) |
 | content (Instagram) | 7 | non créé |
 | platform (Nirvana propre) | 8 | non créé, voir `own-platform.md` |
 
