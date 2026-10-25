@@ -6,6 +6,7 @@ import {
   MessageIdSchema,
   newId,
   queueNameFor,
+  resumeRunAt,
   type AgentMode,
   type AutomaticGate,
   type BlindTestResult,
@@ -453,11 +454,17 @@ export function createConversationCommands({
         if (switches.creator && !stop && !switches.global) {
           // A fan who wrote during the stop was left `pending` (respond saw the switch and did nothing): each of
           // them gets an answer now, instead of waiting for the fan to write again (recette R-G2).
-          for (const id of await tx.conversations.idsInState('pending')) {
+          // One after the other, the longest wait first: a long stop does not wake them all at the same second.
+          const waiting = await tx.conversations.idsInState('pending');
+          for (const [index, id] of waiting.entries()) {
             await tx.jobs.enqueue(
               'conversation.respond',
               { creatorId: input.creatorId, conversationId: id, correlationId: input.correlationId },
-              { queueName: queueNameFor(id), jobKey: jobKeyFor('conversation.respond', id) },
+              {
+                queueName: queueNameFor(id),
+                jobKey: jobKeyFor('conversation.respond', id),
+                runAt: resumeRunAt(index, meta.at),
+              },
             );
           }
         }

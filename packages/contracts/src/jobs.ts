@@ -131,3 +131,15 @@ export function accountQueueNameFor(platformAccountId: string): `account:${strin
 export function jobKeyFor(job: JobName, conversationId: string): string {
   return `${job}:${conversationId}`;
 }
+
+/** Seconds between two answers owed when a stop is lifted: the fans who waited are answered one after the other. */
+export const RESUME_SPACING_SECONDS = 15;
+
+/**
+ * When the answer owed to the fan at `index` (0 = the one who has waited longest) runs after a stop is lifted:
+ * the first right away, then one every `RESUME_SPACING_SECONDS`, so that a long stop does not wake every model call
+ * and every send at the same second.
+ */
+export function resumeRunAt(index: number, now: Date): Date {
+  return new Date(now.getTime() + index * RESUME_SPACING_SECONDS * 1_000);
+}
