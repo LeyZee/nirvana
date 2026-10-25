@@ -1,0 +1,136 @@
+/*
+ * Réglages › Apparence. Three miniatures of the CRM, each drawn with the tokens of its own theme (data-theme on the
+ * miniature), so Jour looks like Jour even while the page is in Nuit. The choice is a neutral ring: selection stays
+ * grey, the neon belongs to the miniature itself.
+ */
+
+.ap {
+  max-width: 680px;
+  align-self: start;
+}
+.ap-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nv-space-4);
+}
+.ap-choice {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--nv-ink-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: color var(--nv-dur-base) var(--nv-ease-out);
+}
+.ap-choice:hover,
+.ap-choice[aria-checked='true'] {
+  color: var(--nv-ink);
+}
+.ap-choice__frame {
+  width: 100%;
+  padding: 4px;
+  border-radius: calc(var(--nv-radius-md) + 4px);
+  box-shadow: inset 0 0 0 1px var(--nv-hairline);
+  transition:
+    box-shadow var(--nv-dur-base) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.ap-choice[aria-checked='true'] .ap-choice__frame {
+  box-shadow:
+    inset 0 0 0 2px var(--nv-ink-muted),
+    0 0 0 4px var(--nv-select);
+}
+.ap-choice:active .ap-choice__frame {
+  transform: scale(0.97);
+}
+.ap-choice:focus-visible {
+  outline: none;
+}
+.ap-choice:focus-visible .ap-choice__frame {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+}
+.ap-choice__label {
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+}
+
+/* The miniature: the void, a rail on the left, two plates, the neon dot of the main action. */
+.ap-mini {
+  aspect-ratio: 16 / 10;
+  display: grid;
+  grid-template-columns: 14% minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 7%;
+  padding: 8%;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-void);
+  overflow: hidden;
+}
+.ap-mini__rail {
+  grid-row: 1 / 3;
+  border-radius: var(--nv-radius-xs);
+  background: var(--nv-glass-fill-strong);
+  box-shadow: inset 0 0 0 1px var(--nv-glass-edge);
+}
+.ap-mini__plate {
+  position: relative;
+  border-radius: var(--nv-radius-xs);
+  background: var(--nv-plate);
+  box-shadow: inset 0 0 0 1px var(--nv-plate-edge);
+}
+.ap-mini__plate--low {
+  height: 22%;
+  min-height: 12px;
+}
+.ap-mini__line {
+  position: absolute;
+  top: 22%;
+  left: 12%;
+  width: 46%;
+  height: 7px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-ink-faint);
+}
+.ap-mini__neon {
+  position: absolute;
+  right: 12%;
+  bottom: 18%;
+  width: 26%;
+  height: 9px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-neon-solid);
+  box-shadow: var(--nv-shadow-neon-soft);
+}
+
+/* Appareil: Nuit and Jour cut on the diagonal. */
+.ap-split {
+  display: grid;
+  border-radius: var(--nv-radius-md);
+  overflow: hidden;
+}
+.ap-split > .ap-mini {
+  grid-area: 1 / 1;
+}
+.ap-split > .ap-mini + .ap-mini {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.ap-note {
+  margin: var(--nv-space-2) 0 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+  text-wrap: pretty;
+}
+
+@media (max-width: 520px) {
+  .ap-choices {
+    gap: var(--nv-space-3);
+  }
+}

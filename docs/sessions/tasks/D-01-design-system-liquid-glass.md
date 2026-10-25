@@ -57,3 +57,4 @@ Les écrans fonctionnels (inbox, conversation, fan, supervision) : ils arrivent 
 2026-10-25 (suite de la refonte) :
 - Fait : images du guide refaites depuis le CRM (Dashboard Nuit et Jour, Suivi, téléphone), palette et typographie rendues depuis `tokens.css`.
 - Reste : passe téléphone (Playground) ; choix du thème Jour, en attente de Charles.
+- Fait (choix de Charles du 25/10) : Réglages › Apparence, Nuit / Jour / Appareil, Nuit par défaut, gardé par le navigateur et posé avant le premier affichage. Reste : passe téléphone (Playground).

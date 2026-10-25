@@ -83,7 +83,7 @@ Les consommateurs et l'ordre d'import sont dans `packages/design-system/README.m
 
 ## Principes
 
-1. **La nuit d'abord.** Nuit est le thème par défaut (usage le soir) ; Jour existe pour le bureau en plein jour.
+1. **La nuit d'abord.** Nuit est le thème par défaut (usage le soir) ; Jour existe pour le bureau en plein jour. Le choix se fait dans Réglages › Apparence (Nuit, Jour, Appareil), par navigateur, et s'applique avant le premier affichage (décision de Charles du 25/10).
 2. **Un seul néon.** `neon` est une lumière, pas un remplissage ni une couleur de sélection. Une action néon par écran (`nv-btn--neon`), une surface teintée par écran (`nv-glass--neon`).
 3. **Le verre flotte, le contenu se pose.** Le verre est pour les contrôles et la navigation, posé sur `nv-aura` ou sur du contenu, jamais sur un aplat ; le contenu va sur le fond ou sur une plaque (`nv-plate`).
 4. **La matière bouge, l'interface reste calme.** Ce qui se déplace (pouce, lentille, Island) se déforme sur un ressort ; le reste ne fait que des fondus.

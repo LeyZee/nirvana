@@ -106,6 +106,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Groupe (Telegram) | `telegram_chat` | Un groupe où un bot se trouve, découvert automatiquement, jamais saisi à la main. |
 | Routage | `telegram_route` | Quel sujet va dans quel groupe, pour une créatrice ou pour toutes. |
 | Astreinte | `on_call` | Le groupe Telegram qui reçoit l'urgent la nuit. « Personne n'est prévenu la nuit » quand aucune créatrice n'en a un joignable. |
+| Apparence (Nuit, Jour, Appareil) | `appearance` (`night`, `day`, `device`) | Le thème du CRM, choisi dans Réglages › Apparence et gardé par le navigateur. Nuit par défaut ; Appareil suit le mode clair ou sombre de l'ordinateur ou du téléphone. |
 
 ## Noms à ne pas utiliser
 

@@ -173,3 +173,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-25 | security.md : les compteurs des limites de débit vivent en mémoire | done | `log/2026-10-25-security-limiter-memory.md` |
 | 2026-10-25 | modules.md à l’état de main, tarifs du playbook dans catalog.ts | done | `log/2026-10-25-docs-modules-state.md` |
 | 2026-10-25 | Refonte : images du guide refaites depuis le CRM (D-01) | done | `log/2026-10-25-d-01-images-guide.md` |
+| 2026-10-25 | Refonte : Réglages › Apparence, Nuit / Jour / Appareil (D-01) | done | `log/2026-10-25-d-01-apparence.md` |
