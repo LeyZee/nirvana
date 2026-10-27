@@ -10,6 +10,7 @@ import {
   assertTeamShareFits,
   calendarDayIn,
   leavesTeam,
+  normalizeEmail,
   presetsInForce,
   rateInForce,
   uniqueCreatorIds,
@@ -21,6 +22,10 @@ describe('team rules', () => {
     const lateEvening = new Date('2026-10-27T23:30:00Z');
     expect(calendarDayIn(lateEvening, 'Europe/Paris')).toBe('2026-10-28');
     expect(calendarDayIn(lateEvening, 'America/New_York')).toBe('2026-10-27');
+  });
+
+  it('keeps the e-mail the way Better Auth looks it up at sign-in', () => {
+    expect(normalizeEmail(' Theo@Example.TEST ')).toBe('theo@example.test');
   });
 
   it('never starts a rate on a day already worked', () => {

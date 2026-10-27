@@ -24,6 +24,7 @@ import {
   assertCreatorsExist,
   assertStartsFromToday,
   calendarDayIn,
+  normalizeEmail,
   presetsInForce,
   uniqueCreatorIds,
 } from '../domain/members';
@@ -97,7 +98,7 @@ export function createTeamService(
       await store.create(actor, {
         id,
         userId: newId(UserIdSchema),
-        email: body.email.toLowerCase(),
+        email: normalizeEmail(body.email),
         firstName: body.firstName,
         lastName: body.lastName,
         displayName: body.displayName,

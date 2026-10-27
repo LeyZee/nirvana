@@ -23,6 +23,14 @@ export function calendarDayIn(at: Date, timeZone: string): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/**
+ * The e-mail as the account keeps it: Better Auth looks an account up in lower case at sign-in, so a member typed
+ * « Theo@Example.test » must be stored as « theo@example.test », and the duplicate check compares that form.
+ */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 /** A rate or a preset applies from a day on, never to a day already worked: today at the earliest. */
 export function assertStartsFromToday(effectiveFrom: string, today: string): void {
   if (effectiveFrom < today) throw new CommissionDateInvalid();

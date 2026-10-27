@@ -183,6 +183,9 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     const twice = await call('POST', '/team/members', owner, theoBody());
     expect(twice.statusCode).toBe(409);
     expect(codeOf(twice)).toBe('member_conflict');
+    const shouted = await call('POST', '/team/members', owner, { ...theoBody(), email: 'THEO@EXAMPLE.TEST' });
+    expect(shouted.statusCode).toBe(409);
+    expect(codeOf(shouted)).toBe('member_conflict');
 
     const unknownCreator = await call('POST', '/team/members', owner, {
       ...theoBody(),
@@ -228,7 +231,8 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     });
     await choosePassword(theo.userId, THEO_PASSWORD);
     await choosePassword(nora.userId, NORA_PASSWORD);
-    theoCookie = await signIn(server, 'theo@example.test', THEO_PASSWORD);
+    // Typed as the owner typed it: Better Auth looks the account up in lower case, where it was stored.
+    theoCookie = await signIn(server, 'Theo@Example.test', THEO_PASSWORD);
     noraCookie = await signIn(server, 'nora@example.test', NORA_PASSWORD);
   });
 
