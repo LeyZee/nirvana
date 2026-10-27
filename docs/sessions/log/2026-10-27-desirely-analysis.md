@@ -1,0 +1,7 @@
+# 2026-10-27 — Étude de Desirely : ce qui manque à Nirvana — proposed
+Fait : lu en entier le centre d'aide public de Desirely (58 articles) et son playbook de 88 pages (le document Papermark, envoyé en PDF par Charles, hors dépôt) ; comparé fonction par fonction avec main 04dae5d ; écrit `docs/reference/desirely-analysis.md`, l'ADR 0030 (médiathèque, proposée) et onze fiches proposées : note de désir (retenue par Charles à 20h24), médiathèque, déroulé d'un script, alertes personnalisées, heures d'activité, relances étendues, gardes de voix, persona par blocs, Suivi et Ventes, hybride par valeur, Premiers pas ; cinq termes de médiathèque au glossaire.
+Pas fait : aucun code (attend l'ID de Charles fiche par fiche). La page Papermark ne se lit pas sans JavaScript ; son contenu est celui du PDF.
+Décisions : la synchronisation lit le coffre, Nirvana ne téléverse rien (ADR 0030, à accepter) ; on ne reprend ni le prix réduit, ni la remise progressive, ni la culpabilisation, ni l'arrêt de la conversation faute de script, ni le 24/7 par défaut.
+Découvertes : le Brief rend déjà `asks_if_bot` sans alerte associée ; heures calmes et Jour / Nuit sont des constantes ; la garde `meeting_promise` bloque la promesse mais pas les mots qu'une plateforme repère dans un refus ; question pour Charles : le « bonus à la place d'une remise » du playbook.
+Candidats à suppression : aucun.
+Vérifié : pnpm check ✓, hygiène ✓ (docs seulement).

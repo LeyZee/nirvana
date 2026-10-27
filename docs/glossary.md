@@ -72,6 +72,11 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Notes du modèle | `creator_note` | Les notes que Reveal affiche à côté de chaque conversation sur la créatrice : sa fiche persona vue par la plateforme. |
 | Bundle (PPV) | `bundle` | Le PPV de Reveal : médias floutés vendus (au moins un), prix TTC, tarif réduit optionnel, aperçu gratuit de 10 médias au plus. |
 | Coffre | `vault` | Les médias de la créatrice stockés sur la plateforme, réutilisables à l'envoi. |
+| Médiathèque | `media_library` | Les médias d'une créatrice vus dans Nirvana, reflet du coffre de chaque plateforme, dossiers compris ; remplie par synchronisation seulement, jamais par téléversement (ADR 0030). |
+| Liaison de média | `media_platform_ref` | Le lien entre un média et son original sur un compte plateforme (`platform_media_id`, dossier) ; un même média a une liaison par plateforme (ADR 0030). |
+| Synchronisation des médias | `media.sync` | Le job rejouable qui lit le coffre d'un compte, crée ou met à jour les liaisons, marque les médias disparus et fait décrire les nouveaux (ADR 0030). |
+| Description validée | `validated_at` | Une description de média relue et validée par un humain ; la seule que l'agent lit, jamais écrasée par une nouvelle génération (ADR 0030). |
+| Média vu | `seen` | Un média que ce fan a déjà eu : gratuit dès l'envoi, payant une fois débloqué (`unlocked_at`, confirmé par la plateforme) ; un script dont un média est vu n'est plus proposable à ce fan (ADR 0030). |
 | Capture | `recording` | Un enregistrement anonymisé du trafic entre le site d'une plateforme et ses serveurs (HAR ou enregistreur de l'extension). |
 | Fan test | `test_fan` | Un compte fan qui appartient à l'agence, seule cible autorisée des écritures pendant les captures et les tests manuels. |
 | Relance | `follow_up` | Message qu'elle écrit après un silence du fan, aux délais de la persona ; un brouillon à valider comme toute réponse (P3-10). Le code la décide (`followUpDecision`) : jamais à un fan à ne plus contacter ni en détresse, jamais de 23 h à 9 h chez elle (reportée à 9 h), jamais rien à vendre tant que l'historique des scripts Reveal manque (P6-01). |
