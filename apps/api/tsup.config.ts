@@ -21,6 +21,7 @@ export default defineConfig({
     'scripts/ops-revoke-sessions': 'src/scripts/ops-revoke-sessions.ts',
     'scripts/ops-reencrypt-sessions': 'src/scripts/ops-reencrypt-sessions.ts',
     'scripts/ops-reencrypt-credentials': 'src/scripts/ops-reencrypt-credentials.ts',
+    'scripts/ops-check-keys': 'src/scripts/ops-check-keys.ts',
   },
   format: 'esm',
   target: 'node22',
