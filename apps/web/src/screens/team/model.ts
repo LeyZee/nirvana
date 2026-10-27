@@ -7,6 +7,8 @@ import type {
   TeamRole,
 } from '@nirvana/contracts';
 
+import { countryName } from '@/lib/country';
+
 /**
  * Équipe › Membres, without React (EQ-01): who shows in which tab, how a status, a rate, a country and an invitation
  * read, and what each refusal of the server says. The server decides; this only says it.
@@ -134,20 +136,6 @@ const CODES =
 
 /** Where the agency's chatters live (Charles, 27/10): first in the list. */
 export const FIRST_COUNTRIES: readonly string[] = ['BJ', 'MG', 'FR'];
-
-const NAMES = new Intl.DisplayNames(['fr'], { type: 'region' });
-
-/** A country's name in French, or its code when the browser does not know it. */
-export const countryName = (code: string): string => NAMES.of(code) ?? code;
-
-/** The flag emoji, from the two regional letters. Windows draws the letters instead, which still reads. */
-export const flagOf = (code: string): string =>
-  String.fromCodePoint(
-    ...code
-      .toUpperCase()
-      .split('')
-      .map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65),
-  );
 
 export interface Country {
   readonly code: string;

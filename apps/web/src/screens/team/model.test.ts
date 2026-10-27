@@ -7,9 +7,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
-  countryName,
   FIRST_COUNTRIES,
-  flagOf,
   formatRate,
   invitationState,
   listMembers,
@@ -21,6 +19,8 @@ import {
   suggestedZone,
   teamSummary,
 } from './model';
+
+import { countryName } from '@/lib/country';
 
 /* Invented members: no real data (ADR 0010). */
 let next = 0;
@@ -117,10 +117,6 @@ describe('countries and zones', () => {
     expect(codes).toHaveLength(249);
     expect(new Set(codes).size).toBe(249);
     expect(FIRST_COUNTRIES.map(countryName)).toEqual(['Bénin', 'Madagascar', 'France']);
-  });
-
-  it('draws a flag from the two letters', () => {
-    expect(flagOf('BJ')).toBe('🇧🇯');
   });
 
   it('proposes the zone of the country, and a real one each time', () => {
