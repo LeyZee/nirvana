@@ -1,6 +1,6 @@
 # 0023. La gestion d'équipe entre dans Nirvana : planning, rapports, paie, routine des créatrices
 
-Statut : accepted (Charles, 27/10/2026, avec ses précisions du même jour : règles d'Imperium inchangées, commission seule, historique repris)
+Statut : accepted (Charles, 27/10/2026, avec ses précisions du même jour : règles d'Imperium inchangées, commission seule, historique repris) ; § Navigation remplacé et § Rôles, § Données et RLS précisés par l'ADR 0024
 Date : 2026-10-27
 Remplace : la ligne « pont Imperium (export) » de la phase 6 (`docs/roadmap.md`) et l'idée d'un Imperium client de l'API Nirvana (`brainstorm/02-architecture-et-stack.md` §1.3)
 

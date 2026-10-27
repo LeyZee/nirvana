@@ -1,7 +1,7 @@
 # EQ-09 PWA de la créatrice : routine, revenus, qui est en poste
-Statut : todo (lot 5 de l'ADR 0023, phase 5 de la roadmap, ID validé par Charles le 27/10/2026)
+Statut : todo (lot 5 de l'ADR 0023, phase 5 de la roadmap, ID validé par Charles le 27/10/2026 ; second temps : l'espace des créatrices passe après celui des chatteurs, Charles, 27/10)
 Phase : 5
-Dépend de : EQ-01, EQ-02, EQ-04 ; la carte de navigation validée et la PR du shell par rôle (ordre dans EQ-01)
+Dépend de : EQ-01, EQ-02, EQ-04, ADR 0024
 Branche : task/eq-09-creator-app
 
 ## Objectif

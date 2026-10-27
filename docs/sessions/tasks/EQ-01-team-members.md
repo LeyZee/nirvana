@@ -1,16 +1,16 @@
 # EQ-01 Équipe : membres, pays, commission, paramètres de paie des plateformes
-Statut : todo (lot 1 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; la carte de navigation est validée avant la première PR d'écran)
+Statut : todo (lot 1 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; ses écrans attendent le shell par rôle, EQ-11)
 Phase : équipe (ADR 0023)
-Dépend de : ADR 0023 ; pour l'écran, la carte de navigation validée et la PR du shell par rôle (ordre ci-dessous)
+Dépend de : ADR 0023, ADR 0024 ; pour l'écran, EQ-11 (ordre ci-dessous)
 Branche : task/eq-01-team-members
 
 ## Objectif
-Ajouter un chatteur ou un manager avec tout ce qu'Imperium savait de lui (pays, commission, statut, notes…), lui donner ses créatrices, et retrouver toute l'équipe dans l'écran des membres (place fixée par la carte de navigation), en plus clair et plus beau qu'Imperium.
+Ajouter un chatteur ou un manager avec tout ce qu'Imperium savait de lui (pays, commission, statut, notes…), lui donner ses créatrices, et retrouver toute l'équipe dans Équipe > Membres (ADR 0024), en plus clair et plus beau qu'Imperium.
 
 ## Contexte à lire
-Ordre avant tout écran de l'équipe (Extension et coordinateur, 27/10) : 1) ADR 0024, rôles et navigation, une fois la carte validée par Charles ; 2) le rôle d'équipe dans `/v1/me` (contrats, par le propriétaire de `packages/contracts`) ; 3) une PR du shell seul : rail configuré par rôle, gardes `beforeLoad`, intertitres Chatting et Agence, « Plus » sur téléphone en feuille de verre, icônes avec geste ; 4) les écrans, à la place que fixe la carte.
+Ordre avant tout écran de l'équipe (ADR 0024) : 1) ADR 0024, rôles et navigation (acceptée par Charles le 27/10) ; 2) le rôle d'équipe dans `/v1/me` (contrats, par le propriétaire de `packages/contracts`) ; 3) le shell par rôle seul (EQ-11) ; 4) les écrans, à la place que fixe l'ADR 0024.
 
-`docs/adr/0023-team-management.md`, `docs/architecture/data-model.md` (§ RLS, tables Better Auth), `docs/architecture/modules.md`, `docs/conventions/security.md`, `docs/design/README.md`, ADR 0011. Concept d'origine : la gestion des chatteurs d'Imperium (`docs/reference/legacy-projects.md`) : Charles (27/10) veut garder tout ce qui y était utile et laisser le reste.
+`docs/adr/0023-team-management.md`, `docs/adr/0024-roles-and-navigation.md`, `docs/architecture/data-model.md` (§ RLS, tables Better Auth), `docs/architecture/modules.md`, `docs/conventions/security.md`, `docs/design/README.md`, ADR 0011. Concept d'origine : la gestion des chatteurs d'Imperium (`docs/reference/legacy-projects.md`) : Charles (27/10) veut garder tout ce qui y était utile et laisser le reste.
 
 ## À faire
 - [ ] Contrats : `TeamMemberSchema`, avec les champs utiles d'Imperium :
@@ -30,10 +30,10 @@ Ordre avant tout écran de l'équipe (Extension et coordinateur, 27/10) : 1) ADR
   - publier une annonce à l'équipe.
   Ce qu'il ne peut pas : changer un taux ou un préréglage de commission, marquer une paie « payée », émettre ou annuler une facture, ouvrir Entraîner, la persona, les clés ou les Réglages de l'agence.
 - [ ] Laissés d'Imperium : taux horaire, identifiant Telegram, mot de passe saisi par l'admin (l'invitation Better Auth le remplace), matrice de permissions par page, rôles `va`, `admin` et `directeur` (le directeur est le propriétaire).
-- [ ] Base (via le propriétaire de `packages/db`, migration à partir de 0015, une par PR) : table `team_members` liée à `user` ; `withMember` qui fixe `app.user_id` et `app.team_scope` calculé par le serveur dans la même transaction, jamais lu dans la requête : `owner` pour le propriétaire (il lit tout ce que lit `agency`), `agency` pour un manager au statut `active`, `self` pour tous les autres. Le troisième scope `owner` (demandé par le propriétaire de `packages/db`, 27/10) précise l'ADR 0023, qui n'en nommait que deux, et sera écrit dans l'ADR des rôles et de la navigation ; politiques fermées par défaut (réglage absent ou nul = aucune ligne). Paramètres de paie d'une plateforme (TVA, commission, devise) et part de l'agence par créatrice : colonnes ou réglages validés par Zod, avec historique daté (un changement s'applique à partir d'une date, jamais en arrière).
+- [ ] Base (via le propriétaire de `packages/db`, migration à partir de 0015, une par PR) : table `team_members` liée à `user` ; `withMember` qui fixe `app.user_id` et `app.team_scope` calculé par le serveur dans la même transaction, jamais lu dans la requête : `owner` pour le propriétaire (il lit tout ce que lit `agency`), `agency` pour un manager au statut `active`, `self` pour tous les autres. Les trois portées sont fixées par l'ADR 0024 ; politiques fermées par défaut (réglage absent ou nul = aucune ligne). Paramètres de paie d'une plateforme (TVA, commission, devise) et part de l'agence par créatrice : colonnes ou réglages validés par Zod, avec historique daté (un changement s'applique à partir d'une date, jamais en arrière).
 - [ ] Module `team` : créer un membre (envoie l'invitation Better Auth), modifier, changer de statut, marquer parti (jamais supprimé ; `creator_ids` vidé et sessions révoquées dans la même transaction), `creator_ids` mis à jour dans la même transaction, `audit_log` pour chaque écriture.
 - [ ] Routes sous `/v1/team/members` : propriétaire et manager lisent tout, un chatteur lit sa fiche ; seul le propriétaire change un taux ou un préréglage, et la base le refuse à tout autre scope.
-- [ ] Écrans (avec le fil propriétaire d'`apps/web`, à la place que fixe la carte de navigation) : liste avec recherche, onglets chatteurs et managers, statut en pastille, préréglage de commission visible ; fiche détaillée (progression des paliers et ventes par créatrice et par plateforme quand EQ-03 et EQ-04 existent, notes internes) ; ajout en un panneau (pays en liste avec drapeau, préréglage de commission en un geste, aperçu du fuseau) ; état vide honnête. Design system, animations de ses jetons, aucune durée en dur.
+- [ ] Écrans (avec le fil propriétaire d'`apps/web`, à la place que fixe l'ADR 0024) : liste avec recherche, onglets chatteurs et managers, statut en pastille, préréglage de commission visible ; fiche détaillée (progression des paliers et ventes par créatrice et par plateforme quand EQ-03 et EQ-04 existent, notes internes) ; ajout en un panneau (pays en liste avec drapeau, préréglage de commission en un geste, aperçu du fuseau) ; état vide honnête. Design system, animations de ses jetons, aucune durée en dur.
 
 ## Critères d'acceptation
 - Tests du domaine : un taux hors bornes est refusé, un changement de taux ne touche pas une date passée, un membre parti ne reçoit plus de shift, un pays inconnu est refusé, le fuseau proposé suit le pays.
