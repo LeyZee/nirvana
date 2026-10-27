@@ -1,5 +1,5 @@
 # P3-14 Heures d'activité de l'agent, par créatrice
-Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
+Statut : in_progress (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 3
 Dépend de : P3-10 (relances, heures calmes), P3-11 (réponse différée, filet « Sans réponse »), EQ-02 (planning, hybride), ADR 0025
 Branche : task/P3-14-agent-hours
@@ -22,8 +22,8 @@ Onglet Horaires par modèle : fuseau d'abord, mode 24/7 par défaut ou créneaux
 - **Hybride** : un chatteur en poste n'est pas borné par ces heures ; l'agent ne reprend que s'il est dans son créneau et que personne n'est en poste (ADR 0025).
 
 ## À faire
-- [ ] Contrat `AgentHours` (fuseau de la créatrice, créneaux de réponse par jour activables, heures calmes des relances, bascule Jour / Nuit) ; stockage en colonne jsonb validée par Zod sur `creators`, sans nouvelle table (Bilan attribue la migration).
-- [ ] `follow-up.ts` et `situation.ts` lisent `AgentHours` au lieu de leurs constantes ; les valeurs par défaut reproduisent le comportement actuel.
+- [x] Contrat `AgentHours` (fuseau de la créatrice, créneaux de réponse par jour activables, heures calmes des relances, bascule Jour / Nuit) ; stockage en colonne jsonb validée par Zod sur `creators`, sans nouvelle table (Bilan attribue la migration).
+- [x] `follow-up.ts` et `situation.ts` lisent `AgentHours` au lieu de leurs constantes ; les valeurs par défaut reproduisent le comportement actuel.
 - [ ] Politique : hors créneau, pas de brouillon ; reprise programmée par le worker ; filet « Sans réponse » muet hors créneau.
 - [ ] Écran (Extension), dans Créatrices, réservé au propriétaire (onglet et adresse, leçon de #217) : la grille et les mots du planning EQ-02 (« 9 h – 1 h » avec espaces insécables, « jusqu'au lendemain »), un en-tête qui dit le fuseau lu (« À l'heure de Nora (Paris) », car le planning se lit à l'heure de l'agence et ces heures à celle de la créatrice), un créneau désactivé grisé en encre pâle, jamais rouge.
 
@@ -35,3 +35,5 @@ Onglet Horaires par modèle : fuseau d'abord, mode 24/7 par défaut ou créneaux
 Le planning des chatteurs (EQ-02).
 
 ## Notes de session
+- 27/10 (Agent, PR 1) : contrat `packages/contracts/src/agent-hours.ts` (schémas, défauts, `replyOpenAt`, `replyOpenedAt`, `nextReplyOpening`, `nextFollowUpAllowed`, `followUpQuietAt`, `nightAt`), relances et Jour / Nuit branchés, `hours` optionnel sur `AgentComposeInput`. Décidé avec Bilan : sans réglage = toujours ouvert (le comportement d'aujourd'hui) ; 9 h – 1 h n'est que la proposition de l'écran (`SUGGESTED_REPLY_SLOTS`).
+- Reste : migration 0024 `creators.agent_hours`, route propriétaire, worker (pas de brouillon hors créneau, reprise à l'ouverture, le plus ancien d'abord), `hours` passé par ComposeInput et FollowUpContext (Bilan) ; filet « Sans réponse » muet hors créneau, compté depuis `replyOpenedAt` (Agent, après la migration) ; écran (Extension).

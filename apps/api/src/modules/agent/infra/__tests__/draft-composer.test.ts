@@ -1,4 +1,4 @@
-import { err, ok, type FanFlags, type MediaDescription } from '@nirvana/contracts';
+import { DEFAULT_AGENT_HOURS, err, ok, type FanFlags, type MediaDescription } from '@nirvana/contracts';
 import type {
   Brief,
   ConversationInput,
@@ -1114,6 +1114,28 @@ describe('createDraftComposer, a follow-up on his silence (P3-10)', () => {
       detail: ['follow_up_quiet_hours'],
       costUsd: 0,
       retryAt: new Date('2026-10-18T07:00:00Z'),
+    });
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('follows her hours when the worker gives them (P3-14)', async () => {
+    const { draftComposer, seen } = composer({}, undefined, limitsOf({}).limits);
+    // Saturday 17 October, 18:00 in Paris; her only slot is Sunday from 14:00 to 20:00.
+    const hours = {
+      ...DEFAULT_AGENT_HOURS,
+      reply: {
+        mode: 'slots' as const,
+        slots: [{ day: 7, startMinute: 840, endMinute: 1200, enabled: true }],
+      },
+    };
+    expect(
+      await draftComposer.compose({ ...FOLLOW_UP, now: new Date('2026-10-17T16:00:00Z'), hours }),
+    ).toEqual({
+      kind: 'held',
+      reason: 'no_reply',
+      detail: ['follow_up_outside_hours'],
+      costUsd: 0,
+      retryAt: new Date('2026-10-18T12:00:00Z'),
     });
     expect(seen.voiceCalls).toBe(0);
   });

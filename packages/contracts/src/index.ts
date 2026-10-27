@@ -1,7 +1,8 @@
-/** Shared Zod schemas and types: auth, the Automatique rule, backups, conversations, creators, dashboard, the desire score, fans (KYC slots, flags), the agent's guard codes, ids, invitation links, money, enums, errors, events, jobs, connector port data, media, settings, persona and its API, scheduling, team and its members, telegram. */
+/** Shared Zod schemas and types: the agent's hours, auth, the Automatique rule, backups, conversations, creators, dashboard, the desire score, fans (KYC slots, flags), the agent's guard codes, ids, invitation links, money, enums, errors, events, jobs, connector port data, media, settings, persona and its API, scheduling, team and its members, telegram. */
 export const CONTRACTS_PACKAGE = '@nirvana/contracts';
 
 export * from './auth';
+export * from './agent-hours';
 export * from './automatic';
 export * from './backups';
 export * from './connector';
