@@ -588,8 +588,10 @@ export type CreateShiftSwapRequestBody = z.input<typeof CreateShiftSwapRequestBo
  * under the rules of a shift set by hand: neither has started nor changed hands or hours since the proposal (otherwise the swap
  * lapses and answers 409 `shift_swap_lapsed_conflict`), and the move puts nobody on two shifts at once, no account under
  * two members, no shift on a member on an approved leave (`shift_member_conflict`, `shift_account_conflict`,
- * `member_on_leave_conflict`, without `details` when the leave is the requester's, and the swap stays proposed). The other proposals on these shifts can no longer be
- * accepted, and lapse just after (ADR 0031).
+ * `member_on_leave_conflict`, without `details` when the leave is the requester's, and the swap stays proposed).
+ * `shift_member_conflict` names in `details.shiftId` only a shift of the colleague's own: when the shift in the way is
+ * the requester's, it comes without `details`, since a colleague's shift is never named (ADR 0031). The other
+ * proposals on these shifts can no longer be accepted, and lapse just after (ADR 0031).
  */
 export const AnswerShiftSwapRequestBodySchema = z.object({ answer: z.enum(['accept', 'decline']) });
 export type AnswerShiftSwapRequestBody = z.infer<typeof AnswerShiftSwapRequestBodySchema>;

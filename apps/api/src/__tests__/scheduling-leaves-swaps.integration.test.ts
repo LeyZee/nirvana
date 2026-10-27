@@ -614,6 +614,19 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
       expect(await holderOf(theoC)).toBe(theo.id);
     });
 
+    it('refuses an acceptance that would put the requester on two shifts, without naming their shift', async () => {
+      const theoD18 = await place(theo, anna, annaMain, 18);
+      const irisD19 = await place(iris, anna, annaSecond, 19);
+      const exchange = swapOf(await propose(theoCookie, theoD18, iris, irisD19));
+      // Placed after the proposal, on Théo, at the hours of the shift that would come back to him.
+      await place(theo, anna, annaMain, 19);
+      const busy = await answer(irisCookie, exchange, 'accept');
+      expect([busy.statusCode, codeOf(busy), detailsOf(busy)]).toEqual([409, 'shift_member_conflict', {}]);
+      expect(await statusOf(exchange)).toBe('proposed');
+      expect(await holderOf(theoD18)).toBe(theo.id);
+      expect(await holderOf(irisD19)).toBe(iris.id);
+    });
+
     it('gives the requester of an exchange no shift during their leave, without saying the leave', async () => {
       const theoD12 = await place(theo, anna, annaMain, 12);
       const irisD13 = await place(iris, anna, annaSecond, 13);

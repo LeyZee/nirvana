@@ -63,11 +63,17 @@ const { platformAccounts, shiftSwapRequests, shifts, teamMembers, user } = schem
 
 /**
  * The shift that keeps a member of a swap off the one they would get, read on the admin connection (it may be on
- * another creator); the shifts the swap moves are not in the way, whoever holds them now.
+ * another creator); the shifts the swap moves are not in the way, whoever holds them now. With `reader`, only a shift
+ * of that member is named (ADR 0031: a colleague's shift never is); `null` when the shift in the way is the other's.
  */
-async function inTheWayOfMovesUnscoped(adminDb: Database, moves: readonly Move[]): Promise<string | null> {
+async function inTheWayOfMovesUnscoped(
+  adminDb: Database,
+  moves: readonly Move[],
+  reader: string | null,
+): Promise<string | null> {
   const moved = moves.map((move) => move.shiftId);
   for (const move of moves) {
+    if (reader !== null && move.to !== reader) continue;
     const [row] = await withAdmin(adminDb, (tx) =>
       tx
         .select({ id: shifts.id })
@@ -211,13 +217,19 @@ class NotAsNoted extends Error {}
  * The shifts change hands in a savepoint, each in its creator, only if each is still as the swap noted it: with its
  * member, its hours, neither cancelled nor started (checked again by the update itself, after any lock it waited
  * on). The member exclusion waits for the end of the moves, so that two shifts at the same hours can be exchanged.
- * An exclusion still violated then answers the module's conflict, with the shift in the way.
+ * An exclusion still violated then answers the module's conflict, with the shift in the way when `write.reader` may
+ * read it: the colleague who accepts names only their own (`null` names any, for the owner and an active manager).
  */
 async function moveShifts(
   tx: Transaction,
   adminDb: Database,
   moves: readonly Move[],
-  write: { readonly by: string; readonly now: Date; readonly allowed: readonly string[] },
+  write: {
+    readonly by: string;
+    readonly now: Date;
+    readonly allowed: readonly string[];
+    readonly reader: string | null;
+  },
   first: (savepoint: Transaction) => Promise<void>,
 ): Promise<void> {
   try {
@@ -248,7 +260,7 @@ async function moveShifts(
     // A swap changes members only, never accounts: the member exclusion is the one a move can break.
     const failure = pgErrorOf(error);
     if (failure?.code !== '23P01' || failure.constraint !== 'shifts_member_overlap_excl') throw error;
-    throw new ShiftMemberConflict(await inTheWayOfMovesUnscoped(adminDb, moves));
+    throw new ShiftMemberConflict(await inTheWayOfMovesUnscoped(adminDb, moves, write.reader));
   }
 }
 
@@ -431,7 +443,8 @@ export function createDrizzleSwapStore(
           if (await colleagues.onLeaveUnscoped(swap.requesterId, back)) throw new MemberOnLeave(null);
         }
         try {
-          await moveShifts(tx, adminDb, moves, { by: actor.userId, now, allowed }, async (savepoint) => {
+          const write = { by: actor.userId, now, allowed, reader: swap.targetMemberId };
+          await moveShifts(tx, adminDb, moves, write, async (savepoint) => {
             await savepoint
               .update(shiftSwapRequests)
               .set({ status: 'accepted', resolvedAt: sql`now()`, resolvedBy: actor.userId, updatedAt: now })
@@ -500,7 +513,8 @@ export function createDrizzleSwapStore(
         }
         await enterCreator(tx, swap.creatorId, allowed);
         try {
-          await moveShifts(tx, adminDb, moves, { by: actor.userId, now, allowed }, async (savepoint) => {
+          const write = { by: actor.userId, now, allowed, reader: null };
+          await moveShifts(tx, adminDb, moves, write, async (savepoint) => {
             await savepoint
               .update(shiftSwapRequests)
               .set({ status: 'reverted', revertedAt: sql`now()`, revertedBy: actor.userId, updatedAt: now })
