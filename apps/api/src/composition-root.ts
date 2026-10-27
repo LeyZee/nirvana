@@ -43,7 +43,7 @@ import { startPlaygroundModule, type PlaygroundModule } from './modules/playgrou
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
-import { postgresRateLimitStore, purgeRateLimitCounters } from './rate-limit-store';
+import { postgresRateLimitStore, purgeRateLimitCounters, RATE_LIMIT_POOL_OPTIONS } from './rate-limit-store';
 import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
 
 /** Every business module, wired. */
@@ -80,9 +80,12 @@ export interface App {
   /** Run by the worker. */
   readonly tasks: TaskList;
   readonly readiness: () => Promise<Readiness>;
-  /** The API's rate limit counters, shared by every instance through Postgres (ADR 0027). */
+  /**
+   * The API's rate limit counters, shared by every instance through Postgres (ADR 0027), on a small pool of their
+   * own with a statement timeout. The worker builds it unused: its pool opens no connection until a first request.
+   */
   readonly rateLimitStore: FastifyRateLimitStoreCtor;
-  /** Closes the queue and both pools; the server and the worker are stopped before. */
+  /** Closes the queue and the pools; the server and the worker are stopped before. */
   shutdown(): Promise<void>;
 }
 
@@ -112,10 +115,12 @@ export interface AppOptions {
 export async function createApp(config: Config, logger: Logger, options: AppOptions = {}): Promise<App> {
   const db = createDbClient(config.DATABASE_URL, POOL_OPTIONS);
   const adminDb = createDbClient(config.DATABASE_ADMIN_URL, { ...POOL_OPTIONS, max: 5 });
+  const rateLimitDb = createDbClient(config.DATABASE_URL, RATE_LIMIT_POOL_OPTIONS);
   // A client losing its connection must not crash the process; the next query reconnects.
   for (const [role, pool] of [
     ['app', db.pool],
     ['admin', adminDb.pool],
+    ['rate_limit', rateLimitDb.pool],
   ] satisfies [string, Pool][]) {
     const onError = (error: Error): void => {
       logger.warn({ err: error, role }, 'database client error');
@@ -450,12 +455,12 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
-    rateLimitStore: postgresRateLimitStore(db.db),
+    rateLimitStore: postgresRateLimitStore({ db: rateLimitDb.db, logger }),
     async shutdown() {
       modules.providers.stop();
       llmLog.stop();
       await jobs.close();
-      await Promise.all([db.close(), adminDb.close()]);
+      await Promise.all([db.close(), adminDb.close(), rateLimitDb.close()]);
     },
   };
 }

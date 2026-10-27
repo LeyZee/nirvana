@@ -3,7 +3,8 @@ import { z } from 'zod';
 /**
  * Error codes and the single error body of the HTTP API (docs/conventions/api.md § Erreurs). A code is stable
  * snake_case; its suffix decides the HTTP status: `*_not_found` 404, `*_invalid` 400, `*_unauthenticated` 401,
- * `*_forbidden` 403, `*_conflict` 409, `*_unprocessable` 422, `*_limited` 429, anything else 500.
+ * `*_forbidden` 403, `*_conflict` 409, `*_unprocessable` 422, `*_limited` 429, `service_unavailable` 503, anything
+ * else 500.
  */
 
 /** Codes produced by the HTTP layer itself; each module documents its own next to its `DomainError` subclasses. */
@@ -15,6 +16,7 @@ export const HTTP_ERROR_CODES = [
   'origin_forbidden',
   'payload_too_large',
   'rate_limited',
+  'service_unavailable',
   'internal_error',
 ] as const;
 export type HttpErrorCode = (typeof HTTP_ERROR_CODES)[number];

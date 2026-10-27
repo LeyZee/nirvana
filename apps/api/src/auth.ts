@@ -251,12 +251,16 @@ export function createAuthRoutes(
     app.decorateRequest('user', null);
     app.decorateRequest('membership', null);
 
-    const perIp = { rateLimit: { max: AUTH_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } };
+    // Both fail closed (security.md): if the counters cannot be read, a refusal (503) beats a burst of passwords.
+    const perIp = {
+      rateLimit: { max: AUTH_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute', skipOnError: false },
+    };
     // Its own counter: the per-IP limiter has already run on this request, `rateLimit()` would stand down.
     const perAccount = app.createRateLimit({
       max: SIGN_IN_PER_ACCOUNT,
       timeWindow: SIGN_IN_ACCOUNT_WINDOW,
       keyGenerator: signInAccountKey,
+      skipOnError: false,
     });
     const forward = async (request: FastifyRequest, reply: FastifyReply) => {
       const body =

@@ -117,6 +117,9 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     max: config.RATE_LIMIT_PER_MINUTE,
     timeWindow: '1 minute',
     ...(deps.rateLimitStore === undefined ? {} : { store: deps.rateLimitStore }),
+    // Fail-open (security.md): a Postgres down already stops most of the API, the limiter must not add to it. The
+    // store logs each failure; sign-in fails closed on its own limiters (auth.ts).
+    skipOnError: true,
     // The plugin throws a 429; the error handler below gives it the common body, `Retry-After` stays.
   });
 
@@ -140,6 +143,18 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
       return reply
         .code(429)
         .send(errorBody(request, 'rate_limited', 'Trop de requêtes, réessaie dans un instant'));
+    }
+    if (error.statusCode === 503) {
+      // A limiter that fails closed could not count (the store has logged why).
+      return reply
+        .code(503)
+        .send(
+          errorBody(
+            request,
+            'service_unavailable',
+            'Service momentanément indisponible, réessaie dans un instant',
+          ),
+        );
     }
     if (error.statusCode === 413) {
       return reply

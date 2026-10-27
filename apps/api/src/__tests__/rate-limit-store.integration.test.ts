@@ -1,11 +1,11 @@
-import { sql } from '@nirvana/db';
+import { createDbClient, sql, type DbClient } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
 import { createLogger } from '../logger';
-import { postgresRateLimitStore, purgeRateLimitCounters } from '../rate-limit-store';
+import { postgresRateLimitStore, purgeRateLimitCounters, RATE_LIMIT_POOL_OPTIONS } from '../rate-limit-store';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
@@ -18,13 +18,14 @@ describe('rate limits shared by every API instance (ADR 0027)', () => {
   let app: App;
   let first: Server;
   let second: Server;
+  let config: ReturnType<typeof testConfig>;
 
   const me = (server: Server, remoteAddress: string) =>
     server.inject({ method: 'GET', url: '/v1/me', remoteAddress });
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
-    const config = testConfig({
+    config = testConfig({
       DATABASE_URL: test.appUrl,
       DATABASE_ADMIN_URL: test.adminUrl,
       RATE_LIMIT_PER_MINUTE: String(PER_MINUTE),
@@ -37,7 +38,7 @@ describe('rate limits shared by every API instance (ADR 0027)', () => {
         logger: createLogger(config),
         routes: app.routes,
         readiness: app.readiness,
-        rateLimitStore: postgresRateLimitStore(app.db.db),
+        rateLimitStore: app.rateLimitStore,
       });
     first = await instance();
     second = await instance();
@@ -123,5 +124,99 @@ describe('rate limits shared by every API instance (ADR 0027)', () => {
       sql`select key from rate_limit_counters order by key`,
     );
     expect(rows.map((row) => row.key)).toEqual(['live', 'recent']);
+  });
+  describe('when the counters cannot be read', () => {
+    const signIn = (server: Server) =>
+      server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email: 'owner@example.test', password: 'correct horse battery' },
+        remoteAddress: '192.0.2.80',
+        headers: { origin: DASHBOARD_ORIGIN },
+      });
+
+    const serverOn = (store: App['rateLimitStore']) =>
+      buildServer({
+        config,
+        logger: createLogger(config),
+        routes: app.routes,
+        readiness: app.readiness,
+        rateLimitStore: store,
+      });
+
+    /** What the store logs: the limiter of each failure, never the client's key. */
+    const warnings: unknown[] = [];
+    const logger = { warn: (object: unknown) => void warnings.push(object) };
+    beforeEach(() => {
+      warnings.length = 0;
+    });
+
+    const brokenStore = postgresRateLimitStore({
+      db: { execute: () => Promise.reject(new Error('connection refused')) },
+      logger,
+    });
+
+    it('lets an ordinary request through, and logs why (fail-open)', async () => {
+      const server = await serverOn(brokenStore);
+      try {
+        const response = await me(server, '192.0.2.70');
+        expect(response.statusCode).toBe(401);
+        expect(warnings).toEqual([expect.objectContaining({ limiter: 'global' })]);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it('refuses a sign-in with a 503 (fail-closed)', async () => {
+      const server = await serverOn(brokenStore);
+      try {
+        const refused = await signIn(server);
+        expect(refused.statusCode).toBe(503);
+        expect(refused.json<{ error: { code: string } }>().error.code).toBe('service_unavailable');
+        expect(warnings).toEqual([expect.objectContaining({ limiter: 'route POST /v1/auth/sign-in/email' })]);
+      } finally {
+        await server.close();
+      }
+    });
+
+    describe('because Postgres is too slow', () => {
+      let limiterDb: DbClient;
+      let server: Server;
+
+      beforeAll(async () => {
+        // The pool the composition root gives the limiter, on the test database.
+        limiterDb = createDbClient(test.appUrl, RATE_LIMIT_POOL_OPTIONS);
+        server = await serverOn(postgresRateLimitStore({ db: limiterDb.db, logger }));
+      });
+
+      afterAll(async () => {
+        await server.close();
+        await limiterDb.close();
+      });
+
+      /** Runs `fn` while another session holds the counters table, as a stuck transaction would. */
+      async function whileLocked<T>(fn: () => Promise<T>): Promise<T> {
+        const holder = await test.admin.pool.connect();
+        try {
+          await holder.query('begin');
+          await holder.query('lock table rate_limit_counters in access exclusive mode');
+          return await fn();
+        } finally {
+          await holder.query('rollback');
+          holder.release();
+        }
+      }
+
+      it('gives up after the statement timeout: an ordinary request passes, a sign-in is refused', async () => {
+        await whileLocked(async () => {
+          const started = Date.now();
+          expect((await me(server, '192.0.2.90')).statusCode).toBe(401);
+          expect((await signIn(server)).statusCode).toBe(503);
+          // Two requests, each held at most the 200 ms timeout (plus the round trips), never a pool's 5 s.
+          expect(Date.now() - started).toBeLessThan(2_000);
+        });
+        expect(warnings).toHaveLength(2);
+      });
+    });
   });
 });

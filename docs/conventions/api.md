@@ -23,7 +23,7 @@ Un seul format, produit par le gestionnaire central :
 { "error": { "code": "conversation_not_found", "message": "Conversation introuvable", "details": {}, "requestId": "…" } }
 ```
 
-- `DomainError.code` → `code` (snake_case stable, documenté dans `packages/contracts/src/errors.ts`) ; mappage HTTP : `*_not_found` → 404, `*_invalid`/validation Zod → 400 (`details` contient les erreurs de champ), `*_unauthenticated` → 401 (pas de session), `*_forbidden` → 403 (rôle ou origine refusés), `*_conflict`/transition d'état interdite → 409, `*_unprocessable` (contenu refusé par une règle métier, une garde par exemple) → 422, limite → 429, le reste → 500 **sans** détail interne.
+- `DomainError.code` → `code` (snake_case stable, documenté dans `packages/contracts/src/errors.ts`) ; mappage HTTP : `*_not_found` → 404, `*_invalid`/validation Zod → 400 (`details` contient les erreurs de champ), `*_unauthenticated` → 401 (pas de session), `*_forbidden` → 403 (rôle ou origine refusés), `*_conflict`/transition d'état interdite → 409, `*_unprocessable` (contenu refusé par une règle métier, une garde par exemple) → 422, limite → 429, `service_unavailable` → 503 (un limiteur qui échoue fermé n’a pas pu compter), le reste → 500 **sans** détail interne.
 - `message` est en français, destiné à l'opérateur, jamais une stack ni une requête SQL.
 
 ## Idempotence et corrélation
