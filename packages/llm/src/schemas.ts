@@ -45,6 +45,29 @@ export const BriefSchema = z.object({
       'real_abuse',
     ]),
   ),
+  /**
+   * What heats him up or cools him down in his last message (P3-12): the code counts his desire score from these,
+   * the brain never gives a number. Absent, nothing read.
+   */
+  desireSignals: z
+    .array(
+      z.enum([
+        'steers_to_intimate',
+        'body_compliment',
+        'asks_about_her_body',
+        'states_desire',
+        'explicit_language',
+        'hot_media_reaction',
+        'roleplay',
+        'changes_subject',
+        'cold_reply',
+        'busy_now',
+        'slows_down',
+        'discomfort',
+      ]),
+    )
+    .max(12)
+    .optional(),
   action: z.enum(['reply', 'offer', 'wait', 'follow_up', 'handoff']),
   replyBrief: z.string().min(1),
   toneHints: z.array(z.string()),

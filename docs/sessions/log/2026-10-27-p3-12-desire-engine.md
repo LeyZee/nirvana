@@ -1,0 +1,20 @@
+# 2026-10-27 — P3-12 Note de désir, part moteur — done
+Fait :
+- `agent/domain/desire.ts` : `desireScore` (signaux du cerveau, intention, sentiment, mesures du code, poids `desire-1`, bornes 0 et 100), `desireNow` (mi-vie de 90 min vers un plancher, à la lecture), `measureDesire` (longueur rapportée à sa médiane, vitesse, emojis suggestifs, messages à la suite), `desireBand`.
+- `BriefSchema.desireSignals` (facultatif, liste fermée) et prompt du cerveau 1.7.0.
+- Politique : `low_desire` remplace `not_sexualizing` dans `offerDecision` ; le seuil d'ouverture s'ajoute à `no_opening` dans `sexualizationDecision`.
+- Persona : `min_desire_to_open` (20 à 70, défaut 40) et `min_desire` (50 à 90, défaut 70), facultatifs ; persona demo à 45 et 75.
+- Composeur : `desire` en entrée (note stockée), `desire` en sortie seulement quand la note bouge, sur un brouillon comme sur un `held` ; jamais recompté.
+- Playground (note dans la trace, retour en arrière compris), évals (`situation.desire`, deux attentes, trois scénarios `full`).
+- Doc : `ai-engine.md` (Brief, politique 5 bis), `persona-schema.md`, fiche.
+Pas fait :
+- Contrat `ComposeInput.desire` et `ComposeResult.desire`, événement `desire_scored`, projection et migration 0022 : Bilan.
+- Écrans (Suivi, lecteur, réglage des seuils) : Extension.
+- Ligne de la note Reveal (après la capture) ; calibration sur le corpus.
+Décisions :
+- Le moteur compare à la note stockée retombée jusqu'à maintenant : un message qui ne la fait pas bouger n'écrit rien, et la retombée continue depuis l'ancien `desire_at`, ce qui garde la projection exacte.
+- `busy_now` pèse −30 : un fan chaud qui dit être au travail sort de « chaud » sur ce seul signal.
+- Test par combinaisons (480 contextes) plutôt qu'une nouvelle dépendance de tests par propriétés.
+Découvertes : aucune.
+Candidats à suppression : aucun.
+Vérifié : pnpm check, pnpm test, pnpm test:integration (37 fichiers) ; évals non lancées (pas de clé xAI ici).

@@ -1,7 +1,6 @@
-# Offre permise : il sexualise après le KYC, âge confirmé, pas d’offre récente. Fan et messages fictifs (ADR 0010).
-description:
-  Il sexualise, âge confirmé, aucune offre depuis longtemps ; le cerveau peut proposer, la politique
-  le permet.
+# Offre permise : il sexualise après le KYC, âge confirmé, déjà chaud, pas d’offre récente. Fan et messages fictifs (ADR 0010).
+description: Il sexualise, âge confirmé, déjà chaud (note de désir 65), aucune offre depuis longtemps ; le
+  cerveau peut proposer, la politique le permet.
 persona_version: demo
 fan_facts:
   - 'prénom : Maxime (fictif)'
@@ -10,6 +9,7 @@ situation:
   known_hours: 60
   age_confirmed: true
   last_offer_hours_ago: 30
+  desire: 65
 history:
   - from: creator
     text: Tu penses à quoi là 😏

@@ -1,6 +1,7 @@
 import { ageOn, PersonaSchema, type Persona } from '@nirvana/contracts';
 import { parse, stringify } from 'yaml';
 
+import { DEFAULT_MIN_DESIRE_TO_OPEN, DEFAULT_SCRIPT_MIN_DESIRE } from '../domain/desire';
 import { DEFAULT_GUARD_SETTINGS, type GuardSettings } from '../domain/guards';
 import type { OfferLimits } from '../domain/policy';
 import type { SexualizationLimits } from '../domain/sexualization';
@@ -10,7 +11,10 @@ export interface PersonaForModels {
   readonly creatorName: string;
   readonly personaSheet: string;
   readonly forbiddenTerms: readonly string[];
-  /** Her pace of scripts (`strategies.script_launch.cooldown_hours`), applied by `offerDecision`, never by a prompt. */
+  /**
+   * Her pace of scripts and the heat they wait for (`strategies.script_launch`), applied by `offerDecision`, never by a
+   * prompt.
+   */
   readonly offerLimits: OfferLimits;
   /** When she opens sexualization or follows him there (`strategies.sexualization`, `strategies.kyc`), applied by code. */
   readonly sexualizationLimits: SexualizationLimits;
@@ -76,10 +80,14 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     forbiddenTerms: [...persona.limits.disgusts, ...persona.limits.never_say].filter(
       (term) => !isPlaceholder(term),
     ),
-    offerLimits: { cooldownHours: persona.strategies.script_launch.cooldown_hours },
+    offerLimits: {
+      cooldownHours: persona.strategies.script_launch.cooldown_hours,
+      minDesire: persona.strategies.script_launch.min_desire ?? DEFAULT_SCRIPT_MIN_DESIRE,
+    },
     sexualizationLimits: {
       initiateAfterHours: persona.strategies.sexualization.initiate_after_hours,
       minHoursBeforeFollowing: persona.strategies.kyc.min_hours_before_following,
+      minDesireToOpen: persona.strategies.sexualization.min_desire_to_open ?? DEFAULT_MIN_DESIRE_TO_OPEN,
     },
     followUps: {
       delaysHours: persona.follow_ups.enabled ? persona.follow_ups.delays_hours : [],

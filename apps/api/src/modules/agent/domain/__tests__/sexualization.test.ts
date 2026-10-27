@@ -7,7 +7,8 @@ const base: SexualizationContext = {
   ageConfirmed: true,
   noExplicit: false,
   fanSexualizes: true,
-  limits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2 },
+  desire: 50,
+  limits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2, minDesireToOpen: 40 },
 };
 
 describe('sexualizationDecision', () => {
@@ -34,6 +35,13 @@ describe('sexualizationDecision', () => {
     expect(sexualizationDecision({ ...calm, relationshipHours: 20 })).toEqual({ kind: 'no_opening' });
     expect(sexualizationDecision(calm)).toEqual({ kind: 'free' });
     expect(sexualizationDecision({ ...calm, ageConfirmed: false })).toEqual({ kind: 'no_opening' });
+  });
+
+  it('opens it herself only once he is warm enough, and follows him whatever his score (P3-12)', () => {
+    const calm = { ...base, fanSexualizes: false };
+    expect(sexualizationDecision({ ...calm, desire: 39 })).toEqual({ kind: 'no_opening' });
+    expect(sexualizationDecision({ ...calm, desire: 40 })).toEqual({ kind: 'free' });
+    expect(sexualizationDecision({ ...base, desire: 0 })).toEqual({ kind: 'free' });
   });
 
   it('stays suggestive with a fan a human set to nothing explicit, and never opens it herself', () => {

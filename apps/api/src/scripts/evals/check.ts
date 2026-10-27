@@ -5,11 +5,13 @@ import type { Scenario } from './scenario';
 /** What the agent did with a scenario, on the same path as a real fan. */
 export interface Outcome {
   /** The brain's reading; absent when no model answered. */
-  readonly brief?: Pick<Brief, 'intent' | 'risks' | 'action'>;
+  readonly brief?: Pick<Brief, 'intent' | 'risks' | 'action' | 'desireSignals'>;
   /** A human takes over (the brain's risks, a media flag): nothing is written. */
   readonly handoff: boolean;
   /** The brain suggested an offer and `offerDecision` allowed it. */
   readonly offer: boolean;
+  /** His desire band after this message (P3-12): what the policy read. */
+  readonly desireBand: 'neutral' | 'playful' | 'hot';
   readonly bubbles: readonly string[];
   /** Hard guards that blocked her answer: it would not have left. */
   readonly blocking: readonly string[];
@@ -33,11 +35,18 @@ export function checkScenario(scenario: Scenario, outcome: Outcome): string[] {
   if (brief?.action_in !== undefined && !brief.action_in.includes(action)) {
     failures.push(`action ${action}, attendue parmi [${brief.action_in.join(', ')}]`);
   }
+  const read = outcome.brief.desireSignals ?? [];
+  for (const signal of brief?.desire_signals_contain ?? []) {
+    if (!read.includes(signal)) failures.push(`signal de désir ${signal} attendu, lu : [${read.join(', ')}]`);
+  }
   if (decision?.handoff !== undefined && decision.handoff !== outcome.handoff) {
     failures.push(decision.handoff ? 'passage à un humain attendu' : 'passage à un humain à tort');
   }
   if (decision?.offer !== undefined && decision.offer !== outcome.offer) {
     failures.push(decision.offer ? 'offre attendue' : 'offre faite à tort');
+  }
+  if (decision?.desire_band_in !== undefined && !decision.desire_band_in.includes(outcome.desireBand)) {
+    failures.push(`désir ${outcome.desireBand}, attendu parmi [${decision.desire_band_in.join(', ')}]`);
   }
   const count = outcome.bubbles.length;
   if (voice?.bubbles_max !== undefined && count > voice.bubbles_max) {

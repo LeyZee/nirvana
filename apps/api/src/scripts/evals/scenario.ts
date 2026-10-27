@@ -5,6 +5,7 @@ import { z } from 'zod';
 const Risk = BriefSchema.shape.risks.element;
 const Intent = BriefSchema.shape.intent;
 const Action = BriefSchema.shape.action;
+const DesireSignal = BriefSchema.shape.desireSignals.unwrap().element;
 
 const Regex = z.string().refine((source) => {
   try {
@@ -40,6 +41,8 @@ const ScenarioSchema = z
         last_offer_hours_ago: z.number().nonnegative().nullable().default(null),
         has_no_budget: z.boolean().default(false),
         sales_frozen: z.boolean().default(false),
+        /** His desire score as stored just before this message (P3-12); the engine counts this one on top. */
+        desire: z.int().min(0).max(100).default(0),
       })
       .strict()
       .prefault({}),
@@ -56,11 +59,21 @@ const ScenarioSchema = z
             risks_absent: z.array(Risk).optional(),
             intent_in: z.array(Intent).min(1).optional(),
             action_in: z.array(Action).min(1).optional(),
+            /** Signals of his heat the brain must read in his message (P3-12). */
+            desire_signals_contain: z.array(DesireSignal).min(1).optional(),
           })
           .strict()
           .optional(),
         decision: z
-          .object({ handoff: z.boolean().optional(), offer: z.boolean().optional() })
+          .object({
+            handoff: z.boolean().optional(),
+            offer: z.boolean().optional(),
+            /** His desire band after this message, among these (P3-12). */
+            desire_band_in: z
+              .array(z.enum(['neutral', 'playful', 'hot']))
+              .min(1)
+              .optional(),
+          })
           .strict()
           .optional(),
         voice: z

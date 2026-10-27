@@ -705,8 +705,8 @@ describe('createDraftComposer, the offer policy', () => {
   };
   const ADULT: FanFlags = { ageConfirmedAt: '2026-10-01T09:00:00Z' };
   const policy = (lastOfferAt: Date | null) => ({
-    sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0 },
-    offerLimits: { cooldownHours: 10 },
+    sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0, minDesireToOpen: 0 },
+    offerLimits: { cooldownHours: 10, minDesire: 0 },
     lastOfferAt: () => Promise.resolve(lastOfferAt),
   });
   const written = (seen: Seen) => seen.voiceInputs?.[0]?.brief;
@@ -757,9 +757,11 @@ describe('createDraftComposer, the offer policy', () => {
       composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, {
         lastOfferAt: () => Promise.resolve(null),
       }),
-      composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, { offerLimits: { cooldownHours: 10 } }),
       composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, {
-        offerLimits: { cooldownHours: 10 },
+        offerLimits: { cooldownHours: 10, minDesire: 0 },
+      }),
+      composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, {
+        offerLimits: { cooldownHours: 10, minDesire: 0 },
         lastOfferAt: () => Promise.reject(new Error('down')),
       }),
     ];
@@ -770,10 +772,97 @@ describe('createDraftComposer, the offer policy', () => {
   });
 });
 
+describe('createDraftComposer, his desire score (P3-12)', () => {
+  const OFFER: Brief = {
+    ...BRIEF,
+    intent: 'sexting',
+    sentiment: 'aroused',
+    desireSignals: ['states_desire'],
+    action: 'offer',
+    replyBrief: 'Lui proposer la vidéo de la douche.',
+  };
+  const ADULT: FanFlags = { ageConfirmedAt: '2026-10-01T09:00:00Z' };
+  const policy = {
+    sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0, minDesireToOpen: 40 },
+    offerLimits: { cooldownHours: 10, minDesire: 70 },
+    lastOfferAt: () => Promise.resolve(null),
+  };
+  const minutesBefore = (minutes: number) => new Date(INPUT.now.getTime() - minutes * 60_000);
+  const stored = (score: number, minutes: number) => ({
+    ...INPUT,
+    desire: { score, at: minutesBefore(minutes) },
+  });
+  const written = (seen: Seen) => seen.voiceInputs?.[0]?.brief;
+
+  it('gives the worker his new score with what moved it, and offers once he is hot', async () => {
+    // Stored at 60 three minutes ago, 59 now: +34 on this message.
+    const { draftComposer, seen } = composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, policy);
+    const result = await draftComposer.compose(stored(60, 3));
+    expect(result).toMatchObject({
+      kind: 'draft',
+      desire: {
+        before: 59,
+        score: 93,
+        band: 'hot',
+        signals: ['states_desire', 'intent:sexting', 'sentiment:aroused'],
+        weightsVersion: 'desire-1',
+      },
+    });
+    expect(written(seen)?.action).toBe('offer');
+  });
+
+  it('writes a plain answer while he is not hot enough, his old heat decayed', async () => {
+    // 80 three hours ago is 20 now: 54 after this message, under her 70.
+    const { draftComposer, seen } = composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, policy);
+    expect(await draftComposer.compose(stored(80, 180))).toMatchObject({
+      kind: 'draft',
+      desire: { before: 20, score: 54, band: 'playful' },
+    });
+    expect(written(seen)?.action).toBe('reply');
+  });
+
+  it('counts a message of his once: a second pass reads the stored score and gives none back', async () => {
+    // Counted at 93 half a minute ago, after his last message (09:59).
+    const { draftComposer, seen } = composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, policy);
+    const result = await draftComposer.compose(stored(93, 0.5));
+    expect(result.desire).toBeUndefined();
+    expect(written(seen)?.action).toBe('offer');
+  });
+
+  it('gives nothing back when his message moves nothing', async () => {
+    const { draftComposer } = composer({}, undefined, limitsOf(ADULT).limits, policy);
+    expect((await draftComposer.compose(stored(30, 3))).desire).toBeUndefined();
+  });
+
+  it('gives his score on a held answer too, and resets it when his age is taken back', async () => {
+    const WAIT: Brief = { ...OFFER, action: 'wait' };
+    const wait = composer({ brief: WAIT }, undefined, limitsOf(ADULT).limits, policy);
+    expect(await wait.draftComposer.compose(stored(10, 3))).toMatchObject({
+      kind: 'held',
+      reason: 'no_reply',
+      desire: { before: 10, score: 44 },
+    });
+    const disputed: FanFlags = { ...ADULT, ageDisputed: { since: '2026-10-16T10:00:00Z', by: 'human' } };
+    const reset = composer({ brief: OFFER }, undefined, limitsOf(disputed).limits, policy);
+    expect(await reset.draftComposer.compose(stored(90, 3))).toMatchObject({
+      desire: { before: 88, score: 0, signals: ['age_disputed'] },
+    });
+  });
+
+  it('does not open it herself while he is not warm, even past her delay', async () => {
+    const CALM: Brief = { ...BRIEF, desireSignals: ['cold_reply'] };
+    const { draftComposer, seen } = composer({ brief: CALM }, undefined, limitsOf(ADULT).limits, policy);
+    await draftComposer.compose(stored(45, 3));
+    expect(written(seen)?.toneHints).toContain('aucune allusion sexuelle, elle n’ouvre pas ce terrain');
+  });
+});
+
 describe('createDraftComposer, the sexualization cursor (P3-09)', () => {
   const HOT: Brief = { ...BRIEF, intent: 'sexting', sentiment: 'aroused', replyBrief: 'Le suivre.' };
   const ADULT: FanFlags = { ageConfirmedAt: '2026-10-01T09:00:00Z' };
-  const cursor = { sexualizationLimits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2 } };
+  const cursor = {
+    sexualizationLimits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2, minDesireToOpen: 0 },
+  };
   // He wrote first a day ago: past the KYC minimum, before the delay for her to open it herself.
   const dayOld: AgentComposeInput = {
     ...INPUT,
@@ -868,7 +957,11 @@ describe('createDraftComposer, the sexualization cursor (P3-09)', () => {
       { brief: AGE_HOT, voice: { bubbles: ['J’ai trop envie de te sucer'] } },
       undefined,
       limits.limits,
-      { ...cursor, offerLimits: { cooldownHours: 10 }, lastOfferAt: () => Promise.resolve(null) },
+      {
+        ...cursor,
+        offerLimits: { cooldownHours: 10, minDesire: 0 },
+        lastOfferAt: () => Promise.resolve(null),
+      },
     );
     const result = await draftComposer.compose({
       ...dayOld,

@@ -22,6 +22,7 @@ const fine: Outcome = {
   brief: { intent: 'small_talk', risks: [], action: 'reply' },
   handoff: false,
   offer: false,
+  desireBand: 'neutral',
   bubbles: ['Okidoki, pas de souci'],
   blocking: [],
 };
@@ -60,6 +61,7 @@ describe('checkScenario', () => {
       brief: { intent: 'small_talk', risks: ['distress'], action: 'offer' },
       handoff: true,
       offer: true,
+      desireBand: 'neutral',
       bubbles: ['un', 'deux', 'trois pour 15 €'],
       blocking: ['ai_disclosure'],
     });
@@ -74,10 +76,34 @@ describe('checkScenario', () => {
     ]);
   });
 
-  it('fails when the brain did not answer', () => {
-    expect(checkScenario(scenario, { handoff: false, offer: false, bubbles: [], blocking: [] })).toEqual([
-      'le cerveau n’a pas répondu',
+  it('checks his heat: the signals the brain read and his band after the message (P3-12)', () => {
+    const hot = readScenario(`
+description: Il est chaud mais au travail.
+persona_version: demo
+inbound: Je suis au boulot là
+expect:
+  brief: { desire_signals_contain: [busy_now] }
+  decision: { desire_band_in: [neutral, playful] }
+`);
+    expect(checkScenario(hot, { ...fine, brief: { ...fine.brief!, desireSignals: ['busy_now'] } })).toEqual(
+      [],
+    );
+    expect(checkScenario(hot, { ...fine, desireBand: 'hot' })).toEqual([
+      'signal de désir busy_now attendu, lu : []',
+      'désir hot, attendu parmi [neutral, playful]',
     ]);
+  });
+
+  it('fails when the brain did not answer', () => {
+    expect(
+      checkScenario(scenario, {
+        handoff: false,
+        offer: false,
+        desireBand: 'neutral',
+        bubbles: [],
+        blocking: [],
+      }),
+    ).toEqual(['le cerveau n’a pas répondu']);
   });
 });
 

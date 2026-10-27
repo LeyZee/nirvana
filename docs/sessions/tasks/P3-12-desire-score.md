@@ -45,12 +45,12 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 - **Jamais** chez la créatrice (ADR 0023), jamais sur Telegram avec des données du fan (ADR 0020).
 
 ## À faire
-- [ ] `desireSignals` dans `BriefSchema` et le prompt du cerveau (le message du fan reste une donnée, règle 4) ; relecture Bilan pour `packages/llm` et `packages/contracts`.
-- [ ] `agent/domain/desire.ts` : `desireScore(previous, signals, measured, now)` pur, avec la retombée, les poids et la liste d'emojis versionnés ; tests.
-- [ ] Champs de persona optionnels `min_desire_to_open` et `min_desire`, bornes dans `PERSONA_BOUNDS`, valeurs de la persona `personas/demo`.
-- [ ] `sexualizationDecision` (seuil dans `no_opening`) et `offerDecision` (`low_desire` à la place de `not_sexualizing`) ; raison lisible de `low_desire` dans `apps/web/src/agent/causes.ts`.
-- [x] `ComposeInput.desire`, `desire` sur les résultats `draft` et `held`, projection, événement `desire_scored` écrit par le worker, migration 0022 (Bilan).
-- [ ] Le moteur rend `desire` avec chaque résultat calculé sur un message du fan (Agent).
+- [x] `desireSignals` dans `BriefSchema` et le prompt du cerveau (le message du fan reste une donnée, règle 4) ; relecture Bilan pour `packages/llm` et `packages/contracts`.
+- [x] `agent/domain/desire.ts` : `desireScore(previous, signals, measured, now)` pur, avec la retombée, les poids et la liste d'emojis versionnés ; tests.
+- [x] Champs de persona optionnels `min_desire_to_open` et `min_desire`, bornes dans `PERSONA_BOUNDS`, valeurs de la persona `personas/demo`.
+- [x] `sexualizationDecision` (seuil dans `no_opening`) et `offerDecision` (`low_desire` à la place de `not_sexualizing`). Aucun écran ne montre aujourd'hui pourquoi une offre est refusée (`causes.ts` ne porte que les causes de passation) : le libellé de `low_desire` viendra avec cet affichage.
+- [x] `ComposeInput.desire`, `desire` sur les résultats `draft` et `held`, projection, événement `desire_scored` écrit par le worker, migration 0022 (Bilan, #221).
+- [x] Le moteur rend `desire` avec chaque résultat calculé sur un message du fan (Agent).
 - [ ] Affichage dans le Suivi et le lecteur, réglage des seuils dans l'écran Persona (Extension).
 - [ ] Ligne de la note Reveal (après la capture, contre `FakeReveal` d'abord).
 - [ ] Calibration hors dépôt sur le corpus de vente (`/mnt/project-files/onlychat/corpus-vente/`) : la note juste avant chacune des ventes et avant chaque refus ; les chiffres agrégés vont au journal, jamais un message.
@@ -67,3 +67,5 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 Le routage vers un chatteur selon la note (`PROPOSED-hybrid-routing-by-value.md`), les autres colonnes du Suivi (`PROPOSED-tracking-sales.md`, qui lit cette note).
 
 ## Notes de session
+
+27/10 soir (fil Agent) : part moteur livrée. `desireScore`, `desireNow`, `measureDesire` dans `agent/domain/desire.ts` (poids `desire-1`, `busy_now` à −30 pour qu'un fan chaud au travail sorte de « chaud ») ; le moteur rend `desire` (avant, après, bande, signaux, version) seulement quand la note bouge et ne recompte jamais un message déjà compté (`desire.at` ≥ son dernier message) ; playground (`désir` dans la trace) ; évals : `situation.desire`, `desire_signals_contain`, `desire_band_in`, trois scénarios `full`. Reste : contrat, worker, projection et migration (Bilan), écrans (Extension), ligne de la note Reveal, calibration.

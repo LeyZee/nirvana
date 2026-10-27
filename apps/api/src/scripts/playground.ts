@@ -205,6 +205,14 @@ function print(turn: PlaygroundTurn): void {
     );
     console.log(dim(`         ${b.replyBrief}`));
   }
+  if (showBrief && turn.desire !== undefined) {
+    const d = turn.desire;
+    console.log(
+      dim(
+        `  désir  ${String(d.score)} (${d.band})${d.signals.length > 0 ? ` · ${d.signals.join(', ')}` : ''}`,
+      ),
+    );
+  }
   if (turn.briefFailure !== undefined) console.log(red(`  brief  échec (${turn.briefFailure})`));
   for (const bubble of turn.bubbles)
     console.log(turn.isBlocked ? red(`  ✗ ${bubble}`) : pink(`  ${persona.creatorName} › ${bubble}`));

@@ -263,13 +263,17 @@ describe('persona file', () => {
     const persona = readPersonaFile(read('messalina/v0.0.0.yaml'), 'Messa', '2026-10-17');
     expect(persona.creatorName).toBe('Messa');
     expect(persona.forbiddenTerms).toEqual([]);
+    // Without her own thresholds, his desire score waits for the defaults (P3-12).
+    expect(persona.offerLimits.minDesire).toBe(70);
+    expect(persona.sexualizationLimits.minDesireToOpen).toBe(40);
   });
 
   it('takes the first name, the disgusts and the forbidden words of a filled persona', () => {
     const persona = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
     expect(persona.creatorName).toBe('Elena');
-    // Her pace of scripts comes from her persona, for the policy (strategies.script_launch).
-    expect(persona.offerLimits).toEqual({ cooldownHours: 12 });
+    // Her pace of scripts and the heat they wait for come from her persona, for the policy (strategies.script_launch).
+    expect(persona.offerLimits).toEqual({ cooldownHours: 12, minDesire: 75 });
+    expect(persona.sexualizationLimits.minDesireToOpen).toBe(45);
     expect(persona.forbiddenTerms).toEqual([
       'Insultes',
       'Humiliation',
@@ -288,13 +292,13 @@ describe('persona file', () => {
     expect(personaSheet).toContain('Une question à la fois');
     expect(personaSheet).toContain('targets:');
     expect(personaSheet).not.toMatch(
-      /date_of_birth|gender|timezone|response_delay|cooldown|max_messages|initiate_after|follow_ups|notifications/,
+      /date_of_birth|gender|timezone|response_delay|cooldown|max_messages|initiate_after|min_desire|follow_ups|notifications/,
     );
   });
 
   it('gives the code her pace, her pet names and whether she splits her messages', () => {
     const persona = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-17');
-    expect(persona.offerLimits).toEqual({ cooldownHours: 12 });
+    expect(persona.offerLimits).toEqual({ cooldownHours: 12, minDesire: 75 });
     expect(persona.splitMessages).toBe(true);
     expect(persona.petNames).toEqual(['Toi', 'Beau gosse', 'Mon grand']);
   });
@@ -323,15 +327,16 @@ describe('playground session, the offer policy and the cursor', () => {
     action: 'offer',
     replyBrief: 'Lui proposer la vidéo de la douche.',
   };
-  const session = (voiceInputs: VoiceInput[], withPace: boolean) =>
+  // His desire score is counted for real here; 0 lets the pace and the cursor be tested on their own.
+  const session = (voiceInputs: VoiceInput[], withPace: boolean, minDesire = 0) =>
     createPlaygroundSession({
       gateway: fakeGateway({ bubbles: ['Mmh tu me chauffes 😏'] }, voiceInputs, [], OFFER),
       creatorName: 'Lina',
       personaSheet: 'fiche',
       guardSettings: settings,
       now: () => new Date('2026-10-17T20:00:00Z'),
-      sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0 },
-      ...(withPace && { offerLimits: { cooldownHours: 10 } }),
+      sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0, minDesireToOpen: 0 },
+      ...(withPace && { offerLimits: { cooldownHours: 10, minDesire } }),
     });
 
   it('confirms his age when he states it, then lets the policy decide each offer on the simulated clock', async () => {
@@ -351,6 +356,23 @@ describe('playground session, the offer policy and the cursor', () => {
     await session(voiceInputs, true).handleFanMessage('T’es trop bonne');
     expect(voiceInputs[0]?.brief.action).toBe('reply');
     expect(voiceInputs[0]?.brief.replyBrief).toContain('ralentit');
+  });
+
+  it('offers only once his desire score reaches hers, as it builds message after message (P3-12)', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    const playground = session(voiceInputs, true, 70);
+    const scores: number[] = [];
+    for (const text of [
+      'J’ai 30 ans et t’es trop bonne',
+      'Tu me rends fou',
+      'J’ai envie de toi',
+      'Montre-moi',
+    ])
+      scores.push((await playground.handleFanMessage(text)).desire?.score ?? -1);
+    expect(scores.every((score, i) => i === 0 || score > (scores[i - 1] ?? 0))).toBe(true);
+    expect(scores.at(-2)).toBeLessThan(70);
+    expect(scores.at(-1)).toBeGreaterThanOrEqual(70);
+    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['reply', 'reply', 'reply', 'offer']);
   });
 
   it('offers nothing without her pace of scripts', async () => {
