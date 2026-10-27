@@ -29,3 +29,5 @@ Emprunté :
 
 Laissé :
 - Python, l'absence de base de données, les scripts à usage unique.
+
+**27/10/2026** : Charles veut l'atelier de scripts d'OnlyScript refait de zéro dans Nirvana, « avec le système des cartons en mieux travaillé », plus robuste et dans le même design. C'est le second temps, après la capture Reveal et le catalogue (P6-01) ; la fiche proposée `PROPOSED-script-studio.md` pose d'abord la question de la source des scripts (Reveal ou Nirvana), à trancher par une ADR.

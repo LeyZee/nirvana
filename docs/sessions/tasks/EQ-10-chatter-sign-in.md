@@ -27,6 +27,6 @@ Chaque chatteur se connecte à son propre espace, depuis son téléphone ou son 
 - Aucun vrai prénom, numéro ni pièce dans les tests et les captures (ADR 0010).
 
 ## Hors périmètre
-Envoi d'e-mails, notifications sur le téléphone, double authentification, espace de la créatrice (EQ-09).
+Envoi d'e-mails, notifications sur le téléphone (EQ-12), double authentification (EQ-15), espace de la créatrice (EQ-09).
 
 ## Notes de session
