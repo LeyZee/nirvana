@@ -1,6 +1,7 @@
 import type { FanFlags, HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
+import { followUpDecision } from '../domain/follow-up';
 import { holdDecision, protectionFor, protectionWhileAnswering, type HoldDecision } from '../domain/hold';
 import { withoutOrders } from '../domain/injection';
 import type { OfferLimits } from '../domain/policy';
@@ -38,6 +39,14 @@ export interface AgentComposeInput {
     readonly notes: readonly string[];
     readonly spentMinor: number;
     readonly firstMessageAt: Date | null;
+  };
+  /** A follow-up on his silence (P3-10), not an answer to a message of his. */
+  readonly followUp?: {
+    /** The index of her delay, from 0. */
+    readonly step: number;
+    readonly steps: number;
+    /** His last message: the silence it follows up on. */
+    readonly silentSince: Date;
   };
 }
 
@@ -88,6 +97,8 @@ type AgentComposeResult =
       readonly cause?: HandoffCause;
       readonly detail: readonly string[];
       readonly costUsd: number;
+      /** A follow-up put off (her quiet hours): the same one is due again at that time. */
+      readonly retryAt?: Date;
     };
 
 export interface AgentDraftComposer {
@@ -97,6 +108,8 @@ export interface AgentDraftComposer {
 export interface DraftComposerDeps {
   readonly gateway: LlmGateway;
   readonly persona: ComposerPersona;
+  /** The spirit of her follow-ups (`PersonaForModels.followUps.spirit`), for the voice. */
+  readonly followUpSpirit?: string | null;
   /** Her clock (day and night, the time she answers at), from the creator of the conversation. */
   readonly timeZoneOf: (creatorId: string) => Promise<string>;
   /** Version of the voice prompt, written on each draft with the model that answered (ADR 0019). */
@@ -267,9 +280,90 @@ async function keepWhileAnswering(
   }
 }
 
+const NOT_FOLLOWED_UP = (detail: string, costUsd = 0): Held => ({
+  kind: 'held',
+  reason: 'no_reply',
+  detail: [detail],
+  costUsd,
+});
+
+/**
+ * A follow-up on his silence (P3-10): his limits read first, then `followUpDecision`, then the voice and every
+ * guard. A silent fan is no emergency: whatever stops it (limits unknown, no model, no budget) writes nothing and
+ * alerts nobody; only a blocking guard hands it to a human, as for an answer.
+ */
+async function followUp(
+  deps: DraftComposerDeps,
+  input: AgentComposeInput,
+  asked: NonNullable<AgentComposeInput['followUp']>,
+): Promise<AgentComposeResult> {
+  // His limits unknown, nothing is written to him: never a message to a fan who may have been stopped.
+  if (deps.limits === undefined) return NOT_FOLLOWED_UP('follow_up_limits_unknown');
+  let flags: FanFlags;
+  try {
+    flags = await deps.limits.flags(input.creatorId, input.fanId);
+  } catch {
+    return NOT_FOLLOWED_UP('follow_up_limits_unreadable');
+  }
+  const timeZone = await deps.timeZoneOf(input.creatorId);
+  const decision = followUpDecision({
+    step: asked.step,
+    steps: asked.steps,
+    flags,
+    now: input.now,
+    timeZone,
+  });
+  if (decision.kind === 'skip') return NOT_FOLLOWED_UP(decision.reason);
+  if (decision.kind === 'later') return { ...NOT_FOLLOWED_UP(decision.reason), retryAt: decision.at };
+  if (voiceUnavailable(deps.gateway)) return NOT_FOLLOWED_UP('follow_up_no_voice');
+  const composed = await composeTurn(deps.gateway, deps.persona, {
+    history: input.history.map((m) => ({
+      from: m.direction === 'inbound' ? 'fan' : 'creator',
+      text: m.text,
+    })),
+    fanText: '',
+    media: [],
+    fanNotes: input.fan.notes.join('\n'),
+    situation: {
+      now: input.now,
+      timeZone,
+      relationshipStartedAt: input.fan.firstMessageAt ?? input.now,
+      spentCents: input.fan.spentMinor,
+    },
+    trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
+    followUp: {
+      silentHours: (input.now.getTime() - asked.silentSince.getTime()) / 3_600_000,
+      spirit: deps.followUpSpirit ?? null,
+    },
+  });
+  const { costUsd } = composed;
+  if (composed.droppedNotes !== undefined) {
+    deps.onDroppedNotes?.({ conversationId: input.conversationId, count: composed.droppedNotes.length });
+  }
+  if (composed.voiceFailure !== undefined) {
+    const reason = composed.voiceFailure.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
+    return { kind: 'held', reason, detail: failureDetail(composed.voiceFailure), costUsd };
+  }
+  const blocking = composed.violations.filter((v) => v.severity === 'blocking');
+  if (blocking.length > 0) {
+    return { kind: 'held', reason: 'guard_blocked', detail: blocking.map((v) => v.code), costUsd };
+  }
+  return {
+    kind: 'draft',
+    bubbles: composed.bubbles,
+    softViolations: composed.violations.map((v) => v.code),
+    costUsd,
+    factsProposed: [],
+    ...(composed.model !== undefined && {
+      voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
+    }),
+  };
+}
+
 export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer {
   return {
     async compose(input) {
+      if (input.followUp !== undefined) return followUp(deps, input, input.followUp);
       const stop = await stopped(deps.limits, input);
       if ('held' in stop) return stop.held;
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');

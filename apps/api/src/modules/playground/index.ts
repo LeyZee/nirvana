@@ -23,7 +23,7 @@ export { FAN_PRESETS, findPreset } from './domain/fan-presets';
 export { ratingRecord } from './infra/engine';
 export { createPlaygroundGateway, createVoiceVariant } from './infra/gateways';
 export { readPersonaFile, withExamples } from '../agent/index';
-export { createPlaygroundSession, type PlaygroundTurn } from './infra/session';
+export { createPlaygroundSession, type PlaygroundFollowUp, type PlaygroundTurn } from './infra/session';
 
 export interface PlaygroundModule {
   readonly name: 'playground';

@@ -907,3 +907,95 @@ describe('createDraftComposer, the sexualization cursor (P3-09)', () => {
     expect(notSaved).toEqual([{ conversationId: 'conversation-1', limit: 'ageConfirmedAt' }]);
   });
 });
+
+describe('createDraftComposer, a follow-up on his silence (P3-10)', () => {
+  // She answered him at 21:59 the day before, he has been silent since: the first follow-up, at noon her time.
+  const FOLLOW_UP: AgentComposeInput = {
+    ...INPUT,
+    history: [
+      { direction: 'inbound', text: 'Bonne soirée', at: new Date('2026-10-16T21:58:00Z') },
+      { direction: 'outbound', text: 'Toi aussi ✨', at: new Date('2026-10-16T21:59:00Z') },
+    ],
+    followUp: { step: 0, steps: 2, silentSince: new Date('2026-10-16T21:58:00Z') },
+  };
+
+  it('writes a light follow-up with no brain call, nothing to buy and nothing sexual', async () => {
+    const { limits } = limitsOf({});
+    const { draftComposer, seen } = composer({}, undefined, limits);
+    expect(await draftComposer.compose(FOLLOW_UP)).toEqual({
+      kind: 'draft',
+      bubbles: ['Coucou toi ✨'],
+      softViolations: [],
+      costUsd: 0.002,
+      voice: { voicePrompt: '1.2.0', voiceModel: 'grok-4.7' },
+      factsProposed: [],
+    });
+    expect(seen.brainInputs).toHaveLength(0);
+    const brief = seen.voiceInputs?.[0]?.brief;
+    expect(brief?.action).toBe('reply');
+    expect(brief?.replyBrief).toContain('depuis 12 h');
+    expect(brief?.replyBrief).toContain('sans rien proposer de payant');
+    expect(brief?.toneHints).toContain('aucune allusion sexuelle, elle n’ouvre pas ce terrain');
+  });
+
+  it('never writes to a fan nobody may write to, nor without his limits: no alert either', async () => {
+    const { draftComposer, seen } = composer({}, undefined, limitsOf({ doNotContact: true }).limits);
+    expect(await draftComposer.compose(FOLLOW_UP)).toEqual({
+      kind: 'held',
+      reason: 'no_reply',
+      detail: ['follow_up_do_not_contact'],
+      costUsd: 0,
+    });
+    expect(await composer().draftComposer.compose(FOLLOW_UP)).toMatchObject({
+      reason: 'no_reply',
+      detail: ['follow_up_limits_unknown'],
+    });
+    const unreadable = limitsOf({}, { failRead: true }).limits;
+    expect(await composer({}, undefined, unreadable).draftComposer.compose(FOLLOW_UP)).toMatchObject({
+      reason: 'no_reply',
+      detail: ['follow_up_limits_unreadable'],
+    });
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('puts it off to 9:00 her time in her quiet hours', async () => {
+    const { draftComposer, seen } = composer({}, undefined, limitsOf({}).limits);
+    // 23:30 UTC is 01:30 in Paris (summer time): back at 9:00, 07:00 UTC.
+    expect(await draftComposer.compose({ ...FOLLOW_UP, now: new Date('2026-10-17T23:30:00Z') })).toEqual({
+      kind: 'held',
+      reason: 'no_reply',
+      detail: ['follow_up_quiet_hours'],
+      costUsd: 0,
+      retryAt: new Date('2026-10-18T07:00:00Z'),
+    });
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('writes nothing past her last delay, nor without a voice', async () => {
+    const limits = limitsOf({}).limits;
+    expect(
+      await composer({}, undefined, limits).draftComposer.compose({
+        ...FOLLOW_UP,
+        followUp: { step: 2, steps: 2, silentSince: new Date('2026-10-16T21:58:00Z') },
+      }),
+    ).toMatchObject({ reason: 'no_reply', detail: ['follow_up_plan_over'] });
+    expect(
+      await composer({ hasKey: false }, undefined, limits).draftComposer.compose(FOLLOW_UP),
+    ).toMatchObject({ reason: 'no_reply', detail: ['follow_up_no_voice'] });
+  });
+
+  it('hands a follow-up a hard guard blocks to a human, the explicit one whatever his age', async () => {
+    const limits = limitsOf({ ageConfirmedAt: '2026-10-01T09:00:00.000Z' }).limits;
+    const { draftComposer } = composer({ voice: { bubbles: ['Je suis une IA'] } }, undefined, limits);
+    expect(await draftComposer.compose(FOLLOW_UP)).toMatchObject({
+      kind: 'held',
+      reason: 'guard_blocked',
+      detail: ['ai_disclosure'],
+    });
+    const explicit = composer({ voice: { bubbles: ['Je pense à ta bite'] } }, undefined, limits);
+    expect(await explicit.draftComposer.compose(FOLLOW_UP)).toMatchObject({
+      reason: 'guard_blocked',
+      detail: ['explicit_before_age'],
+    });
+  });
+});

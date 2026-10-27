@@ -37,7 +37,7 @@ Légende : **appliquée** (code et test), **partielle**, **manquante**, **autrem
 | Jamais de déclaration d'amour | appliquée | garde `love_declaration` ; `guards.test.ts` |
 | Jamais de rencontre concrète ; un « un jour peut-être » vague reste permis | appliquée | garde `meeting_promise` (rencontres concrètes seulement) ; `guards.test.ts` |
 | Petits noms pris dans une liste fermée | appliquée (souple) | garde `pet_name` sur `behavior.pet_names` ; `guards.test.ts` |
-| Ne jamais laisser un fan sans réponse, toujours dire au revoir | manquante | rien ne relance une conversation restée sans réponse ; dépend des relances (plus bas) |
+| Ne jamais laisser un fan sans réponse, toujours dire au revoir | partielle | relances aux délais de la persona (P3-10 : `conversation.follow_up`, `followUpDecision`) ; « dire au revoir » reste au prompt |
 
 ### KYC et sexualisation
 
@@ -69,7 +69,7 @@ Légende : **appliquée** (code et test), **partielle**, **manquante**, **autrem
 | Après un refus : comprendre, insister un peu, bouder une fois, lâcher | partielle | `maySulk` (pas de bouderie si ventes gelées, fan fragile ou à ne plus contacter) est testé mais **sans appelant** ; la garde `guilt_trip` (souple) lit la culpabilisation |
 | Pas de bouderie après un achat, ni avec un fan qui a parlé d'argent, de ses limites ou de détresse | partielle | `maySulk` ne lit ni l'achat récent ni le manque d'argent du tour |
 | Après chaque achat, de l'attention, pas de nouvelle vente tout de suite | manquante | aucun signal d'achat dans le chemin de l'agent (attend les événements de vente de Reveal) |
-| Relance automatique tous les X jours, au plus deux relances de vente | manquante | `follow_ups` et `strategies.post_offer.delay_days` sont dans le schéma de persona, aucun job ne les lit |
+| Relance automatique tous les X jours, au plus deux relances de vente | partielle | relances de lien aux délais de `follow_ups` (P3-10) ; aucune relance ne vend tant que l'historique des scripts manque (P6-01), `post_offer.delay_days` non lu |
 
 ### Mémoire du fan
 
@@ -89,8 +89,8 @@ Le gel `money_trouble` ne s'efface jamais de lui-même, même après un achat : 
 
 Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 
-- [ ] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `P3-09-sexualization-cursor.md`.
-- [ ] Relances et « jamais sans réponse » : `P3-10-follow-ups.md` (partage avec Bilan pour le worker).
+- [x] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `P3-09-sexualization-cursor.md`.
+- [x] Relances et « jamais sans réponse » : `P3-10-follow-ups.md` (partage avec Bilan pour le worker).
 - [ ] Scripts déjà reçus, packs refusés, dossier Jour / Nuit, première offre, attention après achat : après P6-01.
 
 ## Critères d'acceptation

@@ -34,6 +34,7 @@ export { withoutOrders } from './domain/injection';
 /** @public */
 export { offerDecision, offerSignals, type OfferContext, type OfferLimits } from './domain/policy';
 export type { SexualizationLimits } from './domain/sexualization';
+export { followUpDecision, type FollowUpDecision } from './domain/follow-up';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,
@@ -102,11 +103,33 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     voicePrompt: loadPrompt('voice').header.version,
     offerLimits: persona.offerLimits,
     sexualizationLimits: persona.sexualizationLimits,
+    followUpSpirit: persona.followUps.spirit,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),
     ...(options.onLimitsNotSaved !== undefined && { onLimitsNotSaved: options.onLimitsNotSaved }),
   });
+}
+
+/** Her follow-up delays: `conversations`' `FollowUpPlan` port, matched by shape. */
+export interface AgentFollowUpPlan {
+  delaysHours(creatorId: string): Promise<readonly number[]>;
+}
+
+/**
+ * Her follow-up delays, read once from the persona the composer writes with (`follow_ups`): none when she has them
+ * off. Wired only beside `startDraftComposer`, which writes the follow-ups `conversation.follow_up` asks for (P3-10).
+ */
+export async function startFollowUpPlan(options: {
+  readonly personaPath: string;
+}): Promise<AgentFollowUpPlan> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { delaysHours } = readPersonaFile(
+    await readFile(options.personaPath, 'utf8'),
+    'Messa',
+    today,
+  ).followUps;
+  return { delaysHours: () => Promise.resolve(delaysHours) };
 }
 
 /**
