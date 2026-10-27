@@ -27,7 +27,8 @@ export function holdDecision(brief: {
   if (risks.length > 0) return { kind: 'handoff', detail: risks };
   if (brief.action === 'handoff')
     return { kind: 'handoff', detail: brief.risks.length > 0 ? [...brief.risks] : ['brain'] };
-  // He has nothing to answer yet (« attends, je reviens ») : she stays quiet, the follow-up comes later.
+  // He has nothing to answer yet (« attends, je reviens ») : she stays quiet until he writes again. No follow-up is
+  // scheduled after a wait: one is only scheduled after a message of hers (PROPOSED-method-gaps.md).
   if (brief.action === 'wait') return { kind: 'no_reply', detail: ['wait'] };
   return { kind: 'answer' };
 }
