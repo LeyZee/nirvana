@@ -242,7 +242,6 @@ export const deadline = (at: Date): string => DAY.format(at).replace(':', ' h ')
 export type TeamRefusalCode = TeamMemberErrorCode | 'role_forbidden';
 
 /** What each refusal says, in the words of the screen (contracts `TEAM_MEMBER_ERROR_CODES`). */
-
 export const ERROR_MESSAGES: Readonly<Record<TeamRefusalCode, string>> = {
   role_forbidden: 'Ton accès à l’équipe a changé. Recharge la page.',
   member_not_found: 'Ce membre n’existe plus. Recharge la page.',
