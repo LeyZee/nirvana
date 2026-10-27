@@ -219,7 +219,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   });
   const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
   const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
-  const persona = createPersonaModule({ db: db.db, requireRole });
+  const persona = createPersonaModule({
+    db: db.db,
+    requireRole,
+    recentLogin: createRequireRecentLogin(auth),
+  });
   const team = createTeamModule({
     db: db.db,
     creators: {
@@ -318,6 +322,14 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     guard,
     ...(composer !== undefined && { composer }),
     ...(followUps !== undefined && { followUps }),
+    replyHours: {
+      of: async (creatorId) => {
+        const view = await persona.creators.agentHours(creatorId);
+        if (view?.invalidStored === true)
+          logger.warn({ creatorId }, 'agent hours: stored setting unreadable, defaults used');
+        return view === null ? null : { hours: view.hours, timeZone: view.timeZone };
+      },
+    },
   });
   const modules: Modules = {
     backups: startBackupsModule({
@@ -401,6 +413,12 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       JOB_PAYLOADS['conversation.record_facts'],
       logger,
       (payload, context) => modules.conversations.jobs.recordFacts(payload, context.logger),
+    ),
+    'conversation.reopen': defineTask(
+      'conversation.reopen',
+      JOB_PAYLOADS['conversation.reopen'],
+      logger,
+      (payload, context) => modules.conversations.jobs.reopen(payload, context.logger),
     ),
     'connector.dispatch': defineTask(
       'connector.dispatch',

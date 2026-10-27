@@ -3,7 +3,11 @@ import {
   DraftIdSchema,
   jobKeyFor,
   newId,
+  nextReplyOpening,
   queueNameFor,
+  replyOpenAt,
+  reopenJobKey,
+  type AgentHours,
   type HandoffCause,
   type JobPayload,
 } from '@nirvana/contracts';
@@ -19,6 +23,7 @@ import type {
   FanDirectory,
   HoldReason,
   JobLogger,
+  ReplyHours,
   Transaction,
   UnitOfWork,
 } from '../../domain/ports';
@@ -36,6 +41,8 @@ export interface RespondDeps {
   readonly fans: Pick<FanDirectory, 'activeFacts'>;
   /** The engine; without it the draft stays empty and the operator writes it (P0-05 behaviour). */
   readonly composer?: DraftComposer;
+  /** Her hours (P3-14); without them she is always open, as before. */
+  readonly replyHours?: ReplyHours;
 }
 
 /** Messages the engine reads. */
@@ -153,12 +160,61 @@ async function stillPending(
 }
 
 /**
+ * No draft out of her hours (P3-14): the conversation stays `pending`, his message waits, and her next opening answers
+ * it. Every deferral of hers points at one `conversation.reopen` job (its key), which answers all the fans who
+ * wrote, the longest wait first. A wait she chose (P3-11) leaves the conversation at rest, so it keeps its own job,
+ * at the opening, with `waitedFor`.
+ */
+async function deferReply(
+  tx: Transaction,
+  conversation: Conversation,
+  until: Date,
+  payload: JobPayload<'conversation.respond'>,
+  at: Date,
+): Promise<void> {
+  await appendEvent(
+    tx,
+    conversation,
+    { type: 'reply_deferred', payload: { reason: 'outside_hours', until: until.toISOString() } },
+    { actor: 'system', correlationId: payload.correlationId, at },
+  );
+  if (payload.waitedFor !== undefined) {
+    await tx.jobs.enqueue('conversation.respond', payload, {
+      queueName: queueNameFor(conversation.id),
+      jobKey: jobKeyFor('conversation.respond', conversation.id),
+      runAt: until,
+    });
+    return;
+  }
+  await tx.jobs.enqueue(
+    'conversation.reopen',
+    { creatorId: conversation.creatorId, correlationId: payload.correlationId },
+    { jobKey: reopenJobKey(conversation.creatorId), runAt: until },
+  );
+}
+
+/**
+ * Out of her reply slots (P3-14), the opening of her next slot: no draft until then, whoever is on shift. A chatter on
+ * shift is not bound by her hours, but answers in Reveal (ADR 0025): a draft of the agent at 4:00 would serve nobody,
+ * and her hours exist so that she does not answer at 4:00. `null` when she may answer now.
+ */
+function closedUntil(
+  her: { readonly hours: AgentHours; readonly timeZone: string } | null,
+  now: Date,
+): Date | null {
+  if (her === null || replyOpenAt(her.hours, her.timeZone, now)) return null;
+  const opening = nextReplyOpening(her.hours, her.timeZone, now);
+  // Her hours always have an active slot (the contract); stored hours that had none never put a job off to now.
+  return opening.getTime() > now.getTime() ? opening : null;
+}
+
+/**
  * `conversation.respond`, after the debounce (message-flow.md §1). Three steps, so that no lock is held while the
  * engine thinks (seconds): read the gates and the context; compose outside any transaction; re-lock and write,
  * unless the fan wrote again meanwhile (the next debounce answers) or a gate closed. Never sends anything: the
  * draft waits for an operator (copilot). Replayed after a crash, it finds the conversation past `pending`.
  */
-export function createRespondJob({ uow, clock, voice, fans, composer }: RespondDeps) {
+export function createRespondJob({ uow, clock, voice, fans, composer, replyHours }: RespondDeps) {
   return async (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> => {
     const waitedFor = payload.waitedFor === undefined ? null : new Date(payload.waitedFor);
     // Before the engine: if the lock closed (the live rate fell, the voice changed), automatic is over for her.
@@ -169,9 +225,16 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
     });
     if (closed) logger.info({}, 'respond: Automatique closed, back to the copilot');
     const draftId = newId(DraftIdSchema);
+    const hours = replyHours === undefined ? null : await replyHours.of(payload.creatorId);
+    const until = closedUntil(hours, clock.now());
     const read = await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);
       if (conversation === null || !(await stillPending(tx, conversation, logger, waitedFor))) return null;
+      if (until !== null) {
+        await deferReply(tx, conversation, until, payload, clock.now());
+        logger.info({ until: until.toISOString() }, 'respond: out of her hours, deferred');
+        return null;
+      }
       return {
         conversation,
         history: await tx.messages.history(conversation.id, HISTORY_LIMIT),
@@ -195,6 +258,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
       history: read.history,
       fan: { ...read.stats, notes: notes.map(noteLine) },
       ...(waitedFor !== null && { waited: 1 }),
+      ...(hours !== null && { hours: hours.hours }),
       ...(read.conversation.desireScore !== null &&
         read.conversation.desireAt !== null && {
           desire: { score: read.conversation.desireScore, at: read.conversation.desireAt },

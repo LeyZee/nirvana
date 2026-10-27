@@ -262,3 +262,22 @@ export function nextFollowUpAllowed(hours: AgentHours, timeZone: string, after: 
   }
   return null;
 }
+
+/** `GET /v1/creators/:id/agent-hours` (P3-14): her hours as the agent reads them, on her clock. */
+export const AgentHoursViewSchema = z.object({
+  hours: AgentHoursSchema,
+  /** `hours` are `DEFAULT_AGENT_HOURS`: no setting stored, or one that no longer reads (`invalidStored`). */
+  isDefault: z.boolean(),
+  /**
+   * A setting is stored but no longer passes `AgentHoursSchema` (a rule of the contract hardened since): the agent
+   * follows the defaults, and the screen says so instead of a quiet « Par défaut ».
+   */
+  invalidStored: z.boolean(),
+  /** Her clock (`creators.timezone`): every minute above is read on it. */
+  timeZone: z.string().min(1),
+});
+export type AgentHoursView = z.infer<typeof AgentHoursViewSchema>;
+
+/** `PUT /v1/creators/:id/agent-hours`: her hours, or `null` to go back to the defaults. */
+export const SetAgentHoursBodySchema = z.object({ hours: AgentHoursSchema.nullable() });
+export type SetAgentHoursBody = z.infer<typeof SetAgentHoursBodySchema>;

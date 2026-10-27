@@ -11,6 +11,7 @@ import type {
   FollowUpPlan,
   HoldReason,
   JobLogger,
+  ReplyHours,
   Transaction,
   UnitOfWork,
 } from '../../domain/ports';
@@ -30,6 +31,8 @@ export interface FollowUpDeps {
   readonly fans: Pick<FanDirectory, 'activeFacts'>;
   readonly composer?: DraftComposer;
   readonly followUps?: FollowUpPlan;
+  /** Her hours (P3-14): when a follow-up may go out; without them, the defaults. */
+  readonly replyHours?: ReplyHours;
 }
 
 /** Why a follow-up does not go out: the silence it was for is over, or nothing may be written now. */
@@ -68,7 +71,7 @@ async function staleReason(
  * The engine decides whether a follow-up goes out and writes it; it becomes a draft a human approves, never a send.
  * A follow-up that no longer applies is cancelled with `follow_up_cancelled`; a replay finds its draft written.
  */
-export function createFollowUpJob({ uow, clock, fans, composer, followUps }: FollowUpDeps) {
+export function createFollowUpJob({ uow, clock, fans, composer, followUps, replyHours }: FollowUpDeps) {
   return async (payload: JobPayload<'conversation.follow_up'>, logger: JobLogger): Promise<void> => {
     const anchor = new Date(payload.anchorAt);
     const jobKey = followUpJobKey(payload.conversationId);
@@ -116,6 +119,7 @@ export function createFollowUpJob({ uow, clock, fans, composer, followUps }: Fol
     if (read === null || composer === undefined) return;
 
     const notes = await fans.activeFacts(read.conversation.creatorId, read.conversation.fanId);
+    const hours = replyHours === undefined ? null : await replyHours.of(read.conversation.creatorId);
     const now = clock.now();
     const input: ComposeInput = {
       creatorId: read.conversation.creatorId,
@@ -129,6 +133,7 @@ export function createFollowUpJob({ uow, clock, fans, composer, followUps }: Fol
       history: read.history,
       fan: { ...read.stats, notes: notes.map(noteLine) },
       followUp: { step: payload.step, steps, silentSince: anchor },
+      ...(hours !== null && { hours: hours.hours }),
     };
     const source = read.history.findLast((message) => message.author === 'fan') ?? null;
 

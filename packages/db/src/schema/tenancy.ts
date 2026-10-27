@@ -1,19 +1,31 @@
 import { PlatformSchema, SessionStateSchema } from '@nirvana/contracts';
-import { customType, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { check, customType, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 
 import { createdAt, enumCheck, enumText, id, tenantPolicy, timestampTz } from './columns';
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 
 /** The tenant. Out of RLS: it has no `creator_id`, the server reads it through `withAdmin`. */
-export const creators = pgTable('creators', {
-  id: id(),
-  displayName: text('display_name').notNull(),
-  timezone: text('timezone').notNull(),
-  /** `CreatorSettings` (packages/contracts), camelCase keys. */
-  settings: jsonb('settings').notNull().default({}),
-  createdAt: createdAt(),
-});
+export const creators = pgTable(
+  'creators',
+  {
+    id: id(),
+    displayName: text('display_name').notNull(),
+    timezone: text('timezone').notNull(),
+    /** `CreatorSettings` (packages/contracts), camelCase keys. */
+    settings: jsonb('settings').notNull().default({}),
+    /** `AgentHours` (packages/contracts, P3-14), validated on read and write; `null` reads as `DEFAULT_AGENT_HOURS`. */
+    agentHours: jsonb('agent_hours'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      'creators_agent_hours_object_check',
+      sql`${t.agentHours} is null or jsonb_typeof(${t.agentHours}) = 'object'`,
+    ),
+  ],
+);
 
 export const platformAccounts = pgTable(
   'platform_accounts',

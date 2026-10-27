@@ -250,7 +250,8 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
             queue_name => ${options.queueName ?? null},
             run_at => ${options.runAt?.toISOString() ?? null}::timestamptz,
             max_attempts => ${options.maxAttempts ?? JOB_MAX_ATTEMPTS[job]}::int,
-            job_key => ${options.jobKey ?? null}
+            job_key => ${options.jobKey ?? null},
+            job_key_mode => ${options.jobKeyMode ?? 'replace'}
           )`,
         );
       },

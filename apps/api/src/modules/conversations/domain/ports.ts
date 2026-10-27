@@ -1,5 +1,6 @@
 import type {
   Actor,
+  AgentHours,
   ConversationDetail,
   ConversationEventView,
   ConversationId,
@@ -177,6 +178,11 @@ interface JobOptions {
   readonly jobKey?: string;
   readonly runAt?: Date;
   readonly maxAttempts?: number;
+  /**
+   * With a key: `replace` (the default) moves a waiting job to this run; `preserve_run_at` keeps its time and takes
+   * this payload, so that a debounce under way is not cut short.
+   */
+  readonly jobKeyMode?: 'replace' | 'preserve_run_at';
 }
 
 /** Enqueues inside the current transaction (outbox, ADR 0006): a rollback drops the job with the state. */
@@ -260,6 +266,14 @@ export interface BubbleGuard {
  */
 export interface GuardReadContext {
   readonly history: readonly { readonly from: 'fan' | 'creator'; readonly text: string }[];
+}
+
+/**
+ * Her hours (P3-14) and the clock they are read on (`creators.timezone`), implemented by `persona`: the defaults when
+ * none is stored. `null` when she does not exist.
+ */
+export interface ReplyHours {
+  of(creatorId: CreatorId): Promise<{ readonly hours: AgentHours; readonly timeZone: string } | null>;
 }
 
 /** The fan as `conversations` needs it; implemented by the `fans` module. */
@@ -373,6 +387,8 @@ export interface ComposeInput {
    * Absent until he is first scored.
    */
   readonly desire?: { readonly score: number; readonly at: Date };
+  /** Her hours (P3-14) as stored; absent, the defaults. They set her night and when a follow-up may go out. */
+  readonly hours?: AgentHours;
 }
 
 /**
