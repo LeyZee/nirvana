@@ -11,17 +11,17 @@ Le rail, la barre du téléphone et les routes du CRM dépendent du rôle, avant
 `docs/adr/0024-roles-and-navigation.md` en entier, `docs/design/README.md` (gestes des icônes, verre seulement sur ce qui flotte, contenu sur plaques), `packages/design-system/README.md`, le shell actuel d'`apps/web` (`AppShell`, routeur, `shell.css`, `SubNav`), la relecture du fil propriétaire d'`apps/web` sur #157.
 
 ## À faire
-- [ ] Configuration du rail par rôle (propriétaire, manager, chatteur) dans l'ordre de l'ADR 0024, à la place de la liste statique ; `NavItem.to` élargi aux routes nouvelles. La créatrice a sa PWA (EQ-09).
+- [ ] Configuration du rail par rôle (propriétaire, manager, chatteur) dans l'ordre de l'ADR 0024, à la place de la liste statique ; `NavItem.to` élargi aux routes nouvelles, en français comme les routes existantes (`/creatrices`, `/suivi`, `/reglages`) : `/aujourdhui`, `/equipe`, `/paie`, `/planning`, `/commissions`, `/moi`. La créatrice a sa PWA (EQ-09).
 - [ ] Un onglet n'apparaît que lorsque son écran existe : pas d'onglet vide ni grisé.
 - [ ] Intertitres discrets Chatting et Agence dans le rail ; la lentille suit sans changement.
 - [ ] Gardes `beforeLoad` sur `context.user` : une route interdite ramène sur le premier onglet du rôle (Aujourd'hui pour un chatteur, dès qu'EQ-10 le livre ; le Dashboard pour un manager). Les refus du serveur restent la vraie barrière.
-- [ ] Téléphone : cinq emplacements, dont **Plus** quand il en faut davantage ; Plus ouvre une feuille de verre ; `sectionOf` rattache les sections débordées à Plus pour que l'onglet actif reste juste.
+- [ ] Téléphone : cinq emplacements, dont **Plus** quand il en faut davantage ; Plus ouvre une feuille de verre, qui est un dialogue modal accessible (focus piégé dedans, fermeture par Échap, retour du focus sur Plus) ; `sectionOf` rattache les sections débordées à Plus pour que l'onglet actif reste juste.
 - [ ] Icônes Équipe, Paie, Moi et Plus, chacune avec son geste, dessinées dans le design system.
 - [ ] Vérifier l'en-tête de la Paie entre 821 et 1 100 px de large ; repli : défilement horizontal de la `SubNav`.
 
 ## Critères d'acceptation
-- Tests : chaque rôle voit exactement ses onglets, dans l'ordre de l'ADR 0024 ; un chatteur qui ouvre `/settings` revient sur le premier onglet de son rôle ; sur téléphone, Plus est actif quand la section affichée y est rangée.
-- Le rail du propriétaire est inchangé tant qu'aucun écran de l'équipe n'existe.
+- Tests : chaque rôle voit exactement ses onglets, dans l'ordre de l'ADR 0024 ; un chatteur qui ouvre `/reglages` revient sur le premier onglet de son rôle ; la feuille Plus se ferme par Échap et garde le focus ; sur téléphone, Plus est actif quand la section affichée y est rangée.
+- Le rail du propriétaire suit l'ADR 0024 dès cette PR : ses onglets, leur ordre et l'intertitre Chatting ; l'intertitre Agence n'apparaît que lorsque Équipe ou Paie existe.
 - Aucune durée en dur ; captures avant et après, ordinateur et téléphone, Nuit et Jour.
 
 ## Hors périmètre

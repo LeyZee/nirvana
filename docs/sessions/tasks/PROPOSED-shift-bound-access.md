@@ -8,7 +8,7 @@ Branche : task/<id>-shift-bound-access
 Un chatteur ne lit les fans et les conversations de ses créatrices que pendant son shift, plus une courte marge, pour qu'un chatteur qui s'en va ne parte pas avec la liste des gros fans.
 
 ## Contexte
-Aujourd'hui, un `operator` lit tout ce que `creator_ids` lui ouvre, à toute heure. Dans une agence, le départ d'un chatteur avec les fans de ses créatrices est le risque le plus coûteux. Le Suivi du chatteur ne montre déjà que les passations `sale` qui lui sont routées (ADR 0024) ; la fiche du fan, sa mémoire et la liste des fans restent ouvertes.
+Aujourd'hui, un `operator` lit tout ce que `creator_ids` lui ouvre, à toute heure. Dans une agence, le départ d'un chatteur avec les fans de ses créatrices est le risque le plus coûteux. Le filtre du serveur prévu en prérequis d'EQ-08 et d'EQ-10 limite un chatteur aux conversations qui lui sont routées (ADR 0024) ; la fiche du fan, sa mémoire et la liste des fans restent ouvertes, à toute heure.
 
 ## À faire
 - [ ] Règle dans le code, testée : un chatteur (`team_role = chatter`, scope `self`) lit fans, conversations et passations d'une créatrice seulement si `onShift` le place sur elle, avec une marge avant et après réglée par le propriétaire. Un manager actif et le propriétaire ne sont pas bornés.
