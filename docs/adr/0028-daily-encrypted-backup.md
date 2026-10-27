@@ -1,6 +1,6 @@
 # 0028. Export quotidien chiffré de la base, hors de Neon
 
-Statut : accepted (Charles, 27/10 17h27)
+Statut : accepted (Charles, 27/10 17h27) ; § 1 outils et § 2 `--no-privileges` remplacés par l’ADR 0029
 Date : 2026-10-27
 
 ## Contexte

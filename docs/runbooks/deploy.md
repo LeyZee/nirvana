@@ -14,6 +14,7 @@ Rien n'envoie à un fan tant que `connector_config.writes` n'est pas ouvert pour
 | `api` | même image | l'API, `/health` et `/ready` |
 | `worker` | même image, `node dist/worker.js` | les jobs (Graphile Worker), jamais de HTTP |
 | `web` | `apps/web/Dockerfile` | le dashboard, et `/v1/` renvoyé vers l'API : **seul service public** |
+| `backup` | `ops/db-export/Dockerfile` | l'export quotidien chiffré hors Neon, chaque nuit à 3 h (ADR 0028, § 4) |
 
 Le tout est décrit par `docker-compose.prod.yml`. L'API n'a pas de domaine : le navigateur l'atteint par `https://<domaine>/v1/`, à travers le nginx de `web`.
 
@@ -64,6 +65,7 @@ Toutes dans Coolify → Environment Variables, marquées « secret » quand c'es
 | `EXTENSION_DEVICE_TOKEN` | `openssl rand -hex 24` (48 caractères) |
 | `TRUST_PROXY_HOPS` | `2` (le proxy de Coolify, puis le nginx de `web`) ; défaut du compose |
 | `PLAYGROUND_PERSONA_PATH` | chemin **dans le conteneur** de la persona réelle (§ 1.5) ; sans lui, aucun brouillon pour un vrai fan |
+| `BACKUP_*` | § 4.1 ; sans elles, l'export de la nuit échoue et l'alerte le signale |
 | `SENTRY_DSN`, `LANGFUSE_*`, `S3_*`, `VAPID_*` | facultatifs, vides tant que le service n'existe pas |
 
 Les clés des services IA (xAI, Google, Mistral, ElevenLabs) ne sont **pas** des variables en production : elles se collent dans Réglages › Modèles IA › Services (ADR 0016). Les deux clés de chiffrement se gardent aussi hors du serveur (gestionnaire de mots de passe) : les perdre rend illisibles les sessions et les clés stockées.
@@ -109,9 +111,18 @@ Une PR fusionnée dans `main` déclenche le déploiement. Rien à faire à la ma
 
 ## 4. Sauvegardes
 
-- **PITR Neon** (§ 1.1) : retour à n'importe quel instant des 7 derniers jours. C'est la sauvegarde en service dès le premier jour ; procédure dans `restore.md` § A.
-- **Export quotidien chiffré hors Neon** (`operations.md`) : **pas encore en place**. Il faut un job (`pg_dump`, chiffrement `age`, envoi vers un bucket) et une clé de déchiffrement gardée hors du serveur. À faire avant la mise en service de la paie, et dans tous les cas avant d'y mettre des données réelles qu'on ne pourrait pas recréer.
+- **PITR Neon** (§ 1.1) : retour à n'importe quel instant des 7 derniers jours ; procédure dans `restore.md` § A.
+- **Export quotidien chiffré hors Neon** (ADR 0028, service `backup`) : chaque nuit à 3 h, heure de Paris, un dump complet, relu avant envoi, chiffré pour une clé publique, envoyé chez Hetzner. Chaque export laisse une ligne dans `backup_runs`. Restauration et essai trimestriel : `restore.md` § B et § C.
 - Les volumes du serveur ne contiennent rien d'irremplaçable : `training` (notes du playground) et la persona montée (dont l'original est hors serveur).
+
+### 4.1 Mettre l'export en service
+
+Une fois, avant toute donnée réelle qu'on ne pourrait pas recréer, et dans tous les cas avant la paie (EQ-17). Une session Remote Control peut faire les étapes 1 et 4 sur le PC ; Charles fait les étapes 2 et 3 dans les consoles.
+
+1. **La paire de clés `age`, sur le PC**, jamais sur le serveur : `age-keygen -o nirvana-backup.key`. La ligne `# public key: age1…` donne `BACKUP_AGE_RECIPIENT`. Le fichier `nirvana-backup.key` est la clé privée : deux copies, le gestionnaire de mots de passe et une copie papier, avec à côté `SESSION_ENCRYPTION_KEYS` et `CREDENTIALS_ENCRYPTION_KEYS` (sans elles, une restauration rend illisibles les sessions et les clés stockées). Chaque rotation de ces clés (`rotate-secrets.md`) met cette copie à jour.
+2. **Le bucket**, Hetzner → Object Storage, même région que le VPS : un bucket `nirvana-backups` avec le **versioning** et le **verrou d'objets** (Object Lock, mode gouvernance, 30 jours), une règle de cycle de vie qui supprime les objets de plus de 30 jours. Les factures sur dix ans (EQ-17) auront **leur propre bucket**, jamais celui-ci.
+3. **Deux clés d'accès** : une pour le serveur, qui peut écrire et rien d'autre (ni lister, ni supprimer) ; une en lecture seule pour l'essai trimestriel, gardée avec la clé privée. Dans Coolify, avec la première : `BACKUP_S3_ENDPOINT` (`https://<région>.your-objectstorage.com`), `BACKUP_S3_REGION` (`fsn1`, `nbg1`…), `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, et `BACKUP_AGE_RECIPIENT`. `BACKUP_DATABASE_URL` reste vide : le service prend `DATABASE_ADMIN_URL`, dont le rôle a `BYPASSRLS` (§ 1.1), sans quoi `pg_dump` échoue sur les tables en `FORCE ROW LEVEL SECURITY`.
+4. **Premier export sans attendre la nuit** : Coolify → `backup` → Terminal, `/app/export.sh`. Il affiche `backup: backups/nirvana-<date>.tar.age (<taille> bytes, sha256 <empreinte>)` et la ligne de `backup_runs` passe à `succeeded`. Puis jouer tout de suite l'essai de `restore.md` § C.
 
 ## 5. Coupe-circuit
 
