@@ -81,3 +81,11 @@ export type ShiftId = z.infer<typeof ShiftIdSchema>;
 /** A weekly shift that makes the shifts of the weeks ahead (EQ-02). */
 export const ShiftTemplateIdSchema = uuid.brand<'ShiftTemplateId'>();
 export type ShiftTemplateId = z.infer<typeof ShiftTemplateIdSchema>;
+
+/** A member's request to be away for whole days, decided by the agency (EQ-02, ADR 0031). */
+export const LeaveRequestIdSchema = uuid.brand<'LeaveRequestId'>();
+export type LeaveRequestId = z.infer<typeof LeaveRequestIdSchema>;
+
+/** A chatter's offer to give or exchange a shift with a colleague, who accepts or declines it (EQ-02, ADR 0031). */
+export const ShiftSwapRequestIdSchema = uuid.brand<'ShiftSwapRequestId'>();
+export type ShiftSwapRequestId = z.infer<typeof ShiftSwapRequestIdSchema>;

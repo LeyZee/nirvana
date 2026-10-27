@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { PlatformSchema } from './enums';
 import {
   CreatorIdSchema,
+  LeaveRequestIdSchema,
   PlatformAccountIdSchema,
   ShiftIdSchema,
+  ShiftSwapRequestIdSchema,
   ShiftTemplateIdSchema,
   TeamMemberIdSchema,
 } from './ids';
@@ -56,6 +58,16 @@ import { CalendarDaySchema, MemberColorSchema } from './team-members';
  * (`platform_account_not_found` otherwise), and the database holds the pair by a composite foreign key
  * `(platform_account_id, creator_id)` to `platform_accounts (id, creator_id)`, so that no row can open the wrong
  * creator in `shiftCreatorIds`.
+ *
+ * Leaves and swaps (ADR 0031). A leave is the member's, not a creator's: whole days of their own zone, asked by them,
+ * approved or refused by the owner or an active manager (never by the member themselves), once no shift of theirs
+ * covers it any more. While it is approved, no shift lands on them: by hand, by a template (the occurrence shows in
+ * `conflicts` as `member_on_leave`) or by a swap. A swap is between chatters, without a manager (Charles, 27/10): a
+ * chatter gives a shift that has not started to an active colleague of the same creator, or exchanges it for one of
+ * theirs; the colleague accepts or declines, and an acceptance moves the shifts at once, under the rules of a shift set
+ * by hand. The owner and an active manager see every swap and can revert one before either shift starts. The server
+ * decides a leave's approval and every write that puts a shift on a member under one lock per member, so that an
+ * approval and a new shift at the same moment cannot both win.
  */
 
 /** Slot lengths that divide a day, so the slots tile it (4 × 6 h by default, like Imperium's grid). */
@@ -129,10 +141,10 @@ export const ShiftSchema = z.object({
 export type Shift = z.infer<typeof ShiftSchema>;
 
 /**
- * `POST /v1/scheduling/shifts` (owner, active manager) → 201 `ShiftSchema`. The member is `active` and works on this
- * creator, the account is hers, both instants fall on a minute, the shift lasts `SHIFT_MAX_MINUTES` at most and ends
- * after now. A member is never on two shifts at once, and an account never has two members at once: either answers
- * 409 with the shift in the way.
+ * `POST /v1/scheduling/shifts` (owner, active manager) → 201 `ShiftSchema`. The member is `active`, works on this
+ * creator and is not on an approved leave then (409 `member_on_leave_conflict`), the account is hers, both instants
+ * fall on a minute, the shift lasts `SHIFT_MAX_MINUTES` at most and ends after now. A member is never on two shifts at
+ * once, and an account never has two members at once: either answers 409 with the shift in the way.
  */
 export const CreateShiftBodySchema = z.object({
   creatorId: CreatorIdSchema,
@@ -144,11 +156,12 @@ export const CreateShiftBodySchema = z.object({
 export type CreateShiftBody = z.infer<typeof CreateShiftBodySchema>;
 
 /**
- * `PATCH /v1/scheduling/shifts/:shiftId` (owner, active manager) → `ShiftSchema`. Before it starts: another member, or
- * other times, under the rules of a new shift. Under way: only an earlier `endsAt`. One still after now shortens it;
- * one at or before now stops it, at the minute of the request: `stoppedAt` is set and the access window closes with
- * the shift, without the end margin (a shift stopped in the minute it started is cancelled instead). Ended: 409
- * `shift_ended_conflict`. A template's shift changed by hand stays changed.
+ * `PATCH /v1/scheduling/shifts/:shiftId` (owner, active manager) → 200 `ShiftSchema`, or 204 without a body when the
+ * change cancels the shift. Before it starts: another member, or other times, under the rules of a new shift. Under
+ * way: only an earlier `endsAt`. One still after now shortens it; one at or before now stops it, at the minute of the
+ * request: `stoppedAt` is set and the access window closes with the shift, without the end margin. A shift stopped in
+ * the minute it started is cancelled instead, like a `DELETE`, and answers 204: a cancelled shift is never sent back.
+ * Ended: 409 `shift_ended_conflict`. A template's shift changed by hand stays changed.
  */
 export const UpdateShiftBodySchema = z
   .object({ memberId: TeamMemberIdSchema, startsAt: z.iso.datetime(), endsAt: z.iso.datetime() })
@@ -243,18 +256,31 @@ export const PlanningMemberSchema = z.object({
 });
 export type PlanningMember = z.infer<typeof PlanningMemberSchema>;
 
-/** Why an occurrence of a template has no shift: its member is busy elsewhere, or its account already has someone. */
-export const PLANNING_CONFLICT_REASONS = ['member_busy', 'account_taken'] as const;
+/**
+ * Why an occurrence of a template has no shift: its member is busy elsewhere, its account already has someone, or its
+ * member is on an approved leave (ADR 0031; the slot is to be filled by someone else).
+ */
+export const PLANNING_CONFLICT_REASONS = ['member_busy', 'account_taken', 'member_on_leave'] as const;
 export const PlanningConflictReasonSchema = z.enum(PLANNING_CONFLICT_REASONS);
 
-export const PlanningConflictSchema = z.object({
+const TemplateOccurrenceSchema = z.object({
   templateId: ShiftTemplateIdSchema,
   startsAt: z.iso.datetime(),
   endsAt: z.iso.datetime(),
-  reason: PlanningConflictReasonSchema,
-  /** The shift in the way. */
-  shiftId: ShiftIdSchema,
 });
+
+export const PlanningConflictSchema = z.discriminatedUnion('reason', [
+  TemplateOccurrenceSchema.extend({
+    reason: z.enum(['member_busy', 'account_taken']),
+    /** The shift in the way. */
+    shiftId: ShiftIdSchema,
+  }),
+  TemplateOccurrenceSchema.extend({
+    reason: z.literal('member_on_leave'),
+    /** The approved leave that covers the occurrence. */
+    leaveRequestId: LeaveRequestIdSchema,
+  }),
+]);
 export type PlanningConflict = z.infer<typeof PlanningConflictSchema>;
 
 /**
@@ -325,6 +351,230 @@ export const MyShiftsSchema = z.object({
 });
 export type MyShifts = z.infer<typeof MyShiftsSchema>;
 
+/** The longest leave asked at once, in days: beyond, it is a typing mistake, or a status for the owner to set. */
+export const LEAVE_MAX_DAYS = 31;
+
+/** The widest range one read of the leaves covers. */
+export const LEAVE_QUERY_MAX_DAYS = 366;
+
+/**
+ * `pending` until the agency decides: `approved` or `refused`. The member `withdrawn` their pending request; the owner
+ * or an active manager `cancelled` an approved leave before its end. A cancelled leave counts until its `cancelledAt`
+ * and no longer: nothing when it had not started, the days already taken when it had (ADR 0031).
+ */
+export const LEAVE_REQUEST_STATUSES = ['pending', 'approved', 'refused', 'withdrawn', 'cancelled'] as const;
+export const LeaveRequestStatusSchema = z.enum(LEAVE_REQUEST_STATUSES);
+export type LeaveRequestStatus = z.infer<typeof LeaveRequestStatusSchema>;
+
+/** A trimmed free text of 500 characters at most; empty means none. Never a fan's data. */
+const NoteSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .nullish()
+  .transform((value) => (value === undefined || value === null || value === '' ? null : value));
+
+/** Days between two calendar days, `to` excluded. */
+function daysBetween(from: string, to: string): number {
+  return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+}
+
+/**
+ * A member's leave (ADR 0031): from `firstDay` to `lastDay` included, days of the zone the member had when they asked
+ * (`timeZone`). The server fixes the instants when it records the request, from midnight of `firstDay` to midnight
+ * after `lastDay` in that zone, so that a later change of zone never moves it.
+ */
+export const LeaveRequestSchema = z.object({
+  id: LeaveRequestIdSchema,
+  memberId: TeamMemberIdSchema,
+  firstDay: CalendarDaySchema,
+  lastDay: CalendarDaySchema,
+  timeZone: TimezoneSchema,
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  /** What the member wrote with the request. */
+  note: z.string().nullable(),
+  status: LeaveRequestStatusSchema,
+  /** When it was approved or refused; `null` while pending, and for a request withdrawn before any decision. */
+  decidedAt: z.iso.datetime().nullable(),
+  /**
+   * When it was withdrawn or cancelled; `null` otherwise. `startsAt` and `endsAt` never change: a leave cancelled
+   * while under way covers [`startsAt`, `cancelledAt`).
+   */
+  cancelledAt: z.iso.datetime().nullable(),
+  /** What the person who refused or cancelled it wrote, for the member. */
+  decisionNote: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type LeaveRequest = z.infer<typeof LeaveRequestSchema>;
+
+/**
+ * `POST /v1/scheduling/leave-requests` (any team member who has not left, for themselves) → 201 `LeaveRequestSchema`,
+ * or 200 when the same `id` was already recorded with the same days and note (`leave_request_conflict` otherwise).
+ * `id` is made by the client when the form opens, so a retry records one request. `firstDay` is today or later in the
+ * member's zone (`leave_date_invalid` otherwise). A pending or approved leave of theirs that overlaps answers 409
+ * `leave_overlap_conflict` with `details.leaveRequestId`.
+ */
+export const CreateLeaveRequestBodySchema = z
+  .object({
+    id: LeaveRequestIdSchema,
+    firstDay: CalendarDaySchema,
+    lastDay: CalendarDaySchema,
+    note: NoteSchema,
+  })
+  .refine((body) => body.lastDay >= body.firstDay, {
+    message: 'Le dernier jour vient après le premier',
+    path: ['lastDay'],
+  })
+  .refine((body) => daysBetween(body.firstDay, body.lastDay) < LEAVE_MAX_DAYS, {
+    message: `Un congé dure ${String(LEAVE_MAX_DAYS)} jours au plus`,
+    path: ['lastDay'],
+  });
+export type CreateLeaveRequestBody = z.input<typeof CreateLeaveRequestBodySchema>;
+
+/**
+ * `POST /v1/scheduling/leave-requests/:leaveRequestId/decision` (owner, active manager) → `LeaveRequestSchema`. Only a
+ * pending request is decided (`leave_decided_conflict` otherwise). A manager never decides their own leave
+ * (`leave_own_decision_forbidden`); the owner decides theirs, since nobody decides for them. Approving answers 409
+ * `leave_shifts_conflict`, with `details.shiftIds`, while shifts of the member that are not cancelled still overlap the
+ * leave: give them to someone else or cancel them first, so that no account is left without anyone unseen. Approving
+ * also lapses the open swap proposals that would give the member a shift during the leave.
+ */
+export const DecideLeaveRequestBodySchema = z.object({
+  decision: z.enum(['approve', 'refuse']),
+  note: NoteSchema,
+});
+export type DecideLeaveRequestBody = z.input<typeof DecideLeaveRequestBodySchema>;
+
+/*
+ * `DELETE /v1/scheduling/leave-requests/:leaveRequestId` → 204. The member withdraws their own pending request; the
+ * owner or an active manager cancels an approved leave that has not ended, and the member can be planned again from
+ * then on. Either way `cancelledAt` is set, and `decidedAt` keeps the approval. A request in any other state answers
+ * `leave_decided_conflict`. Nothing is deleted: the row keeps its status.
+ */
+
+/**
+ * `GET /v1/scheduling/leave-requests?from=…&to=…`: the requests whose leave overlaps [`from`, `to`), at most
+ * `LEAVE_QUERY_MAX_DAYS`, withdrawn ones aside. The owner and an active manager read every member's, and `members`
+ * names them; any other member reads their own, and `members` holds themselves alone.
+ */
+export const LeaveRequestQuerySchema = z.object({ from: z.iso.datetime(), to: z.iso.datetime() });
+export type LeaveRequestQuery = z.infer<typeof LeaveRequestQuerySchema>;
+
+export const LeaveRequestListSchema = z.object({
+  leaveRequests: z.array(LeaveRequestSchema),
+  members: z.array(PlanningMemberSchema),
+});
+export type LeaveRequestList = z.infer<typeof LeaveRequestListSchema>;
+
+/** How long a swap that was answered, withdrawn, lapsed or reverted stays in the lists. */
+export const SHIFT_SWAP_RECENT_DAYS = 14;
+
+/**
+ * `proposed` until the colleague answers: `accepted` (the shifts have moved) or `declined`. The requester, or the
+ * owner or an active manager, `withdrawn` a proposal; it `lapsed` when one of its shifts started, was cancelled,
+ * changed hands or hours first, or when another swap on the same shift was accepted. The owner or an active manager `reverted`
+ * an accepted swap: the shifts went back to their members.
+ */
+export const SHIFT_SWAP_STATUSES = [
+  'proposed',
+  'accepted',
+  'declined',
+  'withdrawn',
+  'lapsed',
+  'reverted',
+] as const;
+export const ShiftSwapStatusSchema = z.enum(SHIFT_SWAP_STATUSES);
+export type ShiftSwapStatus = z.infer<typeof ShiftSwapStatusSchema>;
+
+/**
+ * A chatter's swap (ADR 0031): `shiftId`, theirs, goes to `targetMemberId`; with `targetShiftId`, that colleague's
+ * shift comes back to them (an exchange), without it the shift is given.
+ */
+export const ShiftSwapRequestSchema = z.object({
+  id: ShiftSwapRequestIdSchema,
+  requesterId: TeamMemberIdSchema,
+  shiftId: ShiftIdSchema,
+  targetMemberId: TeamMemberIdSchema,
+  targetShiftId: ShiftIdSchema.nullable(),
+  /** What the requester wrote to the colleague. */
+  message: z.string().nullable(),
+  status: ShiftSwapStatusSchema,
+  /** When it stopped being `proposed`: answered, withdrawn or lapsed; `null` while proposed. */
+  resolvedAt: z.iso.datetime().nullable(),
+  /** When the owner or an active manager reverted it; `resolvedAt` keeps the acceptance. */
+  revertedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type ShiftSwapRequest = z.infer<typeof ShiftSwapRequestSchema>;
+
+/**
+ * `GET /v1/scheduling/swap-requests`: the proposed swaps, and those resolved in the last `SHIFT_SWAP_RECENT_DAYS`. A
+ * member reads the swaps they make or receive; the owner and an active manager read every one, which is how they hear
+ * of them until EQ-12 notifies. `shifts` holds the shifts the swaps name, as they are now (cancelled ones aside), with
+ * their `accounts` and `members`.
+ */
+export const ShiftSwapListSchema = z.object({
+  swapRequests: z.array(ShiftSwapRequestSchema),
+  shifts: z.array(ShiftSchema),
+  accounts: z.array(PlanningAccountSchema),
+  members: z.array(PlanningMemberSchema),
+});
+export type ShiftSwapList = z.infer<typeof ShiftSwapListSchema>;
+
+/**
+ * `GET /v1/scheduling/swap-candidates?shiftId=…` (the shift's member, for a shift of theirs that has not started): the
+ * colleagues who could take it, active members who work on its creator and are not on an approved leave then, with
+ * their shifts that have not started, within `SHIFT_TEMPLATE_HORIZON_DAYS`, on creators the requester works on (what
+ * an exchange could give back). A display name, a colour and shifts: the one door through which a chatter reads a
+ * colleague's planning (ADR 0031), never a rate, a country or a status.
+ */
+export const SwapCandidatesQuerySchema = z.object({ shiftId: ShiftIdSchema });
+
+export const SwapCandidatesSchema = z.object({
+  candidates: z.array(z.object({ member: PlanningMemberSchema, shifts: z.array(ShiftSchema) })),
+  accounts: z.array(PlanningAccountSchema),
+});
+export type SwapCandidates = z.infer<typeof SwapCandidatesSchema>;
+
+/**
+ * `POST /v1/scheduling/swap-requests` (the member whose shift it is) → 201 `ShiftSwapRequestSchema`, or 200 when the
+ * same `id` was already recorded with the same values (`shift_swap_conflict` otherwise). The shift is theirs and has
+ * not started (`shift_not_found`, `shift_started_conflict`); the colleague is someone else (`shift_swap_self_invalid`),
+ * `active` (`member_left_conflict`) and works on the shift's creator; with `targetShiftId`, that shift is the
+ * colleague's, has not started, and its creator is one the requester works on (`member_creator_conflict` otherwise).
+ * The same proposal still open answers 409 `shift_swap_open_conflict` with `details.shiftSwapRequestId`. Several
+ * colleagues may be asked for the same shift: the first acceptance wins, the others lapse.
+ */
+export const CreateShiftSwapRequestBodySchema = z.object({
+  id: ShiftSwapRequestIdSchema,
+  shiftId: ShiftIdSchema,
+  targetMemberId: TeamMemberIdSchema,
+  targetShiftId: ShiftIdSchema.nullable(),
+  message: NoteSchema,
+});
+export type CreateShiftSwapRequestBody = z.input<typeof CreateShiftSwapRequestBodySchema>;
+
+/**
+ * `POST /v1/scheduling/swap-requests/:shiftSwapRequestId/answer` (the colleague asked, alone) → `ShiftSwapRequestSchema`.
+ * Only a proposed swap is answered (`shift_swap_answered_conflict`). Accepting moves both shifts in one transaction,
+ * under the rules of a shift set by hand: neither has started nor changed hands or hours since the proposal (otherwise the swap
+ * lapses and answers 409 `shift_swap_lapsed_conflict`), and the move puts nobody on two shifts at once, no account under
+ * two members, no shift on a member on an approved leave (`shift_member_conflict`, `shift_account_conflict`,
+ * `member_on_leave_conflict`, and the swap stays proposed). The other proposals on these shifts can no longer be
+ * accepted, and lapse just after (ADR 0031).
+ */
+export const AnswerShiftSwapRequestBodySchema = z.object({ answer: z.enum(['accept', 'decline']) });
+export type AnswerShiftSwapRequestBody = z.infer<typeof AnswerShiftSwapRequestBodySchema>;
+
+/*
+ * `DELETE /v1/scheduling/swap-requests/:shiftSwapRequestId` → 204. The requester, the owner or an active manager
+ * withdraws a proposed swap. The owner or an active manager reverts an accepted one while neither shift has started and
+ * both are still with the members the swap gave them to (`shift_swap_revert_conflict` otherwise): each shift goes back,
+ * under the same rules as an acceptance. A swap in any other state answers `shift_swap_answered_conflict`; the
+ * colleague asked never deletes one, they decline it.
+ */
+
 /**
  * The error codes of `/v1/scheduling`, for the screens to say them in French (the suffix gives the status, api.md):
  * `shift_not_found` 404 ; `shift_template_not_found` 404 ; `member_not_found` 404 ; `creator_not_found` 404 ;
@@ -335,8 +585,18 @@ export type MyShifts = z.infer<typeof MyShiftsSchema>;
  * has ended, or a new one that would end at or before now ; `shift_started_conflict` 409, a change other than an
  * earlier end on a shift under way ; `shift_range_invalid` 400, an end at or before the start, a shift longer than
  * `SHIFT_MAX_MINUTES`, or an instant that does not fall on a minute ; `planning_range_invalid` 400,
- * `to` at or before `from`, or more than `PLANNING_MAX_DAYS` ; `shift_template_date_invalid` 400, a template that
- * starts before today.
+ * `to` at or before `from`, or more than `PLANNING_MAX_DAYS` (`LEAVE_QUERY_MAX_DAYS` for the leaves) ;
+ * `shift_template_date_invalid` 400, a template that starts before today. Leaves and swaps (ADR 0031) :
+ * `member_on_leave_conflict` 409, a shift on a member during their approved leave ; `leave_request_not_found` 404 ;
+ * `leave_request_conflict` 409, the same `id` with other values ; `leave_overlap_conflict` 409, another pending or
+ * approved leave of the member then (`details.leaveRequestId`) ; `leave_decided_conflict` 409, a request no longer
+ * pending, or a leave that cannot be cancelled any more ; `leave_shifts_conflict` 409, shifts still on the member during
+ * the leave (`details.shiftIds`) ; `leave_own_decision_forbidden` 403, a manager deciding their own leave ; `leave_date_invalid` 400, a leave that starts
+ * before today in the member's zone ; `shift_swap_not_found` 404 ; `shift_swap_conflict` 409, the same `id` with other
+ * values ; `shift_swap_open_conflict` 409, the same proposal still open (`details.shiftSwapRequestId`) ;
+ * `shift_swap_answered_conflict` 409, a swap no longer proposed ; `shift_swap_lapsed_conflict` 409, a shift started,
+ * was cancelled, or changed hands or hours since the proposal ; `shift_swap_revert_conflict` 409, an accepted swap that can no
+ * longer go back ; `shift_swap_self_invalid` 400, a swap with oneself.
  */
 export const SCHEDULING_ERROR_CODES = [
   'shift_not_found',
@@ -353,5 +613,20 @@ export const SCHEDULING_ERROR_CODES = [
   'shift_range_invalid',
   'planning_range_invalid',
   'shift_template_date_invalid',
+  'member_on_leave_conflict',
+  'leave_request_not_found',
+  'leave_request_conflict',
+  'leave_overlap_conflict',
+  'leave_decided_conflict',
+  'leave_shifts_conflict',
+  'leave_own_decision_forbidden',
+  'leave_date_invalid',
+  'shift_swap_not_found',
+  'shift_swap_conflict',
+  'shift_swap_open_conflict',
+  'shift_swap_answered_conflict',
+  'shift_swap_lapsed_conflict',
+  'shift_swap_revert_conflict',
+  'shift_swap_self_invalid',
 ] as const;
 export type SchedulingErrorCode = (typeof SCHEDULING_ERROR_CODES)[number];

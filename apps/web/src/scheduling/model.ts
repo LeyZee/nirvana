@@ -35,6 +35,24 @@ export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   shift_range_invalid: 'Ces heures ne vont pas : la fin vient après le début, et un shift dure 24 h au plus.',
   planning_range_invalid: 'Cette période ne se lit pas d’un coup.',
   shift_template_date_invalid: 'Un modèle de shift commence aujourd’hui au plus tôt.',
+  member_on_leave_conflict: 'Ce membre est en congé à ces heures.',
+  leave_request_not_found: 'Cette demande de congé n’existe plus : la liste est relue.',
+  leave_request_conflict: 'Cette demande de congé a déjà été envoyée autrement : la liste est relue.',
+  leave_overlap_conflict: 'Un autre congé couvre déjà une partie de ces jours.',
+  leave_decided_conflict: 'Cette demande de congé a déjà eu sa réponse : la liste est relue.',
+  leave_shifts_conflict:
+    'Des shifts tombent encore pendant ce congé : donne-les à quelqu’un d’autre ou annule-les d’abord.',
+  leave_own_decision_forbidden: 'Ton propre congé est validé par quelqu’un d’autre.',
+  leave_date_invalid: 'Un congé commence aujourd’hui au plus tôt.',
+  shift_swap_not_found: 'Cet échange n’existe plus : la liste est relue.',
+  shift_swap_conflict: 'Cet échange a déjà été proposé autrement : la liste est relue.',
+  shift_swap_open_conflict: 'Tu as déjà proposé cet échange : il attend sa réponse.',
+  shift_swap_answered_conflict: 'Cet échange a déjà eu sa réponse : la liste est relue.',
+  shift_swap_lapsed_conflict:
+    'Cet échange ne tient plus : un des shifts a commencé, a été annulé ou a changé de mains.',
+  shift_swap_revert_conflict:
+    'Cet échange ne revient plus en arrière : un des shifts a commencé ou a changé de mains.',
+  shift_swap_self_invalid: 'Un échange se fait avec un collègue.',
   role_forbidden: 'Ton accès au planning a changé. Recharge la page.',
   request_invalid: 'Ces valeurs ne vont pas : vérifie les heures et le jour.',
 };
@@ -113,8 +131,8 @@ export interface ConflictLine {
   readonly key: string;
   readonly when: string;
   readonly what: string;
-  /** The shift in the way, to open it. */
-  readonly shiftId: string;
+  /** The shift in the way, to open it; none when the member is on leave (ADR 0031). */
+  readonly shiftId: string | null;
 }
 
 export function conflictLines(
@@ -132,17 +150,29 @@ export function conflictLines(
       const who = template === undefined ? undefined : members.get(template.memberId);
       const account = template === undefined ? undefined : accounts.get(template.platformAccountId);
       const where = account === undefined ? '' : ` sur ${account.creatorName}`;
-      const what =
-        conflict.reason === 'member_busy'
-          ? `${who ?? 'Son membre'} est déjà sur un autre shift`
-          : `le compte${account === undefined ? '' : ` @${account.handle}`} a déjà quelqu’un`;
+      const what = whatOf(conflict, who, account);
       return {
         key: `${conflict.templateId}-${conflict.startsAt}`,
         when: `${shortDay(dayOf(conflict.startsAt, timeZone))} · ${rangeAt(conflict.startsAt, conflict.endsAt, timeZone)}${where}`,
         what: what.charAt(0).toUpperCase() + what.slice(1),
-        shiftId: conflict.shiftId,
+        shiftId: conflict.reason === 'member_on_leave' ? null : conflict.shiftId,
       };
     });
+}
+
+function whatOf(
+  conflict: PlanningConflict,
+  who: string | undefined,
+  account: PlanningAccount | undefined,
+): string {
+  switch (conflict.reason) {
+    case 'member_busy':
+      return `${who ?? 'Son membre'} est déjà sur un autre shift`;
+    case 'account_taken':
+      return `le compte${account === undefined ? '' : ` @${account.handle}`} a déjà quelqu’un`;
+    case 'member_on_leave':
+      return `${who ?? 'Son membre'} est en congé : ce shift est à pourvoir`;
+  }
 }
 
 /** « Chaque mardi, 23 h – 5 h ». */

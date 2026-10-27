@@ -223,6 +223,27 @@ describe('Équipe › Planning', () => {
     );
   });
 
+  it('says a member on leave in amber, a shift to fill with no shift to open (ADR 0031)', async () => {
+    serve({
+      planning: planning([
+        {
+          templateId: TEMPLATE,
+          startsAt: '2026-10-29T22:00:00Z',
+          endsAt: '2026-10-30T04:00:00Z',
+          reason: 'member_on_leave',
+          leaveRequestId: id(41),
+        },
+      ]),
+    });
+    renderPage();
+    const amber = await screen.findByRole('status', {
+      name: 'Un modèle de shift n’a pas pu poser son shift',
+    });
+    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
+    expect(amber.textContent).toContain('Théo est en congé : ce shift est à pourvoir.');
+    expect(within(amber).queryByRole('button', { name: 'Voir le shift' })).toBe(null);
+  });
+
   it('places a shift, and names the one in the way when the member is taken', async () => {
     const written = serve({
       write: () => ({

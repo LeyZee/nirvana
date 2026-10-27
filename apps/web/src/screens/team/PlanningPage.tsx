@@ -416,25 +416,28 @@ function Conflicts({
           : `${String(lines.length)} modèles de shift n’ont pas pu poser leur shift`}
       </h2>
       <ul className="sc-conflicts__list">
-        {lines.map((line) => (
-          <li key={line.key} className="sc-conflicts__one">
-            <div className="sc-conflicts__text">
-              <p className="sc-conflicts__when nv-num">{line.when}</p>
-              <p className="sc-conflicts__what">{line.what}.</p>
-            </div>
-            {known.has(line.shiftId) ? (
-              <button
-                type="button"
-                className="nv-btn nv-btn--plain nv-btn--sm"
-                onClick={() => {
-                  onShow(line.shiftId);
-                }}
-              >
-                Voir le shift
-              </button>
-            ) : null}
-          </li>
-        ))}
+        {lines.map((line) => {
+          const shiftId = line.shiftId !== null && known.has(line.shiftId) ? line.shiftId : null;
+          return (
+            <li key={line.key} className="sc-conflicts__one">
+              <div className="sc-conflicts__text">
+                <p className="sc-conflicts__when nv-num">{line.when}</p>
+                <p className="sc-conflicts__what">{line.what}.</p>
+              </div>
+              {shiftId === null ? null : (
+                <button
+                  type="button"
+                  className="nv-btn nv-btn--plain nv-btn--sm"
+                  onClick={() => {
+                    onShow(shiftId);
+                  }}
+                >
+                  Voir le shift
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
