@@ -84,15 +84,15 @@ describe('Aujourd’hui', () => {
     renderPage();
     const hero = (await screen.findByRole('heading', { name: 'Nora Vidal', level: 2 })).closest('section');
     expect(hero?.textContent).toContain('En poste');
-    expect(hero?.textContent).toContain('encore 4 h');
-    expect(hero?.textContent).toContain('23 h – 5 h');
+    expect(hero?.textContent).toContain('encore 4 h');
+    expect(hero?.textContent).toContain('23 h – 5 h');
     expect(hero?.textContent).toContain('Tu chattes sur Reveal.');
-    expect(hero?.textContent).toContain('restent ouvertes jusqu’à 5 h 15');
+    expect(hero?.textContent).toContain('restent ouvertes jusqu’à 5 h 15');
     expect(screen.getByRole('progressbar', { name: 'Avancée du shift' }).getAttribute('aria-valuenow')).toBe(
       '33',
     );
     expect(screen.getByRole('link', { name: 'Ouvrir Suivi' })).toBeTruthy();
-    expect(screen.getByText('Ensuite').closest('section')?.textContent).toContain('Demain · 23 h – 5 h');
+    expect(screen.getByText('Ensuite').closest('section')?.textContent).toContain('Demain · 23 h – 5 h');
   });
 
   it('says when the next shift opens Suivi, and offers no Suivi before', async () => {
@@ -100,8 +100,8 @@ describe('Aujourd’hui', () => {
     renderPage();
     const hero = (await screen.findByRole('heading', { name: 'Nora Vidal', level: 2 })).closest('section');
     expect(hero?.textContent).toContain('Prochain shift');
-    expect(hero?.textContent).toContain('dans 22 h');
-    expect(hero?.textContent).toContain('s’ouvriront dans Suivi à 22 h 45');
+    expect(hero?.textContent).toContain('dans 22 h');
+    expect(hero?.textContent).toContain('s’ouvriront dans Suivi à 22 h 45');
     expect(screen.queryByRole('link', { name: 'Ouvrir Suivi' })).toBeNull();
   });
 
@@ -110,7 +110,8 @@ describe('Aujourd’hui', () => {
     renderPage();
     const hero = (await screen.findByRole('heading', { name: 'Nora Vidal', level: 2 })).closest('section');
     expect(hero?.textContent).toContain('Shift fini');
-    expect(hero?.textContent).toContain('fini à 0 h 55');
+    // The corner says how long Suivi stays open, the hours below say when it ended.
+    expect(hero?.textContent).toContain('Suivi encore 10 min');
     expect(screen.getByRole('link', { name: 'Ouvrir Suivi' })).toBeTruthy();
   });
 

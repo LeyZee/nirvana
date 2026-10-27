@@ -136,7 +136,7 @@ function Hero({
           {state.kind === 'on'
             ? `encore ${lengthOf(left)}`
             : state.kind === 'ended'
-              ? `fini à ${clockAt(shift.endsAt, zone)}`
+              ? `Suivi encore ${lengthOf(new Date(shift.accessEndsAt).getTime() - now.getTime())}`
               : soonOf(toStart)}
         </span>
       </div>

@@ -23,8 +23,8 @@ describe('wall-clock time', () => {
   it('reads an instant in the zone that shows it', () => {
     expect(dayOf('2026-10-28T23:30:00Z', PARIS)).toBe('2026-10-29');
     expect(minuteOf('2026-10-28T23:30:00Z', PARIS)).toBe(30);
-    expect(clockAt('2026-10-28T23:00:00Z', PORTO_NOVO)).toBe('0 h');
-    expect(rangeAt('2026-10-28T17:00:00Z', '2026-10-28T23:00:00Z', PARIS)).toBe('18 h – 0 h');
+    expect(clockAt('2026-10-28T23:00:00Z', PORTO_NOVO)).toBe('0 h');
+    expect(rangeAt('2026-10-28T17:00:00Z', '2026-10-28T23:00:00Z', PARIS)).toBe('18 h – 0 h');
   });
 
   it('turns a day and an hour of a zone into its instant, the next day past midnight', () => {
@@ -43,7 +43,7 @@ describe('wall-clock time', () => {
   it('keeps a 6-hour night slot on its wall-clock hours when the clock changes: 7 h that night', () => {
     const start = zonedInstant('2026-10-25', 0, PARIS);
     const end = zonedInstant('2026-10-25', 360, PARIS);
-    expect(lengthOf(end.getTime() - start.getTime())).toBe('7 h');
+    expect(lengthOf(end.getTime() - start.getTime())).toBe('7 h');
   });
 });
 
@@ -59,12 +59,12 @@ describe('days and weeks', () => {
 
 describe('words for time', () => {
   it('says hours the French way, and how long and how far', () => {
-    expect(clockOf(23 * 60)).toBe('23 h');
-    expect(clockOf(5 * 60 + 15)).toBe('5 h 15');
-    expect(clockOf(1440)).toBe('0 h');
-    expect(lengthOf(45 * 60_000)).toBe('45 min');
-    expect(lengthOf(330 * 60_000)).toBe('5 h 30');
-    expect(untilOf(12 * 60_000)).toBe('dans 12 min');
+    expect(clockOf(23 * 60)).toBe('23 h');
+    expect(clockOf(5 * 60 + 15)).toBe('5 h 15');
+    expect(clockOf(1440)).toBe('0 h');
+    expect(lengthOf(45 * 60_000)).toBe('45 min');
+    expect(lengthOf(330 * 60_000)).toBe('5 h 30');
+    expect(untilOf(12 * 60_000)).toBe('dans 12 min');
     expect(untilOf(3 * 86_400_000)).toBe('dans 3 jours');
   });
 });
