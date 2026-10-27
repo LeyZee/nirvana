@@ -27,3 +27,4 @@ La première vraie paie et la première vraie facture ne partent que lorsque les
 Rapprochement bancaire (Qonto), transmission à une plateforme agréée (EQ-06, hors périmètre), déploiement lui-même.
 
 ## Notes de session
+- 27/10/2026 (fil Équipe ; découverte du fil Mise en production, OPS-01) : l'export quotidien chiffré hors du fournisseur de base, que décrivent `docs/architecture/operations.md` § Données et la procédure B de `docs/runbooks/restore.md`, n'existe pas encore ; seul le PITR du fournisseur protège la base. Il doit tourner, et une restauration depuis lui avoir été jouée, avant la première vraie paie : sans lui, la ligne « export quotidien » de l'état de mise en service n'a pas de preuve et la paie réelle ne démarre pas.
