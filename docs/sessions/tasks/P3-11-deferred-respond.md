@@ -1,6 +1,6 @@
 # P3-11 Réponse différée après « attends, je reviens »
 
-Statut : in_progress (ID validé par Charles le 27/10 à 19h56)
+Statut : done (ID validé par Charles le 27/10 à 19h56)
 Phase : 3
 Dépend de : P3-10 (relances, worker et moteur)
 Branche : task/P3-11-deferred-respond
@@ -37,9 +37,9 @@ Ce n'est pas une relance : une relance (P3-10) suit **son** silence à lui, apr�
 ## À faire
 
 - [x] Contrats (Bilan) : `reply_skipped` gagne `retryAt?` et `conversation.respond` gagne `waitedFor?`, en ajout. `ComposeResult` ne change pas : `retryAt` existe déjà depuis #204. Le port `ComposeInput` gagne `waited?: number` en ajout (conversations).
-- [ ] Agent : `holdDecision` (`wait`) → `retryAt` borné ; avec `waited ≥ 1`, jamais `wait`, mais un message « tu es revenu ? » écrit sur brief du code. Tests du domaine et du composeur.
+- [x] Agent : `holdDecision` (`wait`) → `retryAt` borné ; avec `waited ≥ 1`, jamais `wait`, mais un message « tu es revenu ? » écrit sur brief du code. Tests du domaine et du composeur.
 - [x] Conversations (Bilan) : `respond` reprogramme sur `no_reply` avec `retryAt`, passe `waited` au moteur et passe la main si le second passage n'écrit rien. Tests d'intégration : attente puis réponse, nouveau message pendant l'attente, second passage sans brouillon et passation, prise en main pendant l'attente.
-- [ ] Supervision (Agent, ou Bilan en ajout avec son accord) et Dashboard (Extension) : l'entrée « sans réponse depuis 30 minutes » dans « À traiter », avec un libellé en français.
+- [x] Supervision (Agent) et Dashboard (Extension) : l'entrée « sans réponse depuis 30 minutes » dans « À traiter » (`unanswered`, « Sans réponse »).
 - [x] Doc : `message-flow.md` §2, glossaire (Réponse différée).
 
 ## Critères d'acceptation
@@ -58,3 +58,5 @@ Les relances sur son silence (P3-10), les relances de vente (`P6-02-after-offer.
 27/10 : proposée par Bilan, après la seconde passe méthode / code du fil Agent (#209).
 
 27/10 soir : part Bilan (contrat, worker `respond`, tests) dans sa PR ; bornes accordées avec le fil Agent (10–25 min côté moteur, 5–25 côté worker).
+
+27/10 soir : part Agent (moteur : une attente de 20 minutes, puis « tu es revenu ? » sur brief du code ; filet `unanswered` en supervision, états `idle`, `pending` et `drafting`, muet sous arrêt d'urgence) dans sa PR. Rien ne reste.

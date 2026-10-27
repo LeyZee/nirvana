@@ -54,7 +54,7 @@ Branche : task/<id>-<slug>
 | P3-08 | Recette du copilote dans Suivi, de bout en bout, avec FakeReveal | 3 | todo | PROPOSED-reveal-connector, PROPOSED-copilot-api, clé xAI |
 | P3-09 | Curseur de sexualisation, minimum de KYC et âge confirmé | 3 | done | P3-02 |
 | P3-10 | Relances : un fan n'est jamais laissé sans réponse | 3 | done | P0-05, P3-02 |
-| P3-11 | Réponse différée après « attends, je reviens » | 3 | todo | P3-10 |
+| P3-11 | Réponse différée après « attends, je reviens » | 3 | done | P3-10 |
 | H-01 | Première session d'hygiène | 0 | todo | P0-07b |
 | D-01 | Design system « Liquid Glass » | 4 | in_progress | P0-01 |
 | EQ-01 | Équipe : membres, pays, commission, paramètres de paie des plateformes | équipe | todo | ADR 0023, ADR 0024 ; écrans : EQ-11 |
