@@ -19,7 +19,7 @@ Onglet Horaires par modèle : fuseau d'abord, mode 24/7 par défaut ou créneaux
 - **La bascule Jour / Nuit** du catalogue (22 h – 7 h, `situation.ts`) devient un réglage lu au même endroit, sans changer de sens.
 - **Hors créneau, la conversation se repose.** Le `retryAt` de `respond` ne convient pas : `deferredRespondAt` le borne à 25 min et ignore un délai plus long. Il faut un mécanisme côté worker (Bilan) : aucun brouillon n'est fait, et une reprise est programmée à l'ouverture du créneau suivant ; à la reprise, l'agent répond aux fans qui ont écrit, le plus ancien d'abord, dans le plafond du jour.
 - **Le filet « Sans réponse »** de 30 min (#215) se tait hors créneau ; il reprend son compte à l'ouverture, sinon toutes les conversations reçues la nuit y tomberaient.
-- **Hybride** : un chatteur en poste n'est pas borné par ces heures ; l'agent ne reprend que s'il est dans son créneau et que personne n'est en poste (ADR 0025).
+- **Hybride** : un chatteur en poste n'est pas borné par ces heures et répond dans Reveal ; l'agent, lui, ne répond que dans son créneau, chatteur en poste ou non (ADR 0025, décidé en relecture de #232). Ce que l'agent fait quand un chatteur est en poste relève d'EQ-08.
 
 ## À faire
 - [x] Contrat `AgentHours` (fuseau de la créatrice, créneaux de réponse par jour activables, heures calmes des relances, bascule Jour / Nuit) ; stockage en colonne jsonb validée par Zod sur `creators`, sans nouvelle table (Bilan attribue la migration).
@@ -29,7 +29,7 @@ Onglet Horaires par modèle : fuseau d'abord, mode 24/7 par défaut ou créneaux
 - [ ] Écran (Extension), dans Créatrices, réservé au propriétaire (onglet et adresse, leçon de #217) : la grille et les mots du planning EQ-02 (« 9 h – 1 h » avec espaces insécables, « jusqu'au lendemain »), un en-tête qui dit le fuseau lu (« À l'heure de Nora (Paris) », car le planning se lit à l'heure de l'agence et ces heures à celle de la créatrice), un créneau désactivé grisé en encre pâle, jamais rouge.
 
 ## Critères d'acceptation
-- Tests : message reçu à 3 h, réponse à l'ouverture ; message reçu à minuit dans un créneau ouvert, réponse immédiate mais aucune relance avant 9 h ; changement d'heure ; créneau désactivé ; chatteur en poste hors créneau ; filet « Sans réponse » muet la nuit ; sans réglage, comportement identique à aujourd'hui.
+- Tests : message reçu à 3 h, réponse à l'ouverture ; message reçu à minuit dans un créneau ouvert, réponse immédiate mais aucune relance avant 9 h ; changement d'heure ; créneau désactivé ; changement des heures qui déplace l'ouverture ; filet « Sans réponse » muet la nuit ; sans réglage, comportement identique à aujourd'hui.
 - Écran : Nuit et Jour, 1 440 et 400 px, mouvement réduit, état « Le serveur ne répond pas ».
 
 ## Hors périmètre
