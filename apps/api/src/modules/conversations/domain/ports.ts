@@ -179,10 +179,10 @@ interface JobOptions {
   readonly runAt?: Date;
   readonly maxAttempts?: number;
   /**
-   * With a key: `replace` (the default) moves a waiting job to this run; `preserve_run_at` keeps its time and takes
-   * this payload, so that a debounce under way is not cut short.
+   * With a key: `replace` (the default) moves a waiting job to this run; `unsafe_dedupe` leaves a job already there as
+   * it is, time and payload, so that neither a debounce under way nor a wait she chose (`waitedFor`) is touched.
    */
-  readonly jobKeyMode?: 'replace' | 'preserve_run_at';
+  readonly jobKeyMode?: 'replace' | 'unsafe_dedupe';
 }
 
 /** Enqueues inside the current transaction (outbox, ADR 0006): a rollback drops the job with the state. */

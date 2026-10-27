@@ -304,6 +304,12 @@ describe('conversation.respond and her hours', () => {
     expect(await jobs(`conversation.reopen:${creatorId}`)).toHaveLength(0);
 
     if (atOpening === undefined) throw new Error('no answer at the opening');
+    // Her opening answers the fans still pending; his conversation rests during her wait, so his job keeps `waitedFor`.
+    expect(await stateOf(conversationId)).toBe('idle');
+    await conversations.jobs.reopen({ creatorId, correlationId: 'test' }, NO_LOG);
+    const [stillWaited, ...more] = await jobs(`conversation.respond:${conversationId}`);
+    expect(more).toHaveLength(0);
+    expect(stillWaited?.payload.waitedFor).toBe(waiting.payload.waitedFor);
     clock.current = OPENING;
     composer.results.push(draft);
     await conversations.jobs.respond({ ...atOpening.payload, conversationId }, NO_LOG);

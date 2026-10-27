@@ -26,8 +26,9 @@ export function createReopenJob({ uow, clock }: ReopenDeps) {
             queueName: queueNameFor(id),
             jobKey: jobKeyFor('conversation.respond', id),
             runAt: resumeRunAt(index, now),
-            // A fan who is writing right now keeps his debounce: his answer comes when it ends, not before.
-            jobKeyMode: 'preserve_run_at',
+            // A job already there stays as it is: a fan writing right now keeps his debounce, and a wait she chose
+            // keeps its `waitedFor` (one more pass, never a third). Only the fans her hours put off get one.
+            jobKeyMode: 'unsafe_dedupe',
           },
         );
       }
