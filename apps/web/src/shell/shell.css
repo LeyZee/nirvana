@@ -328,6 +328,174 @@
   }
 }
 
+/* Aujourd'hui: the rays turn an eighth and come out. */
+.is-playing .nav-rays {
+  transform-origin: 12px 12px;
+  animation: nv-nav-rays var(--nv-dur-morph) var(--nv-ease-spring) both;
+}
+@keyframes nv-nav-rays {
+  0% {
+    transform: rotate(-45deg) scale(0.6);
+    opacity: 0;
+  }
+}
+/* Planning: the day drops into its square. */
+.is-playing .nav-day {
+  transform-origin: 15.5px 15px;
+  animation: nv-nav-twinkle var(--nv-dur-morph) var(--nv-stagger) var(--nv-ease-spring) both;
+}
+/* Équipe: the three hop, one after the other. */
+.is-playing :is(.nav-t1, .nav-t2, .nav-t3) {
+  animation: nv-nav-hop var(--nv-dur-morph) var(--nv-ease-spring) both;
+}
+.is-playing .nav-t2 {
+  animation-delay: var(--nv-stagger);
+}
+.is-playing .nav-t3 {
+  animation-delay: calc(2 * var(--nv-stagger));
+}
+@keyframes nv-nav-hop {
+  35% {
+    transform: translateY(-3px);
+  }
+}
+/* Paie and Commissions: the coin flips and lands face up. */
+.is-playing .nav-coin {
+  transform-origin: 12px 12px;
+  animation: nv-nav-flip var(--nv-dur-morph) var(--nv-ease-spring) both;
+}
+@keyframes nv-nav-flip {
+  40% {
+    transform: scaleX(0.1);
+  }
+}
+/* Moi: a nod. */
+.is-playing .nav-head {
+  animation: nv-nav-nod var(--nv-dur-morph) var(--nv-ease-spring) both;
+}
+@keyframes nv-nav-nod {
+  40% {
+    transform: translateY(1.5px);
+  }
+}
+/* Plus: the dots bounce in a row. */
+.is-playing :is(.nav-d1, .nav-d2, .nav-d3) {
+  animation: nv-nav-hop var(--nv-dur-morph) var(--nv-ease-spring) both;
+}
+.is-playing .nav-d2 {
+  animation-delay: var(--nv-stagger);
+}
+.is-playing .nav-d3 {
+  animation-delay: calc(2 * var(--nv-stagger));
+}
+
+/* ── Families of the rail (ADR 0024): a quiet heading, or a gap before a lone tab ── */
+.nv-rail__heading {
+  display: flex;
+  align-items: flex-end;
+  height: 34px;
+  padding: 0 12px 6px;
+  color: var(--nv-ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+}
+.nv-rail__gap {
+  height: 12px;
+}
+
+/* ── « Plus », the phone's fifth place, and its sheet ── */
+.nv-rail__more {
+  display: none;
+}
+.nv-more-scrim {
+  position: fixed;
+  inset: 0;
+  /* Under the tab bar, which stays lit with « Plus » pressed, as the sheet's anchor. */
+  z-index: 29;
+  background: color-mix(in srgb, var(--nv-void) 48%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  animation: nv-more-fade var(--nv-dur-base) var(--nv-ease-out) both;
+}
+.nv-more {
+  position: fixed;
+  z-index: 41;
+  left: max(14px, env(safe-area-inset-left, 0px));
+  right: max(14px, env(safe-area-inset-right, 0px));
+  bottom: calc(14px + 64px + 10px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: var(--nv-radius-xl);
+  box-shadow: var(--nv-shadow-float);
+  transform-origin: 100% 100%;
+  animation: nv-more-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
+}
+.nv-more__title {
+  margin: 4px 12px 6px;
+  color: var(--nv-ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.nv-more__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 16px;
+  color: var(--nv-ink-muted);
+  font-size: 16px;
+  font-weight: 550;
+  text-decoration: none;
+  transition:
+    color var(--nv-dur-fast),
+    background-color var(--nv-dur-fast),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-more__item:hover {
+  color: var(--nv-ink);
+  background: var(--nv-glass-fill);
+}
+.nv-more__item:active {
+  transform: scale(0.97);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-more__item:focus-visible {
+  outline: none;
+  box-shadow: var(--nv-shadow-focus);
+}
+.nv-more__item[aria-current='page'] {
+  color: var(--nv-ink);
+  font-weight: 600;
+  background: var(--nv-select-strong);
+  box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+}
+.nv-more__item[aria-current='page'] .nav-icon {
+  color: var(--nv-neon-ink);
+}
+.nv-more__item:hover .nav-icon {
+  transform: translateY(-1px);
+}
+@keyframes nv-more-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes nv-more-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+}
+
 /* ── Who is signed in ── */
 .nv-user {
   position: relative;
@@ -657,6 +825,14 @@
   .nv-rail__agent::before {
     display: none;
   }
+  /* Icons only: a family heading becomes a hairline, which says the same without words. */
+  .nv-rail__heading {
+    height: 13px;
+    margin: 6px 14px;
+    padding: 0;
+    font-size: 0;
+    border-bottom: 1px solid var(--nv-hairline);
+  }
   .nv-rail__brand,
   .nv-rail__item,
   .nv-user__btn {
@@ -718,8 +894,31 @@
   .nv-rail__sp,
   .nv-rail__lens,
   .nv-rail__agent,
+  .nv-rail__heading,
+  .nv-rail__gap,
+  .nv-rail__item[data-phone='more'],
   .nv-user {
     display: none;
+  }
+  .nv-rail__more {
+    appearance: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+  }
+  .nv-rail__more:not([hidden]) {
+    display: flex;
+  }
+  /* A rail of one to three tabs (a chatter or a manager, before their screens): a capsule fitted to them, centred. */
+  .nv-rail:is([data-tabs='1'], [data-tabs='2'], [data-tabs='3']) {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+  .nv-rail:is([data-tabs='1'], [data-tabs='2'], [data-tabs='3']) .nv-rail__item {
+    flex: none;
+    width: 88px;
   }
   .nv-rail__item {
     flex: 1;
@@ -732,9 +931,14 @@
     font-size: 10px;
     font-weight: 600;
   }
-  .nv-rail__item[aria-current='page'] {
+  .nv-rail__item[aria-current='page'],
+  .nv-rail__more[data-current='true'],
+  .nv-rail__more[aria-expanded='true'] {
     background: var(--nv-select-strong);
     box-shadow: inset 0 1px 0 var(--nv-glass-edge);
+  }
+  .nv-rail__more[data-current='true'] .nav-icon {
+    color: var(--nv-neon-ink);
   }
   .nv-page {
     gap: 20px;
@@ -766,7 +970,9 @@
 @media (prefers-reduced-motion: reduce) {
   .nv-ambient i,
   .nv-page > *,
-  .nv-user__menu {
+  .nv-user__menu,
+  .nv-more,
+  .nv-more-scrim {
     animation: none !important;
   }
   .nv-rail__lens,
