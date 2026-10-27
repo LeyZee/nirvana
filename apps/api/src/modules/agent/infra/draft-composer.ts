@@ -1,4 +1,11 @@
-import type { FanFlags, HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
+import type {
+  AgentHours,
+  FanFlags,
+  HandoffCause,
+  MediaDescription,
+  MediaFlag,
+  Result,
+} from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
 import { measureDesire, type DesireReading } from '../domain/desire';
@@ -49,6 +56,11 @@ export interface AgentComposeInput {
   };
   /** His desire score as stored on the conversation (P3-12), and when it was counted; absent, he starts at 0. */
   readonly desire?: { readonly score: number; readonly at: Date };
+  /**
+   * Her hours (P3-14), as `creators.agent_hours` reads them; absent, the defaults. Whether she answers now is the
+   * worker's call; here they set her night and when a follow-up may go out.
+   */
+  readonly hours?: AgentHours;
   /** How many times she already waited for his last message (P3-11): from 1, she does not wait again. */
   readonly waited?: number;
   /** A follow-up on his silence (P3-10), not an answer to a message of his. */
@@ -330,6 +342,7 @@ async function followUp(
     flags,
     now: input.now,
     timeZone,
+    ...(input.hours !== undefined && { hours: input.hours }),
   });
   if (decision.kind === 'skip') return NOT_FOLLOWED_UP(decision.reason);
   if (decision.kind === 'later') return { ...NOT_FOLLOWED_UP(decision.reason), retryAt: decision.at };
@@ -347,6 +360,7 @@ async function followUp(
       timeZone,
       relationshipStartedAt: input.fan.firstMessageAt ?? input.now,
       spentCents: input.fan.spentMinor,
+      ...(input.hours !== undefined && { night: input.hours.night }),
     },
     trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
     followUp: {
@@ -503,6 +517,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
           timeZone: await deps.timeZoneOf(input.creatorId),
           relationshipStartedAt: input.fan.firstMessageAt ?? input.now,
           spentCents: input.fan.spentMinor,
+          ...(input.hours !== undefined && { night: input.hours.night }),
         },
         trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
         ...(waited && { waited }),

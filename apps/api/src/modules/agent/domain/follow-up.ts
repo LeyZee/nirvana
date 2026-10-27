@@ -1,6 +1,11 @@
-import type { FanFlags } from '@nirvana/contracts';
-
-import { localTime, nextLocalTime } from './situation';
+import {
+  DEFAULT_AGENT_HOURS,
+  nextFollowUpAllowed,
+  followUpQuietAt,
+  replyOpenAt,
+  type AgentHours,
+  type FanFlags,
+} from '@nirvana/contracts';
 
 /** A follow-up the worker asks for (P3-10): which delay of the persona, after which silence of his. */
 export interface FollowUpMoment {
@@ -12,6 +17,8 @@ export interface FollowUpMoment {
   readonly now: Date;
   /** Her time zone: her quiet hours are on her clock. */
   readonly timeZone: string;
+  /** Her hours (P3-14); absent, the defaults: always open, quiet from 23:00 to 9:00. */
+  readonly hours?: AgentHours;
 }
 
 export type FollowUpDecision =
@@ -20,17 +27,16 @@ export type FollowUpDecision =
       readonly kind: 'skip';
       readonly reason: 'follow_up_do_not_contact' | 'follow_up_distress' | 'follow_up_plan_over';
     }
-  | { readonly kind: 'later'; readonly reason: 'follow_up_quiet_hours'; readonly at: Date };
-
-// Her quiet hours, from 23:00 to 08:59 on her clock: a message out of nowhere at night reads as a machine's.
-const QUIET_FROM_HOUR = 23;
-const QUIET_UNTIL_HOUR = 9;
-
-const isQuiet = (hour: number): boolean => hour >= QUIET_FROM_HOUR || hour < QUIET_UNTIL_HOUR;
+  | {
+      readonly kind: 'later';
+      readonly reason: 'follow_up_quiet_hours' | 'follow_up_outside_hours';
+      readonly at: Date;
+    };
 
 /**
  * Whether she follows up on his silence now (P3-10). Never to a fan nobody may write to, nor to one in distress;
- * never past her last delay; in her quiet hours, at 9:00 her time. A follow-up never sells: it keeps the link, and
+ * never past her last delay; out of her reply slots or in her quiet hours (a message out of nowhere at night reads
+ * as a machine's), at the first minute both allow, on her clock (P3-14). A follow-up never sells: it keeps the link, and
  * a sales follow-up after a refused offer waits for Reveal's script history (P6-01), so none of the two the method
  * allows is written yet.
  */
@@ -40,12 +46,12 @@ export function followUpDecision(context: FollowUpMoment): FollowUpDecision {
   if (flags.salesFrozen?.reason === 'distress') return { kind: 'skip', reason: 'follow_up_distress' };
   if (context.step < 0 || context.step >= context.steps)
     return { kind: 'skip', reason: 'follow_up_plan_over' };
-  if (isQuiet(localTime(context.now, context.timeZone).hour)) {
-    return {
-      kind: 'later',
-      reason: 'follow_up_quiet_hours',
-      at: nextLocalTime(context.now, context.timeZone, QUIET_UNTIL_HOUR, 0),
-    };
-  }
-  return { kind: 'write' };
+  const { now, timeZone, hours = DEFAULT_AGENT_HOURS } = context;
+  const open = replyOpenAt(hours, timeZone, now);
+  if (open && !followUpQuietAt(hours, timeZone, now)) return { kind: 'write' };
+  return {
+    kind: 'later',
+    reason: open ? 'follow_up_quiet_hours' : 'follow_up_outside_hours',
+    at: nextFollowUpAllowed(hours, timeZone, now),
+  };
 }
