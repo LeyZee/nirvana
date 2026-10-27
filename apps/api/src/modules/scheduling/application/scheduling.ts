@@ -29,7 +29,6 @@ import type {
   PlanningAdmin,
   PlanningClock,
   PlanningStore,
-  StoredMember,
   StoredShift,
   StoredTemplate,
 } from '../domain/ports';
@@ -41,6 +40,8 @@ import {
   myShiftsOf,
 } from '../domain/shifts';
 import { addMinutes, calendarDayIn } from '../domain/time';
+
+import { toPlanningAccount, toPlanningMember, toShiftDto } from './dto';
 
 /** Équipe › Planning and Aujourd'hui (EQ-02, ADR 0025): reads for every member, writes for the planners. */
 export interface SchedulingService {
@@ -58,24 +59,7 @@ export interface SchedulingService {
   endTemplate(actor: Actor, id: ShiftTemplateId): Promise<void>;
 }
 
-const toShift = (shift: StoredShift): Shift => ({
-  id: shift.id,
-  creatorId: shift.creatorId,
-  platformAccountId: shift.platformAccountId,
-  memberId: shift.memberId,
-  startsAt: shift.startsAt.toISOString(),
-  endsAt: shift.endsAt.toISOString(),
-  templateId: shift.templateId,
-  stoppedAt: shift.stoppedAt?.toISOString() ?? null,
-});
-
 const toTemplate = (template: StoredTemplate): ShiftTemplate => ({ ...template });
-
-const toPlanningMember = (member: StoredMember) => ({
-  id: member.id,
-  displayName: member.displayName,
-  color: member.color,
-});
 
 export function createSchedulingService(
   store: PlanningStore,
@@ -149,15 +133,12 @@ export function createSchedulingService(
             ? shifts.some((shift) => shift.platformAccountId === account.id)
             : asked(account.creatorId),
         )
-        .map((account) => ({
-          ...account,
-          creatorName: creatorNames.get(account.creatorId)?.displayName ?? '—',
-        }));
+        .map((account) => toPlanningAccount(account, creatorNames));
       return {
         settings,
         accounts,
         members: read.members.filter((member) => named.has(member.id)).map(toPlanningMember),
-        shifts: shifts.map(toShift),
+        shifts: shifts.map(toShiftDto),
         conflicts:
           read.scope === 'self'
             ? []
@@ -192,7 +173,7 @@ export function createSchedulingService(
         if (shift === null) return null;
         const window = accessWindow(shift, margin);
         return {
-          ...toShift(shift),
+          ...toShiftDto(shift),
           creatorName: creatorNames.get(shift.creatorId)?.displayName ?? '—',
           platform: shift.platform,
           handle: shift.handle,
@@ -218,7 +199,7 @@ export function createSchedulingService(
         },
         await clockOf(actor.userId),
       );
-      return toShift(shift);
+      return toShiftDto(shift);
     },
 
     updateShift: async (actor, id, body) => {
@@ -232,7 +213,7 @@ export function createSchedulingService(
         },
         await clockOf(actor.userId),
       );
-      return shift === null ? null : toShift(shift);
+      return shift === null ? null : toShiftDto(shift);
     },
 
     cancelShift: async (actor, id) => store.cancelShift(actor, id, await clockOf(actor.userId)),

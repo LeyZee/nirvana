@@ -28,49 +28,20 @@ import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { iso, PARIS, parisDay, parisInstant, weekdayOf } from './support/paris';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 /** Invented people, creators and accounts only (ADR 0010). */
 const OWNER = { email: 'owner@example.test', name: 'Owner', password: 'correct horse battery' };
 const CREATOR = { email: 'creator@example.test', name: 'Creator', password: 'battery staple horse' };
 const PASSWORD = 'staple battery horse';
-const PARIS = 'Europe/Paris';
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-
-/** The grid's day (Paris), shifted by `days`. */
-function parisDay(days = 0): string {
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: PARIS }).format(new Date());
-  const day = new Date(`${today}T12:00:00Z`);
-  day.setUTCDate(day.getUTCDate() + days);
-  return day.toISOString().slice(0, 10);
-}
-
-/** ISO weekday of a calendar day: Monday 1 … Sunday 7. */
-const weekdayOf = (day: string): number => ((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
-
-/** The instant of a wall-clock minute in Paris on that day (never a change-of-time hour here). */
-function parisInstant(day: string, minute: number): Date {
-  const guess = new Date(`${day}T00:00:00Z`).getTime() + minute * MINUTE;
-  const wall = new Intl.DateTimeFormat('en-CA', {
-    timeZone: PARIS,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(guess);
-  const [date = '', time = ''] = wall.split(', ');
-  const offset = new Date(`${date}T${time}:00Z`).getTime() - guess;
-  return new Date(guess - offset);
-}
 
 /** Now, on the minute, moved by `minutes`. */
 const minutesFromNow = (minutes: number): Date =>
   new Date(Math.floor(Date.now() / MINUTE) * MINUTE + minutes * MINUTE);
 
-const iso = (at: Date): string => at.toISOString().replace('.000Z', 'Z');
 const codeOf = (response: LightMyRequestResponse): string => ApiErrorSchema.parse(response.json()).error.code;
 const detailsOf = (response: LightMyRequestResponse) => ApiErrorSchema.parse(response.json()).error.details;
 

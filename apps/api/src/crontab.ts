@@ -43,6 +43,9 @@ const CRON_JOBS: readonly CronJob[] = [
   // The running templates make their shifts four weeks ahead (EQ-02); each occurrence is made once, so the hour that
   // follows a failure, a member back from leave or a new day simply catches up.
   { task: 'scheduling.make_shifts', match: '41 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
+  // A swap proposal lapses once one of its shifts started, was cancelled or changed hands or hours (ADR 0031). Each
+  // acceptance and revert enqueues it too; the quarter hour catches a shift that started or was changed by hand.
+  { task: 'scheduling.lapse_swaps', match: '*/15 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
 ];
 
 export function parsedCronJobs(jobs: readonly CronJob[] = CRON_JOBS): ParsedCronItem[] {

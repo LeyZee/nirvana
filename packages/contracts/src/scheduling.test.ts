@@ -15,6 +15,7 @@ import {
   SchedulingSettingsSchema,
   SHIFT_TEMPLATE_MAX_MINUTES,
   ShiftSwapListSchema,
+  ShiftSwapRequestSchema,
   shiftSlotsOf,
   SwapCandidatesSchema,
   templateLengthMinutes,
@@ -303,6 +304,7 @@ describe('swaps (ADR 0031)', () => {
       candidates: [
         {
           member: { id: COLLEAGUE, displayName: 'Basile', color: null, commissionBasisPoints: 1250 },
+          freeThen: false,
           shifts: [
             { ...shift, id: '0199f2a0-0000-7000-8000-0000000000f2', memberId: COLLEAGUE, stoppedAt: null },
           ],
@@ -326,6 +328,7 @@ describe('swaps (ADR 0031)', () => {
     status: 'proposed',
     resolvedAt: null,
     revertedAt: null,
+    withdrawnByAgency: false,
     createdAt: '2026-10-27T20:00:00Z',
   };
 
@@ -350,5 +353,18 @@ describe('swaps (ADR 0031)', () => {
     expect(list.swapRequests[0]).toMatchObject({ shiftStartsAt: shift.startsAt, shiftEndsAt: shift.endsAt });
     const forgotten = { ...declined, shiftStartsAt: undefined };
     expect(ShiftSwapListSchema.safeParse({ ...list, swapRequests: [forgotten] }).success).toBe(false);
+  });
+
+  it('says a proposal withdrawn by the agency, never by whom', () => {
+    const withdrawn = {
+      ...proposed,
+      status: 'withdrawn',
+      resolvedAt: '2026-10-27T21:00:00Z',
+      withdrawnByAgency: true,
+    };
+    expect(ShiftSwapRequestSchema.parse(withdrawn).withdrawnByAgency).toBe(true);
+    expect(ShiftSwapRequestSchema.safeParse({ ...withdrawn, withdrawnByAgency: undefined }).success).toBe(
+      false,
+    );
   });
 });

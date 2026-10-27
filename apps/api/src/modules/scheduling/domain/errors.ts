@@ -89,6 +89,13 @@ export class PlanningRangeInvalid extends DomainError {
   }
 }
 
+/** The range of a leaves read (`LEAVE_QUERY_MAX_DAYS`). */
+export class LeaveRangeInvalid extends DomainError {
+  constructor() {
+    super('planning_range_invalid', 'La période lue finit après son début et dure un an au plus');
+  }
+}
+
 export class ShiftTemplateDateInvalid extends DomainError {
   constructor() {
     super('shift_template_date_invalid', 'Un modèle commence aujourd’hui au plus tôt');
@@ -109,11 +116,134 @@ export class OwnerOnly extends DomainError {
   }
 }
 
-/** No shift on a member during their approved leave (ADR 0031). */
+/**
+ * No shift on a member during their approved leave (ADR 0031). The leave is named only to someone who reads it: never
+ * to the colleague who accepts an exchange from a requester on leave.
+ */
 export class MemberOnLeave extends DomainError {
-  constructor(leaveRequestId: string) {
+  constructor(leaveRequestId: string | null) {
     super('member_on_leave_conflict', 'Ce membre est en congé à ce moment-là', {
-      details: { leaveRequestId },
+      details: leaveRequestId === null ? {} : { leaveRequestId },
     });
+  }
+}
+
+export class LeaveRequestNotFound extends DomainError {
+  constructor() {
+    super('leave_request_not_found', 'Demande de congé introuvable');
+  }
+}
+
+/** The same `id` was recorded with other values. */
+export class LeaveRequestConflict extends DomainError {
+  constructor() {
+    super('leave_request_conflict', 'Cette demande de congé existe déjà avec d’autres valeurs');
+  }
+}
+
+export class LeaveOverlap extends DomainError {
+  constructor(leaveRequestId: string | null) {
+    super(
+      'leave_overlap_conflict',
+      'Un autre congé en attente ou validé couvre déjà une partie de ces jours',
+      {
+        details: leaveRequestId === null ? {} : { leaveRequestId },
+      },
+    );
+  }
+}
+
+export class LeaveDecided extends DomainError {
+  constructor() {
+    super('leave_decided_conflict', 'Cette demande de congé a déjà sa réponse, ou ce congé est fini');
+  }
+}
+
+/** Approving while shifts of the member still cover the leave: they go to someone else first. */
+export class LeaveShifts extends DomainError {
+  constructor(shiftIds: readonly string[]) {
+    super('leave_shifts_conflict', 'Des shifts du membre tombent encore pendant ce congé', {
+      details: { shiftIds: [...shiftIds] },
+    });
+  }
+}
+
+export class LeaveOwnDecision extends DomainError {
+  constructor() {
+    super('leave_own_decision_forbidden', 'Un manager ne décide pas de son propre congé');
+  }
+}
+
+export class LeaveDateInvalid extends DomainError {
+  constructor() {
+    super('leave_date_invalid', 'Un congé commence aujourd’hui au plus tôt');
+  }
+}
+
+/** A pending request of someone else is refused, never withdrawn by the agency. */
+export class LeaveNotWithdrawable extends DomainError {
+  constructor() {
+    super('role_forbidden', 'Une demande en attente se refuse : seul son membre la retire');
+  }
+}
+
+export class ShiftSwapNotFound extends DomainError {
+  constructor() {
+    super('shift_swap_not_found', 'Échange introuvable');
+  }
+}
+
+/** The same `id` was recorded with other values. */
+export class ShiftSwapConflict extends DomainError {
+  constructor() {
+    super('shift_swap_conflict', 'Cet échange existe déjà avec d’autres valeurs');
+  }
+}
+
+export class ShiftSwapOpen extends DomainError {
+  constructor(shiftSwapRequestId: string | null) {
+    super('shift_swap_open_conflict', 'Cette proposition attend déjà sa réponse', {
+      details: shiftSwapRequestId === null ? {} : { shiftSwapRequestId },
+    });
+  }
+}
+
+export class ShiftSwapAnswered extends DomainError {
+  constructor() {
+    super('shift_swap_answered_conflict', 'Cet échange n’est plus proposé');
+  }
+}
+
+export class ShiftSwapLapsed extends DomainError {
+  constructor() {
+    super(
+      'shift_swap_lapsed_conflict',
+      'Cet échange ne tient plus : un des shifts a commencé, a été annulé, ou a changé de mains ou d’heures',
+    );
+  }
+}
+
+export class ShiftSwapRevert extends DomainError {
+  constructor() {
+    super(
+      'shift_swap_revert_conflict',
+      'Cet échange ne revient plus en arrière : un des shifts a commencé, ou a changé de mains ou d’heures',
+    );
+  }
+}
+
+export class ShiftSwapSelf extends DomainError {
+  constructor() {
+    super('shift_swap_self_invalid', 'Un échange se fait avec un collègue');
+  }
+}
+
+/** Only the colleague asked answers a swap; only its requester or the agency withdraws it. */
+export class ShiftSwapNotYours extends DomainError {
+  constructor() {
+    super(
+      'role_forbidden',
+      'Seul le collègue sollicité répond à un échange, et il ne le retire pas : il le refuse',
+    );
   }
 }
