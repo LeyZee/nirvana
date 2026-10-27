@@ -159,12 +159,18 @@ jobs:
       - name: The stack answers
         run: |
           for attempt in $(seq 1 30); do
-            if $COMPOSE exec -T api wget -q -O - http://127.0.0.1:3000/ready | grep -q '"status":"ready"'; then break; fi
+            if $COMPOSE exec -T api wget -q -O - http://127.0.0.1:3000/ready | grep '"status":"ready"' >/dev/null; then break; fi
             if [ "$attempt" = 30 ]; then exit 1; fi
             sleep 2
           done
-          curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/me)" = 401
+          # nginx starts last: give it the same patience.
+          for attempt in $(seq 1 15); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/me)" = 401 ]; then break; fi
+            if [ "$attempt" = 15 ]; then exit 1; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/ | grep '<div id="root">' >/dev/null
+          curl -fsSI http://127.0.0.1:8080/ | grep -i "content-security-policy: default-src 'none'" >/dev/null
       - name: Logs
         if: failure()
         run: $COMPOSE logs --no-color

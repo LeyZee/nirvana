@@ -41,6 +41,10 @@ server {
         add_header X-Content-Type-Options nosniff always;
         add_header Referrer-Policy no-referrer always;
         add_header X-Frame-Options DENY always;
+        # Scripts, fonts, images and API calls from this origin only; no inline script, no frame, no plugin.
+        # Inline styles stay allowed: React sets `style` attributes, which only 'unsafe-inline' lets through
+        # everywhere (style-src-attr is not in every Safari the team uses).
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'" always;
         try_files $uri $uri/ /index.html;
     }
 }
