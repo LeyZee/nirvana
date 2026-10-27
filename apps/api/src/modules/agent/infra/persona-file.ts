@@ -27,6 +27,8 @@ export interface PersonaForModels {
   readonly splitMessages: boolean;
   /** The only pet names she gives fans (`behavior.pet_names`); a guard flags any other. */
   readonly petNames: readonly string[];
+  /** Her alert keywords (`notifications.alert_keywords`): one written by a fan pauses the agent for him (P4-01). */
+  readonly alertKeywords: readonly string[];
 }
 
 const isPlaceholder = (value: string): boolean => value.startsWith('<');
@@ -95,6 +97,7 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     },
     splitMessages: persona.behavior.split_messages,
     petNames: persona.behavior.pet_names.filter((term) => !isPlaceholder(term)),
+    alertKeywords: persona.notifications.alert_keywords.filter((term) => !isPlaceholder(term)),
   };
 }
 

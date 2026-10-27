@@ -263,6 +263,7 @@ describe('persona file', () => {
     const persona = readPersonaFile(read('messalina/v0.0.0.yaml'), 'Messa', '2026-10-17');
     expect(persona.creatorName).toBe('Messa');
     expect(persona.forbiddenTerms).toEqual([]);
+    expect(persona.alertKeywords).toEqual([]);
     // Without her own thresholds, his desire score waits for the defaults (P3-12).
     expect(persona.offerLimits.minDesire).toBe(70);
     expect(persona.sexualizationLimits.minDesireToOpen).toBe(40);
@@ -280,6 +281,16 @@ describe('persona file', () => {
       "Je t'aime",
       'Mon adresse',
       'Mon numéro',
+    ]);
+    // Her alert keywords, for code to watch (P4-01).
+    expect(persona.alertKeywords).toEqual([
+      'IA',
+      'Bot',
+      'Robot',
+      'Vocal',
+      'Rencontre',
+      'Rendez-vous',
+      'Numéro',
     ]);
   });
 

@@ -1,5 +1,5 @@
 # P4-01 Alertes personnalisées, demandes de service et historique des alertes
-Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
+Statut : in_progress (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 4 (supervision)
 Dépend de : P3-07 (Telegram, routage par sujet ; à caler avec le fil Telegram), persona (`notifications.alert_keywords`), cerveau (`BriefSchema`), ADR 0020, ADR 0024 (rails)
 Branche : task/P4-01-custom-alerts
@@ -30,3 +30,4 @@ Alertes système (plus de script, vente, services proposés, plus de fonds) et a
 Les alertes d'argent du compte (pas de portefeuille chez nous ; le plafond IA a déjà son alerte).
 
 ## Notes de session
+- 27/10 (Agent, PR B1) : les mots-clés de la persona (`notifications.alert_keywords`) mettent l'agent en pause pour ce fan, comme leur contrat le dit : `alertKeywordsIn` (`agent/domain/alerts.ts`) lit en code, mots entiers une fois normalisés, chiffres lus en lettres, ce qu'il a écrit depuis la dernière réponse ; le composeur rend un `handoff` de cause `keyword` (détail `alert_keyword`) avant tout modèle, après un média signalé. Découpage validé avec le coordinateur : A Bilan (contrat `CustomAlert`, `custom_alert` dans `HANDOFF_CAUSES`, événement `alert_triggered` qui remplace `keyword_matched`, migration 0025, route) ; B2 Agent après A (alertes personnalisées, `alertsSeen` du Brief, `asks_for_service`, `asks_if_bot` avec un chatteur en poste, un seul message Telegram par pause, aucune raison qui cite le fan) ; C Extension (Réglages › Alertes, historique dans le Suivi).

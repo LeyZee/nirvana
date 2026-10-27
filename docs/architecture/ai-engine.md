@@ -102,6 +102,7 @@ Brief {
 Entrée : contexte + brief. Sortie : `Decision` + `policy_trace`. Ordre d'évaluation fixe :
 
 1. Risques bloquants → `handoff` (non contournable, même en auto) : `minor_suspected`, `distress`, `self_harm`, `dangerous_request`, `real_abuse` (`agent/domain/hold.ts`), décidé avant que la voix écrive.
+1 bis. Mots-clés d'alerte de la persona (`notifications.alert_keywords`) → `handoff` de cause `keyword`, lus en code sur ce que le fan a écrit depuis la dernière réponse, mots entiers une fois normalisés, avant tout appel de modèle (`agent/domain/alerts.ts`, P4-01). Un média signalé par la vision passe avant. Le journal garde le code `alert_keyword`, jamais ses mots.
 2. Interrupteurs, mode, session → `wait`.
 3. Horaires de la persona (avec jitter) → `wait` avec `runAt`.
 4. `asks_if_bot` → toujours une déflexion en personnage (`reply_brief`), fixée dans le code et non réglable : le prompt de voix et la garde bloquante `ai_disclosure` (ADR 0021, qui remplace ADR 0012).
