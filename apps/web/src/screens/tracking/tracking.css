@@ -302,8 +302,8 @@
   min-height: 72px;
 }
 
-/* « Récents · Chauds d'abord » (P3-12): above the list, quiet, the list's own width. */
-/* The line under a fan's name: a narrow row cuts the creator and the time, never the band of his desire score. */
+/* The line under a fan's name: a narrow row cuts the creator and the time, never the band of his desire score.
+ * The text keeps the nowrap of .nv-convo__preview, so it is cut with an ellipsis instead of wrapping. */
 .tr-preview {
   display: flex;
   min-width: 0;
@@ -317,6 +317,8 @@
   flex: none;
   white-space: pre;
 }
+
+/* « Récents · Chauds d'abord » (P3-12): above the list, quiet, the list's own width. */
 .tr-order {
   display: flex;
   padding: var(--nv-space-2) var(--nv-space-2) var(--nv-space-3);
