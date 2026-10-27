@@ -90,6 +90,7 @@ interface Seen {
   voiceCalls: number;
   traces: unknown[];
   brainInputs?: ConversationInput[];
+  dropped?: { conversationId: string; count: number }[];
 }
 
 function gateway(script: Script, seen: Seen): LlmGateway {
@@ -136,8 +137,9 @@ const INPUT: AgentComposeInput = {
 
 function composer(script: Script = {}, sight?: MediaSight, limits?: FanLimits) {
   const traces: unknown[] = [];
-  const seen: Seen = { voiceCalls: 0, traces, brainInputs: [] };
+  const seen: Seen = { voiceCalls: 0, traces, brainInputs: [], dropped: [] };
   const draftComposer = createDraftComposer({
+    onDroppedNotes: (event) => seen.dropped?.push(event),
     gateway: gateway(script, seen),
     persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
     timeZoneOf: () => Promise.resolve('Europe/Paris'),
@@ -603,6 +605,7 @@ describe('createDraftComposer, his limits (P3-02)', () => {
       fan: { ...INPUT.fan, notes: ['aime le vélo', order] },
     });
     expect(seen.brainInputs?.[0]?.fanNotes).toBe('aime le vélo');
+    expect(seen.dropped).toEqual([{ conversationId: 'conversation-1', count: 1 }]);
     expect(result).toMatchObject({
       kind: 'draft',
       factsProposed: [

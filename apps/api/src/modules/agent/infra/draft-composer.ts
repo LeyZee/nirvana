@@ -103,6 +103,8 @@ export interface DraftComposerDeps {
   readonly sight?: MediaSight;
   /** His limits: read before anything is written, set on a detected risk (P3-02). */
   readonly limits?: FanLimits;
+  /** Lines of her notes kept out of the prompt for looking like an order: counted, never their text. */
+  readonly onDroppedNotes?: (event: { readonly conversationId: string; readonly count: number }) => void;
 }
 
 const failureDetail = (error: LlmFailure): readonly string[] =>
@@ -257,6 +259,9 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
       });
       const { costUsd } = composed;
+      if (composed.droppedNotes !== undefined) {
+        deps.onDroppedNotes?.({ conversationId: input.conversationId, count: composed.droppedNotes.length });
+      }
       if (composed.handoff !== undefined) {
         return protect(deps.limits, input, composed.handoff, {
           ...HANDOFF,

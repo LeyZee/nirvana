@@ -225,6 +225,9 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           personaPath,
           trainingDir,
           fans,
+          onDroppedNotes: (event) => {
+            logger.warn(event, 'fan notes shaped like an order kept out of the prompt');
+          },
           // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
           timeZoneOf: async (creatorId) => {
             const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);

@@ -9,7 +9,12 @@ import { DEFAULT_GUARD_SETTINGS as SHARED_GUARD_SETTINGS } from './domain/guards
 import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
-import { createDraftComposer, type AgentDraftComposer, type MediaSight } from './infra/draft-composer';
+import {
+  createDraftComposer,
+  type AgentDraftComposer,
+  type DraftComposerDeps,
+  type MediaSight,
+} from './infra/draft-composer';
 import { createFanLimits } from './infra/fan-limits';
 import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 import { guardSettingsOf, readPersonaFile } from './infra/persona-file';
@@ -70,6 +75,8 @@ export interface DraftComposerStartOptions {
   readonly sight?: MediaSight;
   /** His limits: nothing is written to a stopped fan, and a risk sets them itself (P3-02). */
   readonly fans?: Pick<FansModule, 'flags' | 'setFlag' | 'clearFlag'>;
+  /** A note of hers kept out of the prompt (it looked like an order): a chatter's real note would vanish unseen. */
+  readonly onDroppedNotes?: DraftComposerDeps['onDroppedNotes'];
 }
 
 /** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
@@ -89,6 +96,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     voicePrompt: loadPrompt('voice').header.version,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
+    ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),
   });
 }
 
