@@ -1,8 +1,8 @@
 # Journal des sessions
 
-Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entrée dans son propre fichier `docs/sessions/log/<date>-<id>.md` (format dans `docs/sessions/README.md`) et ajoute une ligne au tableau ci-dessous ; les entrées plus anciennes restent en bas de ce fichier, figées.
+Depuis le 16/10/2026 (soir), chaque session écrit son entrée dans son propre fichier `docs/sessions/log/<date>-<slug>.md` (format dans `docs/sessions/README.md`). **Depuis le 28/10/2026, le dossier est l’index** : une session n’ajoute plus de ligne au tableau ci-dessous, figé au 27/10, parce que ce fichier partagé faisait entrer chaque PR en conflit avec la précédente. `pnpm sessions:log` affiche les dernières entrées (`pnpm sessions:log --all` pour toutes) ; `scripts/check-repo.mjs` vérifie le nom et la première ligne de chaque fichier, et refuse une ligne nouvelle dans le tableau. Les entrées antérieures au 16/10 (soir) restent en bas de ce fichier, figées.
 
-## Index
+## Index (figé au 27/10/2026)
 
 | Date | Fiche | Statut | Entrée |
 |---|---|---|---|
