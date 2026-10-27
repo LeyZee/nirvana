@@ -1,7 +1,15 @@
-import { HandoffCauseSchema, LIVE_WINDOW, type DecidedDraft } from '@nirvana/contracts';
+import {
+  AgentHoursSchema,
+  DEFAULT_AGENT_HOURS,
+  HandoffCauseSchema,
+  LIVE_WINDOW,
+  type AgentHours,
+  type DecidedDraft,
+} from '@nirvana/contracts';
 import { sql, withTenant, type Database, type Transaction } from '@nirvana/db';
 import { z } from 'zod';
 
+import { unansweredSince } from '../../domain/dashboard';
 import type { DashboardFacts, DashboardReader, DashboardWindow } from '../../domain/dashboard-ports';
 
 /**
@@ -54,7 +62,12 @@ async function decided(
   return list.map((row) => ({ asIs: row.as_is }));
 }
 
-async function facts(tx: Transaction, creatorId: string, window: DashboardWindow) {
+async function facts(
+  tx: Transaction,
+  creatorId: string,
+  window: DashboardWindow,
+  her: { readonly hours: AgentHours; readonly timeZone: string },
+) {
   const now = window.now.toISOString();
   const dayStart = window.dayStart.toISOString();
   const periodStart = window.periodStart.toISOString();
@@ -258,13 +271,21 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
         kind: 'send_failed' as const,
         since: f.since,
       })),
-      ...(quiet ? [] : unanswered).map((u) => ({
-        conversationId: u.conversation_id,
-        fanId: u.fan_id,
-        fanName: u.fan_name,
-        kind: 'unanswered' as const,
-        since: u.since,
-      })),
+      // Out of her reply slots the net is silent; from her opening it counts again (P3-14).
+      ...(quiet ? [] : unanswered).flatMap((u) => {
+        const since = unansweredSince(u.since, window.now, her);
+        return since === null
+          ? []
+          : [
+              {
+                conversationId: u.conversation_id,
+                fanId: u.fan_id,
+                fanName: u.fan_name,
+                kind: 'unanswered' as const,
+                since,
+              },
+            ];
+      }),
     ],
     fans: fans.map((f) => ({
       id: f.id,
@@ -284,15 +305,18 @@ export function createDashboardReader(db: Database): DashboardReader {
       withTenant(db, creatorId, async (tx) => {
         const [creator] = await rows(
           tx,
-          z.object({ display_name: z.string(), timezone: z.string() }),
-          sql`select display_name, timezone from creators where id = ${creatorId}::uuid`,
+          z.object({ display_name: z.string(), timezone: z.string(), agent_hours: z.unknown() }),
+          sql`select display_name, timezone, agent_hours from creators where id = ${creatorId}::uuid`,
         );
         if (creator === undefined) return undefined;
         const window = windowFor(creator.timezone);
+        // Her hours as the worker reads them: none stored, or unreadable, are the defaults (always open).
+        const stored = AgentHoursSchema.safeParse(creator.agent_hours);
+        const her = { hours: stored.success ? stored.data : DEFAULT_AGENT_HOURS, timeZone: creator.timezone };
         return {
           facts: {
             creator: { name: creator.display_name, timezone: creator.timezone },
-            ...(await facts(tx, creatorId, window)),
+            ...(await facts(tx, creatorId, window, her)),
           },
           window,
         };
