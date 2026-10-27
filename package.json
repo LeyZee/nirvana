@@ -16,6 +16,7 @@
     "build": "turbo run build",
     "check": "turbo run typecheck lint && prettier --check . && knip && node scripts/check-repo.mjs && pnpm --filter @nirvana/db drift",
     "check:repo": "node scripts/check-repo.mjs",
+    "sessions:log": "node scripts/session-log.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "prettier --write .",

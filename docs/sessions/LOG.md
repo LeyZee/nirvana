@@ -1,8 +1,8 @@
 # Journal des sessions
 
-Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entrée dans son propre fichier `docs/sessions/log/<date>-<id>.md` (format dans `docs/sessions/README.md`) et ajoute une ligne au tableau ci-dessous ; les entrées plus anciennes restent en bas de ce fichier, figées.
+Depuis le 16/10/2026 (soir), chaque session écrit son entrée dans son propre fichier `docs/sessions/log/<date>-<slug>.md` (format dans `docs/sessions/README.md`). **Depuis le 28/10/2026, le dossier est l’index** : une session n’ajoute plus de ligne au tableau ci-dessous, figé au 27/10, parce que ce fichier partagé faisait entrer chaque PR en conflit avec la précédente. `pnpm sessions:log` affiche les dernières entrées dans l’ordre où elles sont entrées dans le dépôt (`pnpm sessions:log --all` pour toutes) ; `scripts/check-repo.mjs` vérifie le nom et la première ligne de chaque fichier, et refuse toute ligne au-delà des 153 du tableau, quelle que soit sa date. Les entrées antérieures au 16/10 (soir) restent en bas de ce fichier, figées.
 
-## Index
+## Index (figé au 27/10/2026)
 
 | Date | Fiche | Statut | Entrée |
 |---|---|---|---|
@@ -196,4 +196,3 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | OPS-01 Mise en production, lot 1 : images Docker (Opus) | in_progress | `log/2026-10-27-ops-01-images.md` |
 | 2026-10-27 | Pièges : batterie d’injection (langues, encodages, médias, notes, messages coupés) | done | `log/2026-10-27-injection-battery.md` |
 | 2026-10-27 | EQ-01 et EQ-10 : contrats des membres et des liens d’invitation | done | `log/2026-10-27-eq-01-eq-10-contracts.md` |
-| 2026-10-27 | EQ-01 : module `team` et routes `/v1/team` (membres, taux, préréglages, notes) | done | `log/2026-10-27-eq-01-team-module.md` |

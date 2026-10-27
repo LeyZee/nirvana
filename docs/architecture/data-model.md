@@ -9,7 +9,7 @@ Dernière revue : 2026-10-16. Le schéma Drizzle (`packages/db/src/schema/`, P0-
 - Identifiants externes sous la forme `platform_<x>_id text` + contrainte unique `(platform_account_id, platform_<x>_id)`.
 - Argent : `amount_minor integer` + `currency char(3)`.
 - Enum : `text` + `check` (plus simple à migrer qu'un type enum Postgres), valeurs définies dans `packages/contracts`.
-- Nommage : colonnes SQL en `snake_case` ; clés des colonnes `jsonb`, des payloads d'événements et de jobs, et des DTO en `camelCase` (voir `docs/conventions/coding.md`).
+- Nommage : colonnes SQL en `snake_case` ; clés des colonnes `jsonb`, des payloads d'événements et de jobs, et des DTO en `camelCase` (voir `docs/conventions/coding.md`). Ce qui reste en `jsonb` et ce qui devient colonne : `docs/architecture/jsonb.md`.
 - Suppression : logique (`deleted_at`) pour les tables d'état ; les tables append-only ne se suppriment pas (on anonymise via `erase-fan`).
 
 ## Tenant et comptes
