@@ -1,8 +1,8 @@
-import type { MediaDescription } from '@nirvana/contracts';
+import { desireNow, type MediaDescription } from '@nirvana/contracts';
 import type { Brief, CallTrace, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import {
-  desireNow,
+  desireMoved,
   desireScore,
   NO_MEASURE,
   type DesireMeasure,
@@ -366,7 +366,7 @@ export async function composeTurn(
       ...(brief && { brief }),
       ...(!brain.ok && { briefFailure: brain.error }),
       ...(sexualization !== undefined && { sexualization }),
-      ...(desire !== undefined && desire.score !== desire.before && { desire }),
+      ...(desire !== undefined && desireMoved(desire) && { desire }),
       ...(ageDeclared !== null && { ageDeclared }),
       ...(offerRefused !== undefined && { offerRefused }),
       bubbles: [],
@@ -393,7 +393,7 @@ export async function composeTurn(
     ...(brief && { brief }),
     ...(!brain.ok && { briefFailure: brain.error }),
     ...(sexualization !== undefined && { sexualization }),
-    ...(desire !== undefined && desire.score !== desire.before && { desire }),
+    ...(desire !== undefined && desireMoved(desire) && { desire }),
     ...(ageDeclared !== null && { ageDeclared }),
     ...(offerRefused !== undefined && { offerRefused }),
     voiceBrief,

@@ -85,7 +85,7 @@ export interface MediaSight {
 }
 
 /** His desire score after his message, only when it changed (P3-12): `conversations` journals and projects it. */
-type ScoredDesire = Pick<DesireReading, 'before' | 'score' | 'band' | 'signals' | 'weightsVersion'>;
+type ScoredDesire = Pick<DesireReading, 'before' | 'score' | 'signals' | 'weightsVersion'>;
 
 type AgentComposeResult = (
   | {
@@ -521,8 +521,8 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       });
       const settled = await settle(deps, input, composed, stop.flags, waited);
       if (composed.desire === undefined) return settled;
-      const { before, score, band, signals, weightsVersion } = composed.desire;
-      return { ...settled, desire: { before, score, band, signals, weightsVersion } };
+      const { before, score, signals, weightsVersion } = composed.desire;
+      return { ...settled, desire: { before, score, signals, weightsVersion } };
     },
   };
 }

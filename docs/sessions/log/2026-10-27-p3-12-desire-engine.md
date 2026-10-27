@@ -1,6 +1,6 @@
 # 2026-10-27 — P3-12 Note de désir, part moteur — done
 Fait :
-- `agent/domain/desire.ts` : `desireScore` (signaux du cerveau, intention, sentiment, mesures du code, poids `desire-1`, bornes 0 et 100), `desireNow` (mi-vie de 90 min vers un plancher, à la lecture), `measureDesire` (longueur rapportée à sa médiane, vitesse, emojis suggestifs, messages à la suite), `desireBand`.
+- `agent/domain/desire.ts` : `desireScore` (signaux du cerveau, intention, sentiment, mesures du code, poids `desire-1`, bornes 0 et 100), `desireNow` (mi-vie de 90 min vers un plancher, à la lecture), `measureDesire` (longueur rapportée à sa médiane, vitesse, emojis suggestifs, messages à la suite). Bandes et seuils 40/70 pris des contrats (`desireBandOf`, `DESIRE_BAND_FLOORS`), signaux en liste fermée `DESIRE_SIGNALS` dans les contrats (dont `minor_suspected`, `age_disputed`, `frozen`) dont le cerveau tire sa liste, `before` à `null` avant la première note, rien d'écrit pour une première note à 0 (`desireMoved`), après les relectures de Bilan et d'Extension.
 - `BriefSchema.desireSignals` (facultatif, liste fermée) et prompt du cerveau 1.7.0.
 - Politique : `low_desire` remplace `not_sexualizing` dans `offerDecision` ; le seuil d'ouverture s'ajoute à `no_opening` dans `sexualizationDecision`.
 - Persona : `min_desire_to_open` (20 à 70, défaut 40) et `min_desire` (50 à 90, défaut 70), facultatifs ; persona demo à 45 et 75.
@@ -8,7 +8,7 @@ Fait :
 - Playground (note dans la trace, retour en arrière compris), évals (`situation.desire`, deux attentes, trois scénarios `full`).
 - Doc : `ai-engine.md` (Brief, politique 5 bis), `persona-schema.md`, fiche.
 Pas fait :
-- Contrat `ComposeInput.desire` et `ComposeResult.desire`, événement `desire_scored`, projection et migration 0022 : Bilan.
+- Contrat `ComposeInput.desire` et `ComposeResult.desire`, événement `desire_scored`, projection et migration 0022 : Bilan (#221) ; lecture du Suivi (note retombée, points de la courbe) : Bilan.
 - Écrans (Suivi, lecteur, réglage des seuils) : Extension.
 - Ligne de la note Reveal (après la capture) ; calibration sur le corpus.
 Décisions :

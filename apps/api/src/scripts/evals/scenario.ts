@@ -1,3 +1,4 @@
+import { DesireBandSchema } from '@nirvana/contracts';
 import { BriefSchema, JudgeCriterionSchema } from '@nirvana/llm';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -69,10 +70,7 @@ const ScenarioSchema = z
             handoff: z.boolean().optional(),
             offer: z.boolean().optional(),
             /** His desire band after this message, among these (P3-12). */
-            desire_band_in: z
-              .array(z.enum(['neutral', 'playful', 'hot']))
-              .min(1)
-              .optional(),
+            desire_band_in: z.array(DesireBandSchema).min(1).optional(),
           })
           .strict()
           .optional(),

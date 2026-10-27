@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DESIRE_WEIGHTS_VERSION,
-  desireBand,
-  desireNow,
+  desireMoved,
   desireScore,
   measureDesire,
   NO_MEASURE,
@@ -23,47 +22,17 @@ const turn: DesireTurn = {
   now: NOW,
 };
 
-describe('desireBand', () => {
-  it('names the three bands at their bounds', () => {
-    expect([0, 39, 40, 69, 70, 100].map(desireBand)).toEqual([
-      'neutral',
-      'neutral',
-      'playful',
-      'playful',
-      'hot',
-      'hot',
-    ]);
-  });
-});
-
-describe('desireNow', () => {
-  it('halves every 90 minutes without a message of his, computed on read', () => {
-    expect(desireNow({ score: 80, at: NOW }, NOW)).toBe(80);
-    expect(desireNow({ score: 80, at: minutesAgo(90) }, NOW)).toBe(40);
-    expect(desireNow({ score: 80, at: minutesAgo(180) }, NOW)).toBe(20);
-    expect(desireNow(undefined, NOW)).toBe(0);
-  });
-
-  it('falls toward his floor, never below it, and never raises a score under it', () => {
-    expect(desireNow({ score: 80, at: minutesAgo(90) }, NOW, 20)).toBe(50);
-    expect(desireNow({ score: 80, at: minutesAgo(24 * 60) }, NOW, 20)).toBe(20);
-    expect(desireNow({ score: 10, at: minutesAgo(90) }, NOW, 20)).toBe(10);
-  });
-});
-
 describe('desireScore', () => {
   it('rises on what heats him up, falls on what cools him down, within 0 and 100', () => {
     const warm = desireScore({ ...turn, signals: ['states_desire', 'body_compliment'], intent: 'flirt' });
     expect(warm).toEqual({
-      before: 0,
+      before: null,
       score: 26,
-      band: 'neutral',
       signals: ['states_desire', 'body_compliment', 'intent:flirt'],
       weightsVersion: DESIRE_WEIGHTS_VERSION,
     });
     expect(desireScore({ ...turn, previous: { score: 80, at: NOW }, signals: ['busy_now'] })).toMatchObject({
       score: 50,
-      band: 'playful',
     });
     expect(desireScore({ ...turn, signals: ['discomfort'] }).score).toBe(0);
     const all = desireScore({
@@ -88,7 +57,7 @@ describe('desireScore', () => {
       previous: { score: 80, at: minutesAgo(90) },
       signals: ['roleplay'],
     });
-    expect(later).toMatchObject({ before: 40, score: 50, band: 'playful' });
+    expect(later).toMatchObject({ before: 40, score: 50 });
   });
 
   it('adds what code measures: a long, quick answer, suggestive emojis, several messages', () => {
@@ -132,9 +101,14 @@ describe('desireScore', () => {
     expect(desireScore({ ...turn, previous, signals: ['roleplay'], risks: ['meet_request'] }).score).toBe(70);
   });
 
-  it('moves nothing on a plain message: the worker writes no event then', () => {
+  it('moves nothing on a plain message, nor on a first one that leaves him at 0: no event then', () => {
     const plain = desireScore({ ...turn, previous: { score: 30, at: NOW } });
     expect(plain.score).toBe(plain.before);
+    expect(desireMoved(plain)).toBe(false);
+    const first = desireScore(turn);
+    expect(first).toMatchObject({ before: null, score: 0 });
+    expect(desireMoved(first)).toBe(false);
+    expect(desireMoved(desireScore({ ...turn, signals: ['roleplay'] }))).toBe(true);
   });
 });
 

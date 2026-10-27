@@ -1,4 +1,4 @@
-import type { MediaDescription } from '@nirvana/contracts';
+import { desireBandOf, type DesireBand, type DesireSignal, type MediaDescription } from '@nirvana/contracts';
 import type { Brief, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import {
@@ -13,7 +13,6 @@ import {
   type GuardViolation,
   type FollowUpDecision,
   measureDesire,
-  type DesireBand,
   type DesireState,
   type OfferInput,
   type OfferLimits,
@@ -41,7 +40,7 @@ export interface PlaygroundTurn {
   readonly desire?: {
     readonly score: number;
     readonly band: DesireBand;
-    readonly signals: readonly string[];
+    readonly signals: readonly DesireSignal[];
   };
 }
 
@@ -368,7 +367,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         ...(composed.desire !== undefined && {
           desire: {
             score: composed.desire.score,
-            band: composed.desire.band,
+            band: desireBandOf(composed.desire.score),
             signals: composed.desire.signals,
           },
         }),

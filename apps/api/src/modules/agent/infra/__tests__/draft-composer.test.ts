@@ -803,7 +803,6 @@ describe('createDraftComposer, his desire score (P3-12)', () => {
       desire: {
         before: 59,
         score: 93,
-        band: 'hot',
         signals: ['states_desire', 'intent:sexting', 'sentiment:aroused'],
         weightsVersion: 'desire-1',
       },
@@ -816,9 +815,14 @@ describe('createDraftComposer, his desire score (P3-12)', () => {
     const { draftComposer, seen } = composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, policy);
     expect(await draftComposer.compose(stored(80, 180))).toMatchObject({
       kind: 'draft',
-      desire: { before: 20, score: 54, band: 'playful' },
+      desire: { before: 20, score: 54 },
     });
     expect(written(seen)?.action).toBe('reply');
+  });
+
+  it('gives no score before his first one: `before` is null', async () => {
+    const { draftComposer } = composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, policy);
+    expect((await draftComposer.compose(INPUT)).desire).toMatchObject({ before: null, score: 34 });
   });
 
   it('counts a message of his once: a second pass reads the stored score and gives none back', async () => {

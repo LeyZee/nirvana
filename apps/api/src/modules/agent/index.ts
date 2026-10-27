@@ -35,8 +35,8 @@ export { withoutOrders } from './domain/injection';
 export { offerDecision, offerSignals, type OfferContext, type OfferLimits } from './domain/policy';
 export type { SexualizationLimits } from './domain/sexualization';
 export { followUpDecision, type FollowUpDecision } from './domain/follow-up';
-/** @public desireNow and desireBand: the tracking screens read his score as the engine does (P3-12). */
-export { desireBand, desireNow, measureDesire, type DesireBand, type DesireState } from './domain/desire';
+/** @public measureDesire and DesireState: the playground keeps his score as `conversations` would (P3-12). */
+export { measureDesire, type DesireState } from './domain/desire';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,

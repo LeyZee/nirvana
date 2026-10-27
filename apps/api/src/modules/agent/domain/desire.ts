@@ -1,3 +1,5 @@
+import { DESIRE_BAND_FLOORS, desireNow, type DesireSignal } from '@nirvana/contracts';
+
 import { NO_SALE_RISKS } from './policy';
 
 /**
@@ -9,27 +11,18 @@ import { NO_SALE_RISKS } from './policy';
 /** Bumped whenever a weight, a bound or the emoji list changes: each score says which counting it came from. */
 export const DESIRE_WEIGHTS_VERSION = 'desire-1';
 
-export type DesireBand = 'neutral' | 'playful' | 'hot';
-
-/** The lowest score of each band but the first: neutral 0–39, playful 40–69, hot 70–100. */
-const PLAYFUL_FROM = 40;
-const HOT_FROM = 70;
-
-export function desireBand(score: number): DesireBand {
-  if (score >= HOT_FROM) return 'hot';
-  return score >= PLAYFUL_FROM ? 'playful' : 'neutral';
-}
-
 /** Defaults of the persona's thresholds, when her file sets none. */
-export const DEFAULT_MIN_DESIRE_TO_OPEN = PLAYFUL_FROM;
-export const DEFAULT_SCRIPT_MIN_DESIRE = HOT_FROM;
+export const DEFAULT_MIN_DESIRE_TO_OPEN = DESIRE_BAND_FLOORS.playful;
+export const DEFAULT_SCRIPT_MIN_DESIRE = DESIRE_BAND_FLOORS.hot;
 
 /**
  * What one message of his moves, in points. The brain's signals on his last message, then what the brief already
  * gives (intent, sentiment), then what code measures without a model. A first counting, to calibrate on the sales
  * corpus (P3-12, « Calibration »).
  */
-const WEIGHTS: Readonly<Record<string, number>> = {
+type CountedSignal = Exclude<DesireSignal, 'minor_suspected' | 'age_disputed' | 'frozen'>;
+
+const WEIGHTS: Readonly<Record<CountedSignal, number>> = {
   // He warms up.
   steers_to_intimate: 12,
   body_compliment: 8,
@@ -69,9 +62,6 @@ const SHORT_RATIO = 0.5;
 const QUICK_REPLY_S = 120;
 const SLOW_REPLY_S = 3_600;
 const SEVERAL_MESSAGES = 3;
-
-/** Without a message of his, the score halves every 90 minutes toward its floor. */
-const HALF_LIFE_MS = 90 * 60_000;
 
 /** The score as stored, and when it was counted. */
 export interface DesireState {
@@ -136,18 +126,6 @@ export function measureDesire(
 
 const bounded = (score: number): number => Math.min(100, Math.max(0, Math.round(score)));
 
-/**
- * The score now, from the one stored: it halves every 90 minutes without a message of his, toward `floor` (20 once
- * he bought in the last seven days, read from `sales` once P6-01 exists; 0 until then). Applied on read, by the
- * engine and by the tracking screens alike: nothing stores a decayed score.
- */
-export function desireNow(state: DesireState | undefined, now: Date, floor = 0): number {
-  if (state === undefined) return 0;
-  if (state.score <= floor) return bounded(state.score);
-  const elapsed = Math.max(0, now.getTime() - state.at.getTime());
-  return bounded(floor + (state.score - floor) * 0.5 ** (elapsed / HALF_LIFE_MS));
-}
-
 /** One message of his, as the score reads it. */
 export interface DesireTurn {
   readonly previous: DesireState | undefined;
@@ -165,25 +143,34 @@ export interface DesireTurn {
 }
 
 export interface DesireReading {
-  /** The stored score decayed to now, before this message: the worker writes an event only when it differs. */
-  readonly before: number;
+  /**
+   * The stored score decayed to now, before this message (`null` before his first score): the worker writes an
+   * event only when it differs.
+   */
+  readonly before: number | null;
   readonly score: number;
-  readonly band: DesireBand;
-  /** What moved it, in the order counted: the signals' codes, or the reason it was frozen or reset. */
-  readonly signals: readonly string[];
+  /**
+   * What moved it, in the order counted: the signals' codes, or the reason it was frozen or reset. A code may
+   * repeat (`suggestive_emoji` once per emoji counted).
+   */
+  readonly signals: readonly DesireSignal[];
   readonly weightsVersion: string;
 }
 
-const reading = (before: number, score: number, signals: readonly string[]): DesireReading => ({
-  before,
+const reading = (
+  previous: DesireState | undefined,
+  before: number,
+  score: number,
+  signals: readonly DesireSignal[],
+): DesireReading => ({
+  before: previous === undefined ? null : before,
   score,
-  band: desireBand(score),
   signals,
   weightsVersion: DESIRE_WEIGHTS_VERSION,
 });
 
-function measuredSignals(measured: DesireMeasure): string[] {
-  const signals: string[] = [];
+function measuredSignals(measured: DesireMeasure): CountedSignal[] {
+  const signals: CountedSignal[] = [];
   if (measured.lengthRatio !== null && measured.lengthRatio >= LONG_RATIO) signals.push('long_reply');
   if (measured.lengthRatio !== null && measured.lengthRatio <= SHORT_RATIO) signals.push('short_reply');
   if (measured.replySeconds !== null && measured.replySeconds < QUICK_REPLY_S) signals.push('quick_reply');
@@ -194,23 +181,28 @@ function measuredSignals(measured: DesireMeasure): string[] {
   return signals;
 }
 
+const isCounted = (signal: string): signal is CountedSignal => Object.hasOwn(WEIGHTS, signal);
+
 /**
  * His score after his new message: the stored one decayed to now, plus what this message moves, within 0 and 100.
  * A possible minor or a disputed age resets it to 0; a risk that stops any sale freezes it as it stands.
  */
 export function desireScore(turn: DesireTurn): DesireReading {
   const before = desireNow(turn.previous, turn.now, turn.floor);
-  if (turn.risks.includes('minor_suspected')) return reading(before, 0, ['minor_suspected']);
-  if (turn.ageDisputed) return reading(before, 0, ['age_disputed']);
+  if (turn.risks.includes('minor_suspected')) return reading(turn.previous, before, 0, ['minor_suspected']);
+  if (turn.ageDisputed) return reading(turn.previous, before, 0, ['age_disputed']);
   // A risk that stops any sale freezes it: nothing is counted on such a message (`offerDecision` blocks anyway).
-  if (turn.risks.some((risk) => NO_SALE_RISKS.includes(risk))) return reading(before, before, ['frozen']);
-  const signals = [
-    ...new Set(turn.signals.filter((signal) => WEIGHTS[signal] !== undefined)),
-    ...[`intent:${turn.intent}`, `sentiment:${turn.sentiment}`].filter(
-      (signal) => WEIGHTS[signal] !== undefined,
-    ),
+  if (turn.risks.some((risk) => NO_SALE_RISKS.includes(risk))) {
+    return reading(turn.previous, before, before, ['frozen']);
+  }
+  const signals: CountedSignal[] = [
+    ...new Set(turn.signals.filter(isCounted)),
+    ...[`intent:${turn.intent}`, `sentiment:${turn.sentiment}`].filter(isCounted),
     ...measuredSignals(turn.measured),
   ];
-  const moved = signals.reduce((sum, signal) => sum + (WEIGHTS[signal] ?? 0), 0);
-  return reading(before, bounded(before + moved), signals);
+  const moved = signals.reduce((sum, signal) => sum + WEIGHTS[signal], 0);
+  return reading(turn.previous, before, bounded(before + moved), signals);
 }
+
+/** Whether this message moved his score: only then is it journaled (a first score of 0 moves nothing). */
+export const desireMoved = (reading: DesireReading): boolean => reading.score !== (reading.before ?? 0);

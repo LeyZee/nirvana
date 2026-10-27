@@ -9,6 +9,7 @@ import type {
   CreatorId,
   Currency,
   DecidedDraft,
+  DesireSignal,
   DraftId,
   DraftStatus,
   EventBody,
@@ -368,8 +369,8 @@ export interface ComposeInput {
 interface ComposedDesire {
   readonly before: number | null;
   readonly score: number;
-  /** The closed names of the signals that moved it. */
-  readonly signals: readonly string[];
+  /** The closed codes of the signals that moved it; a code may repeat (`suggestive_emoji` once per emoji). */
+  readonly signals: readonly DesireSignal[];
   readonly weightsVersion: string;
 }
 

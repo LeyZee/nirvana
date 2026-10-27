@@ -1,3 +1,4 @@
+import type { DesireBand } from '@nirvana/contracts';
 import type { Brief } from '@nirvana/llm';
 
 import type { Scenario } from './scenario';
@@ -11,7 +12,7 @@ export interface Outcome {
   /** The brain suggested an offer and `offerDecision` allowed it. */
   readonly offer: boolean;
   /** His desire band after this message (P3-12): what the policy read. */
-  readonly desireBand: 'neutral' | 'playful' | 'hot';
+  readonly desireBand: DesireBand;
   readonly bubbles: readonly string[];
   /** Hard guards that blocked her answer: it would not have left. */
   readonly blocking: readonly string[];

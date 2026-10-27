@@ -9,6 +9,7 @@ import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { desireBandOf } from '@nirvana/contracts';
 import {
   createInMemoryCallLog,
   createLlmGateway,
@@ -21,7 +22,6 @@ import {
 
 import {
   composeTurn,
-  desireBand,
   guardSettingsOf,
   holdDecision,
   measureDesire,
@@ -169,7 +169,7 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
     }),
     handoff,
     offer,
-    desireBand: composed.desire?.band ?? desireBand(situation.desire),
+    desireBand: desireBandOf(composed.desire?.score ?? situation.desire),
     bubbles: composed.bubbles,
     blocking,
   };

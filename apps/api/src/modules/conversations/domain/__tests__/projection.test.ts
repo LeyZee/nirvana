@@ -43,7 +43,7 @@ describe('conversation projection', () => {
     const scored = (before: number | null, score: number) =>
       EventBodySchema.parse({
         type: 'desire_scored',
-        payload: { before, score, signals: ['flirt'], weightsVersion: 'w1' },
+        payload: { before, score, signals: ['intent:flirt'], weightsVersion: 'w1' },
       });
     const projection = rebuildProjection([
       { body: inbound, at: at(1) },
