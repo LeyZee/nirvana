@@ -353,8 +353,13 @@ describe('DashboardPage of the owner', () => {
             lastSucceededAt: state === 'never' ? null : '2026-10-26T02:12:00.000Z',
             overdueAfterHours: 26,
             lastRun: null,
-            lastRestoreTest: null,
-            restoreTestFresh: false,
+            lastRestoreTest: {
+              testedAt: '2026-10-01T10:00:00.000Z',
+              backupFinishedAt: '2026-09-30T01:05:00.000Z',
+              durationSeconds: 420,
+              rowCountMismatches: 0,
+            },
+            restoreTestFresh: true,
           },
         }
       : { status: 200, body: apiDashboard() };
@@ -374,6 +379,26 @@ describe('DashboardPage of the owner', () => {
     renderDashboard(false, true);
     await screen.findByRole('radio', { name: 'Arrêt' });
     expect(screen.queryByText(/Aucune sauvegarde/u)).toBeNull();
+  });
+
+  it('says when no restore test is recent, with the exports on time', async () => {
+    serveDashboard((url: URL) =>
+      url.pathname === '/v1/backups/status'
+        ? {
+            status: 200,
+            body: {
+              state: 'ok',
+              lastSucceededAt: '2026-10-26T02:12:00.000Z',
+              overdueAfterHours: 26,
+              lastRun: null,
+              lastRestoreTest: null,
+              restoreTestFresh: false,
+            },
+          }
+        : { status: 200, body: apiDashboard() },
+    );
+    renderDashboard(false, true);
+    expect(await screen.findByText('Aucun essai de restauration récent')).toBeDefined();
   });
 
   it('is the owner’s alone: nobody else reads the exports', async () => {
