@@ -18,7 +18,7 @@
 - écriture par le propriétaire seul : `POST /team/members`, `PATCH /team/members/:memberId`, `PUT /team/members/:memberId/status`, `POST /team/members/:memberId/commission`, `POST /team/commission-presets` ;
 - notes : `POST /team/members/:memberId/notes` par le propriétaire et les managers actifs.
 
-Chaque écriture entre au journal (`audit_log`) sans nom, e-mail ni texte de note. Le lien d'invitation d'un membre (EQ-10) a son propre serveur (`apps/api/src/invitation-links.ts`) : le module ne touche pas à sa table. Il en reçoit seulement, par `InvitationLinkDirectory`, la date où le lien en cours cesse de marcher (`invitationExpiresAt`, même passée, pour « Lien expiré ») ; `null` quand aucun lien n'est en cours (jamais créé, ou déjà utilisé).
+Chaque écriture entre au journal (`audit_log`) sans nom, e-mail ni texte de note. Le lien d'invitation d'un membre (EQ-10) a son propre serveur (`apps/api/src/invitation-links.ts`) : le module ne touche pas à sa table. Il en reçoit seulement, par `InvitationLinkDirectory`, la date où l'invitation en cours cesse de marcher (`invitationExpiresAt`, même passée, pour « Lien expiré ») ; `null` quand aucune invitation n'est en cours (jamais créée, déjà utilisée, ou remplacée par un lien de nouveau mot de passe, que la fiche ne montre pas).
 
 ## Structure
 

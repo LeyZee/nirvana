@@ -389,7 +389,7 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(left?.details).toEqual({ from: 'active', to: 'left', sessionsEnded: 1 });
   });
 
-  it('shows when a member’s link stops working: none, live, expired, then used', async () => {
+  it('shows when a member’s invitation stops working: none, live, expired, used, never a new password link', async () => {
     const created = await call('POST', '/team/members', owner, {
       ...theoBody(),
       email: 'basile@example.test',
@@ -408,10 +408,10 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
       expect(listed?.invitationExpiresAt).toBe(one.invitationExpiresAt);
       return one.invitationExpiresAt;
     };
-    const newLink = async (): Promise<InvitationLinkCreated> => {
-      const response = await call('POST', `/team/members/${basile.id}/invitation-link`, owner, {
-        purpose: 'invitation',
-      });
+    const newLink = async (
+      purpose: 'invitation' | 'reset' = 'invitation',
+    ): Promise<InvitationLinkCreated> => {
+      const response = await call('POST', `/team/members/${basile.id}/invitation-link`, owner, { purpose });
       expect(response.statusCode).toBe(200);
       return InvitationLinkCreatedSchema.parse(response.json());
     };
@@ -442,6 +442,10 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
       payload: { token, password: 'une phrase de passe inventée' },
     });
     expect(redeemed.statusCode).toBe(200);
+    expect(await expiresAtOf()).toBeNull();
+
+    // A link for a new password is out, but it is not an invitation: the record does not offer it as one.
+    await newLink('reset');
     expect(await expiresAtOf()).toBeNull();
   });
 });

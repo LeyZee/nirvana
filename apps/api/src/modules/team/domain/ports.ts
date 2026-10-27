@@ -4,6 +4,7 @@ import type {
   CommissionRate,
   CommissionRateId,
   CreatorId,
+  InvitationLinkPurpose,
   TeamMember,
   TeamMemberId,
   TeamMemberNote,
@@ -99,5 +100,7 @@ export interface CreatorRoster {
  * module never reads: at most one per member, neither used nor replaced, expired or not; a member with none is absent.
  */
 export interface InvitationLinkDirectory {
-  live(memberIds: readonly TeamMemberId[]): Promise<ReadonlyMap<string, { readonly expiresAt: Date }>>;
+  live(
+    memberIds: readonly TeamMemberId[],
+  ): Promise<ReadonlyMap<string, { readonly purpose: InvitationLinkPurpose; readonly expiresAt: Date }>>;
 }
