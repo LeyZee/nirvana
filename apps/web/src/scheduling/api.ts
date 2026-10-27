@@ -91,7 +91,8 @@ export type Refusal =
   | { readonly kind: 'refused'; readonly code: SchedulingRefusalCode; readonly shiftId: string | null }
   | { readonly kind: 'failed' };
 
-export type SchedulingRefusalCode = SchedulingErrorCode | 'role_forbidden';
+/** Besides the planning's own: a role guard, and a body the server refuses that the screen should have caught. */
+export type SchedulingRefusalCode = SchedulingErrorCode | 'role_forbidden' | 'request_invalid';
 
 export type Outcome<T> = { readonly kind: 'ok'; readonly value: T } | Refusal;
 
@@ -107,8 +108,9 @@ async function refusalOf(response: Response): Promise<Refusal> {
   // The 409s of a member or an account already taken name the shift in the way.
   const inTheWay = InTheWaySchema.safeParse(details);
   const shiftId = inTheWay.success ? inTheWay.data.shiftId : null;
-  // A manager whose status changed since the page opened: the role guard, not a server down.
-  if (code === 'role_forbidden') return { kind: 'refused', code, shiftId };
+  // A manager whose status changed since the page opened: the role guard, not a server down. A 400 the screen let
+  // through is said as values that do not fit, not as a silent server.
+  if (code === 'role_forbidden' || code === 'request_invalid') return { kind: 'refused', code, shiftId };
   return isSchedulingCode(code) ? { kind: 'refused', code, shiftId } : { kind: 'failed' };
 }
 
@@ -134,8 +136,11 @@ async function send<T>(
 export const createShift = (body: CreateShiftBody): Promise<Outcome<Shift>> =>
   send('POST', '/v1/scheduling/shifts', body, (json) => ShiftSchema.parse(json));
 
-export const updateShift = (shiftId: string, body: UpdateShiftBody): Promise<Outcome<Shift>> =>
-  send('PATCH', `/v1/scheduling/shifts/${shiftId}`, body, (json) => ShiftSchema.parse(json));
+/** `null` when a stop falls in the shift's first minute: the server cancels it and answers 204. */
+export const updateShift = (shiftId: string, body: UpdateShiftBody): Promise<Outcome<Shift | null>> =>
+  send('PATCH', `/v1/scheduling/shifts/${shiftId}`, body, (json) =>
+    json === null ? null : ShiftSchema.parse(json),
+  );
 
 export const cancelShift = (shiftId: string): Promise<Outcome<null>> =>
   send('DELETE', `/v1/scheduling/shifts/${shiftId}`, undefined, () => null);

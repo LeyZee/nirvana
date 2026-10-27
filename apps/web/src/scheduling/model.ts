@@ -21,7 +21,7 @@ import { clockOf, dayOf, rangeAt, shortDay } from './time';
 /** What each refusal says, in the words of the screens (contracts `SCHEDULING_ERROR_CODES`). */
 export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   shift_not_found: 'Ce shift n’existe plus : le planning est relu.',
-  shift_template_not_found: 'Ce shift qui revient n’existe plus : le planning est relu.',
+  shift_template_not_found: 'Ce modèle de shift n’existe plus : le planning est relu.',
   member_not_found: 'Ce membre n’existe plus.',
   creator_not_found: 'Cette créatrice n’existe plus.',
   platform_account_not_found: 'Ce compte n’est pas celui de cette créatrice.',
@@ -34,8 +34,9 @@ export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   shift_started_conflict: 'Ce shift a commencé : tu peux seulement le finir plus tôt ou l’arrêter.',
   shift_range_invalid: 'Ces heures ne vont pas : la fin vient après le début, et un shift dure 24 h au plus.',
   planning_range_invalid: 'Cette période ne se lit pas d’un coup.',
-  shift_template_date_invalid: 'Un shift qui revient commence aujourd’hui au plus tôt.',
+  shift_template_date_invalid: 'Un modèle de shift commence aujourd’hui au plus tôt.',
   role_forbidden: 'Ton accès au planning a changé. Recharge la page.',
+  request_invalid: 'Ces valeurs ne vont pas : vérifie les heures et le jour.',
 };
 
 const PLATFORMS: Readonly<Record<Platform, string>> = {

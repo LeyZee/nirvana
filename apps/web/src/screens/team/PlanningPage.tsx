@@ -412,8 +412,8 @@ function Conflicts({
     <section className="nv-plate sc-conflicts nv-swap" role="status" aria-labelledby="sc-conflicts-title">
       <h2 id="sc-conflicts-title" className="sc-conflicts__title">
         {lines.length === 1
-          ? 'Un shift qui revient n’a pas pu être posé'
-          : `${String(lines.length)} shifts qui reviennent n’ont pas pu être posés`}
+          ? 'Un modèle de shift n’a pas pu poser son shift'
+          : `${String(lines.length)} modèles de shift n’ont pas pu poser leur shift`}
       </h2>
       <ul className="sc-conflicts__list">
         {lines.map((line) => (

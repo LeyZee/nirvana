@@ -1,4 +1,11 @@
-import { shiftSlotsOf, type Planning, type ShiftSlot, type TeamMember } from '@nirvana/contracts';
+import {
+  SHIFT_TEMPLATE_MAX_MINUTES,
+  shiftSlotsOf,
+  templateLengthMinutes,
+  type Planning,
+  type ShiftSlot,
+  type TeamMember,
+} from '@nirvana/contracts';
 import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
@@ -90,9 +97,12 @@ export function ShiftPanel({
   const endMinute = picked === null ? minuteOfInput(to) : picked.endMinute;
   const hoursOk = startMinute !== null && endMinute !== null && startMinute !== endMinute;
   const crosses = hoursOk && endMinute <= startMinute;
-  const length = hoursOk ? ((endMinute - startMinute + 1440) % 1440) * 60_000 : 0;
+  const minutes = hoursOk ? templateLengthMinutes({ startMinute, endMinute }) : 0;
+  // A template keeps an hour aside, so a change of time never stretches its shifts past a day (contracts).
+  const tooLong = weekly && minutes > SHIFT_TEMPLATE_MAX_MINUTES;
+  const hoursFit = hoursOk && !tooLong;
   const dayOk = /^\d{4}-\d{2}-\d{2}$/u.test(day) && day >= today;
-  const ready = account !== null && chosen !== null && hoursOk && dayOk && !busy;
+  const ready = account !== null && chosen !== null && hoursFit && dayOk && !busy;
 
   const submit = async (): Promise<void> => {
     if (!ready) return;
@@ -126,7 +136,7 @@ export function ShiftPanel({
 
   return (
     <Dialog
-      title={weekly ? 'Nouveau shift qui revient' : 'Nouveau shift'}
+      title={weekly ? 'Nouveau modèle de shift' : 'Nouveau shift'}
       lead={`À l’heure de l’agence (${cityOf(zone)}).`}
       busy={busy}
       onClose={onClose}
@@ -273,10 +283,12 @@ export function ShiftPanel({
               </label>
             </div>
           ) : null}
-          <span className={hoursOk ? 'tm-hint' : 'tm-hint tm-hint--error'}>
-            {hoursOk
-              ? `${lengthOf(length)}${crosses ? ', jusqu’au lendemain' : ''}.`
-              : 'Un début et une fin différents.'}
+          <span className={hoursFit ? 'tm-hint' : 'tm-hint tm-hint--error'}>
+            {!hoursOk
+              ? 'Un début et une fin différents.'
+              : tooLong
+                ? 'Un modèle de shift dure 23 heures au plus.'
+                : `${lengthOf(minutes * 60_000)}${crosses ? ', jusqu’au lendemain' : ''}.`}
           </span>
         </fieldset>
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ConversationSummarySchema } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -35,14 +36,37 @@ const tomorrow = {
   accessEndsAt: '2026-10-29T04:15:00Z',
 };
 
-/** The chatter's shifts, and no creator open to him: what the server sends off shift (ADR 0025). */
-function serve(shifts: unknown): void {
+/** A sale he took before his shift ended: off shift, the one conversation the server still lists (ADR 0025). */
+const taken = ConversationSummarySchema.parse({
+  id: id(201),
+  fanId: id(301),
+  fanDisplayName: 'Basile',
+  state: 'human',
+  mode: 'copilot',
+  lastInboundAt: null,
+  lastOutboundAt: null,
+  unreadCount: 0,
+  updatedAt: '2026-10-27T23:50:00Z',
+});
+
+/**
+ * The chatter's shifts and what Suivi lists off shift (ADR 0025): no creator, or only the one whose handover he
+ * took, with that conversation alone.
+ */
+function serve(shifts: unknown, handover = false): void {
+  const creators = handover ? [{ id: id(1), displayName: 'Nora Vidal', timezone: 'Europe/Paris' }] : [];
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string) => {
       const path = new URL(input, 'http://localhost').pathname;
       const body =
-        path === '/v1/scheduling/my-shifts' ? shifts : path === '/v1/creators' ? { creators: [] } : null;
+        path === '/v1/scheduling/my-shifts'
+          ? shifts
+          : path === '/v1/creators'
+            ? { creators }
+            : path === '/v1/conversations'
+              ? { items: [taken], nextCursor: null }
+              : null;
       return Promise.resolve(new Response(JSON.stringify(body), { status: body === null ? 404 : 200 }));
     }),
   );
@@ -89,6 +113,23 @@ describe('Suivi of a chatter (EQ-13)', () => {
     );
     expect(screen.getByRole('link', { name: 'Mon planning' }).getAttribute('href')).toBe('/planning');
     expect(screen.queryByText('Rien pour toi pour l’instant')).toBeNull();
+  });
+
+  it('promises nothing to read, unless he took a handover he has not given back', async () => {
+    serve({ current: null, next: null, ended: null });
+    renderPage();
+    const off = await screen.findByRole('heading', { name: 'Tu n’es pas en poste' });
+    expect(off.closest('section')?.textContent).toContain('Aucun shift prévu pour l’instant.Mon planning');
+    cleanup();
+
+    serve({ current: null, next: null, ended: null }, true);
+    renderPage();
+    await screen.findByText('Basile');
+    expect(
+      screen.getByRole('heading', { name: 'Tu n’es pas en poste' }).closest('section')?.textContent,
+    ).toContain(
+      'Aucun shift prévu pour l’instant. La passation que tu as prise reste ici jusqu’à ce que tu rendes la main.',
+    );
   });
 
   it('says nothing of the kind while his access is open', async () => {

@@ -34,8 +34,11 @@ export function TrackingPage({
   canDecide: boolean;
   /** Créatrices is in the account's rail: the owner adds a creator from there; a team member waits for his. */
   canAddCreator: boolean;
-  /** A chatter off shift (EQ-13): said under the title, in place of the empty list. */
-  offShift?: ReactNode;
+  /**
+   * A chatter off shift (EQ-13): said under the title, in place of the empty list. Told whether a conversation is still
+   * listed: off shift, the server only lists the one whose handover he took, until he gives it back (ADR 0025).
+   */
+  offShift?: ((holdsHandover: boolean) => ReactNode) | undefined;
 }): JSX.Element {
   const creatorsQuery = useCreators();
   const creators = creatorsQuery.data ?? [];
@@ -85,7 +88,7 @@ export function TrackingPage({
             : `Ce qui attend un humain, puis les conversations et qui a la main. ${MODE_MEANINGS[mode]}`
         }
       />
-      {offShift}
+      {offShift?.(lines.length > 0)}
       {creatorsQuery.isError || (failed.length > 0 && lines.length === 0) ? (
         <Notice
           title="Le serveur ne répond pas"

@@ -212,7 +212,9 @@ describe('Équipe › Planning', () => {
       ]),
     });
     renderPage();
-    const amber = await screen.findByRole('status', { name: 'Un shift qui revient n’a pas pu être posé' });
+    const amber = await screen.findByRole('status', {
+      name: 'Un modèle de shift n’a pas pu poser son shift',
+    });
     expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
     expect(amber.textContent).toContain('Théo est déjà sur un autre shift.');
     fireEvent.click(within(amber).getByRole('button', { name: 'Voir le shift' }));
@@ -283,6 +285,51 @@ describe('Équipe › Planning', () => {
         path: `/v1/scheduling/shifts/${NIGHT}`,
         body: { endsAt: '2026-10-28T00:00:00.000Z' },
       },
+    ]);
+  });
+
+  it('closes the sheet when a stop in the first minute cancels the shift (204)', async () => {
+    const written = serve({ write: () => ({ status: 204 }) });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23 h – 5 h/u }));
+    const sheet = await screen.findByRole('dialog', { name: 'Théo' });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Arrêter maintenant' }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Arrêter' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(written.map(({ method }) => method)).toEqual(['PATCH']);
+  });
+
+  it('keeps a shift template under 23 hours, and words a body the server refuses', async () => {
+    const written = serve({
+      write: () => ({
+        status: 400,
+        body: { error: { code: 'request_invalid', message: 'bad', details: {}, requestId: 'r2' } },
+      }),
+    });
+    renderPage();
+    await screen.findByRole('row', { name: /Nora Vidal/u });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Autres heures' }));
+    fireEvent.change(within(panel).getByLabelText('Début'), { target: { value: '08:00' } });
+    fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '07:30' } });
+    // 23 h 30 is a shift, not a template: a change of time would stretch it past a day.
+    expect(panel.textContent).toContain('23 h 30, jusqu’au lendemain.');
+    fireEvent.click(within(panel).getByRole('switch', { name: /Chaque semaine/u }));
+    expect(await screen.findByRole('dialog', { name: 'Nouveau modèle de shift' })).toBe(panel);
+    expect(panel.textContent).toContain('Un modèle de shift dure 23 heures au plus.');
+    const place = within(panel).getByRole('button', { name: 'Placer Théo' });
+    expect(place.hasAttribute('disabled')).toBe(true);
+
+    fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '07:00' } });
+    expect(place.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(place);
+    expect((await within(panel).findByRole('alert')).textContent).toContain('Ces valeurs ne vont pas');
+    expect(written.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      'POST /v1/scheduling/shift-templates',
     ]);
   });
 });

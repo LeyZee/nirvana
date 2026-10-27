@@ -13,8 +13,8 @@ import { Panel } from '@/shell/layout';
 
 /**
  * Suivi of a chatter (EQ-13, ADR 0025): the server opens a creator's conversations from the start margin of his shift
- * to its end margin. Outside, Suivi says so plainly, with his next shift, instead of an empty list; the handovers sent
- * to him stay readable under it.
+ * to its end margin. Outside, Suivi says so plainly, with his next shift, instead of an empty list. Only a handover he
+ * took stays readable under it, until he gives it back.
  */
 export function ChatterTrackingPage(
   props: Omit<ComponentProps<typeof TrackingPage>, 'offShift'>,
@@ -25,12 +25,28 @@ export function ChatterTrackingPage(
   return (
     <TrackingPage
       {...props}
-      offShift={off ? <OffShift next={mine.data.next} now={now} zone={readerZone()} /> : undefined}
+      offShift={
+        off
+          ? (holdsHandover: boolean) => (
+              <OffShift next={mine.data.next} holdsHandover={holdsHandover} now={now} zone={readerZone()} />
+            )
+          : undefined
+      }
     />
   );
 }
 
-function OffShift({ next, now, zone }: { next: MyShift | null; now: Date; zone: string }): JSX.Element {
+function OffShift({
+  next,
+  holdsHandover,
+  now,
+  zone,
+}: {
+  next: MyShift | null;
+  holdsHandover: boolean;
+  now: Date;
+  zone: string;
+}): JSX.Element {
   const today = dayOf(now, zone);
   const day = next === null ? null : dayOf(next.startsAt, zone);
   const when =
@@ -54,8 +70,11 @@ function OffShift({ next, now, zone }: { next: MyShift | null; now: Date; zone: 
           <h2 className="sc-off__title">Tu n’es pas en poste</h2>
           <p className="sc-off__lead">
             {next === null
-              ? 'Aucun shift prévu pour l’instant. Les passations qu’on t’adresse restent lisibles ici.'
+              ? 'Aucun shift prévu pour l’instant.'
               : `Prochain shift ${when}, ${rangeAt(next.startsAt, next.endsAt, zone)} sur ${next.creatorName}. Ses conversations s’ouvrent ici à ${clockAt(next.accessStartsAt, zone)}.`}
+            {holdsHandover
+              ? ' La passation que tu as prise reste ici jusqu’à ce que tu rendes la main.'
+              : null}
           </p>
         </div>
         <Link to="/planning" className="nv-btn nv-btn--soft nv-btn--sm sc-off__go">

@@ -173,7 +173,7 @@ export function ShiftSheet({
           ) : null}
           {template === null ? null : (
             <li>
-              <span>Revient</span>
+              <span>Modèle</span>
               <span className="sc-sheet__repeat">
                 {templateLine(template)}
                 {arming === 'template' ? null : (
