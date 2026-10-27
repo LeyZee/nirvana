@@ -38,6 +38,8 @@ const CRON_JOBS: readonly CronJob[] = [
   { task: 'fans.purge_facts', match: '45 3 * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
   // The rate limiter's ended windows go, and the hashed IPs and accounts they counted with them (ADR 0027).
   { task: 'rate_limit.purge', match: '*/10 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
+  // A daily export missing for 26 hours alerts the owner (ADR 0028 § 5); the next hour is the retry.
+  { task: 'backups.check', match: '17 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
 ];
 
 export function parsedCronJobs(jobs: readonly CronJob[] = CRON_JOBS): ParsedCronItem[] {

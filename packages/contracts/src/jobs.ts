@@ -32,6 +32,7 @@ export const JOB_NAMES = [
   'fans.refresh_summary',
   'fans.purge_facts',
   'rate_limit.purge',
+  'backups.check',
   'media.describe',
   'providers.check_credentials',
   'telegram.scan',
@@ -77,6 +78,7 @@ export const JOB_PAYLOADS = {
   'fans.refresh_summary': conversationJob.extend({ fanId: FanIdSchema }),
   'fans.purge_facts': z.object({}),
   'rate_limit.purge': z.object({}),
+  'backups.check': z.object({}),
   'media.describe': z.object({
     creatorId: CreatorIdSchema,
     mediaAssetId: MediaAssetIdSchema,
@@ -104,6 +106,7 @@ export const JOB_MAX_ATTEMPTS = {
   'fans.refresh_summary': 3,
   'fans.purge_facts': 1,
   'rate_limit.purge': 1,
+  'backups.check': 1,
   'media.describe': 3,
   'providers.check_credentials': 1,
   // The scan is also enqueued by the `domain_events` trigger (0006) with 25, and a flush by the module with 10:

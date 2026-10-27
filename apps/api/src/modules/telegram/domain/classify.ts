@@ -25,6 +25,7 @@ export const SCANNED_EVENT_TYPES = [
   'validation_resolved',
   'automatic_closed',
   'send_failed',
+  'backup_overdue',
 ] as const;
 
 const URGENT_CAUSES: ReadonlySet<HandoffCause> = new Set([
@@ -71,6 +72,17 @@ function missingText(missing: AutomaticMissing): string {
       return 'le test à l’aveugle de cette version de la voix n’est pas validé';
   }
 }
+
+/** « le 26 oct. à 03:04 », in Paris time: the export's schedule is Paris time too (ADR 0028 § 1). */
+const parisMoment = (at: Date): string => {
+  const day = at.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'short' });
+  const time = at.toLocaleTimeString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `le ${day} à ${time}`;
+};
 
 const conversationLink = (conversationId: string | null): { label: string; path: string } => ({
   label: 'Ouvrir la conversation',
@@ -182,6 +194,19 @@ export function classify(signal: Signal): Outcome | null {
         link: { label: 'Ouvrir le CRM', path: '/' },
       };
     }
+    // Important, not urgent: the base itself runs, only its copy outside Neon is missing (Neon's PITR still holds).
+    case 'backup_overdue':
+      return {
+        kind: 'notice',
+        topic: 'important',
+        threadKey: null,
+        title: 'Important',
+        body:
+          signal.lastSucceededAt === null
+            ? 'Aucune sauvegarde de la base n’a encore réussi : la copie chiffrée hors Neon n’existe pas.'
+            : `Pas de sauvegarde de la base depuis ${parisMoment(signal.lastSucceededAt)} : la copie chiffrée hors Neon a plus de 26 h.`,
+        link: { label: 'Ouvrir le Dashboard', path: '/' },
+      };
     case 'automatic_closed': {
       // Important, not urgent: no fan is at risk, the agent just asks a human to approve again (ADR 0019).
       const reasons = signal.missing.map(missingText);

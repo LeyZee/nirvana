@@ -42,6 +42,7 @@ Faits Telegram qui contraignent le choix :
    |---|---|---|---|
    | `handoff_requested` { `conversationId`, `cause` } | urgent si `cause` ∈ minor, non_consent, distress, meeting, manipulation ; important pour guard, budget, keyword, llm_unavailable, other | contrat : Bilan ; `cause` remplie par l'agent (composeur, vision) | oui (#54, `keyword` par #56) |
    | `budget_threshold_crossed` { `kind` : alert \| reached, `spentMinor`, `capMinor`, `currency`, `day` }, sans créatrice | important (les deux) | contrat : Bilan ; publié dans `onBudget` (`apps/api/src/llm.ts`) | oui (#54) |
+   | `backup_overdue` { `lastSucceededAt` (null si aucun export n'a jamais réussi), `day` }, sans créatrice | important, une fois par jour tant qu'aucun export n'a réussi depuis 26 h | contrat : Bilan ; publié par le job `backups.check` (module `backups`, ADR 0028 § 5, OPS-02) | oui (migration 0020 pour le déclencheur) |
    | `session_state_changed` | important, info | connecteurs | oui |
    | `kill_switch_toggled` | important, info | ops | oui |
    | `automatic_closed` { `missing`, `conversations` ; la version de voix n'est pas lue } | important | Bilan, verrou de l'Automatique (ADR 0019, #91) | oui (migration 0009 pour le déclencheur) |
