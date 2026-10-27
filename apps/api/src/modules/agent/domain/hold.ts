@@ -18,19 +18,36 @@ export type HoldDecision =
   | { readonly kind: 'handoff'; readonly detail: readonly string[] }
   | { readonly kind: 'no_reply'; readonly detail: readonly string[] };
 
-/** What the brain's reading of the moment means for the draft, before the voice writes anything. */
-export function holdDecision(brief: {
-  readonly risks: readonly string[];
-  readonly action: string;
-}): HoldDecision {
+/**
+ * What the brain's reading of the moment means for the draft, before the voice writes anything. `waited`: she
+ * already waited once for his last message (P3-11), so she does not wait again.
+ */
+export function holdDecision(
+  brief: {
+    readonly risks: readonly string[];
+    readonly action: string;
+  },
+  waited = false,
+): HoldDecision {
   const risks = brief.risks.filter(isHandoffRisk);
   if (risks.length > 0) return { kind: 'handoff', detail: risks };
   if (brief.action === 'handoff')
     return { kind: 'handoff', detail: brief.risks.length > 0 ? [...brief.risks] : ['brain'] };
-  // He has nothing to answer yet (« attends, je reviens ») : she stays quiet until he writes again. No follow-up is
-  // scheduled after a wait: one is only scheduled after a message of hers (PROPOSED-method-gaps.md).
-  if (brief.action === 'wait') return { kind: 'no_reply', detail: ['wait'] };
+  // He has nothing to answer yet (« attends, je reviens ») : she stays quiet, and is asked again at `waitRetryAt`.
+  // The second time, she writes to ask whether he is back (P3-11).
+  if (brief.action === 'wait' && !waited) return { kind: 'no_reply', detail: ['wait'] };
   return { kind: 'answer' };
+}
+
+/**
+ * How long she waits after « attends, je reviens » before asking whether he is back (P3-11). Within the 5 to 25
+ * minutes `conversations` accepts, so the 30-minute net of « À traiter » always comes after.
+ */
+const WAIT_MINUTES = 20;
+
+/** When she is asked again about a message she waited on. */
+export function waitRetryAt(now: Date): Date {
+  return new Date(now.getTime() + WAIT_MINUTES * 60_000);
 }
 
 /** What a detected risk changes in his limits by itself, until a human decides (P3-02). */

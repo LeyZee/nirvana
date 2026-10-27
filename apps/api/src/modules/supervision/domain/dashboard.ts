@@ -44,6 +44,7 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   other: 'L’agent a passé la main. Un humain doit lui répondre.',
   awaiting_approval: 'Un brouillon attend d’être validé depuis plus de 10 minutes.',
   send_failed: 'Un message n’a pas pu partir. L’agent ne réessaie plus, un humain doit le renvoyer.',
+  unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
 };
 
 /** Safety first: a possible minor, consent or distress before everything else. */

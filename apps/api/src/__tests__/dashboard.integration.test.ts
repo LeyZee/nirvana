@@ -4,11 +4,13 @@ import {
   DashboardSchema,
   DraftIdSchema,
   EventIdSchema,
+  KillSwitchIdSchema,
   MessageIdSchema,
   newId,
   PlatformAccountIdSchema,
   type ConversationId,
   type CreatorId,
+  type PlatformAccountId,
 } from '@nirvana/contracts';
 import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
@@ -43,6 +45,7 @@ describe('GET /v1/dashboard', () => {
   let app: App;
   let server: Server;
   let creatorId: CreatorId;
+  let platformAccountId: PlatformAccountId;
   let ownerCookie: string;
   let operatorCookie: string;
   let creatorCookie: string;
@@ -83,7 +86,7 @@ describe('GET /v1/dashboard', () => {
     });
 
     creatorId = newId(CreatorIdSchema);
-    const platformAccountId = newId(PlatformAccountIdSchema);
+    platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
       .values({ id: creatorId, displayName: 'Lina', timezone: 'America/Montreal' });
@@ -283,5 +286,73 @@ describe('GET /v1/dashboard', () => {
       ['Leo', 'minor', 'bad'],
       ['Marc', 'send_failed', 'warn'],
     ]);
+  });
+
+  it('shows a message left with nothing under way for 30 minutes, except while she is stopped or Reveal unread (P3-11)', async () => {
+    const longAgo = new Date(Date.now() - 40 * 60_000);
+    const seed = async (name: string, at: Date): Promise<ConversationId> => {
+      const { conversationId } = await app.modules.conversations.ingestMessage({
+        creatorId,
+        platformAccountId,
+        platformConversationId: `c-${name}`,
+        platformFanId: `f-${name}`,
+        fanDisplayName: name,
+        message: {
+          ref: { platform: 'reveal', id: `m-${name}` },
+          conversationRef: { platform: 'reveal', id: `c-${name}` },
+          direction: 'inbound',
+          text: `Coucou, c'est ${name}`,
+          media: [],
+          priceMinor: null,
+          currency: null,
+          isPaid: false,
+          createdAt: at.toISOString(),
+        },
+        correlationId: 'seed',
+      });
+      return conversationId;
+    };
+    const setState = (id: ConversationId, state: string, at: Date, lastOutboundAt: Date | null = null) =>
+      test.admin.db.execute(sql`
+        update conversations set state = ${state}, last_inbound_at = ${at.toISOString()}::timestamptz,
+               last_outbound_at = ${lastOutboundAt?.toISOString() ?? null}::timestamptz
+        where id = ${id}::uuid`);
+    // Nico rests unanswered; Sami's respond never ended; Ines was answered; Theo just wrote.
+    const later = new Date(longAgo.getTime() + 60_000);
+    await setState(await seed('Nico', longAgo), 'idle', longAgo);
+    await setState(await seed('Sami', later), 'pending', later);
+    await setState(await seed('Ines', longAgo), 'idle', longAgo, later);
+    await seed('Theo', new Date());
+
+    const read = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json()).todos;
+    const todos = await read();
+    expect(todos.map((t) => [t.title, t.kind, t.tone])).toEqual([
+      ['Leo', 'minor', 'bad'],
+      ['Nico', 'unanswered', 'warn'],
+      ['Sami', 'unanswered', 'warn'],
+      ['Marc', 'send_failed', 'warn'],
+    ]);
+    expect(todos[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
+
+    // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.
+    const sessionIs = (state: 'valid' | 'expired') =>
+      test.admin.db
+        .update(schema.platformAccounts)
+        .set({ sessionState: state })
+        .where(eq(schema.platformAccounts.id, platformAccountId));
+    await sessionIs('expired');
+    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+    await sessionIs('valid');
+    await test.admin.db.insert(schema.killSwitches).values({
+      id: newId(KillSwitchIdSchema),
+      scope: 'creator',
+      scopeId: creatorId,
+      creatorId,
+      active: true,
+      reason: 'test',
+      setBy: 'test',
+    });
+    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
   });
 });

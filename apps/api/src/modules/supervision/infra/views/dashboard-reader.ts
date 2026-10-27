@@ -161,6 +161,21 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
           order by e.seq desc limit 1) s on true
         where c.state = 'error'`,
   );
+  // The net under every other line (P3-11): his last message unanswered for 30 minutes, with no draft waiting, while
+  // the conversation rests or a respond job that should have ended long ago has not. A respond put off after
+  // « attends, je reviens » runs within 25 minutes, so it never shows here; nothing does while a kill switch stops
+  // her or Reveal is not read, the Dashboard already says so.
+  const unanswered = await rows(
+    tx,
+    z.object({ conversation_id: z.string(), fan_id: z.string(), fan_name: z.string(), since: timestamp }),
+    sql`select c.id as conversation_id, c.fan_id, f.display_name as fan_name, c.last_inbound_at as since
+        from conversations c
+        join fans f on f.id = c.fan_id
+        where c.state in ('idle', 'pending', 'drafting')
+          and c.last_inbound_at < ${now}::timestamptz - interval '30 minutes'
+          and (c.last_outbound_at is null or c.last_outbound_at < c.last_inbound_at)
+          and not exists (select 1 from drafts d where d.conversation_id = c.id and d.status = 'pending')`,
+  );
   // What she sold him over the period: her paid messages he unlocked, in euros (sales observed in EUR only).
   const fans = await rows(
     tx,
@@ -198,6 +213,10 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
     account?.paused_until !== null &&
     account?.paused_until !== undefined &&
     account.paused_until > window.now;
+  const connected =
+    account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused;
+  // Stopped, or Reveal unread (session expired, paused): every conversation would fall in the net, the banner says it.
+  const quiet = stopped.some((s) => s.active) || !connected;
   return {
     switches: {
       global: stopped.some((s) => s.scope === 'global' && s.active),
@@ -206,7 +225,7 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
     autoConversations: counts.auto,
     decidedThreeWeeksAgo: await decided(tx, creatorId, window, new Date(window.now.getTime() - 21 * DAY_MS)),
     reveal: {
-      connected: account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused,
+      connected,
       lastReadAt: account?.last_poll_at ?? null,
       conversations: counts.total,
     },
@@ -238,6 +257,13 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
         fanName: f.fan_name,
         kind: 'send_failed' as const,
         since: f.since,
+      })),
+      ...(quiet ? [] : unanswered).map((u) => ({
+        conversationId: u.conversation_id,
+        fanId: u.fan_id,
+        fanName: u.fan_name,
+        kind: 'unanswered' as const,
+        since: u.since,
       })),
     ],
     fans: fans.map((f) => ({
