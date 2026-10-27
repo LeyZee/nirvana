@@ -32,3 +32,4 @@ Chaque chatteur se connecte à son propre espace, depuis son téléphone ou son 
 Envoi d'e-mails, notifications sur le téléphone (EQ-12), double authentification (EQ-15), espace de la créatrice (EQ-09).
 
 ## Notes de session
+- 2026-10-27 (fil Équipe) : contrat posé, `packages/contracts/src/invitation-links.ts` : `POST /v1/team/members/:memberId/invitation-link` (propriétaire, `invitation` ou `reset`), `POST /v1/invitation-links/inspect` (aperçu sans consommer), `POST /v1/invitation-links/redeem` (usage unique, mot de passe, session) ; erreurs `invitation_link_not_found` (404, quelle que soit la raison) et `password_invalid`. Pages web `/bienvenue` et `/nouveau-mot-de-passe` en cours dans le fil Équipe ; serveur chez Bilan.
