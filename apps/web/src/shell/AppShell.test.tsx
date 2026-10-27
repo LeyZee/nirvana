@@ -98,6 +98,12 @@ describe('the rail of each role', () => {
     });
   });
 
+  it('names a manager on leave a manager, though he has the chatter’s rail', async () => {
+    renderApp({ ...manager, team: { role: 'manager', status: 'on_leave' }, teamScope: 'self' }, '/suivi');
+    expect(await screen.findByText('Manager')).toBeDefined();
+    expect(tabs()).toEqual(['Suivi']);
+  });
+
   it('keeps a manager out of Entraîner and Réglages', async () => {
     const router = renderApp(manager, '/reglages/modeles-ia');
     await waitFor(() => {

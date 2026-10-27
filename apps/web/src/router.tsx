@@ -67,6 +67,7 @@ const tracking = createRoute({
         selected={conversation ?? null}
         onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
         canDecide={user.role !== 'creator'}
+        canAddCreator={canOpen(railOf(user), '/creatrices')}
       />
     );
   },

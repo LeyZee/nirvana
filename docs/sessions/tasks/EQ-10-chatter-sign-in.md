@@ -18,6 +18,7 @@ Chaque chatteur se connecte à son propre espace, depuis son téléphone ou son 
 - [ ] **Mot de passe oublié** : sans e-mail, le propriétaire génère un lien de réinitialisation (mêmes règles que l'invitation). La réinitialisation révoque toutes les sessions du membre.
 - [ ] **Connexion** : la page de connexion existante, pour tous les rôles, avec la ligne « Mot de passe oublié ? Demande un nouveau lien à ton responsable ». Après connexion, le rail du rôle (ADR 0024) et l'arrivée sur Aujourd'hui pour un chatteur. Le limiteur de tentatives existant s'applique ; un membre marqué parti perd ses sessions (EQ-01) et ne retrouve, en se reconnectant, que l'espace de départ d'EQ-14.
 - [ ] **Aujourd'hui** (chatteur) : son shift en cours ou le prochain (EQ-02), « Faire mon rapport » à la fin du shift (EQ-03), son objectif (EQ-05), les annonces. Une brique qui n'existe pas encore n'apparaît pas ; état vide honnête quand il n'a pas de shift.
+- [ ] **Apparence dans Moi** : le manager et le chatteur n'ont pas Réglages (ADR 0024) ; Moi reprend le choix Nuit / Jour / Appareil de Réglages › Apparence (`AppearancePage`), gardé par navigateur comme aujourd'hui.
 - [ ] `audit_log` pour la création, l'utilisation et l'annulation d'un lien, et pour chaque réinitialisation.
 - [ ] Textes en français, apostrophes typographiques, design system, animations de ses jetons, aucune durée en dur ; écrans pensés d'abord pour un téléphone.
 

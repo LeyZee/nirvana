@@ -6,14 +6,15 @@ import { createPortal } from 'react-dom';
 
 import { AgentPill } from './AgentPill';
 import { NavIcon } from './NavIcon';
-import { FAMILY_LABELS, railOf, sectionOf, type NavItem, type Rail, type RailKind } from './nav';
+import { FAMILY_LABELS, railOf, sectionOf, type NavItem, type Rail } from './nav';
 
-const ROLE_LABELS: Readonly<Record<RailKind, string>> = {
-  owner: 'Propriétaire',
-  manager: 'Manager',
-  chatter: 'Chatteur',
-  operator: 'Opérateur',
-};
+/** What the account is, under its name: a manager on leave has the chatter's rail, and stays a manager. */
+function roleLabel(user: Me): string {
+  if (user.role === 'owner') return 'Propriétaire';
+  if (user.role === 'creator') return 'Créatrice';
+  if (user.team === null) return 'Opérateur';
+  return user.team.role === 'manager' ? 'Manager' : 'Chatteur';
+}
 
 export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void }): JSX.Element {
   const rail = useMemo(() => railOf(user), [user]);
@@ -28,11 +29,7 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
         <i />
       </div>
       <RailNav rail={rail} current={current}>
-        <UserMenu
-          name={user.name}
-          role={user.role === 'creator' ? 'Créatrice' : ROLE_LABELS[rail.kind]}
-          onSignOut={onSignOut}
-        />
+        <UserMenu name={user.name} role={roleLabel(user)} onSignOut={onSignOut} />
       </RailNav>
       <main className="nv-stage" key={current}>
         <Outlet />
