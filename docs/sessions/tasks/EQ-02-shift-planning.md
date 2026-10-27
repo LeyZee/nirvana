@@ -1,5 +1,5 @@
 # EQ-02 Planning des shifts et « qui est en poste »
-Statut : todo (lot 2 de l'ADR 0023, ID validé par Charles le 27/10/2026)
+Statut : in-progress (lot 2 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-01 ; pour l'écran, EQ-11
 Branche : task/eq-02-shift-planning
@@ -27,3 +27,4 @@ Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « 
 Rapports de fin de shift (fiche suivante), paie, routage hybride.
 
 ## Notes de session
+- 2026-10-27 (fil Équipe) : contrat posé, `packages/contracts/src/scheduling.ts` : réglages du planning (fuseau de la grille, créneaux, marge d'accès), shifts sur [début, fin) en UTC, modèles de shift, lecture du planning avec ses conflits, « en poste » et « mes shifts ». Un membre n'est jamais sur deux shifts à la fois, un compte n'a jamais deux membres à la fois. Suite : migration 0021 (accord de Bilan), module `scheduling` et son job, écrans ; congés et échanges dans un second contrat.
