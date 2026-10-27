@@ -9,6 +9,7 @@ import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { desireBandOf } from '@nirvana/contracts';
 import {
   createInMemoryCallLog,
   createLlmGateway,
@@ -19,7 +20,13 @@ import {
   type ConversationTurn,
 } from '@nirvana/llm';
 
-import { composeTurn, guardSettingsOf, holdDecision, readPersonaFile } from '../modules/agent/index';
+import {
+  composeTurn,
+  guardSettingsOf,
+  holdDecision,
+  measureDesire,
+  readPersonaFile,
+} from '../modules/agent/index';
 
 import { checkScenario, judgeSuite, type Outcome, type ScenarioResult } from './evals/check';
 import { EVALS_CAP_EUR, evalsConfig } from './evals/judge-model';
@@ -130,6 +137,18 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
         ageConfirmed: situation.age_confirmed,
         noExplicit: false,
       },
+      // His score as stored just before; no clock per message here, so his reply speed is not measured.
+      desire: {
+        previous: { score: situation.desire, at: now },
+        measured: {
+          ...measureDesire(
+            history.map((turn) => ({ fromFan: turn.from === 'fan', text: turn.text, at: now })),
+          ),
+          replySeconds: null,
+        },
+        ageDisputed: false,
+        counted: false,
+      },
       skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
     },
   );
@@ -140,9 +159,17 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
   const blocking = composed.violations.filter((v) => v.severity === 'blocking').map((v) => v.code);
   const bubbles = handoff || composed.isBlocked ? [] : composed.bubbles;
   const outcome: Outcome = {
-    ...(brief !== undefined && { brief: { intent: brief.intent, risks: brief.risks, action: brief.action } }),
+    ...(brief !== undefined && {
+      brief: {
+        intent: brief.intent,
+        risks: brief.risks,
+        action: brief.action,
+        ...(brief.desireSignals !== undefined && { desireSignals: brief.desireSignals }),
+      },
+    }),
     handoff,
     offer,
+    desireBand: desireBandOf(composed.desire?.score ?? situation.desire),
     bubbles: composed.bubbles,
     blocking,
   };

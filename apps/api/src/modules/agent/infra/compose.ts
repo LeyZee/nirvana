@@ -1,6 +1,14 @@
-import type { MediaDescription } from '@nirvana/contracts';
+import { desireNow, type MediaDescription } from '@nirvana/contracts';
 import type { Brief, CallTrace, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
+import {
+  desireMoved,
+  desireScore,
+  NO_MEASURE,
+  type DesireMeasure,
+  type DesireReading,
+  type DesireState,
+} from '../domain/desire';
 import {
   checkExplicit,
   checkVoiceOutput,
@@ -67,6 +75,11 @@ export interface ComposeTurnInput {
    * overruled, she asks him lightly whether he is back.
    */
   readonly waited?: boolean;
+  /**
+   * His desire score (P3-12): as stored, what code measured on his last messages, and whether his age was taken
+   * back. Absent, he starts from 0 with nothing measured.
+   */
+  readonly desire?: DesireInput;
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
 }
@@ -78,8 +91,20 @@ interface FollowUpTurn {
   readonly spirit: string | null;
 }
 
-/** The policy's facts on him for an offer; his heat and the risks come from the brain. */
-export type OfferInput = Omit<OfferContext, 'fanSexualizes' | 'fanAsksForPaid' | 'risks'>;
+/** What his desire score is counted from (`desireScore`). */
+interface DesireInput {
+  readonly previous?: DesireState;
+  readonly measured: DesireMeasure;
+  readonly ageDisputed: boolean;
+  /**
+   * His last message was already counted in `previous` (a second pass after a wait, a replay): the score is read
+   * as stored, decayed, and nothing new is counted.
+   */
+  readonly counted: boolean;
+}
+
+/** The policy's facts on him for an offer; his heat comes from his desire score, the risks from the brain. */
+export type OfferInput = Omit<OfferContext, 'desire' | 'fanAsksForPaid' | 'risks'>;
 
 /** Why the brain's offer was not written: the policy's reason, or nothing to decide on. */
 type OfferRefusal = OfferBlock | 'no_offer_context';
@@ -88,9 +113,10 @@ type OfferRefusal = OfferBlock | 'no_offer_context';
 const NO_OFFER_BRIEF =
   'Réponds à ce qu’il vient de dire et garde la complicité, sans rien proposer de payant, sans parler de prix ni de contenu à acheter.';
 
-function offerRefusal(brief: Brief, offer: OfferInput | undefined): OfferRefusal | undefined {
+function offerRefusal(brief: Brief, offer: OfferInput | undefined, desire: number): OfferRefusal | undefined {
   if (offer === undefined) return 'no_offer_context';
-  const decision = offerDecision({ ...offer, ...offerSignals(brief), risks: brief.risks });
+  const { fanAsksForPaid } = offerSignals(brief);
+  const decision = offerDecision({ ...offer, desire, fanAsksForPaid, risks: brief.risks });
   return decision.allowed ? undefined : decision.reason;
 }
 
@@ -99,6 +125,7 @@ const HOUR_MS = 3_600_000;
 const NO_LIMITS: SexualizationLimits = {
   initiateAfterHours: Number.POSITIVE_INFINITY,
   minHoursBeforeFollowing: Number.POSITIVE_INFINITY,
+  minDesireToOpen: Number.POSITIVE_INFINITY,
 };
 
 /** What the voice writes when he goes there too early: she slows down in her own voice, no lesson, no explicit. */
@@ -152,6 +179,8 @@ export interface ComposedTurn {
   readonly briefFailure?: LlmFailure;
   /** What the cursor decided for this answer; absent when the brain did not read the moment. */
   readonly sexualization?: SexualizationDecision;
+  /** His desire score after this message, only when it changed: the worker writes it (P3-12). */
+  readonly desire?: DesireReading;
   /** An adult age he stated himself in this message (`declaredAdultAge`): the composer may confirm his age. */
   readonly ageDeclared?: number;
   /** The brain suggested an offer and the policy refused it: the voice wrote a plain answer. */
@@ -229,6 +258,22 @@ async function writeFollowUp(
   };
 }
 
+/** His score after this message, or undefined when it was already counted. */
+function desireOf(brief: Brief, input: ComposeTurnInput): DesireReading | undefined {
+  const desire = input.desire;
+  if (desire?.counted === true) return undefined;
+  return desireScore({
+    previous: desire?.previous,
+    signals: brief.desireSignals ?? [],
+    intent: brief.intent,
+    sentiment: brief.sentiment,
+    measured: desire?.measured ?? NO_MEASURE,
+    risks: brief.risks,
+    ageDisputed: desire?.ageDisputed === true,
+    now: input.situation.now,
+  });
+}
+
 /** Brain, then voice, then guards. Writes nothing and sends nothing: the caller decides what the answer becomes. */
 export async function composeTurn(
   gateway: LlmGateway,
@@ -279,6 +324,9 @@ export async function composeTurn(
   // His age as stored: one he states now counts from his next message, so the answer to « j'ai 25 ans » stays
   // careful. The cursor decides from it, a trap's answer first.
   const ageDeclared = brief === undefined ? null : declaredAdultAge(brief.factsProposed, input.fanText);
+  // His heat, counted by code from the brain's signals and what it measured (P3-12); read as stored once counted.
+  const desire = brief === undefined ? undefined : desireOf(brief, input);
+  const heat = desire?.score ?? desireNow(input.desire?.previous, input.situation.now);
   const ageConfirmed = input.sexualization?.ageConfirmed === true;
   const noExplicit = input.sexualization?.noExplicit === true;
   const sexualization =
@@ -290,6 +338,7 @@ export async function composeTurn(
           ageConfirmed,
           noExplicit,
           fanSexualizes: offerSignals(brief).fanSexualizes,
+          desire: heat,
           limits: input.sexualization?.limits ?? NO_LIMITS,
         });
   const within =
@@ -305,7 +354,7 @@ export async function composeTurn(
         }
       : within;
   // The brain may suggest an offer, only the policy decides (CLAUDE.md rule 3): refused, she just answers.
-  const offerRefused = cursored.action === 'offer' ? offerRefusal(cursored, input.offer) : undefined;
+  const offerRefused = cursored.action === 'offer' ? offerRefusal(cursored, input.offer, heat) : undefined;
   const voiceBrief: Brief =
     offerRefused === undefined ? cursored : { ...cursored, action: 'reply', replyBrief: NO_OFFER_BRIEF };
   const brainCostUsd = brain.ok ? (brain.value.meta.costUsd ?? 0) : 0;
@@ -317,6 +366,7 @@ export async function composeTurn(
       ...(brief && { brief }),
       ...(!brain.ok && { briefFailure: brain.error }),
       ...(sexualization !== undefined && { sexualization }),
+      ...(desire !== undefined && desireMoved(desire) && { desire }),
       ...(ageDeclared !== null && { ageDeclared }),
       ...(offerRefused !== undefined && { offerRefused }),
       bubbles: [],
@@ -343,6 +393,7 @@ export async function composeTurn(
     ...(brief && { brief }),
     ...(!brain.ok && { briefFailure: brain.error }),
     ...(sexualization !== undefined && { sexualization }),
+    ...(desire !== undefined && desireMoved(desire) && { desire }),
     ...(ageDeclared !== null && { ageDeclared }),
     ...(offerRefused !== undefined && { offerRefused }),
     voiceBrief,

@@ -7,12 +7,12 @@ const hoursAgo = (hours: number): Date => new Date(NOW.getTime() - hours * 3_600
 const base: OfferContext = {
   now: NOW,
   lastOfferAt: null,
-  fanSexualizes: true,
+  desire: 80,
   fanAsksForPaid: false,
   hasNoBudget: false,
   risks: [],
   flags: { ageConfirmedAt: '2026-10-01T10:00:00Z' },
-  limits: { cooldownHours: 10 },
+  limits: { cooldownHours: 10, minDesire: 70 },
 };
 
 describe('offerDecision', () => {
@@ -35,10 +35,11 @@ describe('offerDecision', () => {
     expect(offerDecision(base)).toEqual({ allowed: true });
   });
 
-  it('never opens the sale itself: he has to sexualize', () => {
-    expect(offerDecision({ ...base, fanSexualizes: false })).toEqual({
-      allowed: false,
-      reason: 'not_sexualizing',
+  it('never opens the sale itself: he has to be hot, at the score she set (P3-12)', () => {
+    expect(offerDecision({ ...base, desire: 69 })).toEqual({ allowed: false, reason: 'low_desire' });
+    expect(offerDecision({ ...base, desire: 70 })).toEqual({ allowed: true });
+    expect(offerDecision({ ...base, desire: 60, limits: { ...base.limits, minDesire: 55 } })).toEqual({
+      allowed: true,
     });
   });
 
@@ -48,14 +49,16 @@ describe('offerDecision', () => {
       reason: 'cooldown',
     });
     expect(offerDecision({ ...base, lastOfferAt: hoursAgo(10) })).toEqual({ allowed: true });
-    expect(offerDecision({ ...base, lastOfferAt: hoursAgo(12), fanSexualizes: false })).toEqual({
+    expect(offerDecision({ ...base, lastOfferAt: hoursAgo(12), desire: 30 })).toEqual({
       allowed: false,
-      reason: 'not_sexualizing',
+      reason: 'low_desire',
     });
   });
 
   it('reads the cooldown the creator set', () => {
-    expect(offerDecision({ ...base, lastOfferAt: hoursAgo(6), limits: { cooldownHours: 5 } })).toEqual({
+    expect(
+      offerDecision({ ...base, lastOfferAt: hoursAgo(6), limits: { ...base.limits, cooldownHours: 5 } }),
+    ).toEqual({
       allowed: true,
     });
   });
@@ -67,11 +70,51 @@ describe('offerDecision', () => {
     expect(offerDecision({ ...base, risks: ['meet_request'] })).toEqual({ allowed: true });
   });
 
-  it('lifts the cooldown and the no-budget stop when he asks for paid content himself, never a risk', () => {
-    const asks = { ...base, fanAsksForPaid: true, fanSexualizes: false };
+  it('lifts the cooldown, the no-budget stop and his score when he asks for paid content himself, never a risk', () => {
+    const asks = { ...base, fanAsksForPaid: true, desire: 0 };
     expect(offerDecision({ ...asks, lastOfferAt: hoursAgo(1) })).toEqual({ allowed: true });
     expect(offerDecision({ ...asks, hasNoBudget: true })).toEqual({ allowed: true });
     expect(offerDecision({ ...asks, risks: ['money_trouble'] })).toEqual({ allowed: false, reason: 'risk' });
+  });
+});
+
+describe('offerDecision, whatever the rest (P3-12)', () => {
+  // Every combination of what may vary: no case is left to chance.
+  const cases = [false, true].flatMap((asks) =>
+    [0, 39, 69, 70, 100].flatMap((desire) =>
+      [false, true].flatMap((noBudget) =>
+        [null, hoursAgo(1), hoursAgo(20)].flatMap((lastOfferAt) =>
+          [[], ['money_trouble'], ['minor_suspected'], ['meet_request']].flatMap((risks) =>
+            [true, false].map((adult): OfferContext => ({
+              ...base,
+              fanAsksForPaid: asks,
+              desire,
+              hasNoBudget: noBudget,
+              lastOfferAt,
+              risks,
+              flags: adult ? base.flags : {},
+            })),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it('never offers without a confirmed age or on a risk', () => {
+    for (const context of cases) {
+      const risky = context.risks.some((risk) => risk !== 'meet_request');
+      if (context.flags.ageConfirmedAt === undefined || risky)
+        expect(offerDecision(context).allowed, JSON.stringify(context)).toBe(false);
+    }
+  });
+
+  it('offers with no budget, during the cooldown or below her score only when he asks himself', () => {
+    for (const context of cases) {
+      const cooling =
+        context.lastOfferAt !== null && NOW.getTime() - context.lastOfferAt.getTime() < 10 * 3_600_000;
+      if ((context.hasNoBudget || cooling || context.desire < 70) && offerDecision(context).allowed)
+        expect(context.fanAsksForPaid, JSON.stringify(context)).toBe(true);
+    }
   });
 });
 

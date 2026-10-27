@@ -46,6 +46,8 @@ export const PERSONA_BOUNDS = {
   kycMaxDurationMinutes: [10, 1440],
   kycMinHoursBeforeFollowing: [0, 24],
   sexualizationInitiateAfterHours: [0, 168],
+  sexualizationMinDesireToOpen: [20, 70],
+  scriptMinDesire: [50, 90],
   scriptCooldownHours: [0, 24],
   postOfferDelayDays: [1, 60],
   followUpDelayHours: [1, 168],
@@ -197,12 +199,16 @@ export const PersonaStrategiesSchema = z.strictObject({
       ...strategyShape(STRATEGY_STYLES),
       /** Relationship time before the agent opens sexualization itself. */
       initiate_after_hours: intIn(PERSONA_BOUNDS.sexualizationInitiateAfterHours),
+      /** His desire score (P3-12) before she opens it herself; absent, 40 (`DEFAULT_MIN_DESIRE_TO_OPEN`). */
+      min_desire_to_open: intIn(PERSONA_BOUNDS.sexualizationMinDesireToOpen).optional(),
     })
     .refine(...instructionsWhenCustom('custom')),
   script_launch: z
     .strictObject({
       ...strategyShape(SCRIPT_LAUNCH_STYLES),
       cooldown_hours: intIn(PERSONA_BOUNDS.scriptCooldownHours),
+      /** His desire score (P3-12) before a script may go out; absent, 70 (`DEFAULT_SCRIPT_MIN_DESIRE`). */
+      min_desire: intIn(PERSONA_BOUNDS.scriptMinDesire).optional(),
     })
     .refine(...instructionsWhenCustom('custom')),
   post_offer: z

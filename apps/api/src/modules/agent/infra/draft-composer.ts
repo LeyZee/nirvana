@@ -1,6 +1,7 @@
 import type { FanFlags, HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
+import { measureDesire, type DesireReading } from '../domain/desire';
 import { followUpDecision } from '../domain/follow-up';
 import {
   holdDecision,
@@ -14,7 +15,7 @@ import type { OfferLimits } from '../domain/policy';
 import type { SexualizationLimits } from '../domain/sexualization';
 import { handoffCauseOf } from '../domain/traps';
 
-import { composeTurn, type ComposerPersona, type OfferInput } from './compose';
+import { composeTurn, type ComposedTurn, type ComposerPersona, type OfferInput } from './compose';
 import type { FanLimits } from './fan-limits';
 
 /**
@@ -46,6 +47,8 @@ export interface AgentComposeInput {
     readonly spentMinor: number;
     readonly firstMessageAt: Date | null;
   };
+  /** His desire score as stored on the conversation (P3-12), and when it was counted; absent, he starts at 0. */
+  readonly desire?: { readonly score: number; readonly at: Date };
   /** How many times she already waited for his last message (P3-11): from 1, she does not wait again. */
   readonly waited?: number;
   /** A follow-up on his silence (P3-10), not an answer to a message of his. */
@@ -81,7 +84,10 @@ export interface MediaSight {
   see(media: MediaToSee): Promise<Result<MediaDescription, string>>;
 }
 
-type AgentComposeResult =
+/** His desire score after his message, only when it changed (P3-12): `conversations` journals and projects it. */
+type ScoredDesire = Pick<DesireReading, 'before' | 'score' | 'signals' | 'weightsVersion'>;
+
+type AgentComposeResult = (
   | {
       readonly kind: 'draft';
       readonly bubbles: readonly string[];
@@ -110,7 +116,8 @@ type AgentComposeResult =
        * again at that time.
        */
       readonly retryAt?: Date;
-    };
+    }
+) & { readonly desire?: ScoredDesire };
 
 export interface AgentDraftComposer {
   compose(input: AgentComposeInput): Promise<AgentComposeResult>;
@@ -371,6 +378,81 @@ async function followUp(
   };
 }
 
+/** What his composed answer becomes: a draft, or held for a human, a wait or a failure. */
+async function settle(
+  deps: DraftComposerDeps,
+  input: AgentComposeInput,
+  composed: ComposedTurn,
+  flags: FanFlags | undefined,
+  waited: boolean,
+): Promise<AgentComposeResult> {
+  const { costUsd } = composed;
+  if (composed.droppedNotes !== undefined) {
+    deps.onDroppedNotes?.({ conversationId: input.conversationId, count: composed.droppedNotes.length });
+  }
+  if (composed.handoff !== undefined) {
+    return protect(deps.limits, input, composed.handoff, {
+      ...HANDOFF,
+      detail: composed.handoff,
+      costUsd,
+    });
+  }
+  if (composed.brief === undefined) {
+    const failure = composed.briefFailure;
+    const reason = failure?.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
+    return { kind: 'held', reason, detail: failure === undefined ? [] : failureDetail(failure), costUsd };
+  }
+  const decision: HoldDecision = holdDecision(composed.brief, waited);
+  if (decision.kind === 'handoff') {
+    const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
+    return protect(deps.limits, input, composed.brief.risks, held);
+  }
+  // He stated an adult age himself: confirmed for his next messages (Charles, 27/10), never once his age was
+  // taken back. Not saved, his age stays unconfirmed and she keeps steering back, the safe side: counted.
+  const his = flags;
+  if (
+    composed.ageDeclared !== undefined &&
+    his !== undefined &&
+    his.ageConfirmedAt === undefined &&
+    his.ageDisputed === undefined
+  ) {
+    await deps.limits?.confirmAge(input.creatorId, input.fanId, input.correlationId, input.now).catch(() => {
+      deps.onLimitsNotSaved?.({ conversationId: input.conversationId, limit: 'ageConfirmedAt' });
+    });
+  }
+  // He said he cannot pay: whatever is written now, the policy remembers it for his next messages. Not
+  // saved, a chatter answers: the next message would forget it.
+  const kept = await keepWhileAnswering(deps.limits, input, composed.brief.risks);
+  if (kept !== null) return { ...kept, costUsd };
+  // He asked her to wait: she is asked again a little later, and then asks whether he is back (P3-11).
+  if (decision.kind === 'no_reply')
+    return {
+      kind: 'held',
+      reason: 'no_reply',
+      detail: decision.detail,
+      costUsd,
+      retryAt: waitRetryAt(input.now),
+    };
+  if (composed.voiceFailure !== undefined) {
+    const reason = composed.voiceFailure.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
+    return { kind: 'held', reason, detail: failureDetail(composed.voiceFailure), costUsd };
+  }
+  const blocking = composed.violations.filter((v) => v.severity === 'blocking');
+  if (blocking.length > 0) {
+    return { kind: 'held', reason: 'guard_blocked', detail: blocking.map((v) => v.code), costUsd };
+  }
+  return {
+    kind: 'draft',
+    bubbles: composed.bubbles,
+    softViolations: composed.violations.map((v) => v.code),
+    costUsd,
+    factsProposed: withoutOrders(composed.brief.factsProposed),
+    ...(composed.model !== undefined && {
+      voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
+    }),
+  };
+}
+
 export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer {
   return {
     async compose(input) {
@@ -379,6 +461,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       if ('held' in stop) return stop.held;
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
       const sinceAnswer = input.history.slice(lastAnswer + 1);
+      const lastFanAt = sinceAnswer.at(-1)?.at;
       const looked = await seeHisMedia(deps.sight, input, sinceAnswer);
       if ('unseen' in looked) return looked.unseen;
       const media = looked.seen.flat();
@@ -423,77 +506,23 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         },
         trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
         ...(waited && { waited }),
+        desire: {
+          ...(input.desire !== undefined && { previous: input.desire }),
+          measured: measureDesire(
+            input.history.map((m) => ({ fromFan: m.direction === 'inbound', text: m.text, at: m.at })),
+          ),
+          ageDisputed: stop.flags?.ageDisputed !== undefined,
+          // Counted once per message of his: a second pass after a wait, or a replay, reads it as stored.
+          counted: input.desire !== undefined && lastFanAt !== undefined && input.desire.at >= lastFanAt,
+        },
         // Safety first: a possible minor or distress hands over even when he is testing her, and without the
         // brain's reading of the risks nobody knows, so the voice does not write either.
         skipVoice: (brief) => brief === undefined || holdDecision(brief, waited).kind !== 'answer',
       });
-      const { costUsd } = composed;
-      if (composed.droppedNotes !== undefined) {
-        deps.onDroppedNotes?.({ conversationId: input.conversationId, count: composed.droppedNotes.length });
-      }
-      if (composed.handoff !== undefined) {
-        return protect(deps.limits, input, composed.handoff, {
-          ...HANDOFF,
-          detail: composed.handoff,
-          costUsd,
-        });
-      }
-      if (composed.brief === undefined) {
-        const failure = composed.briefFailure;
-        const reason = failure?.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
-        return { kind: 'held', reason, detail: failure === undefined ? [] : failureDetail(failure), costUsd };
-      }
-      const decision: HoldDecision = holdDecision(composed.brief, waited);
-      if (decision.kind === 'handoff') {
-        const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
-        return protect(deps.limits, input, composed.brief.risks, held);
-      }
-      // He stated an adult age himself: confirmed for his next messages (Charles, 27/10), never once his age was
-      // taken back. Not saved, his age stays unconfirmed and she keeps steering back, the safe side: counted.
-      const his = stop.flags;
-      if (
-        composed.ageDeclared !== undefined &&
-        his !== undefined &&
-        his.ageConfirmedAt === undefined &&
-        his.ageDisputed === undefined
-      ) {
-        await deps.limits
-          ?.confirmAge(input.creatorId, input.fanId, input.correlationId, input.now)
-          .catch(() => {
-            deps.onLimitsNotSaved?.({ conversationId: input.conversationId, limit: 'ageConfirmedAt' });
-          });
-      }
-      // He said he cannot pay: whatever is written now, the policy remembers it for his next messages. Not
-      // saved, a chatter answers: the next message would forget it.
-      const kept = await keepWhileAnswering(deps.limits, input, composed.brief.risks);
-      if (kept !== null) return { ...kept, costUsd };
-      // He asked her to wait: she is asked again a little later, and then asks whether he is back (P3-11).
-      if (decision.kind === 'no_reply')
-        return {
-          kind: 'held',
-          reason: 'no_reply',
-          detail: decision.detail,
-          costUsd,
-          retryAt: waitRetryAt(input.now),
-        };
-      if (composed.voiceFailure !== undefined) {
-        const reason = composed.voiceFailure.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
-        return { kind: 'held', reason, detail: failureDetail(composed.voiceFailure), costUsd };
-      }
-      const blocking = composed.violations.filter((v) => v.severity === 'blocking');
-      if (blocking.length > 0) {
-        return { kind: 'held', reason: 'guard_blocked', detail: blocking.map((v) => v.code), costUsd };
-      }
-      return {
-        kind: 'draft',
-        bubbles: composed.bubbles,
-        softViolations: composed.violations.map((v) => v.code),
-        costUsd,
-        factsProposed: withoutOrders(composed.brief.factsProposed),
-        ...(composed.model !== undefined && {
-          voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
-        }),
-      };
+      const settled = await settle(deps, input, composed, stop.flags, waited);
+      if (composed.desire === undefined) return settled;
+      const { before, score, signals, weightsVersion } = composed.desire;
+      return { ...settled, desire: { before, score, signals, weightsVersion } };
     },
   };
 }

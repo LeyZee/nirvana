@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { desireBandOf } from './desire';
+import { desireBandOf, desireNow } from './desire';
 import { EventBodySchema } from './events';
+
+const NOW = new Date('2026-10-27T21:00:00Z');
+const minutesAgo = (minutes: number): Date => new Date(NOW.getTime() - minutes * 60_000);
 
 describe('desire score', () => {
   it('names the band of a score at its floors', () => {
@@ -16,16 +19,36 @@ describe('desire score', () => {
   });
 
   it('journals a change of score between 0 and 100, with closed signal names', () => {
-    const payload = { before: null, score: 72, signals: ['explicit_compliment'], weightsVersion: 'w1' };
+    const payload = {
+      before: null,
+      score: 72,
+      signals: ['states_desire', 'suggestive_emoji', 'suggestive_emoji'],
+      weightsVersion: 'w1',
+    };
     expect(EventBodySchema.safeParse({ type: 'desire_scored', payload }).success).toBe(true);
     for (const wrong of [
       { ...payload, score: 101 },
       { ...payload, score: 7.5 },
       { ...payload, before: -1 },
-      { ...payload, signals: ['x'.repeat(65)] },
-      { ...payload, signals: Array.from({ length: 21 }, () => 'x') },
+      { ...payload, signals: ['made_up'] },
+      { ...payload, signals: Array.from({ length: 21 }, () => 'roleplay') },
     ]) {
       expect(EventBodySchema.safeParse({ type: 'desire_scored', payload: wrong }).success).toBe(false);
     }
+  });
+});
+
+describe('desireNow', () => {
+  it('halves every 90 minutes without a message of his, computed on read', () => {
+    expect(desireNow({ score: 80, at: NOW }, NOW)).toBe(80);
+    expect(desireNow({ score: 80, at: minutesAgo(90) }, NOW)).toBe(40);
+    expect(desireNow({ score: 80, at: minutesAgo(180) }, NOW)).toBe(20);
+    expect(desireNow(undefined, NOW)).toBe(0);
+  });
+
+  it('falls toward his floor, never below it, and never raises a score under it', () => {
+    expect(desireNow({ score: 80, at: minutesAgo(90) }, NOW, 20)).toBe(50);
+    expect(desireNow({ score: 80, at: minutesAgo(24 * 60) }, NOW, 20)).toBe(20);
+    expect(desireNow({ score: 10, at: minutesAgo(90) }, NOW, 20)).toBe(10);
   });
 });

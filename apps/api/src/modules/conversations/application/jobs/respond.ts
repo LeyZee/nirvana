@@ -70,9 +70,6 @@ export const noteLine = (fact: {
 
 const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
 
-/** Longest signal name kept in `desire_scored`. */
-const DESIRE_SIGNAL_MAX_LENGTH = 64;
-
 /**
  * Journals the engine's desire score with the result it came with (P3-12). The engine gives one only when the score
  * moved from the stored one cooled down to now: otherwise nothing is written, not even its time, so that it keeps
@@ -94,9 +91,7 @@ async function recordDesire(
       payload: {
         before: desire.before,
         score: desire.score,
-        signals: desire.signals
-          .slice(0, DESIRE_SIGNALS_MAX)
-          .map((signal) => signal.slice(0, DESIRE_SIGNAL_MAX_LENGTH)),
+        signals: desire.signals.slice(0, DESIRE_SIGNALS_MAX),
         weightsVersion: desire.weightsVersion,
       },
     },

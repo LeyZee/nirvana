@@ -1,4 +1,4 @@
-import type { MediaDescription } from '@nirvana/contracts';
+import { desireBandOf, type DesireBand, type DesireSignal, type MediaDescription } from '@nirvana/contracts';
 import type { Brief, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import {
@@ -12,6 +12,8 @@ import {
   type GuardSettings,
   type GuardViolation,
   type FollowUpDecision,
+  measureDesire,
+  type DesireState,
   type OfferInput,
   type OfferLimits,
   type RatedMoment,
@@ -34,6 +36,12 @@ export interface PlaygroundTurn {
   readonly latencyMs: number;
   readonly model?: string;
   readonly isFallback: boolean;
+  /** His desire score after this message, when it moved (P3-12): what the policy read. */
+  readonly desire?: {
+    readonly score: number;
+    readonly band: DesireBand;
+    readonly signals: readonly DesireSignal[];
+  };
 }
 
 /** The last answer and what it was written from: what a rating records, and what a comparison replays. */
@@ -136,6 +144,10 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
   // His last message on the simulated clock, and the follow-ups she wrote since: the next step is their count.
   let lastFanAt: Date | null = null;
   let followUpsSince = 0;
+  // His desire score as `conversations` would store it (P3-12), on the simulated clock.
+  let desire: DesireState | undefined;
+  // His score before each of his messages: a branch goes back to it.
+  const desireBefore: (DesireState | undefined)[] = [];
   const offerAt = (now: Date): OfferInput | undefined =>
     deps.offerLimits === undefined
       ? undefined
@@ -165,6 +177,8 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       ageConfirmedAt = null;
       lastFanAt = null;
       followUpsSince = 0;
+      desire = undefined;
+      desireBefore.length = 0;
       situation = { ...situation, relationshipStartedAt: situation.now, spentCents: 0 };
     },
 
@@ -200,6 +214,8 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       const turn = history[index];
       if (turn === undefined) return undefined;
       history.splice(index);
+      desire = desireBefore[fanMessageNumber - 1];
+      desireBefore.length = fanMessageNumber - 1;
       lastExchange = undefined;
       return { text: turn.text, media: (turn.media ?? []).map((m) => m.description) };
     },
@@ -281,6 +297,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
     async handleFanMessage(text, media = []) {
       lastFanAt = situation.now;
       followUpsSince = 0;
+      desireBefore.push(desire);
       history.push({ from: 'fan', text, media: media.map((description) => ({ description })) });
       const moment: RatedMoment = {
         history: [...history],
@@ -310,8 +327,21 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
               noExplicit: false,
             },
           }),
+          desire: {
+            ...(desire !== undefined && { previous: desire }),
+            // No clock per message here: his reply speed is not measured.
+            measured: {
+              ...measureDesire(
+                history.map((t) => ({ fromFan: t.from === 'fan', text: t.text, at: situation.now })),
+              ),
+              replySeconds: null,
+            },
+            ageDisputed: false,
+            counted: false,
+          },
         },
       );
+      if (composed.desire !== undefined) desire = { score: composed.desire.score, at: situation.now };
       if (composed.ageDeclared !== undefined && ageConfirmedAt === null) ageConfirmedAt = situation.now;
       if (composed.voiceBrief?.action === 'offer' && !composed.isBlocked) {
         lastOfferAt = situation.now;
@@ -334,6 +364,13 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         latencyMs: composed.latencyMs,
         ...(composed.model !== undefined && { model: composed.model }),
         isFallback: composed.isFallback,
+        ...(composed.desire !== undefined && {
+          desire: {
+            score: composed.desire.score,
+            band: desireBandOf(composed.desire.score),
+            signals: composed.desire.signals,
+          },
+        }),
       };
       lastExchange = {
         fanMessage: text,

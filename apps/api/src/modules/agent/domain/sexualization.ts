@@ -11,6 +11,8 @@ export interface SexualizationLimits {
   readonly initiateAfterHours: number;
   /** Relationship time before she follows him there (`strategies.kyc.min_hours_before_following`). */
   readonly minHoursBeforeFollowing: number;
+  /** His desire score before she opens it herself (`strategies.sexualization.min_desire_to_open`, P3-12). */
+  readonly minDesireToOpen: number;
 }
 
 export interface SexualizationContext {
@@ -20,6 +22,8 @@ export interface SexualizationContext {
   readonly noExplicit: boolean;
   /** He is flirting or sexting now (`offerSignals`). */
   readonly fanSexualizes: boolean;
+  /** His desire score after his message (`desireScore`): she opens it herself only once he is warm enough. */
+  readonly desire: number;
   readonly limits: SexualizationLimits;
 }
 
@@ -28,7 +32,7 @@ export type SexualizationDecision =
   | { readonly kind: 'free' }
   /** She may follow him, suggestive only: a human said nothing explicit for him. */
   | { readonly kind: 'suggestive_only' }
-  /** He is not there and it is too early, or his age is unknown: she does not open it. */
+  /** He is not there and it is too early, he is not warm enough, or his age is unknown: she does not open it. */
   | { readonly kind: 'no_opening' }
   /** He goes there too early or without a confirmed age: she slows down, in her voice. */
   | { readonly kind: 'steer_back'; readonly reason: 'age_unconfirmed' | 'too_early' };
@@ -40,7 +44,12 @@ export function sexualizationDecision(context: SexualizationContext): Sexualizat
     if (hours < limits.minHoursBeforeFollowing) return { kind: 'steer_back', reason: 'too_early' };
     return context.noExplicit ? { kind: 'suggestive_only' } : { kind: 'free' };
   }
-  if (!context.ageConfirmed || context.noExplicit || hours < limits.initiateAfterHours)
+  if (
+    !context.ageConfirmed ||
+    context.noExplicit ||
+    hours < limits.initiateAfterHours ||
+    context.desire < limits.minDesireToOpen
+  )
     return { kind: 'no_opening' };
   return { kind: 'free' };
 }

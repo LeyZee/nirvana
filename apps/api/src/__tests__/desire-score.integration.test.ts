@@ -6,6 +6,7 @@ import {
   UserIdSchema,
   type ConversationId,
   type CreatorId,
+  type DesireSignal,
   type PlatformAccountId,
   type SendResult,
 } from '@nirvana/contracts';
@@ -70,7 +71,11 @@ class ScriptedComposer implements DraftComposer {
   }
 }
 
-const scored = (before: number | null, score: number, signals = ['flirt']) => ({
+const scored = (
+  before: number | null,
+  score: number,
+  signals: readonly DesireSignal[] = ['intent:flirt'],
+) => ({
   before,
   score,
   signals,
@@ -223,7 +228,7 @@ describe('conversation.respond with a desire score', () => {
       reason: 'handoff',
       detail: ['sale'],
       costUsd: 0,
-      desire: scored(40, 72, ['asks_content']),
+      desire: scored(40, 72, ['intent:asks_for_media']),
     });
     await respond(conversationId);
     expect(await row(conversationId)).toMatchObject({
@@ -233,8 +238,8 @@ describe('conversation.respond with a desire score', () => {
       desireAt: clock.now(),
     });
     expect(await scoredEvents(conversationId)).toEqual([
-      { before: null, score: 45, signals: ['flirt'], weightsVersion: 'w1' },
-      { before: 40, score: 72, signals: ['asks_content'], weightsVersion: 'w1' },
+      { before: null, score: 45, signals: ['intent:flirt'], weightsVersion: 'w1' },
+      { before: 40, score: 72, signals: ['intent:asks_for_media'], weightsVersion: 'w1' },
     ]);
 
     const live = await row(conversationId);
@@ -256,17 +261,20 @@ describe('conversation.respond with a desire score', () => {
     expect((await row(conversationId)).desireScore).toBeNull();
   });
 
-  it('keeps a score within its bounds when the engine sends too many signals or too long a name', async () => {
+  it('keeps at most twenty signals when the engine sends more', async () => {
     const conversationId = await fanWrites('ds-bounds');
     clock.advance(MINUTE_MS);
     composer.results.push({
       ...draftWith(),
-      desire: scored(null, 10, ['x'.repeat(80), ...Array.from({ length: 25 }, (_, i) => `s${String(i)}`)]),
+      desire: scored(
+        null,
+        10,
+        Array.from({ length: 25 }, () => 'suggestive_emoji'),
+      ),
     });
     await respond(conversationId);
     const [event] = await scoredEvents(conversationId);
     const { signals } = z.object({ signals: z.array(z.string()) }).parse(event);
     expect(signals).toHaveLength(20);
-    expect(signals[0]).toHaveLength(64);
   });
 });

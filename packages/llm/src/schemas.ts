@@ -1,4 +1,4 @@
-import { MediaDescriptionSchema } from '@nirvana/contracts';
+import { DESIRE_BRAIN_SIGNALS, MediaDescriptionSchema } from '@nirvana/contracts';
 import { z } from 'zod';
 
 /** Brain output (docs/architecture/ai-engine.md, « Le Brief »). Decisions are taken by the policy in code, not here. */
@@ -45,6 +45,11 @@ export const BriefSchema = z.object({
       'real_abuse',
     ]),
   ),
+  /**
+   * What heats him up or cools him down in his last message (P3-12): the code counts his desire score from these,
+   * the brain never gives a number. Absent, nothing read.
+   */
+  desireSignals: z.array(z.enum(DESIRE_BRAIN_SIGNALS)).max(DESIRE_BRAIN_SIGNALS.length).optional(),
   action: z.enum(['reply', 'offer', 'wait', 'follow_up', 'handoff']),
   replyBrief: z.string().min(1),
   toneHints: z.array(z.string()),
