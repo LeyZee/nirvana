@@ -1,8 +1,8 @@
-# Mode hybride : passage à l'humain pour vendre, routage et attribution (ID à proposer)
-Statut : proposed (lot 4 de l'ADR 0023, ID à valider par Charles)
+# EQ-08 Mode hybride : passage à l'humain pour vendre, routage et attribution
+Statut : blocked (lot 4 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; attend la capture Reveal et les clés)
 Phase : 3-4 (moteur et Suivi), après la capture Reveal et les clés
-Dépend de : fiche Planning, P6-01 (`sales`), le composeur de l'agent, ADR 0023 acceptée
-Branche : task/<id>-hybrid-sale-handoff
+Dépend de : EQ-02, P6-01 (`sales`), le composeur de l'agent, la capture Reveal
+Branche : task/eq-08-hybrid-sale-handoff
 
 ## Objectif
 Quand la méthode dit qu'il est temps de vendre, l'agent passe la main au chatteur en poste au lieu de dérouler un script, puis reprend la relation quand le chatteur rend la main ; chaque vente détectée revient à celui qui tenait la conversation.

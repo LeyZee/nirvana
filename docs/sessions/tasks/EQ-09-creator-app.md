@@ -1,8 +1,8 @@
-# PWA de la créatrice : routine, revenus, qui est en poste (ID à proposer)
-Statut : proposed (lot 5 de l'ADR 0023, phase 5 de la roadmap, ID à valider par Charles)
+# EQ-09 PWA de la créatrice : routine, revenus, qui est en poste
+Statut : todo (lot 5 de l'ADR 0023, phase 5 de la roadmap, ID validé par Charles le 27/10/2026)
 Phase : 5
-Dépend de : fiches Équipe, Planning et Moteur de paie
-Branche : task/<id>-creator-app
+Dépend de : EQ-01, EQ-02, EQ-04 ; carte de navigation validée
+Branche : task/eq-09-creator-app
 
 ## Objectif
 Donner à chaque créatrice une application installable sur son téléphone : sa routine du jour, ses revenus, ses factures, qui chatte pour elle maintenant, et des notifications.

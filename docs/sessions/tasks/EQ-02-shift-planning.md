@@ -1,8 +1,8 @@
-# Planning des shifts et « qui est en poste » (ID à proposer)
-Statut : proposed (lot 2 de l'ADR 0023, ID à valider par Charles)
+# EQ-02 Planning des shifts et « qui est en poste »
+Statut : todo (lot 2 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
-Dépend de : fiche Équipe (`PROPOSED-team-members.md`)
-Branche : task/<id>-shift-planning
+Dépend de : EQ-01
+Branche : task/eq-02-shift-planning
 
 ## Objectif
 Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « qui est en poste sur cette créatrice maintenant ? ».

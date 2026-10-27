@@ -1,8 +1,8 @@
-# Rapport de fin de shift dans Nirvana (ID à proposer)
-Statut : proposed (lot 3 de l'ADR 0023, ID à valider par Charles)
+# EQ-03 Rapport de fin de shift dans Nirvana
+Statut : todo (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
-Dépend de : fiche Planning (`PROPOSED-shift-planning.md`)
-Branche : task/<id>-shift-reports
+Dépend de : EQ-02
+Branche : task/eq-03-shift-reports
 
 ## Objectif
 Le chatteur déclare à la fin de son shift ce qu'il a généré, directement dans l'application ; un manager le valide ; ces montants nourrissent la paie des comptes en source « déclaré ». Remplace les rapports postés dans Telegram puis lus par un bot dans Imperium.

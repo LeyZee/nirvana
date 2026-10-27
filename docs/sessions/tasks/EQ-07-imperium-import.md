@@ -1,8 +1,8 @@
-# Import de l'historique d'Imperium (ID à proposer)
-Statut : proposed (lot 3 de l'ADR 0023, après les factures ; ID à valider par Charles)
+# EQ-07 Import de l'historique d'Imperium (optionnel)
+Statut : blocked (ID validé par Charles le 27/10/2026 ; optionnelle : aucune copie de la base d'Imperium, son serveur est arrêté. Charles, 27/10 à 14h34 : « on se remet au propre sur une nouvelle base ». Ne se lance que si une sauvegarde est retrouvée et que Charles le redemande.)
 Phase : équipe (ADR 0023)
-Dépend de : fiches Équipe, Planning, Rapports de fin de shift, Moteur de paie, Factures
-Branche : task/<id>-imperium-import
+Dépend de : EQ-01 à EQ-06, une copie de la base d'Imperium
+Branche : task/eq-07-imperium-import
 
 ## Objectif
 Retrouver dans Nirvana l'historique d'Imperium (membres, shifts, rapports, relevés payés, primes, malus, reports, factures émises) en lecture seule, avec des totaux identiques au centime près à ceux d'Imperium, sans qu'aucune donnée réelle n'entre dans le dépôt.
