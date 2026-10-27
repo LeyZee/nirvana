@@ -106,6 +106,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     offerLimits: persona.offerLimits,
     sexualizationLimits: persona.sexualizationLimits,
     followUpSpirit: persona.followUps.spirit,
+    alertKeywords: persona.alertKeywords,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),

@@ -8,6 +8,7 @@ import type {
 } from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
+import { alertKeywordsIn } from '../domain/alerts';
 import { measureDesire, type DesireReading } from '../domain/desire';
 import { followUpDecision } from '../domain/follow-up';
 import {
@@ -162,6 +163,11 @@ export interface DraftComposerDeps {
     readonly conversationId: string;
     readonly limit: 'ageConfirmedAt';
   }) => void;
+  /**
+   * Her alert keywords (`PersonaForModels.alertKeywords`): one in what he wrote since her last answer pauses the agent
+   * for him, before any model is called (P4-01). Without them, nothing is watched.
+   */
+  readonly alertKeywords?: readonly string[];
   /** Lines of her notes kept out of the prompt for looking like an order: counted, never their text. */
   readonly onDroppedNotes?: (event: { readonly conversationId: string; readonly count: number }) => void;
 }
@@ -484,6 +490,10 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         const held: Held = { ...HANDOFF, cause: handoffCauseOf(flags), detail: flags };
         return protect(deps.limits, input, flags, held);
       }
+      // Her alert keywords, in code and at no cost: a human answers him (cause `keyword`). The journal keeps the
+      // code only, never his words.
+      const watched = alertKeywordsIn(sinceAnswer.map((m) => m.text).join('\n'), deps.alertKeywords ?? []);
+      if (watched.length > 0) return { ...HANDOFF, cause: 'keyword', detail: ['alert_keyword'] };
       if (voiceUnavailable(deps.gateway)) {
         return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
       }

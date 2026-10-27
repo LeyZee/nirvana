@@ -127,6 +127,7 @@ async function server(
       followUps: { delaysHours: [12, 24], spirit: null },
       splitMessages: true,
       petNames: [],
+      alertKeywords: [],
     },
     store,
     records,

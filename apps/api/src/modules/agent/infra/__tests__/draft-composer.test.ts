@@ -551,6 +551,63 @@ describe('createDraftComposer', () => {
   });
 });
 
+describe('createDraftComposer, her alert keywords (P4-01)', () => {
+  const watching = (keywords: readonly string[], sight?: MediaSight) => {
+    const seen: Seen = { voiceCalls: 0, traces: [] };
+    const draftComposer = createDraftComposer({
+      gateway: gateway({}, seen),
+      persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
+      timeZoneOf: () => Promise.resolve('Europe/Paris'),
+      voicePrompt: '1.2.0',
+      alertKeywords: keywords,
+      ...(sight !== undefined && { sight }),
+    });
+    return { draftComposer, seen };
+  };
+  const wrote = (...texts: string[]): AgentComposeInput => ({
+    ...INPUT,
+    history: [
+      {
+        direction: 'inbound',
+        text: 'On se voit où pour le rendez-vous ?',
+        at: new Date('2026-10-17T09:50:00Z'),
+      },
+      { direction: 'outbound', text: 'Ici, c’est très bien 😏', at: new Date('2026-10-17T09:55:00Z') },
+      ...texts.map((text) => ({ direction: 'inbound' as const, text, at: new Date('2026-10-17T09:58:00Z') })),
+    ],
+  });
+
+  it('hands him to a human on one of her keywords, before any model is called', async () => {
+    const { draftComposer, seen } = watching(['Vocal', 'Numéro']);
+    expect(await draftComposer.compose(wrote('Coucou', 'tu m’envoies un vocal ?'))).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'keyword',
+      detail: ['alert_keyword'],
+      costUsd: 0,
+    });
+    expect(seen.traces).toHaveLength(0);
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('reads only what he wrote since her last answer, and nothing without keywords', async () => {
+    expect(await watching(['Rendez-vous']).draftComposer.compose(wrote('Ça va ?'))).toMatchObject({
+      kind: 'draft',
+    });
+    expect(await watching([]).draftComposer.compose(wrote('un vocal ?'))).toMatchObject({ kind: 'draft' });
+  });
+
+  it('lets a flagged media of his outrank a keyword', async () => {
+    const flagged: MediaDescription = { ...PHOTO, flags: ['possible_minor'] };
+    const { draftComposer } = watching(['Vocal'], sightOf({ 'm-1': flagged }).sight);
+    expect(
+      await draftComposer.compose(
+        withMedia('un vocal ?', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]),
+      ),
+    ).toMatchObject({ kind: 'held', reason: 'handoff', cause: 'minor' });
+  });
+});
+
 /** His limits in memory, and what the policy asked to set: invented fan only (ADR 0010). */
 function limitsOf(
   flags: FanFlags,
