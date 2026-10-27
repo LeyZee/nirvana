@@ -1,20 +1,33 @@
 import {
   ApiErrorSchema,
+  LeaveRequestListSchema,
+  LeaveRequestSchema,
   MyShiftsSchema,
   OnDutyListSchema,
   PlanningSchema,
   SCHEDULING_ERROR_CODES,
   ShiftSchema,
+  ShiftSwapListSchema,
+  ShiftSwapRequestSchema,
   ShiftTemplateListSchema,
   ShiftTemplateSchema,
+  SwapCandidatesSchema,
+  type CreateLeaveRequestBody,
   type CreateShiftBody,
+  type CreateShiftSwapRequestBody,
   type CreateShiftTemplateBody,
+  type DecideLeaveRequestBody,
+  type LeaveRequest,
+  type LeaveRequestList,
   type MyShifts,
   type OnDuty,
   type Planning,
   type SchedulingErrorCode,
   type Shift,
+  type ShiftSwapList,
+  type ShiftSwapRequest,
   type ShiftTemplate,
+  type SwapCandidates,
   type UpdateShiftBody,
 } from '@nirvana/contracts';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
@@ -23,7 +36,7 @@ import { z } from 'zod';
 
 /**
  * `/v1/scheduling` as the screens read it (EQ-02): the planning of a week, who is on shift, the member's own shifts,
- * and the writes of the owner and an active manager. Every answer is parsed with the contract.
+ * the leaves and the swaps (ADR 0031), and the writes. Every answer is parsed with the contract.
  */
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -49,10 +62,11 @@ export function fetchPlanning(range: PlanningRange): Promise<Planning> {
 /** Everything the planning shows, read again by every write. */
 export const SCHEDULING_KEY = ['scheduling'] as const;
 
-export function usePlanning(range: PlanningRange): UseQueryResult<Planning> {
+export function usePlanning(range: PlanningRange, enabled = true): UseQueryResult<Planning> {
   return useQuery({
     queryKey: [...SCHEDULING_KEY, 'planning', range.from, range.to, range.creatorId],
     queryFn: () => fetchPlanning(range),
+    enabled,
     // The week stays on screen while the next one loads: no blank grid between two weeks.
     placeholderData: (before) => before,
   });
@@ -86,9 +100,53 @@ export function useMyShifts(): UseQueryResult<MyShifts> {
   });
 }
 
+/**
+ * The leaves that overlap [`from`, `to`): the reader's own for a chatter, every member's for the owner and an active
+ * manager.
+ */
+export function useLeaves(range: {
+  readonly from: string;
+  readonly to: string;
+}): UseQueryResult<LeaveRequestList> {
+  return useQuery({
+    queryKey: [...SCHEDULING_KEY, 'leaves', range.from, range.to],
+    queryFn: () =>
+      read(`/v1/scheduling/leave-requests?${new URLSearchParams(range).toString()}`, (body) =>
+        LeaveRequestListSchema.parse(body),
+      ),
+    placeholderData: (before) => before,
+  });
+}
+
+/** The open swaps and those of the last two weeks: the reader's own, or every one for the owner and a manager. */
+export function useSwaps(): UseQueryResult<ShiftSwapList> {
+  return useQuery({
+    queryKey: [...SCHEDULING_KEY, 'swaps'],
+    queryFn: () => read('/v1/scheduling/swap-requests', (body) => ShiftSwapListSchema.parse(body)),
+    // A colleague's answer lands without a write here: read again every minute, like who is on shift.
+    refetchInterval: 60_000,
+  });
+}
+
+/** Who could take one of the reader's shifts, and what they could give back. */
+export function useSwapCandidates(shiftId: string): UseQueryResult<SwapCandidates> {
+  return useQuery({
+    queryKey: [...SCHEDULING_KEY, 'candidates', shiftId],
+    queryFn: () =>
+      read(`/v1/scheduling/swap-candidates?shiftId=${shiftId}`, (body) => SwapCandidatesSchema.parse(body)),
+  });
+}
+
 /** A refusal the screen words, or a server that does not answer. */
 export type Refusal =
-  | { readonly kind: 'refused'; readonly code: SchedulingRefusalCode; readonly shiftId: string | null }
+  | {
+      readonly kind: 'refused';
+      readonly code: SchedulingRefusalCode;
+      /** The shift in the way, when the refusal names one. */
+      readonly shiftId: string | null;
+      /** The shifts still on a member during a leave (`leave_shifts_conflict`). */
+      readonly shiftIds: readonly string[];
+    }
   | { readonly kind: 'failed' };
 
 /** Besides the planning's own: a role guard, and a body the server refuses that the screen should have caught. */
@@ -100,18 +158,23 @@ const isSchedulingCode = (code: string): code is SchedulingErrorCode =>
   SCHEDULING_ERROR_CODES.some((known) => known === code);
 
 const InTheWaySchema = z.object({ shiftId: z.string() });
+const StillOnSchema = z.object({ shiftIds: z.array(z.string()) });
 
 async function refusalOf(response: Response): Promise<Refusal> {
   const parsed = ApiErrorSchema.safeParse(await response.json().catch(() => null));
   if (!parsed.success) return { kind: 'failed' };
   const { code, details } = parsed.data.error;
-  // The 409s of a member or an account already taken name the shift in the way.
+  // The 409s of a member or an account already taken name the shift in the way; a leave's, the shifts still on it.
   const inTheWay = InTheWaySchema.safeParse(details);
-  const shiftId = inTheWay.success ? inTheWay.data.shiftId : null;
+  const stillOn = StillOnSchema.safeParse(details);
+  const refused = {
+    shiftId: inTheWay.success ? inTheWay.data.shiftId : null,
+    shiftIds: stillOn.success ? stillOn.data.shiftIds : [],
+  };
   // A manager whose status changed since the page opened: the role guard, not a server down. A 400 the screen let
   // through is said as values that do not fit, not as a silent server.
-  if (code === 'role_forbidden' || code === 'request_invalid') return { kind: 'refused', code, shiftId };
-  return isSchedulingCode(code) ? { kind: 'refused', code, shiftId } : { kind: 'failed' };
+  if (code === 'role_forbidden' || code === 'request_invalid') return { kind: 'refused', code, ...refused };
+  return isSchedulingCode(code) ? { kind: 'refused', code, ...refused } : { kind: 'failed' };
 }
 
 async function send<T>(
@@ -151,7 +214,40 @@ export const createTemplate = (body: CreateShiftTemplateBody): Promise<Outcome<S
 export const endTemplate = (templateId: string): Promise<Outcome<null>> =>
   send('DELETE', `/v1/scheduling/shift-templates/${templateId}`, undefined, () => null);
 
-/** After a write: the week, who is on shift and the templates are read again together. */
+export const askLeave = (body: CreateLeaveRequestBody): Promise<Outcome<LeaveRequest>> =>
+  send('POST', '/v1/scheduling/leave-requests', body, (json) => LeaveRequestSchema.parse(json));
+
+export const decideLeave = (
+  leaveRequestId: string,
+  body: DecideLeaveRequestBody,
+): Promise<Outcome<LeaveRequest>> =>
+  send('POST', `/v1/scheduling/leave-requests/${leaveRequestId}/decision`, body, (json) =>
+    LeaveRequestSchema.parse(json),
+  );
+
+/** The member withdraws their pending request; the owner or an active manager cancels an approved leave. */
+export const endLeave = (leaveRequestId: string): Promise<Outcome<null>> =>
+  send('DELETE', `/v1/scheduling/leave-requests/${leaveRequestId}`, undefined, () => null);
+
+export const proposeSwap = (body: CreateShiftSwapRequestBody): Promise<Outcome<ShiftSwapRequest>> =>
+  send('POST', '/v1/scheduling/swap-requests', body, (json) => ShiftSwapRequestSchema.parse(json));
+
+export const answerSwap = (
+  shiftSwapRequestId: string,
+  answer: 'accept' | 'decline',
+): Promise<Outcome<ShiftSwapRequest>> =>
+  send('POST', `/v1/scheduling/swap-requests/${shiftSwapRequestId}/answer`, { answer }, (json) =>
+    ShiftSwapRequestSchema.parse(json),
+  );
+
+/** The requester or the agency withdraws a proposal; the agency reverts an accepted swap. */
+export const endSwap = (shiftSwapRequestId: string): Promise<Outcome<null>> =>
+  send('DELETE', `/v1/scheduling/swap-requests/${shiftSwapRequestId}`, undefined, () => null);
+
+/**
+ * After a write, and after a refusal that says « la liste est relue »: the week, who is on shift, the templates, the
+ * leaves and the swaps are read again together.
+ */
 export function useRefreshPlanning(): () => Promise<void> {
   const client = useQueryClient();
   return useCallback(() => client.invalidateQueries({ queryKey: SCHEDULING_KEY }), [client]);

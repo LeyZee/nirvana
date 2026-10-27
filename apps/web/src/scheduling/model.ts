@@ -1,4 +1,6 @@
 import type {
+  LeaveRequest,
+  LeaveRequestStatus,
   MyShift,
   MyShifts,
   Planning,
@@ -7,11 +9,13 @@ import type {
   PlanningMember,
   Platform,
   Shift,
+  ShiftSwapRequest,
+  ShiftSwapStatus,
   ShiftTemplate,
 } from '@nirvana/contracts';
 
 import type { SchedulingRefusalCode } from './api';
-import { clockOf, dayOf, rangeAt, shortDay } from './time';
+import { clockOf, dayMonth, dayOf, daysFrom, minuteOf, rangeAt, shortDay } from './time';
 
 /**
  * The planning without React (EQ-02): where each shift sits in a week, what a conflict says, and where the member is
@@ -56,6 +60,228 @@ export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   role_forbidden: 'Ton accès au planning a changé. Recharge la page.',
   request_invalid: 'Ces valeurs ne vont pas : vérifie les heures et le jour.',
 };
+
+/**
+ * The refusals that say « la liste est relue » or « le planning est relu »: what the screen showed has changed, so it
+ * reads everything again. A swap that lapsed is one of them, an ordinary outcome: a proposal stays `proposed` on screen
+ * until the quarter-hour job passes.
+ */
+export const READ_AGAIN: ReadonlySet<SchedulingRefusalCode> = new Set<SchedulingRefusalCode>([
+  'shift_not_found',
+  'shift_template_not_found',
+  'leave_request_not_found',
+  'leave_request_conflict',
+  'leave_decided_conflict',
+  'shift_swap_not_found',
+  'shift_swap_conflict',
+  'shift_swap_answered_conflict',
+  'shift_swap_lapsed_conflict',
+  'shift_swap_revert_conflict',
+]);
+
+/** A pill's tone: green when it holds, quiet while it waits, faint once over (team.css `tm-status--*`). */
+export type Tone = 'ok' | 'away' | 'gone';
+
+export const LEAVE_STATUS: Readonly<Record<LeaveRequestStatus, { label: string; tone: Tone }>> = {
+  pending: { label: 'En attente', tone: 'away' },
+  approved: { label: 'Validé', tone: 'ok' },
+  refused: { label: 'Refusé', tone: 'gone' },
+  withdrawn: { label: 'Retiré', tone: 'gone' },
+  cancelled: { label: 'Annulé', tone: 'gone' },
+};
+
+/** « Le mar. 4 nov. », « Du lun. 3 au mer. 5 nov. ». */
+export function leaveDaysLine(leave: Pick<LeaveRequest, 'firstDay' | 'lastDay'>): string {
+  if (leave.firstDay === leave.lastDay) return `Le ${dayMonth(leave.firstDay)}`;
+  return `Du ${dayMonth(leave.firstDay)} au ${dayMonth(leave.lastDay)}`;
+}
+
+/** « 1 jour », « 3 jours ». */
+export function leaveLength(leave: Pick<LeaveRequest, 'firstDay' | 'lastDay'>): string {
+  const days = daysFrom(leave.firstDay, leave.lastDay) + 1;
+  return days === 1 ? '1 jour' : `${String(days)} jours`;
+}
+
+/**
+ * What a leave's approval found in its way, once the planning of the leave says when: « Un shift de Théo tombe encore
+ * pendant ce congé, le mar. 4 nov. : … », « 3 shifts de Théo tombent encore pendant ce congé, entre le mar. 4 et le
+ * mer. 12 nov. : … ». Without `days` (not read yet, or not readable), the line says no day.
+ */
+export function inTheWayLine(name: string, count: number, days: readonly string[]): string {
+  const sorted = [...days].sort();
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const when =
+    first === undefined || last === undefined
+      ? ''
+      : first === last
+        ? `, le ${dayMonth(first)}`
+        : `, entre le ${dayMonth(first)} et le ${dayMonth(last)}`;
+  return count === 1
+    ? `Un shift de ${name} tombe encore pendant ce congé${when} : donne-le à quelqu’un d’autre ou annule-le d’abord.`
+    : `${String(count)} shifts de ${name} tombent encore pendant ce congé${when} : donne-les à quelqu’un d’autre ou annule-les d’abord.`;
+}
+
+/** The leave still covers time ahead: an approved leave can be cancelled until its end, a request withdrawn. */
+export const leaveAhead = (leave: Pick<LeaveRequest, 'endsAt'>, now: Date): boolean =>
+  new Date(leave.endsAt).getTime() > now.getTime();
+
+/** « jeu. 30 oct. · 23 h – 5 h · Nora Vidal »: one shift of a swap, from what the swap noted. */
+export function swapShiftLine(
+  startsAt: string,
+  endsAt: string,
+  creatorName: string | undefined,
+  timeZone: string,
+): string {
+  const when = `${dayMonth(dayOf(startsAt, timeZone))} · ${rangeAt(startsAt, endsAt, timeZone)}`;
+  return creatorName === undefined ? when : `${when} · ${creatorName}`;
+}
+
+/** Who reads a swap: the one who proposed it, the colleague asked, or the owner or a manager. */
+export type SwapSide = 'requester' | 'target' | 'agency';
+
+export interface SwapView {
+  readonly title: string;
+  /** The shift offered, and with an exchange the one that comes back, each with what it is to the reader. */
+  readonly lines: readonly { readonly label: string; readonly text: string }[];
+  readonly status: { readonly label: string; readonly tone: Tone };
+}
+
+const SWAP_TONES: Readonly<Record<ShiftSwapStatus, Tone>> = {
+  proposed: 'away',
+  accepted: 'ok',
+  declined: 'gone',
+  withdrawn: 'gone',
+  lapsed: 'gone',
+  reverted: 'gone',
+};
+
+/**
+ * A swap in the words of its reader (ADR 0031). A withdrawal by the agency is said as such, never by whom; a swap that
+ * lapsed says why in general terms, since the shift that moved may not be the reader's.
+ */
+export function swapViewOf(
+  swap: ShiftSwapRequest,
+  side: SwapSide,
+  names: { readonly member: (id: string) => string; readonly creator: (id: string) => string | undefined },
+  timeZone: string,
+): SwapView {
+  const requester = names.member(swap.requesterId);
+  const target = names.member(swap.targetMemberId);
+  const exchange = swap.targetShiftStartsAt !== null && swap.targetShiftEndsAt !== null;
+  const offered = swapShiftLine(
+    swap.shiftStartsAt,
+    swap.shiftEndsAt,
+    names.creator(swap.creatorId),
+    timeZone,
+  );
+  const back =
+    swap.targetShiftStartsAt === null || swap.targetShiftEndsAt === null
+      ? null
+      : swapShiftLine(
+          swap.targetShiftStartsAt,
+          swap.targetShiftEndsAt,
+          swap.targetCreatorId === null ? undefined : names.creator(swap.targetCreatorId),
+          timeZone,
+        );
+  const title =
+    side === 'requester'
+      ? exchange
+        ? `Échange avec ${target}`
+        : `Ton shift pour ${target}`
+      : side === 'target'
+        ? exchange
+          ? `${requester} te propose un échange`
+          : `${requester} te propose son shift`
+        : exchange
+          ? `Échange entre ${requester} et ${target}`
+          : `${requester} donne son shift à ${target}`;
+  const labels = swapLabels(swap.status, side, requester, target);
+  return {
+    title,
+    lines: [
+      { label: labels.offered, text: offered },
+      ...(back === null ? [] : [{ label: labels.back, text: back }]),
+    ],
+    status: { label: swapStatusLabel(swap, side, requester, target), tone: SWAP_TONES[swap.status] },
+  };
+}
+
+/**
+ * The words before each shift of a swap. They follow its status: a proposal speaks in the conditional, an accepted
+ * swap in the past (the shift offered is no longer the requester's), and any other end names the shifts as proposed.
+ */
+function swapLabels(
+  status: ShiftSwapStatus,
+  side: SwapSide,
+  requester: string,
+  target: string,
+): { readonly offered: string; readonly back: string } {
+  if (side === 'agency') return { offered: `Shift de ${requester}`, back: `Shift de ${target}` };
+  if (status === 'proposed') {
+    return side === 'requester'
+      ? { offered: 'Ton shift', back: `Celui de ${target}` }
+      : { offered: 'Tu prendrais', back: 'Tu lui donnerais' };
+  }
+  if (status === 'accepted') {
+    return side === 'requester'
+      ? { offered: 'Tu as donné', back: 'Tu as reçu' }
+      : { offered: 'Tu as pris', back: 'Tu lui as donné' };
+  }
+  return { offered: 'Proposé', back: 'En retour' };
+}
+
+function swapStatusLabel(swap: ShiftSwapRequest, side: SwapSide, requester: string, target: string): string {
+  switch (swap.status) {
+    case 'proposed':
+      return side === 'target' ? 'À toi de répondre' : `En attente de ${target}`;
+    case 'accepted':
+      return side === 'target' ? 'Tu as accepté' : `Accepté par ${target}`;
+    case 'declined':
+      return side === 'target' ? 'Tu as refusé' : `Refusé par ${target}`;
+    case 'withdrawn':
+      if (swap.withdrawnByAgency) return 'Retiré par l’agence';
+      return side === 'requester' ? 'Tu l’as retiré' : `Retiré par ${requester}`;
+    case 'lapsed':
+      return 'Tombé : un des shifts a changé entre-temps';
+    case 'reverted':
+      return 'Annulé par l’agence';
+  }
+}
+
+/**
+ * Where a refusal comes from in a swap: a proposal, the acceptance of a shift given (`take`, nothing comes back to the
+ * requester), or the acceptance of an exchange (`exchange`, where both members receive a shift).
+ */
+export type SwapStep = 'propose' | 'take' | 'exchange';
+
+/**
+ * What a refusal says in a swap, where the general words would mislead: a colleague busy elsewhere is never named by
+ * their shift (ADR 0031), and the leave of someone else is never said. When an exchange is accepted, the shift or the
+ * leave in the way may be either member's, so the words blame neither.
+ */
+export function swapRefusalText(
+  code: SchedulingRefusalCode,
+  step: SwapStep,
+  colleague: string,
+  shiftId: string | null,
+): string {
+  if (code === 'shift_member_conflict') {
+    if (step === 'exchange')
+      return 'L’un de vous deux est déjà sur un autre shift à ces heures : l’échange ne peut pas se faire.';
+    if (step === 'take') return 'Tu es déjà sur un autre shift à ces heures : tu ne peux pas le prendre.';
+    return shiftId === null
+      ? `${colleague} est déjà sur un autre shift à ces heures.`
+      : 'Le shift rendu tombe sur un autre de tes shifts.';
+  }
+  if (code === 'member_on_leave_conflict') {
+    if (step === 'exchange') return 'Un congé tombe sur ces heures : l’échange ne peut pas se faire.';
+    if (step === 'take') return 'Tu es en congé à ces heures : tu ne peux pas le prendre.';
+    return 'Tu es en congé quand tombe le shift rendu.';
+  }
+  if (code === 'member_left_conflict') return `${colleague} ne peut plus recevoir de shift.`;
+  return ERROR_MESSAGES[code];
+}
 
 const PLATFORMS: Readonly<Record<Platform, string>> = {
   reveal: 'Reveal',
@@ -133,6 +359,18 @@ export interface ConflictLine {
   readonly what: string;
   /** The shift in the way, to open it; none when the member is on leave (ADR 0031). */
   readonly shiftId: string | null;
+  /** A shift to fill, when the member is on leave: its account and hours at the agency's, and who is away. */
+  readonly fill: Fill | null;
+}
+
+/** What « Pourvoir » opens the new-shift panel on: the account, the day and hours of the agency, who is away. */
+export interface Fill {
+  readonly accountId: string;
+  readonly day: string;
+  readonly startMinute: number;
+  readonly endMinute: number;
+  readonly awayMemberId: string;
+  readonly awayName: string;
 }
 
 export function conflictLines(
@@ -151,11 +389,23 @@ export function conflictLines(
       const account = template === undefined ? undefined : accounts.get(template.platformAccountId);
       const where = account === undefined ? '' : ` sur ${account.creatorName}`;
       const what = whatOf(conflict, who, account);
+      const agency = planning.settings.timeZone;
       return {
         key: `${conflict.templateId}-${conflict.startsAt}`,
         when: `${shortDay(dayOf(conflict.startsAt, timeZone))} · ${rangeAt(conflict.startsAt, conflict.endsAt, timeZone)}${where}`,
         what: what.charAt(0).toUpperCase() + what.slice(1),
         shiftId: conflict.reason === 'member_on_leave' ? null : conflict.shiftId,
+        fill:
+          conflict.reason !== 'member_on_leave' || template === undefined
+            ? null
+            : {
+                accountId: template.platformAccountId,
+                day: dayOf(conflict.startsAt, agency),
+                startMinute: minuteOf(conflict.startsAt, agency),
+                endMinute: minuteOf(conflict.endsAt, agency),
+                awayMemberId: template.memberId,
+                awayName: who ?? 'Son membre',
+              },
       };
     });
 }

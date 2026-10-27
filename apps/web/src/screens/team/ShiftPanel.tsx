@@ -11,7 +11,7 @@ import { useId, useState, type JSX } from 'react';
 import { Dialog } from './Dialog';
 
 import { createShift, createTemplate, useRefreshPlanning, type Refusal } from '@/scheduling/api';
-import { accountLine, ERROR_MESSAGES } from '@/scheduling/model';
+import { accountLine, ERROR_MESSAGES, type Fill } from '@/scheduling/model';
 import {
   addDays,
   cityOf,
@@ -37,10 +37,14 @@ function firstSlotOf(
   return slot === -1 ? { day: addDays(day, 1), slot: 0 } : { day, slot };
 }
 
-/** Where the panel opens: from « Ajouter un shift », or from the + of one day on one account. */
+/**
+ * Where the panel opens: from « Ajouter un shift », from the + of one day on one account, or from « Pourvoir » on a
+ * shift a template could not place because its member is on leave (its hours, and someone else than that member).
+ */
 export interface ShiftStart {
   readonly accountId: string | null;
   readonly day: string;
+  readonly fill?: Fill;
 }
 
 /**
@@ -74,20 +78,34 @@ export function ShiftPanel({
   );
   const [accountId, setAccountId] = useState(start.accountId ?? accounts[0]?.id ?? '');
   const account = accounts.find((one) => one.id === accountId) ?? null;
+  const fill = start.fill;
   const eligible = (members ?? [])
     .filter(
       (member) =>
-        member.status === 'active' && account !== null && member.creatorIds.includes(account.creatorId),
+        member.status === 'active' &&
+        member.id !== fill?.awayMemberId &&
+        account !== null &&
+        member.creatorIds.includes(account.creatorId),
     )
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
   const [memberId, setMemberId] = useState('');
   const chosen = eligible.find((member) => member.id === memberId) ?? eligible[0] ?? null;
-  // The first slot still ahead: today's evening rather than a night already gone, else tomorrow's first.
-  const [first] = useState(() => firstSlotOf(start.day < today ? today : start.day, today, slots, zone));
+  // The first slot still ahead: today's evening rather than a night already gone, else tomorrow's first. A shift to
+  // fill keeps its own day and hours: one of the slots when they match, else the hours typed in.
+  const [first] = useState(() =>
+    fill === undefined
+      ? firstSlotOf(start.day < today ? today : start.day, today, slots, zone)
+      : {
+          day: fill.day,
+          slot: slots.findIndex(
+            (one) => one.startMinute === fill.startMinute && one.endMinute === fill.endMinute,
+          ),
+        },
+  );
   const [day, setDay] = useState(first.day);
-  const [slot, setSlot] = useState<number | 'other'>(first.slot);
-  const [from, setFrom] = useState(inputOf(slots[first.slot]?.startMinute ?? 0));
-  const [to, setTo] = useState(inputOf(slots[first.slot]?.endMinute ?? 360));
+  const [slot, setSlot] = useState<number | 'other'>(first.slot === -1 ? 'other' : first.slot);
+  const [from, setFrom] = useState(inputOf(fill?.startMinute ?? slots[first.slot]?.startMinute ?? 0));
+  const [to, setTo] = useState(inputOf(fill?.endMinute ?? slots[first.slot]?.endMinute ?? 360));
   const [weekly, setWeekly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
@@ -143,8 +161,12 @@ export function ShiftPanel({
 
   return (
     <Dialog
-      title={weekly ? 'Nouveau modèle de shift' : 'Nouveau shift'}
-      lead={`À l’heure de l’agence (${cityOf(zone)}).`}
+      title={fill !== undefined ? 'Pourvoir un shift' : weekly ? 'Nouveau modèle de shift' : 'Nouveau shift'}
+      lead={
+        fill === undefined
+          ? `À l’heure de l’agence (${cityOf(zone)}).`
+          : `${fill.awayName} est en congé : choisis qui prend ce shift. À l’heure de l’agence (${cityOf(zone)}).`
+      }
       busy={busy}
       onClose={onClose}
     >
@@ -203,8 +225,8 @@ export function ShiftPanel({
             </span>
           ) : eligible.length === 0 ? (
             <span className="tm-hint tm-hint--error">
-              Aucun membre actif ne travaille sur {account?.creatorName ?? 'cette créatrice'} : ajoute-la à sa
-              fiche dans Membres.
+              {fill === undefined ? 'Aucun membre actif' : 'Aucun autre membre actif'} ne travaille sur{' '}
+              {account?.creatorName ?? 'cette créatrice'} : ajoute-la à sa fiche dans Membres.
             </span>
           ) : null}
         </div>
@@ -299,26 +321,29 @@ export function ShiftPanel({
           </span>
         </fieldset>
 
-        <div className="sc-repeat">
-          <label className="sc-repeat__text" htmlFor={`${id}-weekly`}>
-            <span className="sc-repeat__title">Chaque semaine</span>
-            <span className="tm-hint">
-              {weekly
-                ? `Chaque ${longDay(day).split(' ')[0] ?? ''} à partir de ce jour, posé quatre semaines à l’avance.`
-                : 'Un seul shift, ce jour-là.'}
-            </span>
-          </label>
-          <input
-            id={`${id}-weekly`}
-            type="checkbox"
-            role="switch"
-            className="nv-switch"
-            checked={weekly}
-            onChange={(event) => {
-              setWeekly(event.target.checked);
-            }}
-          />
-        </div>
+        {/* A shift filled for someone on leave is that one occurrence: their template stays theirs. */}
+        {fill === undefined ? (
+          <div className="sc-repeat">
+            <label className="sc-repeat__text" htmlFor={`${id}-weekly`}>
+              <span className="sc-repeat__title">Chaque semaine</span>
+              <span className="tm-hint">
+                {weekly
+                  ? `Chaque ${longDay(day).split(' ')[0] ?? ''} à partir de ce jour, posé quatre semaines à l’avance.`
+                  : 'Un seul shift, ce jour-là.'}
+              </span>
+            </label>
+            <input
+              id={`${id}-weekly`}
+              type="checkbox"
+              role="switch"
+              className="nv-switch"
+              checked={weekly}
+              onChange={(event) => {
+                setWeekly(event.target.checked);
+              }}
+            />
+          </div>
+        ) : null}
 
         {refusal === null ? null : (
           <div className="tm-warn sc-refusal nv-swap" role="alert">
