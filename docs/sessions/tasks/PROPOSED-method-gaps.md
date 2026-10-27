@@ -58,17 +58,17 @@ Légende : **appliquée** (code et test), **partielle**, **manquante**, **autrem
 | Rien après un manque d'argent avoué, jusqu'à ce qu'il revienne de lui-même au payant | appliquée | gel `money_trouble` permanent (#194) |
 | Jamais de négociation ni de remise | appliquée | garde `discount` (#194) |
 | Jamais reproposer un pack refusé, jamais renvoyer un script reçu, dossier Jour ou Nuit | attend P6-01 | fiche P6-01 |
-| Au plus 3 offres par jour, au plus 5 offres sans achat (réglages du CRM) | manquante | ni réglage dans la persona, ni règle ; pas dans P6-01 : `PROPOSED-after-offer.md` |
-| Aider à payer en une phrase, puis un humain ; « je dois payer ? » est un signal d'achat | manquante | `PROPOSED-after-offer.md` |
+| Au plus 3 offres par jour, au plus 5 offres sans achat | autrement | remplacés par Charles (17/10 22h00) par le délai entre deux scripts et la re-sexualisation (`offerDecision`) |
+| Aider à payer en une phrase, puis un humain ; « je dois payer ? » est un signal d'achat | manquante | `P6-02-after-offer.md` |
 
 ### Après un refus, après un achat
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Après un refus : comprendre, insister un peu, une bouderie au plus, puis « tant pis » | manquante | `maySulk` existe sans appelant ; il faut savoir qu'une offre a été refusée : `PROPOSED-after-offer.md` |
-| Pas de bouderie après un achat, ni avec un fan qui a parlé d'argent, de ses limites ou de détresse | partielle | `maySulk` lit les drapeaux, pas l'achat récent : `PROPOSED-after-offer.md` |
-| Aftercare systématique après chaque achat, pas de nouvelle vente tout de suite | manquante | `PROPOSED-after-offer.md` |
-| Au plus deux relances de vente sans réponse, au délai de `post_offer.delay_days` | manquante | les relances de #207 ne vendent jamais : `PROPOSED-after-offer.md` |
+| Après un refus : comprendre, insister un peu, une bouderie au plus, puis « tant pis » | manquante | `maySulk` existe sans appelant ; il faut savoir qu'une offre a été refusée : `P6-02-after-offer.md` |
+| Pas de bouderie après un achat, ni avec un fan qui a parlé d'argent, de ses limites ou de détresse | partielle | `maySulk` lit les drapeaux, pas l'achat récent : `P6-02-after-offer.md` |
+| Aftercare systématique après chaque achat, pas de nouvelle vente tout de suite | manquante | `P6-02-after-offer.md` |
+| Au plus deux relances de vente sans réponse, au délai de `post_offer.delay_days` | manquante | les relances de #207 ne vendent jamais : `P6-02-after-offer.md` |
 
 ### Mémoire du fan
 
@@ -91,7 +91,7 @@ Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 - [x] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `P3-09-sexualization-cursor.md`.
 - [x] Relances et « jamais sans réponse » : `P3-10-follow-ups.md` (partage avec Bilan pour le worker).
 - [ ] Scripts déjà reçus, packs refusés, dossier Jour / Nuit : P6-01.
-- [ ] Refus, bouderie, aftercare, aide au paiement, offres par jour et sans achat, relances de vente : `PROPOSED-after-offer.md` (après P6-01).
+- [ ] Refus, bouderie, aftercare, aide au paiement, relances de vente : `P6-02-after-offer.md` (après P6-01).
 - [ ] Relance après un « attends, je reviens » et alerte quand rien ne lui répond : à proposer à Bilan (worker et « À traiter »).
 
 ## Critères d'acceptation
