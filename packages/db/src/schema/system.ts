@@ -1,3 +1,4 @@
+import { BACKUP_RUN_STATUSES, type BackupRunStatus } from '@nirvana/contracts';
 import { sql } from 'drizzle-orm';
 import { bigint, check, index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
@@ -32,9 +33,6 @@ export const rateLimitCounters = pgTable(
   ],
 );
 
-/** Where an export stands: `running` until it ends, then one of the two others. */
-export const BACKUP_RUN_STATUSES = ['running', 'succeeded', 'failed'] as const;
-
 /**
  * One daily export of the database (ADR 0028, OPS-02), written by the `backup` service alone with the admin role,
  * read by the application. Out of RLS (no tenant data). The id has a database default, unlike `id()` of columns.ts:
@@ -48,7 +46,7 @@ export const backupRuns = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     startedAt: timestampTz('started_at').notNull(),
     finishedAt: timestampTz('finished_at'),
-    status: enumText('status').$type<(typeof BACKUP_RUN_STATUSES)[number]>().notNull(),
+    status: enumText('status').$type<BackupRunStatus>().notNull(),
     error: text('error'),
     objectKey: text('object_key'),
     sizeBytes: bigint('size_bytes', { mode: 'number' }),

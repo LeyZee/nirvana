@@ -31,6 +31,7 @@ import {
   startDraftComposer,
   type AgentModule,
 } from './modules/agent';
+import { startBackupsModule, type BackupsModule } from './modules/backups';
 import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
 import {
   createConversationsModule,
@@ -50,6 +51,7 @@ import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
 
 /** Every business module, wired. */
 interface Modules {
+  readonly backups: BackupsModule;
   readonly connectors: ConnectorsModule;
   readonly conversations: ConversationsModule;
   readonly fans: FansModule;
@@ -282,6 +284,10 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     ...(composer !== undefined && { composer }),
   });
   const modules: Modules = {
+    backups: startBackupsModule({
+      db: db.db,
+      adminDb: adminDb.db,
+    }),
     connectors,
     conversations,
     fans,
@@ -428,6 +434,16 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         );
       },
     ),
+    'backups.check': defineTask(
+      'backups.check',
+      JOB_PAYLOADS['backups.check'],
+      logger,
+      async (_payload, context) => {
+        const outcome = await modules.backups.jobs.check();
+        if (outcome === 'alerted')
+          context.logger.warn('backups: no export succeeded for 26 hours, owner alerted');
+      },
+    ),
     'rate_limit.purge': defineTask(
       'rate_limit.purge',
       JOB_PAYLOADS['rate_limit.purge'],
@@ -469,6 +485,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.persona.routes,
       modules.fans.routes(requireRole),
       modules.team.routes(requireRole),
+      modules.backups.routes({ guard: requireRole('owner') }),
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
       modules.supervision.routes,

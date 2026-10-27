@@ -63,6 +63,21 @@ describe('classification (ADR 0020 §2)', () => {
     expect(reached?.kind === 'notice' ? reached.body : '').toContain('Plafond IA atteint (20 €)');
   });
 
+  it('says the database export is overdue, in Paris time, or has never succeeded', () => {
+    expect(classify({ kind: 'backup_overdue', lastSucceededAt: new Date('2026-10-26T02:04:00Z') })).toEqual({
+      kind: 'notice',
+      topic: 'important',
+      threadKey: null,
+      title: 'Important',
+      body: 'Pas de sauvegarde de la base depuis le 26 oct. à 03:04 : la copie chiffrée hors Neon a plus de 26 h.',
+      link: { label: 'Ouvrir le Dashboard', path: '/' },
+    });
+    expect(classify({ kind: 'backup_overdue', lastSucceededAt: null })).toMatchObject({
+      topic: 'important',
+      body: 'Aucune sauvegarde de la base n’a encore réussi : la copie chiffrée hors Neon n’existe pas.',
+    });
+  });
+
   it('says a message could not leave, as important, in the conversation’s thread', () => {
     expect(classify({ kind: 'send_failed', conversationId })).toEqual({
       kind: 'notice',

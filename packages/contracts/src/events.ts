@@ -161,6 +161,7 @@ export const EVENT_TYPES = [
   'script_ended',
   'session_state_changed',
   'budget_threshold_crossed',
+  'backup_overdue',
   'automatic_closed',
   'fan_flag_set',
   'fan_flag_cleared',
@@ -230,6 +231,15 @@ export const EVENT_PAYLOADS = {
     day: z.iso.date(),
   }),
   /**
+   * No export of the database succeeded for 26 hours, or none ever did, in production (ADR 0028 § 5). Published with
+   * no creator, at most once per day while it lasts.
+   */
+  backup_overdue: z.object({
+    lastSucceededAt: z.iso.datetime().nullable(),
+    /** The day of the check, in Europe/Paris: one alert per day. */
+    day: z.iso.date(),
+  }),
+  /**
    * Automatique closed on its own (ADR 0019): the live rate fell under its target, or the voice version changed and
    * has not proved itself yet. Every conversation in automatic went back to the copilot. Published once, for the owner.
    */
@@ -285,6 +295,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('script_ended'),
   typedEvent('session_state_changed'),
   typedEvent('budget_threshold_crossed'),
+  typedEvent('backup_overdue'),
   typedEvent('automatic_closed'),
   typedEvent('fan_flag_set'),
   typedEvent('fan_flag_cleared'),

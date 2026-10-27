@@ -52,6 +52,11 @@ export type Signal =
       readonly conversationId: ConversationId | null;
     }
   | {
+      /** No export of the database succeeded for 26 hours (ADR 0028 § 5); null when none ever did. */
+      readonly kind: 'backup_overdue';
+      readonly lastSucceededAt: Date | null;
+    }
+  | {
       /** Automatique closed on its own (ADR 0019): its conversations went back to the copilot. */
       readonly kind: 'automatic_closed';
       /** What the lock misses now, with the server's figures. */

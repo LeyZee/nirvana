@@ -23,7 +23,7 @@ Règle : le code ne connaît l'environnement que par la config (`apps/api/src/co
 
 ## Données
 
-- Sauvegardes : Neon PITR (7 j minimum) + export logique quotidien chiffré vers un bucket (Hetzner Object Storage / R2), rétention 30 j. Médias : bucket avec versioning.
+- Sauvegardes : Neon PITR (7 j minimum) + export logique quotidien chiffré (`age`, clé publique) vers un bucket Hetzner Object Storage verrouillé, rétention 30 j : service `backup`, ADR 0028, `deploy.md` § 4. Médias : bucket avec versioning.
 - **Restauration testée** une fois par trimestre sur `staging` (fiche `H-xx`). Procédure dans `docs/runbooks/restore.md`.
 - Rétention et purge : jobs quotidiens (faits expirés, médias fan expirés, traces Langfuse > 30 j, `llm_calls` > 90 j agrégés).
 - Croissance : `conversation_events` et `messages` partitionnés par mois quand on dépasse ~10 M de lignes (pas avant). Index de départ : liste dans `data-model.md` (§ Index de départ), qui fait foi.

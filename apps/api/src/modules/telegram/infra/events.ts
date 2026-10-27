@@ -60,6 +60,8 @@ const AutomaticClosedSchema = z.object({
   conversations: z.number().int().min(1),
 });
 
+const BackupOverdueSchema = z.object({ lastSucceededAt: z.iso.datetime().nullable() });
+
 function signalOf(type: string, payload: unknown): Signal | null {
   switch (type) {
     case 'handoff_requested': {
@@ -116,6 +118,15 @@ function signalOf(type: string, payload: unknown): Signal | null {
       const parsed = SendFailedSchema.safeParse(payload);
       if (!parsed.success) return null;
       return { kind: 'send_failed', conversationId: parsed.data.conversationId ?? null };
+    }
+    case 'backup_overdue': {
+      const parsed = BackupOverdueSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      const { lastSucceededAt } = parsed.data;
+      return {
+        kind: 'backup_overdue',
+        lastSucceededAt: lastSucceededAt === null ? null : new Date(lastSucceededAt),
+      };
     }
     case 'automatic_closed': {
       const parsed = AutomaticClosedSchema.safeParse(payload);
