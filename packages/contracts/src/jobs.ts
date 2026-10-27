@@ -48,7 +48,15 @@ export type JobName = z.infer<typeof JobNameSchema>;
 export const JOB_PAYLOADS = {
   'conversation.respond': conversationJob,
   'conversation.send': conversationJob.extend({ draftId: DraftIdSchema }),
-  'conversation.follow_up': conversationJob,
+  /**
+   * A follow-up to a fan who went silent after her answer (P3-10): `anchorAt` is his last message, which the delays
+   * of `persona.follow_ups` count from; `step` is the index of the delay. A message of his since moves the anchor and
+   * the job does nothing.
+   */
+  'conversation.follow_up': conversationJob.extend({
+    anchorAt: z.iso.datetime(),
+    step: z.number().int().min(0).max(4),
+  }),
   /**
    * What she learnt about the fan becomes facts (P3-02): the facts the brief proposed for a draft a human approved,
    * or the note a chatter left on giving the conversation back. `at` fixes the note's slot, so a replay rewrites

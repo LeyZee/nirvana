@@ -1,6 +1,6 @@
 # P3-10 Relances : un fan n'est jamais laissé sans réponse
 
-Statut : todo (ID validé par Charles le 27/10 à 18h37)
+Statut : in_progress (ID validé par Charles le 27/10 à 18h37 ; part Bilan livrée, part agent en cours)
 Phase : 3
 Dépend de : P0-05 (conversations), P3-02, `PROPOSED-method-gaps.md`
 Branche : task/P3-10-follow-ups
@@ -20,8 +20,8 @@ Le job `conversation.follow_up` est déclaré dans les contrats, mais aucune tâ
 
 ## À faire
 
-- [ ] Bilan : planification, annulation, tâche, événements, tests d'intégration.
-- [ ] Agent : règle pure `followUpDecision` (au plus deux relances de vente, aucune après un manque d'argent ou en détresse, délais de `follow_ups.delays_hours` et `post_offer.delay_days`) et son écriture en brouillon.
+- [x] Bilan : planification, annulation, tâche, événements, tests d'intégration (`follow-ups.integration.test.ts`).
+- [ ] Agent : port `FollowUpPlan` exporté et branché dans la composition root (sans lui, rien n'est programmé), `ComposeInput.followUp` lu par l'adaptateur, `retryAt` pour ses heures calmes ; règle pure `followUpDecision` (au plus deux relances de vente, aucune après un manque d'argent ou en détresse, délais de `follow_ups.delays_hours` et `post_offer.delay_days`) et son écriture en brouillon.
 - [ ] Le playground montre la relance avec `advance`.
 
 ## Critères d'acceptation
@@ -34,3 +34,5 @@ Le job `conversation.follow_up` est déclaré dans les contrats, mais aucune tâ
 Les relances de masse, les vocaux.
 
 ## Notes de session
+
+27/10 (Bilan) : contrat convenu avec le fil agent. Ancre = dernier message du fan ; programmation à l'envoi vérifié d'un message d'elle ; annulation paresseuse (le job relit sous verrou et écrit `follow_up_cancelled`) ; brouillon depuis `idle` ; `held` `no_reply` avec `retryAt` (24 h au plus) reprogramme la même étape ; `handoff` et `guard_blocked` passent la main, `llm_unavailable` et `budget_reached` n'écrivent rien. Un brouillon de relance refusé ne programme pas l'étape suivante.

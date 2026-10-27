@@ -353,6 +353,12 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger,
       (payload, context) => modules.conversations.jobs.send(payload, context.logger, context.attempt),
     ),
+    'conversation.follow_up': defineTask(
+      'conversation.follow_up',
+      JOB_PAYLOADS['conversation.follow_up'],
+      logger,
+      (payload, context) => modules.conversations.jobs.followUp(payload, context.logger),
+    ),
     'conversation.record_facts': defineTask(
       'conversation.record_facts',
       JOB_PAYLOADS['conversation.record_facts'],

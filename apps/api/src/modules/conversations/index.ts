@@ -4,6 +4,7 @@ import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createConversationCommands, type ConversationCommands } from './application/commands';
+import { createFollowUpJob } from './application/jobs/follow-up';
 import { createRecordFactsJob } from './application/jobs/record-facts';
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
@@ -13,6 +14,7 @@ import type {
   DraftComposer,
   DraftVoice,
   FanDirectory,
+  FollowUpPlan,
   JobLogger,
   OutboundSender,
 } from './domain/ports';
@@ -21,7 +23,7 @@ import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
 import { createConversationRoutes, type RequireRole } from './infra/http/routes';
 
 export { SendRefused } from './domain/errors';
-export type { Clock, DraftComposer, OutboundSender } from './domain/ports';
+export type { Clock, DraftComposer, FollowUpContext, FollowUpPlan, OutboundSender } from './domain/ports';
 
 /** Public entry point of the `conversations` module (ADR 0002). Other modules import this file only. */
 export interface ConversationsModule extends ConversationCommands {
@@ -33,6 +35,7 @@ export interface ConversationsModule extends ConversationCommands {
     respond(payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void>;
     send(payload: JobPayload<'conversation.send'>, logger: JobLogger, attempt: number): Promise<void>;
     recordFacts(payload: JobPayload<'conversation.record_facts'>, logger: JobLogger): Promise<void>;
+    followUp(payload: JobPayload<'conversation.follow_up'>, logger: JobLogger): Promise<void>;
   };
 }
 
@@ -51,6 +54,8 @@ export interface ConversationsDeps {
   readonly guard: BubbleGuard;
   /** The engine (agent module's adapter); without it drafts stay empty for the operator to write. */
   readonly composer?: DraftComposer;
+  /** Her follow-up delays (P3-10, agent module's adapter); without it, no follow-up is scheduled. */
+  readonly followUps?: FollowUpPlan;
   readonly clock?: Clock;
 }
 
@@ -81,8 +86,20 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
         fans: deps.fans,
         ...(deps.composer === undefined ? {} : { composer: deps.composer }),
       }),
-      send: createSendJob({ uow, clock, sender: deps.sender }),
+      send: createSendJob({
+        uow,
+        clock,
+        sender: deps.sender,
+        ...(deps.followUps === undefined ? {} : { followUps: deps.followUps }),
+      }),
       recordFacts: createRecordFactsJob({ uow, clock, fans: deps.fans }),
+      followUp: createFollowUpJob({
+        uow,
+        clock,
+        fans: deps.fans,
+        ...(deps.composer === undefined ? {} : { composer: deps.composer }),
+        ...(deps.followUps === undefined ? {} : { followUps: deps.followUps }),
+      }),
     },
   };
 }

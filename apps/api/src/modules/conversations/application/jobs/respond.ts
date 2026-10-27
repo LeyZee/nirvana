@@ -30,7 +30,7 @@ export interface RespondDeps {
 }
 
 /** Messages the engine reads. */
-const HISTORY_LIMIT = 40;
+export const HISTORY_LIMIT = 40;
 
 /** Holds that give the conversation to the chatters; the others put it back to `idle`. */
 const HANDOFF_REASONS: readonly HoldReason[] = [
@@ -41,7 +41,7 @@ const HANDOFF_REASONS: readonly HoldReason[] = [
 ];
 
 /** The cause a hold implies when the engine gives none: alerts rank on it. */
-const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
+export const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
   guard_blocked: 'guard',
   budget_reached: 'budget',
   llm_unavailable: 'llm_unavailable',
@@ -50,7 +50,7 @@ const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 
 /** One line of her notes about the fan; a chatter's note reads as such, its dated key says nothing to the engine. */
-const noteLine = (fact: {
+export const noteLine = (fact: {
   readonly category: string;
   readonly key: string;
   readonly value: string;
