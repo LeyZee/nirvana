@@ -32,7 +32,14 @@ Le tout est décrit par `docker-compose.prod.yml`. L'API n'a pas de domaine : le
    ```
 
    (Remplacer `neondb` par le nom de la base.) Les migrations donnent ensuite à `nirvana_app` ses droits table par table.
-4. `DATABASE_URL` = la même chaîne directe, avec `nirvana_app` et son mot de passe, et `?sslmode=require`.
+4. Vérifier les attributs des deux rôles, dans le même éditeur, toujours connecté avec le rôle admin :
+
+   ```sql
+   SELECT rolname, rolbypassrls, rolsuper FROM pg_roles WHERE rolname IN (current_user, 'nirvana_app');
+   ```
+
+   Attendu : le rôle admin à `rolbypassrls = t`, `nirvana_app` à `f`, et `rolsuper = f` pour les deux. Les migrations posent `FORCE ROW LEVEL SECURITY`, qui s'applique aussi au propriétaire des tables : sans `BYPASSRLS`, le déploiement passe, mais chaque job multi-tenant et chaque lecture `withAdmin` ne voient plus aucune ligne, sans erreur. L'attribut ne s'hérite pas de `neon_superuser`. Si le rôle admin est à `f`, **on s'arrête et on demande** : c'est une question d'ADR (0005), pas un réglage à contourner.
+5. `DATABASE_URL` = la même chaîne directe, avec `nirvana_app` et son mot de passe, et `?sslmode=require`.
 
 Le pooler de Neon (hôte en `-pooler`) est interdit : Graphile Worker a besoin de `LISTEN/NOTIFY`.
 
