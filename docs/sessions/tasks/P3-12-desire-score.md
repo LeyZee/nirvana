@@ -53,6 +53,7 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 - [x] Le moteur rend `desire` avec chaque résultat calculé sur un message du fan (Agent).
 - [x] Lecture du Suivi (Bilan) : le DTO donne la note déjà retombée côté serveur (`desireNow`), ou `null` avant la première, et l'API rend les points de la courbe (les `desire_scored`). Extension ne code l'écran qu'une fois cette lecture exposée. Fait : `ConversationSummary.desire` (`{ score, band } | null`) et `GET /v1/conversations/{id}/desire` (`DesireCurveSchema`).
 - [ ] Affichage dans le Suivi et le lecteur, un libellé par code de `DESIRE_SIGNALS` ; réglage des seuils dans l'écran Persona, qui montre dans quelle bande tombe chaque seuil (Extension).
+- [ ] Plancher d'achat (20 après un achat dans les sept jours) avec P6-01 : une seule source lue par le moteur (`desireScore`, `floor`) et par la lecture du Suivi (`DESIRE_FLOOR` de `conversations/infra/db/reader.ts`), sinon la liste et la politique lisent deux notes (remarque sur #225).
 - [ ] Ligne de la note Reveal (après la capture, contre `FakeReveal` d'abord).
 - [ ] Calibration hors dépôt sur le corpus de vente (`/mnt/project-files/onlychat/corpus-vente/`) : la note juste avant chacune des ventes et avant chaque refus ; les chiffres agrégés vont au journal, jamais un message.
 
