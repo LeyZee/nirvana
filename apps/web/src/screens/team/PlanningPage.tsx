@@ -1,9 +1,9 @@
 import type { OnDuty, Planning, ShiftTemplate, TeamMember } from '@nirvana/contracts';
-import { useState, type JSX } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 
 import { ShiftPanel, type ShiftStart } from './ShiftPanel';
 import { ShiftSheet } from './ShiftSheet';
-import { OnLeave, PendingLeaves, TeamSwaps } from './TeamExchanges';
+import { OnLeave, PendingLeaves, TeamSwaps, type InTheWay } from './TeamExchanges';
 import { TeamNav } from './TeamNav';
 import { useMembers } from './api';
 import './team.css';
@@ -40,6 +40,8 @@ import { Page, PageHeader, Panel } from '@/shell/layout';
 
 type Open =
   { readonly kind: 'add'; readonly start: ShiftStart } | { readonly kind: 'shift'; readonly id: string };
+
+const NONE: ReadonlySet<string> = new Set();
 
 /**
  * The leaves read for the page: from the week shown, or this week when it is earlier, over a year less a day, so that
@@ -85,9 +87,18 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
   const onDuty = useOnDuty(true);
   const leaves = useLeaves(leaveRangeOf(monday, thisMonday, zone));
   const swaps = useSwaps();
-  // Shifts a leave's approval found in its way: lit on the grid until the week changes.
-  const [flagged, setFlagged] = useState<ReadonlySet<string>>(new Set());
+  // Shifts a leave's approval found in its way: lit on the grid, from week to week, while that leave waits.
+  const [lit, setLit] = useState<InTheWay | null>(null);
   const ownMemberId = members.data?.find((member) => member.userId === userId)?.id ?? null;
+  const flagged = useMemo(
+    () =>
+      lit !== null &&
+      (leaves.data?.leaveRequests.some((leave) => leave.id === lit.leaveId && leave.status === 'pending') ??
+        false)
+        ? new Set(lit.shiftIds)
+        : NONE,
+    [lit, leaves.data],
+  );
   const data = shown.data;
   if (data !== undefined && data.settings.timeZone !== agency) setAgency(data.settings.timeZone);
   const pickedIndex = picked ?? Math.max(0, days.indexOf(today));
@@ -156,7 +167,6 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
               onMonday={(next) => {
                 setMonday(next);
                 setPicked(next === thisMonday ? null : 0);
-                setFlagged(new Set());
               }}
             />
             <Filters
@@ -173,12 +183,15 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
             <PendingLeaves
               list={leaves.data}
               ownMemberId={ownMemberId}
-              onShowShifts={(leave, shiftIds) => {
-                const first = dayOf(leave.startsAt, zone);
+              zone={zone}
+              onShowShifts={(inTheWay) => {
+                // The week and the day of the first shift in the way, every creator shown, so that it is in sight.
+                const first = dayOf(inTheWay.at, zone);
                 const week = mondayOf(first);
                 setMonday(week);
                 setPicked(weekOf(week).indexOf(first));
-                setFlagged(new Set(shiftIds));
+                setCreatorId(null);
+                setLit(inTheWay);
               }}
             />
           )}

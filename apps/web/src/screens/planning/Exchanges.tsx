@@ -110,9 +110,11 @@ function AnswerCard({
     if (outcome.kind === 'ok') {
       onSaid({
         text:
-          choice === 'accept'
-            ? `C’est fait : le shift de ${requester} est sur ton planning.`
-            : 'Tu as refusé : la proposition est close.',
+          choice === 'decline'
+            ? 'Tu as refusé : la proposition est close.'
+            : swap.targetShiftId === null
+              ? `C’est fait : le shift de ${requester} est sur ton planning.`
+              : 'C’est fait : vous avez échangé vos shifts.',
         tone: 'info',
       });
       await refresh();
@@ -128,7 +130,14 @@ function AnswerCard({
       await refresh();
       return;
     }
-    setProblem(swapRefusalText(outcome.code, 'accept', requester, outcome.shiftId));
+    setProblem(
+      swapRefusalText(
+        outcome.code,
+        swap.targetShiftId === null ? 'take' : 'exchange',
+        requester,
+        outcome.shiftId,
+      ),
+    );
   };
 
   return (
@@ -209,12 +218,12 @@ export function MyLeaves({ leaves, now }: { leaves: readonly LeaveRequest[]; now
     (a, b) => Number(leaveAhead(b, now)) - Number(leaveAhead(a, now)) || a.firstDay.localeCompare(b.firstDay),
   );
   return (
-    <details className="nv-disclosure sc-fold">
+    <details className="nv-disclosure nv-plate sc-fold">
       <summary>
         <span className="nv-disclosure__title">Mes congés</span>
         <span className="nv-disclosure__sum">{sum}</span>
       </summary>
-      <div className="nv-disclosure__body sc-fold__body">
+      <div className="nv-disclosure__body">
         {shown.length === 0 ? (
           <p className="tm-hint">Aucun congé demandé ces derniers temps.</p>
         ) : (
@@ -307,7 +316,7 @@ export function MySwaps({
   const open = mine.filter((swap) => swap.status === 'proposed').length;
   const names = namesOf(list);
   return (
-    <details className="nv-disclosure sc-fold">
+    <details className="nv-disclosure nv-plate sc-fold">
       <summary>
         <span className="nv-disclosure__title">Mes échanges</span>
         <span className="nv-disclosure__sum">
@@ -318,7 +327,7 @@ export function MySwaps({
               : `${String(open)} en attente de réponse`}
         </span>
       </summary>
-      <div className="nv-disclosure__body sc-fold__body">
+      <div className="nv-disclosure__body">
         {mine.length === 0 ? (
           <p className="tm-hint">
             Pour proposer un de tes shifts à un collègue, touche « Échanger » à côté du shift.
@@ -370,7 +379,7 @@ function MySwapCard({
   };
   return (
     <li className="nv-plate sc-card" data-over={swap.status === 'proposed' ? undefined : 'true'}>
-      <SwapBody view={view} message={side === 'requester' ? swap.message : null} />
+      <SwapBody view={view} message={swap.message} />
       {problem === null ? null : (
         <p className="tm-warn sc-refusal nv-swap" role="alert">
           {problem}

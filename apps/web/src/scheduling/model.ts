@@ -102,6 +102,26 @@ export function leaveLength(leave: Pick<LeaveRequest, 'firstDay' | 'lastDay'>): 
   return days === 1 ? '1 jour' : `${String(days)} jours`;
 }
 
+/**
+ * What a leave's approval found in its way, once the planning of the leave says when: « Un shift de Théo tombe encore
+ * pendant ce congé, le mar. 4 nov. : … », « 3 shifts de Théo tombent encore pendant ce congé, entre le mar. 4 et le
+ * mer. 12 nov. : … ». Without `days` (not read yet, or not readable), the line says no day.
+ */
+export function inTheWayLine(name: string, count: number, days: readonly string[]): string {
+  const sorted = [...days].sort();
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const when =
+    first === undefined || last === undefined
+      ? ''
+      : first === last
+        ? `, le ${dayMonth(first)}`
+        : `, entre le ${dayMonth(first)} et le ${dayMonth(last)}`;
+  return count === 1
+    ? `Un shift de ${name} tombe encore pendant ce congé${when} : donne-le à quelqu’un d’autre ou annule-le d’abord.`
+    : `${String(count)} shifts de ${name} tombent encore pendant ce congé${when} : donne-les à quelqu’un d’autre ou annule-les d’abord.`;
+}
+
 /** The leave still covers time ahead: an approved leave can be cancelled until its end, a request withdrawn. */
 export const leaveAhead = (leave: Pick<LeaveRequest, 'endsAt'>, now: Date): boolean =>
   new Date(leave.endsAt).getTime() > now.getTime();
@@ -176,12 +196,7 @@ export function swapViewOf(
         : exchange
           ? `Échange entre ${requester} et ${target}`
           : `${requester} donne son shift à ${target}`;
-  const labels =
-    side === 'requester'
-      ? { offered: 'Ton shift', back: `Celui de ${target}` }
-      : side === 'target'
-        ? { offered: 'Tu prendrais', back: 'Tu lui donnerais' }
-        : { offered: `Shift de ${requester}`, back: `Shift de ${target}` };
+  const labels = swapLabels(swap.status, side, requester, target);
   return {
     title,
     lines: [
@@ -190,6 +205,30 @@ export function swapViewOf(
     ],
     status: { label: swapStatusLabel(swap, side, requester, target), tone: SWAP_TONES[swap.status] },
   };
+}
+
+/**
+ * The words before each shift of a swap. They follow its status: a proposal speaks in the conditional, an accepted
+ * swap in the past (the shift offered is no longer the requester's), and any other end names the shifts as proposed.
+ */
+function swapLabels(
+  status: ShiftSwapStatus,
+  side: SwapSide,
+  requester: string,
+  target: string,
+): { readonly offered: string; readonly back: string } {
+  if (side === 'agency') return { offered: `Shift de ${requester}`, back: `Shift de ${target}` };
+  if (status === 'proposed') {
+    return side === 'requester'
+      ? { offered: 'Ton shift', back: `Celui de ${target}` }
+      : { offered: 'Tu prendrais', back: 'Tu lui donnerais' };
+  }
+  if (status === 'accepted') {
+    return side === 'requester'
+      ? { offered: 'Tu as donné', back: 'Tu as reçu' }
+      : { offered: 'Tu as pris', back: 'Tu lui as donné' };
+  }
+  return { offered: 'Proposé', back: 'En retour' };
 }
 
 function swapStatusLabel(swap: ShiftSwapRequest, side: SwapSide, requester: string, target: string): string {
@@ -204,33 +243,41 @@ function swapStatusLabel(swap: ShiftSwapRequest, side: SwapSide, requester: stri
       if (swap.withdrawnByAgency) return 'Retiré par l’agence';
       return side === 'requester' ? 'Tu l’as retiré' : `Retiré par ${requester}`;
     case 'lapsed':
-      return 'Tombé : il ne tenait plus';
+      return 'Tombé : un des shifts a changé entre-temps';
     case 'reverted':
       return 'Annulé par l’agence';
   }
 }
 
 /**
+ * Where a refusal comes from in a swap: a proposal, the acceptance of a shift given (`take`, nothing comes back to the
+ * requester), or the acceptance of an exchange (`exchange`, where both members receive a shift).
+ */
+export type SwapStep = 'propose' | 'take' | 'exchange';
+
+/**
  * What a refusal says in a swap, where the general words would mislead: a colleague busy elsewhere is never named by
- * their shift (ADR 0031), and the leave of someone else is never said.
+ * their shift (ADR 0031), and the leave of someone else is never said. When an exchange is accepted, the shift or the
+ * leave in the way may be either member's, so the words blame neither.
  */
 export function swapRefusalText(
   code: SchedulingRefusalCode,
-  step: 'propose' | 'accept',
+  step: SwapStep,
   colleague: string,
   shiftId: string | null,
 ): string {
   if (code === 'shift_member_conflict') {
-    if (step === 'accept')
-      return 'Tu es déjà sur un autre shift à ces heures : l’échange ne peut pas se faire.';
+    if (step === 'exchange')
+      return 'L’un de vous deux est déjà sur un autre shift à ces heures : l’échange ne peut pas se faire.';
+    if (step === 'take') return 'Tu es déjà sur un autre shift à ces heures : tu ne peux pas le prendre.';
     return shiftId === null
       ? `${colleague} est déjà sur un autre shift à ces heures.`
       : 'Le shift rendu tombe sur un autre de tes shifts.';
   }
   if (code === 'member_on_leave_conflict') {
-    return step === 'accept'
-      ? 'Un congé tombe sur ces heures : l’échange ne peut pas se faire.'
-      : 'Tu es en congé quand tombe le shift rendu.';
+    if (step === 'exchange') return 'Un congé tombe sur ces heures : l’échange ne peut pas se faire.';
+    if (step === 'take') return 'Tu es en congé à ces heures : tu ne peux pas le prendre.';
+    return 'Tu es en congé quand tombe le shift rendu.';
   }
   if (code === 'member_left_conflict') return `${colleague} ne peut plus recevoir de shift.`;
   return ERROR_MESSAGES[code];

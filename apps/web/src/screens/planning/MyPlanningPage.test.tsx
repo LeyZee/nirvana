@@ -123,6 +123,8 @@ interface Data {
   swaps: Record<string, unknown>[];
   leaves: Record<string, unknown>[];
   candidates: unknown;
+  /** The member reads that fail before one answers. */
+  membersDown: number;
 }
 
 const weeks: string[] = [];
@@ -136,6 +138,7 @@ function serve(
     swaps: data.swaps ?? [],
     leaves: data.leaves ?? [],
     candidates: data.candidates ?? { candidates: [], accounts: [] },
+    membersDown: data.membersDown ?? 0,
   };
   const written: Written[] = [];
   vi.stubGlobal(
@@ -171,8 +174,10 @@ function serve(
             conflicts: [],
           },
         };
-      } else if (url.pathname === '/v1/team/members') reply = { status: 200, body: { members: [me] } };
-      else if (url.pathname === '/v1/scheduling/leave-requests')
+      } else if (url.pathname === '/v1/team/members') {
+        reply = state.membersDown > 0 ? { status: 503 } : { status: 200, body: { members: [me] } };
+        state.membersDown -= 1;
+      } else if (url.pathname === '/v1/scheduling/leave-requests')
         reply = { status: 200, body: { leaveRequests: state.leaves, members: [people[0]] } };
       else if (url.pathname === '/v1/scheduling/swap-requests')
         reply = {
@@ -286,6 +291,41 @@ describe('the chatter’s Planning', () => {
     ]);
   });
 
+  it('says an exchange done, and blames neither member when it cannot be', async () => {
+    const exchange = swap({
+      targetShiftId: id(202),
+      targetCreatorId: NORA,
+      targetShiftStartsAt: '2026-10-31T10:00:00Z',
+      targetShiftEndsAt: '2026-10-31T16:00:00Z',
+    });
+    let tries = 0;
+    serve({ swaps: [exchange] }, (_method, _path, _body, state) => {
+      tries += 1;
+      // The first time, Basile has since taken a shift that overlaps Théo's: the server names it, the page does not.
+      if (tries === 1) return refused('shift_member_conflict', { shiftId: id(203) });
+      const accepted = { ...exchange, status: 'accepted', resolvedAt: '2026-10-28T00:00:00Z' };
+      state.swaps = [accepted];
+      return { status: 200, body: accepted };
+    });
+    renderPage();
+    const asks = await screen.findByRole('region', { name: 'Un échange attend ta réponse' });
+    fireEvent.click(within(asks).getByRole('button', { name: 'Accepter' }));
+    expect(text(await within(asks).findByRole('alert'))).toBe(
+      'L’un de vous deux est déjà sur un autre shift à ces heures : l’échange ne peut pas se faire.',
+    );
+    fireEvent.click(within(asks).getByRole('button', { name: 'Accepter' }));
+    expect(text(await screen.findByRole('status'))).toContain('C’est fait : vous avez échangé vos shifts.');
+    // Answered, it is told in the past among his swaps, with Basile's word kept.
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'Un échange attend ta réponse' })).toBe(null);
+    });
+    const swaps = screen.getByText('Mes échanges').closest('details');
+    expect(text(swaps)).toContain('Tu as accepté');
+    expect(text(swaps)).toContain('Tu as pris');
+    expect(text(swaps)).toContain('Tu lui as donné');
+    expect(text(swaps)).toContain('Tu peux me remplacer ?');
+  });
+
   it('offers a shift ahead to a colleague free then, never to one busy elsewhere', async () => {
     const written = serve(
       {
@@ -362,6 +402,44 @@ describe('the chatter’s Planning', () => {
     expect(written.map(({ body }) => CreateShiftSwapRequestBodySchema.parse(body).targetShiftId)).toEqual([
       id(301),
     ]);
+  });
+
+  it('never offers a colleague busy on two shifts then: no exchange could hold', async () => {
+    serve({
+      candidates: {
+        candidates: [
+          {
+            member: people[2],
+            freeThen: false,
+            shifts: [
+              shift(301, '2026-10-29T11:00:00Z', '2026-10-29T17:00:00Z', LOU),
+              shift(302, '2026-10-29T17:00:00Z', '2026-10-29T23:00:00Z', LOU),
+            ],
+          },
+        ],
+        accounts: [account],
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /^Échanger ton shift du jeudi 29 octobre/u }));
+    const panel = await screen.findByRole('dialog', { name: 'Proposer un échange' });
+    const lou = await within(panel).findByRole('radio', { name: /^Lou/u });
+    expect(text(lou)).toContain('Déjà en shift à ces heures');
+    expect(text(lou)).not.toContain('seulement contre celui-là');
+    expect(lou.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('says why a leave cannot be asked yet when his record does not come, and tries again', async () => {
+    serve({ membersDown: 1 });
+    renderPage();
+    const warning = await screen.findByRole('alert');
+    expect(text(warning)).toContain('Le serveur ne répond pas : ta fiche n’a pas pu être lue');
+    expect(screen.getByRole('button', { name: 'Demander un congé' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(within(warning).getByRole('button', { name: 'Réessayer' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Demander un congé' }).hasAttribute('disabled')).toBe(false);
+    });
+    expect(screen.queryByRole('alert')).toBe(null);
   });
 
   it('asks for a leave in whole days of his own zone', async () => {

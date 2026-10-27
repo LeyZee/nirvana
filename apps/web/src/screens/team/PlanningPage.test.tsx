@@ -67,11 +67,15 @@ const ACCOUNTS = [
   { id: NORA_REVEAL, creatorId: NORA, creatorName: 'Nora Vidal', platform: 'reveal', handle: 'nora' },
 ];
 
-const planning = (conflicts: unknown[] = []): unknown => ({
+const planning = (
+  conflicts: unknown[] = [],
+  shifts: unknown[] = [night],
+  accounts: unknown[] = ACCOUNTS,
+): unknown => ({
   settings: { timeZone: 'Europe/Paris', slotStartMinute: 0, slotLengthMinutes: 360, accessMarginMinutes: 15 },
-  accounts: ACCOUNTS,
+  accounts,
   members: [{ id: THEO, displayName: 'Théo', color: '#c2410c' }],
-  shifts: [night],
+  shifts,
   conflicts,
 });
 
@@ -142,7 +146,9 @@ interface Written {
 /** A fake `/v1/scheduling` and `/v1/team/members`: every write is kept in the list returned and answered by `write`. */
 function serve(
   routes: {
+    /** The planning read, or what it answers for a range that starts at `from`. */
     planning?: unknown;
+    planningOf?: (from: string) => unknown;
     members?: TeamMember[];
     leaves?: unknown[];
     swaps?: unknown[];
@@ -153,7 +159,8 @@ function serve(
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string, init?: RequestInit) => {
-      const path = new URL(input, 'http://localhost').pathname;
+      const url = new URL(input, 'http://localhost');
+      const path = url.pathname;
       const method = init?.method ?? 'GET';
       let reply: Reply;
       if (method !== 'GET') {
@@ -161,7 +168,10 @@ function serve(
         written.push({ method, path, body });
         reply = routes.write?.(method, path, body) ?? { status: 500 };
       } else if (path === '/v1/scheduling/planning')
-        reply = { status: 200, body: routes.planning ?? planning() };
+        reply = {
+          status: 200,
+          body: routes.planningOf?.(url.searchParams.get('from') ?? '') ?? routes.planning ?? planning(),
+        };
       else if (path === '/v1/scheduling/shift-templates')
         reply = { status: 200, body: { templates: [template] } };
       else if (path === '/v1/scheduling/on-duty')
@@ -361,8 +371,9 @@ describe('Équipe › Planning', () => {
   });
 
   it('approves a leave, and points at the shifts still in its way when there are some', async () => {
+    // The leave starts on Wednesday 28 in Théo's zone; the night shift that runs into it started on Tuesday 27.
     const written = serve({
-      leaves: [leave()],
+      leaves: [leave({ firstDay: '2026-10-28', startsAt: '2026-10-27T23:00:00Z' })],
       write: () => ({
         status: 409,
         body: {
@@ -377,12 +388,16 @@ describe('Équipe › Planning', () => {
     });
     renderPage();
     const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
-    expect(text(decide)).toContain('Théo · Du jeu. 29 oct. au ven. 30 oct., 2 jours');
+    expect(text(decide)).toContain('Théo · Du mer. 28 oct. au ven. 30 oct., 3 jours');
     expect(text(decide)).toContain('« Examens »');
     fireEvent.click(within(decide).getByRole('button', { name: 'Valider' }));
-    expect(text(await within(decide).findByRole('alert'))).toBe(
-      'Un shift de Théo tombe encore pendant ce congé : donne-le à quelqu’un d’autre ou annule-le d’abord.Voir le shift',
-    );
+    // Said at once, then with its day once the planning of the leave is read.
+    await within(decide).findByRole('alert');
+    await waitFor(() => {
+      expect(text(within(decide).getByRole('alert'))).toBe(
+        'Un shift de Théo tombe encore pendant ce congé, le mar. 27 oct. : donne-le à quelqu’un d’autre ou annule-le d’abord.Voir le shift',
+      );
+    });
     expect(written).toEqual([
       {
         method: 'POST',
@@ -394,6 +409,77 @@ describe('Équipe › Planning', () => {
     fireEvent.click(within(decide).getByRole('button', { name: 'Voir le shift' }));
     const flagged = await screen.findAllByRole('button', { name: /pendant un congé à valider$/u });
     expect(flagged.map((chip) => chip.getAttribute('data-flagged'))).toEqual(flagged.map(() => 'true'));
+  });
+
+  it('takes « Voir le shift » to the first shift in the way, whatever its week and filter, while the leave waits', async () => {
+    const LEA = id(2);
+    const LEA_REVEAL = id(12);
+    // Théo's leave runs over two weeks; the shift in its way is on the second one, Tuesday 3 at 23 h in Paris.
+    const later = { ...night, id: id(105), startsAt: '2026-11-03T22:00:00Z', endsAt: '2026-11-04T04:00:00Z' };
+    const long = leave({ lastDay: '2026-11-06', endsAt: '2026-11-06T23:00:00Z' });
+    const leaves: unknown[] = [long];
+    const accounts = [
+      ...ACCOUNTS,
+      { id: LEA_REVEAL, creatorId: LEA, creatorName: 'Léa Roux', platform: 'reveal', handle: 'lea' },
+    ];
+    let tries = 0;
+    serve({
+      leaves,
+      // This week has the night shift; the next one, and the leave's own days, the shift in the way.
+      planningOf: (from) => planning([], from === '2026-10-25T23:00:00.000Z' ? [night] : [later], accounts),
+      write: () => {
+        tries += 1;
+        if (tries > 1) {
+          leaves.splice(0, 1, leave({ ...long, status: 'refused', decidedAt: NOW.toISOString() }));
+          return { status: 200, body: leaves[0] };
+        }
+        return {
+          status: 409,
+          body: {
+            error: {
+              code: 'leave_shifts_conflict',
+              message: 'shifts',
+              details: { shiftIds: [id(105)] },
+              requestId: 'r4',
+            },
+          },
+        };
+      },
+    });
+    renderPage();
+    // The reader looks at Léa's accounts only.
+    fireEvent.click(await screen.findByRole('radio', { name: 'Léa Roux' }));
+    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    fireEvent.click(within(decide).getByRole('button', { name: 'Valider' }));
+    await waitFor(() => {
+      expect(text(within(decide).getByRole('alert'))).toContain(
+        'Un shift de Théo tombe encore pendant ce congé, le mar. 3 nov. : donne-le',
+      );
+    });
+    fireEvent.click(within(decide).getByRole('button', { name: 'Voir le shift' }));
+    // The week of the shift, every creator, its day picked for the phone, the shift lit.
+    expect(text(await screen.findByRole('group', { name: 'Semaine' }))).toContain('2 nov. – 8 nov.');
+    expect(screen.getByRole('radio', { name: 'Toutes' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: /^mar\.\s*3$/u }).getAttribute('aria-checked')).toBe('true');
+    const lit = async (): Promise<string[]> =>
+      (await screen.findAllByRole('button', { name: /^Théo, / })).map(
+        (chip) => chip.getAttribute('data-flagged') ?? 'none',
+      );
+    await waitFor(async () => {
+      expect(await lit()).toContain('true');
+    });
+    // Away and back, it is still lit.
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine précédente' }));
+    await waitFor(async () => {
+      expect(await lit()).toContain('true');
+    });
+    // Once the leave is decided, nothing is lit any more.
+    fireEvent.click(within(decide).getByRole('button', { name: 'Refuser' }));
+    fireEvent.click(await within(decide).findByRole('button', { name: 'Refuser la demande' }));
+    await waitFor(async () => {
+      expect(await lit()).not.toContain('true');
+    });
   });
 
   it('refuses a leave with a word for the member', async () => {

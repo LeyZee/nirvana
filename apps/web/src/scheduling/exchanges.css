@@ -268,7 +268,7 @@
   border-radius: var(--nv-radius-full);
   font-size: var(--nv-text-footnote);
   text-decoration: none;
-  opacity: 0;
+  opacity: 0.6;
   transition:
     opacity var(--nv-dur-fast) var(--nv-ease-out),
     color var(--nv-dur-fast) var(--nv-ease-out),
@@ -295,16 +295,13 @@
   margin-top: var(--nv-space-6);
 }
 .sc-fold {
-  border-radius: var(--nv-radius-lg);
-  background: var(--nv-plate);
-  box-shadow: inset 0 0 0 1px var(--nv-plate-edge);
   overflow: hidden;
 }
 .sc-fold.nv-disclosure > summary {
   min-height: 52px;
   padding: 0 var(--nv-space-5);
 }
-.sc-fold__body {
+.sc-fold > .nv-disclosure__body {
   display: flex;
   flex-direction: column;
   gap: var(--nv-space-3);
@@ -398,6 +395,10 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nv-space-2) var(--nv-space-3);
+}
+/* What could not be read above the page's body. */
+.sc-unread {
+  margin-bottom: var(--nv-space-4);
 }
 .sc-refuse {
   display: flex;

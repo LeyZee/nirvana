@@ -18,6 +18,7 @@ import {
   conflictLines,
   dayStateOf,
   gridOf,
+  inTheWayLine,
   leaveAhead,
   leaveDaysLine,
   leaveLength,
@@ -208,6 +209,18 @@ describe('the member’s day', () => {
 const plain = (line: string): string => line.replaceAll('\u00a0', ' ');
 
 describe('leaves', () => {
+  it('says the shifts in the way of an approval, with their days once read', () => {
+    expect(plain(inTheWayLine('Théo', 1, []))).toBe(
+      'Un shift de Théo tombe encore pendant ce congé : donne-le à quelqu’un d’autre ou annule-le d’abord.',
+    );
+    expect(plain(inTheWayLine('Théo', 1, ['2026-11-04']))).toBe(
+      'Un shift de Théo tombe encore pendant ce congé, le mer. 4 nov. : donne-le à quelqu’un d’autre ou annule-le d’abord.',
+    );
+    expect(plain(inTheWayLine('Théo', 3, ['2026-11-12', '2026-11-04', '2026-11-04']))).toBe(
+      '3 shifts de Théo tombent encore pendant ce congé, entre le mer. 4 nov. et le jeu. 12 nov. : donne-les à quelqu’un d’autre ou annule-les d’abord.',
+    );
+  });
+
   it('says its days and how many, the last one included', () => {
     const one = { firstDay: '2026-11-04', lastDay: '2026-11-04' };
     const three = { firstDay: '2026-11-03', lastDay: '2026-11-05' };
@@ -297,6 +310,32 @@ describe('swaps', () => {
     expect(view(exchange, 'agency').title).toBe('Échange entre Théo et Basile');
   });
 
+  it('says an answered swap in the past for those in it, and as proposed once it fell through', () => {
+    const at = '2026-10-28T10:00:00Z';
+    const accepted = { ...exchange, status: 'accepted' as const, resolvedAt: at };
+    expect(view(accepted, 'requester').lines).toEqual([
+      'Tu as donné : jeu. 29 oct. · 23 h – 5 h · Nora Vidal',
+      'Tu as reçu : sam. 31 oct. · 12 h – 18 h',
+    ]);
+    expect(view(accepted, 'target').lines).toEqual([
+      'Tu as pris : jeu. 29 oct. · 23 h – 5 h · Nora Vidal',
+      'Tu lui as donné : sam. 31 oct. · 12 h – 18 h',
+    ]);
+    expect(view(swap({ status: 'accepted', resolvedAt: at }), 'requester').lines).toEqual([
+      'Tu as donné : jeu. 29 oct. · 23 h – 5 h · Nora Vidal',
+    ]);
+    expect(view(accepted, 'agency').lines[0]).toBe('Shift de Théo : jeu. 29 oct. · 23 h – 5 h · Nora Vidal');
+    for (const status of ['declined', 'withdrawn', 'lapsed', 'reverted'] as const) {
+      const ended = { ...exchange, status, resolvedAt: at, revertedAt: status === 'reverted' ? at : null };
+      for (const side of ['requester', 'target'] as const) {
+        expect(view(ended, side).lines).toEqual([
+          'Proposé : jeu. 29 oct. · 23 h – 5 h · Nora Vidal',
+          'En retour : sam. 31 oct. · 12 h – 18 h',
+        ]);
+      }
+    }
+  });
+
   it('says how it ended, a withdrawal by the agency never by whom', () => {
     const ended = (patch: Partial<z.input<typeof ShiftSwapRequestSchema>>) =>
       (['requester', 'target', 'agency'] as const).map((side) => view(swap(patch), side).status);
@@ -321,7 +360,9 @@ describe('swaps', () => {
       'Retiré par l’agence (gone)',
       'Retiré par l’agence (gone)',
     ]);
-    expect(ended({ status: 'lapsed', resolvedAt: at })[1]).toBe('Tombé : il ne tenait plus (gone)');
+    expect(ended({ status: 'lapsed', resolvedAt: at })[1]).toBe(
+      'Tombé : un des shifts a changé entre-temps (gone)',
+    );
     expect(ended({ status: 'reverted', resolvedAt: at, revertedAt: at })[1]).toBe(
       'Annulé par l’agence (gone)',
     );
@@ -334,10 +375,18 @@ describe('swaps', () => {
     expect(swapRefusalText('shift_member_conflict', 'propose', 'Basile', id(103))).toBe(
       'Le shift rendu tombe sur un autre de tes shifts.',
     );
-    expect(swapRefusalText('shift_member_conflict', 'accept', 'Théo', null)).toBe(
-      'Tu es déjà sur un autre shift à ces heures : l’échange ne peut pas se faire.',
+    // Taking a shift given: only the one who takes it can be in the way.
+    expect(swapRefusalText('shift_member_conflict', 'take', 'Théo', null)).toBe(
+      'Tu es déjà sur un autre shift à ces heures : tu ne peux pas le prendre.',
     );
-    expect(swapRefusalText('member_on_leave_conflict', 'accept', 'Théo', null)).toBe(
+    expect(swapRefusalText('member_on_leave_conflict', 'take', 'Théo', null)).toBe(
+      'Tu es en congé à ces heures : tu ne peux pas le prendre.',
+    );
+    // Accepting an exchange: the shift or the leave in the way may be the requester's, so neither is blamed.
+    expect(swapRefusalText('shift_member_conflict', 'exchange', 'Théo', id(104))).toBe(
+      'L’un de vous deux est déjà sur un autre shift à ces heures : l’échange ne peut pas se faire.',
+    );
+    expect(swapRefusalText('member_on_leave_conflict', 'exchange', 'Théo', null)).toBe(
       'Un congé tombe sur ces heures : l’échange ne peut pas se faire.',
     );
     expect(swapRefusalText('member_on_leave_conflict', 'propose', 'Basile', null)).toBe(

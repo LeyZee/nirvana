@@ -62,10 +62,11 @@ export function fetchPlanning(range: PlanningRange): Promise<Planning> {
 /** Everything the planning shows, read again by every write. */
 export const SCHEDULING_KEY = ['scheduling'] as const;
 
-export function usePlanning(range: PlanningRange): UseQueryResult<Planning> {
+export function usePlanning(range: PlanningRange, enabled = true): UseQueryResult<Planning> {
   return useQuery({
     queryKey: [...SCHEDULING_KEY, 'planning', range.from, range.to, range.creatorId],
     queryFn: () => fetchPlanning(range),
+    enabled,
     // The week stays on screen while the next one loads: no blank grid between two weeks.
     placeholderData: (before) => before,
   });

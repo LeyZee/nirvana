@@ -1,15 +1,24 @@
 import type { LeaveRequest, LeaveRequestList, ShiftSwapList, ShiftSwapRequest } from '@nirvana/contracts';
 import { useId, useState, type JSX, type ReactNode } from 'react';
 
-import { decideLeave, endLeave, endSwap, useRefreshPlanning, type Outcome } from '@/scheduling/api';
+import {
+  decideLeave,
+  endLeave,
+  endSwap,
+  usePlanning,
+  useRefreshPlanning,
+  type Outcome,
+} from '@/scheduling/api';
 import {
   ERROR_MESSAGES,
+  inTheWayLine,
   leaveAhead,
   leaveDaysLine,
   leaveLength,
   READ_AGAIN,
   swapViewOf,
 } from '@/scheduling/model';
+import { dayOf } from '@/scheduling/time';
 import { namesOf, SwapBody } from '@/screens/planning/Exchanges';
 
 /**
@@ -57,18 +66,31 @@ function Swatch({ color }: { color: string | null }): JSX.Element {
 }
 
 /**
+ * The shifts a leave's approval found in its way, for the grid to light them: `at` is when the first of them starts
+ * (the leave's start until the planning of the leave is read).
+ */
+export interface InTheWay {
+  readonly leaveId: string;
+  readonly shiftIds: readonly string[];
+  readonly at: string;
+}
+
+/**
  * « Congés à valider »: each pending request with Valider and Refuser. A manager never decides their own (the owner
  * does); while shifts of the member still fall in the leave, the approval is refused and the page shows them.
  */
 export function PendingLeaves({
   list,
   ownMemberId,
+  zone,
   onShowShifts,
 }: {
   list: LeaveRequestList;
   /** The reader's own member id: their own request waits for someone else. */
   ownMemberId: string | null;
-  onShowShifts: (leave: LeaveRequest, shiftIds: readonly string[]) => void;
+  /** The zone the page shows its days in. */
+  zone: string;
+  onShowShifts: (inTheWay: InTheWay) => void;
 }): JSX.Element | null {
   const pending = list.leaveRequests.filter((leave) => leave.status === 'pending');
   if (pending.length === 0) return null;
@@ -87,6 +109,7 @@ export function PendingLeaves({
             name={members.get(leave.memberId)?.displayName ?? 'Un membre'}
             color={members.get(leave.memberId)?.color ?? null}
             own={leave.memberId === ownMemberId}
+            zone={zone}
             onShowShifts={onShowShifts}
           />
         ))}
@@ -101,6 +124,7 @@ function PendingLeave({
   name,
   color,
   own,
+  zone,
   onShowShifts,
 }: {
   leave: LeaveRequest;
@@ -108,13 +132,22 @@ function PendingLeave({
   name: string;
   color: string | null;
   own: boolean;
-  onShowShifts: (leave: LeaveRequest, shiftIds: readonly string[]) => void;
+  zone: string;
+  onShowShifts: (inTheWay: InTheWay) => void;
 }): JSX.Element {
   const id = useId();
   const { busy, problem, run } = useWrite();
   const [refusing, setRefusing] = useState(false);
   const [note, setNote] = useState('');
   const [inTheWay, setInTheWay] = useState<readonly string[]>([]);
+  // The planning of the leave's days says when the shifts in its way start (a leave lasts up to 31 days).
+  const located = usePlanning(
+    { from: leave.startsAt, to: leave.endsAt, creatorId: null },
+    inTheWay.length > 0,
+  );
+  const found = (located.data?.shifts ?? [])
+    .filter((shift) => inTheWay.includes(shift.id))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
   const approve = async (): Promise<void> => {
     setInTheWay([]);
@@ -137,15 +170,21 @@ function PendingLeave({
         {inTheWay.length > 0 ? (
           <div className="sc-inline-warn nv-swap" role="alert">
             <p className="tm-warn">
-              {inTheWay.length === 1
-                ? `Un shift de ${name} tombe encore pendant ce congé : donne-le à quelqu’un d’autre ou annule-le d’abord.`
-                : `${String(inTheWay.length)} shifts de ${name} tombent encore pendant ce congé : donne-les à quelqu’un d’autre ou annule-les d’abord.`}
+              {inTheWayLine(
+                name,
+                inTheWay.length,
+                found.map((shift) => dayOf(shift.startsAt, zone)),
+              )}
             </p>
             <button
               type="button"
               className="nv-btn nv-btn--plain nv-btn--sm"
               onClick={() => {
-                onShowShifts(leave, inTheWay);
+                onShowShifts({
+                  leaveId: leave.id,
+                  shiftIds: inTheWay,
+                  at: found[0]?.startsAt ?? leave.startsAt,
+                });
               }}
             >
               {inTheWay.length === 1 ? 'Voir le shift' : 'Voir ces shifts'}
@@ -375,12 +414,12 @@ export function TeamSwaps({
     .filter((part) => part !== null)
     .join(' · ');
   return (
-    <details className="nv-disclosure sc-fold">
+    <details className="nv-disclosure nv-plate sc-fold">
       <summary>
         <span className="nv-disclosure__title">Échanges entre chatteurs</span>
         <span className="nv-disclosure__sum">{sum === '' ? 'Ces deux dernières semaines' : sum}</span>
       </summary>
-      <div className="nv-disclosure__body sc-fold__body">
+      <div className="nv-disclosure__body">
         <ul className="sc-cards">
           {swaps.map((swap) => (
             <TeamSwap key={swap.id} swap={swap} now={now}>

@@ -12,12 +12,16 @@ const overlaps = (a: Pick<Shift, 'startsAt' | 'endsAt'>, b: Pick<Shift, 'startsA
   new Date(b.startsAt).getTime() < new Date(a.endsAt).getTime();
 
 /**
- * What a colleague could give back for `shift`: any shift of theirs when they are free then; when they are not, only
- * the one that overlaps it, since an exchange against another would leave them on two shifts at once (ADR 0031).
+ * What a colleague could give back for `shift`: any shift of theirs when they are free then. When they are not, only
+ * the one shift of theirs that overlaps it, since an exchange against another would leave them on two shifts at once
+ * (ADR 0031); with two or more overlapping, no exchange can hold, and nothing is offered. A shift of theirs on a
+ * creator the reader does not work on is not listed: the server's refusal says it.
  */
 export function backsOf(candidate: Candidate, shift: Pick<Shift, 'startsAt' | 'endsAt'>): Shift[] {
   const ahead = [...candidate.shifts].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  return candidate.freeThen ? ahead : ahead.filter((one) => overlaps(one, shift));
+  if (candidate.freeThen) return ahead;
+  const inTheWay = ahead.filter((one) => overlaps(one, shift));
+  return inTheWay.length === 1 ? inTheWay : [];
 }
 
 /**
@@ -50,7 +54,7 @@ export function SwapPanel({
   const accounts = new Map((candidates.data?.accounts ?? []).map((account) => [account.id, account]));
   const chosen = list.find((one) => one.member.id === memberId) ?? null;
   const backs = chosen === null ? [] : backsOf(chosen, shift);
-  // A busy colleague takes the shift only against theirs: the first such shift is chosen for them.
+  // A busy colleague takes the shift only against the one of theirs in its way, chosen for them.
   const back = backs.find((one) => one.id === backId) ?? (chosen?.freeThen === false ? backs[0] : undefined);
   const ready = chosen !== null && (chosen.freeThen || back !== undefined) && !busy;
   const offered = swapShiftLine(shift.startsAt, shift.endsAt, creatorName, zone);

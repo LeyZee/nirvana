@@ -65,7 +65,8 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
     creatorId: null,
   });
   // A chatter reads their own record alone: who they are, in which zone their leave days fall.
-  const me = useMembers().data?.find((member) => member.userId === userId) ?? null;
+  const members = useMembers();
+  const me = members.data?.find((member) => member.userId === userId) ?? null;
   const leaves = useLeaves(leaveRangeOf(today, zone));
   const swaps = useSwaps();
   const opened =
@@ -83,6 +84,7 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
               type="button"
               className="nv-btn nv-btn--soft"
               disabled={me === null}
+              aria-busy={members.isPending}
               onClick={() => {
                 setOpen({ kind: 'leave' });
               }}
@@ -94,6 +96,23 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
       />
       {/* One body under the header: the page's grid gives its free height to that one. */}
       <div className="sc-stack">
+        {members.isError && me === null ? (
+          <div className="sc-inline-warn sc-unread nv-swap" role="alert">
+            <p className="tm-warn">
+              Le serveur ne répond pas : ta fiche n’a pas pu être lue, et un congé ne peut pas encore être
+              demandé.
+            </p>
+            <button
+              type="button"
+              className="nv-btn nv-btn--soft nv-btn--sm"
+              onClick={() => {
+                void members.refetch();
+              }}
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
         {me === null || swaps.data === undefined ? null : (
           <Answers
             swaps={swaps.data.swapRequests.filter(
