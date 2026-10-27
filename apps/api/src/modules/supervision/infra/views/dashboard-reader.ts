@@ -164,7 +164,7 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
   // The net under every other line (P3-11): his last message unanswered for 30 minutes, with no draft waiting, while
   // the conversation rests or a respond job that should have ended long ago has not. A respond put off after
   // « attends, je reviens » runs within 25 minutes, so it never shows here; nothing does while a kill switch stops
-  // her, the Dashboard already says so.
+  // her or Reveal is not read, the Dashboard already says so.
   const unanswered = await rows(
     tx,
     z.object({ conversation_id: z.string(), fan_id: z.string(), fan_name: z.string(), since: timestamp }),
@@ -213,6 +213,10 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
     account?.paused_until !== null &&
     account?.paused_until !== undefined &&
     account.paused_until > window.now;
+  const connected =
+    account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused;
+  // Stopped, or Reveal unread (session expired, paused): every conversation would fall in the net, the banner says it.
+  const quiet = stopped.some((s) => s.active) || !connected;
   return {
     switches: {
       global: stopped.some((s) => s.scope === 'global' && s.active),
@@ -221,7 +225,7 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
     autoConversations: counts.auto,
     decidedThreeWeeksAgo: await decided(tx, creatorId, window, new Date(window.now.getTime() - 21 * DAY_MS)),
     reveal: {
-      connected: account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused,
+      connected,
       lastReadAt: account?.last_poll_at ?? null,
       conversations: counts.total,
     },
@@ -254,7 +258,7 @@ async function facts(tx: Transaction, creatorId: string, window: DashboardWindow
         kind: 'send_failed' as const,
         since: f.since,
       })),
-      ...(stopped.some((s) => s.active) ? [] : unanswered).map((u) => ({
+      ...(quiet ? [] : unanswered).map((u) => ({
         conversationId: u.conversation_id,
         fanId: u.fan_id,
         fanName: u.fan_name,

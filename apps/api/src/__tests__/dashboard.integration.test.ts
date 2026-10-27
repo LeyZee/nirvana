@@ -288,7 +288,7 @@ describe('GET /v1/dashboard', () => {
     ]);
   });
 
-  it('shows a message left with nothing under way for 30 minutes, except while she is stopped (P3-11)', async () => {
+  it('shows a message left with nothing under way for 30 minutes, except while she is stopped or Reveal unread (P3-11)', async () => {
     const longAgo = new Date(Date.now() - 40 * 60_000);
     const seed = async (name: string, at: Date): Promise<ConversationId> => {
       const { conversationId } = await app.modules.conversations.ingestMessage({
@@ -335,7 +335,15 @@ describe('GET /v1/dashboard', () => {
     ]);
     expect(todos[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
 
-    // Her kill switch says it all: the net stays quiet, the rest still waits for a human.
+    // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.
+    const sessionIs = (state: 'valid' | 'expired') =>
+      test.admin.db
+        .update(schema.platformAccounts)
+        .set({ sessionState: state })
+        .where(eq(schema.platformAccounts.id, platformAccountId));
+    await sessionIs('expired');
+    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+    await sessionIs('valid');
     await test.admin.db.insert(schema.killSwitches).values({
       id: newId(KillSwitchIdSchema),
       scope: 'creator',

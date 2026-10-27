@@ -59,4 +59,4 @@ Les relances sur son silence (P3-10), les relances de vente (`P6-02-after-offer.
 
 27/10 soir : part Bilan (contrat, worker `respond`, tests) dans sa PR ; bornes accordées avec le fil Agent (10–25 min côté moteur, 5–25 côté worker).
 
-27/10 soir : part Agent (moteur : une attente de 20 minutes, puis « tu es revenu ? » sur brief du code ; filet `unanswered` en supervision, états `idle`, `pending` et `drafting`, muet sous arrêt d'urgence) dans sa PR. Rien ne reste.
+27/10 soir : part Agent (moteur : une attente de 20 minutes, puis « tu es revenu ? » sur brief du code ; filet `unanswered` en supervision, états `idle`, `pending` et `drafting`, muet sous arrêt d’urgence ou Reveal non lu) dans sa PR. Rien ne reste.
