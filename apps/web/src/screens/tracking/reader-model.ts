@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  GuardCodeSchema,
   type ConversationEventView,
   type DashboardTodo,
   type MessageView,
@@ -7,6 +8,7 @@ import {
 import { z } from 'zod';
 
 import { CAUSE_LABELS } from '@/agent/causes';
+import { GUARD_LABELS } from '@/agent/guards';
 
 /*
  * The reader of Suivi in words: the thread in reading order, the agent's notes where it stopped or a human stepped
@@ -96,21 +98,7 @@ export function lastHandoff(read: { readonly events: readonly ConversationEventV
 }
 
 /** What a hard guard found in a draft, in the words of the person deciding. */
-const GUARD_LABELS: Readonly<Record<string, string>> = {
-  ai_disclosure: 'un aveu d’IA',
-  love_declaration: 'une déclaration d’amour',
-  meeting_promise: 'une promesse de rencontre',
-  contact_info: 'des coordonnées',
-  assistant_output: 'un ton d’assistant',
-  forbidden_term: 'un mot que la créatrice refuse',
-  asks_for_nudes: 'une demande de photos',
-  contempt: 'du mépris',
-  payment_lie: 'un mensonge sur un paiement',
-  guilt_trip: 'de la culpabilisation',
-  discount: 'une remise ou une négociation',
-  explicit_before_age: 'du contenu explicite avant l’âge confirmé',
-};
-
+/** The codes a refusal names; one this screen does not know yet is left out, never shown raw. */
 const GuardsSchema = z.object({ guards: z.array(z.string()) });
 
 /** Why an approval, a refusal or a takeover did not go through: the draft stays as it was, the sentence says why. */
@@ -120,7 +108,10 @@ export function decisionError(status: number, body: unknown): string {
   if (code === 'draft_unprocessable') {
     const guards = GuardsSchema.safeParse(error.success ? error.data.error.details : null);
     const found = guards.success
-      ? guards.data.guards.map((g) => GUARD_LABELS[g]).filter((g) => g !== undefined)
+      ? guards.data.guards.flatMap((g) => {
+          const code = GuardCodeSchema.safeParse(g);
+          return code.success ? [GUARD_LABELS[code.data]] : [];
+        })
       : [];
     return found.length === 0
       ? 'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.'

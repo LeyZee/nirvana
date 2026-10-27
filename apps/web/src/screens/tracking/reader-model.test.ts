@@ -100,6 +100,21 @@ describe('decisionError', () => {
     expect(decisionError(422, apiError('draft_unprocessable', { guards: ['explicit_before_age'] }))).toBe(
       'Ce message ne peut pas partir : du contenu explicite avant l’âge confirmé. Retouche-le ou refuse-le.',
     );
+    expect(
+      decisionError(422, apiError('draft_unprocessable', { guards: ['stage_direction', 'media_not_sent'] })),
+    ).toBe(
+      'Ce message ne peut pas partir : une didascalie (« *sourit* », « (rires) »), un média annoncé qui n’est pas joint. Retouche-le ou refuse-le.',
+    );
+    expect(
+      decisionError(
+        422,
+        apiError('draft_unprocessable', {
+          guards: ['platform_meeting_word', 'fake_emergency', 'not_a_guard'],
+        }),
+      ),
+    ).toBe(
+      'Ce message ne peut pas partir : un mot de rencontre que Reveal repère, une maladie ou une urgence pour vendre. Retouche-le ou refuse-le.',
+    );
     expect(decisionError(422, apiError('draft_unprocessable'))).toBe(
       'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.',
     );
