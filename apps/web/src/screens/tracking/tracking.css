@@ -303,6 +303,20 @@
 }
 
 /* « Récents · Chauds d'abord » (P3-12): above the list, quiet, the list's own width. */
+/* The line under a fan's name: a narrow row cuts the creator and the time, never the band of his desire score. */
+.tr-preview {
+  display: flex;
+  min-width: 0;
+}
+.tr-preview__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tr-preview__band {
+  flex: none;
+  white-space: pre;
+}
 .tr-order {
   display: flex;
   padding: var(--nv-space-2) var(--nv-space-2) var(--nv-space-3);
