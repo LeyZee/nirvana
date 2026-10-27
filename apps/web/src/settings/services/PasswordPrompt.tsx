@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { confirmPassword, type ConfirmResult } from './api';
+import './services.css';
 
 const MESSAGES: Record<Exclude<ConfirmResult, 'ok'>, string> = {
   wrong_credentials: 'Ce n’est pas le bon mot de passe.',
@@ -34,11 +35,14 @@ export function PasswordPrompt({
   onConfirmed,
   onCancel,
   onBusyChange,
+  lead = 'Pour toucher à une clé, confirme ton mot de passe.',
 }: {
   onConfirmed: () => void;
   onCancel: () => void;
   /** Told while the password is being checked, so a sheet around the prompt does not close meanwhile. */
   onBusyChange?: (isBusy: boolean) => void;
+  /** What the password unlocks, said before the field; a key by default. */
+  lead?: string;
 }): JSX.Element {
   const input = useRef<HTMLInputElement>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -74,7 +78,7 @@ export function PasswordPrompt({
         if (!isBusy) onCancel();
       }}
     >
-      <p className="sv-muted">Pour toucher à une clé, confirme ton mot de passe.</p>
+      <p className="sv-muted">{lead}</p>
       <form
         className="sv-key"
         data-error={failure !== null}

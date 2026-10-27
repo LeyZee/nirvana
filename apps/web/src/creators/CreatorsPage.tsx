@@ -3,16 +3,26 @@ import { useState, type JSX } from 'react';
 
 import { NewCreatorForm } from './NewCreatorForm';
 import { useCreators } from './api';
+import { HoursSection } from './hours/HoursSection';
 import { PersonaSection } from './persona/PersonaSection';
+import { Segment } from './persona/fields';
 
 import { Page, PageHeader } from '@/shell/layout';
 
+export type CreatorTab = 'persona' | 'hours';
+
 /**
  * Créatrices: the sheet of each creator, starting with her persona (revue 08: the persona belongs to the creator,
- * not to the settings). With several creators, a row of chips picks one; with one, her name is enough. The owner
- * adds a creator here.
+ * not to the settings), then for the owner alone her hours (P3-14). With several creators, a row of chips picks one;
+ * with one, her name is enough. The owner adds a creator here. The tab lives in the address (`?onglet=heures`).
  */
-export function CreatorsPage(): JSX.Element {
+export function CreatorsPage({
+  tab,
+  onTab,
+}: {
+  tab: CreatorTab;
+  onTab: (tab: CreatorTab) => void;
+}): JSX.Element {
   const { user } = useRouteContext({ from: '__root__' });
   // Without the list the persona still shows, as the example it is today.
   const query = useCreators();
@@ -25,11 +35,17 @@ export function CreatorsPage(): JSX.Element {
   const selected = picked ?? creators[0]?.id ?? null;
 
   const current = creators.find((creator) => creator.id === selected);
+  // The router keeps anyone but the owner off the hours; here they also need a creator to read them for.
+  const shown: CreatorTab = isOwner && current !== undefined ? tab : 'persona';
 
   return (
     <Page>
       <PageHeader
-        eyebrow={current === undefined ? undefined : `${current.displayName} · Persona`}
+        eyebrow={
+          current === undefined
+            ? undefined
+            : `${current.displayName} · ${shown === 'hours' ? 'Heures d’activité' : 'Persona'}`
+        }
         title="Créatrices"
         actions={
           <>
@@ -82,12 +98,31 @@ export function CreatorsPage(): JSX.Element {
           />
         </section>
       ) : (
-        <PersonaSection
-          key={selected ?? 'none'}
-          creatorId={current?.id ?? null}
-          canSave={user.role === 'owner' || user.role === 'creator'}
-          timezone={current?.timezone ?? null}
-        />
+        <>
+          {isOwner && current !== undefined ? (
+            <div className="hr-tabs">
+              <Segment
+                label="Fiche de la créatrice"
+                options={[
+                  { value: 'persona', label: 'Persona' },
+                  { value: 'hours', label: 'Heures d’activité' },
+                ]}
+                value={shown}
+                onChange={onTab}
+              />
+            </div>
+          ) : null}
+          {shown === 'hours' && current !== undefined ? (
+            <HoursSection key={current.id} creatorId={current.id} creatorName={current.displayName} />
+          ) : (
+            <PersonaSection
+              key={selected ?? 'none'}
+              creatorId={current?.id ?? null}
+              canSave={user.role === 'owner' || user.role === 'creator'}
+              timezone={current?.timezone ?? null}
+            />
+          )}
+        </>
       )}
     </Page>
   );

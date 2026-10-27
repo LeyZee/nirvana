@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { CAUSE_LABELS } from '@/agent/causes';
 import { GUARD_LABELS } from '@/agent/guards';
+import { addDays, clockAt, dayOf, weekdayOf } from '@/scheduling/time';
 
 /*
  * The reader of Suivi in words: the thread in reading order, the agent's notes where it stopped or a human stepped
@@ -42,8 +43,20 @@ const euros = (minor: number): string =>
 const withReason = (text: string, reason: string | undefined): string =>
   reason === undefined ? text : `${text} : ${reason}`;
 
+const WEEKDAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'] as const;
+
+/** When her slot opens, from the day the note is written: « à 9 h », « demain à 9 h », « lundi à 9 h ». */
+function openingWords(until: string, written: string, timeZone: string): string {
+  const day = dayOf(until, timeZone);
+  const clock = `à ${clockAt(until, timeZone)}`;
+  const from = dayOf(written, timeZone);
+  if (day === from) return clock;
+  if (day === addDays(from, 1)) return `demain ${clock}`;
+  return `${WEEKDAYS[weekdayOf(day) - 1] ?? ''} ${clock}`;
+}
+
 /** The note an event leaves in the thread, or null for the events the messages already show. */
-function noteOf(event: ConversationEventView): string | null {
+function noteOf(event: ConversationEventView, timeZone: string): string | null {
   if (event.type === 'handoff_requested')
     return withReason(`L’agent passe la main (${CAUSE_LABELS[event.payload.cause]})`, event.payload.reason);
   if (event.type === 'takeover_started') return withReason('Un humain reprend la main', event.payload.reason);
@@ -56,14 +69,25 @@ function noteOf(event: ConversationEventView): string | null {
     return event.payload.reason === 'llm_unavailable'
       ? 'Aucune IA n’a répondu : pas de brouillon pour ce message'
       : 'L’agent n’a rien à répondre à ce message';
+  if (event.type === 'reply_deferred')
+    return `Hors de ses heures : la réponse attend l’ouverture de son créneau, ${openingWords(event.payload.until, event.createdAt, timeZone)}`;
   return null;
 }
 
-/** Messages and notes in reading order, oldest first; the API pages both newest first. */
-export function threadOf(read: {
-  readonly messages: readonly MessageView[];
-  readonly events: readonly ConversationEventView[];
-}): ThreadItem[] {
+/** The reader's own clock: times in the thread read as everywhere on its screen. */
+const viewerZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/**
+ * Messages and notes in reading order, oldest first; the API pages both newest first. Every message he writes out of
+ * her hours puts the answer off to the same opening: one note says it, not one per message.
+ */
+export function threadOf(
+  read: {
+    readonly messages: readonly MessageView[];
+    readonly events: readonly ConversationEventView[];
+  },
+  timeZone: string = viewerZone(),
+): ThreadItem[] {
   const timed: { readonly at: number; readonly item: ThreadItem }[] = [];
   for (const message of read.messages) {
     timed.push({
@@ -79,8 +103,15 @@ export function threadOf(read: {
       },
     });
   }
+  const openings = new Map<string, number>();
   for (const event of read.events) {
-    const text = noteOf(event);
+    if (event.type !== 'reply_deferred') continue;
+    const first = openings.get(event.payload.until);
+    if (first === undefined || event.seq < first) openings.set(event.payload.until, event.seq);
+  }
+  for (const event of read.events) {
+    if (event.type === 'reply_deferred' && openings.get(event.payload.until) !== event.seq) continue;
+    const text = noteOf(event, timeZone);
     if (text !== null)
       timed.push({
         at: Date.parse(event.createdAt),
@@ -94,7 +125,7 @@ export function threadOf(read: {
 /** The latest handoff, when the conversation is a human's because the agent stepped back. */
 export function lastHandoff(read: { readonly events: readonly ConversationEventView[] }): string | null {
   const event = read.events.find((e) => e.type === 'handoff_requested');
-  return event === undefined ? null : noteOf(event);
+  return event === undefined ? null : noteOf(event, viewerZone());
 }
 
 /** The codes a refusal names; one this screen does not know yet is left out, never shown raw. */
