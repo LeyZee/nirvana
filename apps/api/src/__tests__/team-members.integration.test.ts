@@ -389,7 +389,7 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(left?.details).toEqual({ from: 'active', to: 'left', sessionsEnded: 1 });
   });
 
-  it('shows when a member’s invitation stops working: none, live, expired, used, never a new password link', async () => {
+  it('shows when a member’s link stops working: none, live, expired, used, then a new password link', async () => {
     const created = await call('POST', '/team/members', owner, {
       ...theoBody(),
       email: 'basile@example.test',
@@ -444,8 +444,8 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(redeemed.statusCode).toBe(200);
     expect(await expiresAtOf()).toBeNull();
 
-    // A link for a new password is out, but it is not an invitation: the record does not offer it as one.
-    await newLink('reset');
-    expect(await expiresAtOf()).toBeNull();
+    // A link for a new password shows too: the owner sees it is out, rather than make a second that cancels it.
+    const reset = await newLink('reset');
+    expect(await expiresAtOf()).toBe(reset.expiresAt);
   });
 });

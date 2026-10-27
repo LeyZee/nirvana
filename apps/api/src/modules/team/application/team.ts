@@ -61,20 +61,14 @@ export function createTeamService(
   const now = options.now ?? (() => new Date());
   const today = (): string => calendarDayIn(now(), options.agencyTimeZone);
 
-  /**
-   * When each member's invitation stops working (« Lien valable jusqu'à… », « Lien expiré »); `null` with none out. A
-   * link for a new password is not an invitation: the record does not show it.
-   */
+  /** When each member's link out stops working (« Lien valable jusqu'à… », « Lien expiré »); `null` with none. */
   const withLinks = async (members: TeamMember[]): Promise<TeamMember[]> => {
     if (members.length === 0) return members;
     const live = await links.live(members.map((member) => member.id));
-    return members.map((member) => {
-      const link = live.get(member.id);
-      return {
-        ...member,
-        invitationExpiresAt: link?.purpose === 'invitation' ? link.expiresAt.toISOString() : null,
-      };
-    });
+    return members.map((member) => ({
+      ...member,
+      invitationExpiresAt: live.get(member.id)?.expiresAt.toISOString() ?? null,
+    }));
   };
 
   const read = async (actor: UserId, id: TeamMemberId): Promise<TeamMember> => {
