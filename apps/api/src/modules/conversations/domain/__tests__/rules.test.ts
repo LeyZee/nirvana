@@ -5,6 +5,7 @@ import {
   canSend,
   debounceFor,
   DEFAULT_DEBOUNCE_SECONDS,
+  deferredRespondAt,
   followUpIdempotencyKey,
   followUpRetry,
   nextFollowUp,
@@ -61,5 +62,14 @@ describe('conversation rules', () => {
     expect(followUpRetry(later(24 * 3_600), AT)).toEqual(later(24 * 3_600));
     expect(followUpRetry(later(24 * 3_600 + 1), AT)).toBeNull();
     expect(followUpRetry(AT, AT)).toBeNull();
+  });
+
+  it('tries her answer again after a wait between 5 and 25 minutes, never otherwise (P3-11)', () => {
+    expect(deferredRespondAt(undefined, AT)).toBeNull();
+    expect(deferredRespondAt(later(5 * 60 - 1), AT)).toBeNull();
+    expect(deferredRespondAt(later(5 * 60), AT)).toEqual(later(5 * 60));
+    expect(deferredRespondAt(later(20 * 60), AT)).toEqual(later(20 * 60));
+    expect(deferredRespondAt(later(25 * 60), AT)).toEqual(later(25 * 60));
+    expect(deferredRespondAt(later(25 * 60 + 1), AT)).toBeNull();
   });
 });

@@ -47,7 +47,11 @@ export const JobNameSchema = z.enum(JOB_NAMES);
 export type JobName = z.infer<typeof JobNameSchema>;
 
 export const JOB_PAYLOADS = {
-  'conversation.respond': conversationJob,
+  /**
+   * Her answer to his last message (message-flow.md §1). `waitedFor` only on the second pass after she chose to wait
+   * (« attends, je reviens », P3-11): his message she waited on; one of his since replaces this job.
+   */
+  'conversation.respond': conversationJob.extend({ waitedFor: z.iso.datetime().exactOptional() }),
   'conversation.send': conversationJob.extend({ draftId: DraftIdSchema }),
   /**
    * A follow-up to a fan who went silent after her answer (P3-10): `anchorAt` is his last message, which the delays

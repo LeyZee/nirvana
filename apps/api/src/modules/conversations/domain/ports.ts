@@ -349,6 +349,11 @@ export interface ComposeInput {
    * decides whether one goes out (`held` with `no_reply` when not) and writes it like an answer, draft and guards.
    */
   readonly followUp?: FollowUpContext;
+  /**
+   * How many times she already waited on his last message (P3-11): 1 on the second pass after « attends, je
+   * reviens », when she may no longer wait; absent otherwise.
+   */
+  readonly waited?: number;
 }
 
 /** Which follow-up this is, after which silence. */
@@ -382,8 +387,10 @@ export type ComposeResult =
       readonly detail: readonly string[];
       readonly costUsd: number;
       /**
-       * A follow-up only, with `no_reply`: not now but later (her quiet hours), so the same step is scheduled again at
-       * that time. Within `FOLLOW_UP_RETRY_MAX_HOURS`; otherwise the follow-up is cancelled.
+       * With `no_reply`, not now but later. For a follow-up, her quiet hours: the same step is scheduled again at that
+       * time, within `FOLLOW_UP_RETRY_MAX_HOURS`, otherwise it is cancelled. For an answer, she chose to wait
+       * (« attends, je reviens », P3-11): the answer is tried once more at that time, within the bounds of
+       * `deferredRespondAt`, otherwise nothing comes back.
        */
       readonly retryAt?: Date;
     };
