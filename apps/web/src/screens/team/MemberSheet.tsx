@@ -5,11 +5,9 @@ import { useState, type JSX } from 'react';
 import { ShareLink } from './ShareLink';
 import { addNote, useNotes } from './api';
 import {
-  countryName,
   creatorNames,
   deadline,
   ERROR_MESSAGES,
-  flagOf,
   formatRate,
   invitationState,
   longDay,
@@ -18,6 +16,7 @@ import {
 import { Avatar, StatusPill } from './parts';
 
 import { localTime } from '@/creators/persona/model';
+import { countryFlag, countryName } from '@/lib/country';
 
 /** Arrived less than this many days ago: the « Nouveau » badge of Imperium. */
 const NEW_DAYS = 30;
@@ -89,7 +88,7 @@ export function MemberSheet({
           <span className="nv-figure__label">Chez lui</span>
           <span className="tm-figure__value">{localTime(member.timeZone, now)}</span>
           <span className="tm-figure__note">
-            <span aria-hidden="true">{flagOf(member.country)} </span>
+            <span aria-hidden="true">{countryFlag(member.country)} </span>
             {countryName(member.country)}
           </span>
         </div>

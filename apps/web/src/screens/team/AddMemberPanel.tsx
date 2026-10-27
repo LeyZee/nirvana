@@ -18,8 +18,6 @@ import {
   ERROR_MESSAGES,
   FIRST_COUNTRIES,
   OTHER_COUNTRIES,
-  countryName,
-  flagOf,
   formatRate,
   parseRate,
   ROLE_LABELS,
@@ -28,6 +26,7 @@ import {
 } from './model';
 
 import { localTime } from '@/creators/persona/model';
+import { countryFlag, countryName } from '@/lib/country';
 
 const ZONES: readonly string[] = Intl.supportedValuesOf('timeZone');
 const ROLES: readonly TeamRole[] = ['chatter', 'manager'];
@@ -503,14 +502,14 @@ function Where({ id, draft, problems, onChange }: StepProps): JSX.Element {
           <optgroup label="Les plus fréquents">
             {FIRST_COUNTRIES.map((code) => (
               <option key={code} value={code}>
-                {`${flagOf(code)}  ${countryName(code)}`}
+                {`${countryFlag(code)}  ${countryName(code)}`}
               </option>
             ))}
           </optgroup>
           <optgroup label="Tous les pays">
             {OTHER_COUNTRIES.map((country) => (
               <option key={country.code} value={country.code}>
-                {`${flagOf(country.code)}  ${country.name}`}
+                {`${countryFlag(country.code)}  ${country.name}`}
               </option>
             ))}
           </optgroup>

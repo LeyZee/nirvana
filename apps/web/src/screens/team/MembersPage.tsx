@@ -5,11 +5,12 @@ import { useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent } from 
 import { AddMemberPanel } from './AddMemberPanel';
 import { MemberSheet } from './MemberSheet';
 import { useMembers, usePresets } from './api';
-import { countryName, creatorNames, flagOf, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
+import { creatorNames, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
 import { Avatar, Notice, StatusPill } from './parts';
 import './team.css';
 
 import { useCreators } from '@/creators/api';
+import { countryFlag, countryName } from '@/lib/country';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const TABS: readonly TeamRole[] = ['chatter', 'manager'];
@@ -253,7 +254,7 @@ function Row({
             {waiting ? <span className="tm-invited">Invité</span> : null}
           </span>
           <span className="nv-convo__preview">
-            <span aria-hidden="true">{flagOf(member.country)} </span>
+            <span aria-hidden="true">{countryFlag(member.country)} </span>
             {countryName(member.country)} · {rateLine(member.commission, presets)}
             {theirs.length === 0 ? null : ` · ${theirs.join(', ')}`}
           </span>
