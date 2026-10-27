@@ -18,6 +18,7 @@ export function AgentHero({
   onOpen,
   onDone,
   onResume,
+  forCreator = false,
 }: {
   agent: AgentState;
   mode: AgentMode;
@@ -27,11 +28,13 @@ export function AgentHero({
   onDone: ((id: string) => void) | undefined;
   /** The action of a stopped agent: back to Copilote; absent while the screen cannot switch the mode. */
   onResume: (() => void) | undefined;
+  /** A creator's Dashboard: the agent's state, never the list of conversations waiting for a human (ADR 0023). */
+  forCreator?: boolean;
 }): JSX.Element {
-  const hero = heroState(agent, waiting, mode);
+  const hero = heroState(agent, waiting, mode, forCreator);
   const stopped = mode === 'stop';
   // A stopped agent asks nothing: the list comes back with it.
-  const todos = stopped ? [] : waiting;
+  const todos = stopped || forCreator ? [] : waiting;
   const first = todos[0];
   return (
     <section
@@ -72,7 +75,7 @@ export function AgentHero({
         )}
       </div>
 
-      {stopped ? null : todos.length === 0 ? (
+      {stopped || forCreator ? null : todos.length === 0 ? (
         <div className="nv-calm nv-swap">
           <span className="nv-dot nv-tone--ok" aria-hidden="true" />
           Rien à traiter pour l’instant.

@@ -45,6 +45,7 @@ describe('GET /v1/dashboard', () => {
   let creatorId: CreatorId;
   let ownerCookie: string;
   let operatorCookie: string;
+  let creatorCookie: string;
   const conversations = new Map<string, ConversationId>();
 
   const call = (url: string, cookie?: string) =>
@@ -131,6 +132,13 @@ describe('GET /v1/dashboard', () => {
       .set({ role: 'operator', creatorIds: [newId(CreatorIdSchema)] })
       .where(eq(schema.user.id, userId));
     operatorCookie = await signIn(server, operator.email, operator.password);
+    const herself = { email: 'creator@example.test', name: 'Lina', password: 'correct horse battery' };
+    const { userId: herId } = await createOwner(app.auth, app.db.db, herself);
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'creator', creatorIds: [creatorId] })
+      .where(eq(schema.user.id, herId));
+    creatorCookie = await signIn(server, herself.email, herself.password);
 
     // Julien's draft goes out as written, Marc's after an edit: one of two without a change.
     const julien = conversations.get('Julien')!;
@@ -241,6 +249,18 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.budget).toMatchObject({ cap: 20, alertAt: 16, costPerEuroSold: null });
     expect(dashboard.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
     expect(dashboard.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([['Julien', 25, 25]]);
+  });
+
+  it('shows a creator her aggregates, never a conversation nor a fan', async () => {
+    const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, creatorCookie);
+    expect(response.statusCode, response.body).toBe(200);
+    const dashboard = DashboardSchema.parse(response.json());
+    expect(dashboard.todos).toEqual([]);
+    expect(dashboard.fans).toEqual([]);
+    expect(response.body).not.toContain('Leo');
+    expect(response.body).not.toContain('Julien');
+    expect(dashboard.reveal).toMatchObject({ connected: true, conversations: 3 });
+    expect(dashboard.guards.today.minor).toBe(1);
   });
 
   it('asks a human to look at a send that failed for good', async () => {

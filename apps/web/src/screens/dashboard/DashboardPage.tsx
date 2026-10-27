@@ -20,6 +20,7 @@ import { NightBanner } from '@/settings/telegram/NightBanner';
 const SAMPLE_NOTE = 'Exemple : ce contrôle ne pilote aucun agent.';
 const GLOBAL_NOTE =
   'Un arrêt général retient l’agent pour toutes les créatrices : seul un opérateur peut le lever.';
+const CREATOR_NOTE = 'Le mode de l’agent se change par l’agence.';
 
 const FUNNEL_SUB: Record<Period, string> = {
   day: 'les fans arrivés aujourd’hui, et combien passent chaque étape',
@@ -71,8 +72,11 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
 /**
  * The Dashboard, read top to bottom (maquette v6, validée le 17/10) : the agent's state and what waits for a
  * human, then the sales, the fans' path, the best fans. Every detail lives in a tip or the read-only reader.
+ *
+ * A creator's keeps her aggregates only (ADR 0023: never a conversation nor a fan): the agent's state and mode,
+ * read only, its health, the sales; no « À traiter », no best fans, no way into Suivi. The server sends her neither.
  */
-export function DashboardPage(): JSX.Element {
+export function DashboardPage({ forCreator = false }: { forCreator?: boolean }): JSX.Element {
   const [period, setPeriod] = useState<Period>('day');
   const view = useDashboard(period);
   if (view.status === 'loading') {
@@ -83,17 +87,19 @@ export function DashboardPage(): JSX.Element {
     );
   }
   if (view.status === 'offline') return <Offline creatorName={view.creatorName} />;
-  return <Loaded view={view} period={period} onPeriod={setPeriod} />;
+  return <Loaded view={view} period={period} onPeriod={setPeriod} forCreator={forCreator} />;
 }
 
 function Loaded({
   view: { status, creatorId, globalStop, readAt, data, mode, automatic },
   period,
   onPeriod,
+  forCreator,
 }: {
   view: Extract<DashboardView, { status: 'live' | 'sample' }>;
   period: Period;
   onPeriod: (period: Period) => void;
+  forCreator: boolean;
 }): JSX.Element {
   const [fanId, setFanId] = useState<string | null>(null);
   const tip = useFloatingTip();
@@ -152,7 +158,9 @@ function Loaded({
           automatic={automatic}
           creatorName={data.creator.name}
           tip={tip}
-          readOnly={status === 'sample' ? SAMPLE_NOTE : globalStop ? GLOBAL_NOTE : null}
+          readOnly={
+            status === 'sample' ? SAMPLE_NOTE : forCreator ? CREATOR_NOTE : globalStop ? GLOBAL_NOTE : null
+          }
           onChange={setMode}
         />
         {writer.pending ? (
@@ -172,10 +180,12 @@ function Loaded({
         todos={data.todos}
         onOpen={openTodo}
         onDone={undefined}
-        onResume={status === 'live' && !globalStop ? resume : undefined}
+        onResume={status === 'live' && !globalStop && !forCreator ? resume : undefined}
+        forCreator={forCreator}
       />
 
-      <NightBanner night={data.telegram} creatorName={data.creator.name} />
+      {/* The night's alerts and where they go are the team's (Réglages › Telegram). */}
+      {forCreator ? null : <NightBanner night={data.telegram} creatorName={data.creator.name} />}
 
       {sales === null ? (
         <Section title="Ventes" sub="ce que l’agent et les chatteurs vendent" index={2}>
@@ -196,17 +206,19 @@ function Loaded({
         </>
       )}
 
-      <Section
-        title="Meilleurs fans"
-        sub="ce qu’ils ont dépensé : d’abord la part de l’agent, puis celle des chatteurs"
-        index={4}
-        control={sales === null ? periodControl : undefined}
-      >
-        <TopFans fans={data.fans} tip={tip} onOpen={openFan} />
-      </Section>
+      {forCreator ? null : (
+        <Section
+          title="Meilleurs fans"
+          sub="ce qu’ils ont dépensé : d’abord la part de l’agent, puis celle des chatteurs"
+          index={4}
+          control={sales === null ? periodControl : undefined}
+        >
+          <TopFans fans={data.fans} tip={tip} onOpen={openFan} />
+        </Section>
+      )}
 
       {tip.element}
-      <Reader fan={fan} onClose={close} />
+      {forCreator ? null : <Reader fan={fan} onClose={close} />}
     </div>
   );
 }
