@@ -1,9 +1,20 @@
-import { TEAM_MEMBER_STATUSES, TEAM_ROLES } from '@nirvana/contracts';
+import { INVITATION_LINK_PURPOSES, TEAM_MEMBER_STATUSES, TEAM_ROLES } from '@nirvana/contracts';
 import { sql, type SQL } from 'drizzle-orm';
-import { check, date, index, integer, pgPolicy, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  date,
+  index,
+  integer,
+  pgPolicy,
+  pgTable,
+  text,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { user } from './auth';
-import { createdAt, enumCheck, enumText, id, updatedAt } from './columns';
+import { createdAt, enumCheck, enumText, id, timestampTz, updatedAt } from './columns';
 
 /**
  * The agency's team (ADR 0023, scopes ADR 0024, EQ-01): out of the creators' RLS (no `creator_id`), under a policy per account.
@@ -141,5 +152,40 @@ export const memberCommissionRates = pgTable(
       for: 'insert',
       withCheck: sql`${isOwner} and ${t.createdBy} = ${currentUser}`,
     }),
+  ],
+);
+
+/**
+ * Single-use links to choose a password (EQ-10): a member's first access, or a new password without e-mail. Out of RLS
+ * and out of reach of `nirvana_app` (the migration revokes it): only `withAdmin` reads or writes it, like
+ * `provider_credentials`. The token itself is never stored, only its SHA-256; it is used by one atomic `UPDATE`
+ * (`used_at` set only while unused, not revoked and not expired), and a member has at most one live link.
+ */
+export const invitationLinks = pgTable(
+  'invitation_links',
+  {
+    id: id(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    purpose: enumText('purpose').notNull(),
+    /** SHA-256 of the token, base64url. */
+    tokenHash: text('token_hash').notNull().unique(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    expiresAt: timestampTz('expires_at').notNull(),
+    usedAt: timestampTz('used_at'),
+    /** Set when a newer link replaces this one. */
+    revokedAt: timestampTz('revoked_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    enumCheck('invitation_links', t.purpose, INVITATION_LINK_PURPOSES),
+    check('invitation_links_expiry_check', sql`${t.expiresAt} > ${t.createdAt}`),
+    check('invitation_links_one_end_check', sql`${t.usedAt} is null or ${t.revokedAt} is null`),
+    uniqueIndex('invitation_links_live_unique')
+      .on(t.memberId)
+      .where(sql`${t.usedAt} is null and ${t.revokedAt} is null`),
   ],
 );

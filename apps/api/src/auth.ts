@@ -138,7 +138,7 @@ export function createAuth(config: Config, db: Database, logger: Logger) {
 export type Auth = ReturnType<typeof createAuth>;
 
 /** The request's headers for Better Auth, with the client IP we resolved in place of any the client sent. */
-function authHeaders(request: FastifyRequest): Headers {
+export function authHeaders(request: FastifyRequest): Headers {
   const headers = fromNodeHeaders(request.headers);
   headers.set(CLIENT_IP_HEADER, request.ip);
   return headers;
@@ -164,12 +164,28 @@ async function currentUser(
 ): Promise<{ user: CurrentUser; membership: Membership | null } | null> {
   const result = await auth.api.getSession({ headers: authHeaders(request) });
   if (result === null) return null;
+  return userOf(db, result.user);
+}
+
+/** The columns of `user` that `/v1/me` starts from. */
+interface AccountRow {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string;
+  readonly role?: string | null | undefined;
+  readonly creatorIds?: readonly string[] | null | undefined;
+}
+
+async function userOf(
+  db: Database,
+  row: AccountRow,
+): Promise<{ user: CurrentUser; membership: Membership | null } | null> {
   const parsed = CurrentUserSchema.safeParse({
-    id: result.user.id,
-    email: result.user.email,
-    name: result.user.name,
-    role: result.user.role,
-    creatorIds: result.user.creatorIds ?? [],
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    creatorIds: row.creatorIds ?? [],
   });
   // A row that does not validate (unknown role) gets no access rather than a guessed one.
   if (!parsed.success) return null;
@@ -238,6 +254,16 @@ function membership(db: Database, userId: string): Promise<Membership> {
       .where(eq(schema.teamMembers.userId, userId));
     return { team: row === undefined ? null : TeamMembershipSchema.parse(row), teamScope };
   });
+}
+
+/**
+ * What `/v1/me` answers for an account, read without a request: the redeem of an invitation link (EQ-10) answers it for
+ * the session it has just opened. `null` for a row that does not validate, as for a session.
+ */
+export async function meOf(db: Database, row: AccountRow): Promise<Me | null> {
+  const signedIn = await userOf(db, row);
+  if (signedIn === null) return null;
+  return { ...signedIn.user, ...(signedIn.membership ?? (await membership(db, signedIn.user.id))) };
 }
 
 /** Mounts Better Auth's own handler under `/v1/auth/*` and adds `GET /v1/me`. */
