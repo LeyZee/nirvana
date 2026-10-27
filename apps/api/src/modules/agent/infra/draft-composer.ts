@@ -2,6 +2,7 @@ import type { HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
 import { holdDecision, protectionFor, type HoldDecision } from '../domain/hold';
+import { withoutOrders } from '../domain/injection';
 import { handoffCauseOf } from '../domain/traps';
 
 import { composeTurn, type ComposerPersona } from './compose';
@@ -288,7 +289,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         bubbles: composed.bubbles,
         softViolations: composed.violations.map((v) => v.code),
         costUsd,
-        factsProposed: composed.brief.factsProposed,
+        factsProposed: withoutOrders(composed.brief.factsProposed),
         ...(composed.model !== undefined && {
           voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
         }),

@@ -2,6 +2,7 @@ import type { MediaDescription } from '@nirvana/contracts';
 import type { Brief, CallTrace, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
 import { checkVoiceOutput, isBlocked, type GuardSettings, type GuardViolation } from '../domain/guards';
+import { screenNotes } from '../domain/injection';
 import { describeSituation, type Situation } from '../domain/situation';
 import { assessTrap, screenMedia, type TrapAssessment } from '../domain/traps';
 
@@ -37,6 +38,8 @@ export interface ComposedTurn {
   /** Safety flags on his media: a human takes over, nothing was written. */
   readonly handoff?: readonly string[];
   readonly trap?: TrapAssessment;
+  /** Lines of her notes shaped like an order: kept out of the prompt (agent/domain/injection.ts). */
+  readonly droppedNotes?: readonly string[];
   readonly brief?: Brief;
   readonly briefFailure?: LlmFailure;
   /** What the voice was asked to write: kept for a comparison or a rating. */
@@ -58,6 +61,16 @@ export interface ComposedTurn {
 export function withExamples(sheet: string, examples: readonly string[]): string {
   if (examples.length === 0) return sheet;
   return `${sheet}\n\nExemples de ses messages, corrigés par l'équipe :\n${examples.map((e) => `- ${e}`).join('\n')}`;
+}
+
+/** His messages before the ones she is answering: the history without its last run of fan turns. */
+function earlierFanTexts(history: readonly ConversationTurn[]): string[] {
+  let end = history.length;
+  while (end > 0 && history[end - 1]?.from === 'fan') end -= 1;
+  return history
+    .slice(0, end)
+    .filter((turn) => turn.from === 'fan')
+    .map((turn) => turn.text);
 }
 
 const NEUTRAL_BRIEF: Brief = {
@@ -89,10 +102,11 @@ export async function composeTurn(
       isFallback: false,
     };
   }
+  const notes = screenNotes(input.fanNotes);
   const base = {
     creatorName: persona.creatorName,
     personaSheet: persona.personaSheet,
-    fanNotes: input.fanNotes,
+    fanNotes: notes.kept,
     situation: describeSituation(input.situation),
     history: input.history,
     ...(input.trace !== undefined && { trace: input.trace }),
@@ -100,7 +114,12 @@ export async function composeTurn(
   const brain = await gateway.brain(base);
   const brief = brain.ok ? brain.value.output : undefined;
   // A trap overrides whatever the brain suggested: she does not play along (agent/domain/traps.ts).
-  const trap = assessTrap({ fanText: input.fanText, media: input.media, ...(brief && { brain: brief }) });
+  const trap = assessTrap({
+    fanText: input.fanText,
+    earlierFanTexts: earlierFanTexts(input.history),
+    media: input.media,
+    ...(brief && { brain: brief }),
+  });
   const voiceBrief: Brief =
     trap.replyBrief === undefined
       ? (brief ?? NEUTRAL_BRIEF)
@@ -115,6 +134,7 @@ export async function composeTurn(
   if (input.skipVoice?.(brief) === true) {
     return {
       ...(trap.isTrap && { trap }),
+      ...(notes.dropped.length > 0 && { droppedNotes: notes.dropped }),
       ...(brief && { brief }),
       ...(!brain.ok && { briefFailure: brain.error }),
       bubbles: [],
@@ -134,6 +154,7 @@ export async function composeTurn(
   const bubbles = asSent(written, persona.splitMessages);
   return {
     ...(trap.isTrap && { trap }),
+    ...(notes.dropped.length > 0 && { droppedNotes: notes.dropped }),
     ...(brief && { brief }),
     ...(!brain.ok && { briefFailure: brain.error }),
     voiceBrief,
