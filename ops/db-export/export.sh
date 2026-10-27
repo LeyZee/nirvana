@@ -20,6 +20,14 @@ sql() {
   psql "$BACKUP_DATABASE_URL" -X -q -A -t -v ON_ERROR_STOP=1 "$@"
 }
 
+# A hex digest as the base64 of its bytes, the form S3's checksum headers take (POSIX printf, no xxd needed).
+hex_to_base64() {
+  for byte in $(printf '%s' "$1" | sed 's/../& /g'); do
+    # shellcheck disable=SC2059 # the format is the octal escape of one byte, built on purpose.
+    printf "\\$(printf '%03o' "0x$byte")"
+  done | base64 | tr -d '\n'
+}
+
 finish() {
   status=$?
   if [ -n "$holder" ]; then
@@ -102,10 +110,15 @@ case "$BACKUP_TARGET" in
     : "${BACKUP_S3_ENDPOINT:?}" "${BACKUP_S3_REGION:?}" "${BACKUP_S3_BUCKET:?}"
     : "${BACKUP_S3_ACCESS_KEY_ID:?}" "${BACKUP_S3_SECRET_ACCESS_KEY:?}"
     object="backups/$name"
+    # A bucket with Object Lock refuses a PUT without an integrity checksum. Both forms are sent: the SHA-256 the
+    # bucket checks and keeps, and Content-MD5 for a provider that still asks for it. Both are signed (SigV4).
+    md5=$(md5sum "$work/$name" | cut -d ' ' -f 1)
     # The credentials go through stdin, never the command line (ps would show them).
     printf 'user = "%s:%s"\n' "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" |
       curl --config - --fail-with-body --silent --show-error --max-time 900 \
         --aws-sigv4 "aws:amz:$BACKUP_S3_REGION:s3" \
+        --header "x-amz-checksum-sha256: $(hex_to_base64 "$sha256")" \
+        --header "Content-MD5: $(hex_to_base64 "$md5")" \
         --upload-file "$work/$name" "$BACKUP_S3_ENDPOINT/$BACKUP_S3_BUCKET/$object" >/dev/null
     ;;
   local)

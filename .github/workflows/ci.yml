@@ -177,6 +177,10 @@ jobs:
         timeout-minutes: 10
         run: |
           mkdir -m 777 backup-out
+          # The S3 checksum headers, in the image's own shell (busybox): SHA-256 of nothing, as base64.
+          $COMPOSE run --rm --no-deps --entrypoint sh backup -c \
+            'eval "$(sed -n "/^hex_to_base64()/,/^}/p" /app/export.sh)"; hex_to_base64 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' |
+            grep -Fx '47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='
           $COMPOSE run --rm --no-deps --entrypoint age-keygen backup > backup-out/identity.txt
           recipient=$(grep -o 'age1[0-9a-z]*' backup-out/identity.txt)
           $COMPOSE run --rm --no-deps -v "$PWD/backup-out:/out" -e BACKUP_TARGET=local -e BACKUP_LOCAL_DIR=/out \
