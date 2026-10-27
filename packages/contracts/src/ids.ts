@@ -56,3 +56,16 @@ export type BlindTestId = z.infer<typeof BlindTestIdSchema>;
 export function newId<S extends z.ZodType<string>>(schema: S): z.output<S> {
   return schema.parse(v7());
 }
+
+/** A member of the agency's team (ADR 0023), linked to one dashboard account (`user`). */
+export const TeamMemberIdSchema = uuid.brand<'TeamMemberId'>();
+export type TeamMemberId = z.infer<typeof TeamMemberIdSchema>;
+
+export const TeamMemberNoteIdSchema = uuid.brand<'TeamMemberNoteId'>();
+export type TeamMemberNoteId = z.infer<typeof TeamMemberNoteIdSchema>;
+
+export const CommissionPresetIdSchema = uuid.brand<'CommissionPresetId'>();
+export type CommissionPresetId = z.infer<typeof CommissionPresetIdSchema>;
+
+export const CommissionRateIdSchema = uuid.brand<'CommissionRateId'>();
+export type CommissionRateId = z.infer<typeof CommissionRateIdSchema>;

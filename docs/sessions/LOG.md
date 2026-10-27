@@ -179,3 +179,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | Gestion d'équipe : ADR 0023 (acceptée) et fiches des lots 1 à 5 | done | `log/2026-10-27-adr-0023-equipe.md` |
 | 2026-10-27 | Équipe : fiches EQ-01 à EQ-09, pays et préréglages, import facultatif | done | `log/2026-10-27-eq-fiches.md` |
 | 2026-10-27 | Équipe : ADR 0024 (rôles et navigation), connexion du chatteur, shell par rôle | done | `log/2026-10-27-adr-0024-roles.md` |
+| 2026-10-27 | EQ-01 : base de l’équipe, `withMember` et RLS par compte | done | `log/2026-10-27-eq-01-team-base.md` |

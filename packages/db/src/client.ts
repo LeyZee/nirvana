@@ -1,4 +1,11 @@
-import { sql } from 'drizzle-orm';
+import {
+  TeamMemberStatusSchema,
+  TeamRoleSchema,
+  teamScopeFor,
+  UserRoleSchema,
+  type TeamScope,
+} from '@nirvana/contracts';
+import { eq, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool, type PoolConfig } from 'pg';
 
@@ -46,6 +53,46 @@ export function withTenant<T>(
   return db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.creator_id', ${creatorId}, true)`);
     return fn(tx);
+  }, config);
+}
+
+/**
+ * Runs `fn` in a transaction scoped to one dashboard account, for the agency's tables without `creator_id` (team,
+ * pay; ADR 0023). The scope is derived here, inside the transaction, from the database and never from the caller:
+ * `owner` for the owner, `agency` for a manager while `active`, `self` for anyone else, including an unknown account.
+ * Every team policy reads `app.user_id` and `app.team_scope`; outside this function they are unset and match nothing.
+ */
+export function withMember<T>(
+  db: Database,
+  userId: string,
+  fn: (tx: Transaction, scope: TeamScope) => Promise<T>,
+  config?: TransactionConfig,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    const [account] = await tx
+      .select({ role: schema.user.role })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId));
+    // His own row only: the scope is not set yet, so the policy lets him read nothing else.
+    const [member] = await tx
+      .select({ teamRole: schema.teamMembers.teamRole, status: schema.teamMembers.status })
+      .from(schema.teamMembers)
+      .where(eq(schema.teamMembers.userId, userId));
+    const role = UserRoleSchema.safeParse(account?.role);
+    const scope = role.success
+      ? teamScopeFor(
+          role.data,
+          member === undefined
+            ? null
+            : {
+                teamRole: TeamRoleSchema.parse(member.teamRole),
+                status: TeamMemberStatusSchema.parse(member.status),
+              },
+        )
+      : 'self';
+    await tx.execute(sql`select set_config('app.team_scope', ${scope}, true)`);
+    return fn(tx, scope);
   }, config);
 }
 
