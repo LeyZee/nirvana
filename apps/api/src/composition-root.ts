@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { FastifyRateLimitStoreCtor } from '@fastify/rate-limit';
 import { CreatorIdSchema, JOB_PAYLOADS } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
 import { createPersistentCallLog, DEFAULT_LLM_CONFIG, loadPrompt, type LlmCallStore } from '@nirvana/llm';
@@ -42,6 +43,7 @@ import { startPlaygroundModule, type PlaygroundModule } from './modules/playgrou
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
+import { postgresRateLimitStore, purgeRateLimitCounters } from './rate-limit-store';
 import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
 
 /** Every business module, wired. */
@@ -78,6 +80,8 @@ export interface App {
   /** Run by the worker. */
   readonly tasks: TaskList;
   readonly readiness: () => Promise<Readiness>;
+  /** The API's rate limit counters, shared by every instance through Postgres (ADR 0027). */
+  readonly rateLimitStore: FastifyRateLimitStoreCtor;
   /** Closes the queue and both pools; the server and the worker are stopped before. */
   shutdown(): Promise<void>;
 }
@@ -404,6 +408,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         );
       },
     ),
+    'rate_limit.purge': defineTask(
+      'rate_limit.purge',
+      JOB_PAYLOADS['rate_limit.purge'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { removed: await purgeRateLimitCounters(db.db) },
+          'rate limit: ended windows dropped',
+        );
+      },
+    ),
     'telegram.purge': defineTask(
       'telegram.purge',
       JOB_PAYLOADS['telegram.purge'],
@@ -435,6 +450,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     ],
     tasks,
     readiness: () => checkReadiness(db.db, adminDb.db),
+    rateLimitStore: postgresRateLimitStore(db.db),
     async shutdown() {
       modules.providers.stop();
       llmLog.stop();

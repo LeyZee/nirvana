@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
-import rateLimit from '@fastify/rate-limit';
+import rateLimit, { type FastifyRateLimitStoreCtor } from '@fastify/rate-limit';
 import { DomainError, type ApiError } from '@nirvana/contracts';
 import Fastify, {
   LogController,
@@ -31,6 +31,8 @@ export interface ServerDeps {
   /** Every module's routes, mounted under `/v1` (api.md). */
   readonly routes: readonly FastifyPluginAsyncZod[];
   readonly readiness: () => Promise<Readiness>;
+  /** Shared counters (ADR 0027); without it, each process counts in its own memory (tests). */
+  readonly rateLimitStore?: FastifyRateLimitStoreCtor;
 }
 
 declare module 'fastify' {
@@ -114,6 +116,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   await server.register(rateLimit, {
     max: config.RATE_LIMIT_PER_MINUTE,
     timeWindow: '1 minute',
+    ...(deps.rateLimitStore === undefined ? {} : { store: deps.rateLimitStore }),
     // The plugin throws a 429; the error handler below gives it the common body, `Retry-After` stays.
   });
 

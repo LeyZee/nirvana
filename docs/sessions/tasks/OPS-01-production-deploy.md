@@ -12,7 +12,7 @@ Au 27/10, rien n'était déployable : aucun Dockerfile, un `dist/` de l'API qui 
 
 ## À faire
 - [x] Lot 1 : build de l'API qui démarre (tsup, paquets du dépôt embarqués), `apps/api/Dockerfile` (API, worker, scripts d'exploitation), `apps/web/Dockerfile` (nginx, `/v1` vers l'API), `docker-compose.prod.yml`, job CI `images` qui construit et démarre la pile.
-- [ ] Lot 2 : magasin Postgres pour `@fastify/rate-limit` (table de compteurs, migration, purge des fenêtres expirées), tests d'intégration à deux instances de l'API.
+- [x] Lot 2 : magasin Postgres pour `@fastify/rate-limit` (table de compteurs, migration, purge des fenêtres expirées), tests d'intégration à deux instances de l'API.
 - [ ] Lot 3 : runbook `deploy.md` dans `docs/runbooks/` : première mise en service (Neon, rôles, Coolify, domaine), variables depuis `.env.example`, migrations, sauvegardes, retour arrière, coupe-circuit.
 
 ## Critères d'acceptation
