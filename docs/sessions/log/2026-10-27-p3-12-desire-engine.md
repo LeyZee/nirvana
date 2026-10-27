@@ -15,6 +15,6 @@ Décisions :
 - Le moteur compare à la note stockée retombée jusqu'à maintenant : un message qui ne la fait pas bouger n'écrit rien, et la retombée continue depuis l'ancien `desire_at`, ce qui garde la projection exacte.
 - `busy_now` pèse −30 : un fan chaud qui dit être au travail sort de « chaud » sur ce seul signal.
 - Test par combinaisons (480 contextes) plutôt qu'une nouvelle dépendance de tests par propriétés.
-Découvertes : aucune.
+Découvertes : `counted` compare `desire_at` (horloge du serveur) à l'heure du dernier message du fan (horodatage Reveal) ; à vérifier sur la capture Reveal (remarque de Bilan sur #222).
 Candidats à suppression : aucun.
-Vérifié : pnpm check, pnpm test, pnpm test:integration (37 fichiers) ; évals non lancées (pas de clé xAI ici).
+Vérifié : pnpm check, pnpm test (dont un test exhaustif : tout code émis par `desireScore` est dans `DESIRE_SIGNALS` et réciproquement), pnpm test:integration (38 fichiers) ; évals non lancées (pas de clé xAI ici).
