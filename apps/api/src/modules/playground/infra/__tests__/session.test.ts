@@ -299,6 +299,16 @@ describe('persona file', () => {
     expect(persona.petNames).toEqual(['Toi', 'Beau gosse', 'Mon grand']);
   });
 
+  it('gives the code her follow-up delays, none when she has them off', () => {
+    const source = read('demo/v0.1.0.yaml');
+    expect(readPersonaFile(source, 'X', '2026-10-17').followUps).toEqual({
+      delaysHours: [12, 24],
+      spirit: null,
+    });
+    const off = source.replace('follow_ups:\n  enabled: true', 'follow_ups:\n  enabled: false');
+    expect(readPersonaFile(off, 'X', '2026-10-17').followUps.delaysHours).toEqual([]);
+  });
+
   it('refuses a file outside the persona schema', () => {
     expect(() => readPersonaFile('identity:\n  first_name: Lina\n', 'X', '2026-10-17')).toThrow();
   });
@@ -349,5 +359,58 @@ describe('playground session, the offer policy and the cursor', () => {
     await playground.handleFanMessage('J’ai 30 ans');
     await playground.handleFanMessage('T’es trop bonne');
     expect(voiceInputs.map((input) => input.brief.action)).toEqual(['reply', 'reply']);
+  });
+});
+
+describe('playground session, follow-ups (P3-10)', () => {
+  // Noon in Paris (summer time): her day.
+  const NOON = new Date('2026-10-17T10:00:00Z');
+  const HOUR = 3_600_000;
+
+  it('follows up on his silence at her delays, then stops, with no brain call', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    const brainInputs: ConversationInput[] = [];
+    const session = createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['Tu fais quoi de beau ?'] }, voiceInputs, brainInputs),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+      now: () => NOON,
+      followUps: { delaysHours: [12, 24], spirit: null },
+    });
+    expect(await session.followUp()).toEqual({ kind: 'nothing_to_follow_up' });
+    await session.handleFanMessage('Moi c’est Julien');
+    expect(await session.followUp()).toEqual({
+      kind: 'not_due',
+      step: 0,
+      dueAt: new Date(NOON.getTime() + 12 * HOUR),
+    });
+    // 12 h later is 00:00 her time: her quiet hours, back at 9:00.
+    session.advance(12 * HOUR);
+    expect(await session.followUp()).toMatchObject({ kind: 'later', reason: 'follow_up_quiet_hours' });
+    session.advance(9 * HOUR);
+    const first = await session.followUp();
+    expect(first).toMatchObject({ kind: 'written', step: 0, turn: { bubbles: ['Tu fais quoi de beau ?'] } });
+    expect(brainInputs).toHaveLength(1);
+    expect(voiceInputs.at(-1)?.brief.replyBrief).toContain('depuis 21 h');
+    expect(await session.followUp()).toMatchObject({ kind: 'not_due', step: 1 });
+    session.advance(3 * HOUR);
+    expect(await session.followUp()).toMatchObject({ kind: 'written', step: 1 });
+    expect(await session.followUp()).toEqual({ kind: 'skip', reason: 'follow_up_plan_over' });
+    // He writes again: the count starts over from his new message.
+    await session.handleFanMessage('Pardon j’étais au boulot');
+    expect(await session.followUp()).toMatchObject({ kind: 'not_due', step: 0 });
+  });
+
+  it('never follows up without her delays', async () => {
+    const session = createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['Coucou'] }),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+      now: () => NOON,
+    });
+    await session.handleFanMessage('Salut');
+    expect(await session.followUp()).toEqual({ kind: 'skip', reason: 'follow_up_plan_over' });
   });
 });

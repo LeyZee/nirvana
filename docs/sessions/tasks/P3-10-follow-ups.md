@@ -1,6 +1,6 @@
 # P3-10 Relances : un fan n'est jamais laissé sans réponse
 
-Statut : in_progress (ID validé par Charles le 27/10 à 18h37 ; part Bilan livrée, part agent en cours)
+Statut : done (ID validé par Charles le 27/10 à 18h37)
 Phase : 3
 Dépend de : P0-05 (conversations), P3-02, `PROPOSED-method-gaps.md`
 Branche : task/P3-10-follow-ups
@@ -21,8 +21,8 @@ Le job `conversation.follow_up` est déclaré dans les contrats, mais aucune tâ
 ## À faire
 
 - [x] Bilan : planification, annulation, tâche, événements, tests d'intégration (`follow-ups.integration.test.ts`).
-- [ ] Agent : port `FollowUpPlan` exporté et branché dans la composition root (sans lui, rien n'est programmé), `ComposeInput.followUp` lu par l'adaptateur, `retryAt` pour ses heures calmes ; règle pure `followUpDecision` (au plus deux relances de vente, aucune après un manque d'argent ou en détresse, délais de `follow_ups.delays_hours` et `post_offer.delay_days`) et son écriture en brouillon.
-- [ ] Le playground montre la relance avec `advance`.
+- [x] Agent : port `FollowUpPlan` exporté et branché dans la composition root (sans lui, rien n'est programmé), `ComposeInput.followUp` lu par l'adaptateur, `retryAt` pour ses heures calmes ; règle pure `followUpDecision` (aucune relance à un fan à ne plus contacter ou en détresse, délais de `follow_ups.delays_hours`) et son écriture en brouillon. Les relances de vente (au plus deux, `post_offer.delay_days`) attendent P6-01 : d'ici là, une relance ne vend jamais.
+- [x] Le playground montre la relance avec `advance` (`/avance 12h` puis `/relance`).
 
 ## Critères d'acceptation
 
@@ -36,3 +36,7 @@ Les relances de masse, les vocaux.
 ## Notes de session
 
 27/10 (Bilan) : contrat convenu avec le fil agent. Ancre = dernier message du fan ; programmation à l'envoi vérifié d'un message d'elle ; annulation paresseuse (le job relit sous verrou et écrit `follow_up_cancelled`) ; brouillon depuis `idle` ; `held` `no_reply` avec `retryAt` (24 h au plus) reprogramme la même étape ; `handoff` et `guard_blocked` passent la main, `llm_unavailable` et `budget_reached` n'écrivent rien. Un brouillon de relance refusé ne programme pas l'étape suivante.
+
+27/10 (Agent) : part moteur. `followUpDecision` (`apps/api/src/modules/agent/domain/follow-up.ts`) : à ne plus contacter, ou ventes gelées pour détresse → `no_reply` sans alerte ; étape au-delà du plan → `no_reply` ; de 23 h à 8 h 59 chez elle → `no_reply` `follow_up_quiet_hours` avec `retryAt` à 9 h. Ses limites illisibles ou inconnues → rien n'est écrit (jamais un message à un fan peut-être stoppé). L'écriture ne passe pas par le cerveau (rien de lui à lire) : brief fixé par le code, rien de payant, aucune allusion sexuelle, toutes les gardes dont `explicit_before_age` quel que soit son âge ; une garde bloquante passe la main. `follow_ups.type: custom` donne son `text` à la voix comme esprit de ses relances. `startFollowUpPlan` (index agent) lit les délais de la persona (aucun si désactivées) ; la composition root le branche seulement à côté du composer de l'agent.
+
+Reste (P6-01) : relances de vente après un refus (au plus deux, `post_offer.delay_days`), qui demandent l'historique des scripts Reveal.

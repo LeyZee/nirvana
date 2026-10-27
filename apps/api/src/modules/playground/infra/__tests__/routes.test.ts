@@ -124,6 +124,7 @@ async function server(
       forbiddenTerms: [],
       offerLimits: { cooldownHours: 10 },
       sexualizationLimits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2 },
+      followUps: { delaysHours: [12, 24], spirit: null },
       splitMessages: true,
       petNames: [],
     },

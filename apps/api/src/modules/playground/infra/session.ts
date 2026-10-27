@@ -5,11 +5,13 @@ import {
   asSent,
   checkVoiceOutput,
   composeTurn,
+  followUpDecision,
   withExamples,
   withoutOrders,
   isBlocked,
   type GuardSettings,
   type GuardViolation,
+  type FollowUpDecision,
   type OfferInput,
   type OfferLimits,
   type RatedMoment,
@@ -42,6 +44,13 @@ interface PlaygroundExchange {
   readonly voiceInput?: VoiceInput;
 }
 
+/** A follow-up asked with /relance: written, or why not (not due yet, her quiet hours, none left). */
+export type PlaygroundFollowUp =
+  | { readonly kind: 'written'; readonly step: number; readonly turn: PlaygroundTurn }
+  | { readonly kind: 'not_due'; readonly step: number; readonly dueAt: Date }
+  | { readonly kind: 'nothing_to_follow_up' }
+  | Exclude<FollowUpDecision, { readonly kind: 'write' }>;
+
 interface VoiceComparison {
   readonly bubbles: readonly string[];
   readonly violations: readonly GuardViolation[];
@@ -65,6 +74,8 @@ export interface PlaygroundSession {
   setSituation(patch: Partial<Situation>): void;
   /** The simulated clock: tests follow-ups, day and night, the sexualisation delay. */
   advance(ms: number): void;
+  /** Her next follow-up on his silence, as `conversation.follow_up` would ask for it at the simulated time (P3-10). */
+  followUp(): Promise<PlaygroundFollowUp>;
   setFanNotes(notes: readonly string[]): void;
   reset(): void;
   readonly history: readonly ConversationTurn[];
@@ -91,6 +102,8 @@ export interface PlaygroundDeps {
   readonly offerLimits?: OfferLimits;
   /** When she goes sexual: the simulated fan starts with his age unknown and confirms it by stating it. */
   readonly sexualizationLimits?: SexualizationLimits;
+  /** Her follow-ups (`PersonaForModels.followUps`): without them, she never follows up. */
+  readonly followUps?: { readonly delaysHours: readonly number[]; readonly spirit: string | null };
 }
 
 /** Why nothing was written, for the trace: the daily cap, or each model that failed. */
@@ -120,6 +133,9 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
   let lastOfferAt: Date | null = null;
   // His age, unknown until he states an adult one, as for a real fan (P3-09).
   let ageConfirmedAt: Date | null = null;
+  // His last message on the simulated clock, and the follow-ups she wrote since: the next step is their count.
+  let lastFanAt: Date | null = null;
+  let followUpsSince = 0;
   const offerAt = (now: Date): OfferInput | undefined =>
     deps.offerLimits === undefined
       ? undefined
@@ -147,6 +163,8 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       lastExchange = undefined;
       lastOfferAt = null;
       ageConfirmedAt = null;
+      lastFanAt = null;
+      followUpsSince = 0;
       situation = { ...situation, relationshipStartedAt: situation.now, spentCents: 0 };
     },
 
@@ -203,7 +221,66 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       };
     },
 
+    async followUp() {
+      if (lastFanAt === null || history.at(-1)?.from !== 'creator') return { kind: 'nothing_to_follow_up' };
+      const delays = deps.followUps?.delaysHours ?? [];
+      const step = followUpsSince;
+      const hours = delays[step];
+      const silentMs = situation.now.getTime() - lastFanAt.getTime();
+      if (hours !== undefined && silentMs < hours * 3_600_000) {
+        return { kind: 'not_due', step, dueAt: new Date(lastFanAt.getTime() + hours * 3_600_000) };
+      }
+      // The simulated fan is an invented adult with no limit set: only the plan and her clock decide.
+      const decision = followUpDecision({
+        step,
+        steps: delays.length,
+        flags: {},
+        now: situation.now,
+        timeZone: situation.timeZone,
+      });
+      if (decision.kind !== 'write') return decision;
+      const composed = await composeTurn(
+        deps.gateway,
+        {
+          creatorName: deps.creatorName,
+          personaSheet,
+          guardSettings: deps.guardSettings,
+          ...(deps.splitMessages !== undefined && { splitMessages: deps.splitMessages }),
+        },
+        {
+          history: [...history],
+          fanText: '',
+          media: [],
+          fanNotes: fanNotes.join('\n'),
+          situation,
+          followUp: { silentHours: silentMs / 3_600_000, spirit: deps.followUps?.spirit ?? null },
+        },
+      );
+      if (!composed.isBlocked) {
+        history.push({ from: 'creator', text: composed.bubbles.join('\n') });
+        followUpsSince += 1;
+      }
+      lastExchange = undefined;
+      return {
+        kind: 'written',
+        step,
+        turn: {
+          ...(composed.brief !== undefined && { brief: composed.brief }),
+          bubbles: composed.bubbles,
+          ...(composed.voiceFailure !== undefined && { voiceFailure: failure(composed.voiceFailure) }),
+          violations: composed.violations,
+          isBlocked: composed.isBlocked,
+          costUsd: composed.costUsd,
+          latencyMs: composed.latencyMs,
+          ...(composed.model !== undefined && { model: composed.model }),
+          isFallback: composed.isFallback,
+        },
+      };
+    },
+
     async handleFanMessage(text, media = []) {
+      lastFanAt = situation.now;
+      followUpsSince = 0;
       history.push({ from: 'fan', text, media: media.map((description) => ({ description })) });
       const moment: RatedMoment = {
         history: [...history],

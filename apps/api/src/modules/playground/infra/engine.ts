@@ -139,6 +139,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     voiceExamples: voiceExamples(deps.records),
     offerLimits: deps.persona.offerLimits,
     sexualizationLimits: deps.persona.sexualizationLimits,
+    followUps: deps.persona.followUps,
     ...(deps.timeZone !== undefined && { timeZone: deps.timeZone }),
     ...(deps.now !== undefined && { now: deps.now }),
   });
