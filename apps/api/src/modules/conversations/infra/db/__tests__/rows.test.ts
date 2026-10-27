@@ -47,6 +47,13 @@ describe('journal rows written before a contract change (ADR 0007, Évolution de
       type: 'handoff_requested',
       payload: { conversationId, cause: 'llm_unavailable', detail: ['llm_unavailable', 'no voice key'] },
     });
+    // Cut at 500 characters right after a « : »: the empty code is dropped, the row still reads.
+    expect(
+      toStoredEvent(row('handoff_requested', { reason: 'guard_blocked : meeting_promise : ' })).body,
+    ).toEqual({
+      type: 'handoff_requested',
+      payload: { conversationId, cause: 'other', detail: ['guard_blocked', 'meeting_promise'] },
+    });
   });
 
   it('reads a takeover of before #60, without its conversation', () => {

@@ -64,7 +64,13 @@ const WAITED_NO_REPLY = 'waited_no_reply';
  * cause already says why in her words (the reader's labels).
  */
 export const handoffDetail = (codes: readonly string[]): readonly string[] =>
-  codes.map((code) => code.slice(0, 500)).slice(0, 20);
+  codes
+    .map((code) => code.slice(0, 500))
+    .filter((code) => code !== '')
+    .slice(0, 20);
+
+/** After a wait, a known situation, not a technical cause: the chatter reads why he takes over (P3-11). */
+const WAITED_NO_REPLY_REASON = 'Après l’attente, l’agent n’avait plus rien à lui écrire';
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 
@@ -248,7 +254,12 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
           conversation,
           {
             type: 'handoff_requested',
-            payload: { conversationId: conversation.id, cause, detail: [...detail] },
+            payload: {
+              conversationId: conversation.id,
+              cause,
+              ...(held && { reason: WAITED_NO_REPLY_REASON }),
+              detail: [...detail],
+            },
           },
           meta,
         );

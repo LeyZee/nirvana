@@ -86,11 +86,6 @@ export function toDraft(row: typeof schema.drafts.$inferSelect): Draft {
 
 const PayloadObjectSchema = z.record(z.string(), z.unknown());
 
-/**
- * Payload shapes the journal still holds from before a contract change, brought to the current shape on read (ADR
- * 0007, « Évolution des payloads »): the journal is never rewritten. A field the current shape requires and an old
- * row lacks gets the value the old writer meant; what the row holds always wins.
- */
 /** The holds the engine wrote as a handoff's `reason` before it had `detail`: their first code opens the line. */
 const ENGINE_HOLD_CODES = [
   'guard_blocked',
@@ -103,9 +98,15 @@ const ENGINE_HOLD_CODES = [
 /** « guard_blocked : meeting_promise » → its codes; a sentence a human wrote → `null`. */
 function engineCodes(reason: string): string[] | null {
   const codes = reason.split(' : ');
-  return ENGINE_HOLD_CODES.includes(codes[0] ?? '') ? codes.slice(0, 20) : null;
+  // An old reason was cut at 500 characters, maybe right after a « : »: no empty code (`detail` refuses one).
+  return ENGINE_HOLD_CODES.includes(codes[0] ?? '') ? codes.filter((code) => code !== '').slice(0, 20) : null;
 }
 
+/**
+ * Payload shapes the journal still holds from before a contract change, brought to the current shape on read (ADR
+ * 0007, « Évolution des payloads »): the journal is never rewritten. A field the current shape requires and an old
+ * row lacks gets the value the old writer meant; what the row holds always wins.
+ */
 function upcast(row: typeof schema.conversationEvents.$inferSelect): unknown {
   const payload = PayloadObjectSchema.safeParse(row.payload);
   if (!payload.success) return row.payload;
