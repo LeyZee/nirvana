@@ -2,6 +2,7 @@ import type { DraftView } from '@nirvana/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type JSX } from 'react';
 
+import { DesireSheet } from './Desire';
 import { FanLimits } from './FanLimits';
 import {
   approveDraft,
@@ -179,6 +180,7 @@ function Loaded({
         </label>
       ) : null}
       <FanLimits creatorId={creatorId} fanId={detail.fanId} canDecide={canDecide} />
+      <DesireSheet creatorId={creatorId} conversationId={detail.id} desire={detail.desire} />
       <div className="tr-reader__body">
         {read.isPartial ? (
           <p className="tr-more">Seuls les derniers messages sont affichés ; le reste se lit dans Reveal.</p>

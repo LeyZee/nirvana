@@ -1,12 +1,34 @@
 import type { ConversationSummary, DashboardTodo } from '@nirvana/contracts';
+import { placeSegmentThumb } from '@nirvana/design-system';
 import { useQueries } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useState, type JSX, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 
 import { Reader } from './Reader';
 import { fetchConversations } from './api';
 import { todoLabel } from './reader-model';
-import { MODE_MEANINGS, mergeConversations, sharedMode, STATE_LABELS, statusClass, subline } from './view';
+import {
+  LIST_ORDER_LABELS,
+  LIST_ORDERS,
+  MODE_MEANINGS,
+  mergeConversations,
+  orderLines,
+  readListOrder,
+  sharedMode,
+  STATE_LABELS,
+  statusClass,
+  storeListOrder,
+  subline,
+  type ListOrder,
+} from './view';
 import './tracking.css';
 
 import { useLiveDashboard } from '@/agent/live';
@@ -14,6 +36,9 @@ import { useCreators } from '@/creators/api';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const REFRESH_MS = 30_000;
+
+/** Arrow keys of a radio group and the way they move. */
+const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 
 /**
  * Suivi : d'abord ce qui attend un humain (la file « à traiter », calculée par le serveur), puis toutes les
@@ -51,6 +76,7 @@ export function TrackingPage({
   });
   const dashboard = useLiveDashboard();
   const now = useNow();
+  const [order, setOrder] = useState<ListOrder>(readListOrder);
 
   const isLoading = creatorsQuery.isPending || queries.some((q) => q.isPending);
   const failed = queries.filter((q) => q.isError);
@@ -62,6 +88,9 @@ export function TrackingPage({
     })),
   );
   const hasMore = queries.some((q) => q.data?.hasMore === true);
+  // The order only offers itself once a fan has a desire score: before that, « Chauds d'abord » would sort nothing.
+  const canOrder = lines.some((l) => l.conversation.desire !== null);
+  const shown = orderLines(lines, canOrder ? order : 'recent');
   const showsCreator = creators.length > 1;
   const mode = sharedMode(lines);
   const retry = (): void => {
@@ -149,9 +178,18 @@ export function TrackingPage({
                 className="tr-panel"
                 eyebrow={todos.length === 0 ? undefined : 'Toutes les conversations'}
               >
+                {canOrder ? (
+                  <OrderControl
+                    order={order}
+                    onChange={(next) => {
+                      setOrder(next);
+                      storeListOrder(next);
+                    }}
+                  />
+                ) : null}
                 <div className="nv-scroll">
                   <ul className="nv-list tr-list" aria-label="Conversations">
-                    {lines.map(({ conversation, creatorName }) => (
+                    {shown.map(({ conversation, creatorName }) => (
                       <Row
                         key={conversation.id}
                         conversation={conversation}
@@ -165,7 +203,13 @@ export function TrackingPage({
                       />
                     ))}
                   </ul>
-                  {hasMore ? <p className="tr-more">Seules les plus récentes sont affichées.</p> : null}
+                  {hasMore ? (
+                    <p className="tr-more">
+                      {canOrder && order === 'hot'
+                        ? 'Seules les plus récentes sont affichées : le classement ne porte que sur elles.'
+                        : 'Seules les plus récentes sont affichées.'}
+                    </p>
+                  ) : null}
                 </div>
               </Panel>
             )}
@@ -188,6 +232,74 @@ export function TrackingPage({
         </div>
       )}
     </Page>
+  );
+}
+
+/**
+ * « Récents · Chauds d'abord » above the list (P3-12): a choice of the reader, remembered on the device, never the
+ * default. « À traiter » stays above it whatever the order.
+ */
+function OrderControl({
+  order,
+  onChange,
+}: {
+  order: ListOrder;
+  onChange: (order: ListOrder) => void;
+}): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const placed = useRef(false);
+  const index = LIST_ORDERS.indexOf(order);
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const step = STEPS[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    const next = LIST_ORDERS[(index + step + LIST_ORDERS.length) % LIST_ORDERS.length] ?? order;
+    ref.current?.querySelector<HTMLButtonElement>(`[data-order="${next}"]`)?.focus();
+    onChange(next);
+  };
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    // First paint in place; later changes slide.
+    placeSegmentThumb(
+      element,
+      index,
+      LIST_ORDERS.length,
+      placed.current ? (thumbRef.current ?? undefined) : undefined,
+    );
+    placed.current = true;
+  }, [index]);
+
+  return (
+    <div className="tr-order">
+      <div
+        className="nv-seg nv-glass nv-glass--thin"
+        role="radiogroup"
+        aria-label="Ordre de la liste"
+        ref={ref}
+        onKeyDown={onKeyDown}
+      >
+        <span className="nv-seg__thumb nv-glass nv-glass--thin" ref={thumbRef} aria-hidden="true" />
+        {LIST_ORDERS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            className="nv-seg__opt"
+            data-order={option}
+            aria-checked={option === order}
+            tabIndex={option === order ? 0 : -1}
+            onClick={() => {
+              onChange(option);
+            }}
+          >
+            {LIST_ORDER_LABELS[option]}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

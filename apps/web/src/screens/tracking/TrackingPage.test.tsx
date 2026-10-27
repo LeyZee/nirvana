@@ -96,6 +96,8 @@ function serve(routes: {
   command?: (action: string) => Reply;
   /** The fan's limits read first, and after a `PUT` (the same when not given). */
   flags?: { before?: FanFlags; after?: FanFlags };
+  /** His desire curve (`/desire`), no point when not given. */
+  desire?: Reply;
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -126,6 +128,8 @@ function serve(routes: {
         reply = { status: 200, body: { items: [FAN_MESSAGE], nextCursor: null } };
       } else if (path.endsWith('/events')) {
         reply = { status: 200, body: { items: [], nextCursor: null } };
+      } else if (path.endsWith('/desire')) {
+        reply = routes.desire ?? { status: 200, body: { points: [] } };
       } else {
         reply = routes.detail?.() ?? { status: 404 };
       }
@@ -173,6 +177,24 @@ const OPEN = `/suivi?conversation=${conversation('1').id}`;
 
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -501,5 +523,154 @@ describe('the reader of Suivi', () => {
     // One retry first (a blip is not an outage), then the reader says so.
     expect(await screen.findByText('Le serveur ne répond pas', undefined, { timeout: 4_000 })).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
+  });
+});
+
+describe('his desire score in Suivi (P3-12)', () => {
+  const hot = conversation('1', { fanDisplayName: 'Basile', desire: { score: 82, band: 'hot' } });
+  const playful = conversation('2', {
+    fanDisplayName: 'Théo',
+    updatedAt: '2026-10-17T20:30:00Z',
+    desire: { score: 45, band: 'playful' },
+  });
+  const unscored = conversation('3', { fanDisplayName: 'Noé', updatedAt: '2026-10-17T20:40:00Z' });
+  const names = (list: HTMLElement): (string | null | undefined)[] =>
+    within(list)
+      .getAllByRole('listitem')
+      .map((row) => row.querySelector('.nv-convo__name')?.textContent);
+
+  it('says the band in a word, never a number, and nothing for a fan with no score yet', async () => {
+    serve({ ...ONE, conversations: { [LEA.id]: { items: [hot, unscored], nextCursor: null } } });
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    const [first, second] = within(list).getAllByRole('listitem');
+    expect(second?.querySelector('.nv-convo__preview')?.textContent).toBe('N’a pas encore écrit · chaud');
+    expect(second?.textContent).not.toContain('82');
+    expect(first?.querySelector('.nv-convo__preview')?.textContent).toBe('N’a pas encore écrit');
+    expect(list.querySelector('[class*="neon"], [class*="danger"], [class*="amber"]')).toBeNull();
+  });
+
+  it('keeps the most recent first, and puts the hottest first only when asked, unscored last', async () => {
+    serve({ ...ONE, conversations: { [LEA.id]: { items: [hot, playful, unscored], nextCursor: null } } });
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    expect(names(list)).toEqual(['Noé', 'Théo', 'Basile']);
+    expect(screen.getByRole('radio', { name: 'Récents' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'Chauds d’abord' }));
+    expect(names(list)).toEqual(['Basile', 'Théo', 'Noé']);
+    expect(window.localStorage.getItem('nirvana.suivi.order')).toBe('hot');
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Chauds d’abord' }), { key: 'ArrowLeft' });
+    expect(names(list)).toEqual(['Noé', 'Théo', 'Basile']);
+  });
+
+  it('keeps « À traiter » above the list whatever the order, and says the order covers the loaded page only', async () => {
+    window.localStorage.setItem('nirvana.suivi.order', 'hot');
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [hot, playful], nextCursor: 'next' } },
+      // The default todo: Kévin, a possible minor, on conversation 1.
+      dashboard: { status: 200, body: apiDashboard() },
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    const list = screen.getByRole('list', { name: 'Conversations' });
+    expect(queue.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(names(list)).toEqual(['Basile', 'Théo']);
+    expect(
+      screen.getByText('Seules les plus récentes sont affichées : le classement ne porte que sur elles.'),
+    ).toBeDefined();
+  });
+
+  it('offers no order while no fan has a score', async () => {
+    serve({ ...ONE, conversations: { [LEA.id]: { items: [unscored], nextCursor: null } } });
+    renderPage();
+    await screen.findByRole('list', { name: 'Conversations' });
+    expect(screen.queryByRole('radiogroup', { name: 'Ordre de la liste' })).toBeNull();
+  });
+
+  const reading = (desire: ConversationDetail['desire']): Reply => ({
+    status: 200,
+    body: ConversationDetailSchema.parse({ ...conversation('1'), desire, openDrafts: [] }),
+  });
+  const listed = { [LEA.id]: { items: [conversation('1')], nextCursor: null } };
+
+  it('shows no desire line in the reader before a first score', async () => {
+    serve({ ...ONE, conversations: listed, detail: () => reading(null) });
+    renderPage(OPEN);
+    await screen.findByText('Salut, ça va ?');
+    expect(screen.queryByText('Désir')).toBeNull();
+  });
+
+  it('shows the band on a neutral gauge, whatever the score', async () => {
+    for (const [score, band] of [
+      [0, 'neutral'],
+      [69, 'playful'],
+      [70, 'hot'],
+      [100, 'hot'],
+    ] as const) {
+      serve({ ...ONE, conversations: listed, detail: () => reading({ score, band }) });
+      renderPage(OPEN);
+      const gauge = await screen.findByRole('meter', { name: 'Note de désir' });
+      expect(gauge.getAttribute('aria-valuenow')).toBe(String(score));
+      expect(gauge.className).toBe('nv-gauge tr-desire__gauge');
+      cleanup();
+    }
+  });
+
+  it('opens on the curve and says, point by point, what moved it in words', async () => {
+    serve({
+      ...ONE,
+      conversations: listed,
+      detail: () => reading({ score: 60, band: 'playful' }),
+      desire: {
+        status: 200,
+        body: {
+          points: [
+            { at: '2026-10-17T19:00:00Z', before: null, score: 46, signals: ['intent:flirt'] },
+            {
+              at: '2026-10-17T20:00:00Z',
+              before: 46,
+              score: 60,
+              signals: ['steers_to_intimate', 'long_reply', 'suggestive_emoji', 'suggestive_emoji'],
+            },
+          ],
+        },
+      },
+    });
+    renderPage(OPEN);
+    const gauge = await screen.findByRole('meter', { name: 'Note de désir' });
+    expect(gauge.getAttribute('aria-valuetext')).toBe('60 sur 100, joueur');
+    const sheet = gauge.closest('details');
+    if (sheet === null) throw new Error('no desire sheet');
+    sheet.open = true;
+    fireEvent(sheet, new Event('toggle'));
+    const chart = await screen.findByLabelText(/Note de désir au fil de ses messages/u);
+    fireEvent.focus(chart);
+    const tip = await screen.findByRole('status');
+    expect(tip.textContent).toContain('+14');
+    expect(tip.textContent).toContain('Il ramène vers l’intime, réponse longue, emoji suggestif ×2');
+    fireEvent.keyDown(chart, { key: 'ArrowLeft' });
+    expect(screen.getByRole('status').textContent).toContain('Première note : 46');
+    expect(screen.getByRole('status').textContent).toContain('Il flirte');
+  });
+
+  it('says when there is not enough for a curve yet', async () => {
+    serve({
+      ...ONE,
+      conversations: listed,
+      detail: () => reading({ score: 46, band: 'playful' }),
+      desire: {
+        status: 200,
+        body: {
+          points: [{ at: '2026-10-17T19:00:00Z', before: null, score: 46, signals: ['intent:flirt'] }],
+        },
+      },
+    });
+    renderPage(OPEN);
+    const sheet = (await screen.findByRole('meter', { name: 'Note de désir' })).closest('details');
+    if (sheet === null) throw new Error('no desire sheet');
+    sheet.open = true;
+    fireEvent(sheet, new Event('toggle'));
+    expect(await screen.findByText('Pas encore assez de messages pour une courbe.')).toBeDefined();
   });
 });

@@ -1,6 +1,7 @@
 import {
   ADDITIONAL_INFO_MAX,
   ageOn,
+  DESIRE_BAND_FLOORS,
   PERSONA_BOUNDS,
   PERSONA_OPTIONS,
   type Persona,
@@ -33,6 +34,8 @@ import {
   type FieldIssue,
   type TabId,
 } from './model';
+
+import { thresholdHint } from '@/agent/desire';
 
 /**
  * One component per tab, in OnlyChat's order. Each edits its own section of the draft; the numbers the policy
@@ -550,6 +553,29 @@ export function StrategiesTab({ value: s, onChange, issues }: TabProps<'strategi
             }}
           />
         </Field>
+        <Field
+          label="Elle ne l’ouvre qu’à partir d’une note de désir de"
+          code
+          id={`${id}-sd`}
+          hint={thresholdHint(
+            s.sexualization.min_desire_to_open,
+            DESIRE_BAND_FLOORS.playful,
+            'quand elle ouvre l’intime',
+          )}
+          path="strategies.sexualization.min_desire_to_open"
+        >
+          <NumberInput
+            id={`${id}-sd`}
+            unit="sur 100"
+            nullable
+            bounds={PERSONA_BOUNDS.sexualizationMinDesireToOpen}
+            value={s.sexualization.min_desire_to_open ?? null}
+            onChange={(v) => {
+              // Emptied, the default applies: an absent key, which the saved version leaves out.
+              set('sexualization', { ...s.sexualization, min_desire_to_open: v ?? undefined });
+            }}
+          />
+        </Field>
       </Fold>
 
       <Fold title="Lancement des scripts" summary={summaries.script_launch} open={openIf('script_launch')}>
@@ -575,6 +601,28 @@ export function StrategiesTab({ value: s, onChange, issues }: TabProps<'strategi
             value={s.script_launch.cooldown_hours}
             onChange={(v) => {
               set('script_launch', { ...s.script_launch, cooldown_hours: v ?? Number.NaN });
+            }}
+          />
+        </Field>
+        <Field
+          label="Un script ne part qu’à partir d’une note de désir de"
+          code
+          id={`${id}-sm`}
+          hint={thresholdHint(
+            s.script_launch.min_desire,
+            DESIRE_BAND_FLOORS.hot,
+            'quand les scripts partent',
+          )}
+          path="strategies.script_launch.min_desire"
+        >
+          <NumberInput
+            id={`${id}-sm`}
+            unit="sur 100"
+            nullable
+            bounds={PERSONA_BOUNDS.scriptMinDesire}
+            value={s.script_launch.min_desire ?? null}
+            onChange={(v) => {
+              set('script_launch', { ...s.script_launch, min_desire: v ?? undefined });
             }}
           />
         </Field>
