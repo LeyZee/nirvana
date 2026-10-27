@@ -18,7 +18,7 @@ import { createAppRouter, type AppRouter } from '../router';
 import { RailNav } from './AppShell';
 import type { NavItem, Rail } from './nav';
 
-const base = { id: 'u1', email: 'membre@example.test', name: 'Nora', creatorIds: [] };
+const base = { id: 'u1', email: 'membre@example.test', name: 'Nora', creatorIds: [], routedCreatorIds: [] };
 const owner: Me = { ...base, role: 'owner', team: null, teamScope: 'owner' };
 const manager: Me = {
   ...base,
@@ -107,6 +107,18 @@ describe('the rail of each role', () => {
     renderApp({ ...manager, team: { role: 'manager', status: 'on_leave' }, teamScope: 'self' }, '/suivi');
     expect(await screen.findByText('Manager')).toBeDefined();
     expect(tabs()).toEqual(['Suivi']);
+  });
+
+  it('sends a creator who opens Suivi to the Dashboard: she never sees a conversation', async () => {
+    const router = renderApp(
+      { ...base, role: 'creator', team: null, teamScope: 'self' },
+      '/suivi?conversation=c1',
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/');
+    });
+    expect(tabs()).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
+    expect(screen.getByText('Créatrice')).toBeDefined();
   });
 
   it('keeps a manager out of Entraîner and Réglages', async () => {

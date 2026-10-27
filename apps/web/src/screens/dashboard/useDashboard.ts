@@ -40,10 +40,13 @@ export type DashboardView =
     };
 
 /** The one door of the Dashboard to its data: `GET /v1/dashboard` for the period. */
-export function useDashboard(period: Period): DashboardView {
+export function useDashboard(period: Period, forCreator = false): DashboardView {
   const live = useLiveDashboard(period);
   const liveData = live.kind === 'live' ? live.data : undefined;
-  const data = useMemo(() => (liveData === undefined ? null : fromApi(liveData)), [liveData]);
+  const data = useMemo(
+    () => (liveData === undefined ? null : fromApi(liveData, forCreator)),
+    [liveData, forCreator],
+  );
   switch (live.kind) {
     case 'loading':
       return { status: 'loading' };

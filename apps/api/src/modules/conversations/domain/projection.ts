@@ -1,4 +1,4 @@
-import type { ConversationMode, ConversationState, EventBody, EventType } from '@nirvana/contracts';
+import type { ConversationMode, ConversationState, EventBody, EventType, UserId } from '@nirvana/contracts';
 
 import { MAX_SEND_ATTEMPTS, nextState, type ConversationCommand } from './state-machine';
 
@@ -9,6 +9,11 @@ export interface ConversationProjection {
   readonly lastInboundAt: Date | null;
   readonly lastOutboundAt: Date | null;
   readonly unreadCount: number;
+  /**
+   * The team member the conversation is routed to (ADR 0024, ADR 0025): the routing event comes with EQ-08, and
+   * « Rendre la main » clears it, so a routed conversation never stays open to him outside his shift.
+   */
+  readonly routedToUserId: UserId | null;
 }
 
 export const INITIAL_PROJECTION: ConversationProjection = {
@@ -17,6 +22,7 @@ export const INITIAL_PROJECTION: ConversationProjection = {
   lastInboundAt: null,
   lastOutboundAt: null,
   unreadCount: 0,
+  routedToUserId: null,
 };
 
 /** Events that move the state whatever their payload. */
@@ -63,6 +69,9 @@ export function applyEvent(
   }
   if (event.type === 'message_received' || event.type === 'message_sent') {
     return { ...projection, state, lastOutboundAt: at, unreadCount: 0 };
+  }
+  if (event.type === 'takeover_ended') {
+    return { ...projection, state, routedToUserId: null };
   }
   if (event.type === 'mode_changed') {
     return { ...projection, state, mode: event.payload.mode ?? projection.mode };

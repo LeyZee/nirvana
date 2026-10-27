@@ -167,3 +167,18 @@ describe('sample data', () => {
     }
   });
 });
+
+describe('heroState for a creator', () => {
+  it('names no conversation and offers no action, whatever waits', () => {
+    const hero = heroState(agent, [todo('a', 'bad')], 'copilot', true);
+    expect(hero).toMatchObject({ tone: 'ok', headline: 'Tout va bien. **Rien ne t’attend.**' });
+    expect(hero.action).toBeUndefined();
+    expect(hero.lead).toContain('L’agence suit les conversations');
+  });
+
+  it('leaves a stopped agent to the agency', () => {
+    const hero = heroState(agent, [], 'stop', true);
+    expect(hero.headline).toBe('L’agent est **arrêté**');
+    expect(hero.action).toBeUndefined();
+  });
+});

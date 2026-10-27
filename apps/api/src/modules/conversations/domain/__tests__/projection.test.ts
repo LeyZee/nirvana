@@ -1,4 +1,4 @@
-import { EventBodySchema } from '@nirvana/contracts';
+import { EventBodySchema, UserIdSchema } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { applyEvent, INITIAL_PROJECTION, rebuildProjection } from '../projection';
@@ -6,6 +6,7 @@ import { applyEvent, INITIAL_PROJECTION, rebuildProjection } from '../projection
 const DRAFT = '0199f2a0-0000-7000-8000-0000000000d1';
 const MESSAGE = '0199f2a0-0000-7000-8000-0000000000a1';
 const CONVERSATION = '0199f2a0-0000-7000-8000-0000000000c1';
+const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-0000000000e1');
 const at = (minute: number) => new Date(`2026-10-17T20:${String(minute).padStart(2, '0')}:00Z`);
 
 const message = { messageId: MESSAGE, platformMessageId: 'p1', mediaIds: [] };
@@ -26,6 +27,16 @@ describe('conversation projection', () => {
     ]);
     expect(afterTwo).toMatchObject({ state: 'pending', unreadCount: 2, lastInboundAt: at(2) });
     expect(applyEvent(afterTwo, sent, at(3))).toMatchObject({ unreadCount: 0, lastOutboundAt: at(3) });
+  });
+
+  it('clears the routing when a human hands the conversation back', () => {
+    const routed = { ...INITIAL_PROJECTION, state: 'human' as const, routedToUserId: USER };
+    const released = EventBodySchema.parse({
+      type: 'takeover_ended',
+      payload: { conversationId: CONVERSATION, userId: USER },
+    });
+    expect(applyEvent(routed, released, at(1))).toMatchObject({ state: 'idle', routedToUserId: null });
+    expect(applyEvent(routed, inbound, at(1)).routedToUserId).toBe(USER);
   });
 
   it('ignores an event the state machine refuses, so a journal always folds', () => {

@@ -73,17 +73,29 @@ async function summaries(
 /** The inbox's queries, in tenant transactions like everything else (RLS). */
 export function createDrizzleConversationReader(db: Database): ConversationReader {
   return {
-    list: (creatorId, page) =>
+    list: (creatorId, page, routedTo) =>
       withTenant(db, creatorId, async (tx) => {
         const after = decodeCursor(page.cursor);
         const rows = await summaries(
           tx,
-          after === null
-            ? undefined
-            : sql`(${schema.conversations.updatedAt}, ${schema.conversations.id}) < (${after.at.toISOString()}::timestamptz, ${after.id}::uuid)`,
+          and(
+            after === null
+              ? undefined
+              : sql`(${schema.conversations.updatedAt}, ${schema.conversations.id}) < (${after.at.toISOString()}::timestamptz, ${after.id}::uuid)`,
+            routedTo === undefined ? undefined : eq(schema.conversations.routedToUserId, routedTo),
+          ),
           page.limit + 1,
         );
         return paged(rows, page, (last) => encodeCursor(new Date(last.updatedAt), last.id));
+      }),
+
+    isRoutedTo: (creatorId, id, userId) =>
+      withTenant(db, creatorId, async (tx) => {
+        const [row] = await tx
+          .select({ id: schema.conversations.id })
+          .from(schema.conversations)
+          .where(and(eq(schema.conversations.id, id), eq(schema.conversations.routedToUserId, userId)));
+        return row !== undefined;
       }),
 
     // State and open drafts in one snapshot: read apart, a draft committed in between showed with the old state.

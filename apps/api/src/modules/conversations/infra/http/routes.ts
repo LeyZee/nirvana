@@ -46,11 +46,26 @@ const ConversationParamsSchema = z.object({ id: ConversationIdSchema });
 const DraftParamsSchema = ConversationParamsSchema.extend({ draftId: DraftIdSchema });
 const CreatorParamsSchema = z.object({ id: CreatorIdSchema });
 
-/** The signed-in user, allowed on this creator: an owner sees every creator, anyone else their own list. */
+class ConversationForbidden extends DomainError {
+  constructor() {
+    super('conversation_forbidden', 'Cette conversation ne t’a pas été confiée');
+  }
+}
+
+function signedIn(request: FastifyRequest): CurrentUser {
+  if (request.user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
+  return request.user;
+}
+
+/** Whether the user reads every conversation of this creator: the owner, or a creator of his `creatorIds`. */
+function readsWholeCreator(user: CurrentUser, creatorId: CreatorId): boolean {
+  return user.role === 'owner' || user.creatorIds.includes(creatorId);
+}
+
+/** The signed-in user, allowed on the whole creator (her mode, her blind tests): never through routing. */
 function actorFor(request: FastifyRequest, creatorId: CreatorId): { user: CurrentUser; userId: UserId } {
-  const { user } = request;
-  if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
-  if (user.role !== 'owner' && !user.creatorIds.includes(creatorId)) throw new CreatorForbidden();
+  const user = signedIn(request);
+  if (!readsWholeCreator(user, creatorId)) throw new CreatorForbidden();
   return { user, userId: UserIdSchema.parse(user.id) };
 }
 
@@ -61,8 +76,27 @@ export function createConversationRoutes(
   guards: { readonly requireRole: RequireRole; readonly recentLogin: preHandlerAsyncHookHandler },
 ): FastifyPluginAsyncZod {
   const { requireRole } = guards;
+
+  /**
+   * The signed-in user, allowed on this conversation: the whole creator, or (a team member whose scope is `self`,
+   * ADR 0024) only a conversation routed to him; anything else is 403.
+   */
+  const actorOn = async (
+    request: FastifyRequest,
+    creatorId: CreatorId,
+    conversationId: z.infer<typeof ConversationIdSchema>,
+  ): Promise<UserId> => {
+    const user = signedIn(request);
+    const userId = UserIdSchema.parse(user.id);
+    if (readsWholeCreator(user, creatorId)) return userId;
+    if (!user.routedCreatorIds.includes(creatorId)) throw new CreatorForbidden();
+    if (!(await reader.isRoutedTo(creatorId, conversationId, userId))) throw new ConversationForbidden();
+    return userId;
+  };
+
   return (app) => {
-    const read = { preHandler: requireRole('owner', 'operator', 'creator') };
+    // A creator never reads a conversation (ADR 0023): her fans' words stay with the agency.
+    const read = { preHandler: requireRole('owner', 'operator') };
     const act = { preHandler: requireRole('owner', 'operator') };
 
     app.get(
@@ -76,8 +110,13 @@ export function createConversationRoutes(
       },
       async (request) => {
         const { creatorId, limit, cursor } = request.query;
-        actorFor(request, creatorId);
-        const page = await reader.list(creatorId, { limit, cursor });
+        const user = signedIn(request);
+        let routedTo: UserId | undefined;
+        if (!readsWholeCreator(user, creatorId)) {
+          if (!user.routedCreatorIds.includes(creatorId)) throw new CreatorForbidden();
+          routedTo = UserIdSchema.parse(user.id);
+        }
+        const page = await reader.list(creatorId, { limit, cursor }, routedTo);
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
     );
@@ -93,7 +132,7 @@ export function createConversationRoutes(
         },
       },
       async (request) => {
-        actorFor(request, request.query.creatorId);
+        await actorOn(request, request.query.creatorId, request.params.id);
         const detail = await reader.get(request.query.creatorId, request.params.id);
         if (detail === null) throw new ConversationNotFound();
         return detail;
@@ -112,7 +151,7 @@ export function createConversationRoutes(
       },
       async (request) => {
         const { creatorId, limit, cursor } = request.query;
-        actorFor(request, creatorId);
+        await actorOn(request, creatorId, request.params.id);
         const page = await reader.messages(creatorId, request.params.id, { limit, cursor });
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
@@ -130,20 +169,20 @@ export function createConversationRoutes(
       },
       async (request) => {
         const { creatorId, limit, cursor } = request.query;
-        actorFor(request, creatorId);
+        await actorOn(request, creatorId, request.params.id);
         const page = await reader.events(creatorId, request.params.id, { limit, cursor });
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
     );
 
-    const command = (
+    const command = async (
       request: FastifyRequest,
       creatorId: CreatorId,
       conversationId: z.infer<typeof ConversationIdSchema>,
     ) => ({
       creatorId,
       conversationId,
-      userId: actorFor(request, creatorId).userId,
+      userId: await actorOn(request, creatorId, conversationId),
       correlationId: request.id,
     });
 
@@ -155,7 +194,7 @@ export function createConversationRoutes(
       },
       async (request, reply) => {
         await commands.approveDraft({
-          ...command(request, request.query.creatorId, request.params.id),
+          ...(await command(request, request.query.creatorId, request.params.id)),
           draftId: request.params.draftId,
           ...(request.body.bubbles === undefined ? {} : { bubbles: request.body.bubbles }),
         });
@@ -171,7 +210,7 @@ export function createConversationRoutes(
       },
       async (request, reply) => {
         await commands.rejectDraft({
-          ...command(request, request.query.creatorId, request.params.id),
+          ...(await command(request, request.query.creatorId, request.params.id)),
           draftId: request.params.draftId,
           ...(request.body.reason === undefined ? {} : { reason: request.body.reason }),
         });
@@ -191,7 +230,7 @@ export function createConversationRoutes(
       },
       async (request, reply) => {
         await commands.takeover({
-          ...command(request, request.query.creatorId, request.params.id),
+          ...(await command(request, request.query.creatorId, request.params.id)),
           ...(request.body.reason === undefined ? {} : { reason: request.body.reason }),
         });
         return reply.code(204).send();
@@ -210,7 +249,7 @@ export function createConversationRoutes(
       },
       async (request, reply) => {
         await commands.release({
-          ...command(request, request.query.creatorId, request.params.id),
+          ...(await command(request, request.query.creatorId, request.params.id)),
           ...(request.body.note === undefined ? {} : { note: request.body.note }),
         });
         return reply.code(204).send();
@@ -228,8 +267,13 @@ export function createConversationRoutes(
         },
       },
       async (request, reply) => {
+        // The conversation's mode is a supervisor's control: never through routing.
+        const { userId } = actorFor(request, request.query.creatorId);
         await commands.setMode({
-          ...command(request, request.query.creatorId, request.params.id),
+          creatorId: request.query.creatorId,
+          conversationId: request.params.id,
+          userId,
+          correlationId: request.id,
           mode: request.body.mode,
         });
         return reply.code(204).send();

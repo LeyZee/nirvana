@@ -21,6 +21,7 @@ describe('dashboard session', () => {
       name: 'Owner',
       role: 'owner',
       creatorIds: [],
+      routedCreatorIds: [],
       team: null,
       teamScope: 'owner',
     };

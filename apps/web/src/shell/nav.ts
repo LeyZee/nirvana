@@ -53,8 +53,11 @@ const ITEMS: Readonly<Record<Section, { readonly label: string; readonly icon: N
   '/reglages': { label: 'Réglages', icon: 'settings' },
 };
 
-/** Which rail an account gets. `operator` is today's operator: no team row, so no team tab. */
-export type RailKind = 'owner' | 'manager' | 'chatter' | 'operator';
+/**
+ * Which rail an account gets. `operator` is today's operator: no team row, so no team tab. `creator` is a creator in
+ * the CRM until her own app (EQ-09): never Suivi, since she never sees a conversation (ADR 0023).
+ */
+export type RailKind = 'owner' | 'manager' | 'chatter' | 'operator' | 'creator';
 
 interface RailPlan {
   /** In the order of ADR 0024, each with its family when the rail has families. */
@@ -110,15 +113,25 @@ const RAILS: Readonly<Record<RailKind, RailPlan>> = {
     settings: true,
     phone: ['/', '/suivi', '/entrainer', '/creatrices'],
   },
+  creator: {
+    sections: [
+      ['/', null],
+      ['/entrainer', 'chatting'],
+      ['/creatrices', 'agency'],
+    ],
+    settings: true,
+    phone: ['/', '/entrainer', '/creatrices'],
+  },
 };
 
 /**
  * The owner gets his rail; a manager gets his while his scope is `agency`; any other team member, a manager on leave
- * included, gets the chatter's, as his scope does. Anyone else (an operator without a team row, a creator until her
- * own app, EQ-09) keeps today's rail.
+ * included, gets the chatter's, as his scope does. An operator without a team row keeps today's rail; a creator, until
+ * her own app (EQ-09), keeps it without Suivi.
  */
 export function railKindOf(me: Me): RailKind {
   if (me.role === 'owner') return 'owner';
+  if (me.role === 'creator') return 'creator';
   if (me.teamScope === 'agency') return 'manager';
   if (me.team !== null) return 'chatter';
   return 'operator';

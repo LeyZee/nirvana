@@ -1,11 +1,14 @@
 import {
   ConversationDetailSchema,
+  ConversationIdSchema,
+  MeSchema,
   CreatorIdSchema,
   MessageViewSchema,
   newId,
   pageOf,
   ConversationSummarySchema,
   PlatformAccountIdSchema,
+  TeamMemberIdSchema,
   type ConversationId,
   type CreatorId,
 } from '@nirvana/contracts';
@@ -208,6 +211,117 @@ describe('/v1/conversations', () => {
     const response = await call('GET', `/v1/conversations?creatorId=${creatorId}`, operatorCookie);
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: { code: 'creator_forbidden' } });
+  });
+
+  it('keeps a creator out of every conversation, even her own (ADR 0023)', async () => {
+    const creator = { email: 'creatrice@example.test', name: 'Créatrice', password: 'correct horse battery' };
+    const { userId } = await createOwner(app.auth, app.db.db, creator);
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'creator', creatorIds: [creatorId] })
+      .where(eq(schema.user.id, userId));
+    const cookie = await signIn(server, creator.email, creator.password);
+    const id = conversationIds[0] ?? newId(ConversationIdSchema);
+    for (const url of [
+      `/v1/conversations?creatorId=${creatorId}`,
+      `/v1/conversations/${id}?creatorId=${creatorId}`,
+      `/v1/conversations/${id}/messages?creatorId=${creatorId}`,
+      `/v1/conversations/${id}/events?creatorId=${creatorId}`,
+    ]) {
+      const response = await call('GET', url, cookie);
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ error: { code: 'role_forbidden' } });
+    }
+  });
+
+  it('lets a team chatter reach only the conversations routed to him, and a manager every one (ADR 0024)', async () => {
+    const people = { chatter: 'chatter@example.test', manager: 'manager@example.test' } as const;
+    const routed = conversationIds[0] ?? newId(ConversationIdSchema);
+    const other = conversationIds[1] ?? newId(ConversationIdSchema);
+    const cookies = { chatter: '', manager: '' };
+    for (const teamRole of ['chatter', 'manager'] as const) {
+      const email = people[teamRole];
+      const { userId } = await createOwner(app.auth, app.db.db, {
+        email,
+        name: teamRole,
+        password: 'correct horse battery',
+      });
+      await test.admin.db
+        .update(schema.user)
+        .set({ role: 'operator', creatorIds: [creatorId] })
+        .where(eq(schema.user.id, userId));
+      // Invented members (ADR 0010).
+      await test.admin.db.insert(schema.teamMembers).values({
+        id: newId(TeamMemberIdSchema),
+        userId,
+        teamRole,
+        firstName: 'Prénom',
+        lastName: 'Inventé',
+        displayName: teamRole,
+        country: 'BJ',
+        timeZone: 'Africa/Porto-Novo',
+        joinedOn: '2026-10-01',
+      });
+      if (teamRole === 'chatter') {
+        await test.admin.db
+          .update(schema.conversations)
+          .set({ routedToUserId: userId })
+          .where(eq(schema.conversations.id, routed));
+      }
+      cookies[teamRole] = await signIn(server, email, 'correct horse battery');
+    }
+    const { chatter, manager } = cookies;
+
+    const me = MeSchema.parse((await call('GET', '/v1/me', chatter)).json());
+    expect(me).toMatchObject({ creatorIds: [], routedCreatorIds: [creatorId], teamScope: 'self' });
+
+    const list = pageOf(ConversationSummarySchema).parse(
+      (await call('GET', `/v1/conversations?creatorId=${creatorId}`, chatter)).json(),
+    );
+    expect(list.items.map((item) => item.id)).toEqual([routed]);
+    expect(
+      (await call('GET', `/v1/conversations/${routed}?creatorId=${creatorId}`, chatter)).statusCode,
+    ).toBe(200);
+    for (const url of [
+      `/v1/conversations/${other}?creatorId=${creatorId}`,
+      `/v1/conversations/${other}/messages?creatorId=${creatorId}`,
+      `/v1/conversations/${other}/events?creatorId=${creatorId}`,
+    ]) {
+      const refused = await call('GET', url, chatter);
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json()).toMatchObject({ error: { code: 'conversation_forbidden' } });
+    }
+    expect(
+      (await call('POST', `/v1/conversations/${other}/takeover?creatorId=${creatorId}`, chatter, {}))
+        .statusCode,
+    ).toBe(403);
+    // The whole creator stays closed to him: her mode, her Dashboard.
+    const mode = await call('POST', `/v1/conversations/${routed}/mode?creatorId=${creatorId}`, chatter, {
+      mode: 'copilot',
+    });
+    expect(mode.json()).toMatchObject({ error: { code: 'creator_forbidden' } });
+    expect((await call('GET', `/v1/dashboard?creatorId=${creatorId}&period=day`, chatter)).statusCode).toBe(
+      403,
+    );
+    // He acts on the conversation routed to him.
+    expect(
+      (await call('POST', `/v1/conversations/${routed}/takeover?creatorId=${creatorId}`, chatter, {}))
+        .statusCode,
+    ).toBe(204);
+    expect(
+      (await call('POST', `/v1/conversations/${routed}/release?creatorId=${creatorId}`, chatter, {}))
+        .statusCode,
+    ).toBe(204);
+
+    // « Rendre la main » ends the routing: the conversation is closed to him again.
+    const after = await call('GET', `/v1/conversations/${routed}?creatorId=${creatorId}`, chatter);
+    expect(after.statusCode).toBe(403);
+    expect(after.json()).toMatchObject({ error: { code: 'conversation_forbidden' } });
+
+    const all = pageOf(ConversationSummarySchema).parse(
+      (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
+    );
+    expect(all.items).toHaveLength(2);
   });
 
   it('answers 404 for a conversation that does not exist and 400 for a bad cursor', async () => {
