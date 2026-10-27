@@ -9,7 +9,7 @@ import {
 
 import { planFacts, selectActiveFacts, type FactProposal, type StoredFact } from '../domain/facts';
 import type { Fan, FanSighting, FanStore, FactStore, FlagStore } from '../domain/fan';
-import { withFlag, withoutFlag, type FlagAuthor, type FlagChange } from '../domain/flags';
+import { withFlag, withFlagIfUnset, withoutFlag, type FlagAuthor, type FlagChange } from '../domain/flags';
 
 /** Who changes a limit and why; the author is the event's actor (P3-02). */
 interface FlagCommand {
@@ -29,6 +29,13 @@ export interface FansService {
   flags(creatorId: CreatorId, fanId: FanId): Promise<FanFlags>;
   /** Sets one limit; writes `fan_flag_set` only when it changed. Returns his limits after. */
   setFlag(creatorId: CreatorId, fanId: FanId, change: FlagChange, command: FlagCommand): Promise<FanFlags>;
+  /** Sets one limit only where none of that name is set (a human's freeze keeps its reason). Returns his limits after. */
+  setFlagIfUnset(
+    creatorId: CreatorId,
+    fanId: FanId,
+    change: FlagChange,
+    command: FlagCommand,
+  ): Promise<FanFlags>;
   /** Lifts one limit; writes `fan_flag_cleared` only when it was set. Returns his limits after. */
   clearFlag(creatorId: CreatorId, fanId: FanId, flag: FanFlagName, command: FlagCommand): Promise<FanFlags>;
 }
@@ -48,6 +55,13 @@ export function createFansService(
     flags: (creatorId, fanId) => flagStore.read(creatorId, fanId),
     setFlag: (creatorId, fanId, change, command) => {
       return flagStore.change(creatorId, fanId, (flags) => withFlag(flags, change), {
+        type: 'fan_flag_set',
+        flag: change.flag,
+        ...command,
+      });
+    },
+    setFlagIfUnset: (creatorId, fanId, change, command) => {
+      return flagStore.change(creatorId, fanId, (flags) => withFlagIfUnset(flags, change), {
         type: 'fan_flag_set',
         flag: change.flag,
         ...command,

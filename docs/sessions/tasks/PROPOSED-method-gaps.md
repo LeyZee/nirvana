@@ -85,6 +85,8 @@ Dans la zone de l'agent, sans capture ni clé (PR à part) :
 - [x] Garder le manque d'argent : `money_trouble` pose `salesFrozen` (raison `money_trouble`) par la politique ; les offres reprennent seulement s'il revient de lui-même au payant.
 - [x] Garde de la voix sur la négociation et la remise (`discount`).
 
+Le gel `money_trouble` ne s'efface jamais de lui-même, même après un achat : seul un humain le lève, et d'ici là une offre ne part que s'il redemande du payant de lui-même. C'est conforme à la méthode, et c'est un point d'entrée pour P6-01 et pour les relances : un fan gelé ne reçoit aucune relance de vente.
+
 Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 
 - [ ] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `PROPOSED-sexualization-cursor.md`.

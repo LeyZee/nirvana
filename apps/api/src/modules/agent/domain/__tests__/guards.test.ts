@@ -137,6 +137,7 @@ describe('voice guards', () => {
       'Je te fais une réduc si tu prends les deux',
       'On peut s’arranger sur le prix',
       'Elle est à moitié prix pour toi',
+      '20 % de moins sur la vidéo si tu la prends',
     ]) {
       expect(codes([bubble])).toContain('discount');
     }
@@ -145,6 +146,8 @@ describe('voice guards', () => {
       'Pas de réduc avec moi, c’est mon prix',
       'Cette vidéo est à 6 €, tu l’ouvres en touchant le cadenas',
       'Je finis à 18 h au lieu de 20 h ce soir',
+      'J’ai -10 % de batterie, je vais devoir te laisser',
+      'Il fait -5 % de moral ce matin 😅',
     ]) {
       expect(codes([bubble])).toEqual([]);
     }
