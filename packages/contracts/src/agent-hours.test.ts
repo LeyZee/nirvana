@@ -134,4 +134,10 @@ describe('agent hours (P3-14)', () => {
     // Monday's 14:00 start is not the opening of Tuesday morning's slot.
     expect(replyOpenedAt(chained, PARIS, paris('2026-10-27T10:00:00'))).toEqual(paris('2026-10-27T09:00:00'));
   });
+
+  it('finds no follow-up minute when her slots all fall in her quiet hours', () => {
+    const night = withSlots(...[1, 2, 3, 4, 5, 6, 7].map((day) => slot(day, '23:00', '01:00')));
+    expect(nextFollowUpAllowed(night, PARIS, paris('2026-10-27T15:00:00'))).toBeNull();
+    expect(nextFollowUpAllowed(night, PARIS, paris('2026-10-27T23:30:00'))).toBeNull();
+  });
 });

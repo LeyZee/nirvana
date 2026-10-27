@@ -25,7 +25,11 @@ export type FollowUpDecision =
   | { readonly kind: 'write' }
   | {
       readonly kind: 'skip';
-      readonly reason: 'follow_up_do_not_contact' | 'follow_up_distress' | 'follow_up_plan_over';
+      readonly reason:
+        | 'follow_up_do_not_contact'
+        | 'follow_up_distress'
+        | 'follow_up_plan_over'
+        | 'follow_up_no_allowed_hour';
     }
   | {
       readonly kind: 'later';
@@ -49,9 +53,8 @@ export function followUpDecision(context: FollowUpMoment): FollowUpDecision {
   const { now, timeZone, hours = DEFAULT_AGENT_HOURS } = context;
   const open = replyOpenAt(hours, timeZone, now);
   if (open && !followUpQuietAt(hours, timeZone, now)) return { kind: 'write' };
-  return {
-    kind: 'later',
-    reason: open ? 'follow_up_quiet_hours' : 'follow_up_outside_hours',
-    at: nextFollowUpAllowed(hours, timeZone, now),
-  };
+  const at = nextFollowUpAllowed(hours, timeZone, now);
+  // Her slots all fall in her quiet hours: no minute ever allows a follow-up, none is written.
+  if (at === null) return { kind: 'skip', reason: 'follow_up_no_allowed_hour' };
+  return { kind: 'later', reason: open ? 'follow_up_quiet_hours' : 'follow_up_outside_hours', at };
 }

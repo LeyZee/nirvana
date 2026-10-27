@@ -74,4 +74,17 @@ describe('followUpDecision', () => {
       kind: 'write',
     });
   });
+
+  it('writes none when her slots all fall in her quiet hours', () => {
+    const hours: AgentHours = {
+      ...DEFAULT_AGENT_HOURS,
+      reply: { mode: 'slots', slots: [{ day: 2, startMinute: 1380, endMinute: 60, enabled: true }] },
+    };
+    for (const now of ['2026-10-27T14:00:00.000Z', '2026-10-27T22:30:00.000Z']) {
+      expect(followUpDecision({ ...base, hours, now: new Date(now) })).toEqual({
+        kind: 'skip',
+        reason: 'follow_up_no_allowed_hour',
+      });
+    }
+  });
 });

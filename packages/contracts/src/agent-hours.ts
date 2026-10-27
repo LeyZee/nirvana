@@ -222,8 +222,11 @@ export function replyOpenedAt(hours: AgentHours, timeZone: string, at: Date): Da
   return opened;
 }
 
-/** When a follow-up may go out next: the first minute both in an open slot and out of her quiet hours. */
-export function nextFollowUpAllowed(hours: AgentHours, timeZone: string, after: Date): Date {
+/**
+ * When a follow-up may go out next: the first minute both in an open slot and out of her quiet hours. `null` when no
+ * minute of the week is both (slots from 23:00 to 1:00 with quiet hours from 23:00 to 9:00): no follow-up then.
+ */
+export function nextFollowUpAllowed(hours: AgentHours, timeZone: string, after: Date): Date | null {
   let at = after;
   // Each step moves to an opening or out of the quiet hours; a week of slots settles in a few.
   for (let i = 0; i < 32; i += 1) {
@@ -232,5 +235,5 @@ export function nextFollowUpAllowed(hours: AgentHours, timeZone: string, after: 
       at = nextWallMinute(at, timeZone, hours.followUpQuiet.endMinute);
     else return at;
   }
-  return at;
+  return null;
 }
