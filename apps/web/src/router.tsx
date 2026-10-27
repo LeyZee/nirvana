@@ -95,6 +95,7 @@ const team = createRoute({
         tab={onglet === 'managers' ? 'manager' : 'chatter'}
         selected={membre ?? null}
         canManage={user.role === 'owner'}
+        viewerId={user.id}
         onTab={(tab) =>
           void navigate({
             search: (before) => ({ ...before, onglet: tab === 'manager' ? 'managers' : undefined }),

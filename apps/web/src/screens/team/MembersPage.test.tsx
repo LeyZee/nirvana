@@ -73,7 +73,9 @@ const apiError = (code: string): unknown => ({
 });
 
 /** A fake `/v1/team`: the list, the presets, the notes, and every POST answered by `post` and kept in `posted`. */
-function serve(routes: { members?: Reply; post?: (path: string, body: unknown) => Reply } = {}): Posted[] {
+function serve(
+  routes: { members?: Reply; afterPost?: Reply; post?: (path: string, body: unknown) => Reply } = {},
+): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
     'fetch',
@@ -85,7 +87,8 @@ function serve(routes: { members?: Reply; post?: (path: string, body: unknown) =
         posted.push({ path, body });
         reply = routes.post?.(path, body) ?? { status: 500 };
       } else if (path === '/v1/team/members')
-        reply = routes.members ?? { status: 200, body: { members: TEAM } };
+        reply = (posted.length > 0 ? routes.afterPost : undefined) ??
+          routes.members ?? { status: 200, body: { members: TEAM } };
       else if (path === '/v1/team/commission-presets') reply = { status: 200, body: { presets: PRESETS } };
       else if (path === '/v1/creators') reply = { status: 200, body: { creators: [LEA] } };
       else if (path.endsWith('/notes')) reply = { status: 200, body: { notes: [] } };
@@ -97,7 +100,7 @@ function serve(routes: { members?: Reply; post?: (path: string, body: unknown) =
 }
 
 /** The page as the app mounts it: the tab and the open member live in the address. */
-function renderPage(at = '/equipe', canManage = true): AnyRouter {
+function renderPage(at = '/equipe', canManage = true, viewerId = id(99)): AnyRouter {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute();
   const team = createRoute({
@@ -112,6 +115,7 @@ function renderPage(at = '/equipe', canManage = true): AnyRouter {
           tab={onglet === 'managers' ? 'manager' : 'chatter'}
           selected={membre ?? null}
           canManage={canManage}
+          viewerId={viewerId}
           onTab={(tab) =>
             void navigate({ search: (s) => ({ ...s, onglet: tab === 'manager' ? 'managers' : undefined }) })
           }
@@ -376,6 +380,65 @@ describe('a link from the sheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
     expect(await screen.findByLabelText('Lien à envoyer')).toBeDefined();
     expect(confirmPassword).toHaveBeenCalledWith('mot-de-passe-invente');
+  });
+
+  it('keeps the link on screen when the list, read again, carries its end', async () => {
+    const until = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    serve({
+      post: () => ({
+        status: 200,
+        body: {
+          url: 'https://nirvana.example.test/nouveau-mot-de-passe#t=lien-invente-0003',
+          expiresAt: until,
+        },
+      }),
+      afterPost: {
+        status: 200,
+        body: { members: [{ ...THEO, invitationExpiresAt: until }, BASILE, JULES, INES] },
+      },
+    });
+    renderPage(`/equipe?membre=${THEO.id}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Lien de nouveau mot de passe' }));
+    // The list re-read says a link is out; the one just made is still there to send.
+    expect(await screen.findByText(/Un lien pour en choisir un nouveau lui a été envoyé/u)).toBeDefined();
+    expect(screen.getByLabelText('Lien à envoyer')).toBeDefined();
+  });
+
+  it('calls « Invité » only one still to choose his password, and offers to replace a live link', async () => {
+    const until = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    const reset = { ...THEO, invitationExpiresAt: until };
+    const invited = member(15, {
+      displayName: 'Mialy',
+      firstName: 'Mialy',
+      invitationPending: true,
+      invitationExpiresAt: until,
+    });
+    serve({ members: { status: 200, body: { members: [reset, invited] } } });
+    renderPage(`/equipe?membre=${invited.id}`);
+    const list = await screen.findByRole('list', { name: 'Chatteurs' });
+    const invitedOf = (name: string): boolean =>
+      within(list)
+        .getAllByRole('button')
+        .find((row) => row.textContent.includes(name))
+        ?.textContent.includes('Invité') ?? false;
+    expect(invitedOf('Théo')).toBe(false);
+    expect(invitedOf('Mialy')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Remplacer le lien' })).toBeDefined();
+  });
+
+  it('shows a manager his own record without the notes about him', async () => {
+    serve();
+    renderPage(`/equipe?onglet=managers&membre=${INES.id}`, false, INES.userId);
+    expect(await screen.findByRole('region', { name: 'Inès' })).toBeDefined();
+    expect(screen.queryByRole('region', { name: 'Notes internes' })).toBeNull();
+  });
+
+  it('opens the fold of those who left when the search finds only them', async () => {
+    serve();
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Rechercher un membre'), { target: { value: 'jules' } });
+    expect(await screen.findByText(/Aucun membre actuel ne répond à « jules »/u)).toBeDefined();
+    expect(screen.getByRole('group').hasAttribute('open')).toBe(true);
   });
 
   it('says why a member who left gets no link', async () => {

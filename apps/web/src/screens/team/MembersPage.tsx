@@ -5,16 +5,7 @@ import { useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent } from 
 import { AddMemberPanel } from './AddMemberPanel';
 import { MemberSheet } from './MemberSheet';
 import { useMembers, usePresets } from './api';
-import {
-  countryName,
-  creatorNames,
-  flagOf,
-  invitationState,
-  listMembers,
-  rateLine,
-  TAB_LABELS,
-  teamSummary,
-} from './model';
+import { countryName, creatorNames, flagOf, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
 import { Avatar, Notice, StatusPill } from './parts';
 import './team.css';
 
@@ -32,6 +23,7 @@ export function MembersPage({
   tab,
   selected,
   canManage,
+  viewerId,
   onTab,
   onSelect,
 }: {
@@ -40,6 +32,8 @@ export function MembersPage({
   selected: string | null;
   /** The owner adds members, makes their links and sees their rates; a manager reads. */
   canManage: boolean;
+  /** The account reading: a manager's own record shows no notes, he never reads those about him. */
+  viewerId: string;
   onTab: (tab: TeamRole) => void;
   onSelect: (memberId: string | null) => void;
 }): JSX.Element {
@@ -50,6 +44,9 @@ export function MembersPage({
   const [adding, setAdding] = useState(false);
   const all = members.data ?? [];
   const lists = listMembers(all, tab, query);
+  // A search that only finds members who left opens their fold, so the list and the fold do not contradict.
+  const searching = query.trim() !== '';
+  const onlyGone = searching && lists.current.length === 0 && lists.gone.length > 0;
   const open = all.find((member) => member.id === selected) ?? null;
   const summary = teamSummary(all);
   const known = presets.data ?? [];
@@ -140,7 +137,9 @@ export function MembersPage({
                     ? tab === 'manager'
                       ? 'Aucun manager pour l’instant.'
                       : 'Aucun chatteur pour l’instant.'
-                    : `Personne ne répond à « ${query.trim()} ».`}
+                    : onlyGone
+                      ? `Aucun membre actuel ne répond à « ${query.trim()} ». Parmi les partis, ci-dessous :`
+                      : `Personne ne répond à « ${query.trim()} ».`}
                 </p>
               ) : (
                 <ul className="nv-list tm-list" aria-label={TAB_LABELS[tab]}>
@@ -160,7 +159,7 @@ export function MembersPage({
               )}
             </Panel>
             {lists.gone.length === 0 ? null : (
-              <details className="nv-disclosure nv-plate tm-gone">
+              <details className="nv-disclosure nv-plate tm-gone" open={onlyGone || undefined}>
                 <summary>
                   <span className="nv-disclosure__title">Partis</span>
                   <span className="nv-disclosure__sum">{lists.gone.length}</span>
@@ -198,6 +197,7 @@ export function MembersPage({
               presets={known}
               creators={names}
               canManage={canManage}
+              isSelf={open.userId === viewerId}
               onClose={() => {
                 onSelect(null);
               }}
@@ -236,7 +236,8 @@ function Row({
   onOpen: () => void;
 }): JSX.Element {
   const theirs = creatorNames(member, creators);
-  const waiting = invitationState(member, new Date()).kind !== 'signed-in';
+  // Still to choose his password: a reset link out for one who has it is not an invitation (the summary says the same).
+  const waiting = member.invitationPending;
   return (
     <li className="nv-enter">
       <button

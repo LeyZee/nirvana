@@ -32,12 +32,15 @@ export function MemberSheet({
   presets,
   creators,
   canManage,
+  isSelf,
   onClose,
 }: {
   member: TeamMember;
   presets: readonly CommissionPreset[];
   creators: readonly CreatorSummary[];
   canManage: boolean;
+  /** His own record: the notes about him are never his to read (the server answers 403). */
+  isSelf: boolean;
   onClose: () => void;
 }): JSX.Element {
   const now = new Date();
@@ -122,7 +125,7 @@ export function MemberSheet({
         </div>
         <div>
           <dt>Fuseau</dt>
-          <dd>{member.timeZone.replace('_', ' ')}</dd>
+          <dd>{member.timeZone.replaceAll('_', ' ')}</dd>
         </div>
         <div>
           <dt>Arrivé le</dt>
@@ -146,7 +149,8 @@ export function MemberSheet({
           </p>
           {canManage ? (
             <ShareLink
-              key={`${member.id}-${access.kind}`}
+              // The member alone: re-reading the list after a link changes `access.kind`, and the link made must stay.
+              key={member.id}
               memberId={member.id}
               name={member.displayName}
               purpose={access.kind === 'signed-in' || access.kind === 'reset-sent' ? 'reset' : 'invitation'}
@@ -155,14 +159,16 @@ export function MemberSheet({
                   ? 'Lien de nouveau mot de passe'
                   : access.kind === 'no-link'
                     ? 'Créer son lien'
-                    : 'Nouveau lien'
+                    : access.kind === 'expired'
+                      ? 'Nouveau lien'
+                      : 'Remplacer le lien'
               }
             />
           ) : null}
         </section>
       )}
 
-      <Notes memberId={member.id} name={member.displayName} />
+      {isSelf ? null : <Notes memberId={member.id} name={member.displayName} />}
     </section>
   );
 }
