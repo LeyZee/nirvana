@@ -37,7 +37,7 @@ function actorFor(request: FastifyRequest, creatorId: CreatorId): UserId {
 }
 
 /**
- * `/v1/fans/:id/flags` (P3-02): the dashboard reads a fan's limits, and a chatter sets or lifts one; the session's
+ * `/v1/fans/:id/flags` (P3-02): the owner or a chatter reads a fan's limits, and sets or lifts one; the session's
  * user is the author of the `fan_flag_set` or `fan_flag_cleared` event.
  */
 export function createFlagRoutes(
@@ -49,7 +49,8 @@ export function createFlagRoutes(
     app.get(
       '/fans/:id/flags',
       {
-        preHandler: requireRole('owner', 'operator', 'creator'),
+        // A creator never sees her fans' data (ADR 0023): the owner and the chatters only.
+        preHandler: requireRole('owner', 'operator'),
         schema: {
           params: FanParamsSchema,
           querystring: CreatorQuerySchema,

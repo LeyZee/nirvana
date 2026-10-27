@@ -182,3 +182,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | EQ-01 : base de l’équipe, `withMember` et RLS par compte | done | `log/2026-10-27-eq-01-team-base.md` |
 | 2026-10-27 | EQ-01 : rôle d’équipe et scope dans `/v1/me` | done | `log/2026-10-27-eq-01-me-team-role.md` |
 | 2026-10-27 | Serveur MCP : ADR 0026 (acceptée) et fiches des quatre lots | done | `log/2026-10-27-adr-0026-mcp.md` |
+| 2026-10-27 | Drapeaux du fan : la créatrice ne les lit plus (ADR 0023) | done | `log/2026-10-27-fan-flags-creator-role.md` |
