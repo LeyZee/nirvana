@@ -36,9 +36,17 @@ function refusal(code: string, details: Record<string, unknown> = {}) {
 
 type Answer = readonly [number, unknown] | 'offline';
 
-/** The two routes; each answers its turns in order, the last one for good. */
-function serve(routes: { inspect?: Answer[]; redeem?: Answer[] }) {
+/**
+ * The two routes; each answers its turns in order, the last one for good. `/v1/me` answers `me`, no session (401)
+ * unless told otherwise.
+ */
+function serve(routes: { inspect?: Answer[]; redeem?: Answer[]; me?: Answer }) {
   const fake = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>((url) => {
+    if (url === '/v1/me') {
+      const me = routes.me ?? ([401, {}] as const);
+      if (me === 'offline') return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(new Response(JSON.stringify(me[1]), { status: me[0] }));
+    }
     const turns = (url.endsWith('/inspect') ? routes.inspect : routes.redeem) ?? [];
     const next = turns.length > 1 ? turns.shift() : turns[0];
     if (next === undefined) return Promise.resolve(new Response('{}', { status: 500 }));
@@ -201,6 +209,8 @@ describe('WelcomePage', () => {
     const fake = serve({ inspect: ['offline', [200, preview('invitation')]] });
     open('welcome');
     expect(await screen.findByText('Le serveur ne répond pas')).toBeDefined();
+    // Reading a link never uses it; whether it still works, the page cannot know yet.
+    expect(screen.getByText('Ton lien n’a pas servi. Réessaie dans un instant.')).toBeDefined();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
       await Promise.resolve();
@@ -231,6 +241,48 @@ describe('an answer lost after the link was used', () => {
     expect(screen.queryByText('Demande-en un nouveau.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Aller à la connexion' }));
     expect(onLeave).toHaveBeenCalledOnce();
+  });
+});
+
+describe('another account signed in on this browser', () => {
+  const CHARLES = {
+    ...ME,
+    id: 'u-owner',
+    email: 'proprietaire@example.test',
+    name: 'Charles',
+    role: 'owner',
+  };
+  const WARNING =
+    /Ce navigateur est connecté au compte de Charles\. Entrer ouvrira celui de Théo à sa place\./u;
+
+  it('says the member’s session will take its place, before he enters', async () => {
+    serve({
+      inspect: [[200, preview('invitation')]],
+      me: [200, { ...CHARLES, team: null, teamScope: 'owner' }],
+    });
+    open('welcome');
+    await screen.findByRole('heading', { name: 'Bienvenue, Théo' });
+    expect(await screen.findByText(WARNING)).toBeDefined();
+  });
+
+  it('says it with the button of the page, on a new password link', async () => {
+    serve({ inspect: [[200, preview('reset')]], me: [200, { ...CHARLES, team: null, teamScope: 'owner' }] });
+    open('reset');
+    expect(await screen.findByText(/Enregistrer ouvrira celui de Théo à sa place\./u)).toBeDefined();
+  });
+
+  it('says nothing when it is his own account, when no one is signed in, or when the session cannot be read', async () => {
+    for (const me of [[200, { ...ME, email: 'THEO@example.test' }], [401, {}], 'offline'] as const) {
+      const fake = serve({ inspect: [[200, preview('invitation')]], me });
+      open('welcome');
+      await screen.findByRole('heading', { name: 'Bienvenue, Théo' });
+      await vi.waitFor(() => {
+        expect(fake.mock.calls.map(([url]) => url)).toContain('/v1/me');
+      });
+      expect(screen.queryByText(/Ce navigateur est connecté/u)).toBeNull();
+      cleanup();
+      forgetTakenToken();
+    }
   });
 });
 

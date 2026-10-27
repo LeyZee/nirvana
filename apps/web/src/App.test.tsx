@@ -110,12 +110,17 @@ describe('App on an invitation link', () => {
     return fake;
   }
 
-  it('opens the link page before reading any session, signed in or not', async () => {
+  it('opens the link page first, signed in or not: the session is read once, by the page, only to warn', async () => {
     const fake = serveLink();
     window.history.replaceState(null, '', `/bienvenue#t=${TOKEN}`);
     render(<App />);
     expect(await screen.findByRole('heading', { name: 'Bienvenue, Théo' })).toBeDefined();
-    expect(fake.mock.calls.map(([url]) => url)).toEqual(['/v1/invitation-links/inspect']);
+    await vi.waitFor(() => {
+      expect(fake.mock.calls.map(([url]) => url).toSorted()).toEqual([
+        '/v1/invitation-links/inspect',
+        '/v1/me',
+      ]);
+    });
   });
 
   it('opens the new password page on its own address', async () => {
@@ -134,8 +139,9 @@ describe('App on an invitation link', () => {
       target: { value: 'une phrase que je retiens' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Entrer' }));
+    // The page read the session once to warn; the app reads the new one after redeem.
     await vi.waitFor(() => {
-      expect(fake.mock.calls.map(([url]) => url)).toContain('/v1/me');
+      expect(fake.mock.calls.filter(([url]) => url === '/v1/me')).toHaveLength(2);
     });
     expect(window.location.pathname).toBe(railOf(theo).home);
     expect(screen.queryByRole('heading', { name: 'Bienvenue, Théo' })).toBeNull();

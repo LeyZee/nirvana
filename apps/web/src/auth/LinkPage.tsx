@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useState, type JSX, type ReactNode, type SyntheticEvent } from 'react';
 
 import { inspectInvitationLink, redeemInvitationLink, takeToken } from './api';
+import { fetchCurrentUser } from './session';
 
 export interface LinkPageProps {
   /** The member is in, his session open (in place of any other on this browser); `null` when it could not be read. */
@@ -40,6 +41,8 @@ type Step =
 export function LinkPage({ copy, onSignedIn, onLeave }: LinkPageProps & { copy: LinkPageCopy }): JSX.Element {
   const [token] = useState(() => takeToken());
   const [step, setStep] = useState<Step>({ kind: token === null ? 'gone' : 'reading' });
+  /** Who this browser is signed in as, if anyone: redeem opens the member's session in place of it. */
+  const [signedIn, setSignedIn] = useState<Me | null>(null);
 
   useNoReferrer();
 
@@ -52,6 +55,14 @@ export function LinkPage({ copy, onSignedIn, onLeave }: LinkPageProps & { copy: 
   }, [token]);
 
   useEffect(read, [read]);
+
+  useEffect(() => {
+    if (token === null) return;
+    // Only to warn: a session that cannot be read is no session to replace.
+    void fetchCurrentUser()
+      .catch(() => null)
+      .then(setSignedIn);
+  }, [token]);
 
   return (
     <main className="nv-aura grid min-h-dvh place-items-center px-4 py-10">
@@ -106,7 +117,7 @@ export function LinkPage({ copy, onSignedIn, onLeave }: LinkPageProps & { copy: 
       case 'unavailable':
         return (
           <Refused title="Le serveur ne répond pas" action={{ label: 'Réessayer', onClick: read }}>
-            Ton lien est toujours bon. Réessaie dans un instant.
+            Ton lien n’a pas servi. Réessaie dans un instant.
           </Refused>
         );
       case 'ready':
@@ -114,6 +125,11 @@ export function LinkPage({ copy, onSignedIn, onLeave }: LinkPageProps & { copy: 
           <PasswordForm
             copy={copy}
             preview={step.preview}
+            otherAccount={
+              signedIn !== null && signedIn.email.toLowerCase() !== step.preview.email.toLowerCase()
+                ? signedIn
+                : null
+            }
             token={token ?? ''}
             onGone={(afterLostAnswer) => {
               setStep({ kind: afterLostAnswer ? 'used_by_this_page' : 'gone' });
@@ -181,12 +197,15 @@ type SendError =
 function PasswordForm({
   copy,
   preview,
+  otherAccount,
   token,
   onGone,
   onSignedIn,
 }: {
   copy: LinkPageCopy;
   preview: InvitationLinkPreview;
+  /** Another account signed in on this browser, which the member's session will replace. */
+  otherAccount: Me | null;
   token: string;
   /** `afterLostAnswer`: an earlier try from this page got no answer, and may have used the link. */
   onGone: (afterLostAnswer: boolean) => void;
@@ -228,7 +247,9 @@ function PasswordForm({
   return (
     <form className="flex flex-col gap-5" onSubmit={(event) => void send(event)}>
       <header className="nv-enter flex flex-col gap-2" style={{ '--nv-i': 1 }}>
-        {copy.eyebrow === undefined ? null : <p className="nv-meta">{copy.eyebrow(preview)}</p>}
+        {copy.eyebrow === undefined ? null : (
+          <p className="text-sm font-medium text-[var(--nv-ink-muted)]">{copy.eyebrow(preview)}</p>
+        )}
         <h2 className="font-serif text-3xl leading-tight">{copy.title(preview)}</h2>
         <p className="text-[var(--nv-ink-muted)]">{copy.lead}</p>
       </header>
@@ -300,6 +321,12 @@ function PasswordForm({
           {error.text}
         </p>
       ) : null}
+      {otherAccount === null ? null : (
+        <p className="nv-enter text-sm text-[var(--nv-ink-muted)]" style={{ '--nv-i': 4 }}>
+          Ce navigateur est connecté au compte de {otherAccount.name}. {copy.submit} ouvrira celui de{' '}
+          {preview.displayName} à sa place.
+        </p>
+      )}
       <button
         className="nv-btn nv-btn--neon nv-enter"
         style={{ '--nv-i': 4 }}
