@@ -9,6 +9,7 @@
 **Routes.** `/v1/settings/telegram` : `GET`, `POST /bots`, `PUT /bots/:id/token`, `POST /bots/:id/listen`, `DELETE /bots/:id`, `POST /chats/:id/test`, `PUT /routes`, `GET /deliveries`, derrière `requireRole('owner')` ; ajouter, remplacer ou supprimer un bot demande une connexion de moins de 10 minutes.
 
 **Jobs.** `TELEGRAM_JOB_PAYLOADS` (contracts) ; le worker les branche sur `module.jobs` :
+
 - `telegram.scan` (file `telegram`, clé unique) : outbox → livraisons ; aussi chaque minute en rattrapage.
 - `telegram.flush_chat` (file `telegram-chat:<id>`, clé par groupe) : envoie, à 3 s d'écart au plus dans un groupe.
 - `telegram.dispatch_polls` (chaque minute) puis `telegram.poll_updates` (file `telegram-bot:<id>`) : groupes découverts par `getUpdates`.

@@ -125,13 +125,18 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
         },
         limits: persona.offerLimits,
       },
+      sexualization: {
+        limits: persona.sexualizationLimits,
+        ageConfirmed: situation.age_confirmed,
+        noExplicit: false,
+      },
       skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
     },
   );
   const { brief } = composed;
   const handoff =
     composed.handoff !== undefined || (brief !== undefined && holdDecision(brief).kind === 'handoff');
-  const offer = brief?.action === 'offer' && composed.offerRefused === undefined;
+  const offer = composed.voiceBrief?.action === 'offer';
   const blocking = composed.violations.filter((v) => v.severity === 'blocking').map((v) => v.code);
   const bubbles = handoff || composed.isBlocked ? [] : composed.bubbles;
   const outcome: Outcome = {

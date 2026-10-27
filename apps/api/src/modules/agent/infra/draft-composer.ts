@@ -4,6 +4,7 @@ import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 import { holdDecision, protectionFor, protectionWhileAnswering, type HoldDecision } from '../domain/hold';
 import { withoutOrders } from '../domain/injection';
 import type { OfferLimits } from '../domain/policy';
+import type { SexualizationLimits } from '../domain/sexualization';
 import { handoffCauseOf } from '../domain/traps';
 
 import { composeTurn, type ComposerPersona, type OfferInput } from './compose';
@@ -104,6 +105,8 @@ export interface DraftComposerDeps {
   readonly sight?: MediaSight;
   /** His limits: read before anything is written, set on a detected risk (P3-02). */
   readonly limits?: FanLimits;
+  /** When she goes sexual (`PersonaForModels.sexualizationLimits`): without it, she never does. */
+  readonly sexualizationLimits?: SexualizationLimits;
   /** Her pace of scripts (`PersonaForModels.offerLimits`): without it, or without his limits, she offers nothing. */
   readonly offerLimits?: OfferLimits;
   /**
@@ -111,6 +114,11 @@ export interface DraftComposerDeps {
    * the cooldown cannot be read, so she offers nothing.
    */
   readonly lastOfferAt?: (creatorId: string, fanId: string) => Promise<Date | null>;
+  /** A limit the policy could not save without holding the draft (his declared age): counted, never silent. */
+  readonly onLimitsNotSaved?: (event: {
+    readonly conversationId: string;
+    readonly limit: 'ageConfirmedAt';
+  }) => void;
   /** Lines of her notes kept out of the prompt for looking like an order: counted, never their text. */
   readonly onDroppedNotes?: (event: { readonly conversationId: string; readonly count: number }) => void;
 }
@@ -294,6 +302,13 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         media,
         fanNotes: input.fan.notes.join('\n'),
         ...(offer !== undefined && { offer }),
+        ...(deps.sexualizationLimits !== undefined && {
+          sexualization: {
+            limits: deps.sexualizationLimits,
+            ageConfirmed: stop.flags?.ageConfirmedAt !== undefined,
+            noExplicit: stop.flags?.noExplicit === true,
+          },
+        }),
         situation: {
           now: input.now,
           timeZone: await deps.timeZoneOf(input.creatorId),
@@ -325,6 +340,21 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       if (decision.kind === 'handoff') {
         const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
         return protect(deps.limits, input, composed.brief.risks, held);
+      }
+      // He stated an adult age himself: confirmed for his next messages (Charles, 27/10), never once his age was
+      // taken back. Not saved, his age stays unconfirmed and she keeps steering back, the safe side: counted.
+      const his = stop.flags;
+      if (
+        composed.ageDeclared !== undefined &&
+        his !== undefined &&
+        his.ageConfirmedAt === undefined &&
+        his.ageDisputed === undefined
+      ) {
+        await deps.limits
+          ?.confirmAge(input.creatorId, input.fanId, input.correlationId, input.now)
+          .catch(() => {
+            deps.onLimitsNotSaved?.({ conversationId: input.conversationId, limit: 'ageConfirmedAt' });
+          });
       }
       // He said he cannot pay: whatever is written now, the policy remembers it for his next messages. Not
       // saved, a chatter answers: the next message would forget it.

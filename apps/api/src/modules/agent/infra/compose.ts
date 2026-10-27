@@ -1,9 +1,21 @@
 import type { MediaDescription } from '@nirvana/contracts';
 import type { Brief, CallTrace, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
 
-import { checkVoiceOutput, isBlocked, type GuardSettings, type GuardViolation } from '../domain/guards';
+import {
+  checkExplicit,
+  checkVoiceOutput,
+  isBlocked,
+  type GuardSettings,
+  type GuardViolation,
+} from '../domain/guards';
 import { screenNotes } from '../domain/injection';
 import { offerDecision, offerSignals, type OfferBlock, type OfferContext } from '../domain/policy';
+import {
+  declaredAdultAge,
+  sexualizationDecision,
+  type SexualizationDecision,
+  type SexualizationLimits,
+} from '../domain/sexualization';
 import { describeSituation, type Situation } from '../domain/situation';
 import { assessTrap, screenMedia, type TrapAssessment } from '../domain/traps';
 
@@ -35,6 +47,16 @@ export interface ComposeTurnInput {
    * cannot decide and she offers nothing: a brain's « offer » is written as a plain answer.
    */
   readonly offer?: OfferInput;
+  /**
+   * When she may go sexual (`sexualizationDecision`): her limits, and whether his age is confirmed. Absent, it is
+   * as if his age were unknown: she does not open it, and steers back a fan who does.
+   */
+  readonly sexualization?: {
+    readonly limits: SexualizationLimits;
+    readonly ageConfirmed: boolean;
+    /** A human's « rien d'explicite » for him. */
+    readonly noExplicit: boolean;
+  };
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
 }
@@ -55,6 +77,33 @@ function offerRefusal(brief: Brief, offer: OfferInput | undefined): OfferRefusal
   return decision.allowed ? undefined : decision.reason;
 }
 
+const HOUR_MS = 3_600_000;
+// Never closed hours: the cursor cannot let her go if her limits are unknown.
+const NO_LIMITS: SexualizationLimits = {
+  initiateAfterHours: Number.POSITIVE_INFINITY,
+  minHoursBeforeFollowing: Number.POSITIVE_INFINITY,
+};
+
+/** What the voice writes when he goes there too early: she slows down in her own voice, no lesson, no explicit. */
+const STEER_BACK_BRIEF: Readonly<Record<'age_unconfirmed' | 'too_early', string>> = {
+  too_early:
+    'Il va trop vite : elle ralentit avec douceur et humour, sans rien d’explicite ni de sous-entendu, sans reproche, et ramène la conversation sur lui (ce qu’il fait, ce qu’il aime).',
+  age_unconfirmed:
+    'Il va trop vite : elle ralentit avec douceur et humour, sans rien d’explicite ni de sous-entendu, sans reproche, et ramène la conversation sur lui ; si ça vient naturellement, elle lui demande son âge.',
+};
+const NO_OPENING_HINT = 'aucune allusion sexuelle, elle n’ouvre pas ce terrain';
+const SUGGESTIVE_HINT = 'suggestive seulement, jamais explicite';
+
+/** The brief as the cursor lets the voice write it. */
+function withinCursor(brief: Brief, decision: SexualizationDecision): Brief {
+  if (decision.kind === 'steer_back')
+    return { ...brief, action: 'reply', replyBrief: STEER_BACK_BRIEF[decision.reason] };
+  if (decision.kind === 'no_opening') return { ...brief, toneHints: [...brief.toneHints, NO_OPENING_HINT] };
+  if (decision.kind === 'suggestive_only')
+    return { ...brief, toneHints: [...brief.toneHints, SUGGESTIVE_HINT] };
+  return brief;
+}
+
 /** One answer, from the brain to the guards: the same path for the playground and for a real fan. */
 export interface ComposedTurn {
   /** Safety flags on his media: a human takes over, nothing was written. */
@@ -64,6 +113,10 @@ export interface ComposedTurn {
   readonly droppedNotes?: readonly string[];
   readonly brief?: Brief;
   readonly briefFailure?: LlmFailure;
+  /** What the cursor decided for this answer; absent when the brain did not read the moment. */
+  readonly sexualization?: SexualizationDecision;
+  /** An adult age he stated himself in this message (`declaredAdultAge`): the composer may confirm his age. */
+  readonly ageDeclared?: number;
   /** The brain suggested an offer and the policy refused it: the voice wrote a plain answer. */
   readonly offerRefused?: OfferRefusal;
   /** What the voice was asked to write: kept for a comparison or a rating. */
@@ -153,10 +206,28 @@ export async function composeTurn(
           replyBrief: trap.replyBrief,
           toneHints: [...(trap.toneHints ?? [])],
         };
+  // His age as stored: one he states now counts from his next message, so the answer to « j'ai 25 ans » stays
+  // careful. The cursor decides from it, a trap's answer first.
+  const ageDeclared = brief === undefined ? null : declaredAdultAge(brief.factsProposed, input.fanText);
+  const ageConfirmed = input.sexualization?.ageConfirmed === true;
+  const noExplicit = input.sexualization?.noExplicit === true;
+  const sexualization =
+    brief === undefined
+      ? undefined
+      : sexualizationDecision({
+          relationshipHours:
+            (input.situation.now.getTime() - input.situation.relationshipStartedAt.getTime()) / HOUR_MS,
+          ageConfirmed,
+          noExplicit,
+          fanSexualizes: offerSignals(brief).fanSexualizes,
+          limits: input.sexualization?.limits ?? NO_LIMITS,
+        });
+  const cursored =
+    sexualization === undefined || trap.replyBrief !== undefined ? read : withinCursor(read, sexualization);
   // The brain may suggest an offer, only the policy decides (CLAUDE.md rule 3): refused, she just answers.
-  const offerRefused = read.action === 'offer' ? offerRefusal(read, input.offer) : undefined;
+  const offerRefused = cursored.action === 'offer' ? offerRefusal(cursored, input.offer) : undefined;
   const voiceBrief: Brief =
-    offerRefused === undefined ? read : { ...read, action: 'reply', replyBrief: NO_OFFER_BRIEF };
+    offerRefused === undefined ? cursored : { ...cursored, action: 'reply', replyBrief: NO_OFFER_BRIEF };
   const brainCostUsd = brain.ok ? (brain.value.meta.costUsd ?? 0) : 0;
   const brainLatencyMs = brain.ok ? brain.value.meta.latencyMs : 0;
   if (input.skipVoice?.(brief) === true) {
@@ -165,6 +236,8 @@ export async function composeTurn(
       ...(notes.dropped.length > 0 && { droppedNotes: notes.dropped }),
       ...(brief && { brief }),
       ...(!brain.ok && { briefFailure: brain.error }),
+      ...(sexualization !== undefined && { sexualization }),
+      ...(ageDeclared !== null && { ageDeclared }),
       ...(offerRefused !== undefined && { offerRefused }),
       bubbles: [],
       violations: [],
@@ -179,13 +252,18 @@ export async function composeTurn(
   const voice = await gateway.voice(voiceInput);
   const written = voice.ok ? voice.value.output.bubbles : [];
   // Checked as written: the length and count guards read the voice's bubbles, not the joined message.
-  const violations = checkVoiceOutput(written, persona.guardSettings);
+  const violations = [
+    ...checkVoiceOutput(written, persona.guardSettings),
+    ...(ageConfirmed && !noExplicit ? [] : checkExplicit(written)),
+  ];
   const bubbles = asSent(written, persona.splitMessages);
   return {
     ...(trap.isTrap && { trap }),
     ...(notes.dropped.length > 0 && { droppedNotes: notes.dropped }),
     ...(brief && { brief }),
     ...(!brain.ok && { briefFailure: brain.error }),
+    ...(sexualization !== undefined && { sexualization }),
+    ...(ageDeclared !== null && { ageDeclared }),
     ...(offerRefused !== undefined && { offerRefused }),
     voiceBrief,
     voiceInput,

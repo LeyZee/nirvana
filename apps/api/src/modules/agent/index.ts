@@ -33,6 +33,7 @@ export { holdDecision } from './domain/hold';
 export { withoutOrders } from './domain/injection';
 /** @public */
 export { offerDecision, offerSignals, type OfferContext, type OfferLimits } from './domain/policy';
+export type { SexualizationLimits } from './domain/sexualization';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,
@@ -74,9 +75,14 @@ export interface DraftComposerStartOptions {
   /** His media seen before she answers; without it, any media goes to a human. */
   readonly sight?: MediaSight;
   /** His limits: nothing is written to a stopped fan, and a risk sets them itself (P3-02). */
-  readonly fans?: Pick<FansModule, 'flags' | 'setFlag' | 'setFlagIfUnset' | 'clearFlag'>;
+  readonly fans?: Pick<
+    FansModule,
+    'flags' | 'setFlag' | 'setFlagIfUnset' | 'clearFlag' | 'confirmDeclaredAge'
+  >;
   /** A note of hers kept out of the prompt (it looked like an order): a chatter's real note would vanish unseen. */
   readonly onDroppedNotes?: DraftComposerDeps['onDroppedNotes'];
+  /** His declared age could not be saved: he stays unconfirmed (the safe side), the log says so. */
+  readonly onLimitsNotSaved?: DraftComposerDeps['onLimitsNotSaved'];
 }
 
 /** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
@@ -95,9 +101,11 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
     offerLimits: persona.offerLimits,
+    sexualizationLimits: persona.sexualizationLimits,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),
+    ...(options.onLimitsNotSaved !== undefined && { onLimitsNotSaved: options.onLimitsNotSaved }),
   });
 }
 

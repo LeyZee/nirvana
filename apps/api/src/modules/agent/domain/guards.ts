@@ -18,6 +18,7 @@ export type GuardCode =
   | 'contempt'
   | 'payment_lie'
   | 'discount'
+  | 'explicit_before_age'
   | 'guilt_trip'
   | 'pet_name';
 
@@ -464,4 +465,26 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
 
 export function isBlocked(violations: readonly GuardViolation[]): boolean {
   return violations.some((v) => v.severity === 'blocking');
+}
+
+// Explicit words, on the normalised text: « un baiser », « la queue au cinéma » or « ma chatte Moka » are not.
+const EXPLICIT =
+  /\b(bite|queue (dure|raide|en moi)|ta queue(?! de)|ma queue(?! de)|chatte (mouillee|trempee|humide)|ma chatte (te |pour toi|mouille|a envie|est trempee)|sucer|suce|te sucer|me baiser|te baiser|baise[- ]moi|on baise|baiser fort|jouir|jouis|orgasme|levrette|fellation|sodomie|branler|branle|me toucher|je me touche|mouillee pour toi|trempee pour toi|bander|tu bandes|je te fais bander|toute nue|tout nu|a poil|seins nus|mes seins|tes seins|mon cul|ton cul|clito|gode|sextoy)\b/;
+
+/**
+ * Nothing explicit before his age is confirmed (P3-09, méthode de chatting): blocking, checked by the composer only
+ * then, on each bubble and on the whole message.
+ */
+export function checkExplicit(bubbles: readonly string[]): GuardViolation[] {
+  const violations: GuardViolation[] = [];
+  bubbles.forEach((bubble, bubbleIndex) => {
+    const match = EXPLICIT.exec(normalise(bubble));
+    if (match)
+      violations.push({ code: 'explicit_before_age', severity: 'blocking', bubbleIndex, match: match[0] });
+  });
+  if (violations.length === 0) {
+    const match = EXPLICIT.exec(normalise(bubbles.join(' ')));
+    if (match) violations.push({ code: 'explicit_before_age', severity: 'blocking', match: match[0] });
+  }
+  return violations;
 }

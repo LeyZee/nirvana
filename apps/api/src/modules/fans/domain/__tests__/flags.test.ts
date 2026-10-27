@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { requestedChange, withFlag, withFlagIfUnset, withoutFlag } from '../flags';
+import {
+  requestedChange,
+  withAgeDisputed,
+  withDeclaredAge,
+  withFlag,
+  withFlagIfUnset,
+  withHumanConfirmation,
+  withoutFlag,
+} from '../flags';
 
 const frozen = { reason: 'money_trouble', since: '2026-10-02T10:00:00Z' } as const;
 
@@ -74,5 +82,39 @@ describe('withFlagIfUnset', () => {
   it('keeps a freeze a human set, whatever its reason', () => {
     const operator = { salesFrozen: { reason: 'operator', since: '2026-10-10T09:00:00.000Z' } } as const;
     expect(withFlagIfUnset(operator, { flag: 'salesFrozen', value: money })).toBeNull();
+  });
+});
+
+describe('his age taken back, and confirmed again', () => {
+  const NOW = new Date('2026-10-17T20:00:00.000Z');
+  const confirmed = { ageConfirmedAt: '2026-10-01T09:00:00.000Z', fragile: true } as const;
+
+  it('takes back a confirmation and disputes it, even when nothing was confirmed yet', () => {
+    expect(withAgeDisputed(confirmed, 'policy', NOW)).toEqual({
+      fragile: true,
+      ageDisputed: { since: NOW.toISOString(), by: 'policy' },
+    });
+    expect(withAgeDisputed({}, 'human', NOW)).toEqual({
+      ageDisputed: { since: NOW.toISOString(), by: 'human' },
+    });
+    expect(
+      withAgeDisputed({ ageDisputed: { since: '2026-10-02T09:00:00.000Z', by: 'human' } }, 'policy', NOW),
+    ).toBeNull();
+  });
+
+  it('confirms his own statement only where nothing was confirmed and nothing taken back', () => {
+    expect(withDeclaredAge({}, NOW)).toEqual({ ageConfirmedAt: NOW.toISOString() });
+    expect(withDeclaredAge(confirmed, NOW)).toBeNull();
+    expect(withDeclaredAge({ ageDisputed: { since: NOW.toISOString(), by: 'policy' } }, NOW)).toBeNull();
+  });
+
+  it('lets a human confirm a disputed age, which settles the dispute', () => {
+    const change = { flag: 'ageConfirmedAt', value: NOW.toISOString() } as const;
+    expect(
+      withHumanConfirmation({ ageDisputed: { since: NOW.toISOString(), by: 'policy' } }, change),
+    ).toEqual({
+      ageConfirmedAt: NOW.toISOString(),
+    });
+    expect(withHumanConfirmation({}, change)).toEqual({ ageConfirmedAt: NOW.toISOString() });
   });
 });

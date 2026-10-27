@@ -40,12 +40,18 @@ export const FanFlagsSchema = z
   .object({
     /** When he was confirmed an adult: nothing explicit before. */
     ageConfirmedAt: z.iso.datetime().exactOptional(),
+    /**
+     * His age was taken back (a sign of a minor, or a human): his own statement no longer confirms it. Set with each
+     * removal of `ageConfirmedAt`, lifted only by a human (P3-09).
+     */
+    ageDisputed: z.object({ since: z.iso.datetime(), by: z.enum(['policy', 'human']) }).exactOptional(),
     /** No offer, no sulking, no sales follow-up. */
     salesFrozen: z.object({ reason: SalesFreezeReasonSchema, since: z.iso.datetime() }).exactOptional(),
     /** A ceiling he set himself, in cents. */
     spendingLimitMinor: z.number().int().nonnegative().exactOptional(),
     /** Gentle only: no sulking either. */
     fragile: z.literal(true).exactOptional(),
+    /** Suggestive only, never explicit, whatever his age (a human's call). */
     noExplicit: z.literal(true).exactOptional(),
     /** Nothing is written to him at all. */
     doNotContact: z.literal(true).exactOptional(),

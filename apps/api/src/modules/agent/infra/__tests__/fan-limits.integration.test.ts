@@ -67,7 +67,11 @@ describe('fan limits set by the policy, through the fans module', () => {
     await limits.protect(creatorId, fanId, protection, 'correlation-1', AT);
     // A replayed job changes nothing more.
     await limits.protect(creatorId, fanId, protection, 'correlation-1', AT);
-    expect(await limits.flags(creatorId, fanId)).toEqual({ doNotContact: true });
+    expect(await limits.flags(creatorId, fanId)).toMatchObject({
+      doNotContact: true,
+      ageDisputed: { by: 'policy' },
+    });
+    expect((await limits.flags(creatorId, fanId)).ageConfirmedAt).toBeUndefined();
     const events = await test.admin.db
       .select()
       .from(schema.domainEvents)
@@ -94,5 +98,36 @@ describe('fan limits set by the policy, through the fans module', () => {
     });
     await limits.protect(creatorId, frozenFanId, money, 'correlation-3', AT);
     expect((await limits.flags(creatorId, frozenFanId)).salesFrozen?.reason).toBe('operator');
+  });
+
+  it('confirms his age when he stated it, once, and keeps a confirmation already there', async () => {
+    await limits.confirmAge(creatorId, frozenFanId, 'correlation-6', AT);
+    await limits.confirmAge(creatorId, frozenFanId, 'correlation-6', new Date('2026-10-18T08:00:00.000Z'));
+    expect((await limits.flags(creatorId, frozenFanId)).ageConfirmedAt).toBe(AT.toISOString());
+  });
+
+  it('never confirms again an age taken back, by a sign of a minor or by a human, until a human decides', async () => {
+    const fans = createFansModule({ db: test.app.db, adminDb: test.admin.db });
+    // Taken back by the policy (fan-1, a sign of a minor above): « j'ai 19 ans » next does not confirm it.
+    await limits.confirmAge(creatorId, fanId, 'correlation-7', AT);
+    expect((await limits.flags(creatorId, fanId)).ageConfirmedAt).toBeUndefined();
+    // Taken back by a human from Suivi.
+    await fans.clearFlag(creatorId, frozenFanId, 'ageConfirmedAt', {
+      author: 'human:owner',
+      correlationId: 'correlation-8',
+    });
+    await limits.confirmAge(creatorId, frozenFanId, 'correlation-9', AT);
+    expect(await limits.flags(creatorId, frozenFanId)).toMatchObject({ ageDisputed: { by: 'human' } });
+    expect((await limits.flags(creatorId, frozenFanId)).ageConfirmedAt).toBeUndefined();
+    // A human confirms it again: that settles the dispute.
+    await fans.setFlag(
+      creatorId,
+      frozenFanId,
+      { flag: 'ageConfirmedAt', value: AT.toISOString() },
+      { author: 'human:owner', correlationId: 'correlation-10' },
+    );
+    const settled = await limits.flags(creatorId, frozenFanId);
+    expect(settled.ageConfirmedAt).toBe(AT.toISOString());
+    expect(settled.ageDisputed).toBeUndefined();
   });
 });

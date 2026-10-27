@@ -14,11 +14,13 @@ export interface FanLimits {
     correlationId: string,
     at: Date,
   ): Promise<void>;
+  /** He stated an adult age himself (Charles, 27/10): confirmed by the policy, unless it already is or was taken back. */
+  confirmAge(creatorId: string, fanId: string, correlationId: string, at: Date): Promise<void>;
 }
 
 /** The `fans` module behind the port; the policy is the author (`system`), the risks are the reason. */
 export function createFanLimits(
-  fans: Pick<FansModule, 'flags' | 'setFlag' | 'setFlagIfUnset' | 'clearFlag'>,
+  fans: Pick<FansModule, 'flags' | 'setFlag' | 'setFlagIfUnset' | 'clearFlag' | 'confirmDeclaredAge'>,
 ): FanLimits {
   return {
     flags: (creatorId, fanId) => fans.flags(CreatorIdSchema.parse(creatorId), FanIdSchema.parse(fanId)),
@@ -40,6 +42,12 @@ export function createFanLimits(
         const value = { reason: 'money_trouble', since: at.toISOString() } satisfies FanFlags['salesFrozen'];
         await fans.setFlagIfUnset(creator, fan, { flag: 'salesFrozen', value }, command);
       }
+    },
+    async confirmAge(creatorId, fanId, correlationId, at) {
+      await fans.confirmDeclaredAge(CreatorIdSchema.parse(creatorId), FanIdSchema.parse(fanId), at, {
+        correlationId,
+        reason: 'declared_adult_age',
+      });
     },
   };
 }

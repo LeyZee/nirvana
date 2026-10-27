@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkVoiceOutput, DEFAULT_GUARD_SETTINGS, isBlocked, type GuardCode } from '../guards';
+import {
+  checkExplicit,
+  checkVoiceOutput,
+  DEFAULT_GUARD_SETTINGS,
+  isBlocked,
+  type GuardCode,
+} from '../guards';
 
 function codes(bubbles: string[], forbiddenTerms: string[] = []): GuardCode[] {
   return checkVoiceOutput(bubbles, { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms }).map((v) => v.code);
@@ -328,6 +334,27 @@ describe('voice guards', () => {
       ['Si j’ai assez confiance, un jour peut-être qu’on se rencontrera'],
     ]) {
       expect(codes(bubbles), bubbles.join(' | ')).toEqual([]);
+    }
+  });
+});
+
+describe('checkExplicit', () => {
+  it('blocks explicit words, in a bubble or across two', () => {
+    expect(checkExplicit(['J’ai envie de te sucer']).map((v) => [v.code, v.severity])).toEqual([
+      ['explicit_before_age', 'blocking'],
+    ]);
+    expect(checkExplicit(['Je suis toute', 'nue là']).map((v) => v.code)).toEqual(['explicit_before_age']);
+  });
+
+  it('lets a kiss, a ponytail, a cat or the rain through', () => {
+    for (const bubble of [
+      'Un gros baiser 😘',
+      'J’ai fait une queue de cheval aujourd’hui',
+      'Ma chatte Moka dort sur moi',
+      'Je suis mouillée, il pleut des cordes',
+      'Tu lis des bandes dessinées ?',
+    ]) {
+      expect(checkExplicit([bubble])).toEqual([]);
     }
   });
 });

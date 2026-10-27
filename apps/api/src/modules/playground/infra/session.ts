@@ -13,6 +13,7 @@ import {
   type OfferInput,
   type OfferLimits,
   type RatedMoment,
+  type SexualizationLimits,
   type Situation,
   type TrapAssessment,
 } from '../../agent/index';
@@ -88,6 +89,8 @@ export interface PlaygroundDeps {
    * for a real fan. Without it, she offers nothing.
    */
   readonly offerLimits?: OfferLimits;
+  /** When she goes sexual: the simulated fan starts with his age unknown and confirms it by stating it. */
+  readonly sexualizationLimits?: SexualizationLimits;
 }
 
 /** Why nothing was written, for the trace: the daily cap, or each model that failed. */
@@ -115,6 +118,8 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
   let lastExchange: PlaygroundExchange | undefined;
   // When the policy last let her offer, on the simulated clock: the cooldown is tested with `advance`.
   let lastOfferAt: Date | null = null;
+  // His age, unknown until he states an adult one, as for a real fan (P3-09).
+  let ageConfirmedAt: Date | null = null;
   const offerAt = (now: Date): OfferInput | undefined =>
     deps.offerLimits === undefined
       ? undefined
@@ -122,7 +127,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
           now,
           lastOfferAt,
           hasNoBudget: false,
-          flags: { ageConfirmedAt: startedAt.toISOString() },
+          flags: ageConfirmedAt === null ? {} : { ageConfirmedAt: ageConfirmedAt.toISOString() },
           limits: deps.offerLimits,
         };
 
@@ -141,6 +146,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       fanNotes.length = 0;
       lastExchange = undefined;
       lastOfferAt = null;
+      ageConfirmedAt = null;
       situation = { ...situation, relationshipStartedAt: situation.now, spentCents: 0 };
     },
 
@@ -220,9 +226,17 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
           fanNotes: moment.fanNotes,
           situation,
           ...(offer !== undefined && { offer }),
+          ...(deps.sexualizationLimits !== undefined && {
+            sexualization: {
+              limits: deps.sexualizationLimits,
+              ageConfirmed: ageConfirmedAt !== null,
+              noExplicit: false,
+            },
+          }),
         },
       );
-      if (composed.brief?.action === 'offer' && composed.offerRefused === undefined && !composed.isBlocked) {
+      if (composed.ageDeclared !== undefined && ageConfirmedAt === null) ageConfirmedAt = situation.now;
+      if (composed.voiceBrief?.action === 'offer' && !composed.isBlocked) {
         lastOfferAt = situation.now;
       }
       // In-memory fan notes until the fans module stores facts (P3-02).

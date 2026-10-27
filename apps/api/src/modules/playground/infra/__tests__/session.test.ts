@@ -304,11 +304,12 @@ describe('persona file', () => {
   });
 });
 
-describe('playground session, the offer policy', () => {
+describe('playground session, the offer policy and the cursor', () => {
   const OFFER: Brief = {
     ...BRIEF,
     intent: 'sexting',
     sentiment: 'aroused',
+    factsProposed: [{ category: 'identity', key: 'age', value: '30', kind: 'declared', confidence: 1 }],
     action: 'offer',
     replyBrief: 'Lui proposer la vidéo de la douche.',
   };
@@ -319,22 +320,34 @@ describe('playground session, the offer policy', () => {
       personaSheet: 'fiche',
       guardSettings: settings,
       now: () => new Date('2026-10-17T20:00:00Z'),
+      sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0 },
       ...(withPace && { offerLimits: { cooldownHours: 10 } }),
     });
 
-  it('lets the policy decide each offer on the simulated clock, as for a real fan', async () => {
+  it('confirms his age when he states it, then lets the policy decide each offer on the simulated clock', async () => {
     const voiceInputs: VoiceInput[] = [];
     const playground = session(voiceInputs, true);
-    await playground.handleFanMessage('T’es trop bonne');
+    // His age is confirmed by this message: the offer waits for the next one, as for a real fan.
+    await playground.handleFanMessage('J’ai 30 ans et t’es trop bonne');
     await playground.handleFanMessage('Encore');
+    await playground.handleFanMessage('Montre-moi');
     playground.advance(11 * 3_600_000);
     await playground.handleFanMessage('Je pense qu’à toi');
-    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['offer', 'reply', 'offer']);
+    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['reply', 'offer', 'reply', 'offer']);
+  });
+
+  it('steers back a fan who goes sexual before stating his age', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    await session(voiceInputs, true).handleFanMessage('T’es trop bonne');
+    expect(voiceInputs[0]?.brief.action).toBe('reply');
+    expect(voiceInputs[0]?.brief.replyBrief).toContain('ralentit');
   });
 
   it('offers nothing without her pace of scripts', async () => {
     const voiceInputs: VoiceInput[] = [];
-    await session(voiceInputs, false).handleFanMessage('T’es trop bonne');
-    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['reply']);
+    const playground = session(voiceInputs, false);
+    await playground.handleFanMessage('J’ai 30 ans');
+    await playground.handleFanMessage('T’es trop bonne');
+    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['reply', 'reply']);
   });
 });

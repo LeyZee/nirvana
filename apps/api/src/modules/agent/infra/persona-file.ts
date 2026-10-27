@@ -3,6 +3,7 @@ import { parse, stringify } from 'yaml';
 
 import { DEFAULT_GUARD_SETTINGS, type GuardSettings } from '../domain/guards';
 import type { OfferLimits } from '../domain/policy';
+import type { SexualizationLimits } from '../domain/sexualization';
 
 /** Who she is for the models, read from the persona YAML: the playground and the drafts share it. */
 export interface PersonaForModels {
@@ -11,6 +12,8 @@ export interface PersonaForModels {
   readonly forbiddenTerms: readonly string[];
   /** Her pace of scripts (`strategies.script_launch.cooldown_hours`), applied by `offerDecision`, never by a prompt. */
   readonly offerLimits: OfferLimits;
+  /** When she opens sexualization or follows him there (`strategies.sexualization`, `strategies.kyc`), applied by code. */
+  readonly sexualizationLimits: SexualizationLimits;
   /** False: her answer goes out as one message, whatever the voice wrote (`behavior.split_messages`). */
   readonly splitMessages: boolean;
   /** The only pet names she gives fans (`behavior.pet_names`); a guard flags any other. */
@@ -69,6 +72,10 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
       (term) => !isPlaceholder(term),
     ),
     offerLimits: { cooldownHours: persona.strategies.script_launch.cooldown_hours },
+    sexualizationLimits: {
+      initiateAfterHours: persona.strategies.sexualization.initiate_after_hours,
+      minHoursBeforeFollowing: persona.strategies.kyc.min_hours_before_following,
+    },
     splitMessages: persona.behavior.split_messages,
     petNames: persona.behavior.pet_names.filter((term) => !isPlaceholder(term)),
   };

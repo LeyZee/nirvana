@@ -29,6 +29,35 @@ export function withFlagIfUnset(flags: FanFlags, change: FlagChange): FanFlags |
   return flags[change.flag] === undefined ? withFlag(flags, change) : null;
 }
 
+/**
+ * His age taken back: no confirmation, and disputed so that his own statement no longer confirms it. Written even
+ * when his age was not confirmed yet (a sign of a minor before any statement); a dispute keeps its first date.
+ */
+export function withAgeDisputed(flags: FanFlags, by: 'policy' | 'human', now: Date): FanFlags | null {
+  if (flags.ageConfirmedAt === undefined && flags.ageDisputed !== undefined) return null;
+  const rest = Object.fromEntries(Object.entries(flags).filter(([name]) => name !== 'ageConfirmedAt'));
+  return FanFlagsSchema.parse({
+    ...rest,
+    ageDisputed: flags.ageDisputed ?? { since: now.toISOString(), by },
+  });
+}
+
+/** A human confirms his age: that settles a dispute too. */
+export function withHumanConfirmation(flags: FanFlags, change: FlagChange): FanFlags | null {
+  const confirmed = withFlag(flags, change);
+  if (flags.ageDisputed === undefined) return confirmed;
+  const rest = Object.fromEntries(
+    Object.entries(confirmed ?? flags).filter(([name]) => name !== 'ageDisputed'),
+  );
+  return FanFlagsSchema.parse(rest);
+}
+
+/** His own adult statement confirms his age, only where nothing was confirmed and nothing taken back (P3-09). */
+export function withDeclaredAge(flags: FanFlags, at: Date): FanFlags | null {
+  if (flags.ageConfirmedAt !== undefined || flags.ageDisputed !== undefined) return null;
+  return FanFlagsSchema.parse({ ...flags, ageConfirmedAt: at.toISOString() });
+}
+
 /** His limits without this one, or `null` when it was not set. */
 export function withoutFlag(flags: FanFlags, flag: FanFlagName): FanFlags | null {
   if (flags[flag] === undefined) return null;

@@ -110,6 +110,7 @@ const session = createPlaygroundSession({
   voiceExamples: examples,
   timeZone: values.fuseau,
   offerLimits: persona.offerLimits,
+  sexualizationLimits: persona.sexualizationLimits,
 });
 let isRated = true;
 
