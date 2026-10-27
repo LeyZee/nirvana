@@ -150,7 +150,7 @@ describe('/v1/backups/restore-tests', () => {
       headers: { cookie: owner },
     });
     expect(status.json()).toMatchObject({
-      lastRestoreTest: { rowCountMismatches: 2 },
+      lastRestoreTest: { rowCountMismatches: 2, backupFinishedAt: finishedAt.toISOString() },
       restoreTestFresh: false,
     });
     expect(await app.modules.backups.restoreTestFresh(new Date())).toBe(false);

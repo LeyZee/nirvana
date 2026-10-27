@@ -13,6 +13,8 @@ export interface RestoreTestEntry {
 
 export interface StoredRestoreTest extends RestoreTestEntry {
   readonly backupSha256: string;
+  /** When the restored export ended. */
+  readonly backupFinishedAt: Date;
   readonly createdAt: Date;
 }
 
@@ -54,6 +56,9 @@ export function checkTestedAt(testedAt: Date, backupFinishedAt: Date, now: Date)
 /**
  * Whether the restore is proven now (EQ-17's pay guard): the latest test, by `testedAt`, found no mismatch and is at
  * most `RESTORE_TEST_FRESH_DAYS` old. A recent failed test means the restore is broken now.
+ *
+ * `now` is the instant of the action being guarded, never a past date: the latest test is the latest of all, so a test
+ * dated after `now` counts as fresh (it can be, by up to the 5 minutes a client clock may run ahead).
  */
 export function isRestoreTestFresh(
   latest: Pick<RestoreTestEntry, 'testedAt' | 'rowCountMismatches'> | null,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { RecordRestoreTestBodySchema } from './backups';
+import { REAUTHENTICATION_ERROR_CODE } from './auth';
+import { BACKUP_ERROR_CODES, RecordRestoreTestBodySchema } from './backups';
 
 const body = {
   id: '0195f0c0-0000-7000-8000-0000000000aa',
@@ -30,5 +31,9 @@ describe('restore test entry (ADR 0028 § 6)', () => {
     expect(parse({ rowCountMismatches: 1_000_001 })).toBe(false);
     expect(parse({ backupSha256: 'g'.repeat(64) })).toBe(false);
     expect(parse({ notes: 'x'.repeat(501) })).toBe(false);
+  });
+
+  it('lists the sign-in error with its own, for the entry screen', () => {
+    expect(BACKUP_ERROR_CODES).toContain(REAUTHENTICATION_ERROR_CODE);
   });
 });

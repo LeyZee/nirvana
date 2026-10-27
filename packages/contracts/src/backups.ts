@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { REAUTHENTICATION_ERROR_CODE } from './auth';
+
 /**
  * The daily encrypted export of the database (ADR 0028, OPS-02), as the application sees it: the rows the `backup`
  * service writes in `backup_runs`, never a file of the server.
@@ -36,9 +38,13 @@ export type BackupRunSummary = z.infer<typeof BackupRunSummarySchema>;
  */
 export const RESTORE_TEST_FRESH_DAYS = 90;
 
-/** The latest restore test by `testedAt`, as the status shows it. */
+/**
+ * The latest restore test by `testedAt`, as the status shows it. `backupFinishedAt` names the export it restored (when
+ * that export ended), so that the proof reads « export du 25/10 restauré le 26/10 » without giving its fingerprint.
+ */
 export const RestoreTestSummarySchema = z.object({
   testedAt: z.iso.datetime(),
+  backupFinishedAt: z.iso.datetime(),
   durationSeconds: z.number().int().positive(),
   rowCountMismatches: z.number().int().nonnegative(),
 });
@@ -69,7 +75,7 @@ const Sha256Schema = z
  * `POST /v1/backups/restore-tests`, owner only, after a recent sign-in: the owner enters the quarterly test played on
  * the PC (ADR 0028 § 6). `id` is made by the client when the form opens: sending the same test twice records it once
  * (the table is append-only). The fingerprint is the one `restore-check.sh` printed; it must name an export that
- * succeeded.
+ * succeeded. `testedAt` is when the test ended, the moment the row counts were compared.
  */
 export const RecordRestoreTestBodySchema = z.object({
   id: z.uuid(),
@@ -100,8 +106,8 @@ export const RestoreTestSchema = z.object({
 export type RestoreTest = z.infer<typeof RestoreTestSchema>;
 
 /**
- * The error codes of `POST /v1/backups/restore-tests`, besides `reauthentication_forbidden` (sign-in older than 10
- * minutes). `restore_test_backup_unprocessable`: no export succeeded with this fingerprint.
+ * The error codes of `POST /v1/backups/restore-tests`. `reauthentication_forbidden`: sign-in older than 10 minutes.
+ * `restore_test_backup_unprocessable`: no export succeeded with this fingerprint.
  * `restore_test_before_backup_unprocessable`: the test is dated before the export ended.
  * `restore_test_in_future_unprocessable`: dated more than 5 minutes ahead of the server's clock.
  * `restore_test_conflict`: this `id` is already recorded with other values.
@@ -111,5 +117,6 @@ export const BACKUP_ERROR_CODES = [
   'restore_test_before_backup_unprocessable',
   'restore_test_in_future_unprocessable',
   'restore_test_conflict',
+  REAUTHENTICATION_ERROR_CODE,
 ] as const;
 export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];

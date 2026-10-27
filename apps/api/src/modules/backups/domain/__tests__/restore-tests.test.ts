@@ -13,6 +13,11 @@ describe('restore tests (ADR 0028 § 6)', () => {
     expect(isRestoreTestFresh({ testedAt: daysAgo(1), rowCountMismatches: 1 }, now)).toBe(false);
   });
 
+  it('reads `now` as the instant of the action: a test dated just after it still counts', () => {
+    const justAfter = new Date(now.getTime() + 4 * 60_000);
+    expect(isRestoreTestFresh({ testedAt: justAfter, rowCountMismatches: 0 }, now)).toBe(true);
+  });
+
   it('dates a test after its export and at most 5 minutes ahead of the server', () => {
     const finished = daysAgo(2);
     expect(checkTestedAt(daysAgo(1), finished, now)).toBeNull();

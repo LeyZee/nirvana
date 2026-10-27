@@ -37,7 +37,12 @@ function memoryRestoreTests(
       const existing = tests.find((test) => test.id === entry.id);
       if (existing !== undefined) return Promise.resolve({ inserted: false, test: existing });
       const backup = backups.find((candidate) => candidate.id === entry.backupRunId);
-      const test = { ...entry, backupSha256: backup?.sha256 ?? '', createdAt: new Date() };
+      const test = {
+        ...entry,
+        backupSha256: backup?.sha256 ?? '',
+        backupFinishedAt: backup?.finishedAt ?? new Date(0),
+        createdAt: new Date(),
+      };
       tests.push(test);
       audit.push(entry.id);
       return Promise.resolve({ inserted: true, test });

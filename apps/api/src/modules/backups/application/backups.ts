@@ -55,6 +55,7 @@ export async function readBackupStatus(
         ? null
         : {
             testedAt: lastTest.testedAt.toISOString(),
+            backupFinishedAt: lastTest.backupFinishedAt.toISOString(),
             durationSeconds: lastTest.durationSeconds,
             rowCountMismatches: lastTest.rowCountMismatches,
           },
@@ -62,7 +63,7 @@ export async function readBackupStatus(
   };
 }
 
-/** EQ-17's pay guard, through the composition root: is the restore proven at `at`? */
+/** EQ-17's pay guard, through the composition root: is the restore proven for an action made now, at `at`? */
 export async function restoreTestFresh(deps: Pick<BackupsDeps, 'restoreTests'>, at: Date): Promise<boolean> {
   return isRestoreTestFresh(await deps.restoreTests.latest(), at);
 }
