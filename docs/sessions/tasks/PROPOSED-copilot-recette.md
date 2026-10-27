@@ -20,12 +20,14 @@ Avant le premier vrai fan, Charles déroule sur son PC une conversation complèt
 ## Ce qui manque avant de la jouer
 
 1. **`RevealApiConnector`** (fil Reveal, zone de Bilan), lu contre FakeReveal par son URL de base. Aujourd'hui seul `FakeConnector` existe, en mémoire et sans écran possible.
-2. **Un lanceur de recette**, à décider avec Bilan qui possède `composition-root` :
-   - FakeReveal tourne comme un serveur à part ;
-   - l'API est démarrée avec le connecteur Reveal pointé dessus et la garde d'écriture fermée ;
-   - le compte de recette et la persona de démo sont chargés.
-   - Par défaut proposé : un script pnpm recette:copilote (à créer) dans `apps/api/src/scripts`, qui démarre FakeReveal et l'API ensemble. Jamais en production : il refuse de démarrer si `NODE_ENV=production`.
-3. **Un fichier de scénarios de recette**, evals/recette/copilote.yaml (à créer) : les messages que chaque fan inventé envoie, dans l'ordre, et ce qu'on attend de voir. Il est rejoué par `/__scenario`, et le temps avance par `/__clock`, jamais en attente réelle.
+2. **Un lanceur qui ne sert que FakeReveal** (décision de Bilan, propriétaire de `composition-root`, sur #182) :
+   - un script fake-reveal:serve (à créer) dans `apps/api/src/scripts` sert FakeReveal sur un port local et affiche son URL ;
+   - l'API de la recette est celle de `pnpm dev`, telle quelle, avec l'URL de base du connecteur Reveal pointée sur FakeReveal (variable de config posée par la fiche Reveal). Aucun script ne recompose l'API à côté d'`index.ts`, sinon la recette testerait autre chose que ce qui part en production ;
+   - un enchaînement des deux reste possible, à condition qu'il lance `pnpm dev` et rien d'autre.
+3. **Prérequis dans la zone de Bilan** :
+   - en `NODE_ENV=production`, `loadConfig` refuse une URL Reveal en `http://` ou locale (`127.0.0.1`, `localhost`) ; la garde tient même si l'API est lancée à la main ;
+   - au démarrage de la recette, un contrôle vérifie qu'aucun compte de la base n'a ouvert l'écriture (`connector_config.writes`, ADR 0018), et s'arrête sinon.
+4. **Un fichier de scénarios de recette**, evals/recette/copilote.yaml (à créer) : les messages que chaque fan inventé envoie, dans l'ordre, et ce qu'on attend de voir. Il est rejoué par `/__scenario`, et le temps avance par `/__clock`, jamais en attente réelle.
 
 ## Le déroulé, fan par fan
 
@@ -54,11 +56,11 @@ Pour chaque brouillon, Charles fait l’un des trois gestes, et chacun doit se v
 - Aucun message sortant dans FakeReveal (`GET /__state` : la conversation n’a que les messages des fans), quel que soit le geste : la garde d’écriture reste fermée pendant toute la recette.
 - Aucun texte de fan dans les journaux (`*.text` est masqué ; vérifié en fin de séance).
 - Aucune bulle qui dise ou laisse entendre qu’elle est une IA, promette une rencontre ou l’amour, ou donne un contact hors plateforme.
-- Aucune dépense au-delà du plafond des évals (3 € par séance, `EVALS_CAP_EUR`) : la recette passe par le même plafond séparé que les évals, jamais par celui des fans.
+- Aucune dépense au-delà du plafond des fans : `pnpm dev` passe par les 20 €/jour de l'agent, pas par `EVALS_CAP_EUR`, que seul `pnpm evals` applique. Un plafond propre à la recette demanderait un réglage de budget dans la config et la composition root, donc par Bilan ; la fiche n'en demande pas.
 
 ## Critères d’acceptation
 
-- [ ] Le script pnpm recette:copilote (à créer) démarre FakeReveal et l’API, et affiche l’URL du dashboard et le compte de recette ; il refuse de démarrer en production ou avec la garde d’écriture ouverte.
+- [ ] Le script fake-reveal:serve (à créer) sert FakeReveal et affiche son URL ; la recette tourne sur `pnpm dev` pointé dessus, et le contrôle de démarrage de Bilan refuse une écriture ouverte. En production, `loadConfig` refuse une URL Reveal locale ou en `http://`.
 - [ ] Les neuf cas ci-dessus se rejouent depuis evals/recette/copilote.yaml (à créer). Un test d’intégration les joue avec un composeur fixe (sans clé) et vérifie ce qui arrive dans Suivi :
   - un brouillon, un passage à l’humain ou rien, selon le cas ;
   - la cause ;
