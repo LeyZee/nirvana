@@ -8,6 +8,7 @@ export * from './llm';
 export * from './media';
 export * from './memory';
 export * from './persona';
+export * from './scheduling';
 export * from './supervision';
 export * from './system';
 export * from './tenancy';

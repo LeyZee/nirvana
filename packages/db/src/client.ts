@@ -97,6 +97,29 @@ export function withMember<T>(
 }
 
 /**
+ * `withMember` inside one creator, for the tables that carry both `creator_id` and `member_id` (shifts and templates,
+ * later the shift reports; ADR 0023 § Données et RLS): their policies ask for the creator and for the member himself
+ * or the scope `owner` | `agency`. A reader of several creators loops, one transaction per creator.
+ */
+export function withTenantMember<T>(
+  db: Database,
+  creatorId: string,
+  userId: string,
+  fn: (tx: Transaction, scope: TeamScope) => Promise<T>,
+  config?: TransactionConfig,
+): Promise<T> {
+  return withMember(
+    db,
+    userId,
+    async (tx, scope) => {
+      await tx.execute(sql`select set_config('app.creator_id', ${creatorId}, true)`);
+      return fn(tx, scope);
+    },
+    config,
+  );
+}
+
+/**
  * Runs `fn` in a transaction on the admin connection (BYPASSRLS), for the multi-tenant system jobs only. Callers
  * are named `*Unscoped` so a review sees every place that crosses tenants.
  */

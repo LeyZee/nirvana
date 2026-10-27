@@ -172,6 +172,25 @@ L'e-mail et la photo restent sur `user` (Better Auth), jamais recopiés. Les not
 
 Un lien d’invitation (EQ-10) ne garde que l’empreinte de son jeton. Il sert une fois, par un seul `UPDATE` qui pose `used_at` tant que le lien n'est ni utilisé, ni annulé, ni expiré, et que le membre n'est pas parti. Un membre a au plus un lien vivant (index unique partiel) : un nouveau lien annule le précédent (`revoked_at`). Comme `provider_credentials`, la table est retirée à `nirvana_app` (`REVOKE ALL`, migration 0018).
 
+## Planning (module `scheduling`, ADR 0023, ADR 0025, EQ-02)
+
+```
+scheduling_settings      id (= 1, une ligne au plus), time_zone (fuseau de la grille), slot_start_minute, slot_length_minutes
+                         (60 à 720, divise la journée), access_margin_minutes (0 à 120), updated_by, updated_at
+                         (sans ligne : les valeurs par défaut du module)
+shift_templates          id, creator_id, platform_account_id, member_id, weekday (1 lundi … 7 dimanche), start_minute,
+                         end_minute (minutes murales du fuseau de la grille ; une fin avant le début est le lendemain ;
+                         23 h au plus), valid_from, valid_until, created_by, created_at
+                         (seule valid_until change, une fois : on termine un modèle)
+shifts                   id, creator_id, platform_account_id, member_id, starts_at, ends_at ([début, fin) en UTC, minutes
+                         entières, 24 h au plus), template_id, template_starts_at (le début que le modèle lui a donné,
+                         gardé si on le déplace), cancelled_at, stopped_at (arrêté en cours : ends_at est la minute de
+                         l'arrêt), created_by, updated_by, created_at, updated_at
+                         (jamais supprimé : annulé ; unique template_id + template_starts_at, annulés et déplacés compris)
+```
+
+Deux contraintes d'exclusion (`btree_gist`, `tstzrange(starts_at, ends_at, '[)')`, migration 0021) tiennent un membre hors de deux shifts à la fois et un compte hors de deux membres à la fois, shifts annulés exceptés : deux personnes qui planifient au même instant ne peuvent pas gagner toutes les deux. Une clé étrangère composite `(platform_account_id, creator_id)` vers `platform_accounts (id, creator_id)` garde chaque shift et chaque modèle sur le compte de sa créatrice. Le passé du planning est gardé, pour tous les rôles, celui du job compris (déclencheurs `refuse_planning_change`) : rien n'est supprimé, un shift ne change ni de créatrice, ni de compte, ni de modèle, un shift en cours garde son début et son membre et ne fait que finir plus tôt (la fenêtre d'accès du chatteur, ADR 0025, se lit sur ces colonnes), un shift fini ou annulé ne change plus, un modèle ne change que sa fin, une fois. Les droits par colonne tiennent en plus le rôle de l'application, qui part de `REVOKE ALL` : ni `DELETE`, ni `TRUNCATE`.
+
 ## Système (hors RLS, sans `creator_id`)
 
 ```
@@ -207,6 +226,7 @@ Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.en
 - `withTenant(creatorId, tx => …)` ouvre une transaction et fait `SET LOCAL app.creator_id = …`. Les jobs système multi-tenant (réconciliation, purge, dispatch des polls) passent par `withAdmin` (`DATABASE_ADMIN_URL`) dans des fonctions nommées `*Unscoped`.
 - **Conversation routée** (`conversations.routed_to_user_id`, migration 0016) : un membre de l'équipe au scope `self` (chatteur, manager qui n'est pas actif) n'a aucun accès à toute une créatrice. `requireRole` déplace ses `creator_ids` dans `routedCreatorIds` (contrat `CurrentUser`), donc toute route qui vérifie `creatorIds` le refuse, et `conversations` ne lui ouvre que les conversations qui lui sont routées : lire, valider, refuser, prendre et rendre la main ; jamais le mode, le Dashboard, les fans ni la persona. Garde du serveur, pas de RLS : EQ-13 (ADR 0025) ouvrira les conversations et les fans des créatrices de son shift actif par une liste à part (`shiftCreatorIds`), lue seulement par ces routes ; `creatorIds` reste vide, donc la persona et le Dashboard restent fermés.
 - **Tables de l'équipe** (sans `creator_id`) : une politique par compte. `withMember(db, userId, (tx, scope) => …)` fait `SET LOCAL app.user_id`, lit dans la même transaction le rôle d'accès (`user.role`) et la ligne `team_members` du compte, puis fait `SET LOCAL app.team_scope` (scopes fixés par l'ADR 0024) : `owner` pour le propriétaire, `agency` pour un manager au statut `active`, `self` pour tous les autres (`teamScopeFor`, contracts). Le scope n'est jamais lu dans la requête. `self` lit ses propres lignes (sa fiche, ses taux) ; `agency` lit toute l'équipe sauf les notes posées sur sa propre fiche, et écrit des notes signées de son compte ; seul `owner` crée ou modifie une fiche et insère un taux ou un préréglage, signé de son compte (`created_by`). Hors `withMember`, aucune ligne. Notes, préréglages et taux sont en ajout seul (`REVOKE UPDATE, DELETE` et trigger `refuse_change`) ; `team_members` n'a pas de `DELETE` (migration 0015).
+- **Tables du planning** (`creator_id` **et** `member_id`, ADR 0023 § Données et RLS) : `withTenantMember(db, creatorId, userId, (tx, scope) => …)` pose les trois réglages (`app.creator_id`, `app.user_id`, `app.team_scope`). Un shift ou un modèle se lit dans sa créatrice, par le membre lui-même ou par le scope `owner` | `agency` : deux chatteurs d'une même créatrice ne lisent pas les shifts l'un de l'autre. Seuls `owner` et `agency` écrivent, signé de leur compte. Un lecteur de plusieurs créatrices boucle, une transaction par créatrice. `scheduling_settings` (sans créatrice) se lit par tout scope posé et s'écrit par le propriétaire.
 - **Hors RLS** (pas de `creator_id`) : `creators`, les tables Better Auth, `invitation_links` (`withAdmin` seul), `audit_log`, `worker_heartbeats`, `rate_limit_counters`, les lignes `kill_switches` de scope `global` (lues par toutes les créatrices, politique `global_read` ; écrites, modifiées et supprimées seulement par `withAdmin`, migration 0010), les tables `graphile_worker`.
 
 ## Index de départ

@@ -39,6 +39,8 @@ export const platformAccounts = pgTable(
     enumCheck('platform_accounts', t.platform, PlatformSchema.options),
     enumCheck('platform_accounts', t.sessionState, SessionStateSchema.options),
     unique('platform_accounts_platform_handle_unique').on(t.platform, t.handle),
+    /** The target of the planning's composite keys: a shift's account and creator always go together (EQ-02). */
+    unique('platform_accounts_id_creator_unique').on(t.id, t.creatorId),
     index('platform_accounts_creator_idx').on(t.creatorId),
     tenantPolicy(t.creatorId),
   ],
