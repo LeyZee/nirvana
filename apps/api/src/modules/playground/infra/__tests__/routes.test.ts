@@ -92,7 +92,14 @@ const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
     await reply.code(403).send({ error: 'forbidden' });
     return;
   }
-  request.user = { id, email: `${id}@example.test`, name: id, role: 'owner', creatorIds: [] };
+  request.user = {
+    id,
+    email: `${id}@example.test`,
+    name: id,
+    role: 'owner',
+    creatorIds: [],
+    routedCreatorIds: [],
+  };
 };
 
 async function server(
