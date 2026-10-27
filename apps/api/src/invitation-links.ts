@@ -19,7 +19,7 @@ import {
   type InvitationLinkPurpose,
   type PasswordInvalidReason,
 } from '@nirvana/contracts';
-import { and, eq, schema, sql, withAdmin, type Database, type Transaction } from '@nirvana/db';
+import { and, eq, inArray, schema, sql, withAdmin, type Database, type Transaction } from '@nirvana/db';
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -255,6 +255,45 @@ async function redeemLinkUnscoped(
     const [member] = await tx.select(accountColumns).from(schema.user).where(eq(schema.user.id, link.userId));
     if (member === undefined) throw new InvitationLinkNotFound();
     return member;
+  });
+}
+
+/** A member's link still out: not used and not replaced, whether or not it has expired. */
+export interface LiveInvitationLink {
+  readonly purpose: InvitationLinkPurpose;
+  readonly expiresAt: Date;
+}
+
+/**
+ * The live link of each member asked for, for the team's list (« Lien valable jusqu'à… », « Lien expiré »): at most
+ * one per member (unique index). A member with no link out, or whose last link was used, is absent. Through `withAdmin`,
+ * as every read of the table: the team module receives this function, never the table.
+ */
+export function liveInvitationLinksUnscoped(
+  adminDb: Database,
+  memberIds: readonly string[],
+): Promise<ReadonlyMap<string, LiveInvitationLink>> {
+  if (memberIds.length === 0) return Promise.resolve(new Map());
+  return withAdmin(adminDb, async (tx) => {
+    const rows = await tx
+      .select({
+        memberId: schema.invitationLinks.memberId,
+        purpose: schema.invitationLinks.purpose,
+        expiresAt: schema.invitationLinks.expiresAt,
+      })
+      .from(schema.invitationLinks)
+      .where(
+        and(
+          inArray(schema.invitationLinks.memberId, [...memberIds]),
+          sql`${schema.invitationLinks.usedAt} is null and ${schema.invitationLinks.revokedAt} is null`,
+        ),
+      );
+    return new Map(
+      rows.map((row) => [
+        row.memberId,
+        { purpose: InvitationLinkPurposeSchema.parse(row.purpose), expiresAt: row.expiresAt },
+      ]),
+    );
   });
 }
 

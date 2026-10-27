@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
+import { liveInvitationLinksUnscoped } from '../invitation-links';
 import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
@@ -319,6 +320,36 @@ describe('invitation links (EQ-10)', () => {
     await post('/v1/invitation-links/redeem', { token, password: PASSWORD });
     expect(logs.length).toBeGreaterThan(0);
     expect(logs.join('\n')).not.toContain(token);
+  });
+
+  it('tells the team list which link is still out, expired or not', async () => {
+    const out = await addMember('out@example.test');
+    const expired = await addMember('lapsed@example.test');
+    const used = await addMember('used@example.test');
+    const none = await addMember('none@example.test');
+    const { expiresAt } = await newLink(out.memberId);
+    await newLink(expired.memberId, 'reset');
+    await test.admin.db
+      .update(schema.invitationLinks)
+      .set({ createdAt: sql`now() - interval '73 hours'`, expiresAt: sql`now() - interval '1 hour'` })
+      .where(eq(schema.invitationLinks.memberId, expired.memberId));
+    await post('/v1/invitation-links/redeem', {
+      token: (await newLink(used.memberId)).token,
+      password: PASSWORD,
+    });
+
+    const links = await liveInvitationLinksUnscoped(app.adminDb.db, [
+      out.memberId,
+      expired.memberId,
+      used.memberId,
+      none.memberId,
+    ]);
+    expect(links.get(out.memberId)).toEqual({ purpose: 'invitation', expiresAt: new Date(expiresAt) });
+    expect(links.get(expired.memberId)?.purpose).toBe('reset');
+    expect(links.get(expired.memberId)?.expiresAt.getTime()).toBeLessThan(Date.now());
+    expect(links.has(used.memberId)).toBe(false);
+    expect(links.has(none.memberId)).toBe(false);
+    expect((await liveInvitationLinksUnscoped(app.adminDb.db, [])).size).toBe(0);
   });
 
   it('keeps the table out of reach of the application role', async () => {
