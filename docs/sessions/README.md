@@ -33,7 +33,7 @@ Le projet avance par sessions. Une session = un agent (Claude Opus 5.5 dans Clau
 
 ## Format d'une entrée de journal
 
-Une entrée = un fichier `docs/sessions/log/<AAAA-MM-JJ>-<slug-en-minuscules>.md` (ex. `2026-10-20-p0-03.md`), jamais modifié par une autre session, dont la première ligne commence par `# <AAAA-MM-JJ>` (vérifié par `scripts/check-repo.mjs`). Le dossier est l'index : aucune session n'édite un fichier partagé, donc deux PR en parallèle n'entrent jamais en conflit sur le journal. Le tableau de `docs/sessions/LOG.md` est figé au 27/10/2026.
+Une entrée = un fichier `docs/sessions/log/<AAAA-MM-JJ>-<slug-en-minuscules>.md` (ex. `2026-10-20-p0-03.md`), jamais modifié par une autre session, dont la première ligne commence par `# <AAAA-MM-JJ>` (vérifié par `scripts/check-repo.mjs`). Le dossier est l'index : aucune session n'édite un fichier partagé, donc deux PR en parallèle n'entrent jamais en conflit sur le journal. Le tableau de `docs/sessions/LOG.md` est figé à ses 153 lignes du 27/10/2026, et `scripts/check-repo.mjs` refuse une ligne de plus. `pnpm sessions:log` liste les entrées dans l’ordre où elles sont entrées dans le dépôt (d’après git), la dernière d’abord.
 
 ```
 # 2026-10-20 — P0-03 Base de données — done
