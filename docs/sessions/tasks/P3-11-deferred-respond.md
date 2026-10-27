@@ -1,6 +1,6 @@
 # P3-11 Réponse différée après « attends, je reviens »
 
-Statut : todo (ID validé par Charles le 27/10 à 19h56)
+Statut : in_progress (ID validé par Charles le 27/10 à 19h56)
 Phase : 3
 Dépend de : P3-10 (relances, worker et moteur)
 Branche : task/P3-11-deferred-respond
@@ -27,20 +27,20 @@ Ce n'est pas une relance : une relance (P3-10) suit **son** silence à lui, apr�
 
 ## Règles
 
-1. **Le moteur dit quand revenir.** Un `wait` rend `no_reply` avec `retryAt`, borné par le code entre 10 et 60 minutes (point de départ : 20 minutes, à calibrer). Le cerveau ne fixe pas ce délai (CLAUDE.md, règle 3).
+1. **Le moteur dit quand revenir.** Un `wait` rend `no_reply` avec `retryAt`, borné par le code entre 10 et 25 minutes côté moteur (point de départ : 20 minutes, à calibrer) ; le worker n'accepte que 5 à 25 minutes, pour que le filet de 30 minutes vienne toujours après. Le cerveau ne fixe pas ce délai (CLAUDE.md, règle 3).
 2. **Le worker reprogramme `conversation.respond`.** Il le fait sur la même file `conv:<id>`, avec la même clé `conversation.respond:<id>`, en mode `replace`, à `retryAt`. Un nouveau message du fan remplace naturellement ce job : il répond alors au nouveau message, sans rien à annuler.
-3. **Une seule attente** pour le même dernier message du fan. Le compte vient du journal : les `reply_skipped` de raison `wait` depuis son dernier message entrant. Si le second passage n'écrit toujours rien (refus, garde, modèle injoignable), c'est une passation (`handoff_requested`, cause à choisir dans le contrat), donc « À traiter ».
+3. **Une seule attente** pour le même dernier message du fan. Le second passage porte `waitedFor` (son message attendu) dans la charge du job : un nouveau message remplace le job et remet donc le compte à zéro. Si le second passage n'écrit toujours rien (refus, garde, modèle injoignable), c'est une passation (`handoff_requested`, cause `other`, raison `waited_no_reply`, sans nouvelle cause au contrat), donc « À traiter ».
 4. **Le moteur sait qu'il a déjà attendu.** `ComposeInput.waited` (en ajout) porte le nombre d'attentes déjà faites pour ce message. Avec `waited ≥ 1`, le moteur n'a plus le droit de rechoisir `wait` : il écrit un petit message pour lui demander s'il est revenu, avec un brief fixé par le code comme pour les relances, et toutes les gardes. La passation de la règle 3 est le filet si ce message ne s'écrit pas.
 5. **Revérification sous verrou** comme pour `respond` : la conversation doit être au repos, aucune prise en main, aucune pause, les portes ouvertes. Sinon, rien n'est écrit.
 6. **« À traiter »** montre aussi, au-delà de 30 minutes, une conversation dont le dernier message du fan n'a ni réponse, ni brouillon, ni job prévu. C'est un filet de sécurité pour tout trou futur, pas seulement pour `wait`.
 
 ## À faire
 
-- [ ] Contrats (Bilan) : `reply_skipped` gagne `retryAt?` en ajout. `ComposeResult` ne change pas : `retryAt` existe déjà depuis #204. Le port `ComposeInput` gagne `waited?: number` en ajout (conversations).
+- [x] Contrats (Bilan) : `reply_skipped` gagne `retryAt?` et `conversation.respond` gagne `waitedFor?`, en ajout. `ComposeResult` ne change pas : `retryAt` existe déjà depuis #204. Le port `ComposeInput` gagne `waited?: number` en ajout (conversations).
 - [ ] Agent : `holdDecision` (`wait`) → `retryAt` borné ; avec `waited ≥ 1`, jamais `wait`, mais un message « tu es revenu ? » écrit sur brief du code. Tests du domaine et du composeur.
-- [ ] Conversations (Bilan) : `respond` reprogramme sur `no_reply` avec `retryAt`, passe `waited` au moteur et passe la main si le second passage n'écrit rien. Tests d'intégration : attente puis réponse, nouveau message pendant l'attente, second passage sans brouillon et passation, prise en main pendant l'attente.
-- [ ] Supervision (Bilan) et Dashboard (Extension) : l'entrée « sans réponse depuis 30 minutes » dans « À traiter », avec un libellé en français.
-- [ ] Doc : `message-flow.md` §1, glossaire si un terme naît.
+- [x] Conversations (Bilan) : `respond` reprogramme sur `no_reply` avec `retryAt`, passe `waited` au moteur et passe la main si le second passage n'écrit rien. Tests d'intégration : attente puis réponse, nouveau message pendant l'attente, second passage sans brouillon et passation, prise en main pendant l'attente.
+- [ ] Supervision (Agent, ou Bilan en ajout avec son accord) et Dashboard (Extension) : l'entrée « sans réponse depuis 30 minutes » dans « À traiter », avec un libellé en français.
+- [x] Doc : `message-flow.md` §2, glossaire (Réponse différée).
 
 ## Critères d'acceptation
 
@@ -56,3 +56,5 @@ Les relances sur son silence (P3-10), les relances de vente (`PROPOSED-after-off
 ## Notes de session
 
 27/10 : proposée par Bilan, après la seconde passe méthode / code du fil Agent (#209).
+
+27/10 soir : part Bilan (contrat, worker `respond`, tests) dans sa PR ; bornes accordées avec le fil Agent (10–25 min côté moteur, 5–25 côté worker).

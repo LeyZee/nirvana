@@ -1,4 +1,11 @@
-import { DraftIdSchema, newId, type HandoffCause, type JobPayload } from '@nirvana/contracts';
+import {
+  DraftIdSchema,
+  jobKeyFor,
+  newId,
+  queueNameFor,
+  type HandoffCause,
+  type JobPayload,
+} from '@nirvana/contracts';
 
 import type {
   Clock,
@@ -14,6 +21,7 @@ import type {
   Transaction,
   UnitOfWork,
 } from '../../domain/ports';
+import { deferredRespondAt } from '../../domain/rules';
 import { closeAutomaticIfLocked } from '../automatic';
 import { readProposedFacts } from '../facts';
 import { appendEvent } from '../journal';
@@ -47,6 +55,9 @@ export const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
   llm_unavailable: 'llm_unavailable',
 };
 
+/** The reason of the handoff when the second pass after a wait wrote nothing. */
+const WAITED_NO_REPLY = 'waited_no_reply';
+
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 
 /** One line of her notes about the fan; a chatter's note reads as such, its dated key says nothing to the engine. */
@@ -58,13 +69,35 @@ export const noteLine = (fact: {
 
 const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
 
-/** The conversation still waits for this answer: same state, no fan message since, nothing blocking. */
-async function stillPending(tx: Transaction, conversation: Conversation | null, logger: JobLogger) {
+/** Why the second pass after a wait has nothing to do: he wrote since (another job answers), or she did. */
+function waitedOver(conversation: Conversation, waitedFor: Date): string | null {
+  if (conversation.state !== 'idle') return `state ${conversation.state}`;
+  if (conversation.lastInboundAt?.getTime() !== waitedFor.getTime()) return 'fan_wrote';
+  const answered = conversation.lastOutboundAt;
+  return answered !== null && answered.getTime() >= waitedFor.getTime() ? 'answered' : null;
+}
+
+/**
+ * The conversation still waits for this answer: same state, no fan message since, nothing blocking. The second pass
+ * after a wait (P3-11) finds it at rest, his message still the last one and still unanswered.
+ */
+async function stillPending(
+  tx: Transaction,
+  conversation: Conversation | null,
+  logger: JobLogger,
+  waitedFor: Date | null = null,
+) {
   if (conversation === null) {
     logger.warn({}, 'respond: conversation not found');
     return false;
   }
-  if (conversation.state !== 'pending') {
+  if (waitedFor !== null) {
+    const over = waitedOver(conversation, waitedFor);
+    if (over !== null) {
+      logger.info({ over }, 'respond: the wait is over');
+      return false;
+    }
+  } else if (conversation.state !== 'pending') {
     logger.info({ state: conversation.state }, 'respond: nothing to answer');
     return false;
   }
@@ -84,6 +117,7 @@ async function stillPending(tx: Transaction, conversation: Conversation | null, 
  */
 export function createRespondJob({ uow, clock, voice, fans, composer }: RespondDeps) {
   return async (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> => {
+    const waitedFor = payload.waitedFor === undefined ? null : new Date(payload.waitedFor);
     // Before the engine: if the lock closed (the live rate fell, the voice changed), automatic is over for her.
     const closed = await closeAutomaticIfLocked(uow, payload.creatorId, voice, {
       actor: 'system',
@@ -94,7 +128,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
     const draftId = newId(DraftIdSchema);
     const read = await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);
-      if (conversation === null || !(await stillPending(tx, conversation, logger))) return null;
+      if (conversation === null || !(await stillPending(tx, conversation, logger, waitedFor))) return null;
       return {
         conversation,
         history: await tx.messages.history(conversation.id, HISTORY_LIMIT),
@@ -117,6 +151,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
       platformConversationId: read.conversation.platformConversationId,
       history: read.history,
       fan: { ...read.stats, notes: notes.map(noteLine) },
+      ...(waitedFor !== null && { waited: 1 }),
     };
     const source = read.history.findLast((message) => message.author === 'fan') ?? null;
 
@@ -131,7 +166,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
 
     await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);
-      if (conversation === null || !(await stillPending(tx, conversation, logger))) return;
+      if (conversation === null || !(await stillPending(tx, conversation, logger, waitedFor))) return;
       if (lastInboundKey(conversation) !== read.lastInbound) {
         logger.info({ draftId }, 'respond: fan wrote again, result dropped');
         return;
@@ -161,8 +196,10 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
         );
         return;
       }
-      if (HANDOFF_REASONS.includes(result.reason)) {
-        const reason = [result.reason, ...result.detail].join(' : ').slice(0, 500);
+      // After a wait, nothing written is nothing to wait for any more: a human answers him (P3-11).
+      if (HANDOFF_REASONS.includes(result.reason) || waitedFor !== null) {
+        const held = waitedFor !== null && !HANDOFF_REASONS.includes(result.reason);
+        const reason = [held ? WAITED_NO_REPLY : result.reason, ...result.detail].join(' : ').slice(0, 500);
         const cause = result.cause ?? DEFAULT_CAUSES[result.reason] ?? 'other';
         await appendEvent(
           tx,
@@ -171,6 +208,9 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
           meta,
         );
       } else {
+        // She chose to wait (« attends, je reviens »): her answer is tried once more, unless he writes first.
+        const retryAt =
+          conversation.lastInboundAt === null ? null : deferredRespondAt(result.retryAt, meta.at);
         await appendEvent(
           tx,
           conversation,
@@ -179,10 +219,28 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
             payload: {
               reason: 'no_reply',
               detail: result.detail.map((line) => line.slice(0, 500)).slice(0, 20),
+              ...(retryAt !== null && { retryAt: retryAt.toISOString() }),
             },
           },
           meta,
         );
+        if (retryAt !== null && conversation.lastInboundAt !== null) {
+          await tx.jobs.enqueue(
+            'conversation.respond',
+            {
+              creatorId: conversation.creatorId,
+              conversationId: conversation.id,
+              correlationId: payload.correlationId,
+              waitedFor: conversation.lastInboundAt.toISOString(),
+            },
+            {
+              queueName: queueNameFor(conversation.id),
+              // His next message replaces it: the debounce answers that one instead.
+              jobKey: jobKeyFor('conversation.respond', conversation.id),
+              runAt: retryAt,
+            },
+          );
+        }
       }
       logger.info({ reason: result.reason, costUsd: result.costUsd }, 'respond: held');
     });

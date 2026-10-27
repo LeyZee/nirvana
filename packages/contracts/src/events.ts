@@ -199,6 +199,8 @@ export const EVENT_PAYLOADS = {
   reply_skipped: z.object({
     reason: z.enum(['no_reply', 'llm_unavailable']),
     detail: z.array(z.string().max(500)).max(20),
+    /** She chose to wait (P3-11): her answer is tried again at that time, unless he writes first. */
+    retryAt: z.iso.datetime().exactOptional(),
   }),
   takeover_started: takeoverPayload,
   takeover_ended: takeoverPayload,
