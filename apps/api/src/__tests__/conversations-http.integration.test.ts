@@ -213,6 +213,27 @@ describe('/v1/conversations', () => {
     expect(response.json()).toMatchObject({ error: { code: 'creator_forbidden' } });
   });
 
+  it('keeps a creator out of every conversation, even her own (ADR 0023)', async () => {
+    const creator = { email: 'creatrice@example.test', name: 'Créatrice', password: 'correct horse battery' };
+    const { userId } = await createOwner(app.auth, app.db.db, creator);
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'creator', creatorIds: [creatorId] })
+      .where(eq(schema.user.id, userId));
+    const cookie = await signIn(server, creator.email, creator.password);
+    const id = conversationIds[0] ?? newId(ConversationIdSchema);
+    for (const url of [
+      `/v1/conversations?creatorId=${creatorId}`,
+      `/v1/conversations/${id}?creatorId=${creatorId}`,
+      `/v1/conversations/${id}/messages?creatorId=${creatorId}`,
+      `/v1/conversations/${id}/events?creatorId=${creatorId}`,
+    ]) {
+      const response = await call('GET', url, cookie);
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ error: { code: 'role_forbidden' } });
+    }
+  });
+
   it('lets a team chatter reach only the conversations routed to him, and a manager every one (ADR 0024)', async () => {
     const people = { chatter: 'chatter@example.test', manager: 'manager@example.test' } as const;
     const routed = conversationIds[0] ?? newId(ConversationIdSchema);

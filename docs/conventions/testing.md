@@ -25,7 +25,7 @@ Six couches, chacune avec un outil et un but. Une PR touche la couche qui corres
 
 ## FakeReveal
 
-Un serveur HTTP (Fastify, dans `apps/api/test/fake-reveal/`) qui imite l'API de Reveal telle qu'observée (phase 1), piloté par des scénarios (`scenarios/*.json` : messages qui arrivent à t+X, session qui expire, erreur 500, rate limit). C'est contre lui que tourne le connecteur en CI et en dev. Il est mis à jour à chaque changement observé de Reveal (voir `docs/reference/reveal-api-observed.md`), et ses enregistrements anonymisés sont versionnés dans le dépôt (`apps/api/test/fake-reveal/recordings/`, sans secret ni donnée réelle) et protégés (hygiene.md).
+Un serveur HTTP (Fastify, dans `apps/api/src/__tests__/fake-reveal/`) qui imite l'API de Reveal telle qu'observée (phase 1), piloté par des scénarios (`scenarios/*.json` : messages qui arrivent à t+X, session qui expire, erreur 500, rate limit). C'est contre lui que tourne le connecteur en CI et en dev. Il est mis à jour à chaque changement observé de Reveal (voir `docs/reference/reveal-api-observed.md`), et ses enregistrements anonymisés sont versionnés dans le dépôt (`apps/api/src/__tests__/fake-reveal/recordings/`, sans secret ni donnée réelle) et protégés (hygiene.md).
 
 ## Évals (résumé, détail dans `docs/playbooks/write-an-eval.md`)
 
