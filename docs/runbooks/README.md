@@ -4,6 +4,7 @@ Procédures d'exploitation, écrites pour être suivies sous stress, par quelqu'
 
 | Runbook | Quand |
 |---|---|
+| `deploy.md` | Mettre en service, mettre à jour, revenir en arrière (Coolify, Neon) |
 | `local-dev.md` | Lancer le CRM sur son PC (base locale, compte, dashboard) |
 | `incident.md` | Quelque chose va mal en production (bot qui déraille, envois en double, plateforme qui bloque) |
 | `rotate-secrets.md` | Un secret a fuité ou arrive à échéance |

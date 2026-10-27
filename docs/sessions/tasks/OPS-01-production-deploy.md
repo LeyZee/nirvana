@@ -1,5 +1,5 @@
 # OPS-01 Mise en production : images, limiteur partagé, runbook
-Statut : in_progress
+Statut : done
 Phase : exploitation (ADR 0005, ADR 0027, `docs/architecture/operations.md`)
 Dépend de : rien
 Branche : claude/project-thread-guzxdb (une branche de push pour la session, une PR par lot)
@@ -13,7 +13,7 @@ Au 27/10, rien n'était déployable : aucun Dockerfile, un `dist/` de l'API qui 
 ## À faire
 - [x] Lot 1 : build de l'API qui démarre (tsup, paquets du dépôt embarqués), `apps/api/Dockerfile` (API, worker, scripts d'exploitation), `apps/web/Dockerfile` (nginx, `/v1` vers l'API), `docker-compose.prod.yml`, job CI `images` qui construit et démarre la pile.
 - [x] Lot 2 : magasin Postgres pour `@fastify/rate-limit` (table de compteurs, migration, purge des fenêtres expirées), tests d'intégration à deux instances de l'API.
-- [ ] Lot 3 : runbook `deploy.md` dans `docs/runbooks/` : première mise en service (Neon, rôles, Coolify, domaine), variables depuis `.env.example`, migrations, sauvegardes, retour arrière, coupe-circuit.
+- [x] Lot 3 : `docs/runbooks/deploy.md` : première mise en service (Neon, rôles, Coolify, domaine), variables depuis `.env.example`, migrations, sauvegardes, retour arrière, coupe-circuit.
 
 ## Critères d'acceptation
 - La CI construit les deux images et démarre la pile : `/ready` vert (base, migrations, worker), le dashboard servi, `/v1` joint l'API à travers nginx.
