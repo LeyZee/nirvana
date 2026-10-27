@@ -120,6 +120,14 @@ export function withTenantMember<T>(
 }
 
 /**
+ * Moves a `withTenantMember` transaction to another creator, for the writes that touch two creators at once: a swap of
+ * shifts on two creators, a leave whose approval reads every creator of the member (ADR 0031). Still `SET LOCAL`.
+ */
+export async function enterCreator(tx: Transaction, creatorId: string): Promise<void> {
+  await tx.execute(sql`select set_config('app.creator_id', ${creatorId}, true)`);
+}
+
+/**
  * Runs `fn` in a transaction on the admin connection (BYPASSRLS), for the multi-tenant system jobs only. Callers
  * are named `*Unscoped` so a review sees every place that crosses tenants.
  */

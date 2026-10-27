@@ -11,11 +11,12 @@ import {
   type PgColumn,
   text,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
 import { user } from './auth';
-import { createdAt, id, timestampTz, updatedAt } from './columns';
+import { createdAt, enumCheck, id, timestampTz, updatedAt } from './columns';
 import { teamMembers } from './team';
 import { creators, platformAccounts } from './tenancy';
 
@@ -37,8 +38,22 @@ const plans: SQL = sql`${currentScope} in ('owner', 'agency')`;
 const isOwner: SQL = sql`${currentScope} = 'owner'`;
 
 /** The member of the row is the signed-in account. */
-const isMine = (memberId: PgColumn): SQL =>
+const isMine = (memberId: PgColumn | SQL): SQL =>
   sql`exists (select 1 from team_members m where m.id = ${memberId} and m.user_id = ${currentUser})`;
+
+/**
+ * A swap names this shift (ADR 0031), and the signed-in member made or received it. Raw table name: `shift_swap_requests`
+ * is declared below, and its own policies never read `shifts` (Postgres refuses policies that loop).
+ */
+const namedBySwapOfMine: SQL = sql`exists (select 1 from shift_swap_requests s where (s.shift_id = "shifts"."id" or s.target_shift_id = "shifts"."id") and s.status in ('proposed', 'accepted') and (${isMine(sql`s.requester_id`)} or ${isMine(sql`s.target_member_id`)}))`;
+
+/**
+ * The swap accepted in this very transaction (`resolved_at = now()`) by the signed-in member, the colleague asked, names
+ * this shift: the proof that lets a chatter move it (ADR 0031). Bound to the transaction, so that a shift a manager
+ * gave to someone else afterwards is never taken back by the old swap.
+ */
+const acceptedNowByMe = (shape: SQL): SQL =>
+  sql`exists (select 1 from shift_swap_requests s where s.status = 'accepted' and s.resolved_at = now() and ${isMine(sql`s.target_member_id`)} and (${shape}))`;
 
 /** One row at most (`id = 1`): no row means the defaults of the `scheduling` module. */
 export const schedulingSettings = pgTable(
@@ -194,6 +209,8 @@ export const shifts = pgTable(
     }),
     check('shifts_template_check', sql`(${t.templateId} is null) = (${t.templateStartsAt} is null)`),
     unique('shifts_template_occurrence_unique').on(t.templateId, t.templateStartsAt),
+    /** For the swaps' composite keys: a swap names a shift with its creator, and the policies read that creator. */
+    unique('shifts_id_creator_unique').on(t.id, t.creatorId),
     index('shifts_creator_start_idx').on(t.creatorId, t.startsAt),
     /** A member's shifts still to end: the access window of ADR 0025 reads them at every request. */
     index('shifts_member_end_idx')
@@ -211,6 +228,198 @@ export const shifts = pgTable(
       for: 'update',
       using: sql`${t.creatorId} = ${currentCreator} and ${plans}`,
       withCheck: sql`${t.creatorId} = ${currentCreator} and ${plans} and ${t.updatedBy} = ${currentUser}`,
+    }),
+    /** The shifts a member's swaps name, proposed or accepted: the colleague asked reads the shift offered. */
+    pgPolicy('swap_read', {
+      for: 'select',
+      using: sql`${t.creatorId} = ${currentCreator} and ${namedBySwapOfMine}`,
+    }),
+    /**
+     * The colleague asked moves the shifts of the swap they accept: each to the other member of the swap, at the hours
+     * the swap noted, neither cancelled nor stopped.
+     */
+    pgPolicy('swap_update', {
+      for: 'update',
+      using: sql`${t.creatorId} = ${currentCreator} and ${acceptedNowByMe(sql`s.shift_id = "shifts"."id" or s.target_shift_id = "shifts"."id"`)}`,
+      withCheck: sql`${t.creatorId} = ${currentCreator} and ${t.updatedBy} = ${currentUser} and ${t.cancelledAt} is null and ${t.stoppedAt} is null and ${acceptedNowByMe(
+        sql`(s.shift_id = "shifts"."id" and "shifts"."member_id" = s.target_member_id and "shifts"."starts_at" = s.shift_starts_at and "shifts"."ends_at" = s.shift_ends_at) or (s.target_shift_id = "shifts"."id" and "shifts"."member_id" = s.requester_id and "shifts"."starts_at" = s.target_shift_starts_at and "shifts"."ends_at" = s.target_shift_ends_at)`,
+      )}`,
+    }),
+  ],
+);
+
+export const LEAVE_REQUEST_STATUSES = ['pending', 'approved', 'refused', 'withdrawn', 'cancelled'] as const;
+
+/**
+ * A member's leave (ADR 0031): no creator, the policy of the team's tables. The member reads theirs, asks for their own
+ * and withdraws it while pending; the owner and an active manager read all and decide, a manager never on their own
+ * (the owner decides theirs). The instants are fixed when it is asked and never change: a leave cancelled under way
+ * covers [`starts_at`, `cancelled_at`). Two pending or approved leaves of a member never overlap (exclusion constraint
+ * of the migration), and a trigger keeps its columns and its states (`pending` → `approved` | `refused` | `withdrawn`,
+ * `approved` → `cancelled` before its end).
+ */
+export const leaveRequests = pgTable(
+  'leave_requests',
+  {
+    id: id(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    firstDay: date('first_day').notNull(),
+    lastDay: date('last_day').notNull(),
+    timeZone: text('time_zone').notNull(),
+    startsAt: timestampTz('starts_at').notNull(),
+    endsAt: timestampTz('ends_at').notNull(),
+    note: text('note'),
+    status: text('status').notNull(),
+    decidedAt: timestampTz('decided_at'),
+    decidedBy: text('decided_by').references(() => user.id),
+    decisionNote: text('decision_note'),
+    cancelledAt: timestampTz('cancelled_at'),
+    cancelledBy: text('cancelled_by').references(() => user.id),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    enumCheck('leave_requests', t.status, LEAVE_REQUEST_STATUSES),
+    check(
+      'leave_requests_days_check',
+      sql`${t.lastDay} >= ${t.firstDay} and ${t.lastDay} - ${t.firstDay} < 31`,
+    ),
+    check('leave_requests_range_check', sql`${t.endsAt} > ${t.startsAt}`),
+    check(
+      'leave_requests_texts_check',
+      sql`coalesce(char_length(${t.note}), 0) <= 500 and coalesce(char_length(${t.decisionNote}), 0) <= 500`,
+    ),
+    check(
+      'leave_requests_state_check',
+      sql`(${t.decidedAt} is null) = (${t.decidedBy} is null) and (${t.cancelledAt} is null) = (${t.cancelledBy} is null) and case ${t.status} when 'pending' then ${t.decidedAt} is null and ${t.cancelledAt} is null when 'approved' then ${t.decidedAt} is not null and ${t.cancelledAt} is null when 'refused' then ${t.decidedAt} is not null and ${t.cancelledAt} is null when 'withdrawn' then ${t.decidedAt} is null and ${t.cancelledAt} is not null else ${t.decidedAt} is not null and ${t.cancelledAt} is not null end`,
+    ),
+    index('leave_requests_member_start_idx').on(t.memberId, t.startsAt),
+    pgPolicy('member_read', { for: 'select', using: sql`${plans} or ${isMine(t.memberId)}` }),
+    pgPolicy('member_insert', {
+      for: 'insert',
+      withCheck: sql`${isMine(t.memberId)} and ${t.createdBy} = ${currentUser} and ${t.status} = 'pending'`,
+    }),
+    pgPolicy('member_withdraw', {
+      for: 'update',
+      using: sql`${isMine(t.memberId)} and ${t.status} = 'pending'`,
+      withCheck: sql`${isMine(t.memberId)} and ${t.status} = 'withdrawn' and ${t.cancelledBy} = ${currentUser}`,
+    }),
+    pgPolicy('team_decide', {
+      for: 'update',
+      using: plans,
+      withCheck: sql`${plans} and (${t.status} = 'cancelled' or ${isOwner} or not ${isMine(t.memberId)}) and ((${t.status} in ('approved', 'refused') and ${t.decidedBy} = ${currentUser}) or (${t.status} = 'cancelled' and ${t.cancelledBy} = ${currentUser}))`,
+    }),
+  ],
+);
+
+export const SHIFT_SWAP_STATUSES = [
+  'proposed',
+  'accepted',
+  'declined',
+  'withdrawn',
+  'lapsed',
+  'reverted',
+] as const;
+
+/**
+ * A chatter's swap (ADR 0031): the requester's shift goes to the colleague, and with a target shift that one comes back.
+ * It notes each shift's hours at the proposal: the acceptance moves them only if nothing changed, and the policy
+ * `swap_update` of `shifts` holds the move to them. Read under the rule of ADR 0023: the creator of one of the two
+ * shifts, and one of the two members or the scope `owner` | `agency`. Its policies never read `shifts`, whose
+ * policies read it. One open proposal per (shift, colleague, shift asked back); a trigger keeps the columns and the
+ * states (`proposed` → `accepted` | `declined` | `withdrawn` | `lapsed`, `accepted` → `reverted`). Every state but a
+ * lapse names who resolved it; the job that lapses the proposals left behind by an acceptance is nobody.
+ */
+export const shiftSwapRequests = pgTable(
+  'shift_swap_requests',
+  {
+    id: id(),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id),
+    shiftId: uuid('shift_id').notNull(),
+    requesterId: uuid('requester_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    shiftStartsAt: timestampTz('shift_starts_at').notNull(),
+    shiftEndsAt: timestampTz('shift_ends_at').notNull(),
+    targetMemberId: uuid('target_member_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    targetCreatorId: uuid('target_creator_id').references(() => creators.id),
+    targetShiftId: uuid('target_shift_id'),
+    targetShiftStartsAt: timestampTz('target_shift_starts_at'),
+    targetShiftEndsAt: timestampTz('target_shift_ends_at'),
+    message: text('message'),
+    status: text('status').notNull(),
+    resolvedAt: timestampTz('resolved_at'),
+    resolvedBy: text('resolved_by').references(() => user.id),
+    revertedAt: timestampTz('reverted_at'),
+    revertedBy: text('reverted_by').references(() => user.id),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    enumCheck('shift_swap_requests', t.status, SHIFT_SWAP_STATUSES),
+    foreignKey({
+      name: 'shift_swap_requests_shift_fk',
+      columns: [t.shiftId, t.creatorId],
+      foreignColumns: [shifts.id, shifts.creatorId],
+    }),
+    foreignKey({
+      name: 'shift_swap_requests_target_shift_fk',
+      columns: [t.targetShiftId, t.targetCreatorId],
+      foreignColumns: [shifts.id, shifts.creatorId],
+    }),
+    check('shift_swap_requests_members_check', sql`${t.requesterId} <> ${t.targetMemberId}`),
+    check(
+      'shift_swap_requests_target_check',
+      sql`num_nulls(${t.targetShiftId}, ${t.targetCreatorId}, ${t.targetShiftStartsAt}, ${t.targetShiftEndsAt}) in (0, 4) and ${t.targetShiftId} is distinct from ${t.shiftId}`,
+    ),
+    check('shift_swap_requests_message_check', sql`coalesce(char_length(${t.message}), 0) <= 500`),
+    check(
+      'shift_swap_requests_state_check',
+      sql`(${t.resolvedBy} is null or ${t.resolvedAt} is not null) and (${t.resolvedBy} is not null or ${t.status} in ('proposed', 'lapsed')) and (${t.revertedAt} is null) = (${t.revertedBy} is null) and (${t.status} = 'proposed') = (${t.resolvedAt} is null) and (${t.status} = 'reverted') = (${t.revertedAt} is not null)`,
+    ),
+    uniqueIndex('shift_swap_requests_open_unique')
+      .on(
+        t.shiftId,
+        t.targetMemberId,
+        sql`coalesce(${t.targetShiftId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      )
+      .where(sql`${t.status} = 'proposed'`),
+    index('shift_swap_requests_shift_idx').on(t.shiftId),
+    index('shift_swap_requests_target_shift_idx').on(t.targetShiftId),
+    pgPolicy('swap_read', {
+      for: 'select',
+      using: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and (${plans} or ${isMine(t.requesterId)} or ${isMine(t.targetMemberId)})`,
+    }),
+    pgPolicy('requester_insert', {
+      for: 'insert',
+      withCheck: sql`${t.creatorId} = ${currentCreator} and ${isMine(t.requesterId)} and ${t.createdBy} = ${currentUser} and ${t.status} = 'proposed'`,
+    }),
+    pgPolicy('requester_withdraw', {
+      for: 'update',
+      using: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and ${isMine(t.requesterId)} and ${t.status} = 'proposed'`,
+      withCheck: sql`${isMine(t.requesterId)} and ${t.status} in ('withdrawn', 'lapsed') and ${t.resolvedBy} = ${currentUser}`,
+    }),
+    pgPolicy('target_answer', {
+      for: 'update',
+      using: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and ${isMine(t.targetMemberId)} and ${t.status} = 'proposed'`,
+      withCheck: sql`${isMine(t.targetMemberId)} and ${t.status} in ('accepted', 'declined', 'lapsed') and ${t.resolvedBy} = ${currentUser}`,
+    }),
+    pgPolicy('team_update', {
+      for: 'update',
+      using: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and ${plans}`,
+      withCheck: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and ${plans} and ((${t.status} in ('withdrawn', 'lapsed') and ${t.resolvedBy} = ${currentUser}) or (${t.status} = 'reverted' and ${t.revertedBy} = ${currentUser}))`,
     }),
   ],
 );

@@ -13,7 +13,7 @@
 - un membre n'est jamais sur deux shifts à la fois, un compte n'a jamais deux membres à la fois : la base le décide (contraintes d'exclusion), le module répond 409 avec le shift qui barre la route ;
 - un shift fini ne change plus ; un shift en cours ne fait que finir plus tôt, s'arrêter à la minute de la demande (`stoppedAt`, sans marge de fin) ou s'annuler ; la base tient la même règle pour tous les rôles ;
 - un modèle parle en heures murales du fuseau de la grille : un créneau garde ses heures au changement d'heure (5 ou 7 h cette nuit-là) ; une heure du trou de printemps devient le premier instant après, une heure vécue deux fois en automne devient la première ;
-- un modèle fait ses shifts quatre semaines à l'avance, une seule fois chacun (clé `(template_id, template_starts_at)`, annulés compris) ; une occurrence qui chevaucherait un autre shift n'est pas faite, et le planning la montre dans `conflicts` ;
+- un modèle fait ses shifts quatre semaines à l'avance, une seule fois chacun (clé `(template_id, template_starts_at)`, annulés compris) ; une occurrence qui chevaucherait un autre shift n'est pas faite (sautée dans son propre point de sauvegarde : l'exclusion du membre est reportable depuis la migration 0023 et n'arbitre plus un `ON CONFLICT`), et le planning la montre dans `conflicts` ;
 - un modèle ne fait plus de shift pour un membre qui n'est pas `active` ou qui ne travaille plus sur sa créatrice ;
 - finir un modèle annule ses shifts pas encore commencés ; un modèle qui n'a pas commencé finit la veille de son premier jour.
 

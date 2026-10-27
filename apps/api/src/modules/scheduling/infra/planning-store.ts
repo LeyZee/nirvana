@@ -16,6 +16,7 @@ import {
 } from '@nirvana/contracts';
 import {
   and,
+  enterCreator,
   eq,
   inArray,
   schema,
@@ -146,10 +147,6 @@ function pgErrorOf(error: unknown): { code: string; constraint: string | null } 
   return null;
 }
 
-/** The creator whose rows the policies compare with, switched inside one transaction (`SET LOCAL`). */
-const enterCreator = (tx: Transaction, creatorId: string) =>
-  tx.execute(sql`select set_config('app.creator_id', ${creatorId}, true)`);
-
 /** Who did what (append-only, `audit_log`): never a name. */
 async function audit(
   tx: Transaction,
@@ -256,34 +253,45 @@ async function creatorOfUnscoped(
   return row?.creatorId ?? null;
 }
 
-/** The shifts a template makes ahead, each once: the occurrence key and the exclusions skip the others. */
+/**
+ * The shifts a template makes ahead, each once: the occurrence key skips those already made, and an occurrence that
+ * overlaps another shift of its member or its account is skipped in its own savepoint. The member exclusion is
+ * deferrable since 0023 (a swap of two shifts at the same hours), and a deferrable constraint is no arbiter of
+ * `ON CONFLICT`: only the occurrence key is.
+ */
 async function makeShifts(
   tx: Transaction,
   template: StoredTemplate,
   by: string,
   clock: { readonly now: Date; readonly timeZone: string },
 ): Promise<number> {
-  const ahead = occurrencesAhead(template, clock.now, clock.timeZone);
-  if (ahead.length === 0) return 0;
-  const made = await tx
-    .insert(shifts)
-    .values(
-      ahead.map((occurrence) => ({
-        id: newId(ShiftIdSchema),
-        creatorId: template.creatorId,
-        platformAccountId: template.platformAccountId,
-        memberId: template.memberId,
-        startsAt: occurrence.startsAt,
-        endsAt: occurrence.endsAt,
-        templateId: template.id,
-        templateStartsAt: occurrence.startsAt,
-        createdBy: by,
-        updatedBy: by,
-      })),
-    )
-    .onConflictDoNothing()
-    .returning({ id: shifts.id });
-  return made.length;
+  let made = 0;
+  for (const occurrence of occurrencesAhead(template, clock.now, clock.timeZone)) {
+    try {
+      const rows = await tx.transaction((savepoint) =>
+        savepoint
+          .insert(shifts)
+          .values({
+            id: newId(ShiftIdSchema),
+            creatorId: template.creatorId,
+            platformAccountId: template.platformAccountId,
+            memberId: template.memberId,
+            startsAt: occurrence.startsAt,
+            endsAt: occurrence.endsAt,
+            templateId: template.id,
+            templateStartsAt: occurrence.startsAt,
+            createdBy: by,
+            updatedBy: by,
+          })
+          .onConflictDoNothing({ target: [shifts.templateId, shifts.templateStartsAt] })
+          .returning({ id: shifts.id }),
+      );
+      made += rows.length;
+    } catch (error) {
+      if (pgErrorOf(error)?.code !== '23P01') throw error;
+    }
+  }
+  return made;
 }
 
 /**
