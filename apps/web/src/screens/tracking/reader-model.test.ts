@@ -94,6 +94,9 @@ describe('decisionError', () => {
     ).toBe(
       'Ce message ne peut pas partir : une promesse de rencontre, des coordonnées. Retouche-le ou refuse-le.',
     );
+    expect(decisionError(422, apiError('draft_unprocessable', { guards: ['discount'] }))).toBe(
+      'Ce message ne peut pas partir : une remise ou une négociation. Retouche-le ou refuse-le.',
+    );
     expect(decisionError(422, apiError('draft_unprocessable'))).toBe(
       'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.',
     );
