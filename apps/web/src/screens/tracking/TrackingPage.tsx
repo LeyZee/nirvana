@@ -111,7 +111,7 @@ export function TrackingPage({
       ) : creators.length === 0 ? (
         <Notice
           title="Rien pour toi pour l’instant"
-          text="Pendant ton shift, les conversations de tes créatrices arrivent ici."
+          text="Les conversations des créatrices qui te sont confiées arrivent ici."
         />
       ) : (
         <div className="tr-layout">
