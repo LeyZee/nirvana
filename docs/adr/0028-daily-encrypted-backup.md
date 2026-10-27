@@ -1,6 +1,6 @@
 # 0028. Export quotidien chiffré de la base, hors de Neon
 
-Statut : proposed
+Statut : accepted (Charles, 27/10 17h27)
 Date : 2026-10-27
 
 ## Contexte

@@ -72,3 +72,4 @@ Branche : task/<id>-<slug>
 | EQ-18 | Journal : qui a fait quoi, lisible par le propriétaire | équipe | todo | EQ-11 |
 | EQ-19 | « Voir comme » : l'écran exact d'un chatteur, en lecture seule | équipe | todo | EQ-10, EQ-11, EQ-15, EQ-18 |
 | OPS-01 | Mise en production : images, limiteur partagé, runbook | exploitation | done | ADR 0027 |
+| OPS-02 | Export quotidien chiffré de la base, hors de Neon | exploitation | todo | OPS-01, ADR 0028 |

@@ -52,4 +52,4 @@ Date : AAAA-MM-JJ
 | 0025 | Le chatteur chatte dans Reveal ; dans Nirvana, il traite sa créatrice pendant son shift, et rien hors shift | accepted |
 | 0026 | Serveur MCP de Nirvana : une seconde porte sur les mêmes commandes | accepted |
 | 0027 | Mise en production : deux images, un compose Coolify, un limiteur partagé en Postgres | accepted |
-| 0028 | Export quotidien chiffré de la base, hors de Neon | proposed |
+| 0028 | Export quotidien chiffré de la base, hors de Neon | accepted |

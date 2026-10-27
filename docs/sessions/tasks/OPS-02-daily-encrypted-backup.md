@@ -1,8 +1,8 @@
-# PROPOSED Export quotidien chiffré de la base, hors de Neon
-Statut : proposed
-Phase : exploitation (ADR 0028, à accepter)
-Dépend de : OPS-01 (fait), ADR 0028 acceptée
-Branche : task/<id>-daily-encrypted-backup
+# OPS-02 Export quotidien chiffré de la base, hors de Neon
+Statut : todo (ID validé par Charles le 27/10/2026, 17h27)
+Phase : exploitation (ADR 0028)
+Dépend de : OPS-01 (fait)
+Branche : task/ops-02-daily-encrypted-backup
 
 ## Objectif
 Chaque nuit, un export complet de la base part chiffré chez un autre fournisseur, l'application voit s'il a réussi, et une restauration a été prouvée.
