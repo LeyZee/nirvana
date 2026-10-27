@@ -8,6 +8,8 @@ const status = (patch: Partial<BackupStatus>): BackupStatus => ({
   lastSucceededAt: '2026-10-26T02:12:00.000Z',
   overdueAfterHours: 26,
   lastRun: null,
+  lastRestoreTest: null,
+  restoreTestFresh: false,
   ...patch,
 });
 
