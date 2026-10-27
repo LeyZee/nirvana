@@ -98,6 +98,18 @@ describe('a shift in time', () => {
 });
 
 describe('conflicts', () => {
+  const template = ShiftTemplateSchema.parse({
+    id: id(31),
+    creatorId: NORA,
+    platformAccountId: NORA_REVEAL,
+    memberId: THEO,
+    weekday: 3,
+    startMinute: 1380,
+    endMinute: 300,
+    validFrom: '2026-10-26',
+    validUntil: null,
+  });
+
   it('says when, where and who is in the way', () => {
     const week = planning(
       [],
@@ -111,24 +123,7 @@ describe('conflicts', () => {
         },
       ],
     );
-    const lines = conflictLines(
-      week.conflicts,
-      [
-        ShiftTemplateSchema.parse({
-          id: id(31),
-          creatorId: NORA,
-          platformAccountId: NORA_REVEAL,
-          memberId: THEO,
-          weekday: 3,
-          startMinute: 1380,
-          endMinute: 300,
-          validFrom: '2026-10-26',
-          validUntil: null,
-        }),
-      ],
-      week,
-      PARIS,
-    );
+    const lines = conflictLines(week.conflicts, [template], week, PARIS);
     expect(lines).toEqual([
       {
         key: `${id(31)}-2026-10-27T22:00:00Z`,
@@ -137,6 +132,24 @@ describe('conflicts', () => {
         shiftId: id(101),
       },
     ]);
+  });
+
+  it('says a member on leave, with no shift to open (ADR 0031)', () => {
+    const week = planning(
+      [],
+      [
+        {
+          templateId: id(31),
+          startsAt: '2026-10-27T22:00:00Z',
+          endsAt: '2026-10-28T04:00:00Z',
+          reason: 'member_on_leave',
+          leaveRequestId: id(41),
+        },
+      ],
+    );
+    const [line] = conflictLines(week.conflicts, [template], week, PARIS);
+    expect(line?.what).toBe('Théo est en congé');
+    expect(line?.shiftId).toBe(null);
   });
 });
 

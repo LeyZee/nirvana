@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AnswerShiftSwapRequestBodySchema,
+  CreateLeaveRequestBodySchema,
   CreateShiftBodySchema,
+  CreateShiftSwapRequestBodySchema,
   CreateShiftTemplateBodySchema,
+  DecideLeaveRequestBodySchema,
+  LeaveRequestSchema,
   MyShiftsSchema,
+  PlanningConflictSchema,
   PlanningSchema,
   SCHEDULING_ERROR_CODES,
   SchedulingSettingsSchema,
   SHIFT_TEMPLATE_MAX_MINUTES,
+  ShiftSwapListSchema,
   shiftSlotsOf,
+  SwapCandidatesSchema,
   templateLengthMinutes,
   UpdateShiftBodySchema,
 } from './scheduling';
@@ -16,6 +24,10 @@ import {
 const CREATOR = '0199f2a0-0000-7000-8000-0000000000c1';
 const ACCOUNT = '0199f2a0-0000-7000-8000-0000000000a1';
 const MEMBER = '0199f2a0-0000-7000-8000-0000000000e1';
+const COLLEAGUE = '0199f2a0-0000-7000-8000-0000000000e2';
+const TEMPLATE = '0199f2a0-0000-7000-8000-0000000000b1';
+const LEAVE = '0199f2a0-0000-7000-8000-0000000000d1';
+const SWAP = '0199f2a0-0000-7000-8000-0000000000d2';
 
 const shift = {
   id: '0199f2a0-0000-7000-8000-0000000000f1',
@@ -159,6 +171,140 @@ describe('shifts and templates', () => {
   });
 
   it('gives every error code a suffix that sets its status (api.md)', () => {
-    for (const code of SCHEDULING_ERROR_CODES) expect(code).toMatch(/_(not_found|invalid|conflict)$/u);
+    for (const code of SCHEDULING_ERROR_CODES) {
+      expect(code).toMatch(/_(not_found|invalid|conflict|forbidden)$/u);
+    }
+  });
+});
+
+describe('conflicts of the templates', () => {
+  const occurrence = {
+    templateId: TEMPLATE,
+    startsAt: '2026-11-03T23:00:00Z',
+    endsAt: '2026-11-04T05:00:00Z',
+  };
+
+  it('points a busy member or a taken account to the shift in the way', () => {
+    expect(
+      PlanningConflictSchema.safeParse({ ...occurrence, reason: 'member_busy', shiftId: shift.id }).success,
+    ).toBe(true);
+    expect(PlanningConflictSchema.safeParse({ ...occurrence, reason: 'account_taken' }).success).toBe(false);
+  });
+
+  it('points a member on leave to the leave, never to a shift (ADR 0031)', () => {
+    const onLeave = PlanningConflictSchema.parse({
+      ...occurrence,
+      reason: 'member_on_leave',
+      leaveRequestId: LEAVE,
+    });
+    expect(onLeave.reason === 'member_on_leave' && onLeave.leaveRequestId).toBe(LEAVE);
+    expect(
+      PlanningConflictSchema.safeParse({ ...occurrence, reason: 'member_on_leave', shiftId: shift.id })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe('leaves (ADR 0031)', () => {
+  const ask = { id: LEAVE, firstDay: '2026-12-24', lastDay: '2026-12-26', note: '  Noël en famille  ' };
+
+  it('takes whole days of the member, a note trimmed, and none when it is empty', () => {
+    expect(CreateLeaveRequestBodySchema.parse(ask).note).toBe('Noël en famille');
+    expect(CreateLeaveRequestBodySchema.parse({ ...ask, note: '   ' }).note).toBe(null);
+    expect(CreateLeaveRequestBodySchema.parse({ ...ask, note: undefined }).note).toBe(null);
+    expect(CreateLeaveRequestBodySchema.safeParse({ ...ask, firstDay: '2026-12-24T00:00:00Z' }).success).toBe(
+      false,
+    );
+  });
+
+  it('takes one day, refuses a last day before the first, and more than 31 days', () => {
+    expect(CreateLeaveRequestBodySchema.safeParse({ ...ask, lastDay: '2026-12-24' }).success).toBe(true);
+    expect(CreateLeaveRequestBodySchema.safeParse({ ...ask, lastDay: '2026-12-23' }).success).toBe(false);
+    expect(
+      CreateLeaveRequestBodySchema.safeParse({ ...ask, firstDay: '2026-12-01', lastDay: '2026-12-31' })
+        .success,
+    ).toBe(true);
+    expect(
+      CreateLeaveRequestBodySchema.safeParse({ ...ask, firstDay: '2026-12-01', lastDay: '2027-01-01' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('sends a leave back with the zone its days belong to and the instants fixed from them', () => {
+    const leave = {
+      id: LEAVE,
+      memberId: MEMBER,
+      firstDay: '2026-12-24',
+      lastDay: '2026-12-26',
+      timeZone: 'Indian/Antananarivo',
+      startsAt: '2026-12-23T21:00:00Z',
+      endsAt: '2026-12-26T21:00:00Z',
+      note: null,
+      status: 'pending',
+      decidedAt: null,
+      decisionNote: null,
+      createdAt: '2026-10-27T20:00:00Z',
+    };
+    expect(LeaveRequestSchema.parse(leave).timeZone).toBe('Indian/Antananarivo');
+    expect(LeaveRequestSchema.safeParse({ ...leave, status: 'deleted' }).success).toBe(false);
+  });
+
+  it('is approved or refused, with a note for the member', () => {
+    expect(
+      DecideLeaveRequestBodySchema.parse({ decision: 'refuse', note: 'Trop de monde absent' }).note,
+    ).toBe('Trop de monde absent');
+    expect(DecideLeaveRequestBodySchema.safeParse({ decision: 'cancel' }).success).toBe(false);
+  });
+});
+
+describe('swaps (ADR 0031)', () => {
+  const offer = { id: SWAP, shiftId: shift.id, targetMemberId: COLLEAGUE, targetShiftId: null, message: '' };
+
+  it('gives a shift, or exchanges it for one of the colleague’s', () => {
+    expect(CreateShiftSwapRequestBodySchema.parse(offer).message).toBe(null);
+    const exchange = { ...offer, targetShiftId: '0199f2a0-0000-7000-8000-0000000000f2', message: 'Merci !' };
+    expect(CreateShiftSwapRequestBodySchema.parse(exchange).targetShiftId).toBe(exchange.targetShiftId);
+    expect(CreateShiftSwapRequestBodySchema.safeParse({ ...offer, targetShiftId: undefined }).success).toBe(
+      false,
+    );
+  });
+
+  it('is accepted or declined by the colleague, nothing else', () => {
+    expect(AnswerShiftSwapRequestBodySchema.safeParse({ answer: 'accept' }).success).toBe(true);
+    expect(AnswerShiftSwapRequestBodySchema.safeParse({ answer: 'approve' }).success).toBe(false);
+  });
+
+  it('names a colleague by display name and colour only, with the shifts an exchange could give back', () => {
+    const candidates = SwapCandidatesSchema.parse({
+      candidates: [
+        {
+          member: { id: COLLEAGUE, displayName: 'Basile', color: null, commissionBasisPoints: 1250 },
+          shifts: [
+            { ...shift, id: '0199f2a0-0000-7000-8000-0000000000f2', memberId: COLLEAGUE, stoppedAt: null },
+          ],
+        },
+      ],
+      accounts: [],
+    });
+    expect(Object.keys(candidates.candidates[0]?.member ?? {})).toEqual(['id', 'displayName', 'color']);
+  });
+
+  it('lists the swaps with the shifts they name, as they are now', () => {
+    const list = ShiftSwapListSchema.parse({
+      swapRequests: [
+        {
+          ...offer,
+          requesterId: MEMBER,
+          message: null,
+          status: 'proposed',
+          resolvedAt: null,
+          createdAt: '2026-10-27T20:00:00Z',
+        },
+      ],
+      shifts: [{ ...shift, stoppedAt: null }],
+      accounts: [],
+      members: [],
+    });
+    expect(list.swapRequests[0]?.status).toBe('proposed');
   });
 });
