@@ -143,7 +143,7 @@ function composer(
   script: Script = {},
   sight?: MediaSight,
   limits?: FanLimits,
-  offer: Pick<DraftComposerDeps, 'offerLimits' | 'lastOfferAt'> = {},
+  offer: Pick<DraftComposerDeps, 'offerLimits' | 'lastOfferAt' | 'sexualizationLimits'> = {},
 ) {
   const traces: unknown[] = [];
   const seen: Seen = { voiceCalls: 0, traces, brainInputs: [], dropped: [], voiceInputs: [] };
@@ -507,6 +507,7 @@ function limitsOf(
   options: { readonly failWrite?: boolean; readonly failRead?: boolean } = {},
 ) {
   const protections: { fanId: string; protection: Protection; correlationId: string }[] = [];
+  const confirmed: string[] = [];
   const limits: FanLimits = {
     flags: () => (options.failRead === true ? Promise.reject(new Error('down')) : Promise.resolve(flags)),
     protect: (_creatorId, fanId, protection, correlationId) => {
@@ -514,8 +515,13 @@ function limitsOf(
       protections.push({ fanId, protection, correlationId });
       return Promise.resolve();
     },
+    confirmAge: (_creatorId, fanId) => {
+      if (options.failWrite === true) return Promise.reject(new Error('down'));
+      confirmed.push(fanId);
+      return Promise.resolve();
+    },
   };
-  return { limits, protections };
+  return { limits, protections, confirmed };
 }
 
 describe('createDraftComposer, his limits (P3-02)', () => {
@@ -671,6 +677,7 @@ describe('createDraftComposer, the offer policy', () => {
   };
   const ADULT: FanFlags = { ageConfirmedAt: '2026-10-01T09:00:00Z' };
   const policy = (lastOfferAt: Date | null) => ({
+    sexualizationLimits: { initiateAfterHours: 0, minHoursBeforeFollowing: 0 },
     offerLimits: { cooldownHours: 10 },
     lastOfferAt: () => Promise.resolve(lastOfferAt),
   });
@@ -732,5 +739,92 @@ describe('createDraftComposer, the offer policy', () => {
       expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
       expect(written(seen)?.action).toBe('reply');
     }
+  });
+});
+
+describe('createDraftComposer, the sexualization cursor (P3-09)', () => {
+  const HOT: Brief = { ...BRIEF, intent: 'sexting', sentiment: 'aroused', replyBrief: 'Le suivre.' };
+  const ADULT: FanFlags = { ageConfirmedAt: '2026-10-01T09:00:00Z' };
+  const cursor = { sexualizationLimits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2 } };
+  // He wrote first a day ago: past the KYC minimum, before the delay for her to open it herself.
+  const dayOld: AgentComposeInput = {
+    ...INPUT,
+    fan: { ...INPUT.fan, firstMessageAt: new Date('2026-10-16T10:00:00Z') },
+  };
+  const written = (seen: Seen) => seen.voiceInputs?.[0]?.brief;
+
+  it('follows a confirmed adult past the KYC minimum', async () => {
+    const { draftComposer, seen } = composer({ brief: HOT }, undefined, limitsOf(ADULT).limits, cursor);
+    await draftComposer.compose(dayOld);
+    expect(written(seen)).toMatchObject({ replyBrief: 'Le suivre.' });
+  });
+
+  it('steers him back when he goes there too early, or before his age is confirmed', async () => {
+    const early = composer({ brief: HOT }, undefined, limitsOf(ADULT).limits, cursor);
+    await early.draftComposer.compose(INPUT);
+    expect(written(early.seen)?.replyBrief).toContain('ralentit');
+    const unknown = composer({ brief: HOT }, undefined, limitsOf({}).limits, cursor);
+    await unknown.draftComposer.compose(dayOld);
+    expect(written(unknown.seen)?.replyBrief).toContain('son âge');
+  });
+
+  it('does not open it herself before her delay', async () => {
+    const { draftComposer, seen } = composer({}, undefined, limitsOf(ADULT).limits, cursor);
+    await draftComposer.compose(dayOld);
+    expect(written(seen)?.toneHints).toContain('aucune allusion sexuelle, elle n’ouvre pas ce terrain');
+  });
+
+  it('blocks explicit words while his age is not confirmed', async () => {
+    const explicit = { bubbles: ['J’ai trop envie de te sucer'] };
+    const unknown = composer({ voice: explicit }, undefined, limitsOf({}).limits, cursor);
+    expect(await unknown.draftComposer.compose(dayOld)).toMatchObject({
+      kind: 'held',
+      reason: 'guard_blocked',
+      detail: ['explicit_before_age'],
+    });
+    const adult = composer({ brief: HOT, voice: explicit }, undefined, limitsOf(ADULT).limits, cursor);
+    expect((await adult.draftComposer.compose(dayOld)).kind).toBe('draft');
+  });
+
+  it('confirms his age when he states an adult one himself, never on the brain’s word alone', async () => {
+    const said = (text: string): AgentComposeInput => ({
+      ...dayOld,
+      history: [{ direction: 'inbound', text, at: new Date('2026-10-17T09:59:00Z') }],
+    });
+    const AGE: Brief = {
+      ...BRIEF,
+      factsProposed: [
+        { category: 'identity', key: 'age', value: '31 ans', kind: 'declared', confidence: 0.95 },
+      ],
+    };
+    const yes = limitsOf({});
+    await composer({ brief: AGE }, undefined, yes.limits, cursor).draftComposer.compose(said('J’ai 31 ans'));
+    expect(yes.confirmed).toEqual(['fan-1']);
+    const brainOnly = limitsOf({});
+    await composer({ brief: AGE }, undefined, brainOnly.limits, cursor).draftComposer.compose(
+      said('Et toi ?'),
+    );
+    expect(brainOnly.confirmed).toEqual([]);
+    const already = limitsOf(ADULT);
+    await composer({ brief: AGE }, undefined, already.limits, cursor).draftComposer.compose(
+      said('J’ai 31 ans'),
+    );
+    expect(already.confirmed).toEqual([]);
+  });
+
+  it('never confirms an age when he may be a minor', async () => {
+    const minor: Brief = {
+      ...BRIEF,
+      risks: ['minor_suspected'],
+      factsProposed: [{ category: 'identity', key: 'age', value: '19', kind: 'declared', confidence: 0.9 }],
+    };
+    const limits = limitsOf({});
+    await composer({ brief: minor }, undefined, limits.limits, cursor).draftComposer.compose({
+      ...dayOld,
+      history: [
+        { direction: 'inbound', text: 'J’ai 19 ans enfin bientôt', at: new Date('2026-10-17T09:59:00Z') },
+      ],
+    });
+    expect(limits.confirmed).toEqual([]);
   });
 });

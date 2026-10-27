@@ -125,6 +125,7 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
         },
         limits: persona.offerLimits,
       },
+      sexualization: { limits: persona.sexualizationLimits, ageConfirmed: situation.age_confirmed },
       skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
     },
   );

@@ -123,6 +123,7 @@ async function server(
       personaSheet: 'fiche',
       forbiddenTerms: [],
       offerLimits: { cooldownHours: 10 },
+      sexualizationLimits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2 },
       splitMessages: true,
       petNames: [],
     },

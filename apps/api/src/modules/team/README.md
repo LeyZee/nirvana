@@ -7,6 +7,7 @@
 **Tables possédées.** `team_members`, `team_member_notes`, `commission_presets`, `member_commission_rates`. Toutes passent par `withMember` : la base décide de ce que lit chaque scope (`owner`, `agency` pour un manager `active`, `self` pour les autres). Hors RLS, et dans la même transaction que la fiche : il écrit dans `user` le compte d'un nouveau membre (sans mot de passe, rôle `operator`), son nom et ses créatrices ; il lit `account` pour savoir si le mot de passe est choisi ; il supprime les lignes de `session` d'un membre qui part. Ces tables restent celles de Better Auth (`auth.ts`).
 
 **Règles propres** (`domain/members.ts`, testées) :
+
 - un taux ou un préréglage commence aujourd'hui au plus tôt, dans le fuseau de l'agence (Europe/Paris tant que l'agence n'a pas son réglage), sauf le premier taux d'un membre, qui commence le jour de son arrivée ;
 - un taux n'est jamais modifié : un nouveau taux est une nouvelle ligne, une par membre et par jour ;
 - seul un manager a une part du net de l'équipe ;
@@ -14,6 +15,7 @@
 - les notes internes et les préréglages se lisent par le propriétaire et les managers actifs, jamais par le membre dont parle la note : refusé (403) plutôt qu'une liste vide.
 
 **Routes** (`routes(requireRole)`, montées sous `/v1`, contrats `packages/contracts/src/team-members.ts`) :
+
 - lecture pour le propriétaire et les comptes de l'équipe, jamais pour une créatrice : `GET /team/members`, `GET /team/members/:memberId`, `GET /team/members/:memberId/commission`, `GET /team/commission-presets`, `GET /team/members/:memberId/notes` ;
 - écriture par le propriétaire seul : `POST /team/members`, `PATCH /team/members/:memberId`, `PUT /team/members/:memberId/status`, `POST /team/members/:memberId/commission`, `POST /team/commission-presets` ;
 - notes : `POST /team/members/:memberId/notes` par le propriétaire et les managers actifs.

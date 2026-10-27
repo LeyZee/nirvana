@@ -5,6 +5,7 @@
 **Peut dépendre de.** agent, packages/llm
 
 **Règles propres.**
+
 - Une session par utilisateur, en mémoire : un redémarrage la vide.
 - Les notes vont au magasin d'`agent`, en JSONL hors dépôt (`NIRVANA_TRAINING_DIR`), tant qu'il n'y a pas de table. Le taux est commun à tous, puisqu'il mesure le bot.
 - Les libellés des gardes, des pièges et des raisons sont écrits ici, en français : l'écran les affiche tels quels.

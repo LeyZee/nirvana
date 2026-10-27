@@ -43,6 +43,9 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Note du chatteur | `operator_note` | Ce qu'un chatteur veut qu'elle retienne d'un fan, laissé en rendant la main ; gardé comme un fait de cette catégorie, jamais proposé par un modèle. |
 | Résumé fan | `fan_summary` | Résumé opérationnel régénéré. |
 | Slot KYC | `kyc_slot` | Une information qu'on cherche à apprendre : une ligne du canevas de notes de Reveal (Prénom, Localisation, Âge, Métier, Passions, Envies, Situation), liste fermée `KycSlotSchema`. |
+| Curseur de sexualisation | `sexualizationDecision` | La règle de code qui dit si elle peut suivre un fan qui sexualise ou l'ouvrir elle-même : délais de la persona (`strategies.sexualization.initiate_after_hours`, `strategies.kyc.min_hours_before_following`) et âge confirmé. |
+| Recadrage | `steer_back` | Quand il va trop vite (trop tôt ou âge non confirmé), elle ralentit dans sa voix, sans rien d'explicite ni de reproche, et revient sur lui. |
+| Âge déclaré | `declaredAdultAge` | Un âge de 18 ans ou plus qu'il écrit lui-même, sans signe de mineur : il confirme son âge (`ageConfirmedAt`, auteur `system`, Charles 27/10). |
 | Drapeau du fan | `fan_flag` | Une limite du fan (`fans.flags`, `FanFlagsSchema`) : âge confirmé, ventes gelées et leur raison, plafond de dépense, fragile, pas d'explicite, ne plus écrire. Lue par la politique avant toute offre, posée par la politique ou un humain, jamais par un modèle seul. |
 | Persona | `persona` | La fiche versionnée de la créatrice, calquée sur la fiche OnlyChat (détails, infos en plus, comportement, stratégies, relances, notifications), plus ses limites. |
 | Version de persona | `persona_version` | Un état enregistré de la persona d'une créatrice. Une seule est active, celle avec laquelle l'agent écrit ; le CRM enregistre des versions qui restent inactives tant qu'elles ne sont pas activées (ADR 0010). |

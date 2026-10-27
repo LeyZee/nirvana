@@ -138,6 +138,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     splitMessages: deps.persona.splitMessages,
     voiceExamples: voiceExamples(deps.records),
     offerLimits: deps.persona.offerLimits,
+    sexualizationLimits: deps.persona.sexualizationLimits,
     ...(deps.timeZone !== undefined && { timeZone: deps.timeZone }),
     ...(deps.now !== undefined && { now: deps.now }),
   });

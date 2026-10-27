@@ -33,6 +33,7 @@ export { holdDecision } from './domain/hold';
 export { withoutOrders } from './domain/injection';
 /** @public */
 export { offerDecision, offerSignals, type OfferContext, type OfferLimits } from './domain/policy';
+export type { SexualizationLimits } from './domain/sexualization';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,
@@ -95,6 +96,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
     offerLimits: persona.offerLimits,
+    sexualizationLimits: persona.sexualizationLimits,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),

@@ -95,4 +95,10 @@ describe('fan limits set by the policy, through the fans module', () => {
     await limits.protect(creatorId, frozenFanId, money, 'correlation-3', AT);
     expect((await limits.flags(creatorId, frozenFanId)).salesFrozen?.reason).toBe('operator');
   });
+
+  it('confirms his age when he stated it, once, and keeps a confirmation already there', async () => {
+    await limits.confirmAge(creatorId, frozenFanId, 'correlation-6', AT);
+    await limits.confirmAge(creatorId, frozenFanId, 'correlation-6', new Date('2026-10-18T08:00:00.000Z'));
+    expect((await limits.flags(creatorId, frozenFanId)).ageConfirmedAt).toBe(AT.toISOString());
+  });
 });
