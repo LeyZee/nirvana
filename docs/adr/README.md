@@ -49,3 +49,4 @@ Date : AAAA-MM-JJ
 | 0022 | La persona fait partie de la version qui ouvre l'Automatique | accepted |
 | 0023 | La gestion d'équipe entre dans Nirvana : planning, rapports, paie, routine des créatrices | accepted (§ Navigation remplacé par 0024) |
 | 0024 | Rôles et navigation : chacun ne voit que ce qui le concerne | accepted |
+| 0026 | Serveur MCP de Nirvana : une seconde porte sur les mêmes commandes | accepted |
