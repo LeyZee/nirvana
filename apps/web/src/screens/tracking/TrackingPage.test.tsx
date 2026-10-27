@@ -654,6 +654,37 @@ describe('his desire score in Suivi (P3-12)', () => {
     expect(screen.getByRole('status').textContent).toContain('Il flirte');
   });
 
+  it('ends the curve on the score the gauge shows, after a silence', async () => {
+    serve({
+      ...ONE,
+      conversations: listed,
+      detail: () => reading({ score: 62, band: 'playful' }),
+      desire: {
+        status: 200,
+        body: {
+          points: [
+            { at: '2026-10-17T19:00:00Z', before: null, score: 46, signals: ['intent:flirt'] },
+            { at: '2026-10-17T20:00:00Z', before: 46, score: 78, signals: ['intent:sexting'] },
+          ],
+        },
+      },
+    });
+    renderPage(OPEN);
+    const sheet = (await screen.findByRole('meter', { name: 'Note de désir' })).closest('details');
+    if (sheet === null) throw new Error('no desire sheet');
+    sheet.open = true;
+    fireEvent(sheet, new Event('toggle'));
+    const chart = await screen.findByLabelText(/Note de désir au fil de ses messages/u);
+    fireEvent.focus(chart);
+    const tip = await screen.findByRole('status');
+    expect(tip.textContent).toContain('Maintenant');
+    expect(tip.textContent).toContain('−16');
+    expect(tip.textContent).toContain('Retombée depuis son dernier message');
+    fireEvent.keyDown(chart, { key: 'ArrowLeft' });
+    expect(screen.getByRole('status').textContent).toContain('+32');
+    expect(screen.getByRole('status').textContent).toContain('Sexto');
+  });
+
   it('says when there is not enough for a curve yet', async () => {
     serve({
       ...ONE,

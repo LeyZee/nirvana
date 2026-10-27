@@ -77,7 +77,7 @@ export function DesireSheet({
         ) : query.data.length < 2 ? (
           <p className="tr-desire__empty">Pas encore assez de messages pour une courbe.</p>
         ) : (
-          <DesireChart points={query.data} />
+          <DesireChart points={query.data} now={desire.score} />
         )}
       </div>
     </details>
@@ -92,8 +92,19 @@ const TIP_ROOM = 72;
 /** Arrow keys walk the points, as the pointer does. */
 const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowLeft: -1 };
 
-/** His score message after message, in `data-1` (the neon is the urgencies' light), from 0 to 100. */
-function DesireChart({ points }: { points: readonly DesirePoint[] }): JSX.Element {
+/** What the tip says of a point: when, what moved, and why. */
+interface Reading {
+  readonly when: string;
+  readonly movement: string;
+  readonly why: string;
+}
+
+/**
+ * His score message after message, in `data-1` (the neon is the urgencies' light), from 0 to 100. The points are the
+ * scores recorded at his messages; `now` is the score the gauge shows, cooled since. When they differ, a last dashed
+ * point « Maintenant » joins them, so that the curve never ends on another score than the gauge.
+ */
+function DesireChart({ points, now }: { points: readonly DesirePoint[]; now: number }): JSX.Element {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -116,17 +127,37 @@ function DesireChart({ points }: { points: readonly DesirePoint[] }): JSX.Elemen
   const plotWidth = Math.max(0, width - CHART.left - CHART.right);
   const base = height - CHART.bottom;
   const frame = { width: plotWidth, height, padTop: CHART.top, padBottom: CHART.bottom };
-  const at = chartPoints(
-    points.map((p) => p.score),
-    frame,
-    { min: 0, max: 100 },
-  );
+  const recorded = points.at(-1)?.score ?? now;
+  const cooled = now !== recorded;
+  const at = chartPoints([...points.map((p) => p.score), ...(cooled ? [now] : [])], frame, {
+    min: 0,
+    max: 100,
+  });
+  const scored = cooled ? at.slice(0, -1) : at;
   const y = (value: number): number => base - (value / 100) * (base - CHART.top);
-  const last = points.length - 1;
-  const point = hover === null ? undefined : points[hover];
+  const last = at.length - 1;
   const dot = hover === null ? undefined : at[hover];
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const today = dayOf(new Date(), zone);
+  const readingOf = (index: number): Reading | undefined => {
+    const point = points[index];
+    if (point === undefined) {
+      return index === points.length && cooled
+        ? {
+            when: 'Maintenant',
+            movement: movementOf({ before: recorded, score: now }),
+            why: now < recorded ? 'Retombée depuis son dernier message' : 'Depuis son dernier message',
+          }
+        : undefined;
+    }
+    const day = dayOf(point.at, zone);
+    return {
+      when: day === today ? clockAt(point.at, zone) : `${shortDay(day)} · ${clockAt(point.at, zone)}`,
+      movement: movementOf(point),
+      why: signalsLine(point.signals),
+    };
+  };
+  const reading = hover === null ? undefined : readingOf(hover);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const step = STEPS[event.key];
@@ -143,7 +174,7 @@ function DesireChart({ points }: { points: readonly DesirePoint[] }): JSX.Elemen
       aria-label="Note de désir au fil de ses messages. Les flèches passent d’un point à l’autre."
       onPointerMove={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
-        setHover(nearestIndex(event.clientX - rect.left - CHART.left, points.length, plotWidth));
+        setHover(nearestIndex(event.clientX - rect.left - CHART.left, at.length, plotWidth));
       }}
       onPointerLeave={() => {
         setHover(null);
@@ -190,7 +221,8 @@ function DesireChart({ points }: { points: readonly DesirePoint[] }): JSX.Elemen
             </g>
           ))}
           <g transform={`translate(${String(CHART.left)},0)`}>
-            <path className="nv-chart__line" pathLength={1} d={linePath(at)} />
+            <path className="nv-chart__line" pathLength={1} d={linePath(scored)} />
+            {cooled ? <path className="tr-desire__cooling" d={linePath(at.slice(-2))} /> : null}
             {dot === undefined ? null : (
               <>
                 <line className="nv-chart__cursor" x1={dot.x} x2={dot.x} y1={CHART.top} y2={base} />
@@ -200,7 +232,7 @@ function DesireChart({ points }: { points: readonly DesirePoint[] }): JSX.Elemen
           </g>
         </svg>
       )}
-      {point === undefined || dot === undefined ? null : (
+      {reading === undefined || dot === undefined ? null : (
         <div
           className={`nv-chart__tip tr-desire__tip${dot.y < TIP_ROOM ? ' is-below' : ''}`}
           role="status"
@@ -209,13 +241,9 @@ function DesireChart({ points }: { points: readonly DesirePoint[] }): JSX.Elemen
             '--nv-tip-y': `${String(dot.y)}px`,
           }}
         >
-          <span className="nv-chart__tip-l">
-            {dayOf(point.at, zone) === today
-              ? clockAt(point.at, zone)
-              : `${shortDay(dayOf(point.at, zone))} · ${clockAt(point.at, zone)}`}
-          </span>
-          <span className="nv-chart__tip-v">{movementOf(point)}</span>
-          <span className="nv-chart__tip-l tr-desire__signals">{signalsLine(point.signals)}</span>
+          <span className="nv-chart__tip-l">{reading.when}</span>
+          <span className="nv-chart__tip-v">{reading.movement}</span>
+          <span className="nv-chart__tip-l tr-desire__signals">{reading.why}</span>
         </div>
       )}
     </div>
