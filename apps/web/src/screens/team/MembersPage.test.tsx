@@ -100,12 +100,12 @@ function serve(
 }
 
 /** The page as the app mounts it: the tab and the open member live in the address. */
-function renderPage(at = '/equipe', canManage = true, viewerId = id(99)): AnyRouter {
+function renderPage(at = '/equipe/membres', canManage = true, viewerId = id(99)): AnyRouter {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute();
   const team = createRoute({
     getParentRoute: () => root,
-    path: '/equipe',
+    path: '/equipe/membres',
     validateSearch: parseTeamSearch,
     component: function Team() {
       const { onglet, membre } = team.useSearch();
@@ -147,6 +147,15 @@ beforeEach(() => {
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   }));
+  // Équipe's tabs watch their own width.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
 });
 
 afterEach(() => {
@@ -214,7 +223,7 @@ describe('Équipe › Membres', () => {
         body: { id: id(90), body: 'À suivre', authorName: 'Nora', createdAt: '2026-10-27T10:00:00.000Z' },
       }),
     });
-    renderPage(`/equipe?membre=${THEO.id}`);
+    renderPage(`/equipe/membres?membre=${THEO.id}`);
     fireEvent.change(await screen.findByLabelText('Nouvelle note'), { target: { value: '  À suivre  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la note' }));
     await waitFor(() => {
@@ -224,7 +233,7 @@ describe('Équipe › Membres', () => {
 
   it('tells a manager whose access changed, not that the server is down', async () => {
     serve({ post: () => ({ status: 403, body: apiError('role_forbidden') }) });
-    renderPage(`/equipe?membre=${THEO.id}`);
+    renderPage(`/equipe/membres?membre=${THEO.id}`);
     fireEvent.change(await screen.findByLabelText('Nouvelle note'), { target: { value: 'À suivre' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la note' }));
     expect(await screen.findByText('Ton accès à l’équipe a changé. Recharge la page.')).toBeTruthy();
@@ -232,7 +241,7 @@ describe('Équipe › Membres', () => {
 
   it('lets a manager read the team, never add a member nor make a link', async () => {
     serve();
-    renderPage(`/equipe?membre=${THEO.id}`, false);
+    renderPage(`/equipe/membres?membre=${THEO.id}`, false);
     await screen.findByRole('region', { name: 'Théo' });
     expect(screen.queryByRole('button', { name: 'Ajouter un membre' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Lien de nouveau mot de passe' })).toBeNull();
@@ -373,7 +382,7 @@ describe('a link from the sheet', () => {
       },
     });
     confirmPassword.mockResolvedValue('ok');
-    renderPage(`/equipe?membre=${THEO.id}`);
+    renderPage(`/equipe/membres?membre=${THEO.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Lien de nouveau mot de passe' }));
     const password = await screen.findByLabelText('Ton mot de passe');
     fireEvent.change(password, { target: { value: 'mot-de-passe-invente' } });
@@ -397,7 +406,7 @@ describe('a link from the sheet', () => {
         body: { members: [{ ...THEO, invitationExpiresAt: until }, BASILE, JULES, INES] },
       },
     });
-    renderPage(`/equipe?membre=${THEO.id}`);
+    renderPage(`/equipe/membres?membre=${THEO.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Lien de nouveau mot de passe' }));
     // The list re-read says a link is out; the one just made is still there to send.
     expect(await screen.findByText(/Un lien pour en choisir un nouveau lui a été envoyé/u)).toBeDefined();
@@ -414,7 +423,7 @@ describe('a link from the sheet', () => {
       invitationExpiresAt: until,
     });
     serve({ members: { status: 200, body: { members: [reset, invited] } } });
-    renderPage(`/equipe?membre=${invited.id}`);
+    renderPage(`/equipe/membres?membre=${invited.id}`);
     const list = await screen.findByRole('list', { name: 'Chatteurs' });
     const invitedOf = (name: string): boolean =>
       within(list)
@@ -428,7 +437,7 @@ describe('a link from the sheet', () => {
 
   it('shows a manager his own record without the notes about him', async () => {
     serve();
-    renderPage(`/equipe?onglet=managers&membre=${INES.id}`, false, INES.userId);
+    renderPage(`/equipe/membres?onglet=managers&membre=${INES.id}`, false, INES.userId);
     expect(await screen.findByRole('region', { name: 'Inès' })).toBeDefined();
     expect(screen.queryByRole('region', { name: 'Notes internes' })).toBeNull();
   });
@@ -443,7 +452,7 @@ describe('a link from the sheet', () => {
 
   it('says why a member who left gets no link', async () => {
     serve({ post: () => ({ status: 409, body: apiError('member_left_conflict') }) });
-    renderPage(`/equipe?membre=${BASILE.id}`);
+    renderPage(`/equipe/membres?membre=${BASILE.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Lien de nouveau mot de passe' }));
     expect(await screen.findByText('Ce membre est parti : sa fiche ne change plus.')).toBeDefined();
   });

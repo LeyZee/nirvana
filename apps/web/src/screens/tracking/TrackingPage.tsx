@@ -1,7 +1,7 @@
 import type { ConversationSummary, DashboardTodo } from '@nirvana/contracts';
 import { useQueries } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
 
 import { Reader } from './Reader';
 import { fetchConversations } from './api';
@@ -25,6 +25,7 @@ export function TrackingPage({
   onSelect,
   canDecide,
   canAddCreator,
+  offShift,
 }: {
   /** The conversation open in the reader (`/suivi?conversation=<id>`), or null for the list alone. */
   selected: string | null;
@@ -33,6 +34,11 @@ export function TrackingPage({
   canDecide: boolean;
   /** Créatrices is in the account's rail: the owner adds a creator from there; a team member waits for his. */
   canAddCreator: boolean;
+  /**
+   * A chatter off shift (EQ-13): said under the title, in place of the empty list. Told whether a conversation is still
+   * listed: off shift, the server only lists the one whose handover he took, until he gives it back (ADR 0025).
+   */
+  offShift?: ((holdsHandover: boolean) => ReactNode) | undefined;
 }): JSX.Element {
   const creatorsQuery = useCreators();
   const creators = creatorsQuery.data ?? [];
@@ -82,6 +88,7 @@ export function TrackingPage({
             : `Ce qui attend un humain, puis les conversations et qui a la main. ${MODE_MEANINGS[mode]}`
         }
       />
+      {offShift?.(lines.length > 0)}
       {creatorsQuery.isError || (failed.length > 0 && lines.length === 0) ? (
         <Notice
           title="Le serveur ne répond pas"
@@ -108,7 +115,7 @@ export function TrackingPage({
             Aller à Créatrices
           </Link>
         </Notice>
-      ) : creators.length === 0 ? (
+      ) : creators.length === 0 && offShift !== undefined ? null : creators.length === 0 ? (
         <Notice
           title="Rien pour toi pour l’instant"
           text="Les conversations des créatrices qui te sont confiées arrivent ici."

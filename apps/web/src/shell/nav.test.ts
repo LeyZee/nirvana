@@ -82,7 +82,7 @@ describe('railOf, with the screens of today', () => {
     // An operator without a team row keeps today's rail: no Équipe.
     expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Créatrices', 'Réglages']);
     expect(labels(manager)).toEqual(['Dashboard', 'Suivi', 'Équipe']);
-    expect(labels(chatter)).toEqual(['Suivi']);
+    expect(labels(chatter)).toEqual(['Aujourd’hui', 'Suivi', 'Planning']);
     // A creator never sees a conversation (ADR 0023): no Suivi.
     expect(labels(creator)).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
   });
@@ -103,7 +103,7 @@ describe('railOf, with the screens of today', () => {
   it('lands each account on its first tab', () => {
     expect(railOf(owner).home).toBe('/');
     expect(railOf(manager).home).toBe('/');
-    expect(railOf(chatter).home).toBe('/suivi');
+    expect(railOf(chatter).home).toBe('/aujourdhui');
   });
 });
 
@@ -118,7 +118,8 @@ describe('sectionOf and canOpen', () => {
   it('lets a chatter open Suivi, and nothing that is not his', () => {
     const rail = railOf(chatter);
     expect(canOpen(rail, '/suivi')).toBe(true);
-    for (const section of ['/', '/entrainer', '/creatrices', '/reglages'] as const) {
+    expect(canOpen(rail, '/planning')).toBe(true);
+    for (const section of ['/', '/entrainer', '/equipe', '/creatrices', '/reglages'] as const) {
       expect(canOpen(rail, section)).toBe(false);
     }
     expect(canOpen(railOf(owner), '/reglages')).toBe(true);

@@ -9,6 +9,7 @@ import {
 
 import { CreatorsPage } from './creators/CreatorsPage';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { MyPlanningPage } from './screens/planning/MyPlanningPage';
 import { AppearancePage } from './screens/settings/AppearancePage';
 import {
   DevicesPage,
@@ -18,7 +19,10 @@ import {
   TelegramPage,
 } from './screens/settings/SettingsLayout';
 import { MembersPage } from './screens/team/MembersPage';
+import { PlanningPage } from './screens/team/PlanningPage';
 import { parseTeamSearch } from './screens/team/model';
+import { TodayPage } from './screens/today/TodayPage';
+import { ChatterTrackingPage } from './screens/tracking/ChatterTrackingPage';
 import { TrackingPage } from './screens/tracking/TrackingPage';
 import { parseTrackingSearch } from './screens/tracking/view';
 import { CorrectionsPage } from './screens/train/CorrectionsPage';
@@ -71,24 +75,42 @@ const tracking = createRoute({
     const { conversation } = tracking.useSearch();
     const navigate = tracking.useNavigate();
     const { user } = rootRoute.useRouteContext();
-    return (
-      <TrackingPage
-        selected={conversation ?? null}
-        onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
-        canDecide={user.role !== 'creator'}
-        canAddCreator={canOpen(railOf(user), '/creatrices')}
-      />
-    );
+    const rail = railOf(user);
+    const props = {
+      selected: conversation ?? null,
+      onSelect: (id: string | null) => void navigate({ search: id === null ? {} : { conversation: id } }),
+      canDecide: user.role !== 'creator',
+      canAddCreator: canOpen(rail, '/creatrices'),
+    };
+    // A chatter reads Suivi within his shift (EQ-13): outside it, the page says so.
+    return rail.kind === 'chatter' ? <ChatterTrackingPage {...props} /> : <TrackingPage {...props} />;
   },
 });
 
-const team = createRoute({
+const today = createRoute({ getParentRoute: () => rootRoute, path: '/aujourdhui', component: TodayPage });
+const myPlanning = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/equipe',
+  path: '/planning',
+  component: MyPlanningPage,
+});
+
+const team = createRoute({ getParentRoute: () => rootRoute, path: '/equipe' });
+const teamIndex = createRoute({
+  getParentRoute: () => team,
+  path: '/',
+  beforeLoad: () => {
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+    throw redirect({ to: '/equipe/planning', replace: true });
+  },
+});
+const teamPlanning = createRoute({ getParentRoute: () => team, path: '/planning', component: PlanningPage });
+const teamMembers = createRoute({
+  getParentRoute: () => team,
+  path: '/membres',
   validateSearch: parseTeamSearch,
-  component: function Team() {
-    const { onglet, membre } = team.useSearch();
-    const navigate = team.useNavigate();
+  component: function Members() {
+    const { onglet, membre } = teamMembers.useSearch();
+    const navigate = teamMembers.useNavigate();
     const { user } = rootRoute.useRouteContext();
     return (
       <MembersPage
@@ -164,7 +186,9 @@ const routeTree = rootRoute.addChildren([
   creators,
   train.addChildren([trainIndex, playground, corrections, tests]),
   tracking,
-  team,
+  today,
+  myPlanning,
+  team.addChildren([teamIndex, teamPlanning, teamMembers]),
   settings.addChildren([settingsIndex, aiModels, telegram, devices, appearance, agentMode]),
 ]);
 
