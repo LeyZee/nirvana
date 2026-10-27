@@ -194,3 +194,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | Évaluations : 34 scénarios et exécuteur sur le vrai chemin de l’agent | done | `log/2026-10-27-evals-runner.md` |
 | 2026-10-27 | Migration 0017 : table du limiteur partagé (OPS-01) | done | `log/2026-10-27-rate-limit-table.md` |
 | 2026-10-27 | OPS-01 Mise en production, lot 1 : images Docker (Opus) | in_progress | `log/2026-10-27-ops-01-images.md` |
+| 2026-10-27 | Pièges : batterie d’injection (langues, encodages, médias, notes, messages coupés) | done | `log/2026-10-27-injection-battery.md` |

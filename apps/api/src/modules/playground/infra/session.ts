@@ -6,6 +6,7 @@ import {
   checkVoiceOutput,
   composeTurn,
   withExamples,
+  withoutOrders,
   isBlocked,
   type GuardSettings,
   type GuardViolation,
@@ -194,7 +195,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         { history: [...history], fanText: text, media, fanNotes: moment.fanNotes, situation },
       );
       // In-memory fan notes until the fans module stores facts (P3-02).
-      for (const fact of composed.brief?.factsProposed ?? [])
+      for (const fact of withoutOrders(composed.brief?.factsProposed ?? []))
         fanNotes.push(`${fact.category} / ${fact.key} : ${fact.value} (${fact.kind})`);
       if (!composed.isBlocked) history.push({ from: 'creator', text: composed.bubbles.join('\n') });
 
