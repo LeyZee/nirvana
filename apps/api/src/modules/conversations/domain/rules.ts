@@ -64,7 +64,7 @@ export function followUpIdempotencyKey(conversationId: string, anchor: Date, ste
 }
 
 /** How far ahead the engine may put a follow-up off (her night): beyond, it is cancelled. */
-export const FOLLOW_UP_RETRY_MAX_HOURS = 24;
+const FOLLOW_UP_RETRY_MAX_HOURS = 24;
 
 /** The time a follow-up put off goes out again, or `null` when the engine asked for none or for too far ahead. */
 export function followUpRetry(retryAt: Date | undefined, now: Date): Date | null {
