@@ -36,6 +36,11 @@ const chatter: Me = {
 beforeEach(() => {
   // The router restores the scroll on each navigation; jsdom has no layout to scroll.
   vi.stubGlobal('scrollTo', vi.fn());
+  // jsdom has no matchMedia: a reduced motion, so the lens and the icons do not play.
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({ matches: true })),
+  );
   // The screens stay on their loading state: only the shell is under test.
   vi.stubGlobal(
     'fetch',
