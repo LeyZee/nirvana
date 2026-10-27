@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { REAUTHENTICATION_ERROR_CODE } from './auth';
 import { CountryCodeSchema } from './team';
 
 /**
@@ -21,7 +22,11 @@ export const PASSWORD_MAX_LENGTH = 128;
 /** At least 128 random bits, base64url: what the page reads after `#t=` and posts back. */
 export const InvitationLinkTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22,128}$/);
 
-/** `POST /v1/team/members/:memberId/invitation-link` (owner): a new link cancels the one before; valid 72 h. */
+/**
+ * `POST /v1/team/members/:memberId/invitation-link` (owner): a new link cancels the one before; valid 72 h. It needs a
+ * recent sign-in (`requireRecentLogin`, otherwise 403 `reauthentication_forbidden`: the page asks for the password and
+ * retries), and refuses a member who left (403 `member_forbidden`).
+ */
 export const CreateInvitationLinkBodySchema = z.object({ purpose: InvitationLinkPurposeSchema });
 export const InvitationLinkCreatedSchema = z.object({
   /** Built by the server, the token in its fragment: `/bienvenue#t=…` or `/nouveau-mot-de-passe#t=…`. */
@@ -47,7 +52,8 @@ export type InvitationLinkPreview = z.infer<typeof InvitationLinkPreviewSchema>;
 
 /**
  * `POST /v1/invitation-links/redeem`: uses the link once (an atomic update), sets the password, ends the member's other
- * sessions, opens his own and answers `MeSchema`. A refused password answers `password_invalid`.
+ * sessions, opens his own and answers `MeSchema`. A refused password answers 400 `password_invalid` with
+ * `details.reason` (`PasswordInvalidReasonSchema`) and leaves the link unused: the member tries again.
  */
 export const RedeemInvitationLinkBodySchema = z.object({
   token: InvitationLinkTokenSchema,
@@ -55,5 +61,15 @@ export const RedeemInvitationLinkBodySchema = z.object({
 });
 export type RedeemInvitationLinkBody = z.infer<typeof RedeemInvitationLinkBodySchema>;
 
+/** `details.reason` of `password_invalid`: too short, too long, or refused by Better Auth. */
+export const PasswordInvalidReasonSchema = z.enum(['too_short', 'too_long', 'refused']);
+export type PasswordInvalidReason = z.infer<typeof PasswordInvalidReasonSchema>;
+
 /** The error codes of these routes, besides `rate_limited` from the limiter of the redeem and inspect routes. */
-export const INVITATION_LINK_ERROR_CODES = ['invitation_link_not_found', 'password_invalid'] as const;
+export const INVITATION_LINK_ERROR_CODES = [
+  'invitation_link_not_found',
+  'password_invalid',
+  'member_forbidden',
+  REAUTHENTICATION_ERROR_CODE,
+] as const;
+export type InvitationLinkErrorCode = (typeof INVITATION_LINK_ERROR_CODES)[number];

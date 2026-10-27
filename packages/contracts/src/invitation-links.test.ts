@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { REAUTHENTICATION_ERROR_CODE } from './auth';
 import {
+  INVITATION_LINK_ERROR_CODES,
   InvitationLinkPreviewSchema,
   InvitationLinkTokenSchema,
   PASSWORD_MIN_LENGTH,
+  PasswordInvalidReasonSchema,
   RedeemInvitationLinkBodySchema,
 } from './invitation-links';
 
@@ -32,5 +35,11 @@ describe('invitation links', () => {
       memberId: 'not part of the preview',
     });
     expect(Object.keys(preview).sort()).toEqual(['country', 'displayName', 'email', 'expiresAt', 'purpose']);
+  });
+
+  it('names why a password is refused and what the owner meets when making a link', () => {
+    expect(PasswordInvalidReasonSchema.options).toEqual(['too_short', 'too_long', 'refused']);
+    expect(INVITATION_LINK_ERROR_CODES).toContain(REAUTHENTICATION_ERROR_CODE);
+    expect(INVITATION_LINK_ERROR_CODES).toContain('member_forbidden');
   });
 });

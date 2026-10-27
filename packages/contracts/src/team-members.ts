@@ -88,8 +88,9 @@ export const CommissionChoiceSchema = z.union([
 
 /**
  * `POST /v1/team/members` (owner) → `TeamMemberSchema`: creates the account (no password), the record and the first
- * rate in one transaction. The panel then asks `POST …/:memberId/invitation-link` for the link to share (EQ-10). The
- * time zone the screen offers follows the country, and stays editable.
+ * rate in one transaction; 409 `member_conflict` when an account already has this e-mail. The panel then asks
+ * `POST …/:memberId/invitation-link` for the link to share (EQ-10). The time zone the screen offers follows the
+ * country, and stays editable.
  */
 export const CreateTeamMemberBodySchema = z
   .object({
