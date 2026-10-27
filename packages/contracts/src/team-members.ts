@@ -100,7 +100,7 @@ export const CommissionChoiceSchema = z.union([
 
 /**
  * `POST /v1/team/members` (owner) → `TeamMemberSchema`: creates the account (no password), the record and the first
- * rate in one transaction; 409 `member_conflict` when an account already has this e-mail. The panel then asks
+ * rate, from `joinedOn`, in one transaction; 409 `member_conflict` when an account already has this e-mail. The panel then asks
  * `POST …/:memberId/invitation-link` for the link to share (EQ-10). The time zone the screen offers follows the
  * country, and stays editable.
  */
@@ -150,7 +150,8 @@ export const ChangeTeamMemberStatusBodySchema = z.object({ status: TeamMemberSta
 
 /**
  * `POST /v1/team/members/:memberId/commission` (owner only, the database refuses anyone else): from a day on, never
- * before today. A share of the team's net for a chatter answers `team_share_invalid`.
+ * before today. A share of the team's net for a chatter answers `team_share_invalid`; a second rate from the same day
+ * answers `commission_rate_conflict`, since a rate is never changed.
  */
 export const SetCommissionRateBodySchema = z.object({
   commission: CommissionChoiceSchema,
@@ -180,8 +181,8 @@ export const AddTeamMemberNoteBodySchema = z.object({ body: z.string().trim().mi
  * `member_not_found` 404 ; `member_conflict` 409, an account already has this e-mail ; `member_left_conflict` 409, a
  * member who left is not changed any more (EQ-14) ; `commission_preset_not_found` 404 ; `commission_date_invalid` 400,
  * a rate or a preset that starts before today ; `commission_preset_conflict` 409, this name already has a rate from
- * that day ; `team_share_invalid` 400, a share for a chatter ; `creator_not_found` 404, an unknown creator in
- * `creatorIds`.
+ * that day ; `commission_rate_conflict` 409, this member already has a rate from that day ; `team_share_invalid` 400,
+ * a share for a chatter ; `creator_not_found` 404, an unknown creator in `creatorIds`.
  */
 export const TEAM_MEMBER_ERROR_CODES = [
   'member_not_found',
@@ -189,6 +190,7 @@ export const TEAM_MEMBER_ERROR_CODES = [
   'member_left_conflict',
   'commission_preset_not_found',
   'commission_preset_conflict',
+  'commission_rate_conflict',
   'commission_date_invalid',
   'team_share_invalid',
   'creator_not_found',
