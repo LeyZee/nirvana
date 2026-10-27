@@ -205,8 +205,9 @@ export const EVENT_PAYLOADS = {
     retryAt: z.iso.datetime().exactOptional(),
   }),
   /**
-   * The engine's desire score of the fan changed (P3-12): written with the answer it came with, only when it moved.
-   * The conversation projects the last one; `before` is the score it replaced, `null` for the first.
+   * The engine's desire score of the fan changed (P3-12): written with the result it came with, only when it moved.
+   * The conversation projects the last one; `before` is the stored score cooled down to that moment, `null` for the
+   * first.
    */
   desire_scored: z.object({
     before: DesireScoreSchema.nullable(),

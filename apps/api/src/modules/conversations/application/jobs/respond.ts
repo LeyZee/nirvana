@@ -74,8 +74,9 @@ const lastInboundKey = (conversation: Conversation): number => conversation.last
 const DESIRE_SIGNAL_MAX_LENGTH = 64;
 
 /**
- * Journals the engine's desire score with the result it came with (P3-12), only when it moved: an unchanged score
- * writes nothing, not even its time, so that the projection is the last `desire_scored` and a rebuild finds it exactly.
+ * Journals the engine's desire score with the result it came with (P3-12). The engine gives one only when the score
+ * moved from the stored one cooled down to now: otherwise nothing is written, not even its time, so that it keeps
+ * cooling from its last computation, the projection is the last `desire_scored`, and a rebuild finds it exactly.
  */
 async function recordDesire(
   tx: Transaction,
@@ -84,14 +85,14 @@ async function recordDesire(
   meta: EventMeta,
 ): Promise<Conversation> {
   const desire = result.desire;
-  if (desire === undefined || desire.score === conversation.desireScore) return conversation;
+  if (desire === undefined) return conversation;
   return appendEvent(
     tx,
     conversation,
     {
       type: 'desire_scored',
       payload: {
-        before: conversation.desireScore,
+        before: desire.before,
         score: desire.score,
         signals: desire.signals
           .slice(0, DESIRE_SIGNALS_MAX)

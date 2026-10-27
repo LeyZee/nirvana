@@ -70,14 +70,19 @@ class ScriptedComposer implements DraftComposer {
   }
 }
 
-const scored = (score: number, signals = ['flirt']) => ({ score, signals, weightsVersion: 'w1' });
+const scored = (before: number | null, score: number, signals = ['flirt']) => ({
+  before,
+  score,
+  signals,
+  weightsVersion: 'w1',
+});
 
-const draftWith = (score: number): ComposeResult => ({
+const draftWith = (desire?: ReturnType<typeof scored>): ComposeResult => ({
   kind: 'draft',
   bubbles: ['Coucou toi'],
   softViolations: [],
   costUsd: 0,
-  desire: scored(score),
+  ...(desire !== undefined && { desire }),
 });
 
 /** P3-12: the engine scores the fan's desire with each answer; the worker journals each change and projects it. */
@@ -189,7 +194,7 @@ describe('conversation.respond with a desire score', () => {
   it('journals each change with the answer, writes nothing when the score holds, and rebuilds it exactly', async () => {
     const conversationId = await fanWrites('ds-change');
     clock.advance(MINUTE_MS);
-    composer.results.push(draftWith(45));
+    composer.results.push(draftWith(scored(null, 45)));
     await respond(conversationId);
     const firstAt = clock.now();
     expect(composer.inputs[0]?.desire).toBeUndefined();
@@ -199,12 +204,12 @@ describe('conversation.respond with a desire score', () => {
       desireAt: firstAt,
     });
 
-    // Same score on his next message: nothing written, not even the time, so that it keeps cooling from `firstAt`.
+    // The score did not move from where it cooled: the engine gives none, and nothing is written, not even the time.
     await reject(conversationId);
     clock.advance(10 * MINUTE_MS);
     await fanWrites('ds-change', 'Et toi ?');
     clock.advance(MINUTE_MS);
-    composer.results.push(draftWith(45));
+    composer.results.push(draftWith());
     await respond(conversationId);
     expect(composer.inputs[1]?.desire).toEqual({ score: 45, at: firstAt });
     expect(await row(conversationId)).toMatchObject({ desireScore: 45, desireAt: firstAt });
@@ -218,7 +223,7 @@ describe('conversation.respond with a desire score', () => {
       reason: 'handoff',
       detail: ['sale'],
       costUsd: 0,
-      desire: scored(72, ['asks_content']),
+      desire: scored(40, 72, ['asks_content']),
     });
     await respond(conversationId);
     expect(await row(conversationId)).toMatchObject({
@@ -229,7 +234,7 @@ describe('conversation.respond with a desire score', () => {
     });
     expect(await scoredEvents(conversationId)).toEqual([
       { before: null, score: 45, signals: ['flirt'], weightsVersion: 'w1' },
-      { before: 45, score: 72, signals: ['asks_content'], weightsVersion: 'w1' },
+      { before: 40, score: 72, signals: ['asks_content'], weightsVersion: 'w1' },
     ]);
 
     const live = await row(conversationId);
@@ -244,7 +249,7 @@ describe('conversation.respond with a desire score', () => {
   it('writes no score with a result dropped because he wrote again', async () => {
     const conversationId = await fanWrites('ds-dropped');
     clock.advance(MINUTE_MS);
-    composer.results.push(draftWith(60));
+    composer.results.push(draftWith(scored(null, 60)));
     composer.during = () => fanWrites('ds-dropped', 'Allô ?');
     await respond(conversationId);
     expect(await scoredEvents(conversationId)).toEqual([]);
@@ -255,8 +260,8 @@ describe('conversation.respond with a desire score', () => {
     const conversationId = await fanWrites('ds-bounds');
     clock.advance(MINUTE_MS);
     composer.results.push({
-      ...draftWith(10),
-      desire: scored(10, ['x'.repeat(80), ...Array.from({ length: 25 }, (_, i) => `s${String(i)}`)]),
+      ...draftWith(),
+      desire: scored(null, 10, ['x'.repeat(80), ...Array.from({ length: 25 }, (_, i) => `s${String(i)}`)]),
     });
     await respond(conversationId);
     const [event] = await scoredEvents(conversationId);

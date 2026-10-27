@@ -361,8 +361,12 @@ export interface ComposeInput {
   readonly desire?: { readonly score: number; readonly at: Date };
 }
 
-/** The desire score the engine computed with this result (P3-12); the band is `desireBandOf(score)`. */
+/**
+ * The desire score the engine computed with this result (P3-12), given only when it moved: `before` is the stored
+ * score cooled down to now (`null` before the first), and differs from `score`. The band is `desireBandOf(score)`.
+ */
 interface ComposedDesire {
+  readonly before: number | null;
   readonly score: number;
   /** The closed names of the signals that moved it. */
   readonly signals: readonly string[];
