@@ -80,8 +80,11 @@ export function deferredRespondAt(retryAt: Date | undefined, now: Date): Date | 
     : null;
 }
 
-/** How far ahead the engine may put a follow-up off (her night): beyond, it is cancelled. */
-const FOLLOW_UP_RETRY_MAX_HOURS = 24;
+/**
+ * How far ahead the engine may put a follow-up off (her night, or her next reply slot, P3-14): a week of slots and a
+ * day of margin. Beyond, it is cancelled.
+ */
+const FOLLOW_UP_RETRY_MAX_HOURS = 8 * 24;
 
 /** The time a follow-up put off goes out again, or `null` when the engine asked for none or for too far ahead. */
 export function followUpRetry(retryAt: Date | undefined, now: Date): Date | null {

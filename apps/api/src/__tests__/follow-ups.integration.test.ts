@@ -336,7 +336,7 @@ describe('conversation.follow_up', () => {
     expect(await events(off)).not.toContain('follow_up_scheduled');
   });
 
-  it('puts a follow-up off to the time the engine gives, within a day, and cancels it beyond', async () => {
+  it('puts a follow-up off to the time the engine gives, within eight days, and cancels it beyond', async () => {
     const night = await answered('fu-night');
     const payload = await payloadOf(night);
     const morning = new Date(clock.now().getTime() + 9 * HOUR_S * 1_000);
@@ -359,7 +359,8 @@ describe('conversation.follow_up', () => {
       reason: 'no_reply',
       detail: ['follow_up_quiet_hours'],
       costUsd: 0,
-      retryAt: new Date(clock.now().getTime() + 48 * HOUR_S * 1_000),
+      // Her next reply slot is at most a week away (P3-14): beyond eight days, the engine asked for too much.
+      retryAt: new Date(clock.now().getTime() + 9 * 24 * HOUR_S * 1_000),
     };
     await runFollowUp(await payloadOf(far));
     expect((await events(far)).at(-1)).toBe('follow_up_cancelled');

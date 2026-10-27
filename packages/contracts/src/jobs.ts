@@ -26,6 +26,7 @@ export const JOB_NAMES = [
   'conversation.send',
   'conversation.follow_up',
   'conversation.record_facts',
+  'conversation.reopen',
   'connector.dispatch',
   'connector.poll',
   'connector.reconcile',
@@ -77,6 +78,11 @@ export const JOB_PAYLOADS = {
       }),
     ]),
   }),
+  /**
+   * Her next reply slot opened (P3-14): the fans who wrote while she was out of her hours are answered, the longest
+   * wait first. One per creator (`reopenJobKey`): every deferral out of her hours points at it.
+   */
+  'conversation.reopen': z.object({ creatorId: CreatorIdSchema, correlationId: z.string().min(1) }),
   'connector.dispatch': z.object({}),
   'connector.poll': z.object({
     creatorId: CreatorIdSchema,
@@ -114,6 +120,7 @@ export const JOB_MAX_ATTEMPTS = {
   'conversation.send': 3,
   'conversation.follow_up': 3,
   'conversation.record_facts': 3,
+  'conversation.reopen': 3,
   'connector.dispatch': 1,
   'connector.poll': 3,
   'connector.reconcile': 3,
@@ -143,6 +150,11 @@ export const DEBOUNCED_JOBS = [
 
 export function queueNameFor(conversationId: string): `conv:${string}` {
   return `conv:${conversationId}`;
+}
+
+/** The one opening job of a creator (P3-14): a later deferral replaces it, it never runs twice for one opening. */
+export function reopenJobKey(creatorId: string): string {
+  return `conversation.reopen:${creatorId}`;
 }
 
 export function accountQueueNameFor(platformAccountId: string): `account:${string}` {

@@ -1,5 +1,6 @@
 import type {
   Actor,
+  AgentHours,
   ConversationDetail,
   ConversationEventView,
   ConversationId,
@@ -262,6 +263,22 @@ export interface GuardReadContext {
   readonly history: readonly { readonly from: 'fan' | 'creator'; readonly text: string }[];
 }
 
+/**
+ * Her hours (P3-14) and the clock they are read on (`creators.timezone`), implemented by `persona`: the defaults when
+ * none is stored. `null` when she does not exist.
+ */
+export interface ReplyHours {
+  of(creatorId: CreatorId): Promise<{ readonly hours: AgentHours; readonly timeZone: string } | null>;
+}
+
+/**
+ * Whether someone works her conversations at `at` (ADR 0025): a member on a shift of hers, not cancelled, not on
+ * leave. Implemented by `scheduling`; without it, nobody is.
+ */
+export interface ShiftPresence {
+  someoneOnShift(creatorId: CreatorId, at: Date): Promise<boolean>;
+}
+
 /** The fan as `conversations` needs it; implemented by the `fans` module. */
 export interface FanDirectory {
   upsertFanByPlatformId(sighting: {
@@ -373,6 +390,8 @@ export interface ComposeInput {
    * Absent until he is first scored.
    */
   readonly desire?: { readonly score: number; readonly at: Date };
+  /** Her hours (P3-14) as stored; absent, the defaults. They set her night and when a follow-up may go out. */
+  readonly hours?: AgentHours;
 }
 
 /**
