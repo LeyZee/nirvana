@@ -1,7 +1,7 @@
 # EQ-11 Shell par rôle : rail, barre du téléphone et gardes de route
 Statut : todo (met en œuvre l'ADR 0024, acceptée par Charles le 27/10/2026)
 Phase : équipe (ADR 0024)
-Dépend de : ADR 0024 ; le rôle d'équipe dans `/v1/me` (EQ-01, par le propriétaire de `packages/contracts`)
+Dépend de : ADR 0024 ; le rôle d'équipe dans `/v1/me` (EQ-01, livré : contrat `MeSchema`, champs `team` et `teamScope`)
 Branche : task/eq-11-role-based-shell
 
 ## Objectif
