@@ -7,7 +7,6 @@ import {
   TeamMemberNoteIdSchema,
   UserIdSchema,
 } from './ids';
-import { InvitationLinkCreatedSchema } from './invitation-links';
 import { TimezoneSchema } from './persona';
 import { BasisPointsSchema, CountryCodeSchema, TeamMemberStatusSchema, TeamRoleSchema } from './team';
 
@@ -67,43 +66,52 @@ export const TeamMemberSchema = z.object({
   commission: CommissionRateSchema.nullable(),
   /** No password yet: the invitation link has not been used (EQ-10). */
   invitationPending: z.boolean(),
+  /**
+   * When the pending link stops working, for « Lien valable jusqu'à… » or « Lien expiré » ; `null` with no link out
+   * (none made yet, or already used).
+   */
+  invitationExpiresAt: z.iso.datetime().nullable(),
 });
 export type TeamMember = z.infer<typeof TeamMemberSchema>;
 
 /** `GET /v1/team/members`: chatters and managers alike, the screen splits them. */
 export const TeamMemberListSchema = z.object({ members: z.array(TeamMemberSchema) });
 
-/** The rate given when adding a member, or later from a day on: a preset, or typed by hand. */
+/**
+ * The rate given when adding a member, or later from a day on: a preset, or typed by hand. Each branch is strict, so
+ * a body that sends both is refused instead of losing one of them.
+ */
 export const CommissionChoiceSchema = z.union([
-  z.object({ presetId: CommissionPresetIdSchema }),
-  z.object({ rateBps: BasisPointsSchema }),
+  z.strictObject({ presetId: CommissionPresetIdSchema }),
+  z.strictObject({ rateBps: BasisPointsSchema }),
 ]);
 
 /**
- * `POST /v1/team/members` (owner): creates the account (no password), the record, the first rate and the
- * invitation link, in one transaction. The time zone the screen offers follows the country, and stays editable.
+ * `POST /v1/team/members` (owner) → `TeamMemberSchema`: creates the account (no password), the record and the first
+ * rate in one transaction. The panel then asks `POST …/:memberId/invitation-link` for the link to share (EQ-10). The
+ * time zone the screen offers follows the country, and stays editable.
  */
-export const CreateTeamMemberBodySchema = z.object({
-  email: z.email(),
-  firstName: NameSchema,
-  lastName: NameSchema,
-  displayName: NameSchema,
-  teamRole: TeamRoleSchema,
-  country: CountryCodeSchema,
-  timeZone: TimezoneSchema,
-  color: MemberColorSchema.nullable().default(null),
-  joinedOn: CalendarDaySchema,
-  creatorIds: z.array(CreatorIdSchema).default([]),
-  commission: CommissionChoiceSchema,
-  /** A manager's share of the team's net; refused for a chatter. */
-  teamShareBps: BasisPointsSchema.nullable().default(null),
-});
+export const CreateTeamMemberBodySchema = z
+  .object({
+    email: z.email(),
+    firstName: NameSchema,
+    lastName: NameSchema,
+    displayName: NameSchema,
+    teamRole: TeamRoleSchema,
+    country: CountryCodeSchema,
+    timeZone: TimezoneSchema,
+    color: MemberColorSchema.nullable().default(null),
+    joinedOn: CalendarDaySchema,
+    creatorIds: z.array(CreatorIdSchema).default([]),
+    commission: CommissionChoiceSchema,
+    /** A manager's share of the team's net; refused for a chatter. */
+    teamShareBps: BasisPointsSchema.nullable().default(null),
+  })
+  .refine((body) => body.teamRole === 'manager' || body.teamShareBps === null, {
+    message: 'Seul un manager a une part du net de l’équipe',
+    path: ['teamShareBps'],
+  });
 export type CreateTeamMemberBody = z.infer<typeof CreateTeamMemberBodySchema>;
-
-export const TeamMemberCreatedSchema = z.object({
-  member: TeamMemberSchema,
-  invitation: InvitationLinkCreatedSchema,
-});
 
 /** `PATCH /v1/team/members/:memberId` (owner): what changes; the rest stays. Status and rate have their own routes. */
 export const UpdateTeamMemberBodySchema = z
@@ -127,7 +135,10 @@ export type UpdateTeamMemberBody = z.infer<typeof UpdateTeamMemberBodySchema>;
  */
 export const ChangeTeamMemberStatusBodySchema = z.object({ status: TeamMemberStatusSchema });
 
-/** `POST /v1/team/members/:memberId/commission` (owner only, the database refuses anyone else): from a day on, never before today. */
+/**
+ * `POST /v1/team/members/:memberId/commission` (owner only, the database refuses anyone else): from a day on, never
+ * before today. A share of the team's net for a chatter answers `team_share_invalid`.
+ */
 export const SetCommissionRateBodySchema = z.object({
   commission: CommissionChoiceSchema,
   teamShareBps: BasisPointsSchema.nullable().default(null),
@@ -150,3 +161,21 @@ export type TeamMemberNote = z.infer<typeof TeamMemberNoteSchema>;
 /** `GET /v1/team/members/:memberId/notes` (newest first) and `POST` with `AddTeamMemberNoteBodySchema`. */
 export const TeamMemberNoteListSchema = z.object({ notes: z.array(TeamMemberNoteSchema) });
 export const AddTeamMemberNoteBodySchema = z.object({ body: z.string().trim().min(1).max(2000) });
+
+/**
+ * The error codes of `/v1/team`, for the screen to say them in French (the suffix gives the status, api.md):
+ * `member_not_found` 404 ; `member_conflict` 409, an account already has this e-mail ; `member_left_conflict` 409, a
+ * member who left is not changed any more (EQ-14) ; `commission_preset_not_found` 404 ; `commission_date_invalid` 400,
+ * a rate that starts before today ; `team_share_invalid` 400, a share for a chatter ; `creator_not_found` 404, an
+ * unknown creator in `creatorIds`.
+ */
+export const TEAM_MEMBER_ERROR_CODES = [
+  'member_not_found',
+  'member_conflict',
+  'member_left_conflict',
+  'commission_preset_not_found',
+  'commission_date_invalid',
+  'team_share_invalid',
+  'creator_not_found',
+] as const;
+export type TeamMemberErrorCode = (typeof TEAM_MEMBER_ERROR_CODES)[number];

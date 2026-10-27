@@ -40,9 +40,22 @@ describe('team members', () => {
     expect(CommissionChoiceSchema.safeParse({ rateBps: 1250 }).success).toBe(true);
   });
 
+  it('refuses a rate given twice, rather than dropping one of the two', () => {
+    expect(CommissionChoiceSchema.safeParse({ presetId: PRESET, rateBps: 1250 }).success).toBe(false);
+  });
+
+  it('gives a share of the team’s net to a manager only', () => {
+    const manager = { ...created, teamRole: 'manager', teamShareBps: 500 };
+    expect(CreateTeamMemberBodySchema.safeParse(manager).success).toBe(true);
+    expect(CreateTeamMemberBodySchema.safeParse({ ...manager, teamRole: 'chatter' }).success).toBe(false);
+  });
+
   it('has no hourly rate anywhere: a member is paid by commission only (ADR 0023)', () => {
-    const shapes = [CreateTeamMemberBodySchema, SetCommissionRateBodySchema];
-    for (const shape of shapes) expect(JSON.stringify(Object.keys(shape.shape))).not.toMatch(/hour/iu);
+    const keys = [
+      ...Object.keys(CreateTeamMemberBodySchema.parse(created)),
+      ...Object.keys(SetCommissionRateBodySchema.shape),
+    ];
+    expect(keys.join(' ')).not.toMatch(/hour/iu);
   });
 
   it('changes only what is sent, and refuses an empty change', () => {
@@ -61,6 +74,7 @@ describe('team members', () => {
       creatorIds: [CREATOR],
       commission: null,
       invitationPending: true,
+      invitationExpiresAt: '2026-10-30T16:00:00.000Z',
     });
     expect(member.invitationPending).toBe(true);
   });
