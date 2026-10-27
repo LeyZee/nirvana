@@ -107,6 +107,7 @@ const GUARD_LABELS: Readonly<Record<string, string>> = {
   payment_lie: 'un mensonge sur un paiement',
   guilt_trip: 'de la culpabilisation',
   discount: 'une remise ou une négociation',
+  explicit_before_age: 'du contenu explicite avant l’âge confirmé',
 };
 
 const GuardsSchema = z.object({ guards: z.array(z.string()) });
