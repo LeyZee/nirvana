@@ -81,6 +81,7 @@ export function createSwapService(
           .toSorted((a, b) => a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id))
           .map((member) => ({
             member: toPlanningMember(member),
+            freeThen: member.freeThen,
             shifts: found.shifts
               .filter((one) => one.memberId === member.id)
               .toSorted((a, b) => a.startsAt.getTime() - b.startsAt.getTime())

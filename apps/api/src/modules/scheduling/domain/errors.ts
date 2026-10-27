@@ -116,11 +116,14 @@ export class OwnerOnly extends DomainError {
   }
 }
 
-/** No shift on a member during their approved leave (ADR 0031). */
+/**
+ * No shift on a member during their approved leave (ADR 0031). The leave is named only to someone who reads it: never
+ * to the colleague who accepts an exchange from a requester on leave.
+ */
 export class MemberOnLeave extends DomainError {
-  constructor(leaveRequestId: string) {
+  constructor(leaveRequestId: string | null) {
     super('member_on_leave_conflict', 'Ce membre est en congé à ce moment-là', {
-      details: { leaveRequestId },
+      details: leaveRequestId === null ? {} : { leaveRequestId },
     });
   }
 }

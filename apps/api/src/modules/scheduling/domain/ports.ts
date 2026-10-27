@@ -265,6 +265,8 @@ export interface StoredSwap {
   readonly status: ShiftSwapStatus;
   readonly resolvedAt: Date | null;
   readonly revertedAt: Date | null;
+  /** `withdrawn` by someone other than its requester: the owner or an active manager. */
+  readonly withdrawnByAgency: boolean;
   readonly createdAt: Date;
 }
 
@@ -325,15 +327,36 @@ export interface ColleagueReads {
   namesUnscoped(memberIds: readonly TeamMemberId[]): Promise<NamedMember[]>;
   /**
    * The colleagues who could take `shift`: active, working on its creator, not the requester, and no leave covering
-   * its hours; with their shifts not cancelled starting in (`now`, `until`), on `creatorIds`, and those shifts'
-   * accounts.
+   * its hours, each `freeThen` when no other shift of theirs overlaps it, on any creator; with their shifts not
+   * cancelled starting in (`now`, `until`), on `creatorIds`, and those shifts' accounts.
    */
   candidatesUnscoped(
     shift: StoredShift,
     creatorIds: readonly CreatorId[],
     now: Date,
     until: Date,
-  ): Promise<{ members: NamedMember[]; shifts: StoredShift[]; accounts: StoredAccount[] }>;
+  ): Promise<{
+    members: (NamedMember & { readonly freeThen: boolean })[];
+    shifts: StoredShift[];
+    accounts: StoredAccount[];
+  }>;
+  /**
+   * A shift of the member, not cancelled, that overlaps [`startsAt`, `endsAt`) on any creator, other than `except`:
+   * what would put them on two shifts at once. Its id, for the caller to say only when the shift is the reader's.
+   */
+  overlappingShiftUnscoped(
+    memberId: TeamMemberId,
+    span: { readonly startsAt: Date; readonly endsAt: Date },
+    except: readonly ShiftId[],
+  ): Promise<ShiftId | null>;
+  /**
+   * Whether a leave of the member covers part of [`startsAt`, `endsAt`) (`leaveCover`): for the requester of an
+   * exchange, whose leaves the colleague who accepts does not read. Only the effect, never the leave.
+   */
+  onLeaveUnscoped(
+    memberId: TeamMemberId,
+    span: { readonly startsAt: Date; readonly endsAt: Date },
+  ): Promise<boolean>;
   /**
    * Whether a member can take a shift on a creator (status and creators), for the side of a swap the reader's
    * policies hide: the colleague asked when proposing, the requester when accepting. `null` when no such member.

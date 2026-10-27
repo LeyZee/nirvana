@@ -452,12 +452,14 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
       basileA = await place(basile, anna, annaSecond, 3);
       basileI = await place(basile, ines, inesMain, 4);
       noraA = await place(nora, anna, annaMain, 4, 840, 960);
+      const theoD4 = await place(theo, anna, annaSecond, 4, 840, 960);
+      // Basile's own shift falls at the same hours: he can only take Théo's in exchange for it.
       const body = {
         id: newId(ShiftSwapRequestIdSchema),
         shiftId: theoA.id,
         targetMemberId: basile.id,
-        targetShiftId: null,
-        message: 'Tu peux me remplacer ?',
+        targetShiftId: basileA.id,
+        message: 'On échange ?',
       };
       toBasile = swapOf(await call('POST', '/scheduling/swap-requests', theoCookie, body));
       expect(toBasile).toMatchObject({
@@ -467,24 +469,36 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
         shiftStartsAt: theoA.startsAt,
         shiftEndsAt: theoA.endsAt,
         targetMemberId: basile.id,
-        targetShiftId: null,
-        targetCreatorId: null,
-        targetShiftStartsAt: null,
-        targetShiftEndsAt: null,
-        message: 'Tu peux me remplacer ?',
+        targetShiftId: basileA.id,
+        targetCreatorId: anna,
+        targetShiftStartsAt: basileA.startsAt,
+        targetShiftEndsAt: basileA.endsAt,
+        message: 'On échange ?',
         status: 'proposed',
         resolvedAt: null,
         revertedAt: null,
+        withdrawnByAgency: false,
       });
       const retry = await call('POST', '/scheduling/swap-requests', theoCookie, body);
       expect([retry.statusCode, ShiftSwapRequestSchema.parse(retry.json())]).toEqual([200, toBasile]);
       const changed = await call('POST', '/scheduling/swap-requests', theoCookie, { ...body, message: null });
       expect([changed.statusCode, codeOf(changed)]).toEqual([409, 'shift_swap_conflict']);
-      const twice = await propose(theoCookie, theoA, basile);
+      const twice = await propose(theoCookie, theoA, basile, basileA);
       expect([twice.statusCode, codeOf(twice), detailsOf(twice)]).toEqual([
         409,
         'shift_swap_open_conflict',
         { shiftSwapRequestId: toBasile.id },
+      ]);
+
+      // Nobody would end up on two shifts at once. Basile's shift in the way is not Théo's: it is never named.
+      const busy = await propose(theoCookie, theoA, basile);
+      expect([busy.statusCode, codeOf(busy), detailsOf(busy)]).toEqual([409, 'shift_member_conflict', {}]);
+      // Nora's shift would come back to Théo while he is on another one, his own: that one is named.
+      const mine = await propose(theoCookie, theoA, nora, noraA);
+      expect([mine.statusCode, codeOf(mine), detailsOf(mine)]).toEqual([
+        409,
+        'shift_member_conflict',
+        { shiftId: theoD4.id },
       ]);
 
       const expectations: [LightMyRequestResponse, number, string][] = [
@@ -513,17 +527,32 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
     it('names the colleagues who could take a shift, by name and colour only, never one on leave', async () => {
       const away = leaveOf(await askLeave(irisCookie, 3));
       expect((await decide(owner, away, 'approve')).statusCode).toBe(200);
+      // Nora is on Inès at those hours, a creator Théo does not work on.
+      const noraI = await place(nora, ines, inesMain, 3);
 
-      const response = await call('GET', `/scheduling/swap-candidates?shiftId=${theoA.id}`, theoCookie);
-      expect(response.statusCode).toBe(200);
-      const found = SwapCandidatesSchema.parse(response.json());
+      const read = async () => {
+        const response = await call('GET', `/scheduling/swap-candidates?shiftId=${theoA.id}`, theoCookie);
+        expect(response.statusCode).toBe(200);
+        return { response, found: SwapCandidatesSchema.parse(response.json()) };
+      };
+      const { response, found } = await read();
       // Lou does not work on Anna, Iris is on leave that day, Théo is the one asking.
-      expect(found.candidates.map((candidate) => candidate.member.displayName)).toEqual(['Basile', 'Nora']);
+      expect(found.candidates.map((candidate) => [candidate.member.displayName, candidate.freeThen])).toEqual(
+        [
+          ['Basile', false],
+          ['Nora', false],
+        ],
+      );
       const basileShifts = found.candidates[0]?.shifts.map((shift) => shift.id) ?? [];
       // What could come back to Théo: Basile's shifts on Anna, never the one on Inès.
       expect(basileShifts).toContain(basileA.id);
       expect(basileShifts).not.toContain(basileI.id);
-      expect(found.candidates[1]?.shifts.map((shift) => shift.id)).toContain(noraA.id);
+      // Nora's shift in the way is said by `freeThen` alone, never shown.
+      const noraShifts = found.candidates[1]?.shifts.map((shift) => shift.id) ?? [];
+      expect(noraShifts).toContain(noraA.id);
+      expect(noraShifts).not.toContain(noraI.id);
+      expect((await call('DELETE', `/scheduling/shifts/${noraI.id}`, owner)).statusCode).toBe(204);
+      expect((await read()).found.candidates.map((candidate) => candidate.freeThen)).toEqual([false, true]);
       expect(found.accounts.every((account) => account.creatorId === anna)).toBe(true);
       const raw = z
         .object({ candidates: z.array(z.object({ member: z.record(z.string(), z.unknown()) })) })
@@ -566,15 +595,51 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
       }
       const notTheirs = await call('DELETE', `/scheduling/swap-requests/${toBasile.id}`, basileCookie);
       expect([notTheirs.statusCode, codeOf(notTheirs)]).toEqual([403, 'role_forbidden']);
-      // Basile already has a shift at those hours: the acceptance is refused, the proposal stays.
-      const busy = await answer(basileCookie, toBasile, 'accept');
+      expect(await statusOf(toBasile)).toBe('proposed');
+      expect(await holderOf(theoA)).toBe(theo.id);
+    });
+
+    it('refuses an acceptance that would put the colleague on two shifts, naming their own', async () => {
+      const theoC = await place(theo, anna, annaMain, 11);
+      const offered = swapOf(await propose(theoCookie, theoC, basile));
+      // Placed after the proposal: the acceptance sees it under Basile's lock.
+      const basileD11 = await place(basile, ines, inesMain, 11);
+      const busy = await answer(basileCookie, offered, 'accept');
       expect([busy.statusCode, codeOf(busy), detailsOf(busy)]).toEqual([
         409,
         'shift_member_conflict',
-        { shiftId: basileA.id },
+        { shiftId: basileD11.id },
       ]);
-      expect(await statusOf(toBasile)).toBe('proposed');
-      expect(await holderOf(theoA)).toBe(theo.id);
+      expect(await statusOf(offered)).toBe('proposed');
+      expect(await holderOf(theoC)).toBe(theo.id);
+    });
+
+    it('gives the requester of an exchange no shift during their leave, without saying the leave', async () => {
+      const theoD12 = await place(theo, anna, annaMain, 12);
+      const irisD13 = await place(iris, anna, annaSecond, 13);
+      const exchange = swapOf(await propose(theoCookie, theoD12, iris, irisD13));
+      // Written straight in the table, as if the approval had not lapsed the proposal.
+      await test.admin.db.insert(schema.leaveRequests).values({
+        id: newId(LeaveRequestIdSchema),
+        memberId: theo.id,
+        firstDay: parisDay(13),
+        lastDay: parisDay(13),
+        timeZone: 'Africa/Porto-Novo',
+        startsAt: new Date(memberMidnight(parisDay(13))),
+        endsAt: new Date(memberMidnight(parisDay(14))),
+        status: 'approved',
+        decidedAt: new Date(),
+        decidedBy: nora.userId,
+        createdBy: theo.userId,
+      });
+      const refused = await answer(irisCookie, exchange, 'accept');
+      expect([refused.statusCode, codeOf(refused), detailsOf(refused)]).toEqual([
+        409,
+        'member_on_leave_conflict',
+        {},
+      ]);
+      expect(await statusOf(exchange)).toBe('proposed');
+      expect([await holderOf(theoD12), await holderOf(irisD13)]).toEqual([theo.id, iris.id]);
     });
 
     it('moves the shift on acceptance, and the other proposals on it lapse just after', async () => {
@@ -625,16 +690,21 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
       const gone = await call('DELETE', `/scheduling/swap-requests/${declined.id}`, theoCookie);
       expect([gone.statusCode, codeOf(gone)]).toEqual([409, 'shift_swap_answered_conflict']);
 
+      // Théo reads who withdrew each proposal: himself, or the agency, never by name.
+      const withdrawn = async (swap: ShiftSwapRequest) =>
+        (await swaps(theoCookie)).swapRequests
+          .filter((one) => one.id === swap.id)
+          .map((one) => [one.status, one.withdrawnByAgency]);
       const first = swapOf(await propose(theoCookie, theoB, basile));
       expect((await call('DELETE', `/scheduling/swap-requests/${first.id}`, theoCookie)).statusCode).toBe(
         204,
       );
-      expect(await statusOf(first)).toBe('withdrawn');
+      expect(await withdrawn(first)).toEqual([['withdrawn', false]]);
       const second = swapOf(await propose(theoCookie, theoB, basile));
       expect((await call('DELETE', `/scheduling/swap-requests/${second.id}`, noraCookie)).statusCode).toBe(
         204,
       );
-      expect(await statusOf(second)).toBe('withdrawn');
+      expect(await withdrawn(second)).toEqual([['withdrawn', true]]);
 
       const third = swapOf(await propose(theoCookie, theoB, basile));
       expect((await answer(basileCookie, third, 'accept')).statusCode).toBe(200);

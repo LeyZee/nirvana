@@ -73,5 +73,6 @@ export const toSwapDto = (swap: StoredSwap): ShiftSwapRequest => ({
   status: swap.status,
   resolvedAt: isoOrNull(swap.resolvedAt),
   revertedAt: isoOrNull(swap.revertedAt),
+  withdrawnByAgency: swap.withdrawnByAgency,
   createdAt: swap.createdAt.toISOString(),
 });

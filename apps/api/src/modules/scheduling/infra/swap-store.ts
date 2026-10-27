@@ -6,6 +6,7 @@ import {
   TeamMemberIdSchema,
   TeamMemberStatusSchema,
   type ShiftSwapRequestId,
+  type TeamMemberId,
 } from '@nirvana/contracts';
 import {
   and,
@@ -25,6 +26,7 @@ import { z } from 'zod';
 
 import {
   MemberNotFound,
+  MemberOnLeave,
   ShiftMemberConflict,
   ShiftNotFound,
   ShiftSwapAnswered,
@@ -102,6 +104,9 @@ const swapColumns = {
   resolvedAt: shiftSwapRequests.resolvedAt,
   revertedAt: shiftSwapRequests.revertedAt,
   createdAt: shiftSwapRequests.createdAt,
+  // The requester's account wrote the proposal; anyone else who withdrew it planned.
+  createdBy: shiftSwapRequests.createdBy,
+  resolvedBy: shiftSwapRequests.resolvedBy,
 };
 
 const StoredSwapSchema = z.object({
@@ -121,9 +126,14 @@ const StoredSwapSchema = z.object({
   resolvedAt: z.date().nullable(),
   revertedAt: z.date().nullable(),
   createdAt: z.date(),
+  createdBy: z.string(),
+  resolvedBy: z.string().nullable(),
 });
 
-const toSwap = (row: unknown): StoredSwap => StoredSwapSchema.parse(row);
+function toSwap(row: unknown): StoredSwap {
+  const { createdBy, resolvedBy, ...swap } = StoredSwapSchema.parse(row);
+  return { ...swap, withdrawnByAgency: swap.status === 'withdrawn' && resolvedBy !== createdBy };
+}
 
 /** The swap as the policies show it, locked when it is about to change. */
 async function readSwap(
@@ -137,12 +147,12 @@ async function readSwap(
 }
 
 /** The signed-in account's member id, which every scope reads; `null` outside the team. */
-async function ownMemberId(tx: Transaction, userId: string): Promise<string | null> {
+async function ownMemberId(tx: Transaction, userId: string): Promise<TeamMemberId | null> {
   const [row] = await tx
     .select({ id: teamMembers.id })
     .from(teamMembers)
     .where(eq(teamMembers.userId, userId));
-  return row?.id ?? null;
+  return row === undefined ? null : TeamMemberIdSchema.parse(row.id);
 }
 
 /** The signed-in member's own status and creators, to take a shift by a swap like one set by hand. */
@@ -309,6 +319,18 @@ export function createDrizzleSwapStore(
           // The requester reads their own leaves: no shift comes back to them during one.
           await assertNotOnLeave(tx, me, back.startsAt, back.endsAt);
         }
+        // Nobody on two shifts at once, whatever the creator: an acceptance would always fail. The colleague's shift in
+        // the way is not the requester's, so it is never named; the requester's own is.
+        const busy = await colleagues.overlappingShiftUnscoped(
+          swap.targetMemberId,
+          offered,
+          back === null ? [] : [back.id],
+        );
+        if (busy !== null) throw new ShiftMemberConflict(null);
+        if (back !== null) {
+          const mine = await colleagues.overlappingShiftUnscoped(me, back, [offered.id]);
+          if (mine !== null) throw new ShiftMemberConflict(mine);
+        }
         try {
           await tx.transaction((savepoint) =>
             savepoint.insert(shiftSwapRequests).values({
@@ -397,14 +419,16 @@ export function createDrizzleSwapStore(
           await lapse(tx, id, actor.userId, now);
           return { lapsed: true };
         }
-        // The rules of a shift set by hand: the colleague can take it and is not on leave then. The requester's
-        // leave is never read here (ADR 0031): its approval lapsed this proposal, under the same lock.
+        // The rules of a shift set by hand: the colleague can take it and is not on leave then.
         assertCanWork(await ownWork(tx, actor.userId), swap.creatorId);
         await assertNotOnLeave(tx, swap.targetMemberId, swap.shiftStartsAt, swap.shiftEndsAt);
-        if (swap.targetCreatorId !== null) {
+        if (back !== null) {
           const requester = await colleagues.memberWorkUnscoped(swap.requesterId);
           if (requester === null) throw new MemberNotFound();
-          assertCanWork(requester, swap.targetCreatorId);
+          assertCanWork(requester, back.creatorId);
+          // The approval of the requester's leave lapses such a proposal under the same lock; read again here, past
+          // the colleague's policies, so that no path gives them a shift during a leave. The leave itself is not said.
+          if (await colleagues.onLeaveUnscoped(swap.requesterId, back)) throw new MemberOnLeave(null);
         }
         try {
           await moveShifts(tx, adminDb, moves, { by: actor.userId, now, allowed }, async (savepoint) => {

@@ -513,6 +513,11 @@ export const ShiftSwapRequestSchema = z.object({
   resolvedAt: z.iso.datetime().nullable(),
   /** When the owner or an active manager reverted it; `resolvedAt` keeps the acceptance. */
   revertedAt: z.iso.datetime().nullable(),
+  /**
+   * `withdrawn` by the owner or an active manager rather than by its requester: the screen says « retirée par
+   * l'agence », never by whom. `false` for any other status.
+   */
+  withdrawnByAgency: z.boolean(),
   createdAt: z.iso.datetime(),
 });
 export type ShiftSwapRequest = z.infer<typeof ShiftSwapRequestSchema>;
@@ -541,13 +546,17 @@ export type ShiftSwapList = z.infer<typeof ShiftSwapListSchema>;
  * their shifts that have not started, within `SHIFT_TEMPLATE_HORIZON_DAYS`, on creators the requester works on (what
  * an exchange could give back). A display name, a colour and shifts: the one door through which a chatter reads a
  * colleague's planning (ADR 0031), never a rate, a country or a status. A leave is never said, only its effect (the
- * colleague is not listed). The server checks under the policies that the shift is the reader's and ahead, then reads
- * the rest outside them, bounded to these fields.
+ * colleague is not listed). `freeThen` is `false` when the colleague already has a shift that overlaps the one offered,
+ * on any creator: they can only take it in exchange for that shift, when it is in `shifts`; which shift and where is
+ * never said. The server checks under the policies that the shift is the reader's and ahead, then reads the rest
+ * outside them, bounded to these fields.
  */
 export const SwapCandidatesQuerySchema = z.object({ shiftId: ShiftIdSchema });
 
 export const SwapCandidatesSchema = z.object({
-  candidates: z.array(z.object({ member: PlanningMemberSchema, shifts: z.array(ShiftSchema) })),
+  candidates: z.array(
+    z.object({ member: PlanningMemberSchema, freeThen: z.boolean(), shifts: z.array(ShiftSchema) }),
+  ),
   accounts: z.array(PlanningAccountSchema),
 });
 export type SwapCandidates = z.infer<typeof SwapCandidatesSchema>;
@@ -558,8 +567,11 @@ export type SwapCandidates = z.infer<typeof SwapCandidatesSchema>;
  * not started (`shift_not_found`, `shift_started_conflict`); the colleague is someone else (`shift_swap_self_invalid`),
  * `active` (`member_left_conflict`) and works on the shift's creator; with `targetShiftId`, that shift is the
  * colleague's, has not started, and its creator is one the requester works on (`member_creator_conflict` otherwise).
- * The same proposal still open answers 409 `shift_swap_open_conflict` with `details.shiftSwapRequestId`. Several
- * colleagues may be asked for the same shift: the first acceptance wins, the others lapse.
+ * Nobody would end up on two shifts at once (`shift_member_conflict`): the colleague has no other shift that overlaps
+ * the one offered, on any creator (no `details.shiftId`, the shift is not the requester's), and the shift given back
+ * overlaps no other shift of the requester (`details.shiftId`, theirs). The same proposal still open answers 409
+ * `shift_swap_open_conflict` with `details.shiftSwapRequestId`. Several colleagues may be asked for the same shift: the
+ * first acceptance wins, the others lapse.
  */
 export const CreateShiftSwapRequestBodySchema = z.object({
   id: ShiftSwapRequestIdSchema,
@@ -576,7 +588,7 @@ export type CreateShiftSwapRequestBody = z.input<typeof CreateShiftSwapRequestBo
  * under the rules of a shift set by hand: neither has started nor changed hands or hours since the proposal (otherwise the swap
  * lapses and answers 409 `shift_swap_lapsed_conflict`), and the move puts nobody on two shifts at once, no account under
  * two members, no shift on a member on an approved leave (`shift_member_conflict`, `shift_account_conflict`,
- * `member_on_leave_conflict`, and the swap stays proposed). The other proposals on these shifts can no longer be
+ * `member_on_leave_conflict`, without `details` when the leave is the requester's, and the swap stays proposed). The other proposals on these shifts can no longer be
  * accepted, and lapse just after (ADR 0031).
  */
 export const AnswerShiftSwapRequestBodySchema = z.object({ answer: z.enum(['accept', 'decline']) });
