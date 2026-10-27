@@ -95,7 +95,8 @@ export function createConversationRoutes(
   };
 
   return (app) => {
-    const read = { preHandler: requireRole('owner', 'operator', 'creator') };
+    // A creator never reads a conversation (ADR 0023): her fans' words stay with the agency.
+    const read = { preHandler: requireRole('owner', 'operator') };
     const act = { preHandler: requireRole('owner', 'operator') };
 
     app.get(
