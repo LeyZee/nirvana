@@ -97,7 +97,6 @@ export function lastHandoff(read: { readonly events: readonly ConversationEventV
   return event === undefined ? null : noteOf(event);
 }
 
-/** What a hard guard found in a draft, in the words of the person deciding. */
 /** The codes a refusal names; one this screen does not know yet is left out, never shown raw. */
 const GuardsSchema = z.object({ guards: z.array(z.string()) });
 
@@ -108,9 +107,9 @@ export function decisionError(status: number, body: unknown): string {
   if (code === 'draft_unprocessable') {
     const guards = GuardsSchema.safeParse(error.success ? error.data.error.details : null);
     const found = guards.success
-      ? guards.data.guards.flatMap((g) => {
-          const code = GuardCodeSchema.safeParse(g);
-          return code.success ? [GUARD_LABELS[code.data]] : [];
+      ? guards.data.guards.flatMap((raw) => {
+          const guard = GuardCodeSchema.safeParse(raw);
+          return guard.success ? [GUARD_LABELS[guard.data]] : [];
         })
       : [];
     return found.length === 0
