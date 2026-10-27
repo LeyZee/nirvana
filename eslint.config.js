@@ -23,6 +23,7 @@ const MODULE_DEPENDENCIES = {
   playground: ['agent'],
   providers: [],
   telegram: [],
+  team: [],
 };
 
 const moduleNames = Object.keys(MODULE_DEPENDENCIES);
