@@ -354,6 +354,23 @@ export interface ComposeInput {
    * reviens », when she may no longer wait; absent otherwise.
    */
   readonly waited?: number;
+  /**
+   * The fan's desire score as last written (P3-12) and when it was computed: the engine lets it cool from then on.
+   * Absent until he is first scored.
+   */
+  readonly desire?: { readonly score: number; readonly at: Date };
+}
+
+/**
+ * The desire score the engine computed with this result (P3-12), given only when it moved: `before` is the stored
+ * score cooled down to now (`null` before the first), and differs from `score`. The band is `desireBandOf(score)`.
+ */
+interface ComposedDesire {
+  readonly before: number | null;
+  readonly score: number;
+  /** The closed names of the signals that moved it. */
+  readonly signals: readonly string[];
+  readonly weightsVersion: string;
 }
 
 /** Which follow-up this is, after which silence. */
@@ -378,6 +395,7 @@ export type ComposeResult =
       readonly voice?: DraftVoice;
       /** What the brief read about the fan in his messages. */
       readonly factsProposed?: readonly ProposedFact[];
+      readonly desire?: ComposedDesire;
     }
   | {
       readonly kind: 'held';
@@ -393,6 +411,7 @@ export type ComposeResult =
        * `deferredRespondAt`, otherwise nothing comes back.
        */
       readonly retryAt?: Date;
+      readonly desire?: ComposedDesire;
     };
 
 /**

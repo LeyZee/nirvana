@@ -1,5 +1,5 @@
 # P3-12 Note de désir : la tension sexuelle de chaque fan, et ne vendre que quand elle est haute
-Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête » ; idée retenue par Charles à 20h24 : « plus la note est élevée, plus on peut passer à l'action et vendre des médias »)
+Statut : in_progress (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête » ; idée retenue par Charles à 20h24 : « plus la note est élevée, plus on peut passer à l'action et vendre des médias »)
 Phase : 3 (politique de l'agent)
 Dépend de : P3-09 (curseur de sexualisation, livré), `offerDecision` (livré), P3-02 (mémoire et limites du fan) ; la ligne de la note Reveal attend la capture (`setFanNote`) ; la règle « pendant une vente » attend P6-01 et P6-02 ; le reste se code sans capture ni clé
 Branche : task/P3-12-desire-score
@@ -49,7 +49,8 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 - [ ] `agent/domain/desire.ts` : `desireScore(previous, signals, measured, now)` pur, avec la retombée, les poids et la liste d'emojis versionnés ; tests.
 - [ ] Champs de persona optionnels `min_desire_to_open` et `min_desire`, bornes dans `PERSONA_BOUNDS`, valeurs de la persona `personas/demo`.
 - [ ] `sexualizationDecision` (seuil dans `no_opening`) et `offerDecision` (`low_desire` à la place de `not_sexualizing`) ; raison lisible de `low_desire` dans `apps/web/src/agent/causes.ts`.
-- [ ] `ComposeInput.desire`, résultat du moteur, projection et événement `desire_scored` écrits par le worker, migration (Bilan).
+- [x] `ComposeInput.desire`, `desire` sur les résultats `draft` et `held`, projection, événement `desire_scored` écrit par le worker, migration 0022 (Bilan).
+- [ ] Le moteur rend `desire` avec chaque résultat calculé sur un message du fan (Agent).
 - [ ] Affichage dans le Suivi et le lecteur, réglage des seuils dans l'écran Persona (Extension).
 - [ ] Ligne de la note Reveal (après la capture, contre `FakeReveal` d'abord).
 - [ ] Calibration hors dépôt sur le corpus de vente (`/mnt/project-files/onlychat/corpus-vente/`) : la note juste avant chacune des ventes et avant chaque refus ; les chiffres agrégés vont au journal, jamais un message.

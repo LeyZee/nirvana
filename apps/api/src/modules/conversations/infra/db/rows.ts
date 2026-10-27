@@ -4,6 +4,7 @@ import {
   ConversationModeSchema,
   ConversationStateSchema,
   CreatorIdSchema,
+  DesireBandSchema,
   DraftIdSchema,
   DomainError,
   DraftStatusSchema,
@@ -35,6 +36,9 @@ export function toConversation(row: typeof schema.conversations.$inferSelect): C
     lastOutboundAt: row.lastOutboundAt,
     unreadCount: row.unreadCount,
     routedToUserId: row.routedToUserId === null ? null : UserIdSchema.parse(row.routedToUserId),
+    desireScore: row.desireScore,
+    desireBand: row.desireBand === null ? null : DesireBandSchema.parse(row.desireBand),
+    desireAt: row.desireAt,
   };
 }
 

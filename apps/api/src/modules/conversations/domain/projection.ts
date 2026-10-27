@@ -1,4 +1,12 @@
-import type { ConversationMode, ConversationState, EventBody, EventType, UserId } from '@nirvana/contracts';
+import {
+  desireBandOf,
+  type ConversationMode,
+  type ConversationState,
+  type DesireBand,
+  type EventBody,
+  type EventType,
+  type UserId,
+} from '@nirvana/contracts';
 
 import { MAX_SEND_ATTEMPTS, nextState, type ConversationCommand } from './state-machine';
 
@@ -14,6 +22,10 @@ export interface ConversationProjection {
    * « Rendre la main » clears it, so a routed conversation never stays open to him outside his shift.
    */
   readonly routedToUserId: UserId | null;
+  /** The last `desire_scored` (P3-12): its score, the band of that score, and when the engine computed it. */
+  readonly desireScore: number | null;
+  readonly desireBand: DesireBand | null;
+  readonly desireAt: Date | null;
 }
 
 export const INITIAL_PROJECTION: ConversationProjection = {
@@ -23,6 +35,9 @@ export const INITIAL_PROJECTION: ConversationProjection = {
   lastOutboundAt: null,
   unreadCount: 0,
   routedToUserId: null,
+  desireScore: null,
+  desireBand: null,
+  desireAt: null,
 };
 
 /** Events that move the state whatever their payload. */
@@ -72,6 +87,10 @@ export function applyEvent(
   }
   if (event.type === 'takeover_ended') {
     return { ...projection, state, routedToUserId: null };
+  }
+  if (event.type === 'desire_scored') {
+    const score = event.payload.score;
+    return { ...projection, state, desireScore: score, desireBand: desireBandOf(score), desireAt: at };
   }
   if (event.type === 'mode_changed') {
     return { ...projection, state, mode: event.payload.mode ?? projection.mode };
