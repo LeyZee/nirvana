@@ -23,6 +23,10 @@ export {
   type GuardViolation,
 } from './domain/guards';
 export type { TrapAssessment } from './domain/traps';
+/** @public The policy, read by `pnpm evals` on the same path as a real fan (and by the composer at P6-01). */
+export { holdDecision } from './domain/hold';
+/** @public */
+export { offerDecision, offerSignals, type OfferContext } from './domain/policy';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,

@@ -56,10 +56,19 @@ export {
   type TurnMedia,
   type VideoFrame,
   type VideoKeyframes,
+  type JudgeInput,
   type VoiceInput,
 } from './gateway';
 export type { HealthReport, HealthState, ProviderHealth, RoleHealth } from './health';
 export { loadPrompt } from './prompts';
 export { createModelResolver, createTranscriberResolver, type ModelResolver } from './providers';
-export { BriefSchema, VoiceOutputSchema, type Brief, type VoiceOutput } from './schemas';
+export {
+  BriefSchema,
+  JudgeCriterionSchema,
+  VoiceOutputSchema,
+  type Brief,
+  type JudgeCriterion,
+  type JudgeOutput,
+  type VoiceOutput,
+} from './schemas';
 export { wrapUntrusted, type UntrustedKind } from './untrusted';

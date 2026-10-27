@@ -66,3 +66,31 @@ export const SenseOutputSchema = MediaDescriptionSchema.omit({
   kind: true,
   durationS: true,
 });
+
+/** What the judge scores a reply on (`evals/rubrics`, `evals/thresholds.json`). */
+export const JudgeCriterionSchema = z.enum([
+  'naturalness',
+  'spontaneity',
+  'persona_consistency',
+  'relevance',
+  'listening',
+  'continuity',
+  'memory',
+  'no_repetition',
+  'safety',
+]);
+export type JudgeCriterion = z.infer<typeof JudgeCriterionSchema>;
+
+export const JudgeOutputSchema = z.object({
+  scores: z
+    .array(
+      z.object({
+        criterion: JudgeCriterionSchema,
+        score: z.number().min(0).max(1),
+        reason: z.string().min(1).max(400),
+      }),
+    )
+    .min(1)
+    .max(9),
+});
+export type JudgeOutput = z.infer<typeof JudgeOutputSchema>;
