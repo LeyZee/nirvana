@@ -70,7 +70,7 @@ export const handoffDetail = (codes: readonly string[]): readonly string[] =>
     .slice(0, 20);
 
 /** After a wait, a known situation, not a technical cause: the chatter reads why he takes over (P3-11). */
-const WAITED_NO_REPLY_REASON = 'Après l’attente, l’agent n’avait plus rien à lui écrire';
+const WAITED_NO_REPLY_REASON = 'après l’attente, l’agent n’avait plus rien à lui écrire';
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 

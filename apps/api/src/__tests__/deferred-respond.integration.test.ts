@@ -241,7 +241,7 @@ describe('conversation.respond after a wait', () => {
     expect(handoff?.type).toBe('handoff_requested');
     expect(handoff?.payload).toMatchObject({ cause: 'other' });
     const said = z.object({ reason: z.string(), detail: z.array(z.string()) }).parse(handoff?.payload);
-    expect(said.reason).toBe('Après l’attente, l’agent n’avait plus rien à lui écrire');
+    expect(said.reason).toBe('après l’attente, l’agent n’avait plus rien à lui écrire');
     expect(said.detail[0]).toBe('waited_no_reply');
     // Never a third pass: the only respond job left is the one that just ran.
     expect(
