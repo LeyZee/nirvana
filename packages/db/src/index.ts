@@ -1,6 +1,7 @@
 /** Drizzle schema, migrations, client with `withTenant` / `withMember` / `withTenantMember` / `withAdmin` (RLS, ADR 0005 and 0023), secret encryption. */
 export {
   createDbClient,
+  enterCreator,
   SNAPSHOT_READ,
   withAdmin,
   withMember,

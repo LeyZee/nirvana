@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  LeaveRequestIdSchema,
   MyShiftsSchema,
   newId,
   OnDutyListSchema,
@@ -591,5 +592,131 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
       .where(eq(schema.auditLog.entity, 'shift_template'));
     expect(rows.map((row) => row.action).toSorted()).toEqual(['shift_template.create', 'shift_template.end']);
     expect(JSON.stringify(rows)).not.toMatch(/Théo|Basile|Anna/u);
+  });
+
+  it('puts no shift on a member during their approved leave, under the member’s lock (ADR 0031)', async () => {
+    const { member: lou } = await addMember({
+      email: 'lou@example.test',
+      displayName: 'Lou',
+      teamRole: 'chatter',
+      creatorIds: [ines],
+    });
+    // Written straight in the table, as the leave routes will: approved by the active manager.
+    const approvedLeave = async (db: typeof test.admin.db, day: number) => {
+      const id = newId(LeaveRequestIdSchema);
+      await db.insert(schema.leaveRequests).values({
+        id,
+        memberId: lou.id,
+        firstDay: parisDay(day),
+        lastDay: parisDay(day),
+        timeZone: PARIS,
+        startsAt: parisInstant(parisDay(day), 0),
+        endsAt: parisInstant(parisDay(day + 1), 0),
+        status: 'approved',
+        decidedAt: new Date(),
+        decidedBy: nora.userId,
+        createdBy: lou.userId,
+      });
+      return id;
+    };
+    const louOn = (day: number) =>
+      shiftBody(
+        lou.id,
+        ines,
+        inesAccount,
+        parisInstant(parisDay(day), 600),
+        parisInstant(parisDay(day), 720),
+      );
+    const away = await approvedLeave(test.admin.db, 12);
+    const twelfth = {
+      startsAt: parisInstant(parisDay(12), 600).toISOString(),
+      endsAt: parisInstant(parisDay(12), 720).toISOString(),
+    };
+
+    const onLeave = await call('POST', '/scheduling/shifts', owner, louOn(12));
+    expect([onLeave.statusCode, codeOf(onLeave), detailsOf(onLeave)]).toEqual([
+      409,
+      'member_on_leave_conflict',
+      { leaveRequestId: away },
+    ]);
+    const before = await call('POST', '/scheduling/shifts', noraCookie, louOn(11));
+    expect(before.statusCode).toBe(201);
+    const moved = await call('PATCH', `/scheduling/shifts/${ShiftSchema.parse(before.json()).id}`, owner, {
+      startsAt: louOn(12).startsAt,
+      endsAt: louOn(12).endsAt,
+    });
+    expect([moved.statusCode, codeOf(moved)]).toEqual([409, 'member_on_leave_conflict']);
+
+    // A template makes nothing during the leave, and the planning shows that occurrence as a shift to fill.
+    const created = await call('POST', '/scheduling/shift-templates', owner, {
+      creatorId: ines,
+      platformAccountId: inesAccount,
+      memberId: lou.id,
+      weekday: weekdayOf(parisDay(12)),
+      startMinute: 600,
+      endMinute: 720,
+      validFrom: parisDay(0),
+    });
+    expect(created.statusCode).toBe(201);
+    const template = ShiftTemplateSchema.parse(created.json());
+    const from = parisInstant(parisDay(0), 0);
+    const to = parisInstant(parisDay(28), 0);
+    const louShifts = async () =>
+      (await planning(owner, from, to, ines)).shifts
+        .filter((shift) => shift.templateId === template.id)
+        .map((shift) => shift.startsAt);
+    const toFill = async () =>
+      (await planning(owner, from, to, ines)).conflicts.filter(
+        (conflict) => conflict.templateId === template.id,
+      );
+    expect(await louShifts()).toEqual(
+      [5, 19, 26].map((day) => parisInstant(parisDay(day), 600).toISOString()),
+    );
+    expect(await toFill()).toEqual([
+      {
+        templateId: template.id,
+        ...twelfth,
+        reason: 'member_on_leave',
+        leaveRequestId: away,
+      },
+    ]);
+    const jobLogger = { warn: () => undefined };
+    expect(await app.modules.scheduling.jobs.makeShifts(jobLogger)).toBe(0);
+
+    // Cancelled before it started, the leave covers nothing: the job makes the occurrence.
+    await test.admin.db
+      .update(schema.leaveRequests)
+      .set({ status: 'cancelled', cancelledAt: new Date(), cancelledBy: nora.userId })
+      .where(eq(schema.leaveRequests.id, away));
+    expect(await app.modules.scheduling.jobs.makeShifts(jobLogger)).toBe(1);
+    expect(await louShifts()).toContain(twelfth.startsAt);
+    expect(await toFill()).toEqual([]);
+
+    // A leave approved while a shift is being placed: the shift waits for the member's lock, then sees the leave.
+    const someoneWaitsOnTheMember = async () =>
+      (
+        await test.admin.db.execute<{ waiting: number }>(
+          // `pg_locks` shows every role's locks; `pg_stat_activity` hides another role's waits.
+          sql`select count(*)::int as waiting from pg_locks where locktype = 'advisory' and not granted`,
+        )
+      ).rows[0]?.waiting !== 0;
+    const { placing, approved } = await test.admin.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`scheduling.member:${lou.id}`}, 0))`,
+      );
+      // `inject` sends nothing until something waits on it.
+      const placing = Promise.resolve(call('POST', '/scheduling/shifts', owner, louOn(13)));
+      for (let tries = 0; !(await someoneWaitsOnTheMember()); tries += 1) {
+        if (tries > 250) throw new Error('the shift never waited for the member’s lock');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return { placing, approved: await approvedLeave(tx, 13) };
+    });
+    const late = await placing;
+    expect([late.statusCode, codeOf(late), detailsOf(late)]).toEqual([
+      409,
+      'member_on_leave_conflict',
+      { leaveRequestId: approved },
+    ]);
   });
 });

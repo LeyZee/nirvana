@@ -108,3 +108,12 @@ export class OwnerOnly extends DomainError {
     super('role_forbidden', 'Seul le propriétaire règle le planning');
   }
 }
+
+/** No shift on a member during their approved leave (ADR 0031). */
+export class MemberOnLeave extends DomainError {
+  constructor(leaveRequestId: string) {
+    super('member_on_leave_conflict', 'Ce membre est en congé à ce moment-là', {
+      details: { leaveRequestId },
+    });
+  }
+}

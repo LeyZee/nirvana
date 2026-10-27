@@ -22,6 +22,7 @@ import {
 } from '@nirvana/contracts';
 
 import { CreatorNotFound } from '../domain/errors';
+import { leaveCover } from '../domain/leaves';
 import type {
   Actor,
   CreatorDirectory,
@@ -123,6 +124,11 @@ export function createSchedulingService(
         shift.startsAt.getTime() < to.getTime() && from.getTime() < shift.endsAt.getTime();
       const shifts = read.shifts.filter((shift) => asked(shift.creatorId) && inRange(shift));
       const templates = read.templates.filter((template) => asked(template.creatorId));
+      // An occurrence during its member's leave is a shift to fill (ADR 0031), shown before anything else in its way.
+      const leaves = read.leaves.flatMap((leave) => {
+        const cover = leaveCover(leave);
+        return cover === null ? [] : [{ id: leave.id, memberId: leave.memberId, ...cover }];
+      });
       const conflicts = conflictsOf(
         templates,
         read.made,
@@ -130,6 +136,7 @@ export function createSchedulingService(
         { from, to },
         now(),
         settings.timeZone,
+        leaves,
       );
       const named = new Set([
         ...shifts.map((shift) => shift.memberId),

@@ -489,14 +489,23 @@ export type ShiftSwapStatus = z.infer<typeof ShiftSwapStatusSchema>;
 
 /**
  * A chatter's swap (ADR 0031): `shiftId`, theirs, goes to `targetMemberId`; with `targetShiftId`, that colleague's
- * shift comes back to them (an exchange), without it the shift is given.
+ * shift comes back to them (an exchange), without it the shift is given. The swap keeps what it noted when it was
+ * proposed, each shift's creator and hours: a screen says a swap that ended from them (« Ton shift du jeu. 23 h – 5 h
+ * sur Nora : refusé »), since the shift itself may no longer be readable.
  */
 export const ShiftSwapRequestSchema = z.object({
   id: ShiftSwapRequestIdSchema,
   requesterId: TeamMemberIdSchema,
   shiftId: ShiftIdSchema,
+  creatorId: CreatorIdSchema,
+  shiftStartsAt: z.iso.datetime(),
+  shiftEndsAt: z.iso.datetime(),
   targetMemberId: TeamMemberIdSchema,
   targetShiftId: ShiftIdSchema.nullable(),
+  /** With `targetShiftId`, its creator and hours as noted; `null` for a shift given. */
+  targetCreatorId: CreatorIdSchema.nullable(),
+  targetShiftStartsAt: z.iso.datetime().nullable(),
+  targetShiftEndsAt: z.iso.datetime().nullable(),
   /** What the requester wrote to the colleague. */
   message: z.string().nullable(),
   status: ShiftSwapStatusSchema,
@@ -511,8 +520,12 @@ export type ShiftSwapRequest = z.infer<typeof ShiftSwapRequestSchema>;
 /**
  * `GET /v1/scheduling/swap-requests`: the proposed swaps, and those resolved in the last `SHIFT_SWAP_RECENT_DAYS`. A
  * member reads the swaps they make or receive; the owner and an active manager read every one, which is how they hear
- * of them until EQ-12 notifies. `shifts` holds the shifts the swaps name, as they are now (cancelled ones aside), with
- * their `accounts` and `members`.
+ * of them until EQ-12 notifies. `shifts` holds the shifts the swaps name that the reader may read now, as they are
+ * (cancelled ones aside): both shifts of a proposed or accepted swap, and otherwise the reader's own (every one for
+ * the owner and an active manager). An ended swap is said from what it noted, never from its shift. `accounts` holds
+ * the accounts of every creator the swaps name (her name is there even when no shift is), and `members` every member
+ * they name, by display name and colour only: a chatter's policies show them their own row alone, so the server reads
+ * these three columns outside them, for the members of the swaps the policies let the reader read (ADR 0031).
  */
 export const ShiftSwapListSchema = z.object({
   swapRequests: z.array(ShiftSwapRequestSchema),
@@ -527,7 +540,9 @@ export type ShiftSwapList = z.infer<typeof ShiftSwapListSchema>;
  * colleagues who could take it, active members who work on its creator and are not on an approved leave then, with
  * their shifts that have not started, within `SHIFT_TEMPLATE_HORIZON_DAYS`, on creators the requester works on (what
  * an exchange could give back). A display name, a colour and shifts: the one door through which a chatter reads a
- * colleague's planning (ADR 0031), never a rate, a country or a status.
+ * colleague's planning (ADR 0031), never a rate, a country or a status. A leave is never said, only its effect (the
+ * colleague is not listed). The server checks under the policies that the shift is the reader's and ahead, then reads
+ * the rest outside them, bounded to these fields.
  */
 export const SwapCandidatesQuerySchema = z.object({ shiftId: ShiftIdSchema });
 
