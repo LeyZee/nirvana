@@ -21,11 +21,41 @@ import { CalendarDaySchema, MemberColorSchema } from './team-members';
  * when a template makes its shifts: a slot keeps its wall-clock hours across a change of time, so a 6-hour night slot
  * lasts 5 or 7 hours that night.
  *
- * On shift (`onShift`, glossary « En poste »). A member is on shift on an account at an instant `at` when one of his
- * shifts there, not cancelled, has `startsAt ≤ at < endsAt`. A chatter's access window (ADR 0025, EQ-13) widens it by
- * `accessMarginMinutes` on each side: `startsAt − margin ≤ at < endsAt + margin`. The server computes both from the
- * database at each request, never from a request and never from a cache: a shift cancelled, moved or shortened
- * counts as it now is from the next request on.
+ * Instants on the minute. `startsAt` and `endsAt` fall on a minute (seconds and milliseconds at zero), and a shift
+ * lasts `SHIFT_MAX_MINUTES` at most: anything else answers 400 `shift_range_invalid`.
+ *
+ * Wall-clock times that do not exist or happen twice. A template's hour that falls in the spring gap (02:30 on the
+ * last Sunday of March in Paris) becomes the first instant after the gap (03:00); an hour that happens twice in the
+ * autumn becomes the first of the two. The `scheduling` module converts, and its tests hold both cases. A template
+ * lasts `SHIFT_TEMPLATE_MAX_MINUTES` at most, so that a change of time never stretches one of its shifts past a day.
+ *
+ * On shift (`onShift`, glossary « En poste »). A member is on shift on an account at an instant `at` when they are
+ * `active` and one of their shifts there, not cancelled, has `startsAt ≤ at < endsAt`. Their access window (ADR 0025,
+ * EQ-13) widens it by `accessMarginMinutes` on each side, `startsAt − margin ≤ at < endsAt + margin`, with two
+ * exceptions: a shift a person stopped while under way (`stoppedAt`, see `UpdateShiftBodySchema`) gets no margin
+ * after its end, and a member who is not `active` has no window at all, whatever their shifts. A cancelled shift
+ * counts for neither. The server computes both from the database at each request, never from a request and never
+ * from a cache: a shift cancelled, moved, shortened or stopped counts as it now is from the next request on.
+ *
+ * Who reads which. The routing of a « sale » handover (EQ-13), `OnDuty` and `MyShifts.current` read `onShift`, without
+ * the margin: a sale never goes to a chatter who is only in their margin. Only the creators' list of ADR 0025
+ * (`shiftCreatorIds`) reads the window, per creator: a chatter whose window is open on any account of a creator keeps
+ * that creator.
+ *
+ * One member, one account, one instant. The database decides it, not a read before the write: two exclusion
+ * constraints (`btree_gist`, `tstzrange(starts_at, ends_at, '[)')`, cancelled shifts aside) keep a member off two
+ * shifts at once and an account off two members at once, so two people planning at the same moment cannot both win.
+ * A violation (23P01) answers 409 `shift_member_conflict` or `shift_account_conflict`; the server then reads the
+ * shift in the way and gives it in `details.shiftId`.
+ *
+ * The past is kept. A shift that has ended (`endsAt ≤ now`) no longer changes: 409 `shift_ended_conflict`. A shift
+ * under way may only be shortened, stopped or cancelled; any other change answers 409 `shift_started_conflict`. A new
+ * shift ends after now. A cancelled shift is never sent back, and changing it answers `shift_not_found`.
+ *
+ * Creator and account. A shift and a template name both: the server checks that the account is the creator's
+ * (`platform_account_not_found` otherwise), and the database holds the pair by a composite foreign key
+ * `(platform_account_id, creator_id)` to `platform_accounts (id, creator_id)`, so that no row can open the wrong
+ * creator in `shiftCreatorIds`.
  */
 
 /** Slot lengths that divide a day, so the slots tile it (4 × 6 h by default, like Imperium's grid). */
@@ -33,6 +63,9 @@ export const SHIFT_SLOT_LENGTHS_MINUTES = [60, 120, 180, 240, 360, 480, 720] as 
 
 /** The longest shift: beyond a day, it is a typing mistake. */
 export const SHIFT_MAX_MINUTES = 24 * 60;
+
+/** The longest template: an hour short of a day, so that the autumn change of time keeps its shifts within a day. */
+export const SHIFT_TEMPLATE_MAX_MINUTES = SHIFT_MAX_MINUTES - 60;
 
 /** The widest range one planning read covers (six weeks). */
 export const PLANNING_MAX_DAYS = 42;
@@ -51,7 +84,7 @@ export const SchedulingSettingsSchema = z
     /** Where the day's first slot starts, in minutes after midnight; earlier than the end of that slot. */
     slotStartMinute: MinuteOfDaySchema,
     slotLengthMinutes: z.literal(SHIFT_SLOT_LENGTHS_MINUTES),
-    /** ADR 0025: how long before and after his shift a chatter keeps his creators in Nirvana. */
+    /** ADR 0025: how long before and after their shift a chatter keeps their creators in Nirvana. */
     accessMarginMinutes: z.number().int().min(0).max(120),
   })
   .refine((settings) => settings.slotStartMinute < settings.slotLengthMinutes, {
@@ -90,13 +123,16 @@ export const ShiftSchema = z.object({
   endsAt: z.iso.datetime(),
   /** The template that made it, or `null` for a shift set by hand. */
   templateId: ShiftTemplateIdSchema.nullable(),
+  /** When a person stopped it under way (it then ends at that minute, without the end margin), or `null`. */
+  stoppedAt: z.iso.datetime().nullable(),
 });
 export type Shift = z.infer<typeof ShiftSchema>;
 
 /**
- * `POST /v1/scheduling/shifts` (owner, active manager) → 201 `ShiftSchema`. The member works on this creator, the
- * account is hers, and the range lasts a whole number of minutes, `SHIFT_MAX_MINUTES` at most. A member is never on
- * two shifts at once, and an account never has two members at once: either answers 409 with the shift in the way.
+ * `POST /v1/scheduling/shifts` (owner, active manager) → 201 `ShiftSchema`. The member is `active` and works on this
+ * creator, the account is hers, both instants fall on a minute, the shift lasts `SHIFT_MAX_MINUTES` at most and ends
+ * after now. A member is never on two shifts at once, and an account never has two members at once: either answers
+ * 409 with the shift in the way.
  */
 export const CreateShiftBodySchema = z.object({
   creatorId: CreatorIdSchema,
@@ -108,8 +144,11 @@ export const CreateShiftBodySchema = z.object({
 export type CreateShiftBody = z.infer<typeof CreateShiftBodySchema>;
 
 /**
- * `PATCH /v1/scheduling/shifts/:shiftId` (owner, active manager) → `ShiftSchema`: another member, or other times
- * (shortened to now, it ends now). Same rules as a new shift. A template's shift changed by hand stays changed.
+ * `PATCH /v1/scheduling/shifts/:shiftId` (owner, active manager) → `ShiftSchema`. Before it starts: another member, or
+ * other times, under the rules of a new shift. Under way: only an earlier `endsAt`. One still after now shortens it;
+ * one at or before now stops it, at the minute of the request: `stoppedAt` is set and the access window closes with
+ * the shift, without the end margin (a shift stopped in the minute it started is cancelled instead). Ended: 409
+ * `shift_ended_conflict`. A template's shift changed by hand stays changed.
  */
 export const UpdateShiftBodySchema = z
   .object({ memberId: TeamMemberIdSchema, startsAt: z.iso.datetime(), endsAt: z.iso.datetime() })
@@ -118,9 +157,17 @@ export const UpdateShiftBodySchema = z
 export type UpdateShiftBody = z.infer<typeof UpdateShiftBodySchema>;
 
 /*
- * `DELETE /v1/scheduling/shifts/:shiftId` (owner, active manager) → 204: the shift is cancelled, kept in the audit
- * trail, and its template never makes it again.
+ * `DELETE /v1/scheduling/shifts/:shiftId` (owner, active manager) → 204: the shift, not yet ended, is cancelled, kept
+ * in the audit trail, and its template never makes it again. Its access window closes at the next request.
  */
+
+/** How long a template lasts in wall-clock minutes, an end at or before the start being the next day. */
+export function templateLengthMinutes(template: {
+  readonly startMinute: number;
+  readonly endMinute: number;
+}): number {
+  return (template.endMinute - template.startMinute + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}
 
 /**
  * A weekly shift: every `weekday` from `validFrom`, from `startMinute` to `endMinute` in the grid's zone (an end at
@@ -163,6 +210,10 @@ export const CreateShiftTemplateBodySchema = z
   .refine((body) => body.startMinute !== body.endMinute, {
     message: 'Un modèle commence et finit à des heures différentes',
     path: ['endMinute'],
+  })
+  .refine((body) => templateLengthMinutes(body) <= SHIFT_TEMPLATE_MAX_MINUTES, {
+    message: 'Un modèle dure 23 heures au plus',
+    path: ['endMinute'],
   });
 export type CreateShiftTemplateBody = z.infer<typeof CreateShiftTemplateBodySchema>;
 
@@ -184,7 +235,7 @@ export const PlanningAccountSchema = z.object({
 });
 export type PlanningAccount = z.infer<typeof PlanningAccountSchema>;
 
-/** A member as the planning names him: on a shift, in a template, or in a conflict. */
+/** A member as the planning names them: on a shift, in a template, or in a conflict. */
 export const PlanningMemberSchema = z.object({
   id: TeamMemberIdSchema,
   displayName: z.string().min(1),
@@ -208,8 +259,10 @@ export type PlanningConflict = z.infer<typeof PlanningConflictSchema>;
 
 /**
  * `GET /v1/scheduling/planning?from=…&to=…[&creatorId=…]`: the shifts that overlap [`from`, `to`), at most
- * `PLANNING_MAX_DAYS`. The owner and an active manager read every creator; any other member reads his own shifts
- * only, on his own creators, and gets no conflicts.
+ * `PLANNING_MAX_DAYS`. The owner and an active manager read every creator: every account, every member named by a
+ * shift or a template, and the conflicts. Any other member (a chatter, a manager who is not `active`) reads their own
+ * shifts only: `shifts` holds theirs, `accounts` the accounts those shifts are on, `members` themselves alone, and
+ * `conflicts` stays empty. A colleague's name never reaches a chatter through the planning.
  */
 export const PlanningQuerySchema = z.object({
   from: z.iso.datetime(),
@@ -227,7 +280,10 @@ export const PlanningSchema = z.object({
 });
 export type Planning = z.infer<typeof PlanningSchema>;
 
-/** Who is on shift right now on one account (`GET /v1/scheduling/on-duty`, owner and active manager). */
+/**
+ * Who is on shift right now on one account (`GET /v1/scheduling/on-duty`, owner and active manager): `onShift`, without
+ * the margin.
+ */
 export const OnDutySchema = z.object({
   creatorId: CreatorIdSchema,
   platformAccountId: PlatformAccountIdSchema,
@@ -239,13 +295,26 @@ export type OnDuty = z.infer<typeof OnDutySchema>;
 
 export const OnDutyListSchema = z.object({ onDuty: z.array(OnDutySchema) });
 
-/** A member's own shift, with its creator's name: a chatter does not read the creators' list (ADR 0025). */
-export const MyShiftSchema = ShiftSchema.extend({ creatorName: z.string().min(1) });
+/**
+ * A member's own shift, for Aujourd'hui: its creator's name (a chatter does not read the creators' list, ADR 0025),
+ * the account to open in the platform (the chatter chats there, never in Nirvana), and the access window the server
+ * computed for it (`accessEndsAt` is `endsAt` for a stopped shift).
+ */
+export const MyShiftSchema = ShiftSchema.extend({
+  creatorName: z.string().min(1),
+  platform: PlatformSchema,
+  handle: z.string().min(1),
+  accessStartsAt: z.iso.datetime(),
+  accessEndsAt: z.iso.datetime(),
+});
 export type MyShift = z.infer<typeof MyShiftSchema>;
 
 /**
- * `GET /v1/scheduling/my-shifts` (any team member): the shift he is on now, if any, and his next one, for Aujourd'hui.
- * Both `null` for an account that is not in the team.
+ * `GET /v1/scheduling/my-shifts` (any team member), for Aujourd'hui. `current` is the shift the member is on now,
+ * `onShift` without the margin (`startsAt ≤ now < endsAt`): « En poste ». `next` is the earliest shift that starts
+ * after now, even when its start margin is already open: « Bientôt en poste ». A shift whose end margin is still open
+ * after its end is in neither; its creator stays open through the creators' list of ADR 0025. Both `null` for an
+ * account that is not in the team, and for a member who is not `active`.
  */
 export const MyShiftsSchema = z.object({ current: MyShiftSchema.nullable(), next: MyShiftSchema.nullable() });
 export type MyShifts = z.infer<typeof MyShiftsSchema>;
@@ -254,10 +323,12 @@ export type MyShifts = z.infer<typeof MyShiftsSchema>;
  * The error codes of `/v1/scheduling`, for the screens to say them in French (the suffix gives the status, api.md):
  * `shift_not_found` 404 ; `shift_template_not_found` 404 ; `member_not_found` 404 ; `creator_not_found` 404 ;
  * `platform_account_not_found` 404, an account that is not this creator's ; `member_left_conflict` 409, a member who
- * left gets no shift ; `member_creator_conflict` 409, the member does not work on this creator ;
+ * is not `active` gets no shift ; `member_creator_conflict` 409, the member does not work on this creator ;
  * `shift_member_conflict` 409, the member already has a shift then ; `shift_account_conflict` 409, the account already
- * has a member then (both with `details.shiftId`, the shift in the way) ; `shift_range_invalid` 400, an end at or
- * before the start, a range longer than `SHIFT_MAX_MINUTES` or not in whole minutes ; `planning_range_invalid` 400,
+ * has a member then (both with `details.shiftId`, the shift in the way) ; `shift_ended_conflict` 409, a shift that
+ * has ended, or a new one that would end at or before now ; `shift_started_conflict` 409, a change other than an
+ * earlier end on a shift under way ; `shift_range_invalid` 400, an end at or before the start, a shift longer than
+ * `SHIFT_MAX_MINUTES`, or an instant that does not fall on a minute ; `planning_range_invalid` 400,
  * `to` at or before `from`, or more than `PLANNING_MAX_DAYS` ; `shift_template_date_invalid` 400, a template that
  * starts before today.
  */
@@ -271,6 +342,8 @@ export const SCHEDULING_ERROR_CODES = [
   'member_creator_conflict',
   'shift_member_conflict',
   'shift_account_conflict',
+  'shift_ended_conflict',
+  'shift_started_conflict',
   'shift_range_invalid',
   'planning_range_invalid',
   'shift_template_date_invalid',

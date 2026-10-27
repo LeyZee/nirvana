@@ -3,16 +3,29 @@ import { describe, expect, it } from 'vitest';
 import {
   CreateShiftBodySchema,
   CreateShiftTemplateBodySchema,
+  MyShiftsSchema,
   PlanningSchema,
   SCHEDULING_ERROR_CODES,
   SchedulingSettingsSchema,
+  SHIFT_TEMPLATE_MAX_MINUTES,
   shiftSlotsOf,
+  templateLengthMinutes,
   UpdateShiftBodySchema,
 } from './scheduling';
 
 const CREATOR = '0199f2a0-0000-7000-8000-0000000000c1';
 const ACCOUNT = '0199f2a0-0000-7000-8000-0000000000a1';
 const MEMBER = '0199f2a0-0000-7000-8000-0000000000e1';
+
+const shift = {
+  id: '0199f2a0-0000-7000-8000-0000000000f1',
+  creatorId: CREATOR,
+  platformAccountId: ACCOUNT,
+  memberId: MEMBER,
+  startsAt: '2026-10-28T23:00:00Z',
+  endsAt: '2026-10-29T05:00:00Z',
+  templateId: null,
+};
 
 const settings = {
   timeZone: 'Europe/Paris',
@@ -86,9 +99,58 @@ describe('shifts and templates', () => {
     expect(CreateShiftTemplateBodySchema.safeParse({ ...template, weekday: 0 }).success).toBe(false);
   });
 
+  it('keeps a template an hour short of a day, so the autumn change of time never stretches it past one', () => {
+    const template = {
+      creatorId: CREATOR,
+      platformAccountId: ACCOUNT,
+      memberId: MEMBER,
+      weekday: 6,
+      startMinute: 60,
+      endMinute: 0,
+      validFrom: '2026-11-02',
+    };
+    expect(templateLengthMinutes(template)).toBe(1380);
+    expect(templateLengthMinutes({ startMinute: 1080, endMinute: 0 })).toBe(360);
+    expect(SHIFT_TEMPLATE_MAX_MINUTES).toBe(1380);
+    expect(CreateShiftTemplateBodySchema.safeParse(template).success).toBe(true);
+    expect(CreateShiftTemplateBodySchema.safeParse({ ...template, startMinute: 59 }).success).toBe(false);
+  });
+
   it('reads an empty planning', () => {
     const empty = { settings, accounts: [], members: [], shifts: [], conflicts: [] };
     expect(PlanningSchema.parse(empty).shifts).toEqual([]);
+  });
+
+  it('gives a chatter their own shifts, the accounts those are on, themselves alone and no conflict', () => {
+    const chatterPlanning = {
+      settings,
+      accounts: [
+        { id: ACCOUNT, creatorId: CREATOR, creatorName: 'Nora Vidal', platform: 'reveal', handle: 'nora' },
+      ],
+      members: [{ id: MEMBER, displayName: 'Théo', color: '#c2410c' }],
+      shifts: [{ ...shift, stoppedAt: null }],
+      conflicts: [],
+    };
+    const planning = PlanningSchema.parse(chatterPlanning);
+    expect(planning.members.map((member) => member.id)).toEqual([MEMBER]);
+    expect(planning.shifts.every((one) => one.memberId === MEMBER)).toBe(true);
+  });
+
+  it('tells Aujourd’hui which account to open and when the creators open and close', () => {
+    const mine = {
+      ...shift,
+      stoppedAt: null,
+      creatorName: 'Nora Vidal',
+      platform: 'reveal',
+      handle: 'nora',
+      accessStartsAt: '2026-10-28T22:45:00Z',
+      accessEndsAt: '2026-10-29T05:15:00Z',
+    };
+    expect(MyShiftsSchema.parse({ current: null, next: mine }).next?.handle).toBe('nora');
+    expect(MyShiftsSchema.safeParse({ current: null, next: { ...mine, platform: undefined } }).success).toBe(
+      false,
+    );
+    expect(MyShiftsSchema.parse({ current: null, next: null })).toEqual({ current: null, next: null });
   });
 
   it('gives every error code a suffix that sets its status (api.md)', () => {
