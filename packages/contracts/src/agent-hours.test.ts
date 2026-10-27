@@ -140,4 +140,19 @@ describe('agent hours (P3-14)', () => {
     expect(nextFollowUpAllowed(night, PARIS, paris('2026-10-27T15:00:00'))).toBeNull();
     expect(nextFollowUpAllowed(night, PARIS, paris('2026-10-27T23:30:00'))).toBeNull();
   });
+
+  it('walks a full week of night slots before it finds the one out of her quiet hours', () => {
+    // 28 slots, four a night in her quiet hours, but Sunday's last at 10:00: a whole week to walk.
+    const nights = ['23:00', '00:00', '01:00', '02:00'];
+    const slots = [1, 2, 3, 4, 5, 6, 7].flatMap((day) =>
+      nights.map((start, i) =>
+        day === 7 && i === 3 ? slot(7, '10:00', '11:00') : slot(day, start, `${start.slice(0, 2)}:30`),
+      ),
+    );
+    const hours = withSlots(...slots);
+    expect(AgentHoursSchema.safeParse(hours).success).toBe(true);
+    expect(nextFollowUpAllowed(hours, PARIS, paris('2026-10-26T15:00:00'))).toEqual(
+      paris('2026-11-01T10:00:00'),
+    );
+  });
 });

@@ -228,8 +228,10 @@ export function replyOpenedAt(hours: AgentHours, timeZone: string, at: Date): Da
  */
 export function nextFollowUpAllowed(hours: AgentHours, timeZone: string, after: Date): Date | null {
   let at = after;
-  // Each step moves to an opening or out of the quiet hours; a week of slots settles in a few.
-  for (let i = 0; i < 32; i += 1) {
+  // Each step moves to an opening or past the quiet hours, about two a day; bounded in time too: past a week and a
+  // day of her clock, no minute will ever allow one.
+  const horizon = after.getTime() + 8 * MINUTES_PER_DAY * MINUTE_MS;
+  for (let i = 0; i < 4 * AGENT_SLOTS_MAX + 8 && at.getTime() <= horizon; i += 1) {
     if (!replyOpenAt(hours, timeZone, at)) at = nextReplyOpening(hours, timeZone, at);
     else if (followUpQuietAt(hours, timeZone, at))
       at = nextWallMinute(at, timeZone, hours.followUpQuiet.endMinute);
