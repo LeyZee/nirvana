@@ -1,4 +1,4 @@
-import type { ConversationDesire, DesirePoint } from '@nirvana/contracts';
+import { DESIRE_BAND_FLOORS, type ConversationDesire, type DesirePoint } from '@nirvana/contracts';
 import { chartPoints, linePath, nearestIndex } from '@nirvana/design-system';
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -11,10 +11,10 @@ import { clockAt, dayOf, shortDay } from '@/scheduling/time';
 /** The curve follows the reader's pace: a new message of his moves it. */
 const REFRESH_MS = 10_000;
 
-/** The two floors drawn across the curve, named by the band they open (glossary « Note de désir »). */
+/** The two floors drawn across the curve, from the contracts' bands, named by the band they open (glossary « Note de désir »). */
 const FLOORS = [
-  { value: 40, band: 'playful' },
-  { value: 70, band: 'hot' },
+  { value: DESIRE_BAND_FLOORS.playful, band: 'playful' },
+  { value: DESIRE_BAND_FLOORS.hot, band: 'hot' },
 ] as const;
 
 /**
