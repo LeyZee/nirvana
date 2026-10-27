@@ -16,7 +16,7 @@ Plateforme ──(poll toutes les N s, ou WebSocket)──▶ Connector.listConv
                                      • si inbound : addJob('conversation.respond', { conversationId },
                                          { queueName: 'conv:'+id, jobKey: 'respond:'+id, jobKeyMode: 'replace',
                                            runAt: now + debounceFor(conversation, persona) })
-                                     • annule le follow_up en attente (jobKey replace avec runAt = null, ou flag)
+                                     • la relance en attente ne partira pas : son ancre (son dernier message) a bougé
 ```
 
 Le debounce (30 à 90 s, selon la persona et l'heure) fait qu'un fan qui envoie trois messages d'affilée obtient une seule réponse qui les prend tous en compte. Le `queueName` garantit qu'aucun autre job ne touche la conversation en même temps.
@@ -87,7 +87,7 @@ Mode auto : `CreatorSettings.auto_approve_categories` (ex. `['small_talk','kyc',
 ## 4. Après l'envoi
 
 - **Mémoire** : les `facts_proposed` du brief deviennent `fan_facts` avec `kind` et `confidence` ; en copilote, l'approbation du draft vaut confirmation. Tous les N messages (config), job `fans.refresh_summary`.
-- **Relance** : si `decision.follow_up_in` est défini, `addJob('conversation.follow_up', …, { jobKey: 'follow_up:'+id, runAt })`. Un message entrant annule la relance.
+- **Relance** (P3-10) : quand un message d'elle est vérifié envoyé, `conversation.send` programme `conversation.follow_up` au premier délai de `persona.follow_ups.delays_hours` encore à venir, compté depuis le dernier message du fan (l'ancre), sur `conv:<id>` avec `job_key = conversation.follow_up:<id>` (une seule relance en attente), et écrit `follow_up_scheduled`. Le job relit sous verrou : conversation au repos (`idle`), ancre inchangée, sa réponse à elle après l'ancre, étape encore prévue par la persona, aucune porte fermée. Sinon il écrit `follow_up_cancelled` et s'arrête : un message du fan, une prise en main ou une pause annulent donc la relance sans retirer le job. Sinon le moteur reçoit `followUp { step, steps, silentSince }`, décide si elle part et l'écrit : un brouillon à valider comme toute réponse (jamais un envoi direct), puis l'envoi programme l'étape suivante avec la même ancre. Au-delà du dernier délai, plus rien. Un refus du moteur (`no_reply`) avec `retryAt` (ses heures calmes) reprogramme la même étape à cette heure, à 24 h au plus ; sans, un refus, un modèle injoignable ou un budget atteint n'écrivent rien ; une garde ou une passation donnent la main aux chatteurs. Sans le port `FollowUpPlan` (délais de la persona, module agent), rien n'est programmé.
 - **Ventes** (phase 6) : `sale_detected` vient du connecteur (poll des transactions ou message typé) et met à jour `media_sends`, `sales`.
 
 ## 5. Prise en main humaine

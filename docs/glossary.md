@@ -70,7 +70,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Coffre | `vault` | Les médias de la créatrice stockés sur la plateforme, réutilisables à l'envoi. |
 | Capture | `recording` | Un enregistrement anonymisé du trafic entre le site d'une plateforme et ses serveurs (HAR ou enregistreur de l'extension). |
 | Fan test | `test_fan` | Un compte fan qui appartient à l'agence, seule cible autorisée des écritures pendant les captures et les tests manuels. |
-| Relance | `follow_up` | Message envoyé après un silence du fan. |
+| Relance | `follow_up` | Message qu'elle écrit après un silence du fan, aux délais de la persona ; un brouillon à valider comme toute réponse (P3-10). |
+| Ancre d'une relance | `anchorAt` | Le dernier message du fan, d'où se comptent les délais des relances ; un nouveau message de lui la déplace et la relance en attente ne part pas. |
 | Petit rappel | `nudge` | Rappel court quand le fan a lu sans répondre (« nudge » d'OnlyChat). |
 | Cooldown | `cooldown` | Délai pendant lequel le bot ne pousse pas de vente. |
 | Connecteur | `connector` | Adaptateur d'une plateforme derrière le port `PlatformConnector`. |

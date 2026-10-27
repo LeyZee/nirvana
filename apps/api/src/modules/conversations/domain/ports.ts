@@ -344,6 +344,21 @@ export interface ComposeInput {
   /** The last 40 messages, oldest first. */
   readonly history: readonly HistoryMessage[];
   readonly fan: FanContext;
+  /**
+   * Present for a follow-up (P3-10): he went silent after her answer, nothing of his is to be answered. The engine
+   * decides whether one goes out (`held` with `no_reply` when not) and writes it like an answer, draft and guards.
+   */
+  readonly followUp?: FollowUpContext;
+}
+
+/** Which follow-up this is, after which silence. */
+interface FollowUpContext {
+  /** The index of the delay in `persona.follow_ups.delays_hours`, from 0. */
+  readonly step: number;
+  /** How many delays the persona has: the last step is `steps - 1`. */
+  readonly steps: number;
+  /** His last message: the silence the delays count from. */
+  readonly silentSince: Date;
 }
 
 /** Why the engine wrote no draft. The first three hand the conversation to the chatters. */
@@ -366,6 +381,11 @@ export type ComposeResult =
       readonly cause?: HandoffCause;
       readonly detail: readonly string[];
       readonly costUsd: number;
+      /**
+       * A follow-up only, with `no_reply`: not now but later (her quiet hours), so the same step is scheduled again at
+       * that time. Within `FOLLOW_UP_RETRY_MAX_HOURS`; otherwise the follow-up is cancelled.
+       */
+      readonly retryAt?: Date;
     };
 
 /**
@@ -374,6 +394,14 @@ export type ComposeResult =
  */
 export interface DraftComposer {
   compose(input: ComposeInput): Promise<ComposeResult>;
+}
+
+/**
+ * The persona's follow-up delays (`persona.follow_ups`), implemented by the agent's adapter: hours after the fan's
+ * last message, strictly increasing; empty when her follow-ups are off. Without this port nothing is scheduled.
+ */
+export interface FollowUpPlan {
+  delaysHours(creatorId: CreatorId): Promise<readonly number[]>;
 }
 
 /** What a job handler logs through; the composition root passes the job's own logger. */
