@@ -16,11 +16,12 @@ Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « 
 - [ ] Base (via le propriétaire de `packages/db`) : `shifts`, `shift_templates`, `leave_requests`, `shift_swap_requests`, avec `creator_id` et `member_id` ; RLS sur les deux pour les congés et les échanges (la créatrice **et** le membre lui-même ou le scope `agency`). Vue « en poste » pour la créatrice : nom affiché et créneau seulement, jamais `team_members`.
 - [ ] Module `scheduling` : CRUD, matérialisation des modèles par un job Graphile rejouable, demandes de congé et d'échange (manager ou propriétaire valident), `onShift(creatorId, at)` exporté par `index.ts`.
 - [ ] Écrans, à la place que fixe l'ADR 0024 : le planning de l'équipe (semaine, par créatrice, fuseau au choix, conflits signalés) et celui d'un chatteur (le sien, celui de l'équipe, congés et échanges).
-- [ ] Rappel de shift et « shift sans rapport » dans l'application (À traiter du membre), pas sur Telegram.
+- [ ] Rappel de shift et « shift sans rapport » dans l'application (À traiter du membre), pas sur Telegram ; sur le téléphone, la prise de poste et le shift non pris viennent avec EQ-12.
 
 ## Critères d'acceptation
 - Tests du domaine : créneau de nuit à cheval sur minuit, changement d'heure été/hiver, conflit détecté, modèle récurrent rejoué sans doublon.
 - Tests d'intégration : un chatteur ne voit que les shifts de ses créatrices et ne lit pas les congés d'un autre chatteur de la même créatrice ; la créatrice ne lit ni taux ni pays par la vue « en poste ».
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Rapports de fin de shift (fiche suivante), paie, routage hybride.

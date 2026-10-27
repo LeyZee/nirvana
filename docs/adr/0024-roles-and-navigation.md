@@ -1,6 +1,6 @@
 # 0024. Rôles et navigation : chacun ne voit que ce qui le concerne
 
-Statut : accepted (Charles, 27/10/2026)
+Statut : accepted (Charles, 27/10/2026) ; le Suivi du chatteur est remplacé par l'ADR 0025
 Date : 2026-10-27
 Remplace : le § Navigation de l'ADR 0023 ; précise ses § Rôles et § Données et RLS (scope `owner`, statut `active`)
 

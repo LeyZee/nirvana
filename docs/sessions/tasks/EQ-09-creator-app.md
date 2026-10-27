@@ -20,6 +20,7 @@ Donner à chaque créatrice une application installable sur son téléphone : sa
 - Tests : jour compté dans le fuseau de la créatrice (passage de minuit, heure d'été), double coche sans doublon, série qui casse puis repart.
 - La créatrice ne lit jamais une conversation ni un fan (test d'intégration RLS).
 - Vérification sur un vrai iPhone installé (zone sûre, notifications).
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Projets de la créatrice, liens et trafic, ventes Telegram Stars, gamification au-delà de la série.

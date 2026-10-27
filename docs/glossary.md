@@ -17,7 +17,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Sens | `sense` | Rôle LLM qui décrit les médias. |
 | Cerveau | `brain` | Rôle LLM qui analyse et décide. |
 | Voix | `voice` | Rôle LLM qui rédige dans la voix de la créatrice. |
-| Juge | `judge` | Rôle LLM d'évaluation (hors production). |
+| Juge | `judge` | Rôle LLM d'évaluation, jamais sur le chemin d'un vrai fan : évals, et retour aux recrues dans S'entraîner. |
 | Politique | `policy` | Règles déterministes en code appliquées entre le cerveau et la voix. |
 | Gardes | `guards` | Vérifications en code après la voix (dégoûts, répétition, longueur, argent, identité). |
 | Repli | `fallback` | Le modèle de secours d'un rôle LLM, utilisé quand le modèle actif refuse, ne répond pas ou n'a pas de clé. |
@@ -113,12 +113,21 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Scope d'équipe | `team_scope` (`owner`, `agency`, `self`) | Ce qu'un membre lit des tables de l'équipe, calculé par le serveur (ADR 0024) : tout et seul à poser un taux (`owner`), toute l'équipe (`agency`, manager au statut actif), ses propres lignes (`self`). |
 | Moi | `me` | L'espace personnel de chacun dans le CRM, sous un seul nom (ADR 0024) : planning, commissions, dossier prestataire, contrat et mandat selon le rôle. |
 | Lien d'invitation | `invitation_link` | Lien à usage unique et de courte durée que le propriétaire partage (par exemple sur WhatsApp) pour qu'un membre choisisse son mot de passe ; même mécanisme pour un mot de passe oublié. |
+| Double authentification | `two_factor` | Un code à usage unique d'une application d'authentification, en plus du mot de passe : obligatoire pour le propriétaire et les managers, redemandé pour les gestes d'argent (EQ-15). |
+| Voir comme | `view_as` | Le propriétaire ou un manager actif voit l'écran exact d'un chatteur, en lecture seule, avec sa propre session ; ouverture et fermeture au journal (EQ-19). |
+| Journal d'audit | `audit_log` | Qui a fait quoi dans le CRM (taux, paies, factures, accès), en ajout seul ; lu par le propriétaire dans Réglages › Journal (EQ-18). Distinct du journal d'événements d'une conversation. |
+| Départ | `offboarding` | Le parcours qui fait partir un membre : accès coupé à l'heure dite, planning libéré, passations rendues, relevé final sans minimum de versement, dernière facture (EQ-14). |
 | Shift | `shift` | Une plage où un membre chatte sur un compte d'une créatrice, début et fin en UTC. |
 | Créneau | `shift_slot`, `ShiftSlot` | Une des plages fixes de la journée de l'agence (4 × 6 h par défaut) sur lesquelles se posent les shifts. Jamais `slot` seul, réservé aux slots KYC (`KycSlot`). |
-| En poste | `onShift` | Le membre dont le shift couvre cet instant sur cette créatrice ; il reçoit en premier les passages à l'humain pour vendre. |
+| En poste | `onShift` | Le membre dont le shift couvre cet instant sur cette créatrice ; il reçoit en premier les passages à l'humain pour vendre. Un chatteur ne traite les conversations d'une créatrice qu'en poste, plus une marge (ADR 0025). |
+| Prise de poste | `shift_check_in` | Le geste « Je prends mon poste » au début d'un shift, qui date son vrai début (EQ-12). |
+| Shift non pris | `unstarted_shift` | Un shift sans prise de poste après le délai réglé : alerte importante au manager en poste ou au propriétaire, avec les membres libres (EQ-12). |
+| Annonce | `announcement` | Message du propriétaire ou d'un manager actif à toute l'équipe ou aux membres d'une créatrice, affiché dans Aujourd'hui avec « Lu » ; remplace Telegram pour l'équipe. |
+| Heures calmes | `quiet_hours` | Plage du fuseau d'un membre où aucune notification ne part, sauf le début de son propre shift. |
+| S'entraîner | `practice_session` | Session où une recrue répond à un fan simulé, avec une persona d'exemple, et reçoit un retour du juge sur la méthode ; jamais un vrai fan (EQ-16). |
 | Rapport de fin de shift | `shift_report` | Ce que le chatteur déclare avoir généré pendant son shift, saisi dans Nirvana, validé par un manager. |
 | Source de revenus | `earnings_source` (`declared`, `detected`) | D'où la paie lit les montants d'un compte pour une période : rapports de fin de shift validés ou ventes détectées par le connecteur, jamais les deux. |
-| Qui vend | `sellerMode` (`agent`, `team`, `both`) | Réglage d'une créatrice : quand il est temps de vendre, l'agent vend, ou il passe la main au chatteur en poste (motif `sale`), ou les deux. Avec `team` et personne en poste, l'agent continue la relation sans vendre. `both` par défaut : les chatteurs vendent quand ils sont en poste, l'agent quand personne ne l'est. |
+| Qui vend | `sellerMode` (`agent`, `team`, `both`) | Réglage d'une créatrice : quand il est temps de vendre, l'agent vend, ou il passe la main au chatteur en poste (motif `sale`), ou les deux. Avec `team` et personne en poste, l'agent continue la relation sans vendre. `team` par défaut au lancement, le temps d'entraîner l'agent ; le propriétaire passe ensuite une créatrice à `both` (les chatteurs vendent quand ils sont en poste, l'agent quand personne ne l'est). |
 | Issue de la passation | `releaseOutcome` (`sold`, `refused`, `none`) | Ce que le chatteur indique en rendant la main après un passage pour vendre ; le code en tire la suite (aftercare après un achat, pas de bouderie après un refus traité). |
 | Période de paie | `pay_period` | Une quinzaine (1-15, 16-fin du mois) dans le fuseau de l'agence. |
 | Relevé de commissions | `commission_statement` | Le calcul d'un membre pour une période, avec les règles et le taux de change copiés : `draft`, `validated`, `paid`. Jamais « fiche de paie » : un chatteur est un prestataire. |
