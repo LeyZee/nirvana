@@ -82,7 +82,7 @@ export function DashboardPage({
   forOwner = false,
 }: {
   forCreator?: boolean;
-  /** The owner also reads the state of the daily export (OPS-02), the one figure that is his alone. */
+  /** The owner also reads the state of the daily export (OPS-02), the one figure that is the owner's alone. */
   forOwner?: boolean;
 }): JSX.Element {
   const [period, setPeriod] = useState<Period>('day');
