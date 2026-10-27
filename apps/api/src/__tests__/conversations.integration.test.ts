@@ -425,7 +425,14 @@ describe('conversations module (P0-05)', () => {
       where id = ${conversationId}`);
     const rebuilt = await conversations.rebuildProjection(creatorId, conversationId);
 
-    const keys = ['state', 'mode', 'lastInboundAt', 'lastOutboundAt', 'unreadCount'] as const;
+    const keys = [
+      'state',
+      'mode',
+      'lastInboundAt',
+      'lastOutboundAt',
+      'unreadCount',
+      'routedToUserId',
+    ] as const;
     const pick = (row: typeof projected) => Object.fromEntries(keys.map((key) => [key, row[key]]));
     expect(rebuilt).toEqual(pick(projected));
     expect(pick(await conversationRow(conversationId))).toEqual(pick(projected));

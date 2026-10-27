@@ -292,6 +292,11 @@ describe('/v1/conversations', () => {
         .statusCode,
     ).toBe(204);
 
+    // « Rendre la main » ends the routing: the conversation is closed to him again.
+    const after = await call('GET', `/v1/conversations/${routed}?creatorId=${creatorId}`, chatter);
+    expect(after.statusCode).toBe(403);
+    expect(after.json()).toMatchObject({ error: { code: 'conversation_forbidden' } });
+
     const all = pageOf(ConversationSummarySchema).parse(
       (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
     );

@@ -27,6 +27,8 @@ declare module 'fastify' {
   interface FastifyRequest {
     /** Set by `requireRole` once the session is checked; `null` on routes that do not require one. */
     user: CurrentUser | null;
+    /** The team membership `requireRole` already read for an operator, so `/v1/me` does not read it twice. */
+    membership: Membership | null;
   }
 }
 
@@ -155,7 +157,11 @@ function signInAccountKey(request: FastifyRequest): string {
  * whose scope is `self` (a chatter, a manager who is not active) reads a creator only through the conversations
  * routed to him: his creators move to `routedCreatorIds`, so every route that checks `creatorIds` refuses him at once.
  */
-async function currentUser(auth: Auth, db: Database, request: FastifyRequest): Promise<CurrentUser | null> {
+async function currentUser(
+  auth: Auth,
+  db: Database,
+  request: FastifyRequest,
+): Promise<{ user: CurrentUser; membership: Membership | null } | null> {
   const result = await auth.api.getSession({ headers: authHeaders(request) });
   if (result === null) return null;
   const parsed = CurrentUserSchema.safeParse({
@@ -168,10 +174,10 @@ async function currentUser(auth: Auth, db: Database, request: FastifyRequest): P
   // A row that does not validate (unknown role) gets no access rather than a guessed one.
   if (!parsed.success) return null;
   const user = parsed.data;
-  if (user.role !== 'operator') return user;
-  const { team, teamScope } = await membership(db, user.id);
-  if (team === null || teamScope !== 'self') return user;
-  return { ...user, creatorIds: [], routedCreatorIds: user.creatorIds };
+  if (user.role !== 'operator') return { user, membership: null };
+  const member = await membership(db, user.id);
+  if (member.team === null || member.teamScope !== 'self') return { user, membership: member };
+  return { user: { ...user, creatorIds: [], routedCreatorIds: user.creatorIds }, membership: member };
 }
 
 const TokenCarrierSchema = z.looseObject({ token: z.unknown() });
@@ -192,10 +198,11 @@ export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
 export function createRequireRole(auth: Auth, db: Database): RequireRole {
   return (...roles) =>
     async (request) => {
-      const user = await currentUser(auth, db, request);
-      if (user === null) throw new SessionUnauthenticated();
-      if (!roles.includes(user.role)) throw new RoleForbidden();
-      request.user = user;
+      const session = await currentUser(auth, db, request);
+      if (session === null) throw new SessionUnauthenticated();
+      if (!roles.includes(session.user.role)) throw new RoleForbidden();
+      request.user = session.user;
+      request.membership = session.membership;
     };
 }
 
@@ -216,12 +223,14 @@ export function createRequireRecentLogin(
   };
 }
 
+type Membership = Pick<Me, 'team' | 'teamScope'>;
+
 /**
  * The account's team role and scope (ADR 0024), read through `withMember`: the scope is the one the database policies
  * apply, never a second computation. No row, no membership; a row that does not validate has already failed
  * `withMember`, like here.
  */
-function membership(db: Database, userId: string): Promise<Pick<Me, 'team' | 'teamScope'>> {
+function membership(db: Database, userId: string): Promise<Membership> {
   return withMember(db, userId, async (tx, teamScope) => {
     const [row] = await tx
       .select({ role: schema.teamMembers.teamRole, status: schema.teamMembers.status })
@@ -240,6 +249,7 @@ export function createAuthRoutes(
 ): FastifyPluginAsyncZod {
   return (app) => {
     app.decorateRequest('user', null);
+    app.decorateRequest('membership', null);
 
     const perIp = { rateLimit: { max: AUTH_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } };
     // Its own counter: the per-IP limiter has already run on this request, `rateLimit()` would stand down.
@@ -296,7 +306,7 @@ export function createAuthRoutes(
       },
       async (request) => {
         if (request.user === null) throw new SessionUnauthenticated();
-        return { ...request.user, ...(await membership(db, request.user.id)) };
+        return { ...request.user, ...(request.membership ?? (await membership(db, request.user.id))) };
       },
     );
     return Promise.resolve();
