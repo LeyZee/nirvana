@@ -30,6 +30,20 @@ export const BackupRunSummarySchema = z.object({
 });
 export type BackupRunSummary = z.infer<typeof BackupRunSummarySchema>;
 
+/**
+ * A restore test counts for this many days (ADR 0028 § 6: one per quarter). The pay guard of EQ-17 and the Dashboard
+ * read the same bound.
+ */
+export const RESTORE_TEST_FRESH_DAYS = 90;
+
+/** The latest restore test by `testedAt`, as the status shows it. */
+export const RestoreTestSummarySchema = z.object({
+  testedAt: z.iso.datetime(),
+  durationSeconds: z.number().int().positive(),
+  rowCountMismatches: z.number().int().nonnegative(),
+});
+export type RestoreTestSummary = z.infer<typeof RestoreTestSummarySchema>;
+
 /** `GET /v1/backups/status`, owner only. */
 export const BackupStatusSchema = z.object({
   state: BackupStateSchema,
@@ -37,5 +51,65 @@ export const BackupStatusSchema = z.object({
   /** Hours the export may go without success before `overdue` (26). */
   overdueAfterHours: z.number().int().positive(),
   lastRun: BackupRunSummarySchema.nullable(),
+  lastRestoreTest: RestoreTestSummarySchema.nullable(),
+  /**
+   * The latest restore test found no row count mismatch and is at most `RESTORE_TEST_FRESH_DAYS` old. Read on the
+   * latest test only: a recent failed one means the restore is broken now, whatever older ones said.
+   */
+  restoreTestFresh: z.boolean(),
 });
 export type BackupStatus = z.infer<typeof BackupStatusSchema>;
+
+const Sha256Schema = z
+  .string()
+  .regex(/^[0-9a-fA-F]{64}$/)
+  .transform((value) => value.toLowerCase());
+
+/**
+ * `POST /v1/backups/restore-tests`, owner only, after a recent sign-in: the owner enters the quarterly test played on
+ * the PC (ADR 0028 § 6). `id` is made by the client when the form opens: sending the same test twice records it once
+ * (the table is append-only). The fingerprint is the one `restore-check.sh` printed; it must name an export that
+ * succeeded.
+ */
+export const RecordRestoreTestBodySchema = z.object({
+  id: z.uuid(),
+  backupSha256: Sha256Schema,
+  testedAt: z.iso.datetime(),
+  durationSeconds: z.number().int().min(1).max(86_400),
+  rowCountMismatches: z.number().int().min(0).max(1_000_000),
+  /** Trimmed; empty means none. */
+  notes: z
+    .string()
+    .trim()
+    .max(500)
+    .nullish()
+    .transform((value) => (value === undefined || value === null || value === '' ? null : value)),
+});
+export type RecordRestoreTestBody = z.input<typeof RecordRestoreTestBodySchema>;
+
+/** A recorded restore test: 201 when it is new, 200 when the same `id` was already recorded with the same values. */
+export const RestoreTestSchema = z.object({
+  id: z.uuid(),
+  backupSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  testedAt: z.iso.datetime(),
+  durationSeconds: z.number().int().positive(),
+  rowCountMismatches: z.number().int().nonnegative(),
+  notes: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type RestoreTest = z.infer<typeof RestoreTestSchema>;
+
+/**
+ * The error codes of `POST /v1/backups/restore-tests`, besides `reauthentication_forbidden` (sign-in older than 10
+ * minutes). `restore_test_backup_unprocessable`: no export succeeded with this fingerprint.
+ * `restore_test_before_backup_unprocessable`: the test is dated before the export ended.
+ * `restore_test_in_future_unprocessable`: dated more than 5 minutes ahead of the server's clock.
+ * `restore_test_conflict`: this `id` is already recorded with other values.
+ */
+export const BACKUP_ERROR_CODES = [
+  'restore_test_backup_unprocessable',
+  'restore_test_before_backup_unprocessable',
+  'restore_test_in_future_unprocessable',
+  'restore_test_conflict',
+] as const;
+export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];

@@ -13,7 +13,14 @@
 - un `running` de plus de 26 h n'est pas un succès ;
 - au plus une alerte par jour, à l'heure de Paris, tant que ça dure : elle revient chaque matin jusqu'au prochain export réussi.
 
-**Routes** (montées sous `/v1`, contrat `packages/contracts/src/backups.ts`) : `GET /backups/status`, propriétaire seul. La réponse ne donne ni le chemin du fichier, ni le bucket, ni l'empreinte.
+**Routes** (montées sous `/v1`, contrat `packages/contracts/src/backups.ts`, propriétaire seul) :
+
+- `GET /backups/status` : l'état de l'export, le dernier essai de restauration et sa fraîcheur. La réponse ne donne ni le chemin du fichier, ni le bucket, ni l'empreinte d'un export.
+- `POST /backups/restore-tests`, après une connexion de moins de 10 minutes : l'essai trimestriel saisi par le propriétaire (ADR 0028 § 6). L'empreinte doit nommer un export `succeeded` (422 `restore_test_backup_unprocessable`), l'essai ne peut précéder la fin de cet export (422 `restore_test_before_backup_unprocessable`) ni dépasser l'horloge du serveur de plus de 5 minutes (422 `restore_test_in_future_unprocessable`). L'`id` vient du client : le même essai renvoyé donne la ligne existante (200), le même `id` avec d'autres valeurs un 409 `restore_test_conflict`. Une ligne `restore_test.record` entre dans `audit_log`, sans les notes.
+
+**Pour EQ-17.** `restoreTestFresh(at)`, exporté par l'index et branché par le composition root sur le port de la garde de paie : vrai si le **dernier** essai (par date d'essai) n'a trouvé aucun écart et a au plus `RESTORE_TEST_FRESH_DAYS` (90) jours. Un essai récent raté veut dire que la restauration est cassée maintenant.
+
+**Tables (suite).** Lit et ajoute `restore_tests` avec le rôle de l'application (`SELECT`, `INSERT` ; ni modification ni suppression : droits et trigger de la migration 0019).
 
 **Job.** `backups.check`, toutes les heures (`crontab.ts`). Le message Telegram vient du module `telegram` (sujet « important »).
 

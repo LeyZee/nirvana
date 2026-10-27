@@ -485,7 +485,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.persona.routes,
       modules.fans.routes(requireRole),
       modules.team.routes(requireRole),
-      modules.backups.routes({ guard: requireRole('owner') }),
+      modules.backups.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
       modules.supervision.routes,
