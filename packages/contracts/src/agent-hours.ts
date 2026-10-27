@@ -266,8 +266,13 @@ export function nextFollowUpAllowed(hours: AgentHours, timeZone: string, after: 
 /** `GET /v1/creators/:id/agent-hours` (P3-14): her hours as the agent reads them, on her clock. */
 export const AgentHoursViewSchema = z.object({
   hours: AgentHoursSchema,
-  /** No setting stored: `hours` are `DEFAULT_AGENT_HOURS`. */
+  /** `hours` are `DEFAULT_AGENT_HOURS`: no setting stored, or one that no longer reads (`invalidStored`). */
   isDefault: z.boolean(),
+  /**
+   * A setting is stored but no longer passes `AgentHoursSchema` (a rule of the contract hardened since): the agent
+   * follows the defaults, and the screen says so instead of a quiet « Par défaut ».
+   */
+  invalidStored: z.boolean(),
   /** Her clock (`creators.timezone`): every minute above is read on it. */
   timeZone: z.string().min(1),
 });

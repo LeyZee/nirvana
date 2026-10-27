@@ -11,7 +11,7 @@ export interface ReopenDeps {
  * `conversation.reopen` (P3-14): her reply slot opened, and every fan who wrote while she was out of her hours
  * is answered, as after a stop: the longest wait first, then one every `RESUME_SPACING_SECONDS`. Each answer is a
  * `conversation.respond` that reads her hours again: if they changed meanwhile, it puts itself off once more. A replay
- * replaces the same jobs (their keys), so a fan is never answered twice.
+ * finds the same jobs (their keys), so a fan is never answered twice.
  */
 export function createReopenJob({ uow, clock }: ReopenDeps) {
   return async (payload: JobPayload<'conversation.reopen'>, logger: JobLogger): Promise<void> => {
@@ -26,6 +26,8 @@ export function createReopenJob({ uow, clock }: ReopenDeps) {
             queueName: queueNameFor(id),
             jobKey: jobKeyFor('conversation.respond', id),
             runAt: resumeRunAt(index, now),
+            // A fan who is writing right now keeps his debounce: his answer comes when it ends, not before.
+            jobKeyMode: 'preserve_run_at',
           },
         );
       }

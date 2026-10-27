@@ -178,6 +178,11 @@ interface JobOptions {
   readonly jobKey?: string;
   readonly runAt?: Date;
   readonly maxAttempts?: number;
+  /**
+   * With a key: `replace` (the default) moves a waiting job to this run; `preserve_run_at` keeps its time and takes
+   * this payload, so that a debounce under way is not cut short.
+   */
+  readonly jobKeyMode?: 'replace' | 'preserve_run_at';
 }
 
 /** Enqueues inside the current transaction (outbox, ADR 0006): a rollback drops the job with the state. */
@@ -269,14 +274,6 @@ export interface GuardReadContext {
  */
 export interface ReplyHours {
   of(creatorId: CreatorId): Promise<{ readonly hours: AgentHours; readonly timeZone: string } | null>;
-}
-
-/**
- * Whether someone works her conversations at `at` (ADR 0025): a member on a shift of hers, not cancelled, not on
- * leave. Implemented by `scheduling`; without it, nobody is.
- */
-export interface ShiftPresence {
-  someoneOnShift(creatorId: CreatorId, at: Date): Promise<boolean>;
 }
 
 /** The fan as `conversations` needs it; implemented by the `fans` module. */

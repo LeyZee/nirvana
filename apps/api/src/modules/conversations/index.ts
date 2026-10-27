@@ -19,7 +19,6 @@ import type {
   JobLogger,
   OutboundSender,
   ReplyHours,
-  ShiftPresence,
 } from './domain/ports';
 import { createDrizzleConversationReader } from './infra/db/reader';
 import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
@@ -70,8 +69,6 @@ export interface ConversationsDeps {
   readonly followUps?: FollowUpPlan;
   /** Her hours (P3-14, `persona`); without them she is always open and quiet from 23:00 to 9:00, as before. */
   readonly replyHours?: ReplyHours;
-  /** Who works her conversations now (ADR 0025, `scheduling`); without it, nobody does. */
-  readonly presence?: ShiftPresence;
   readonly clock?: Clock;
 }
 
@@ -102,7 +99,6 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
         fans: deps.fans,
         ...(deps.composer === undefined ? {} : { composer: deps.composer }),
         ...(deps.replyHours === undefined ? {} : { replyHours: deps.replyHours }),
-        ...(deps.presence === undefined ? {} : { presence: deps.presence }),
       }),
       send: createSendJob({
         uow,

@@ -8,9 +8,12 @@ export interface CreatorDirectory {
   create(input: NewCreator, userId?: string): Promise<CreatorSummary>;
   /**
    * Her hours (P3-14) on her clock; `null` when she does not exist. No setting, or one that no longer reads as
-   * `AgentHours`, reads as the defaults: today's behaviour, never a silent stop.
+   * `AgentHours` (`invalidStored`), reads as the defaults: today's behaviour, never a silent stop.
    */
   agentHours(id: CreatorId): Promise<AgentHoursView | null>;
-  /** Stores her hours, `null` for the defaults, audited with the owner who set them; `false` when she does not exist. */
+  /**
+   * Stores her hours, `null` for the defaults, audited with the owner who set them, and moves her `conversation.reopen`
+   * to her next opening under them in the same transaction; `false` when she does not exist.
+   */
   setAgentHours(id: CreatorId, hours: AgentHours | null, userId: string): Promise<boolean>;
 }

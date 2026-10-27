@@ -10,7 +10,12 @@ import { reopenJobKey } from './jobs';
 
 describe('her hours over HTTP (P3-14)', () => {
   it('sends her hours with her zone, and says when they are the defaults', () => {
-    const view = { hours: DEFAULT_AGENT_HOURS, isDefault: true, timeZone: 'Europe/Paris' };
+    const view = {
+      hours: DEFAULT_AGENT_HOURS,
+      isDefault: true,
+      invalidStored: false,
+      timeZone: 'Europe/Paris',
+    };
     expect(AgentHoursViewSchema.parse(view)).toEqual(view);
     expect(AgentHoursViewSchema.safeParse({ ...view, timeZone: '' }).success).toBe(false);
   });

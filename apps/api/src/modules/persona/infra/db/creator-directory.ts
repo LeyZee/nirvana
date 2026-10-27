@@ -3,11 +3,15 @@ import {
   AuditEntryIdSchema,
   CreatorIdSchema,
   DEFAULT_AGENT_HOURS,
+  JOB_MAX_ATTEMPTS,
+  JOB_PAYLOADS,
   NewCreatorSchema,
   newId,
+  nextReplyOpening,
+  reopenJobKey,
   type CreatorSummary,
 } from '@nirvana/contracts';
-import { eq, inArray, schema, type Database } from '@nirvana/db';
+import { eq, inArray, schema, sql, type Database } from '@nirvana/db';
 
 import type { CreatorDirectory } from '../../domain/ports';
 
@@ -17,7 +21,10 @@ const toSummary = (row: { id: string; displayName: string; timezone: string }): 
   timezone: row.timezone,
 });
 
-export function createDrizzleCreatorDirectory(db: Database): CreatorDirectory {
+export function createDrizzleCreatorDirectory(
+  db: Database,
+  now: () => Date = () => new Date(),
+): CreatorDirectory {
   return {
     async list(ids) {
       if (ids !== 'all' && ids.length === 0) return [];
@@ -56,10 +63,13 @@ export function createDrizzleCreatorDirectory(db: Database): CreatorDirectory {
         .from(schema.creators)
         .where(eq(schema.creators.id, id));
       if (row === undefined) return null;
-      const stored = row.agentHours === null ? null : AgentHoursSchema.safeParse(row.agentHours);
-      return stored?.success === true
-        ? { hours: stored.data, isDefault: false, timeZone: row.timezone }
-        : { hours: DEFAULT_AGENT_HOURS, isDefault: true, timeZone: row.timezone };
+      if (row.agentHours === null) {
+        return { hours: DEFAULT_AGENT_HOURS, isDefault: true, invalidStored: false, timeZone: row.timezone };
+      }
+      const stored = AgentHoursSchema.safeParse(row.agentHours);
+      return stored.success
+        ? { hours: stored.data, isDefault: false, invalidStored: false, timeZone: row.timezone }
+        : { hours: DEFAULT_AGENT_HOURS, isDefault: true, invalidStored: true, timeZone: row.timezone };
     },
 
     async setAgentHours(id, hours, userId) {
@@ -69,10 +79,28 @@ export function createDrizzleCreatorDirectory(db: Database): CreatorDirectory {
           .update(schema.creators)
           .set({ agentHours: parsed })
           .where(eq(schema.creators.id, id))
-          .returning({ id: schema.creators.id });
-        if (updated.length === 0) return false;
+          .returning({ timezone: schema.creators.timezone });
+        const [creator] = updated;
+        if (creator === undefined) return false;
+        const auditId = newId(AuditEntryIdSchema);
+        // The fans her old hours put off wait for her opening under the new ones, which may be now (`conversation.reopen`,
+        // one per creator): never until an opening that no longer is. With nobody waiting, the job finds nothing.
+        const opening = nextReplyOpening(parsed ?? DEFAULT_AGENT_HOURS, creator.timezone, now());
+        const payload = JOB_PAYLOADS['conversation.reopen'].parse({
+          creatorId: id,
+          correlationId: `agent_hours:${auditId}`,
+        });
+        await tx.execute(
+          sql`select public.enqueue_job(
+            task => 'conversation.reopen',
+            payload => ${JSON.stringify(payload)}::jsonb,
+            run_at => ${opening.toISOString()}::timestamptz,
+            max_attempts => ${JOB_MAX_ATTEMPTS['conversation.reopen']}::int,
+            job_key => ${reopenJobKey(id)}
+          )`,
+        );
         await tx.insert(schema.auditLog).values({
-          id: newId(AuditEntryIdSchema),
+          id: auditId,
           userId,
           action: 'creator.agent_hours',
           entity: 'creator',

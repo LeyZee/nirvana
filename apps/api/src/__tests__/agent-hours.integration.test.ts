@@ -99,8 +99,8 @@ describe('conversation.respond and her hours', () => {
   let platformAccountId: PlatformAccountId;
   let counter = 0;
 
-  function moduleWith(options: { hours?: AgentHours; onShift?: boolean }): ConversationsModule {
-    const { hours, onShift } = options;
+  function moduleWith(options: { hours?: AgentHours }): ConversationsModule {
+    const { hours } = options;
     return createConversationsModule({
       db: test.app.db,
       fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
@@ -114,7 +114,6 @@ describe('conversation.respond and her hours', () => {
       ...(hours !== undefined && {
         replyHours: { of: () => Promise.resolve({ hours, timeZone: PARIS }) },
       }),
-      ...(onShift !== undefined && { presence: { someoneOnShift: () => Promise.resolve(onShift) } }),
     });
   }
 
@@ -212,6 +211,10 @@ describe('conversation.respond and her hours', () => {
     clock.advance(MINUTE_MS);
     await respond(conversations, second);
     await respond(conversations, first);
+    // The worker deletes a job once it ran: their debounce jobs are gone by the opening.
+    await test.admin.db.execute(
+      sql`delete from graphile_worker._private_jobs where key in (${`conversation.respond:${first}`}, ${`conversation.respond:${second}`})`,
+    );
 
     expect(composer.inputs).toHaveLength(0);
     for (const conversationId of [first, second]) {
@@ -244,19 +247,22 @@ describe('conversation.respond and her hours', () => {
     expect(await drafts(first)).toHaveLength(1);
   });
 
-  it('answers out of her hours while a chatter is on shift (ADR 0025)', async () => {
-    const conversations = moduleWith({ hours: SLOTS, onShift: true });
-    const conversationId = await fanWrites(conversations, 'ah-shift');
-    composer.results.push(draft);
-    await respond(conversations, conversationId);
-    expect(composer.inputs).toHaveLength(1);
-    expect(await stateOf(conversationId)).toBe('awaiting_approval');
-    expect(await jobs(`conversation.reopen:${creatorId}`)).toHaveLength(0);
+  it('keeps the debounce of a fan writing at her opening', async () => {
+    clock.current = OPENING;
+    const conversations = moduleWith({ hours: SLOTS });
+    const conversationId = await fanWrites(conversations, 'ah-typing');
+    const [debounce] = await jobs(`conversation.respond:${conversationId}`);
+    if (debounce === undefined) throw new Error('no debounce');
+    expect(debounce.run_at.getTime()).toBeGreaterThan(OPENING.getTime());
+    await conversations.jobs.reopen({ creatorId, correlationId: 'test' }, NO_LOG);
+    const [kept, ...more] = await jobs(`conversation.respond:${conversationId}`);
+    expect(more).toHaveLength(0);
+    expect(kept?.run_at.toISOString()).toBe(debounce.run_at.toISOString());
   });
 
-  it('puts nobody off when nobody is on shift but she is in her slot, and passes her hours', async () => {
+  it('puts nobody off in her slot, and passes her hours', async () => {
     clock.current = new Date('2026-10-18T08:00:00.000Z');
-    const conversations = moduleWith({ hours: SLOTS, onShift: false });
+    const conversations = moduleWith({ hours: SLOTS });
     const conversationId = await fanWrites(conversations, 'ah-open');
     composer.results.push(draft);
     await respond(conversations, conversationId);

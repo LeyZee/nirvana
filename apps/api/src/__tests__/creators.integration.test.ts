@@ -1,12 +1,15 @@
 import {
   AgentHoursViewSchema,
   DEFAULT_AGENT_HOURS,
+  nextReplyOpening,
+  reopenJobKey,
   SUGGESTED_REPLY_SLOTS,
   type AgentHours,
 } from '@nirvana/contracts';
 import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { z } from 'zod';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
@@ -36,6 +39,13 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     });
     await createOwner(app.auth, app.db.db, OWNER);
   });
+
+  async function reopenJobs(creatorId: string) {
+    const result = await test.admin.db.execute(
+      sql`select run_at, payload from graphile_worker._private_jobs where key = ${reopenJobKey(creatorId)}`,
+    );
+    return z.array(z.object({ run_at: z.coerce.date(), payload: z.unknown() })).parse(result.rows);
+  }
 
   afterAll(async () => {
     await server.close();
@@ -112,6 +122,7 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     expect(await read()).toEqual({
       hours: DEFAULT_AGENT_HOURS,
       isDefault: true,
+      invalidStored: false,
       timeZone: 'Europe/Brussels',
     });
     expect((await server.inject({ method: 'GET', url, headers: operator })).statusCode).toBe(403);
@@ -122,8 +133,14 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     expect(AgentHoursViewSchema.parse(set.json())).toEqual({
       hours: slots,
       isDefault: false,
+      invalidStored: false,
       timeZone: 'Europe/Brussels',
     });
+    // The fans her old hours put off wait for her next opening under the new ones: 9:00 in Brussels at the latest.
+    const [moved] = await reopenJobs(nora.id);
+    expect(moved?.run_at.getTime()).toBe(
+      nextReplyOpening(slots, 'Europe/Brussels', moved?.run_at ?? new Date()).getTime(),
+    );
     expect(await read()).toMatchObject({ isDefault: false, hours: slots });
 
     // Two slots of one day that overlap: refused, the stored hours kept.
@@ -148,7 +165,11 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     ]);
 
     expect((await put(owner, null)).statusCode).toBe(200);
-    expect(await read()).toMatchObject({ hours: DEFAULT_AGENT_HOURS, isDefault: true });
+    expect(await read()).toMatchObject({ hours: DEFAULT_AGENT_HOURS, isDefault: true, invalidStored: false });
+    // Back to always open: those who wait are answered now, not at the opening the old hours gave.
+    const [now] = await reopenJobs(nora.id);
+    expect(now?.run_at.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(now?.payload).toMatchObject({ creatorId: nora.id });
     const audit = await test.admin.db
       .select({ action: schema.auditLog.action })
       .from(schema.auditLog)
@@ -169,5 +190,26 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
       'reauthentication_forbidden',
     ]);
     expect((await read()).isDefault).toBe(true);
+  });
+
+  it('says when her stored hours no longer read, and follows the defaults', async () => {
+    const iris = await app.modules.persona.creators.create({ displayName: 'Iris' });
+    // Hours a later contract would refuse: every slot switched off.
+    await test.admin.db
+      .update(schema.creators)
+      .set({ agentHours: { reply: { mode: 'slots', slots: [] }, followUpQuiet: {}, night: {} } })
+      .where(eq(schema.creators.id, iris.id));
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/creators/${iris.id}/agent-hours`,
+      headers: owner,
+    });
+    expect(AgentHoursViewSchema.parse(response.json())).toEqual({
+      hours: DEFAULT_AGENT_HOURS,
+      isDefault: true,
+      invalidStored: true,
+      timeZone: 'Europe/Paris',
+    });
   });
 });

@@ -325,12 +325,10 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     replyHours: {
       of: async (creatorId) => {
         const view = await persona.creators.agentHours(creatorId);
+        if (view?.invalidStored === true)
+          logger.warn({ creatorId }, 'agent hours: stored setting unreadable, defaults used');
         return view === null ? null : { hours: view.hours, timeZone: view.timeZone };
       },
-    },
-    // A chatter on shift is not bound by her hours (ADR 0025): the agent never waits while someone works her.
-    presence: {
-      someoneOnShift: async (creatorId, at) => (await scheduling.onShift(creatorId, at)).length > 0,
     },
   });
   const modules: Modules = {

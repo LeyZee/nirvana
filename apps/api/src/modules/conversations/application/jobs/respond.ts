@@ -8,7 +8,6 @@ import {
   replyOpenAt,
   reopenJobKey,
   type AgentHours,
-  type CreatorId,
   type HandoffCause,
   type JobPayload,
 } from '@nirvana/contracts';
@@ -25,7 +24,6 @@ import type {
   HoldReason,
   JobLogger,
   ReplyHours,
-  ShiftPresence,
   Transaction,
   UnitOfWork,
 } from '../../domain/ports';
@@ -45,8 +43,6 @@ export interface RespondDeps {
   readonly composer?: DraftComposer;
   /** Her hours (P3-14); without them she is always open, as before. */
   readonly replyHours?: ReplyHours;
-  /** Who works her conversations now (ADR 0025); without it, nobody does. */
-  readonly presence?: ShiftPresence;
 }
 
 /** Messages the engine reads. */
@@ -185,17 +181,15 @@ async function deferReply(
 }
 
 /**
- * Out of her reply slots with nobody on shift (P3-14), the opening of her next slot: no draft until then. `null` when
- * she may answer now: in a slot, or a human works her conversations (a chatter on shift is not bound by her hours).
+ * Out of her reply slots (P3-14), the opening of her next slot: no draft until then, whoever is on shift. A chatter on
+ * shift is not bound by her hours, but answers in Reveal (ADR 0025): a draft of the agent at 4:00 would serve nobody,
+ * and her hours exist so that she does not answer at 4:00. `null` when she may answer now.
  */
-async function closedUntil(
+function closedUntil(
   her: { readonly hours: AgentHours; readonly timeZone: string } | null,
-  presence: ShiftPresence | undefined,
-  creatorId: CreatorId,
   now: Date,
-): Promise<Date | null> {
+): Date | null {
   if (her === null || replyOpenAt(her.hours, her.timeZone, now)) return null;
-  if (presence !== undefined && (await presence.someoneOnShift(creatorId, now))) return null;
   const opening = nextReplyOpening(her.hours, her.timeZone, now);
   // Her hours always have an active slot (the contract); stored hours that had none never put a job off to now.
   return opening.getTime() > now.getTime() ? opening : null;
@@ -207,7 +201,7 @@ async function closedUntil(
  * unless the fan wrote again meanwhile (the next debounce answers) or a gate closed. Never sends anything: the
  * draft waits for an operator (copilot). Replayed after a crash, it finds the conversation past `pending`.
  */
-export function createRespondJob({ uow, clock, voice, fans, composer, replyHours, presence }: RespondDeps) {
+export function createRespondJob({ uow, clock, voice, fans, composer, replyHours }: RespondDeps) {
   return async (payload: JobPayload<'conversation.respond'>, logger: JobLogger): Promise<void> => {
     const waitedFor = payload.waitedFor === undefined ? null : new Date(payload.waitedFor);
     // Before the engine: if the lock closed (the live rate fell, the voice changed), automatic is over for her.
@@ -219,7 +213,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer, replyHours
     if (closed) logger.info({}, 'respond: Automatique closed, back to the copilot');
     const draftId = newId(DraftIdSchema);
     const hours = replyHours === undefined ? null : await replyHours.of(payload.creatorId);
-    const until = await closedUntil(hours, presence, payload.creatorId, clock.now());
+    const until = closedUntil(hours, clock.now());
     const read = await uow.inTenant(payload.creatorId, async (tx) => {
       const conversation = await tx.conversations.lock(payload.conversationId);
       if (conversation === null || !(await stillPending(tx, conversation, logger, waitedFor))) return null;

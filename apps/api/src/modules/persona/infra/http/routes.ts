@@ -72,6 +72,8 @@ export function createCreatorRoutes(
       async (request) => {
         const view = await directory.agentHours(request.params.id);
         if (view === null) throw new CreatorNotFound();
+        if (view.invalidStored)
+          request.log.warn({ creatorId: request.params.id }, 'agent hours: stored setting unreadable');
         return view;
       },
     );
