@@ -4,7 +4,7 @@ Fait : `pnpm evals` mesure enfin quelque chose. 32 scénarios inventés s'ajoute
 
 Pas fait : aucun scénario n'a tourné contre un vrai modèle (pas de clé xAI ici) ; les médias (vision) ne sont pas encore dans les scénarios ; la batterie d'injection de `agent/domain/injection.ts` est une PR à part.
 
-Décisions : exécuteur maison plutôt que Promptfoo, jamais installé : un scénario doit passer par le code de l'agent, pas par un prompt isolé (`docs/conventions/testing.md`). Le juge vit dans `packages/llm` (rôle déjà prévu dans `DEFAULT_LLM_CONFIG`).
+Décisions : exécuteur maison plutôt que Promptfoo, jamais installé : un scénario doit passer par le code de l'agent, pas par un prompt isolé (`docs/conventions/testing.md`). Le juge vit dans `packages/llm` (rôle déjà prévu dans `DEFAULT_LLM_CONFIG`) ; l'exécuteur le passe sur Mistral ou Gemini dès que leur clé existe (relecture de Bilan : un modèle note trop bien ses propres mots), et chaque passage a son propre plafond de 3 €.
 
 Découvertes : `README.md` disait encore « 0 test d'intégration », corrigé. Deux scénarios existants écrivaient `prénom: Hugo` sans guillemets (lu comme un objet YAML), corrigé.
 

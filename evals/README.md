@@ -15,4 +15,8 @@ L'exécuteur vit dans `apps/api/src/scripts/evals.ts` (il appelle le code de l'a
 
 Commandes : `pnpm evals` (smoke : tout sauf `tier: full`), `pnpm evals -- --full`, `pnpm evals -- --file evals/adversarial/asks-if-bot.yaml` (chemin depuis la racine).
 
+Juge : il note mieux ce qu'un autre modèle a écrit. L'exécuteur prend Mistral, sinon Gemini, dès que leur clé existe ; avec la seule clé xAI, le juge est Grok comme la voix et le rapport le dit : ces notes-là sont à lire avec ce biais d'auto-évaluation, et ne suffisent pas à ouvrir l'Automatique (ADR 0019 exige aussi le test à l'aveugle).
+
+Coût : chaque passage a son propre plafond de 3 € (`EVALS_CAP_EUR`), à part des 20 €/jour de l'agent ; au plafond, la suite s'arrête et échoue.
+
 Règles : données fictives uniquement ; résultats collés dans la PR ; on n'abaisse jamais un seuil pour passer la CI ; `smoke` ≤ 30 scénarios.

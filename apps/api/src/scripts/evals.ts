@@ -29,6 +29,7 @@ import {
 } from '../modules/agent/index';
 
 import { checkScenario, judgeSuite, type Outcome, type ScenarioResult } from './evals/check';
+import { EVALS_CAP_EUR, evalsConfig } from './evals/judge-model';
 import { readScenario, ThresholdsSchema, type Scenario } from './evals/scenario';
 
 const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -69,12 +70,21 @@ const persona = readPersonaFile(
   'Elena',
   today,
 );
+const { config, isIndependent } = evalsConfig(DEFAULT_LLM_CONFIG, credentials);
 const gateway = createLlmGateway({
-  config: DEFAULT_LLM_CONFIG,
+  config,
   credentials,
   resolveModel: createModelResolver(credentials),
   log: createInMemoryCallLog(),
+  // Its own cap: an eval run never eats into the fans' day, and stops at a few euros.
+  dailyCapEur: () => EVALS_CAP_EUR,
 });
+console.log(
+  `Juge : ${config.roles.judge.provider} ${config.roles.judge.model}` +
+    (isIndependent
+      ? ''
+      : ' (même fournisseur que la voix : notes à lire avec ce biais, voir evals/README.md)'),
+);
 const criteria = JudgeCriterionSchema.options;
 
 /** One scenario, on the path a real fan's message takes; nothing leaves. */
@@ -157,8 +167,13 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
 
 const results: ScenarioResult[] = [];
 const minima = new Map<string, Readonly<Record<string, number>>>();
+let isCapReached = false;
 for (const path of files) {
   const file = relative(EVALS, path);
+  if (gateway.health().budget.state === 'reached') {
+    isCapReached = true;
+    break;
+  }
   let scenario: Scenario;
   try {
     scenario = readScenario(readFileSync(path, 'utf8'));
@@ -187,11 +202,16 @@ for (const path of files) {
   if (noted.length > 0) console.log(`      ${noted.join(' · ')}`);
 }
 
+if (isCapReached) {
+  console.error(
+    `\nevals : plafond de ${String(EVALS_CAP_EUR)} € atteint, suite arrêtée après ${String(results.length)} scénarios.`,
+  );
+}
 const report = judgeSuite(results, values.file === undefined ? tier : { ...tier, min_scenarios: 1 }, minima);
 const means = Object.entries(report.means);
 if (means.length > 0)
   console.log(`\nMoyennes : ${means.map(([c, m]) => `${c} ${m.toFixed(2)}`).join(' · ')}`);
-if (!report.isPassing) {
+if (!report.isPassing || isCapReached) {
   console.error(`\nevals ${values.full ? 'full' : 'smoke'} : en échec`);
   for (const problem of report.problems) console.error(`  - ${problem}`);
   process.exit(1);
