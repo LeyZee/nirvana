@@ -171,6 +171,22 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ | grep '<div id="root">' >/dev/null
           curl -fsSI http://127.0.0.1:8080/ | grep -i "content-security-policy: default-src 'none'" >/dev/null
+      # The daily export (ADR 0028) end to end, but to a folder instead of the bucket: dump, check, encrypt, then a
+      # restore into an empty database with the queue emptied, and the same row counts.
+      - name: Backup export and restore
+        timeout-minutes: 10
+        run: |
+          mkdir -m 777 backup-out
+          $COMPOSE run --rm --no-deps --entrypoint age-keygen backup > backup-out/identity.txt
+          recipient=$(grep -o 'age1[0-9a-z]*' backup-out/identity.txt)
+          $COMPOSE run --rm --no-deps -v "$PWD/backup-out:/out" -e BACKUP_TARGET=local -e BACKUP_LOCAL_DIR=/out \
+            -e BACKUP_AGE_RECIPIENT="$recipient" backup /app/export.sh
+          docker compose exec -T postgres psql -U nirvana_admin -d nirvana -c 'create database nirvana_restore'
+          export_file=$(cd backup-out && ls nirvana-*.tar.age)
+          $COMPOSE run --rm --no-deps -v "$PWD/backup-out:/out" backup /app/restore-check.sh "/out/$export_file" \
+            /out/identity.txt postgres://nirvana_admin:change-me@postgres:5432/nirvana_restore
+          docker compose exec -T postgres psql -U nirvana_admin -d nirvana -Atc \
+            "select count(*) from backup_runs where status = 'succeeded'" | grep -x 1
       - name: Logs
         if: failure()
         run: $COMPOSE logs --no-color
