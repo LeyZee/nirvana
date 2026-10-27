@@ -28,7 +28,7 @@ Il ne change jamais le mode de l'agent et n'ouvre ni la persona, ni Entraîner, 
 
 **Hors de cette fenêtre**, Nirvana ne lui montre rien des conversations ni des fans. Seule exception : la passation qu'il a prise reste lisible jusqu'à « Rendre la main ».
 
-**Une garde du serveur**, calculée à chaque requête comme `creatorIds`, ouvre ces créatrices au chatteur pendant la fenêtre. Ce n'est pas une politique RLS de plus. Un shift retiré ou raccourci ferme l'accès à la requête suivante. C'est le seul endroit qui rend des `creatorIds` à un membre au scope `self`.
+**Une garde du serveur**, calculée à chaque requête comme `creatorIds`, ouvre ces créatrices au chatteur pendant la fenêtre, par un ensemble à part (les créatrices de son shift), jamais en les remettant dans `creatorIds` : `creatorIds` ouvre aussi le mode de l'agent, le Dashboard, la persona et la liste des fans, qui restent fermés au chatteur. Ce n'est pas une politique RLS de plus. Un shift retiré ou raccourci ferme l'accès à la requête suivante. C'est le seul endroit qui ouvre une créatrice à un membre au scope `self`.
 
 **Aucun export** de liste de fans pour un chatteur. Chaque fiche de fan qu'il ouvre dans Nirvana entre au journal d'audit, sans son contenu.
 
