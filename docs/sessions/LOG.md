@@ -190,4 +190,5 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | Conversations fermées au rôle creator, même les siennes (ADR 0023) | done | `log/2026-10-27-creator-off-conversations.md` |
 | 2026-10-27 | Suivi fermé à la créatrice (ADR 0023) | done | `log/2026-10-27-web-suivi-sans-creatrice.md` |
 | 2026-10-27 | Dashboard : la créatrice ne voit que ses agrégats (ADR 0023) | done | `log/2026-10-27-dashboard-creator-view.md` |
+| 2026-10-27 | Modules vides sales et scripts retirés (audit du 27/10) | done | `log/2026-10-27-remove-empty-modules.md` |
 | 2026-10-27 | OPS-01 Mise en production, lot 1 : images Docker (Opus) | in_progress | `log/2026-10-27-ops-01-images.md` |

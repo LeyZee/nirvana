@@ -40,8 +40,6 @@ import { createMediaModule, missingMediaBinaries, type MediaModule } from './mod
 import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
-import { createSalesModule, type SalesModule } from './modules/sales';
-import { createScriptsModule, type ScriptsModule } from './modules/scripts';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
 import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
@@ -55,8 +53,6 @@ interface Modules {
   readonly agent: AgentModule;
   readonly media: MediaModule;
   readonly supervision: SupervisionModule;
-  readonly sales: SalesModule;
-  readonly scripts: ScriptsModule;
   readonly providers: ProvidersModule;
   /** Null in the worker, or when its persona cannot be read: the API starts without the playground and says why. */
   readonly playground: PlaygroundModule | null;
@@ -298,8 +294,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         },
       }),
     }),
-    sales: createSalesModule(),
-    scripts: createScriptsModule(),
     providers,
     playground,
     telegram,
