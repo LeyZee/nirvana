@@ -218,6 +218,14 @@ describe('Équipe › Membres', () => {
     });
   });
 
+  it('tells a manager whose access changed, not that the server is down', async () => {
+    serve({ post: () => ({ status: 403, body: apiError('role_forbidden') }) });
+    renderPage(`/equipe?membre=${THEO.id}`);
+    fireEvent.change(await screen.findByLabelText('Nouvelle note'), { target: { value: 'À suivre' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la note' }));
+    expect(await screen.findByText('Ton accès à l’équipe a changé. Recharge la page.')).toBeTruthy();
+  });
+
   it('lets a manager read the team, never add a member nor make a link', async () => {
     serve();
     renderPage(`/equipe?membre=${THEO.id}`, false);

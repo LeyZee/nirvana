@@ -233,7 +233,11 @@ const DAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', hour: 'numeric',
 export const deadline = (at: Date): string => DAY.format(at).replace(':', ' h ');
 
 /** What each refusal says, in the words of the screen (contracts `TEAM_MEMBER_ERROR_CODES`). */
-export const ERROR_MESSAGES: Readonly<Record<TeamMemberErrorCode, string>> = {
+/** A refusal the screen words: the module's codes, and the role guard when a manager's access changed meanwhile. */
+export type TeamRefusalCode = TeamMemberErrorCode | 'role_forbidden';
+
+export const ERROR_MESSAGES: Readonly<Record<TeamRefusalCode, string>> = {
+  role_forbidden: 'Ton accès à l’équipe a changé. Recharge la page.',
   member_not_found: 'Ce membre n’existe plus. Recharge la page.',
   member_conflict: 'Un compte utilise déjà cet e-mail.',
   member_left_conflict: 'Ce membre est parti : sa fiche ne change plus.',

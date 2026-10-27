@@ -18,6 +18,8 @@ import {
 } from '@nirvana/contracts';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import type { TeamRefusalCode } from './model';
+
 /**
  * `/v1/team` as Équipe › Membres reads it (EQ-01, EQ-10). Every answer is parsed with the contract: a shape the page
  * does not expect is an error, not a guess.
@@ -57,7 +59,7 @@ export function useNotes(memberId: string): UseQueryResult<TeamMemberNote[]> {
 
 /** A refusal the screen says in its own words, or a server that does not answer. */
 export type Refusal =
-  | { readonly kind: 'refused'; readonly code: TeamMemberErrorCode }
+  | { readonly kind: 'refused'; readonly code: TeamRefusalCode }
   | { readonly kind: 'reauth' }
   | { readonly kind: 'failed' };
 
@@ -71,6 +73,8 @@ async function refusalOf(response: Response): Promise<Refusal> {
   if (!parsed.success) return { kind: 'failed' };
   const { code } = parsed.data.error;
   if (code === REAUTHENTICATION_ERROR_CODE) return { kind: 'reauth' };
+  // A manager whose status changed since the page opened: the role guard, not a server down.
+  if (code === 'role_forbidden') return { kind: 'refused', code };
   return isTeamCode(code) ? { kind: 'refused', code } : { kind: 'failed' };
 }
 
