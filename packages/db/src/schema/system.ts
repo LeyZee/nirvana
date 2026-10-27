@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { bigint, check, index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { user } from './auth';
-import { id, timestampTz } from './columns';
+import { enumCheck, enumText, id, timestampTz } from './columns';
 
 /** Written every 30 s by each worker, read by `/ready`. Out of RLS. */
 export const workerHeartbeats = pgTable('worker_heartbeats', {
@@ -32,6 +32,9 @@ export const rateLimitCounters = pgTable(
   ],
 );
 
+/** Where an export stands: `running` until it ends, then one of the two others. */
+export const BACKUP_RUN_STATUSES = ['running', 'succeeded', 'failed'] as const;
+
 /**
  * One daily export of the database (ADR 0028, OPS-02), written by the `backup` service alone with the admin role,
  * read by the application. Out of RLS (no tenant data). The id has a database default, unlike `id()` of columns.ts:
@@ -45,7 +48,7 @@ export const backupRuns = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     startedAt: timestampTz('started_at').notNull(),
     finishedAt: timestampTz('finished_at'),
-    status: text('status', { enum: ['running', 'succeeded', 'failed'] }).notNull(),
+    status: enumText('status').$type<(typeof BACKUP_RUN_STATUSES)[number]>().notNull(),
     error: text('error'),
     objectKey: text('object_key'),
     sizeBytes: bigint('size_bytes', { mode: 'number' }),
@@ -54,7 +57,7 @@ export const backupRuns = pgTable(
     rowCounts: jsonb('row_counts').$type<Record<string, number>>(),
   },
   (t) => [
-    check('backup_runs_status_check', sql`${t.status} in ('running', 'succeeded', 'failed')`),
+    enumCheck('backup_runs', t.status, BACKUP_RUN_STATUSES),
     check('backup_runs_error_check', sql`char_length(${t.error}) <= 500`),
     check('backup_runs_sha256_check', sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
     check(
