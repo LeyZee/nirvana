@@ -33,6 +33,8 @@ describe('her hours in words (P3-14)', () => {
       `9${NBSP}h${NBSP}30${NBSP}–${NBSP}18${NBSP}h`,
     );
     expect(slotWords({ startMinute: 0, endMinute: 0 })).toBe('toute la journée');
+    // Ending at 0 h closes her day: nothing falls on the next one.
+    expect(slotWords({ startMinute: 1080, endMinute: 0 })).toBe(`18${NBSP}h${NBSP}–${NBSP}0${NBSP}h`);
   });
 
   it('names whose clock the page reads, by her first name and her city', () => {
@@ -137,5 +139,11 @@ describe('what the contract refuses, on its line', () => {
       noFollowUpEver(slots({ mode: 'slots', slots: [...SUGGESTED_REPLY_SLOTS] }), 'Europe/Paris', now),
     ).toBe(false);
     expect(noFollowUpEver(DEFAULT_AGENT_HOURS, 'Europe/Paris', now)).toBe(false);
+    // Every slot off: the contract refuses it, and its own error says so, not this warning.
+    const allOff = slots({
+      mode: 'slots',
+      slots: SUGGESTED_REPLY_SLOTS.map((slot) => ({ ...slot, enabled: false })),
+    });
+    expect(noFollowUpEver(allOff, 'Europe/Paris', now)).toBe(false);
   });
 });

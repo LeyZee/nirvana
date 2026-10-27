@@ -26,10 +26,14 @@ const NBSP = '\u00a0';
 export const rangeOf = (range: MinuteRange): string =>
   `${clockOf(range.startMinute)}${NBSP}–${NBSP}${clockOf(range.endMinute)}`;
 
-/** What a slot covers: « toute la journée », « 9 h – 1 h, jusqu'au lendemain », « 9 h – 18 h ». */
+/**
+ * What a slot covers: « toute la journée », « 9 h – 1 h, jusqu'au lendemain », « 9 h – 18 h ». A slot that ends at
+ * 0 h closes with her day: nothing of it falls on the next one.
+ */
 export function slotWords(slot: Pick<AgentSlot, 'startMinute' | 'endMinute'>): string {
   if (slot.startMinute === slot.endMinute) return 'toute la journée';
-  return `${rangeOf(slot)}${slot.endMinute < slot.startMinute ? ', jusqu’au lendemain' : ''}`;
+  const overnight = slot.endMinute !== 0 && slot.endMinute < slot.startMinute;
+  return `${rangeOf(slot)}${overnight ? ', jusqu’au lendemain' : ''}`;
 }
 
 /** « Paris » from « Europe/Paris », « Sao Paulo » from « America/Sao_Paulo ». */
@@ -142,7 +146,10 @@ export const isDefaultHours = (hours: AgentHours): boolean => sameHours(hours, D
 
 /**
  * No follow-up can ever go out: no minute of her week is both in a slot and out of her quiet hours (slots from
- * 23 h to 1 h with quiet hours from 23 h to 9 h). A warning, not an error: she may want it.
+ * 23 h to 1 h with quiet hours from 23 h to 9 h). A warning, not an error: she may want it. Said of a setting the
+ * contract takes only: with every slot off, the contract's own error is the one to read.
  */
 export const noFollowUpEver = (hours: AgentHours, timeZone: string, now: Date): boolean =>
-  hours.reply.mode === 'slots' && nextFollowUpAllowed(hours, timeZone, now) === null;
+  hours.reply.mode === 'slots' &&
+  AgentHoursSchema.safeParse(hours).success &&
+  nextFollowUpAllowed(hours, timeZone, now) === null;
