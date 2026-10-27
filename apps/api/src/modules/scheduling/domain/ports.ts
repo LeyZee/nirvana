@@ -1,6 +1,8 @@
 import type {
   CreatorId,
   CreatorSummary,
+  LeaveRequestId,
+  LeaveRequestStatus,
   Platform,
   PlatformAccountId,
   SchedulingSettings,
@@ -54,6 +56,16 @@ export interface StoredAccount {
   readonly handle: string;
 }
 
+/** A leave as the planning reads it, for what it covers (`leaveCover`). */
+export interface StoredLeave {
+  readonly id: LeaveRequestId;
+  readonly memberId: TeamMemberId;
+  readonly status: LeaveRequestStatus;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+  readonly cancelledAt: Date | null;
+}
+
 export interface StoredMember {
   readonly id: TeamMemberId;
   readonly displayName: string;
@@ -75,6 +87,8 @@ interface PlanningRead {
   readonly templates: readonly StoredTemplate[];
   /** `occurrenceKey` of each shift the templates made in the range, cancelled or moved ones included. */
   readonly made: ReadonlySet<string>;
+  /** Planners only: the approved and cancelled leaves of the templates' members overlapping the range (ADR 0031). */
+  readonly leaves: readonly StoredLeave[];
   /** The members the policies let the reader see, among those the shifts and templates name. */
   readonly members: readonly StoredMember[];
 }
@@ -88,7 +102,7 @@ interface NewShift {
   readonly endsAt: Date;
 }
 
-interface ShiftChange {
+export interface ShiftChange {
   readonly memberId?: TeamMemberId;
   readonly startsAt?: Date;
   readonly endsAt?: Date;

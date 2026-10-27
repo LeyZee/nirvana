@@ -114,8 +114,9 @@ describe('leaves and swaps (ADR 0031): the member, the colleague, the agency', (
         .set({ status: 'accepted', resolvedAt: sql`now()`, resolvedBy: userId })
         .where(eq(s.shiftSwapRequests.id, swapId));
       let moved = 0;
+      const named = moves.map((move) => move.creator.creatorId);
       for (const move of moves) {
-        await enterCreator(tx, move.creator.creatorId);
+        await enterCreator(tx, move.creator.creatorId, named);
         const rows = await tx
           .update(s.shifts)
           .set({ memberId: member(move.to), updatedBy: userId })
@@ -197,6 +198,13 @@ describe('leaves and swaps (ADR 0031): the member, the colleague, the agency', (
       expect(byC).toEqual([]);
     });
 
+    it('enters no creator outside the list its caller checked', async () => {
+      const entered = withTenantMember(test.app.db, nora.creatorId, owner, (tx) =>
+        enterCreator(tx, ines.creatorId, [nora.creatorId]),
+      );
+      await expect(entered).rejects.toThrow(/outside the allowed list/u);
+    });
+
     it('moves nothing without an accepted swap, and nothing but to the other member of it', async () => {
       const offered = { creator: nora, startsAt: '2099-12-02T00:00:00Z', endsAt: '2099-12-02T06:00:00Z' };
       const id = await plan(nora, chatterA, offered.startsAt, offered.endsAt);
@@ -265,7 +273,7 @@ describe('leaves and swaps (ADR 0031): the member, the colleague, the agency', (
           .set({ status: 'accepted', resolvedAt: sql`now()`, resolvedBy: chatterB })
           .where(eq(s.shiftSwapRequests.id, swap));
         for (const move of moves) {
-          await enterCreator(tx, move.creator.creatorId);
+          await enterCreator(tx, move.creator.creatorId, [nora.creatorId, ines.creatorId]);
           await tx
             .update(s.shifts)
             .set({ memberId: member(move.to), updatedBy: chatterB })

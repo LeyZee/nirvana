@@ -244,22 +244,36 @@ export interface PlanningTemplate extends TemplateRule {
   readonly platformAccountId: string;
 }
 
-export interface Conflict {
+/** A member's leave as the planning reads it: what it covers (`leaveCover`, `domain/leaves.ts`). */
+export interface CoveringLeave {
+  readonly id: string;
+  readonly memberId: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
+interface ConflictTimes {
   readonly templateId: string;
   readonly startsAt: Date;
   readonly endsAt: Date;
-  readonly reason: PlanningConflict['reason'];
-  readonly shiftId: string;
 }
+
+export type Conflict =
+  | (ConflictTimes & {
+      readonly reason: Exclude<PlanningConflict['reason'], 'member_on_leave'>;
+      readonly shiftId: string;
+    })
+  | (ConflictTimes & { readonly reason: 'member_on_leave'; readonly leaveRequestId: string });
 
 const overlaps = (a: Occurrence, b: Occurrence): boolean =>
   a.startsAt.getTime() < b.endsAt.getTime() && b.startsAt.getTime() < a.endsAt.getTime();
 
 /**
  * The occurrences of the templates, in [`from`, `to`) and not yet ended, that have no shift, with what stands in
- * their way: another shift of their member (`member_busy`) or of their account (`account_taken`). An occurrence with
- * no shift and nothing in its way is only not made yet (beyond the horizon), not a conflict. `made` holds the keys of
- * the shifts the templates already made, cancelled ones included.
+ * their way: their member's leave (`member_on_leave`, ADR 0031: a shift to fill), another shift of their member
+ * (`member_busy`) or of their account (`account_taken`). An occurrence with no shift and nothing in its way is only
+ * not made yet (beyond the horizon), not a conflict. `made` holds the keys of the shifts the templates already made,
+ * cancelled ones included.
  */
 export function conflictsOf(
   templates: readonly PlanningTemplate[],
@@ -268,6 +282,7 @@ export function conflictsOf(
   range: { readonly from: Date; readonly to: Date },
   now: Date,
   timeZone: string,
+  leaves: readonly CoveringLeave[],
 ): Conflict[] {
   const fromDay = addDays(calendarDayIn(range.from, timeZone), -1);
   const toDay = calendarDayIn(range.to, timeZone);
@@ -277,6 +292,18 @@ export function conflictsOf(
     for (const occurrence of occurrences(template, fromDay, toDay, timeZone)) {
       if (!overlaps(occurrence, window) || occurrence.endsAt.getTime() <= now.getTime()) continue;
       if (made.has(occurrenceKey(template.id, occurrence.startsAt))) continue;
+      const away = leaves.find(
+        (leave) => leave.memberId === template.memberId && overlaps(leave, occurrence),
+      );
+      if (away !== undefined) {
+        conflicts.push({
+          ...occurrence,
+          templateId: template.id,
+          reason: 'member_on_leave',
+          leaveRequestId: away.id,
+        });
+        continue;
+      }
       const busy = shifts.find(
         (shift) => shift.memberId === template.memberId && overlaps(shift, occurrence),
       );

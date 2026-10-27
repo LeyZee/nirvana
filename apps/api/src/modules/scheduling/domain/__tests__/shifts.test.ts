@@ -283,7 +283,7 @@ describe('conflicts of the templates', () => {
         endsAt: at('2026-11-09T12:00:00Z'),
       },
     ];
-    expect(conflictsOf([template], new Set(), shifts, range, now, PARIS)).toEqual([
+    expect(conflictsOf([template], new Set(), shifts, range, now, PARIS, [])).toEqual([
       {
         templateId: 't1',
         startsAt: at('2026-11-02T05:00:00Z'),
@@ -312,6 +312,31 @@ describe('conflicts of the templates', () => {
         endsAt: at('2026-11-02T11:00:00Z'),
       },
     ];
-    expect(conflictsOf([template], made, shifts, range, now, PARIS)).toEqual([]);
+    expect(conflictsOf([template], made, shifts, range, now, PARIS, [])).toEqual([]);
+  });
+
+  it('shows an occurrence during its member’s leave as a shift to fill, before anything else in its way', () => {
+    const shifts = [
+      {
+        id: 's-busy',
+        memberId: 'm1',
+        platformAccountId: 'a2',
+        startsAt: at('2026-11-02T04:00:00Z'),
+        endsAt: at('2026-11-02T06:00:00Z'),
+      },
+    ];
+    const leaves = [
+      { id: 'l1', memberId: 'm1', startsAt: at('2026-11-01T23:00:00Z'), endsAt: at('2026-11-03T23:00:00Z') },
+      { id: 'l2', memberId: 'm2', startsAt: at('2026-11-08T23:00:00Z'), endsAt: at('2026-11-10T23:00:00Z') },
+    ];
+    expect(conflictsOf([template], new Set(), shifts, range, now, PARIS, leaves)).toEqual([
+      {
+        templateId: 't1',
+        startsAt: at('2026-11-02T05:00:00Z'),
+        endsAt: at('2026-11-02T11:00:00Z'),
+        reason: 'member_on_leave',
+        leaveRequestId: 'l1',
+      },
+    ]);
   });
 });

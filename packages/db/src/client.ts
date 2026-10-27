@@ -120,10 +120,18 @@ export function withTenantMember<T>(
 }
 
 /**
- * Moves a `withTenantMember` transaction to another creator, for the writes that touch two creators at once: a swap of
- * shifts on two creators, a leave whose approval reads every creator of the member (ADR 0031). Still `SET LOCAL`.
+ * Moves a `withMember` or `withTenantMember` transaction to another creator, for what touches several creators at
+ * once: a reader of several creators, a swap of shifts on two creators, a leave whose approval reads every creator of
+ * the member (ADR 0031). Still `SET LOCAL`. `allowed` is the list the caller checked first (the creators that exist,
+ * the two of a swap, those of the member): a creator outside it throws, so that no caller opens a creator it did not
+ * check. The policies still decide what the scope reads and writes in her.
  */
-export async function enterCreator(tx: Transaction, creatorId: string): Promise<void> {
+export async function enterCreator(
+  tx: Transaction,
+  creatorId: string,
+  allowed: readonly string[],
+): Promise<void> {
+  if (!allowed.includes(creatorId)) throw new Error('enterCreator: creator outside the allowed list');
   await tx.execute(sql`select set_config('app.creator_id', ${creatorId}, true)`);
 }
 

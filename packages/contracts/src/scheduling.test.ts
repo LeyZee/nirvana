@@ -313,23 +313,42 @@ describe('swaps (ADR 0031)', () => {
     expect(Object.keys(candidates.candidates[0]?.member ?? {})).toEqual(['id', 'displayName', 'color']);
   });
 
+  const proposed = {
+    ...offer,
+    requesterId: MEMBER,
+    creatorId: CREATOR,
+    shiftStartsAt: shift.startsAt,
+    shiftEndsAt: shift.endsAt,
+    targetCreatorId: null,
+    targetShiftStartsAt: null,
+    targetShiftEndsAt: null,
+    message: null,
+    status: 'proposed',
+    resolvedAt: null,
+    revertedAt: null,
+    createdAt: '2026-10-27T20:00:00Z',
+  };
+
   it('lists the swaps with the shifts they name, as they are now', () => {
     const list = ShiftSwapListSchema.parse({
-      swapRequests: [
-        {
-          ...offer,
-          requesterId: MEMBER,
-          message: null,
-          status: 'proposed',
-          resolvedAt: null,
-          revertedAt: null,
-          createdAt: '2026-10-27T20:00:00Z',
-        },
-      ],
+      swapRequests: [proposed],
       shifts: [{ ...shift, stoppedAt: null }],
       accounts: [],
       members: [],
     });
     expect(list.swapRequests[0]?.status).toBe('proposed');
+  });
+
+  it('keeps the hours a swap noted, to say one that ended without its shift', () => {
+    const declined = { ...proposed, status: 'declined', resolvedAt: '2026-10-27T21:00:00Z' };
+    const list = ShiftSwapListSchema.parse({
+      swapRequests: [declined],
+      shifts: [],
+      accounts: [],
+      members: [],
+    });
+    expect(list.swapRequests[0]).toMatchObject({ shiftStartsAt: shift.startsAt, shiftEndsAt: shift.endsAt });
+    const forgotten = { ...declined, shiftStartsAt: undefined };
+    expect(ShiftSwapListSchema.safeParse({ ...list, swapRequests: [forgotten] }).success).toBe(false);
   });
 });

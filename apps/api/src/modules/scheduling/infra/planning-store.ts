@@ -1,6 +1,8 @@
 import {
   AuditEntryIdSchema,
   CreatorIdSchema,
+  LeaveRequestIdSchema,
+  LeaveRequestStatusSchema,
   newId,
   PlatformAccountIdSchema,
   PlatformSchema,
@@ -32,6 +34,7 @@ import { z } from 'zod';
 
 import {
   MemberNotFound,
+  MemberOnLeave,
   OwnerOnly,
   PlatformAccountNotFound,
   ShiftAccountConflict,
@@ -39,11 +42,15 @@ import {
   ShiftNotFound,
   ShiftTemplateNotFound,
 } from '../domain/errors';
+import { leaveCover } from '../domain/leaves';
 import type {
   Actor,
   PlanningAdmin,
   PlanningStore,
+  PlanningClock,
+  ShiftChange,
   StoredAccount,
+  StoredLeave,
   StoredMember,
   StoredShift,
   StoredTemplate,
@@ -61,7 +68,16 @@ import {
 } from '../domain/shifts';
 import { addDays, calendarDayIn } from '../domain/time';
 
-const { auditLog, platformAccounts, schedulingSettings, shiftTemplates, shifts, teamMembers, user } = schema;
+const {
+  auditLog,
+  leaveRequests,
+  platformAccounts,
+  schedulingSettings,
+  shiftTemplates,
+  shifts,
+  teamMembers,
+  user,
+} = schema;
 
 const shiftColumns = {
   id: shifts.id,
@@ -166,6 +182,91 @@ async function audit(
   });
 }
 
+/**
+ * One lock per member (ADR 0031), taken by every write that puts a shift on a member and by a leave's approval, so
+ * that an approval and a new shift at the same moment cannot both win. A transaction-scoped advisory lock, which the
+ * policies do not hide; several members in the order of their ids. Every path takes it before locking any row.
+ */
+async function lockMembers(tx: Transaction, memberIds: readonly string[]): Promise<void> {
+  for (const memberId of [...new Set(memberIds)].toSorted()) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`scheduling.member:${memberId}`}, 0))`,
+    );
+  }
+}
+
+const leaveColumns = {
+  id: leaveRequests.id,
+  memberId: leaveRequests.memberId,
+  status: leaveRequests.status,
+  startsAt: leaveRequests.startsAt,
+  endsAt: leaveRequests.endsAt,
+  cancelledAt: leaveRequests.cancelledAt,
+};
+
+const StoredLeaveSchema = z.object({
+  id: LeaveRequestIdSchema,
+  memberId: TeamMemberIdSchema,
+  status: LeaveRequestStatusSchema,
+  startsAt: z.date(),
+  endsAt: z.date(),
+  cancelledAt: z.date().nullable(),
+});
+
+/**
+ * The member's leaves that may cover something in [`from`, `to`): approved or cancelled ones overlapping it (a
+ * cancelled one covers up to its cancellation, `leaveCover`). Read by the owner, an active manager or the job; a
+ * creator's transaction reads them too, since a leave has no creator.
+ */
+async function leavesOf(
+  tx: Transaction,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+): Promise<StoredLeave[]> {
+  if (memberIds.length === 0) return [];
+  const rows = await tx
+    .select(leaveColumns)
+    .from(leaveRequests)
+    .where(
+      and(
+        inArray(leaveRequests.memberId, [...memberIds]),
+        inArray(leaveRequests.status, ['approved', 'cancelled']),
+        sql`${leaveRequests.startsAt} < ${to}`,
+        sql`${leaveRequests.endsAt} > ${from}`,
+      ),
+    );
+  return rows.map((row) => StoredLeaveSchema.parse(row));
+}
+
+/** The leave that covers part of [`startsAt`, `endsAt`) for the member, if any. */
+function leaveCovering(
+  leaves: readonly StoredLeave[],
+  memberId: string,
+  startsAt: Date,
+  endsAt: Date,
+): StoredLeave | undefined {
+  return leaves.find((leave) => {
+    const cover = leave.memberId === memberId ? leaveCover(leave) : null;
+    return (
+      cover !== null &&
+      cover.startsAt.getTime() < endsAt.getTime() &&
+      startsAt.getTime() < cover.endsAt.getTime()
+    );
+  });
+}
+
+/** No shift on a member during their leave: called under the member's lock (`lockMembers`). */
+async function assertNotOnLeave(
+  tx: Transaction,
+  memberId: string,
+  startsAt: Date,
+  endsAt: Date,
+): Promise<void> {
+  const away = leaveCovering(await leavesOf(tx, [memberId], startsAt, endsAt), memberId, startsAt, endsAt);
+  if (away !== undefined) throw new MemberOnLeave(away.id);
+}
+
 /** A shift goes to an `active` member working on its creator; `member_not_found` when the member does not exist. */
 async function assertMemberWorks(
   tx: Transaction,
@@ -241,6 +342,9 @@ async function shiftInTheWayUnscoped(
   return row?.id ?? null;
 }
 
+/** A shift that changed hands between its read and its lock (a swap): `updateShift` tries again. */
+class MovedMeanwhile extends Error {}
+
 /** The creator of a shift or a template, to enter her with `withTenantMember`; the policies then decide. */
 async function creatorOfUnscoped(
   adminDb: Database,
@@ -254,8 +358,9 @@ async function creatorOfUnscoped(
 }
 
 /**
- * The shifts a template makes ahead, each once: the occurrence key skips those already made, and an occurrence that
- * overlaps another shift of its member or its account is skipped in its own savepoint. The member exclusion is
+ * The shifts a template makes ahead, each once, under its member's lock: the occurrence key skips those already
+ * made, an occurrence during the member's leave is not made (the planning shows it in `conflicts`, ADR 0031), and one
+ * that overlaps another shift of its member or its account is skipped in its own savepoint. The member exclusion is
  * deferrable since 0023 (a swap of two shifts at the same hours), and a deferrable constraint is no arbiter of
  * `ON CONFLICT`: only the occurrence key is.
  */
@@ -265,8 +370,15 @@ async function makeShifts(
   by: string,
   clock: { readonly now: Date; readonly timeZone: string },
 ): Promise<number> {
+  const ahead = occurrencesAhead(template, clock.now, clock.timeZone);
+  const last = ahead.at(-1);
+  if (last === undefined) return 0;
+  await lockMembers(tx, [template.memberId]);
+  const leaves = await leavesOf(tx, [template.memberId], clock.now, last.endsAt);
   let made = 0;
-  for (const occurrence of occurrencesAhead(template, clock.now, clock.timeZone)) {
+  for (const occurrence of ahead) {
+    if (leaveCovering(leaves, template.memberId, occurrence.startsAt, occurrence.endsAt) !== undefined)
+      continue;
     try {
       const rows = await tx.transaction((savepoint) =>
         savepoint
@@ -325,6 +437,81 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
     });
   };
 
+  /**
+   * One try of `updateShift`. The member the shift goes to is locked before the row, as on every path (ADR 0031):
+   * the shift is read first to know its member when the change keeps it.
+   */
+  const updateShiftOnce = (actor: Actor, id: ShiftId, change: ShiftChange, clock: PlanningClock) =>
+    inCreatorOf(
+      shifts,
+      id,
+      actor,
+      () => new ShiftNotFound(),
+      async (tx, creatorId) => {
+        const [current] = await tx
+          .select({ memberId: shifts.memberId })
+          .from(shifts)
+          .where(eq(shifts.id, id));
+        if (current === undefined) throw new ShiftNotFound();
+        await lockMembers(tx, [change.memberId ?? current.memberId]);
+        const shift = await lockShift(tx, id);
+        if (shift === null) throw new ShiftNotFound();
+        if (change.memberId === undefined && shift.memberId !== current.memberId) throw new MovedMeanwhile();
+        const update = decideUpdate(shift, change, clock.now);
+        const signed = { updatedBy: actor.userId, updatedAt: clock.now };
+        const byId = eq(shifts.id, id);
+        switch (update.kind) {
+          case 'plan': {
+            if (update.memberId !== shift.memberId) {
+              await assertMemberWorks(tx, TeamMemberIdSchema.parse(update.memberId), creatorId);
+            }
+            await assertNotOnLeave(tx, update.memberId, update.startsAt, update.endsAt);
+            const times = { memberId: update.memberId, startsAt: update.startsAt, endsAt: update.endsAt };
+            await placed(
+              adminDb,
+              tx
+                .update(shifts)
+                .set({ ...times, ...signed })
+                .where(byId),
+              {
+                ...shift,
+                ...times,
+              },
+            );
+            break;
+          }
+          case 'shorten':
+            await tx
+              .update(shifts)
+              .set({ endsAt: update.endsAt, ...signed })
+              .where(byId);
+            break;
+          case 'stop':
+            await tx
+              .update(shifts)
+              .set({ endsAt: update.endsAt, stoppedAt: update.stoppedAt, ...signed })
+              .where(byId);
+            break;
+          case 'cancel':
+            await tx
+              .update(shifts)
+              .set({ cancelledAt: clock.now, ...signed })
+              .where(byId);
+            break;
+        }
+        await audit(
+          tx,
+          actor,
+          update.kind === 'cancel' ? 'shift.cancel' : 'shift.update',
+          { kind: 'shift', id },
+          {
+            change: update.kind,
+          },
+        );
+        return update.kind === 'cancel' ? null : lockShift(tx, id);
+      },
+    );
+
   return {
     settings: (actor) =>
       withMember(db, actor, async (tx) => {
@@ -369,7 +556,7 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
             made: Set<string>;
           } = { shifts: [], accounts: [], templates: [], made: new Set() };
           for (const creatorId of creatorIds) {
-            await enterCreator(tx, creatorId);
+            await enterCreator(tx, creatorId, creatorIds);
             const rows = await tx
               .select(shiftColumns)
               .from(shifts)
@@ -419,7 +606,9 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
             named.length === 0
               ? []
               : await tx.select(memberColumns).from(teamMembers).where(inArray(teamMembers.id, named));
-          return { scope, ...found, members: members.map(toMember) };
+          const planned = [...new Set(found.templates.map((template) => template.memberId))];
+          const leaves = plans ? await leavesOf(tx, planned, range.from, range.to) : [];
+          return { scope, ...found, leaves, members: members.map(toMember) };
         },
         SNAPSHOT_READ,
       ),
@@ -432,7 +621,7 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
           assertPlans(scope);
           const onDuty: { shift: StoredShift; member: StoredMember }[] = [];
           for (const creatorId of creatorIds) {
-            await enterCreator(tx, creatorId);
+            await enterCreator(tx, creatorId, creatorIds);
             const rows = await tx
               .select({ shift: shiftColumns, member: memberColumns })
               .from(shifts)
@@ -457,8 +646,10 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
         assertPlans(scope);
         assertShiftRange(shift.startsAt, shift.endsAt);
         assertEndsAhead(shift.endsAt, clock.now);
+        await lockMembers(tx, [shift.memberId]);
         await assertMemberWorks(tx, shift.memberId, shift.creatorId);
         await assertAccountOf(tx, shift.platformAccountId);
+        await assertNotOnLeave(tx, shift.memberId, shift.startsAt, shift.endsAt);
         await placed(
           adminDb,
           tx.insert(shifts).values({ ...shift, createdBy: actor.userId, updatedBy: actor.userId }),
@@ -468,68 +659,16 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
         return { ...shift, templateId: null, stoppedAt: null };
       }),
 
-    updateShift: (actor, id, change, clock) =>
-      inCreatorOf(
-        shifts,
-        id,
-        actor,
-        () => new ShiftNotFound(),
-        async (tx, creatorId) => {
-          const shift = await lockShift(tx, id);
-          if (shift === null) throw new ShiftNotFound();
-          const update = decideUpdate(shift, change, clock.now);
-          const signed = { updatedBy: actor.userId, updatedAt: clock.now };
-          const byId = eq(shifts.id, id);
-          switch (update.kind) {
-            case 'plan': {
-              if (update.memberId !== shift.memberId) {
-                await assertMemberWorks(tx, TeamMemberIdSchema.parse(update.memberId), creatorId);
-              }
-              const times = { memberId: update.memberId, startsAt: update.startsAt, endsAt: update.endsAt };
-              await placed(
-                adminDb,
-                tx
-                  .update(shifts)
-                  .set({ ...times, ...signed })
-                  .where(byId),
-                {
-                  ...shift,
-                  ...times,
-                },
-              );
-              break;
-            }
-            case 'shorten':
-              await tx
-                .update(shifts)
-                .set({ endsAt: update.endsAt, ...signed })
-                .where(byId);
-              break;
-            case 'stop':
-              await tx
-                .update(shifts)
-                .set({ endsAt: update.endsAt, stoppedAt: update.stoppedAt, ...signed })
-                .where(byId);
-              break;
-            case 'cancel':
-              await tx
-                .update(shifts)
-                .set({ cancelledAt: clock.now, ...signed })
-                .where(byId);
-              break;
-          }
-          await audit(
-            tx,
-            actor,
-            update.kind === 'cancel' ? 'shift.cancel' : 'shift.update',
-            { kind: 'shift', id },
-            {
-              change: update.kind,
-            },
-          );
-          return update.kind === 'cancel' ? null : lockShift(tx, id);
-        },
-      ),
+    updateShift: async (actor, id, change, clock) => {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return await updateShiftOnce(actor, id, change, clock);
+        } catch (error) {
+          // The shift changed hands between its read and its lock (a swap): read and lock again.
+          if (!(error instanceof MovedMeanwhile) || attempt === 3) throw error;
+        }
+      }
+    },
 
     cancelShift: (actor, id, clock) =>
       inCreatorOf(
@@ -557,7 +696,7 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
           assertPlans(scope);
           const running: StoredTemplate[] = [];
           for (const creatorId of creatorIds) {
-            await enterCreator(tx, creatorId);
+            await enterCreator(tx, creatorId, creatorIds);
             const rows = await tx
               .select(templateColumns)
               .from(shiftTemplates)
