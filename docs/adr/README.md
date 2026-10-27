@@ -47,3 +47,4 @@ Date : AAAA-MM-JJ
 | 0020 | Notifications Telegram : bots, groupes et routage gérés depuis le CRM | proposed |
 | 0021 | Rester en personnage est fixé dans le code, sans réglage | accepted |
 | 0022 | La persona fait partie de la version qui ouvre l'Automatique | accepted |
+| 0023 | La gestion d'équipe entre dans Nirvana : planning, rapports, paie, routine des créatrices | proposed |

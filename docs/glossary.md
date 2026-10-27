@@ -107,6 +107,24 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Routage | `telegram_route` | Quel sujet va dans quel groupe, pour une créatrice ou pour toutes. |
 | Astreinte | `on_call` | Le groupe Telegram qui reçoit l'urgent la nuit. « Personne n'est prévenu la nuit » quand aucune créatrice n'en a un joignable. |
 | Apparence (Nuit, Jour, Appareil) | `appearance` (`night`, `day`, `device`) | Le thème du CRM, choisi dans Réglages › Apparence et gardé par le navigateur. Nuit par défaut ; Appareil suit le mode clair ou sombre de l'ordinateur ou du téléphone. |
+| Membre de l'équipe | `team_member` | Le profil d'un chatteur ou d'un manager de l'agence, lié à son compte : rôle d'équipe, fuseau, mode et taux de rémunération, statut (ADR 0023). |
+| Rôle d'équipe | `team_role` (`chatter`, `manager`) | Ce qu'un membre fait dans l'équipe. Distinct du rôle d'accès (`operator`) : un manager voit toute l'équipe et valide rapports et paies jusqu'à « validée ». |
+| Shift | `shift` | Une plage où un membre chatte sur un compte d'une créatrice, début et fin en UTC. |
+| Créneau | `slot` | Une des plages fixes de la journée de l'agence (4 × 6 h par défaut) sur lesquelles se posent les shifts. |
+| En poste | `onShift` | Le membre dont le shift couvre cet instant sur cette créatrice ; il reçoit en premier les passages à l'humain pour vendre. |
+| Rapport de fin de shift | `shift_report` | Ce que le chatteur déclare avoir généré pendant son shift, saisi dans Nirvana, validé par un manager. |
+| Source de revenus | `earnings_source` (`declared`, `detected`) | D'où la paie lit les montants d'un compte pour une période : rapports de fin de shift validés ou ventes détectées par le connecteur, jamais les deux. |
+| Qui vend | `sellerMode` (`agent`, `team`, `both`) | Réglage d'une créatrice : quand il est temps de vendre, l'agent vend, ou il passe la main au chatteur en poste (motif `sale`), ou les deux. |
+| Période de paie | `pay_period` | Une quinzaine (1-15, 16-fin du mois) dans le fuseau de l'agence. |
+| Fiche de paie | `payslip` | Le calcul d'un membre pour une période, avec les règles et le taux de change copiés : `draft`, `validated`, `paid`. |
+| Palier | `bonus_tier` | Seuil de net hors taxes qui débloque une prime ; le plus haut atteint compte. |
+| Prime | `bonus` | Montant ajouté à une fiche : palier, objectif collectif ou prime manuelle avec motif. |
+| Malus | `penalty` | Retenue fixe ou en pourcentage avec motif, plafonnée à la part du membre plus ses primes. |
+| Report | `carry_over` | Montant sous le minimum de versement, reporté sur la période suivante. |
+| Ajustement | `pay_adjustment` | Correction d'une fiche déjà validée, portée sur la prochaine période ouverte. |
+| Part de l'agence | `agency_share` | La part des revenus d'une créatrice qui revient à l'agence. |
+| Routine | `routine` | Les tâches quotidiennes qu'une créatrice coche dans son application : celles de l'agence comptent pour la série, les siennes non. |
+| Série | `streak` | Le nombre de jours d'affilée où la créatrice a coché ses tâches essentielles. |
 
 ## Noms à ne pas utiliser
 
