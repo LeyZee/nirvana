@@ -253,7 +253,7 @@ describe('another account signed in on this browser', () => {
     role: 'owner',
   };
   const WARNING =
-    /Ce navigateur est connecté au compte de Charles\. Entrer ouvrira celui de Théo à sa place\./u;
+    /Ce navigateur est connecté au compte de Charles\. « Entrer » ouvrira celui de Théo à sa place\./u;
 
   it('says the member’s session will take its place, before he enters', async () => {
     serve({
@@ -268,7 +268,7 @@ describe('another account signed in on this browser', () => {
   it('says it with the button of the page, on a new password link', async () => {
     serve({ inspect: [[200, preview('reset')]], me: [200, { ...CHARLES, team: null, teamScope: 'owner' }] });
     open('reset');
-    expect(await screen.findByText(/Enregistrer ouvrira celui de Théo à sa place\./u)).toBeDefined();
+    expect(await screen.findByText(/« Enregistrer » ouvrira celui de Théo à sa place\./u)).toBeDefined();
   });
 
   it('says nothing when it is his own account, when no one is signed in, or when the session cannot be read', async () => {

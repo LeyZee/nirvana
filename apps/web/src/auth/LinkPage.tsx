@@ -323,7 +323,7 @@ function PasswordForm({
       ) : null}
       {otherAccount === null ? null : (
         <p className="nv-enter text-sm text-[var(--nv-ink-muted)]" style={{ '--nv-i': 4 }}>
-          Ce navigateur est connecté au compte de {otherAccount.name}. {copy.submit} ouvrira celui de{' '}
+          Ce navigateur est connecté au compte de {otherAccount.name}. « {copy.submit} » ouvrira celui de{' '}
           {preview.displayName} à sa place.
         </p>
       )}
