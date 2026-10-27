@@ -1,3 +1,4 @@
+import { newId, TeamMemberIdSchema } from '@nirvana/contracts';
 import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
@@ -18,6 +19,7 @@ describe('dashboard authentication (P0-07a)', () => {
   let test: TestDb;
   let app: App;
   let server: Server;
+  let operatorId = '';
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
@@ -34,8 +36,8 @@ describe('dashboard authentication (P0-07a)', () => {
       readiness: app.readiness,
     });
     await createOwner(app.auth, app.db.db, OWNER);
-    const { userId } = await createOwner(app.auth, app.db.db, OPERATOR);
-    await test.admin.db.update(schema.user).set({ role: 'operator' }).where(eq(schema.user.id, userId));
+    operatorId = (await createOwner(app.auth, app.db.db, OPERATOR)).userId;
+    await test.admin.db.update(schema.user).set({ role: 'operator' }).where(eq(schema.user.id, operatorId));
   });
 
   afterAll(async () => {
@@ -62,6 +64,48 @@ describe('dashboard authentication (P0-07a)', () => {
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, 'auth.login'));
     expect(logins.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('tells the team role and the scope the database applies (ADR 0024)', async () => {
+    const owner = await signIn(server, OWNER.email, OWNER.password);
+    const operator = await signIn(server, OPERATOR.email, OPERATOR.password);
+    const meOf = async (cookie: string) =>
+      (await server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } })).json<{
+        team: { role: string; status: string } | null;
+        teamScope: string;
+      }>();
+    expect(await meOf(owner)).toMatchObject({ team: null, teamScope: 'owner' });
+    expect(await meOf(operator)).toMatchObject({ team: null, teamScope: 'self' });
+
+    // Invented member (ADR 0010).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: operatorId,
+      teamRole: 'manager',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Manager',
+      country: 'MG',
+      timeZone: 'Indian/Antananarivo',
+      joinedOn: '2026-10-01',
+    });
+    const setMember = (values: { teamRole?: string; status?: string }) =>
+      test.admin.db.update(schema.teamMembers).set(values).where(eq(schema.teamMembers.userId, operatorId));
+    expect(await meOf(operator)).toMatchObject({
+      team: { role: 'manager', status: 'active' },
+      teamScope: 'agency',
+    });
+    await setMember({ status: 'on_leave' });
+    expect(await meOf(operator)).toMatchObject({
+      team: { role: 'manager', status: 'on_leave' },
+      teamScope: 'self',
+    });
+    await setMember({ teamRole: 'chatter', status: 'active' });
+    expect(await meOf(operator)).toMatchObject({
+      team: { role: 'chatter', status: 'active' },
+      teamScope: 'self',
+    });
+    await test.admin.db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, operatorId));
   });
 
   it('sets the session cookie HttpOnly and SameSite=Lax, and keeps the token out of the body', async () => {

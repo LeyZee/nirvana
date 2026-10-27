@@ -427,7 +427,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     auth,
     requireRole,
     routes: [
-      createAuthRoutes(auth, config, requireRole),
+      createAuthRoutes(auth, db.db, config, requireRole),
       modules.conversations.routes,
       modules.persona.routes,
       modules.fans.routes(requireRole),

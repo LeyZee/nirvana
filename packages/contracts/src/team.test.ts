@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BasisPointsSchema, CountryCodeSchema, teamScopeFor } from './team';
+import { BasisPointsSchema, CountryCodeSchema, MeSchema, teamScopeFor } from './team';
 
 describe('teamScopeFor', () => {
   it('gives the owner every row, an active manager the team, anyone else his own rows', () => {
@@ -25,5 +25,28 @@ describe('team values', () => {
     expect(BasisPointsSchema.safeParse(12.5).success).toBe(false);
     expect(CountryCodeSchema.safeParse('BJ').success).toBe(true);
     expect(CountryCodeSchema.safeParse('bj').success).toBe(false);
+  });
+});
+
+describe('MeSchema', () => {
+  const user = {
+    id: 'u1',
+    email: 'chatter@example.test',
+    name: 'Chatteur',
+    role: 'operator',
+    creatorIds: [],
+  };
+
+  it('carries the team role and the scope, never the session token', () => {
+    const me = { ...user, team: { role: 'chatter', status: 'active' }, teamScope: 'self' };
+    expect(MeSchema.parse({ ...me, token: 'secret' })).toEqual(me);
+    expect(MeSchema.parse({ ...user, role: 'owner', team: null, teamScope: 'owner' }).team).toBeNull();
+  });
+
+  it('refuses an unknown team role or scope', () => {
+    expect(
+      MeSchema.safeParse({ ...user, team: { role: 'va', status: 'active' }, teamScope: 'self' }).success,
+    ).toBe(false);
+    expect(MeSchema.safeParse({ ...user, team: null, teamScope: 'admin' }).success).toBe(false);
   });
 });

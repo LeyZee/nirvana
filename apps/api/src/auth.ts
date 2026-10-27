@@ -2,14 +2,17 @@ import {
   AuditEntryIdSchema,
   CurrentUserSchema,
   DomainError,
+  MeSchema,
   newId,
   REAUTHENTICATION_ERROR_CODE,
+  TeamMembershipSchema,
   UserIdSchema,
   UserRoleSchema,
   type CurrentUser,
+  type Me,
   type UserRole,
 } from '@nirvana/contracts';
-import { eq, schema, type Database } from '@nirvana/db';
+import { eq, schema, withMember, type Database } from '@nirvana/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { fromNodeHeaders } from 'better-auth/node';
@@ -204,9 +207,25 @@ export function createRequireRecentLogin(
   };
 }
 
+/**
+ * The signed-in account with its team role and scope (ADR 0024), read through `withMember`: the scope is the one the
+ * database policies apply, never a second computation. No row, no membership; a row that does not validate has
+ * already failed `withMember`, like here.
+ */
+async function me(db: Database, user: CurrentUser): Promise<Me> {
+  return withMember(db, user.id, async (tx, teamScope) => {
+    const [row] = await tx
+      .select({ role: schema.teamMembers.teamRole, status: schema.teamMembers.status })
+      .from(schema.teamMembers)
+      .where(eq(schema.teamMembers.userId, user.id));
+    return { ...user, team: row === undefined ? null : TeamMembershipSchema.parse(row), teamScope };
+  });
+}
+
 /** Mounts Better Auth's own handler under `/v1/auth/*` and adds `GET /v1/me`. */
 export function createAuthRoutes(
   auth: Auth,
+  db: Database,
   config: Config,
   requireRole: RequireRole,
 ): FastifyPluginAsyncZod {
@@ -264,11 +283,11 @@ export function createAuthRoutes(
       '/me',
       {
         preHandler: requireRole(...UserRoleSchema.options),
-        schema: { response: { 200: CurrentUserSchema } },
+        schema: { response: { 200: MeSchema } },
       },
       (request) => {
         if (request.user === null) throw new SessionUnauthenticated();
-        return request.user;
+        return me(db, request.user);
       },
     );
     return Promise.resolve();
