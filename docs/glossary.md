@@ -149,6 +149,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Mandat de facturation | `billing_mandate` | L'accord, accepté par le prestataire avant sa première facture, qui autorise l'autofacturation et fixe le délai de contestation. |
 | Avoir | `credit_note` | Document numéroté dans la séquence du prestataire qui annule ou réduit une facture émise, en la citant. Une facture émise ne se modifie jamais. |
 | Régime de facturation | `billing_regime` | Les règles de facture d'un pays de prestataire (mentions, TVA, retenue à la source), réglées par le propriétaire et validées par le comptable. |
+| Sauvegarde | `backup_run` | L'export chiffré de la base, chaque nuit, chez un autre hébergeur que la base, gardé 30 jours (ADR 0028). Plus de 26 h sans sauvegarde réussie : avertissement ambre et alerte Telegram. |
+| Essai de restauration | `restore_test` | Une sauvegarde de production restaurée sur le PC du propriétaire dans une base jetable, puis notée dans Réglages › Sauvegardes : date, durée, tables qui diffèrent, empreinte SHA-256 de la sauvegarde. La paie réelle attend un essai réussi de moins de 90 jours (ADR 0028, EQ-17). |
 | Part de l'agence | `agency_share` | La part des revenus d'une créatrice qui revient à l'agence. |
 | Routine | `routine` | Les tâches quotidiennes qu'une créatrice coche dans son application : celles de l'agence comptent pour la série, les siennes non. |
 | Série | `streak` | Le nombre de jours d'affilée où la créatrice a coché ses tâches essentielles. |

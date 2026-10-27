@@ -15,6 +15,7 @@ import {
   DevicesPage,
   AgentModePage,
   AiModelsPage,
+  BackupsPage,
   SettingsLayout,
   TelegramPage,
 } from './screens/settings/SettingsLayout';
@@ -179,6 +180,7 @@ const appearance = createRoute({
   path: '/apparence',
   component: AppearancePage,
 });
+const backups = createRoute({ getParentRoute: () => settings, path: '/sauvegardes', component: BackupsPage });
 const agentMode = createRoute({ getParentRoute: () => settings, path: '/mode', component: AgentModePage });
 
 const routeTree = rootRoute.addChildren([
@@ -189,7 +191,7 @@ const routeTree = rootRoute.addChildren([
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamMembers]),
-  settings.addChildren([settingsIndex, aiModels, telegram, devices, appearance, agentMode]),
+  settings.addChildren([settingsIndex, aiModels, telegram, backups, devices, appearance, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext, history?: RouterHistory) =>
