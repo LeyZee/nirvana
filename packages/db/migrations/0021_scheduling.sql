@@ -98,8 +98,10 @@ ALTER TABLE "shifts" ADD CONSTRAINT "shifts_account_overlap_excl"
   EXCLUDE USING gist ("platform_account_id" WITH =, tstzrange("starts_at", "ends_at", '[)') WITH &&) WHERE ("cancelled_at" IS NULL);--> statement-breakpoint
 -- Nothing of the planning is deleted: a shift is cancelled (`cancelled_at`), a template ended (`valid_until`), once.
 -- A template changes nothing but that end; a shift never changes its creator, its account, its template or who made
--- it, and a shift that has ended no longer changes at all. The column grants below hold the application role; these
--- triggers hold every role, the admin one of the job that makes the templates' shifts included.
+-- it, a shift under way keeps its start and its member and only ends earlier, and a shift that has ended no longer
+-- changes at all: the chatter's access window (ADR 0025) is read on these columns. The column grants below hold the
+-- application role; these triggers hold every role, the admin one of the job that makes the templates' shifts
+-- included.
 CREATE FUNCTION "refuse_planning_change"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'this change to % is refused: the planning keeps its past (EQ-02)', TG_TABLE_NAME
@@ -122,6 +124,10 @@ CREATE TRIGGER "shifts_kept" BEFORE UPDATE ON "shifts" FOR EACH ROW
   WHEN (
     OLD."ends_at" <= now()
     OR OLD."cancelled_at" IS NOT NULL
+    OR (OLD."starts_at" <= now()
+        AND (NEW."starts_at" IS DISTINCT FROM OLD."starts_at"
+             OR NEW."member_id" IS DISTINCT FROM OLD."member_id"
+             OR NEW."ends_at" > OLD."ends_at"))
     OR (OLD."id", OLD."creator_id", OLD."platform_account_id", OLD."template_id", OLD."template_starts_at",
         OLD."created_by", OLD."created_at")
        IS DISTINCT FROM
@@ -131,9 +137,10 @@ CREATE TRIGGER "shifts_kept" BEFORE UPDATE ON "shifts" FOR EACH ROW
   EXECUTE FUNCTION "refuse_planning_change"();--> statement-breakpoint
 CREATE TRIGGER "shifts_not_deleted" BEFORE DELETE ON "shifts" FOR EACH ROW
   EXECUTE FUNCTION "refuse_planning_change"();--> statement-breakpoint
+-- From nothing, whatever the default privileges of the base gave: a TRUNCATE would pass the RLS and the BEFORE DELETE
+-- triggers.
+REVOKE ALL ON "scheduling_settings", "shift_templates", "shifts" FROM nirvana_app;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON "scheduling_settings" TO nirvana_app;--> statement-breakpoint
 GRANT SELECT, INSERT ON "shift_templates", "shifts" TO nirvana_app;--> statement-breakpoint
-REVOKE DELETE ON "scheduling_settings", "shift_templates", "shifts" FROM nirvana_app;--> statement-breakpoint
-REVOKE UPDATE ON "shift_templates", "shifts" FROM nirvana_app;--> statement-breakpoint
 GRANT UPDATE ("valid_until") ON "shift_templates" TO nirvana_app;--> statement-breakpoint
 GRANT UPDATE ("member_id", "starts_at", "ends_at", "cancelled_at", "stopped_at", "updated_by", "updated_at") ON "shifts" TO nirvana_app;

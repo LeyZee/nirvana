@@ -458,6 +458,57 @@ describe('planning tables (EQ-02): the creator and the member, through withTenan
     ).toBe('no error');
   });
 
+  it('a shift under way keeps its start and its member and only ends earlier, even for the admin role', async () => {
+    const minute = 60_000;
+    const startsAt = new Date(Math.floor(Date.now() / minute) * minute - 60 * minute);
+    const endsAt = new Date(startsAt.getTime() + 6 * 60 * minute);
+    const row = shiftRow(nora, chatterB, startsAt.toISOString(), endsAt.toISOString());
+    await withAdmin(test.admin.db, (tx) => tx.insert(s.shifts).values(row));
+    const asOwner = (set: Partial<typeof s.shifts.$inferInsert>) =>
+      failure(
+        withTenantMember(test.app.db, nora.creatorId, owner, (tx) =>
+          tx
+            .update(s.shifts)
+            .set({ ...set, updatedBy: owner })
+            .where(eq(s.shifts.id, row.id)),
+        ),
+      );
+    const later = (at: Date, minutes: number) => new Date(at.getTime() + minutes * minute);
+    // Its start, earlier or later, its member and a later end are refused.
+    expect(await asOwner({ startsAt: later(startsAt, -60) })).toMatch(/keeps its past/u);
+    expect(await asOwner({ startsAt: later(startsAt, 30) })).toMatch(/keeps its past/u);
+    expect(await asOwner({ memberId: member(chatterA) })).toMatch(/keeps its past/u);
+    expect(await asOwner({ endsAt: later(endsAt, 60) })).toMatch(/keeps its past/u);
+    expect(
+      await failure(
+        withAdmin(test.admin.db, (tx) =>
+          tx
+            .update(s.shifts)
+            .set({ endsAt: later(endsAt, 60) })
+            .where(eq(s.shifts.id, row.id)),
+        ),
+      ),
+    ).toMatch(/keeps its past/u);
+    // It ends earlier, then stops on the minute; stopped, it has ended and no longer changes.
+    expect(await asOwner({ endsAt: later(endsAt, -60) })).toBe('no error');
+    const stoppedAt = new Date();
+    expect(
+      await asOwner({ endsAt: new Date(Math.floor(stoppedAt.getTime() / minute) * minute), stoppedAt }),
+    ).toBe('no error');
+    expect(await asOwner({ cancelledAt: new Date() })).toMatch(/keeps its past/u);
+  });
+
+  it('gives the application role neither DELETE nor TRUNCATE, whatever the base gave it', async () => {
+    for (const table of ['scheduling_settings', 'shift_templates', 'shifts']) {
+      expect(await failure(test.app.db.execute(sql.raw(`truncate "${table}"`)))).toMatch(
+        /permission denied/u,
+      );
+      expect(await failure(test.app.db.execute(sql.raw(`delete from "${table}"`)))).toMatch(
+        /permission denied/u,
+      );
+    }
+  });
+
   it('every member reads the settings; the owner alone writes them, under their own name', async () => {
     const settings = {
       id: 1,
