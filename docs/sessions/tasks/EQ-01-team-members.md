@@ -1,13 +1,15 @@
 # EQ-01 Équipe : membres, pays, commission, paramètres de paie des plateformes
 Statut : todo (lot 1 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; la carte de navigation est validée avant la première PR d'écran)
 Phase : équipe (ADR 0023)
-Dépend de : ADR 0023 ; carte de navigation validée pour l'écran
+Dépend de : ADR 0023 ; pour l'écran, la carte de navigation validée et la PR du shell par rôle (ordre ci-dessous)
 Branche : task/eq-01-team-members
 
 ## Objectif
-Ajouter un chatteur ou un manager avec tout ce qu'Imperium savait de lui (pays, commission, statut, notes…), lui donner ses créatrices, et retrouver toute l'équipe dans Équipe > Membres, en plus clair et plus beau qu'Imperium.
+Ajouter un chatteur ou un manager avec tout ce qu'Imperium savait de lui (pays, commission, statut, notes…), lui donner ses créatrices, et retrouver toute l'équipe dans l'écran des membres (place fixée par la carte de navigation), en plus clair et plus beau qu'Imperium.
 
 ## Contexte à lire
+Ordre avant tout écran de l'équipe (Extension et coordinateur, 27/10) : 1) ADR 0024, rôles et navigation, une fois la carte validée par Charles ; 2) le rôle d'équipe dans `/v1/me` (contrats, par le propriétaire de `packages/contracts`) ; 3) une PR du shell seul : rail configuré par rôle, gardes `beforeLoad`, intertitres Chatting et Agence, « Plus » sur téléphone en feuille de verre, icônes avec geste ; 4) les écrans, à la place que fixe la carte.
+
 `docs/adr/0023-team-management.md`, `docs/architecture/data-model.md` (§ RLS, tables Better Auth), `docs/architecture/modules.md`, `docs/conventions/security.md`, `docs/design/README.md`, ADR 0011. Concept d'origine : la gestion des chatteurs d'Imperium (`docs/reference/legacy-projects.md`) : Charles (27/10) veut garder tout ce qui y était utile et laisser le reste.
 
 ## À faire
