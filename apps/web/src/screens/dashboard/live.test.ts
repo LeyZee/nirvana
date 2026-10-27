@@ -20,6 +20,14 @@ describe('fromApi', () => {
     expect(todo).toMatchObject({ kind: 'Envoi échoué', tone: 'warn' });
   });
 
+  it('names a message left with no answer (P3-11)', () => {
+    const todos = apiDashboard().todos.map(
+      (t) => ({ ...t, tone: 'warn', kind: 'unanswered' }) satisfies typeof t,
+    );
+    const [todo] = fromApi(apiDashboard({ todos })).todos;
+    expect(todo).toMatchObject({ kind: 'Sans réponse', tone: 'warn' });
+  });
+
   it('writes the server’s figures the French way, nothing more', () => {
     expect(card('budget')?.value).toBe('7,40 € sur 20 €');
     expect(card('budget')?.gauge).toEqual({ kind: 'spend', value: 37, mark: 80 });

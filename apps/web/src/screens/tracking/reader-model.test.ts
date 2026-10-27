@@ -139,5 +139,6 @@ describe('todoLabel', () => {
       });
     expect(todoLabel(todo('send_failed'))).toBe('Envoi échoué');
     expect(todoLabel(todo('awaiting_approval'))).toBe('Brouillon à valider');
+    expect(todoLabel(todo('unanswered'))).toBe('Sans réponse');
   });
 });

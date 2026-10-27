@@ -17,6 +17,7 @@ import { CAUSE_LABELS } from '@/agent/causes';
 export function todoLabel(todo: DashboardTodo): string {
   if (todo.kind === 'awaiting_approval') return 'Brouillon à valider';
   if (todo.kind === 'send_failed') return 'Envoi échoué';
+  if (todo.kind === 'unanswered') return 'Sans réponse';
   return CAUSE_LABELS[todo.kind];
 }
 

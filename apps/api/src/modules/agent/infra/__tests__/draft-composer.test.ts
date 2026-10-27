@@ -320,9 +320,37 @@ describe('createDraftComposer', () => {
     });
   });
 
-  it('stays quiet when the brain says there is nothing to answer yet', async () => {
-    const { draftComposer } = composer({ brief: { ...BRIEF, action: 'wait' } });
-    expect(await draftComposer.compose(INPUT)).toMatchObject({ kind: 'held', reason: 'no_reply' });
+  it('stays quiet when the brain says there is nothing to answer yet, and is asked again 20 minutes later', async () => {
+    const { draftComposer, seen } = composer({ brief: { ...BRIEF, action: 'wait' } });
+    expect(await draftComposer.compose(INPUT)).toEqual({
+      kind: 'held',
+      reason: 'no_reply',
+      detail: ['wait'],
+      costUsd: 0.002,
+      retryAt: new Date('2026-10-17T10:20:00Z'),
+    });
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('asks whether he is back instead of waiting twice for the same message (P3-11)', async () => {
+    const { draftComposer, seen } = composer({ brief: { ...BRIEF, action: 'wait' } });
+    expect(await draftComposer.compose({ ...INPUT, waited: 1 })).toMatchObject({
+      kind: 'draft',
+      bubbles: ['Coucou toi ✨'],
+    });
+    const brief = seen.voiceInputs?.[0]?.brief;
+    expect(brief?.action).toBe('reply');
+    expect(brief?.replyBrief).toContain('s’il est revenu');
+    expect(brief?.toneHints).toContain('aucune allusion sexuelle, elle n’ouvre pas ce terrain');
+  });
+
+  it('still hands a risk to a human after a wait', async () => {
+    const { draftComposer } = composer({ brief: { ...BRIEF, risks: ['distress'], action: 'wait' } });
+    expect(await draftComposer.compose({ ...INPUT, waited: 1 })).toMatchObject({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['distress'],
+    });
   });
 
   it('sees his photo before she answers, and shows it to the models in his message', async () => {

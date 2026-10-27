@@ -2,7 +2,13 @@ import type { FanFlags, HandoffCause, MediaDescription, MediaFlag, Result } from
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
 import { followUpDecision } from '../domain/follow-up';
-import { holdDecision, protectionFor, protectionWhileAnswering, type HoldDecision } from '../domain/hold';
+import {
+  holdDecision,
+  protectionFor,
+  protectionWhileAnswering,
+  waitRetryAt,
+  type HoldDecision,
+} from '../domain/hold';
 import { withoutOrders } from '../domain/injection';
 import type { OfferLimits } from '../domain/policy';
 import type { SexualizationLimits } from '../domain/sexualization';
@@ -40,6 +46,8 @@ export interface AgentComposeInput {
     readonly spentMinor: number;
     readonly firstMessageAt: Date | null;
   };
+  /** How many times she already waited for his last message (P3-11): from 1, she does not wait again. */
+  readonly waited?: number;
   /** A follow-up on his silence (P3-10), not an answer to a message of his. */
   readonly followUp?: {
     /** The index of her delay, from 0. */
@@ -97,7 +105,10 @@ type AgentComposeResult =
       readonly cause?: HandoffCause;
       readonly detail: readonly string[];
       readonly costUsd: number;
-      /** A follow-up put off (her quiet hours): the same one is due again at that time. */
+      /**
+       * A follow-up put off (her quiet hours), or his message she waits on (« attends, je reviens »): the same is due
+       * again at that time.
+       */
       readonly retryAt?: Date;
     };
 
@@ -390,6 +401,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       // What he wrote since her last answer: the traps read it as one message.
       const fanText = sinceAnswer.map((m) => m.text).join('\n');
       const offer = await offerInput(deps, input, stop.flags);
+      const waited = (input.waited ?? 0) >= 1;
       const composed = await composeTurn(deps.gateway, deps.persona, {
         history,
         fanText,
@@ -410,9 +422,10 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
           spentCents: input.fan.spentMinor,
         },
         trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
+        ...(waited && { waited }),
         // Safety first: a possible minor or distress hands over even when he is testing her, and without the
         // brain's reading of the risks nobody knows, so the voice does not write either.
-        skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
+        skipVoice: (brief) => brief === undefined || holdDecision(brief, waited).kind !== 'answer',
       });
       const { costUsd } = composed;
       if (composed.droppedNotes !== undefined) {
@@ -430,7 +443,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         const reason = failure?.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
         return { kind: 'held', reason, detail: failure === undefined ? [] : failureDetail(failure), costUsd };
       }
-      const decision: HoldDecision = holdDecision(composed.brief);
+      const decision: HoldDecision = holdDecision(composed.brief, waited);
       if (decision.kind === 'handoff') {
         const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
         return protect(deps.limits, input, composed.brief.risks, held);
@@ -454,8 +467,15 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       // saved, a chatter answers: the next message would forget it.
       const kept = await keepWhileAnswering(deps.limits, input, composed.brief.risks);
       if (kept !== null) return { ...kept, costUsd };
+      // He asked her to wait: she is asked again a little later, and then asks whether he is back (P3-11).
       if (decision.kind === 'no_reply')
-        return { kind: 'held', reason: 'no_reply', detail: decision.detail, costUsd };
+        return {
+          kind: 'held',
+          reason: 'no_reply',
+          detail: decision.detail,
+          costUsd,
+          retryAt: waitRetryAt(input.now),
+        };
       if (composed.voiceFailure !== undefined) {
         const reason = composed.voiceFailure.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
         return { kind: 'held', reason, detail: failureDetail(composed.voiceFailure), costUsd };

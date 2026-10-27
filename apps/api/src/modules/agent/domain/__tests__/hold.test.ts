@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { holdDecision, protectionFor, protectionWhileAnswering } from '../hold';
+import { holdDecision, protectionFor, protectionWhileAnswering, waitRetryAt } from '../hold';
 
 describe('holdDecision', () => {
   it('hands a possible minor, distress or self-harm to a chatter, whatever the brain suggests', () => {
@@ -31,6 +31,12 @@ describe('holdDecision', () => {
       detail: ['meet_request'],
     });
     expect(holdDecision({ risks: [], action: 'wait' })).toEqual({ kind: 'no_reply', detail: ['wait'] });
+  });
+
+  it('never waits twice for the same message, and is asked again 20 minutes later (P3-11)', () => {
+    expect(holdDecision({ risks: [], action: 'wait' }, true)).toEqual({ kind: 'answer' });
+    expect(holdDecision({ risks: ['distress'], action: 'wait' }, true).kind).toBe('handoff');
+    expect(waitRetryAt(new Date('2026-10-27T20:00:00Z'))).toEqual(new Date('2026-10-27T20:20:00Z'));
   });
 
   it('answers otherwise, a meeting request included (the voice declines it)', () => {

@@ -154,4 +154,13 @@ describe('à traiter', () => {
     expect(todo).toMatchObject({ kind: 'send_failed', tone: 'warn', waitingMinutes: 3 });
     expect(todo?.why).toContain('un humain doit le renvoyer');
   });
+
+  it('says that his message has waited 30 minutes with nothing under way (P3-11)', () => {
+    const [todo] = todos(
+      [{ conversationId: CONVERSATION, fanId: FAN, fanName: 'E', kind: 'unanswered', since: minutesAgo(42) }],
+      NOW,
+    );
+    expect(todo).toMatchObject({ kind: 'unanswered', tone: 'warn', waitingMinutes: 42 });
+    expect(todo?.why).toContain('plus de 30 minutes');
+  });
 });

@@ -62,6 +62,11 @@ export interface ComposeTurnInput {
    * light message from a brief set by code, with nothing to buy and nothing sexual, checked by every guard.
    */
   readonly followUp?: FollowUpTurn;
+  /**
+   * She already waited once for his last message (« attends, je reviens », P3-11): a brain that would wait again is
+   * overruled, she asks him lightly whether he is back.
+   */
+  readonly waited?: boolean;
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
 }
@@ -121,6 +126,10 @@ function followUpBrief(followUp: FollowUpTurn): Brief {
     toneHints: [NO_OPENING_HINT, 'court, une seule bulle'],
   };
 }
+
+/** What the voice writes when she waited for him once and he has not written since (P3-11), set by code. */
+const CAME_BACK_BRIEF =
+  'Il lui avait dit d’attendre un peu et n’a rien écrit depuis. Elle lui demande avec légèreté s’il est revenu, en une phrase, sans reproche, sans rien proposer de payant.';
 
 /** The brief as the cursor lets the voice write it. */
 function withinCursor(brief: Brief, decision: SexualizationDecision): Brief {
@@ -283,8 +292,18 @@ export async function composeTurn(
           fanSexualizes: offerSignals(brief).fanSexualizes,
           limits: input.sexualization?.limits ?? NO_LIMITS,
         });
-  const cursored =
+  const within =
     sexualization === undefined || trap.replyBrief !== undefined ? read : withinCursor(read, sexualization);
+  // She waited once already: no second wait, a light « tu es revenu ? » (P3-11).
+  const cursored: Brief =
+    input.waited === true && within.action === 'wait'
+      ? {
+          ...within,
+          action: 'reply',
+          replyBrief: CAME_BACK_BRIEF,
+          toneHints: [...within.toneHints, NO_OPENING_HINT],
+        }
+      : within;
   // The brain may suggest an offer, only the policy decides (CLAUDE.md rule 3): refused, she just answers.
   const offerRefused = cursored.action === 'offer' ? offerRefusal(cursored, input.offer) : undefined;
   const voiceBrief: Brief =
