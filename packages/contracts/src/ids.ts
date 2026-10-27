@@ -73,3 +73,11 @@ export type CommissionRateId = z.infer<typeof CommissionRateIdSchema>;
 /** A single-use link to choose a password, for a member's first access or a reset (EQ-10). */
 export const InvitationLinkIdSchema = uuid.brand<'InvitationLinkId'>();
 export type InvitationLinkId = z.infer<typeof InvitationLinkIdSchema>;
+
+/** A member's shift on one account of a creator (EQ-02). */
+export const ShiftIdSchema = uuid.brand<'ShiftId'>();
+export type ShiftId = z.infer<typeof ShiftIdSchema>;
+
+/** A weekly shift that makes the shifts of the weeks ahead (EQ-02). */
+export const ShiftTemplateIdSchema = uuid.brand<'ShiftTemplateId'>();
+export type ShiftTemplateId = z.infer<typeof ShiftTemplateIdSchema>;
