@@ -4,9 +4,9 @@ Fait : `sexualizationDecision` décide, en code, si elle suit un fan qui sexuali
 
 Pas fait : rien de la fiche.
 
-Décisions : sans limites de persona, elle ne va jamais sur ce terrain (fail closed). L'offre attend le message qui suit la confirmation.
+Décisions : sans limites de persona, elle ne va jamais sur ce terrain (fail closed). Un âge déclaré compte à partir du message suivant. Après relecture de Bilan : `ageDisputed` (contrat `fans`, ajout accordé par Bilan) empêche qu'un âge retiré se reconfirme par déclaration, et `noExplicit` est appliqué.
 
-Découvertes : le libellé de `explicit_before_age` manque dans `apps/web/src/screens/tracking/reader-model.ts`, comme celui de `discount` (zone Extension).
+Découvertes : `onLimitsNotSaved` est à brancher sur le journal dans la composition root (Bilan). Le libellé de `explicit_before_age` manque dans `apps/web/src/screens/tracking/reader-model.ts`, comme celui de `discount` (zone Extension).
 
 Candidats à suppression : aucun.
 

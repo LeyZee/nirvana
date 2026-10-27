@@ -227,12 +227,16 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
           situation,
           ...(offer !== undefined && { offer }),
           ...(deps.sexualizationLimits !== undefined && {
-            sexualization: { limits: deps.sexualizationLimits, ageConfirmed: ageConfirmedAt !== null },
+            sexualization: {
+              limits: deps.sexualizationLimits,
+              ageConfirmed: ageConfirmedAt !== null,
+              noExplicit: false,
+            },
           }),
         },
       );
       if (composed.ageDeclared !== undefined && ageConfirmedAt === null) ageConfirmedAt = situation.now;
-      if (composed.brief?.action === 'offer' && composed.offerRefused === undefined && !composed.isBlocked) {
+      if (composed.voiceBrief?.action === 'offer' && !composed.isBlocked) {
         lastOfferAt = situation.now;
       }
       // In-memory fan notes until the fans module stores facts (P3-02).

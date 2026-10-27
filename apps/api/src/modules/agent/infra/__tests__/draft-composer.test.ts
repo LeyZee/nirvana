@@ -827,4 +827,83 @@ describe('createDraftComposer, the sexualization cursor (P3-09)', () => {
     });
     expect(limits.confirmed).toEqual([]);
   });
+
+  it('never confirms an age taken back: explicit stays blocked and nothing is offered', async () => {
+    const disputed: FanFlags = { ageDisputed: { since: '2026-10-16T09:00:00Z', by: 'policy' } };
+    const AGE_HOT: Brief = {
+      ...HOT,
+      action: 'offer',
+      factsProposed: [{ category: 'identity', key: 'age', value: '19', kind: 'declared', confidence: 0.95 }],
+    };
+    const limits = limitsOf(disputed);
+    const { draftComposer, seen } = composer(
+      { brief: AGE_HOT, voice: { bubbles: ['J’ai trop envie de te sucer'] } },
+      undefined,
+      limits.limits,
+      { ...cursor, offerLimits: { cooldownHours: 10 }, lastOfferAt: () => Promise.resolve(null) },
+    );
+    const result = await draftComposer.compose({
+      ...dayOld,
+      history: [{ direction: 'inbound', text: 'J’ai 19 ans', at: new Date('2026-10-17T09:59:00Z') }],
+    });
+    expect(limits.confirmed).toEqual([]);
+    expect(result).toMatchObject({ kind: 'held', reason: 'guard_blocked', detail: ['explicit_before_age'] });
+    expect(written(seen)?.action).toBe('reply');
+  });
+
+  it('keeps the answer to his stated age careful: it counts from his next message', async () => {
+    const AGE: Brief = {
+      ...HOT,
+      factsProposed: [{ category: 'identity', key: 'age', value: '25', kind: 'declared', confidence: 0.95 }],
+    };
+    const limits = limitsOf({});
+    const { draftComposer, seen } = composer(
+      { brief: AGE, voice: { bubbles: ['Mmh j’ai envie de te sucer'] } },
+      undefined,
+      limits.limits,
+      cursor,
+    );
+    const result = await draftComposer.compose({
+      ...dayOld,
+      history: [{ direction: 'inbound', text: 'J’ai 25 ans', at: new Date('2026-10-17T09:59:00Z') }],
+    });
+    expect(limits.confirmed).toEqual(['fan-1']);
+    expect(written(seen)?.replyBrief).toContain('ralentit');
+    expect(result).toMatchObject({ reason: 'guard_blocked', detail: ['explicit_before_age'] });
+  });
+
+  it('stays suggestive with a confirmed adult a human set to nothing explicit', async () => {
+    const flags: FanFlags = { ...ADULT, noExplicit: true };
+    const { draftComposer, seen } = composer(
+      { brief: HOT, voice: { bubbles: ['Viens me sucer'] } },
+      undefined,
+      limitsOf(flags).limits,
+      cursor,
+    );
+    expect(await draftComposer.compose(dayOld)).toMatchObject({ detail: ['explicit_before_age'] });
+    expect(written(seen)?.toneHints).toContain('suggestive seulement, jamais explicite');
+  });
+
+  it('counts a declared age it could not save', async () => {
+    const AGE: Brief = {
+      ...BRIEF,
+      factsProposed: [{ category: 'identity', key: 'age', value: '25', kind: 'declared', confidence: 0.95 }],
+    };
+    const notSaved: { conversationId: string; limit: string }[] = [];
+    const draftComposer = createDraftComposer({
+      gateway: gateway({ brief: AGE }, { voiceCalls: 0, traces: [] }),
+      persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
+      timeZoneOf: () => Promise.resolve('Europe/Paris'),
+      voicePrompt: '1.2.0',
+      limits: limitsOf({}, { failWrite: true }).limits,
+      ...cursor,
+      onLimitsNotSaved: (event) => notSaved.push(event),
+    });
+    const result = await draftComposer.compose({
+      ...dayOld,
+      history: [{ direction: 'inbound', text: 'J’ai 25 ans', at: new Date('2026-10-17T09:59:00Z') }],
+    });
+    expect(result.kind).toBe('draft');
+    expect(notSaved).toEqual([{ conversationId: 'conversation-1', limit: 'ageConfirmedAt' }]);
+  });
 });

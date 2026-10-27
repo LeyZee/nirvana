@@ -51,7 +51,12 @@ export interface ComposeTurnInput {
    * When she may go sexual (`sexualizationDecision`): her limits, and whether his age is confirmed. Absent, it is
    * as if his age were unknown: she does not open it, and steers back a fan who does.
    */
-  readonly sexualization?: { readonly limits: SexualizationLimits; readonly ageConfirmed: boolean };
+  readonly sexualization?: {
+    readonly limits: SexualizationLimits;
+    readonly ageConfirmed: boolean;
+    /** A human's « rien d'explicite » for him. */
+    readonly noExplicit: boolean;
+  };
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
 }
@@ -87,12 +92,15 @@ const STEER_BACK_BRIEF: Readonly<Record<'age_unconfirmed' | 'too_early', string>
     'Il va trop vite : elle ralentit avec douceur et humour, sans rien d’explicite ni de sous-entendu, sans reproche, et ramène la conversation sur lui ; si ça vient naturellement, elle lui demande son âge.',
 };
 const NO_OPENING_HINT = 'aucune allusion sexuelle, elle n’ouvre pas ce terrain';
+const SUGGESTIVE_HINT = 'suggestive seulement, jamais explicite';
 
 /** The brief as the cursor lets the voice write it. */
 function withinCursor(brief: Brief, decision: SexualizationDecision): Brief {
   if (decision.kind === 'steer_back')
     return { ...brief, action: 'reply', replyBrief: STEER_BACK_BRIEF[decision.reason] };
   if (decision.kind === 'no_opening') return { ...brief, toneHints: [...brief.toneHints, NO_OPENING_HINT] };
+  if (decision.kind === 'suggestive_only')
+    return { ...brief, toneHints: [...brief.toneHints, SUGGESTIVE_HINT] };
   return brief;
 }
 
@@ -198,9 +206,11 @@ export async function composeTurn(
           replyBrief: trap.replyBrief,
           toneHints: [...(trap.toneHints ?? [])],
         };
-  // His age, as stored or as he states it now; the cursor decides from it, a trap's answer first.
+  // His age as stored: one he states now counts from his next message, so the answer to « j'ai 25 ans » stays
+  // careful. The cursor decides from it, a trap's answer first.
   const ageDeclared = brief === undefined ? null : declaredAdultAge(brief.factsProposed, input.fanText);
-  const ageConfirmed = input.sexualization?.ageConfirmed === true || ageDeclared !== null;
+  const ageConfirmed = input.sexualization?.ageConfirmed === true;
+  const noExplicit = input.sexualization?.noExplicit === true;
   const sexualization =
     brief === undefined
       ? undefined
@@ -208,6 +218,7 @@ export async function composeTurn(
           relationshipHours:
             (input.situation.now.getTime() - input.situation.relationshipStartedAt.getTime()) / HOUR_MS,
           ageConfirmed,
+          noExplicit,
           fanSexualizes: offerSignals(brief).fanSexualizes,
           limits: input.sexualization?.limits ?? NO_LIMITS,
         });
@@ -243,7 +254,7 @@ export async function composeTurn(
   // Checked as written: the length and count guards read the voice's bubbles, not the joined message.
   const violations = [
     ...checkVoiceOutput(written, persona.guardSettings),
-    ...(ageConfirmed ? [] : checkExplicit(written)),
+    ...(ageConfirmed && !noExplicit ? [] : checkExplicit(written)),
   ];
   const bubbles = asSent(written, persona.splitMessages);
   return {

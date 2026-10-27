@@ -9,7 +9,16 @@ import {
 
 import { planFacts, selectActiveFacts, type FactProposal, type StoredFact } from '../domain/facts';
 import type { Fan, FanSighting, FanStore, FactStore, FlagStore } from '../domain/fan';
-import { withFlag, withFlagIfUnset, withoutFlag, type FlagAuthor, type FlagChange } from '../domain/flags';
+import {
+  withAgeDisputed,
+  withDeclaredAge,
+  withFlag,
+  withFlagIfUnset,
+  withHumanConfirmation,
+  withoutFlag,
+  type FlagAuthor,
+  type FlagChange,
+} from '../domain/flags';
 
 /** Who changes a limit and why; the author is the event's actor (P3-02). */
 interface FlagCommand {
@@ -36,7 +45,20 @@ export interface FansService {
     change: FlagChange,
     command: FlagCommand,
   ): Promise<FanFlags>;
-  /** Lifts one limit; writes `fan_flag_cleared` only when it was set. Returns his limits after. */
+  /**
+   * His own adult statement confirms his age (P3-09), decided under the row lock: never over a confirmation, never
+   * after his age was taken back (`ageDisputed`). The author is the policy.
+   */
+  confirmDeclaredAge(
+    creatorId: CreatorId,
+    fanId: FanId,
+    at: Date,
+    command: Omit<FlagCommand, 'author'>,
+  ): Promise<FanFlags>;
+  /**
+   * Lifts one limit; writes `fan_flag_cleared` only when it was set. Returns his limits after. Taking back his age
+   * also disputes it, so that his own statement no longer confirms it.
+   */
   clearFlag(creatorId: CreatorId, fanId: FanId, flag: FanFlagName, command: FlagCommand): Promise<FanFlags>;
 }
 
@@ -54,7 +76,11 @@ export function createFansService(
     activeFacts: async (creatorId, fanId) => selectActiveFacts(await facts.current(creatorId, fanId), now()),
     flags: (creatorId, fanId) => flagStore.read(creatorId, fanId),
     setFlag: (creatorId, fanId, change, command) => {
-      return flagStore.change(creatorId, fanId, (flags) => withFlag(flags, change), {
+      // A human confirming his age settles a dispute; the policy never does.
+      const human = command.author !== 'system' && change.flag === 'ageConfirmedAt';
+      const apply = (flags: FanFlags) =>
+        human ? withHumanConfirmation(flags, change) : withFlag(flags, change);
+      return flagStore.change(creatorId, fanId, apply, {
         type: 'fan_flag_set',
         flag: change.flag,
         ...command,
@@ -67,8 +93,19 @@ export function createFansService(
         ...command,
       });
     },
+    confirmDeclaredAge: (creatorId, fanId, at, command) => {
+      return flagStore.change(creatorId, fanId, (flags) => withDeclaredAge(flags, at), {
+        type: 'fan_flag_set',
+        flag: 'ageConfirmedAt',
+        author: 'system',
+        ...command,
+      });
+    },
     clearFlag: (creatorId, fanId, flag, command) => {
-      return flagStore.change(creatorId, fanId, (flags) => withoutFlag(flags, flag), {
+      const by = command.author === 'system' ? 'policy' : 'human';
+      const apply = (flags: FanFlags) =>
+        flag === 'ageConfirmedAt' ? withAgeDisputed(flags, by, now()) : withoutFlag(flags, flag);
+      return flagStore.change(creatorId, fanId, apply, {
         type: 'fan_flag_cleared',
         flag,
         ...command,

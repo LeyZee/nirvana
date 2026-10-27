@@ -16,6 +16,8 @@ export interface SexualizationLimits {
 export interface SexualizationContext {
   readonly relationshipHours: number;
   readonly ageConfirmed: boolean;
+  /** A human set « rien d'explicite » for him (`noExplicit`): suggestive at most, whatever his age. */
+  readonly noExplicit: boolean;
   /** He is flirting or sexting now (`offerSignals`). */
   readonly fanSexualizes: boolean;
   readonly limits: SexualizationLimits;
@@ -24,6 +26,8 @@ export interface SexualizationContext {
 export type SexualizationDecision =
   /** She may follow him, or open it herself. */
   | { readonly kind: 'free' }
+  /** She may follow him, suggestive only: a human said nothing explicit for him. */
+  | { readonly kind: 'suggestive_only' }
   /** He is not there and it is too early, or his age is unknown: she does not open it. */
   | { readonly kind: 'no_opening' }
   /** He goes there too early or without a confirmed age: she slows down, in her voice. */
@@ -34,9 +38,10 @@ export function sexualizationDecision(context: SexualizationContext): Sexualizat
   if (context.fanSexualizes) {
     if (!context.ageConfirmed) return { kind: 'steer_back', reason: 'age_unconfirmed' };
     if (hours < limits.minHoursBeforeFollowing) return { kind: 'steer_back', reason: 'too_early' };
-    return { kind: 'free' };
+    return context.noExplicit ? { kind: 'suggestive_only' } : { kind: 'free' };
   }
-  if (!context.ageConfirmed || hours < limits.initiateAfterHours) return { kind: 'no_opening' };
+  if (!context.ageConfirmed || context.noExplicit || hours < limits.initiateAfterHours)
+    return { kind: 'no_opening' };
   return { kind: 'free' };
 }
 

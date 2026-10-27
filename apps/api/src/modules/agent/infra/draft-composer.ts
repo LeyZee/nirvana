@@ -114,6 +114,11 @@ export interface DraftComposerDeps {
    * the cooldown cannot be read, so she offers nothing.
    */
   readonly lastOfferAt?: (creatorId: string, fanId: string) => Promise<Date | null>;
+  /** A limit the policy could not save without holding the draft (his declared age): counted, never silent. */
+  readonly onLimitsNotSaved?: (event: {
+    readonly conversationId: string;
+    readonly limit: 'ageConfirmedAt';
+  }) => void;
   /** Lines of her notes kept out of the prompt for looking like an order: counted, never their text. */
   readonly onDroppedNotes?: (event: { readonly conversationId: string; readonly count: number }) => void;
 }
@@ -301,6 +306,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
           sexualization: {
             limits: deps.sexualizationLimits,
             ageConfirmed: stop.flags?.ageConfirmedAt !== undefined,
+            noExplicit: stop.flags?.noExplicit === true,
           },
         }),
         situation: {
@@ -335,12 +341,20 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
         return protect(deps.limits, input, composed.brief.risks, held);
       }
-      // He stated an adult age himself: confirmed for his next messages (Charles, 27/10). Not saved, nothing is
-      // lost: his age stays unconfirmed and she keeps steering back, the safe side.
-      if (composed.ageDeclared !== undefined && stop.flags?.ageConfirmedAt === undefined) {
+      // He stated an adult age himself: confirmed for his next messages (Charles, 27/10), never once his age was
+      // taken back. Not saved, his age stays unconfirmed and she keeps steering back, the safe side: counted.
+      const his = stop.flags;
+      if (
+        composed.ageDeclared !== undefined &&
+        his !== undefined &&
+        his.ageConfirmedAt === undefined &&
+        his.ageDisputed === undefined
+      ) {
         await deps.limits
           ?.confirmAge(input.creatorId, input.fanId, input.correlationId, input.now)
-          .catch(() => undefined);
+          .catch(() => {
+            deps.onLimitsNotSaved?.({ conversationId: input.conversationId, limit: 'ageConfirmedAt' });
+          });
       }
       // He said he cannot pay: whatever is written now, the policy remembers it for his next messages. Not
       // saved, a chatter answers: the next message would forget it.

@@ -5,6 +5,7 @@ import { declaredAdultAge, sexualizationDecision, type SexualizationContext } fr
 const base: SexualizationContext = {
   relationshipHours: 48,
   ageConfirmed: true,
+  noExplicit: false,
   fanSexualizes: true,
   limits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2 },
 };
@@ -33,6 +34,13 @@ describe('sexualizationDecision', () => {
     expect(sexualizationDecision({ ...calm, relationshipHours: 20 })).toEqual({ kind: 'no_opening' });
     expect(sexualizationDecision(calm)).toEqual({ kind: 'free' });
     expect(sexualizationDecision({ ...calm, ageConfirmed: false })).toEqual({ kind: 'no_opening' });
+  });
+
+  it('stays suggestive with a fan a human set to nothing explicit, and never opens it herself', () => {
+    expect(sexualizationDecision({ ...base, noExplicit: true })).toEqual({ kind: 'suggestive_only' });
+    expect(sexualizationDecision({ ...base, noExplicit: true, fanSexualizes: false })).toEqual({
+      kind: 'no_opening',
+    });
   });
 });
 
