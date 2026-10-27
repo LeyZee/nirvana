@@ -154,6 +154,50 @@ describe('the rail of each role', () => {
   });
 });
 
+describe('Réglages › Sauvegardes', () => {
+  const subTabs = async (): Promise<string[]> =>
+    within(await screen.findByRole('navigation', { name: 'Réglages' }))
+      .getAllByRole('link')
+      .map((link) => link.textContent);
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('is a tab of the owner, after Telegram', async () => {
+    const router = renderApp(owner, '/reglages/sauvegardes');
+    expect(await subTabs()).toEqual([
+      'Modèles IA',
+      'Telegram',
+      'Sauvegardes',
+      'Appareils',
+      'Apparence',
+      'Mode de l’agent',
+    ]);
+    expect(router.state.location.pathname).toBe('/reglages/sauvegardes');
+  });
+
+  it('is no tab of an operator or a creator, and its address sends them back to Réglages', async () => {
+    for (const user of [
+      { ...base, role: 'operator', team: null, teamScope: 'self' },
+      { ...base, role: 'creator', team: null, teamScope: 'self' },
+    ] satisfies Me[]) {
+      const router = renderApp(user, '/reglages/sauvegardes');
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
+      });
+      expect(await subTabs()).not.toContain('Sauvegardes');
+      cleanup();
+    }
+  });
+});
+
 describe('« Plus » on the phone', () => {
   const item = (to: NavItem['to'], label: string, icon: NavItem['icon']): NavItem => ({
     to,

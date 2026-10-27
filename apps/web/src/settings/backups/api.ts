@@ -1,7 +1,6 @@
 import {
   ApiErrorSchema,
   BACKUP_ERROR_CODES,
-  BackupStatusSchema,
   REAUTHENTICATION_ERROR_CODE,
   RestoreTestSchema,
   type BackupStatus,
@@ -12,29 +11,29 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import type { REFUSALS } from './model';
 
+import { backupStatusQuery } from '@/screens/dashboard/backups';
+
 /**
  * `/v1/backups` as Réglages › Sauvegardes reads and writes it (ADR 0028, EQ-17), parsed with the contract. The status
- * shares its cache with the Dashboard's banner: a test entered here clears the banner there.
+ * is read through the Dashboard's own query: one cache, so a test entered here clears the banner there.
  */
 
-export const BACKUP_STATUS_KEY = ['backups', 'status'] as const;
-
-async function fetchStatus(): Promise<BackupStatus> {
-  const response = await fetch('/v1/backups/status', { credentials: 'include' });
-  if (!response.ok) throw new Error(`GET /v1/backups/status: ${String(response.status)}`);
-  return BackupStatusSchema.parse(await response.json());
-}
-
 export function useBackupStatusQuery(): UseQueryResult<BackupStatus> {
-  return useQuery({ queryKey: BACKUP_STATUS_KEY, queryFn: fetchStatus, retry: 1 });
+  return useQuery(backupStatusQuery);
 }
 
 export type RefusalCode = keyof typeof REFUSALS;
 
+/**
+ * `session_expired`: the session ended while the dialog was open (401). `rate_limited`: the server's limiter (429).
+ * Both are answers, never « the server does not answer ».
+ */
 export type Outcome =
   | { readonly kind: 'ok'; readonly value: RestoreTest }
   | { readonly kind: 'refused'; readonly code: RefusalCode }
   | { readonly kind: 'reauth' }
+  | { readonly kind: 'session_expired' }
+  | { readonly kind: 'rate_limited' }
   | { readonly kind: 'failed' };
 
 const isRefusal = (code: string): code is RefusalCode =>
@@ -55,6 +54,8 @@ export async function recordRestoreTest(body: RecordRestoreTestBody): Promise<Ou
       body: JSON.stringify(body),
     });
     if (response.ok) return { kind: 'ok', value: RestoreTestSchema.parse(await response.json()) };
+    if (response.status === 401) return { kind: 'session_expired' };
+    if (response.status === 429) return { kind: 'rate_limited' };
     const parsed = ApiErrorSchema.safeParse(await response.json().catch(() => null));
     if (!parsed.success) return { kind: 'failed' };
     const { code } = parsed.data.error;

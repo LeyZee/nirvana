@@ -16,6 +16,9 @@ import { backupBannerOf } from '@/screens/dashboard/backups';
 
 const DAY_MS = 86_400_000;
 
+/** No-break space between a number and its unit: « 4 min 12 s » never splits across two lines. */
+const NBSP = '\u00a0';
+
 /** « 12 juillet », with the year when it is not this one. */
 function dayOf(iso: string, now: Date, timeZone: string | undefined): string {
   const at = new Date(iso);
@@ -37,19 +40,21 @@ function clockOf(iso: string, timeZone: string | undefined): string {
 
 /** « 4 min 12 s », « 52 s », « 1 h 05 min ». */
 export function durationOf(seconds: number): string {
-  if (seconds < 60) return `${String(seconds)} s`;
+  if (seconds < 60) return `${String(seconds)}${NBSP}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
     const rest = seconds % 60;
-    return rest === 0 ? `${String(minutes)} min` : `${String(minutes)} min ${String(rest)} s`;
+    return rest === 0
+      ? `${String(minutes)}${NBSP}min`
+      : `${String(minutes)}${NBSP}min${NBSP}${String(rest)}${NBSP}s`;
   }
-  return `${String(Math.floor(minutes / 60))} h ${String(minutes % 60).padStart(2, '0')} min`;
+  return `${String(Math.floor(minutes / 60))}${NBSP}h${NBSP}${String(minutes % 60).padStart(2, '0')}${NBSP}min`;
 }
 
 /** « 42 Mo », « 860 ko ». */
 function sizeOf(bytes: number): string {
-  if (bytes < 1_000_000) return `${String(Math.max(1, Math.round(bytes / 1000)))} ko`;
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(bytes / 1_000_000)} Mo`;
+  if (bytes < 1_000_000) return `${String(Math.max(1, Math.round(bytes / 1000)))}${NBSP}ko`;
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(bytes / 1_000_000)}${NBSP}Mo`;
 }
 
 export type Tone = 'ok' | 'warn';
@@ -92,7 +97,7 @@ export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string)
   return {
     tone: 'ok',
     title: `Sauvegardée le ${dayOf(status.lastSucceededAt, now, timeZone)} à ${clockOf(status.lastSucceededAt, timeZone)}`,
-    text: `Chaque nuit, la base est chiffrée et copiée hors de chez son hébergeur, gardée 30 jours. Après ${String(status.overdueAfterHours)} h sans copie réussie, le Dashboard et Telegram te préviennent.`,
+    text: `Chaque nuit, la base est chiffrée et copiée hors de chez son hébergeur, gardée 30${NBSP}jours. Après ${String(status.overdueAfterHours)}${NBSP}h sans copie réussie, le Dashboard et Telegram te préviennent.`,
     lastRun,
   };
 }
@@ -105,7 +110,7 @@ export interface RestoreView {
   readonly validity: string | null;
 }
 
-const PAY_RULE = `La paie attend un essai réussi de moins de ${String(RESTORE_TEST_FRESH_DAYS)} jours.`;
+const PAY_RULE = `La paie attend un essai réussi de moins de ${String(RESTORE_TEST_FRESH_DAYS)}${NBSP}jours.`;
 
 /**
  * The latest restore test (ADR 0028 § 6). Its freshness is the server's (`restoreTestFresh`, the bound the pay guard
@@ -123,7 +128,8 @@ export function restoreViewOf(status: BackupStatus, now: Date, timeZone?: string
   }
   const restored = `Sauvegarde du ${dayOf(test.backupFinishedAt, now, timeZone)} restaurée en ${durationOf(test.durationSeconds)}`;
   if (test.rowCountMismatches > 0) {
-    const tables = test.rowCountMismatches > 1 ? `${String(test.rowCountMismatches)} tables` : 'une table';
+    const tables =
+      test.rowCountMismatches > 1 ? `${String(test.rowCountMismatches)}${NBSP}tables` : 'une table';
     return {
       tone: 'warn',
       title: `L’essai du ${dayOf(test.testedAt, now, timeZone)} n’a pas tout retrouvé`,
@@ -135,7 +141,7 @@ export function restoreViewOf(status: BackupStatus, now: Date, timeZone?: string
     return {
       tone: 'warn',
       title: `Le dernier essai date du ${dayOf(test.testedAt, now, timeZone)}`,
-      text: `${restored}, toutes les lignes retrouvées. Il a plus de ${String(RESTORE_TEST_FRESH_DAYS)} jours : ${PAY_RULE.charAt(0).toLowerCase()}${PAY_RULE.slice(1)}`,
+      text: `${restored}, toutes les lignes retrouvées. Il a plus de ${String(RESTORE_TEST_FRESH_DAYS)}${NBSP}jours : ${PAY_RULE.charAt(0).toLowerCase()}${PAY_RULE.slice(1)}`,
       validity: null,
     };
   }
@@ -221,7 +227,7 @@ const wholeIn = (text: string, min: number, max: number): number | null => {
 export function problemsOf(draft: RestoreDraft, now: Date): Partial<Record<DraftField, string>> {
   const problems: Partial<Record<DraftField, string>> = {};
   if (!/^[0-9a-f]{64}$/i.test(draft.sha256.trim())) {
-    problems.sha256 = 'L’empreinte compte 64 caractères, chiffres et lettres de a à f.';
+    problems.sha256 = 'L’empreinte compte 64\u00a0caractères, chiffres et lettres de a à f.';
   }
   const testedAt = new Date(draft.testedAt);
   if (Number.isNaN(testedAt.getTime())) problems.testedAt = 'Indique le jour et l’heure de fin de l’essai.';
@@ -229,12 +235,12 @@ export function problemsOf(draft: RestoreDraft, now: Date): Partial<Record<Draft
     problems.testedAt = 'Cette heure n’est pas encore passée.';
   }
   if (wholeIn(draft.durationSeconds, 1, 86_400) === null) {
-    problems.durationSeconds = 'Un nombre entier de secondes, de 1 à 86 400.';
+    problems.durationSeconds = 'Un nombre entier de secondes, de 1 à 86\u00a0400.';
   }
   if (wholeIn(draft.rowCountMismatches, 0, 1_000_000) === null) {
     problems.rowCountMismatches = 'Le nombre de tables qui diffèrent : 0 quand tout correspond.';
   }
-  if (draft.notes.trim().length > 500) problems.notes = 'Au plus 500 caractères.';
+  if (draft.notes.trim().length > 500) problems.notes = 'Au plus 500\u00a0caractères.';
   return problems;
 }
 

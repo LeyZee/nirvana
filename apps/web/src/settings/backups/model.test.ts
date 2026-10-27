@@ -45,8 +45,9 @@ describe('exportViewOf', () => {
     expect(exportViewOf(status(), NOW, PARIS)).toEqual({
       tone: 'ok',
       title: 'Sauvegardée le 27 octobre à 03:12',
-      text: 'Chaque nuit, la base est chiffrée et copiée hors de chez son hébergeur, gardée 30 jours. Après 26 h sans copie réussie, le Dashboard et Telegram te préviennent.',
-      lastRun: 'Dernière tentative réussie le 27 octobre, en 3 min 30 s, 42,4 Mo chiffrés.',
+      text: 'Chaque nuit, la base est chiffrée et copiée hors de chez son hébergeur, gardée 30\u00a0jours. Après 26\u00a0h sans copie réussie, le Dashboard et Telegram te préviennent.',
+      lastRun:
+        'Dernière tentative réussie le 27 octobre, en 3\u00a0min\u00a030\u00a0s, 42,4\u00a0Mo chiffrés.',
     });
   });
 
@@ -104,7 +105,7 @@ describe('restoreViewOf', () => {
     expect(restoreViewOf(status(), NOW, PARIS)).toEqual({
       tone: 'ok',
       title: 'Essai réussi le 20 octobre',
-      text: 'Sauvegarde du 20 octobre restaurée en 4 min 12 s, toutes les lignes retrouvées.',
+      text: 'Sauvegarde du 20 octobre restaurée en 4\u00a0min\u00a012\u00a0s, toutes les lignes retrouvées.',
       validity: 'Valable jusqu’au 18 janvier 2027',
     });
   });
@@ -113,7 +114,7 @@ describe('restoreViewOf', () => {
     const view = restoreViewOf(status({ lastRestoreTest: null, restoreTestFresh: false }), NOW, PARIS);
     expect(view.tone).toBe('warn');
     expect(view.title).toBe('Aucun essai de restauration noté');
-    expect(view.text).toMatch(/moins de 90 jours\.$/u);
+    expect(view.text).toMatch(/moins de 90\u00a0jours\.$/u);
   });
 
   it('says a test that missed rows holds the pay back, whatever its age', () => {
@@ -133,7 +134,7 @@ describe('restoreViewOf', () => {
     expect(view).toEqual({
       tone: 'warn',
       title: 'L’essai du 20 octobre n’a pas tout retrouvé',
-      text: 'Sauvegarde du 20 octobre restaurée en 52 s, mais 2 tables n’avaient pas le bon nombre de lignes. La paie attend un essai réussi de moins de 90 jours.',
+      text: 'Sauvegarde du 20 octobre restaurée en 52\u00a0s, mais 2\u00a0tables n’avaient pas le bon nombre de lignes. La paie attend un essai réussi de moins de 90\u00a0jours.',
       validity: null,
     });
   });
@@ -154,20 +155,20 @@ describe('restoreViewOf', () => {
     );
     expect(view.title).toBe('Le dernier essai date du 20 décembre 2025');
     expect(view.text).toBe(
-      'Sauvegarde du 19 décembre 2025 restaurée en 1 h 05 min, toutes les lignes retrouvées. Il a plus de 90 jours : la paie attend un essai réussi de moins de 90 jours.',
+      'Sauvegarde du 19 décembre 2025 restaurée en 1\u00a0h\u00a005\u00a0min, toutes les lignes retrouvées. Il a plus de 90\u00a0jours : la paie attend un essai réussi de moins de 90\u00a0jours.',
     );
   });
 });
 
 describe('durationOf', () => {
-  it('reads seconds as a person would', () => {
+  it('reads seconds as a person would, number and unit never split across two lines', () => {
     expect([1, 59, 60, 252, 3_600, 3_900].map(durationOf)).toEqual([
-      '1 s',
-      '59 s',
-      '1 min',
-      '4 min 12 s',
-      '1 h 00 min',
-      '1 h 05 min',
+      '1\u00a0s',
+      '59\u00a0s',
+      '1\u00a0min',
+      '4\u00a0min\u00a012\u00a0s',
+      '1\u00a0h\u00a000\u00a0min',
+      '1\u00a0h\u00a005\u00a0min',
     ]);
   });
 });

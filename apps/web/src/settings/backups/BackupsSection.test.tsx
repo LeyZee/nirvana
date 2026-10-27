@@ -166,6 +166,19 @@ describe('Réglages › Sauvegardes', () => {
     expect(posted).toHaveLength(1);
   });
 
+  it('says an ended session as such, with the way back in', async () => {
+    serve({ post: () => ({ status: 401, body: apiError('session_unauthenticated') }) });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Noter un essai' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Compte rendu de l’essai'), { target: { value: REPORT } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continuer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Noter l’essai' }));
+
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(/ta session a expiré/u);
+    expect(within(dialog).getByRole('button', { name: 'Se reconnecter' })).toBeTruthy();
+  });
+
   it('sends nothing while a field is wrong, and says so on each', async () => {
     const posted = serve({});
     renderPage();

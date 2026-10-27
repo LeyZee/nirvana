@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-import { BACKUP_STATUS_KEY, recordRestoreTest } from './api';
+import { recordRestoreTest, type Outcome } from './api';
 import {
   bodyOf,
   durationOf,
@@ -16,6 +16,7 @@ import {
   type RestoreDraft,
 } from './model';
 
+import { backupStatusQuery } from '@/screens/dashboard/backups';
 import { confirmPassword, type ConfirmResult } from '@/settings/services/api';
 
 const STEP_TITLES = ['Compte rendu', 'Vérifier'] as const;
@@ -32,6 +33,19 @@ const PASSWORD_MESSAGES: Record<Exclude<ConfirmResult, 'ok'>, string> = {
   unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
   session_expired: 'Ta session a expiré. Reconnecte-toi.',
 };
+
+/** Why the test was not recorded, when the server did not refuse it: each answer in its own words. */
+const NOT_RECORDED: Record<Exclude<Outcome['kind'], 'ok' | 'refused' | 'reauth'>, string> = {
+  failed: 'L’essai n’a pas été noté : le serveur ne répond pas. Réessaie dans un instant.',
+  rate_limited: 'L’essai n’a pas été noté : trop de requêtes d’un coup. Réessaie dans une minute.',
+  session_expired: 'L’essai n’a pas été noté : ta session a expiré. Reconnecte-toi.',
+};
+
+/** A message under the fields; `signIn` adds « Se reconnecter ». */
+interface Failure {
+  readonly message: string;
+  readonly signIn: boolean;
+}
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled])';
 
@@ -61,7 +75,7 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
   const [refused, setRefused] = useState<{ readonly field: DraftField; readonly message: string } | null>(
     null,
   );
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
 
   const shown: Partial<Record<DraftField, string>> = {
@@ -145,7 +159,7 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
     setBusy(false);
     if (outcome.kind === 'ok') {
       setPhase({ kind: 'done', test: outcome.value });
-      await client.invalidateQueries({ queryKey: BACKUP_STATUS_KEY });
+      await client.invalidateQueries({ queryKey: backupStatusQuery.queryKey });
       return;
     }
     if (outcome.kind === 'reauth') {
@@ -153,12 +167,12 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
       return;
     }
     setPhase({ kind: 'check' });
-    if (outcome.kind === 'failed') {
-      setFailure('L’essai n’a pas été noté : le serveur ne répond pas. Réessaie dans un instant.');
+    if (outcome.kind !== 'refused') {
+      setFailure({ message: NOT_RECORDED[outcome.kind], signIn: outcome.kind === 'session_expired' });
       return;
     }
     const refusal = REFUSALS[outcome.code];
-    if (refusal.field === null) setFailure(refusal.message);
+    if (refusal.field === null) setFailure({ message: refusal.message, signIn: false });
     else setRefused({ field: refusal.field, message: refusal.message });
   };
 
@@ -275,9 +289,10 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
             <CheckFields id={id} draft={draft} problems={shown} disabled={busy} onChange={change} />
             {failure === null ? null : (
               <p className="bk-warn nv-swap" role="alert">
-                {failure}
+                {failure.message}
               </p>
             )}
+            {failure?.signIn === true ? <SignInAgain /> : null}
             {phase.kind === 'password' ? (
               <PasswordStep
                 onConfirmed={() => {
@@ -376,7 +391,7 @@ function CheckFields({
       <Field
         id={`${id}-sha256`}
         label="Empreinte de la sauvegarde"
-        hint="La ligne « export sha256 » : 64 caractères."
+        hint={'La ligne « export sha256 » : 64\u00a0caractères.'}
         problem={problems.sha256}
       >
         <input
@@ -568,17 +583,22 @@ function PasswordStep({
           {PASSWORD_MESSAGES[failure]}
         </p>
       )}
-      {failure === 'session_expired' ? (
-        <button
-          type="button"
-          className="nv-btn nv-btn--soft nv-btn--sm bk-self-start"
-          onClick={() => {
-            window.location.reload();
-          }}
-        >
-          Se reconnecter
-        </button>
-      ) : null}
+      {failure === 'session_expired' ? <SignInAgain /> : null}
     </div>
+  );
+}
+
+/** The session has ended: reloading the app shows the sign-in. */
+function SignInAgain(): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="nv-btn nv-btn--soft nv-btn--sm bk-self-start"
+      onClick={() => {
+        window.location.reload();
+      }}
+    >
+      Se reconnecter
+    </button>
   );
 }
