@@ -7,4 +7,4 @@ Fait :
 - Tests : `model.test.ts` (11), `HoursSection.test.tsx` (9), une note de plus dans `reader-model.test.ts`. Captures 1 440 et 400 px, Nuit et Jour.
 Pas fait : rien sur la fiche.
 Décisions : aucune.
-Découvertes : Chromium sans locale française montre les champs d'heure en « 11:00 PM » ; la largeur des champs (144 px) tient les deux formats.
+Découvertes : Chromium sans locale française montre les champs d'heure en « 11:00 PM » ; la largeur des champs (144 px) tient les deux formats. La note `reply_deferred` du Suivi se lit à l'heure du lecteur, comme toutes les heures du Suivi ; le jour où l'agence et une créatrice ne seront plus dans le même fuseau, il faudra dire la ville (« 9 h à Paris »), ce qui demande le fuseau de la créatrice dans la lecture du Suivi (relevé de Bilan sur #238).
