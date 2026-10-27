@@ -51,7 +51,7 @@ Ce n'est pas une relance : une relance (P3-10) suit **son** silence à lui, apr�
 
 ## Hors périmètre
 
-Les relances sur son silence (P3-10), les relances de vente (`PROPOSED-after-offer.md`), tout envoi réel.
+Les relances sur son silence (P3-10), les relances de vente (`P6-02-after-offer.md`), tout envoi réel.
 
 ## Notes de session
 
