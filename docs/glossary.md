@@ -76,6 +76,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Fan test | `test_fan` | Un compte fan qui appartient à l'agence, seule cible autorisée des écritures pendant les captures et les tests manuels. |
 | Relance | `follow_up` | Message qu'elle écrit après un silence du fan, aux délais de la persona ; un brouillon à valider comme toute réponse (P3-10). Le code la décide (`followUpDecision`) : jamais à un fan à ne plus contacter ni en détresse, jamais de 23 h à 9 h chez elle (reportée à 9 h), jamais rien à vendre tant que l'historique des scripts Reveal manque (P6-01). |
 | Ancre d'une relance | `anchorAt` | Le dernier message du fan, d'où se comptent les délais des relances ; un nouveau message de lui la déplace et la relance en attente ne part pas. |
+| Réponse différée | `waitedFor` | Sa réponse remise à plus tard quand elle choisit d'attendre (« attends, je reviens ») : une seule fois, 5 à 25 minutes après, tant qu'il n'a rien écrit ; au second passage elle ne peut plus attendre, et si rien ne s'écrit, un humain prend la main (P3-11). Ce n'est pas une relance : c'est elle qui n'a pas encore répondu. |
 | Petit rappel | `nudge` | Rappel court quand le fan a lu sans répondre (« nudge » d'OnlyChat). |
 | Cooldown | `cooldown` | Délai pendant lequel le bot ne pousse pas de vente. |
 | Connecteur | `connector` | Adaptateur d'une plateforme derrière le port `PlatformConnector`. |

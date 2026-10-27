@@ -109,7 +109,7 @@ describe('Suivi of a chatter (EQ-13)', () => {
     renderPage();
     const off = await screen.findByRole('heading', { name: 'Tu n’es pas en poste' });
     expect(off.closest('section')?.textContent).toContain(
-      'Prochain shift aujourd’hui, 23 h – 5 h sur Nora Vidal. Ses conversations s’ouvrent ici à 22 h 45.',
+      'Prochain shift aujourd’hui, 23 h – 5 h sur Nora Vidal. Ses conversations s’ouvrent ici à 22 h 45.',
     );
     expect(screen.getByRole('link', { name: 'Mon planning' }).getAttribute('href')).toBe('/planning');
     expect(screen.queryByText('Rien pour toi pour l’instant')).toBeNull();

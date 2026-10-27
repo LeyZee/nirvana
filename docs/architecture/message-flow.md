@@ -61,6 +61,7 @@ Le moteur peut aussi ne pas écrire de brouillon (`held`) :
 
 - `guard_blocked`, `handoff`, `budget_reached` et `llm_unavailable` donnent `handoff_requested` : la conversation passe à `human` et les chatteurs reprennent. Un modèle injoignable (fournisseur en panne, clé absente) ne laisse donc plus un fan sans réponse ni alerte : la cause `llm_unavailable` part en alerte « Important ».
 - `no_reply` donne `reply_skipped` et la conversation revient à `idle`. Les anciens `reply_skipped` de raison `llm_unavailable` restent lisibles.
+- **Réponse différée** (P3-11) : quand elle choisit d'attendre (« attends, je reviens »), le moteur rend `no_reply` avec `retryAt`. Entre 5 et 25 minutes, `reply_skipped` porte ce `retryAt` et `conversation.respond` est remis en file à cette heure, sur `conv:<id>` et la même clé (`replace`), avec `waitedFor` (son message attendu). Un nouveau message du fan remplace ce job : le debounce répond à ce message-là. Au second passage, le job accepte la conversation au repos tant que son message est toujours le dernier et sans réponse d'elle, et le moteur reçoit `waited: 1` (elle ne peut plus attendre). Un brouillon s'écrit comme d'habitude ; sinon, quoi que rende le moteur, c'est `handoff_requested` (cause `other`, raison `waited_no_reply`). Hors de la borne, un `reply_skipped` simple, sans reprise.
 
 Le job n'envoie jamais rien lui-même.
 

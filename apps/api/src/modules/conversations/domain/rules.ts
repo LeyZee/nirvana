@@ -63,6 +63,23 @@ export function followUpIdempotencyKey(conversationId: string, anchor: Date, ste
   return `follow_up:${conversationId}:${String(anchor.getTime())}:${String(step)}`;
 }
 
+const MINUTE_MS = 60_000;
+const DEFERRED_RESPOND_MIN_MINUTES = 5;
+const DEFERRED_RESPOND_MAX_MINUTES = 25;
+
+/**
+ * When her deferred answer is tried again (P3-11), or `null` when the engine asked for none or out of bounds: not
+ * before 5 minutes, and never after 25, so the « À traiter » net of 30 minutes always comes after it.
+ */
+export function deferredRespondAt(retryAt: Date | undefined, now: Date): Date | null {
+  if (retryAt === undefined) return null;
+  const ahead = retryAt.getTime() - now.getTime();
+  return ahead >= DEFERRED_RESPOND_MIN_MINUTES * MINUTE_MS &&
+    ahead <= DEFERRED_RESPOND_MAX_MINUTES * MINUTE_MS
+    ? retryAt
+    : null;
+}
+
 /** How far ahead the engine may put a follow-up off (her night): beyond, it is cancelled. */
 const FOLLOW_UP_RETRY_MAX_HOURS = 24;
 

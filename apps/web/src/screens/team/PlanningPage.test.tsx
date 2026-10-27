@@ -179,14 +179,14 @@ describe('Équipe › Planning', () => {
     serve();
     renderPage();
     const chip = await screen.findByRole('button', {
-      name: 'Théo, 23 h – 5 h, jusqu’au lendemain, en poste',
+      name: 'Théo, 23 h – 5 h, jusqu’au lendemain, en poste',
     });
     // The night shift starts on Tuesday 27, at the agency's hour.
     const row = screen.getByRole('row', { name: /Nora Vidal/u });
     expect(within(row).getByRole('rowheader').textContent).toContain('Nora Vidal@nora sur Reveal');
     expect(within(row).getAllByRole('cell')[1]?.contains(chip)).toBe(true);
     const duty = screen.getByRole('region', { name: 'En poste maintenant' });
-    expect(duty.textContent).toContain('ThéoNora Vidaljusqu’à 5 h');
+    expect(duty.textContent).toContain('ThéoNora Vidaljusqu’à 5 h');
     expect(screen.getByText('1 shift · 6 h')).toBeTruthy();
   });
 
@@ -194,9 +194,9 @@ describe('Équipe › Planning', () => {
     reader.zone = 'Indian/Antananarivo';
     serve();
     renderPage();
-    await screen.findByRole('button', { name: /^Théo, 23 h – 5 h/u });
+    await screen.findByRole('button', { name: /^Théo, 23\u00a0h – 5\u00a0h/u });
     fireEvent.click(screen.getByRole('radio', { name: 'Mon heure (Antananarivo)' }));
-    expect(await screen.findByRole('button', { name: /^Théo, 1 h – 7 h/u })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /^Théo, 1\u00a0h – 7\u00a0h/u })).toBeTruthy();
   });
 
   it('says in amber which weekly shifts could not be placed, and opens the one in the way', async () => {
@@ -215,11 +215,11 @@ describe('Équipe › Planning', () => {
     const amber = await screen.findByRole('status', {
       name: 'Un modèle de shift n’a pas pu poser son shift',
     });
-    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
+    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
     expect(amber.textContent).toContain('Théo est déjà sur un autre shift.');
     fireEvent.click(within(amber).getByRole('button', { name: 'Voir le shift' }));
     expect((await screen.findByRole('dialog', { name: 'Théo' })).textContent).toContain(
-      'Chaque mardi, 23 h – 5 h',
+      'Chaque mardi, 23 h – 5 h',
     );
   });
 
@@ -242,10 +242,10 @@ describe('Équipe › Planning', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
     const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
     // At 1 h, the night slot has begun: the panel opens on the next one.
-    expect(within(panel).getByRole('radio', { name: '6 h – 12 h' }).getAttribute('aria-checked')).toBe(
+    expect(within(panel).getByRole('radio', { name: '6 h – 12 h' }).getAttribute('aria-checked')).toBe(
       'true',
     );
-    fireEvent.click(within(panel).getByRole('radio', { name: '12 h – 18 h' }));
+    fireEvent.click(within(panel).getByRole('radio', { name: '12 h – 18 h' }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Placer Théo' }));
     expect((await within(panel).findByRole('alert')).textContent).toContain(
       'Ce membre est déjà sur un autre shift à ces heures.',
@@ -270,7 +270,7 @@ describe('Équipe › Planning', () => {
   it('stops a shift under way at the minute, after a confirmation', async () => {
     const written = serve({ write: () => ({ status: 200, body: { ...night, endsAt: NOW.toISOString() } }) });
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23 h – 5 h/u }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23\u00a0h – 5\u00a0h/u }));
     const sheet = await screen.findByRole('dialog', { name: 'Théo' });
     expect(sheet.textContent).toContain('En poste');
     fireEvent.click(within(sheet).getByRole('button', { name: 'Arrêter maintenant' }));
@@ -291,7 +291,7 @@ describe('Équipe › Planning', () => {
   it('closes the sheet when a stop in the first minute cancels the shift (204)', async () => {
     const written = serve({ write: () => ({ status: 204 }) });
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23 h – 5 h/u }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23\u00a0h – 5\u00a0h/u }));
     const sheet = await screen.findByRole('dialog', { name: 'Théo' });
     fireEvent.click(within(sheet).getByRole('button', { name: 'Arrêter maintenant' }));
     fireEvent.click(within(sheet).getByRole('button', { name: 'Arrêter' }));
@@ -317,7 +317,7 @@ describe('Équipe › Planning', () => {
     fireEvent.change(within(panel).getByLabelText('Début'), { target: { value: '08:00' } });
     fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '07:30' } });
     // 23 h 30 is a shift, not a template: a change of time would stretch it past a day.
-    expect(panel.textContent).toContain('23 h 30, jusqu’au lendemain.');
+    expect(panel.textContent).toContain('23 h 30, jusqu’au lendemain.');
     fireEvent.click(within(panel).getByRole('switch', { name: /Chaque semaine/u }));
     expect(await screen.findByRole('dialog', { name: 'Nouveau modèle de shift' })).toBe(panel);
     expect(panel.textContent).toContain('Un modèle de shift dure 23 heures au plus.');
@@ -331,5 +331,21 @@ describe('Équipe › Planning', () => {
     expect(written.map(({ method, path }) => `${method} ${path}`)).toEqual([
       'POST /v1/scheduling/shift-templates',
     ]);
+  });
+
+  it('says how long a single shift really lasts the night the clocks go forward', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('row', { name: /Nora Vidal/u });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    fireEvent.change(within(panel).getByLabelText('Jour'), { target: { value: '2027-03-28' } });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Autres heures' }));
+    fireEvent.change(within(panel).getByLabelText('Début'), { target: { value: '00:00' } });
+    fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '06:00' } });
+    // 2 h becomes 3 h in Paris: the night shift lasts 5 h; a template keeps its wall-clock 6 h.
+    expect(panel.textContent).toContain('5 h.');
+    fireEvent.click(within(panel).getByRole('switch', { name: /Chaque semaine/u }));
+    expect(panel.textContent).toContain('6 h.');
   });
 });

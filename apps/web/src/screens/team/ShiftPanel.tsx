@@ -102,6 +102,13 @@ export function ShiftPanel({
   const tooLong = weekly && minutes > SHIFT_TEMPLATE_MAX_MINUTES;
   const hoursFit = hoursOk && !tooLong;
   const dayOk = /^\d{4}-\d{2}-\d{2}$/u.test(day) && day >= today;
+  // A single shift lasts what its two instants span: 5 h for 0 h – 6 h the night the clocks go forward. A template
+  // keeps its wall-clock hours, whatever the week.
+  const lasts =
+    hoursOk && dayOk && !weekly
+      ? zonedInstant(crosses ? addDays(day, 1) : day, endMinute, zone).getTime() -
+        zonedInstant(day, startMinute, zone).getTime()
+      : minutes * 60_000;
   const ready = account !== null && chosen !== null && hoursFit && dayOk && !busy;
 
   const submit = async (): Promise<void> => {
@@ -288,7 +295,7 @@ export function ShiftPanel({
               ? 'Un début et une fin différents.'
               : tooLong
                 ? 'Un modèle de shift dure 23 heures au plus.'
-                : `${lengthOf(minutes * 60_000)}${crosses ? ', jusqu’au lendemain' : ''}.`}
+                : `${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
           </span>
         </fieldset>
 
