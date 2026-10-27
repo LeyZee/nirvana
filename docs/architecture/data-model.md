@@ -154,6 +154,20 @@ kill_switches   id, scope (global|creator|conversation), scope_id (nullable pour
 
 Les approbations et prises en main ne sont pas une table : ce sont des `conversation_events` (`draft_approved`, `takeover_started`, …) et l'état des `drafts`.
 
+## Équipe (module `team`, ADR 0023, EQ-01)
+
+```
+team_members             id, user_id (unique → user), team_role (chatter|manager), first_name, last_name, display_name,
+                         country (ISO 3166-1 alpha-2), time_zone, status (active|on_leave|sick|travelling|suspended|left),
+                         color (#rrggbb), joined_on, created_at, updated_at        (jamais supprimé : un membre parti est `left`)
+team_member_notes        id, member_id, body (1 à 2 000 car.), author_user_id, created_at          (ajout seul)
+commission_presets       id, name, rate_bps (0 à 10 000), effective_from, created_by, created_at   (ajout seul, unique name + effective_from)
+member_commission_rates  id, member_id, rate_bps, team_share_bps (manager), preset_id, effective_from, created_by, created_at
+                         (ajout seul, unique member_id + effective_from : le taux d'un jour est la dernière ligne en vigueur ce jour-là)
+```
+
+L'e-mail et la photo restent sur `user` (Better Auth), jamais recopiés. Les notes internes sont dans leur propre table : sur la ligne du membre, la RLS (par ligne) les lui montrerait.
+
 ## Système (hors RLS, sans `creator_id`)
 
 ```
@@ -184,6 +198,7 @@ Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.en
 
   Le second argument `true` (`missing_ok`) fait que, hors `withTenant`, la politique compare à `NULL` et retourne **zéro ligne** au lieu de lever « unrecognized configuration parameter ». C'est ce que le test de P0-03 vérifie.
 - `withTenant(creatorId, tx => …)` ouvre une transaction et fait `SET LOCAL app.creator_id = …`. Les jobs système multi-tenant (réconciliation, purge, dispatch des polls) passent par `withAdmin` (`DATABASE_ADMIN_URL`) dans des fonctions nommées `*Unscoped`.
+- **Tables de l'équipe** (sans `creator_id`) : une politique par compte. `withMember(db, userId, (tx, scope) => …)` fait `SET LOCAL app.user_id`, lit dans la même transaction le rôle d'accès (`user.role`) et la ligne `team_members` du compte, puis fait `SET LOCAL app.team_scope` : `owner` pour le propriétaire, `agency` pour un manager au statut `active`, `self` pour tous les autres (`teamScopeFor`, contracts). Le scope n'est jamais lu dans la requête. `self` lit ses propres lignes (sa fiche, ses taux) ; `agency` lit toute l'équipe et écrit des notes signées de son compte ; seul `owner` crée ou modifie une fiche et insère un taux ou un préréglage. Hors `withMember`, aucune ligne. Notes, préréglages et taux sont en ajout seul (`REVOKE UPDATE, DELETE` et trigger `refuse_change`) ; `team_members` n'a pas de `DELETE` (migration 0015).
 - **Hors RLS** (pas de `creator_id`) : `creators`, les tables Better Auth, `audit_log`, `worker_heartbeats`, les lignes `kill_switches` de scope `global` (lues par toutes les créatrices, politique `global_read` ; écrites, modifiées et supprimées seulement par `withAdmin`, migration 0010), les tables `graphile_worker`.
 
 ## Index de départ

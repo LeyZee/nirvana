@@ -1,5 +1,5 @@
 # EQ-01 Équipe : membres, pays, commission, paramètres de paie des plateformes
-Statut : todo (lot 1 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; ses écrans attendent le shell par rôle, EQ-11)
+Statut : in_progress (base posée par Bilan, migration 0015 ; lot 1 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; ses écrans attendent le shell par rôle, EQ-11)
 Phase : équipe (ADR 0023)
 Dépend de : ADR 0023, ADR 0024 ; pour l'écran, EQ-11 (ordre ci-dessous)
 Branche : task/eq-01-team-members
@@ -44,3 +44,4 @@ Ordre avant tout écran de l'équipe (ADR 0024) : 1) ADR 0024, rôles et navigat
 Planning, rapports, paie, dossier prestataire et factures, import d'Imperium.
 
 ## Notes de session
+- 2026-10-27 (Bilan) : base posée. Migration 0015 (`team_members`, `team_member_notes`, `commission_presets`, `member_commission_rates`, politiques par compte, ajout seul), `withMember` avec les scopes `owner` / `agency` / `self` déduits en base (`teamScopeFor`, contracts `team.ts`), tests RLS (`packages/db/src/team-rls.integration.test.ts`). Restent : `TeamMemberSchema` complet et le module `team` (routes, invitation, statut parti avec sessions révoquées), les paramètres de paie des plateformes et la part de l'agence (tables datées avec `creator_id`, prochaine migration), le rôle d'équipe dans `/v1/me` (PR suivante de Bilan), les écrans.
