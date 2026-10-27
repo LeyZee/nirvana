@@ -48,6 +48,19 @@ describe('events', () => {
       payload: { kind: 'alert', spentMinor: 1600, capMinor: 2000, currency: 'EUR', day: '2026-10-17' },
     });
     expect(budget.type).toBe('budget_threshold_crossed');
+    const backup = DomainEventSchema.parse({
+      ...envelope(),
+      creatorId: null,
+      type: 'backup_overdue',
+      payload: { lastSucceededAt: null, day: '2026-10-27' },
+    });
+    expect(backup.type).toBe('backup_overdue');
+    expect(
+      EVENT_PAYLOADS.backup_overdue.safeParse({
+        lastSucceededAt: '2026-10-26T01:00:00.000Z',
+        day: '27/10/2026',
+      }).success,
+    ).toBe(false);
   });
 
   it('refuses a payload that belongs to another type, and an unknown type', () => {

@@ -197,6 +197,20 @@ describe('reading the outbox', () => {
         payload: { kind: 'alert', spentMinor: 1600, capMinor: 2000, currency: 'EUR', day: '2026-10-17' },
       }),
     ).toMatchObject({ signal: { kind: 'budget', threshold: 'alert' } });
+    expect(
+      toScannedEvent({
+        ...base,
+        type: 'backup_overdue',
+        payload: { lastSucceededAt: '2026-10-26T02:04:00.000Z', day: '2026-10-27' },
+      })?.signal,
+    ).toEqual({ kind: 'backup_overdue', lastSucceededAt: new Date('2026-10-26T02:04:00.000Z') });
+    expect(
+      toScannedEvent({
+        ...base,
+        type: 'backup_overdue',
+        payload: { lastSucceededAt: null, day: '2026-10-27' },
+      })?.signal,
+    ).toEqual({ kind: 'backup_overdue', lastSucceededAt: null });
     // The voice version stays in Nirvana: the signal carries only the reasons and the count.
     const closed = toScannedEvent({
       ...base,
