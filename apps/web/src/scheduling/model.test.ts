@@ -148,7 +148,7 @@ describe('conflicts', () => {
       ],
     );
     const [line] = conflictLines(week.conflicts, [template], week, PARIS);
-    expect(line?.what).toBe('Théo est en congé');
+    expect(line?.what).toBe('Théo est en congé : ce shift est à pourvoir');
     expect(line?.shiftId).toBe(null);
   });
 });

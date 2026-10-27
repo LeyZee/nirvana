@@ -359,7 +359,8 @@ export const LEAVE_QUERY_MAX_DAYS = 366;
 
 /**
  * `pending` until the agency decides: `approved` or `refused`. The member `withdrawn` their pending request; the owner
- * or an active manager `cancelled` an approved leave before its end, and the member can be planned again from then on.
+ * or an active manager `cancelled` an approved leave before its end. A cancelled leave counts until its `cancelledAt`
+ * and no longer: nothing when it had not started, the days already taken when it had (ADR 0031).
  */
 export const LEAVE_REQUEST_STATUSES = ['pending', 'approved', 'refused', 'withdrawn', 'cancelled'] as const;
 export const LeaveRequestStatusSchema = z.enum(LEAVE_REQUEST_STATUSES);
@@ -394,8 +395,13 @@ export const LeaveRequestSchema = z.object({
   /** What the member wrote with the request. */
   note: z.string().nullable(),
   status: LeaveRequestStatusSchema,
-  /** When it was approved, refused, withdrawn or cancelled; `null` while pending. */
+  /** When it was approved or refused; `null` while pending, and for a request withdrawn before any decision. */
   decidedAt: z.iso.datetime().nullable(),
+  /**
+   * When it was withdrawn or cancelled; `null` otherwise. `startsAt` and `endsAt` never change: a leave cancelled
+   * while under way covers [`startsAt`, `cancelledAt`).
+   */
+  cancelledAt: z.iso.datetime().nullable(),
   /** What the person who refused or cancelled it wrote, for the member. */
   decisionNote: z.string().nullable(),
   createdAt: z.iso.datetime(),
@@ -428,10 +434,11 @@ export type CreateLeaveRequestBody = z.input<typeof CreateLeaveRequestBodySchema
 
 /**
  * `POST /v1/scheduling/leave-requests/:leaveRequestId/decision` (owner, active manager) → `LeaveRequestSchema`. Only a
- * pending request is decided (`leave_decided_conflict` otherwise), never by the member it is for
- * (`leave_own_decision_forbidden`). Approving answers 409 `leave_shifts_conflict`, with `details.shiftIds`, while shifts
- * of the member that are not cancelled still overlap the leave: give them to someone else or cancel them first, so that
- * no account is left without anyone unseen.
+ * pending request is decided (`leave_decided_conflict` otherwise). A manager never decides their own leave
+ * (`leave_own_decision_forbidden`); the owner decides theirs, since nobody decides for them. Approving answers 409
+ * `leave_shifts_conflict`, with `details.shiftIds`, while shifts of the member that are not cancelled still overlap the
+ * leave: give them to someone else or cancel them first, so that no account is left without anyone unseen. Approving
+ * also lapses the open swap proposals that would give the member a shift during the leave.
  */
 export const DecideLeaveRequestBodySchema = z.object({
   decision: z.enum(['approve', 'refuse']),
@@ -442,7 +449,8 @@ export type DecideLeaveRequestBody = z.input<typeof DecideLeaveRequestBodySchema
 /*
  * `DELETE /v1/scheduling/leave-requests/:leaveRequestId` → 204. The member withdraws their own pending request; the
  * owner or an active manager cancels an approved leave that has not ended, and the member can be planned again from
- * then on. A request in any other state answers `leave_decided_conflict`. Nothing is deleted: the row keeps its status.
+ * then on. Either way `cancelledAt` is set, and `decidedAt` keeps the approval. A request in any other state answers
+ * `leave_decided_conflict`. Nothing is deleted: the row keeps its status.
  */
 
 /**
@@ -580,7 +588,7 @@ export type AnswerShiftSwapRequestBody = z.infer<typeof AnswerShiftSwapRequestBo
  * `leave_request_conflict` 409, the same `id` with other values ; `leave_overlap_conflict` 409, another pending or
  * approved leave of the member then (`details.leaveRequestId`) ; `leave_decided_conflict` 409, a request no longer
  * pending, or a leave that cannot be cancelled any more ; `leave_shifts_conflict` 409, shifts still on the member during
- * the leave (`details.shiftIds`) ; `leave_own_decision_forbidden` 403 ; `leave_date_invalid` 400, a leave that starts
+ * the leave (`details.shiftIds`) ; `leave_own_decision_forbidden` 403, a manager deciding their own leave ; `leave_date_invalid` 400, a leave that starts
  * before today in the member's zone ; `shift_swap_not_found` 404 ; `shift_swap_conflict` 409, the same `id` with other
  * values ; `shift_swap_open_conflict` 409, the same proposal still open (`details.shiftSwapRequestId`) ;
  * `shift_swap_answered_conflict` 409, a swap no longer proposed ; `shift_swap_lapsed_conflict` 409, a shift started,

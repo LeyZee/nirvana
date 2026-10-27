@@ -37,8 +37,7 @@ export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   shift_template_date_invalid: 'Un modèle de shift commence aujourd’hui au plus tôt.',
   member_on_leave_conflict: 'Ce membre est en congé à ces heures.',
   leave_request_not_found: 'Cette demande de congé n’existe plus : la liste est relue.',
-  leave_request_conflict:
-    'Cette demande de congé est déjà partie avec d’autres valeurs : la liste est relue.',
+  leave_request_conflict: 'Cette demande de congé a déjà été envoyée autrement : la liste est relue.',
   leave_overlap_conflict: 'Un autre congé couvre déjà une partie de ces jours.',
   leave_decided_conflict: 'Cette demande de congé a déjà eu sa réponse : la liste est relue.',
   leave_shifts_conflict:
@@ -46,7 +45,7 @@ export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   leave_own_decision_forbidden: 'Ton propre congé est validé par quelqu’un d’autre.',
   leave_date_invalid: 'Un congé commence aujourd’hui au plus tôt.',
   shift_swap_not_found: 'Cet échange n’existe plus : la liste est relue.',
-  shift_swap_conflict: 'Cet échange est déjà parti avec d’autres valeurs : la liste est relue.',
+  shift_swap_conflict: 'Cet échange a déjà été proposé autrement : la liste est relue.',
   shift_swap_open_conflict: 'Tu as déjà proposé cet échange : il attend sa réponse.',
   shift_swap_answered_conflict: 'Cet échange a déjà eu sa réponse : la liste est relue.',
   shift_swap_lapsed_conflict:
@@ -172,7 +171,7 @@ function whatOf(
     case 'account_taken':
       return `le compte${account === undefined ? '' : ` @${account.handle}`} a déjà quelqu’un`;
     case 'member_on_leave':
-      return `${who ?? 'Son membre'} est en congé`;
+      return `${who ?? 'Son membre'} est en congé : ce shift est à pourvoir`;
   }
 }
 

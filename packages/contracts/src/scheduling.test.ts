@@ -242,11 +242,35 @@ describe('leaves (ADR 0031)', () => {
       note: null,
       status: 'pending',
       decidedAt: null,
+      cancelledAt: null,
       decisionNote: null,
       createdAt: '2026-10-27T20:00:00Z',
     };
     expect(LeaveRequestSchema.parse(leave).timeZone).toBe('Indian/Antananarivo');
     expect(LeaveRequestSchema.safeParse({ ...leave, status: 'deleted' }).success).toBe(false);
+  });
+
+  it('keeps when it was approved once it is cancelled (ADR 0031)', () => {
+    const cancelled = LeaveRequestSchema.parse({
+      id: LEAVE,
+      memberId: MEMBER,
+      firstDay: '2026-12-24',
+      lastDay: '2026-12-26',
+      timeZone: 'Europe/Paris',
+      startsAt: '2026-12-23T23:00:00Z',
+      endsAt: '2026-12-26T23:00:00Z',
+      note: null,
+      status: 'cancelled',
+      decidedAt: '2026-11-02T10:00:00Z',
+      cancelledAt: '2026-12-25T09:30:00Z',
+      decisionNote: 'Retour plus tôt',
+      createdAt: '2026-10-27T20:00:00Z',
+    });
+    expect([cancelled.decidedAt, cancelled.cancelledAt, cancelled.endsAt]).toEqual([
+      '2026-11-02T10:00:00Z',
+      '2026-12-25T09:30:00Z',
+      '2026-12-26T23:00:00Z',
+    ]);
   });
 
   it('is approved or refused, with a note for the member', () => {
