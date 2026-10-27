@@ -93,7 +93,7 @@ describe('a shift in time', () => {
 
   it('names an account and a template the way the screens say them', () => {
     expect(accountLine({ platform: 'reveal', handle: 'nora' })).toBe('@nora sur Reveal');
-    expect(templateLine({ weekday: 2, startMinute: 1380, endMinute: 300 })).toBe('Chaque mardi, 23 h – 5 h');
+    expect(templateLine({ weekday: 2, startMinute: 1380, endMinute: 300 })).toBe('Chaque mardi, 23 h – 5 h');
   });
 });
 
@@ -132,7 +132,7 @@ describe('conflicts', () => {
     expect(lines).toEqual([
       {
         key: `${id(31)}-2026-10-27T22:00:00Z`,
-        when: 'mar. 27 · 23 h – 5 h sur Nora Vidal',
+        when: 'mar. 27 · 23 h – 5 h sur Nora Vidal',
         what: 'Théo est déjà sur un autre shift',
         shiftId: id(101),
       },

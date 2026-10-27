@@ -100,11 +100,11 @@ describe('the chatter’s Planning', () => {
     const today = await screen.findByRole('region', { name: 'Aujourd’hui' });
     const night = within(today).getByRole('listitem');
     // 22:00Z is 1 h on Wednesday 28 in Antananarivo, 23 h on Tuesday in Paris.
-    expect(night.textContent).toContain('1 h – 7 h');
-    expect(night.textContent).toContain('@nora sur Reveal · 23 h – 5 h à Paris');
+    expect(night.textContent).toContain('1 h – 7 h');
+    expect(night.textContent).toContain('@nora sur Reveal · 23 h – 5 h à Paris');
     expect(night.textContent).toContain('En poste');
     const thursday = screen.getByRole('region', { name: 'Jeudi 29 octobre' });
-    expect(thursday.textContent).toContain('19 h – 1 h');
+    expect(thursday.textContent).toContain('19 h – 1 h');
     expect(thursday.textContent).toContain('À venir');
     expect(screen.getByText('2 shifts · 12 h')).toBeTruthy();
   });

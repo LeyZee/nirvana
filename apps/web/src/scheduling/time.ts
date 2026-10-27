@@ -122,12 +122,15 @@ export const mondayOf = (day: string): string => addDays(day, 1 - weekdayOf(day)
 export const weekOf = (monday: string): string[] =>
   Array.from({ length: 7 }, (_, index) => addDays(monday, index));
 
+/** No-break spaces: « 1 h 17 » never splits across two lines. */
+const NBSP = '\u00a0';
+
 /** « 23 h », « 23 h 30 »: the French way, short enough for a grid. */
 export function clockOf(minute: number): string {
   const inDay = ((minute % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
   const hours = Math.floor(inDay / 60);
   const minutes = inDay % 60;
-  return minutes === 0 ? `${String(hours)} h` : `${String(hours)} h ${pad(minutes)}`;
+  return minutes === 0 ? `${String(hours)}${NBSP}h` : `${String(hours)}${NBSP}h${NBSP}${pad(minutes)}`;
 }
 
 /** An instant's clock in a zone: « 23 h », « 5 h 15 ». */
@@ -143,8 +146,8 @@ export function lengthOf(milliseconds: number): string {
   const total = Math.max(0, Math.round(milliseconds / MINUTE_MS));
   const hours = Math.floor(total / 60);
   const minutes = total % 60;
-  if (hours === 0) return `${String(minutes)} min`;
-  return minutes === 0 ? `${String(hours)} h` : `${String(hours)} h ${pad(minutes)}`;
+  if (hours === 0) return `${String(minutes)}${NBSP}min`;
+  return minutes === 0 ? `${String(hours)}${NBSP}h` : `${String(hours)}${NBSP}h${NBSP}${pad(minutes)}`;
 }
 
 /** « dans 12 min », « dans 3 h 05 », « dans 2 jours »: how far ahead an instant is. */
