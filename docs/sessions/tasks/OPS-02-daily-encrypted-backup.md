@@ -1,5 +1,5 @@
 # OPS-02 Export quotidien chiffré de la base, hors de Neon
-Statut : todo (ID validé par Charles le 27/10/2026, 17h27)
+Statut : in_progress (ID validé par Charles le 27/10/2026, 17h27)
 Phase : exploitation (ADR 0028)
 Dépend de : OPS-01 (fait)
 Branche : task/ops-02-daily-encrypted-backup
@@ -14,7 +14,7 @@ ADR 0028, ADR 0005, ADR 0027, `docs/runbooks/restore.md`, `docs/runbooks/deploy.
 - [ ] Prérequis : le rôle admin de Neon a `BYPASSRLS` (contrôle du § 1.1 de `deploy.md`) ; sans lui, `pg_dump` (qui met `row_security = off`) échoue sur les tables en `FORCE ROW LEVEL SECURITY`.
 - [ ] Image `backup` (`ops/backup/Dockerfile`) : `postgres:16-alpine`, `age`, `rclone`, `supercronic`, utilisateur non root ; `tzdata` et `CRON_TZ=Europe/Paris` (sinon l'export tourne en UTC) ; script d'export (dump `custom` sans les données de `session`, `verification` et `rate_limit_counters`, relecture `pg_restore --list`, comptes de lignes, chiffrement `age`, envoi, ligne `backup_runs`).
 - [ ] Service `backup` dans `docker-compose.prod.yml` ; variables dans `.env.example` sans valeur.
-- [ ] Migration `backup_runs` (écrite avec le fil propriétaire de `packages/db`, prochaine migration libre) : `GRANT SELECT` à `nirvana_app`, écriture par le rôle admin seul, pas de RLS.
+- [x] Migration `backup_runs` (écrite avec le fil propriétaire de `packages/db`, prochaine migration libre) : `GRANT SELECT` à `nirvana_app`, écriture par le rôle admin seul, pas de RLS.
 - [ ] Job `images` de la CI : construire l'image, puis, dans une étape à part (bornée à 10 min), export vers un dossier local sur la base de test, `pg_restore` dans une base vide et comparaison des comptes.
 - [ ] `restore.md` § B et test trimestriel réécrits selon l'ADR ; `deploy.md` : création du bucket (versioning, verrou d'objets, cycle de vie 30 jours, identifiants sans suppression), génération de la paire `age` sur le PC de Charles, garde des clés de l'application avec la clé privée.
 - [ ] Script d'essai de restauration pour la session Remote Control du PC de Charles : conteneur Postgres jetable sans volume, restauration sans les clés de chiffrement de l'application, file `graphile_worker` vidée juste après `pg_restore`, API seule (jamais le worker), comparaison des comptes, suppression du conteneur et du dump déchiffré en fin d'essai (même en échec), empreinte SHA-256 de l'export affichée pour la saisie du propriétaire (EQ-17).
