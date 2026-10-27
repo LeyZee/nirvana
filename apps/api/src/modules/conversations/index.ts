@@ -23,7 +23,7 @@ import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
 import { createConversationRoutes, type RequireRole } from './infra/http/routes';
 
 export { SendRefused } from './domain/errors';
-export type { Clock, DraftComposer, FollowUpPlan, OutboundSender } from './domain/ports';
+export type { Clock, DraftComposer, FollowUpContext, FollowUpPlan, OutboundSender } from './domain/ports';
 
 /** Public entry point of the `conversations` module (ADR 0002). Other modules import this file only. */
 export interface ConversationsModule extends ConversationCommands {

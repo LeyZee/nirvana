@@ -352,7 +352,7 @@ export interface ComposeInput {
 }
 
 /** Which follow-up this is, after which silence. */
-interface FollowUpContext {
+export interface FollowUpContext {
   /** The index of the delay in `persona.follow_ups.delays_hours`, from 0. */
   readonly step: number;
   /** How many delays the persona has: the last step is `steps - 1`. */

@@ -22,6 +22,7 @@ import {
   type Clock,
   type ConversationsModule,
   type DraftComposer,
+  type FollowUpContext,
   type FollowUpPlan,
   type OutboundSender,
 } from '../modules/conversations';
@@ -254,11 +255,8 @@ describe('conversation.follow_up', () => {
     composer.inputs.length = 0;
     await runFollowUp(first);
     expect(composer.inputs).toHaveLength(1);
-    expect(composer.inputs[0]?.followUp).toEqual({
-      step: 0,
-      steps: 2,
-      silentSince: new Date(first.anchorAt),
-    });
+    const expected: FollowUpContext = { step: 0, steps: 2, silentSince: new Date(first.anchorAt) };
+    expect(composer.inputs[0]?.followUp).toEqual(expected);
     expect(await row(conversationId)).toMatchObject({ state: 'awaiting_approval' });
 
     await approveAndSend(conversationId);
