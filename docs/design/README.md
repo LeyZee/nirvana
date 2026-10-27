@@ -74,7 +74,7 @@ Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CR
 
 - **Hiérarchie** : il se lit en deux secondes ; un seul chiffre ou une seule action domine, le secondaire est replié ou au survol (section « Hiérarchie »).
 - **Ça respire** : espacements des jetons, contenu sur plaques, au plus trois chiffres secondaires côte à côte, jamais un mur de champs ; un formulaire long se fait par étapes.
-- **Tout réagit** : survol, pression, focus et sélection sur chaque élément cliquable, par les classes communes (section « États ») ; rien n'apparaît sans animation (`nv-enter`, `stagger`) ; les chiffres comptent (`countUp`) ; un graphique passe par `nv-chart`.
+- **Tout réagit** : survol, pression, focus et sélection sur chaque élément cliquable, par les classes communes (section « États ») ; rien n'apparaît sans animation (`nv-enter` avec `--nv-i`) ; les chiffres comptent (`countUp`) ; un graphique passe par `nv-chart`.
 - **Navigation fluide** : la lentille glisse entre les onglets, la page entre en fondu, un retour garde la position et les filtres, le focus clavier suit, aucune animation ne bloque une saisie.
 - **Le design system, rien d'autre** : jetons de couleur, de durée et de courbe (aucune valeur en dur), un seul néon par écran, verre seulement sur ce qui flotte, textes en français avec apostrophes typographiques, montants en euros (ADR 0011).
 - **États honnêtes** : chargement, vide qui propose l'action, erreur « Le serveur ne répond pas », jamais un faux contenu.

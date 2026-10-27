@@ -119,7 +119,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Départ | `offboarding` | Le parcours qui fait partir un membre : accès coupé à l'heure dite, planning libéré, passations rendues, relevé final sans minimum de versement, dernière facture (EQ-14). |
 | Shift | `shift` | Une plage où un membre chatte sur un compte d'une créatrice, début et fin en UTC. |
 | Créneau | `shift_slot`, `ShiftSlot` | Une des plages fixes de la journée de l'agence (4 × 6 h par défaut) sur lesquelles se posent les shifts. Jamais `slot` seul, réservé aux slots KYC (`KycSlot`). |
-| En poste | `onShift` | Le membre dont le shift couvre cet instant sur cette créatrice ; il reçoit en premier les passages à l'humain pour vendre. |
+| En poste | `onShift` | Le membre dont le shift couvre cet instant sur cette créatrice ; il reçoit en premier les passages à l'humain pour vendre. Un chatteur ne traite les conversations d'une créatrice qu'en poste, plus une marge (ADR 0025). |
 | Prise de poste | `shift_check_in` | Le geste « Je prends mon poste » au début d'un shift, qui date son vrai début (EQ-12). |
 | Shift non pris | `unstarted_shift` | Un shift sans prise de poste après le délai réglé : alerte importante au manager en poste ou au propriétaire, avec les membres libres (EQ-12). |
 | Annonce | `announcement` | Message du propriétaire ou d'un manager actif à toute l'équipe ou aux membres d'une créatrice, affiché dans Aujourd'hui avec « Lu » ; remplace Telegram pour l'équipe. |

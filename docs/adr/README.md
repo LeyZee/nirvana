@@ -47,6 +47,7 @@ Date : AAAA-MM-JJ
 | 0020 | Notifications Telegram : bots, groupes et routage gérés depuis le CRM | proposed |
 | 0021 | Rester en personnage est fixé dans le code, sans réglage | accepted |
 | 0022 | La persona fait partie de la version qui ouvre l'Automatique | accepted |
-| 0023 | La gestion d'équipe entre dans Nirvana : planning, rapports, paie, routine des créatrices | accepted (§ Navigation remplacé par 0024) |
-| 0024 | Rôles et navigation : chacun ne voit que ce qui le concerne | accepted |
+| 0023 | La gestion d'équipe entre dans Nirvana : planning, rapports, paie, routine des créatrices | accepted (§ Navigation remplacé par 0024, gardes du chatteur par 0025) |
+| 0024 | Rôles et navigation : chacun ne voit que ce qui le concerne | accepted (Suivi du chatteur remplacé par 0025) |
+| 0025 | Le chatteur chatte dans Reveal ; dans Nirvana, il traite sa créatrice pendant son shift, et rien hors shift | accepted |
 | 0026 | Serveur MCP de Nirvana : une seconde porte sur les mêmes commandes | accepted |

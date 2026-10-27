@@ -12,7 +12,7 @@ Le rail, la barre du téléphone et les routes du CRM dépendent du rôle, avant
 
 ## À faire
 - [ ] Configuration du rail par rôle (propriétaire, manager, chatteur) dans l'ordre de l'ADR 0024, à la place de la liste statique ; `NavItem.to` élargi aux routes nouvelles, en français comme les routes existantes (`/creatrices`, `/suivi`, `/reglages`) : `/aujourdhui`, `/equipe`, `/paie`, `/planning`, `/commissions`, `/moi`. La créatrice a sa PWA (EQ-09).
-- [ ] Choix du rail depuis `/v1/me` (`MeSchema`) : `role = owner` → propriétaire ; `teamScope = agency` → manager ; sinon, une ligne d'équipe (`team` non nul) → chatteur, y compris un manager hors statut actif, comme son scope ; un `operator` sans ligne d'équipe garde le rail d'un operator d'aujourd'hui.
+- [ ] Choix du rail depuis `/v1/me` (`MeSchema`) : `role = owner` → propriétaire ; `teamScope = agency` → manager ; sinon, une ligne d'équipe (`team` non nul) → chatteur, y compris un manager hors statut actif, comme son scope ; un `operator` sans ligne d'équipe garde le rail d'un operator d'aujourd'hui ; une `creator` garde le rail d'aujourd'hui jusqu'à sa PWA (EQ-09). Le rail et les gardes sont une fonction pure de `Me`, pour que « Voir comme » (EQ-19) n'ait qu'à changer `Me` dans le contexte du routeur.
 - [ ] Un onglet n'apparaît que lorsque son écran existe : pas d'onglet vide ni grisé.
 - [ ] Intertitres discrets Chatting et Agence dans le rail ; la lentille suit sans changement.
 - [ ] Gardes `beforeLoad` sur `context.user` : une route interdite ramène sur le premier onglet du rôle (Aujourd'hui pour un chatteur, dès qu'EQ-10 le livre ; le Dashboard pour un manager). Les refus du serveur restent la vraie barrière.
