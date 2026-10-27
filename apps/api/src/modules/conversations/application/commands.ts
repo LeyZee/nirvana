@@ -111,6 +111,8 @@ export interface CommandDeps {
 
 const NEW_FAN_MESSAGE = 'Nouveau message du fan';
 const TAKEN_OVER = 'Conversation reprise par un humain';
+/** How far back the guards read what she already sent (P3-13): the conversation's last twenty messages. */
+const GUARD_HISTORY_MESSAGES = 20;
 
 /** Expires every draft still open: they answer a conversation that has moved on. */
 async function expireOpenDrafts(
@@ -255,8 +257,15 @@ export function createConversationCommands({
         if (bubbles.length === 0 || bubbles.some((bubble) => bubble.trim() === '')) {
           throw new DomainError('draft_invalid', 'Le brouillon est vide');
         }
-        // Rewritten or not, what leaves passes the hard guards again: a chatter's words speak for her too.
-        const verdict = guard.check(bubbles);
+        // Rewritten or not, what leaves passes the hard guards again: a chatter's words speak for her too, read
+        // against what she already sent him (P3-13).
+        const history = await tx.messages.history(conversation.id, GUARD_HISTORY_MESSAGES);
+        const verdict = guard.check(bubbles, {
+          history: history.map((message) => ({
+            from: message.direction === 'inbound' ? 'fan' : 'creator',
+            text: message.text,
+          })),
+        });
         if (verdict.isBlocked) throw new DraftGuarded(verdict.codes);
         const meta = humanMeta(input);
         await appendEvent(

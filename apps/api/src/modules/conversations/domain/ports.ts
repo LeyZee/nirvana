@@ -19,6 +19,7 @@ import type {
   FactCategory,
   FactKind,
   FanId,
+  GuardCode,
   HandoffCause,
   JobName,
   JobPayload,
@@ -247,7 +248,18 @@ export interface UnitOfWork {
  * again on the bubbles a chatter approves, rewritten or not (revue 09, G5). Implemented by the `agent` module.
  */
 export interface BubbleGuard {
-  check(bubbles: readonly string[]): { readonly isBlocked: boolean; readonly codes: readonly string[] };
+  check(
+    bubbles: readonly string[],
+    context: GuardReadContext,
+  ): { readonly isBlocked: boolean; readonly codes: readonly GuardCode[] };
+}
+
+/**
+ * What the guards read the approved bubbles against (P3-13): the conversation's last messages, oldest first, his and
+ * hers, so that a bubble she already sent or a third closed question in a row shows. A draft never carries a media.
+ */
+export interface GuardReadContext {
+  readonly history: readonly { readonly from: 'fan' | 'creator'; readonly text: string }[];
 }
 
 /** The fan as `conversations` needs it; implemented by the `fans` module. */
