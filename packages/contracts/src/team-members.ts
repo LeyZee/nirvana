@@ -1,0 +1,152 @@
+import { z } from 'zod';
+
+import {
+  CommissionPresetIdSchema,
+  CreatorIdSchema,
+  TeamMemberIdSchema,
+  TeamMemberNoteIdSchema,
+  UserIdSchema,
+} from './ids';
+import { InvitationLinkCreatedSchema } from './invitation-links';
+import { TimezoneSchema } from './persona';
+import { BasisPointsSchema, CountryCodeSchema, TeamMemberStatusSchema, TeamRoleSchema } from './team';
+
+/**
+ * Équipe › Membres (EQ-01, ADR 0023, ADR 0024), under `/v1/team`. Paid by commission only, never by the hour. The
+ * e-mail stays in `user` (Better Auth): the add panel types it for the invitation, the server joins it on read.
+ */
+
+/** A calendar day, `YYYY-MM-DD`: an arrival, the first day of a rate. */
+export const CalendarDaySchema = z.iso.date();
+
+/** The member's colour on the planning, as `team_members_color_check` takes it. */
+export const MemberColorSchema = z.string().regex(/^#[0-9a-f]{6}$/);
+
+const NameSchema = z.string().trim().min(1).max(80);
+
+/** A named rate the owner offers in one gesture (values are settings, never in the code). */
+export const CommissionPresetSchema = z.object({
+  id: CommissionPresetIdSchema,
+  name: z.string().min(1).max(60),
+  rateBps: BasisPointsSchema,
+  effectiveFrom: CalendarDaySchema,
+});
+export type CommissionPreset = z.infer<typeof CommissionPresetSchema>;
+
+/** `GET /v1/team/commission-presets`: the presets in force today, one per name. */
+export const CommissionPresetListSchema = z.object({ presets: z.array(CommissionPresetSchema) });
+
+/**
+ * A member's rate from a day on (`member_commission_rates`, added only). `teamShareBps` is a manager's share of the
+ * team's net, `null` for a chatter.
+ */
+export const CommissionRateSchema = z.object({
+  rateBps: BasisPointsSchema,
+  teamShareBps: BasisPointsSchema.nullable(),
+  presetId: CommissionPresetIdSchema.nullable(),
+  effectiveFrom: CalendarDaySchema,
+});
+export type CommissionRate = z.infer<typeof CommissionRateSchema>;
+
+/** One member as Équipe › Membres shows him: an owner and an active manager read everyone, a member his own row. */
+export const TeamMemberSchema = z.object({
+  id: TeamMemberIdSchema,
+  userId: UserIdSchema,
+  email: z.email(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  displayName: z.string().min(1),
+  teamRole: TeamRoleSchema,
+  status: TeamMemberStatusSchema,
+  country: CountryCodeSchema,
+  timeZone: TimezoneSchema,
+  color: MemberColorSchema.nullable(),
+  joinedOn: CalendarDaySchema,
+  creatorIds: z.array(CreatorIdSchema),
+  /** The rate in force today; `null` before the first one starts. */
+  commission: CommissionRateSchema.nullable(),
+  /** No password yet: the invitation link has not been used (EQ-10). */
+  invitationPending: z.boolean(),
+});
+export type TeamMember = z.infer<typeof TeamMemberSchema>;
+
+/** `GET /v1/team/members`: chatters and managers alike, the screen splits them. */
+export const TeamMemberListSchema = z.object({ members: z.array(TeamMemberSchema) });
+
+/** The rate given when adding a member, or later from a day on: a preset, or typed by hand. */
+export const CommissionChoiceSchema = z.union([
+  z.object({ presetId: CommissionPresetIdSchema }),
+  z.object({ rateBps: BasisPointsSchema }),
+]);
+
+/**
+ * `POST /v1/team/members` (owner): creates the account (no password), the record, the first rate and the
+ * invitation link, in one transaction. The time zone the screen offers follows the country, and stays editable.
+ */
+export const CreateTeamMemberBodySchema = z.object({
+  email: z.email(),
+  firstName: NameSchema,
+  lastName: NameSchema,
+  displayName: NameSchema,
+  teamRole: TeamRoleSchema,
+  country: CountryCodeSchema,
+  timeZone: TimezoneSchema,
+  color: MemberColorSchema.nullable().default(null),
+  joinedOn: CalendarDaySchema,
+  creatorIds: z.array(CreatorIdSchema).default([]),
+  commission: CommissionChoiceSchema,
+  /** A manager's share of the team's net; refused for a chatter. */
+  teamShareBps: BasisPointsSchema.nullable().default(null),
+});
+export type CreateTeamMemberBody = z.infer<typeof CreateTeamMemberBodySchema>;
+
+export const TeamMemberCreatedSchema = z.object({
+  member: TeamMemberSchema,
+  invitation: InvitationLinkCreatedSchema,
+});
+
+/** `PATCH /v1/team/members/:memberId` (owner): what changes; the rest stays. Status and rate have their own routes. */
+export const UpdateTeamMemberBodySchema = z
+  .object({
+    firstName: NameSchema,
+    lastName: NameSchema,
+    displayName: NameSchema,
+    teamRole: TeamRoleSchema,
+    country: CountryCodeSchema,
+    timeZone: TimezoneSchema,
+    color: MemberColorSchema.nullable(),
+    creatorIds: z.array(CreatorIdSchema),
+  })
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, 'Rien à changer');
+export type UpdateTeamMemberBody = z.infer<typeof UpdateTeamMemberBodySchema>;
+
+/**
+ * `PUT /v1/team/members/:memberId/status` (owner): `left` empties the member's creators and ends his sessions in the
+ * same transaction; the whole departure is EQ-14.
+ */
+export const ChangeTeamMemberStatusBodySchema = z.object({ status: TeamMemberStatusSchema });
+
+/** `POST /v1/team/members/:memberId/commission` (owner only, the database refuses anyone else): from a day on, never before today. */
+export const SetCommissionRateBodySchema = z.object({
+  commission: CommissionChoiceSchema,
+  teamShareBps: BasisPointsSchema.nullable().default(null),
+  effectiveFrom: CalendarDaySchema,
+});
+export type SetCommissionRateBody = z.infer<typeof SetCommissionRateBodySchema>;
+
+/** `GET /v1/team/members/:memberId/commission`: every rate, newest first. */
+export const CommissionRateHistorySchema = z.object({ rates: z.array(CommissionRateSchema) });
+
+/** An internal note, read by the owner and the active managers only, never by the member it is about. */
+export const TeamMemberNoteSchema = z.object({
+  id: TeamMemberNoteIdSchema,
+  body: z.string().min(1).max(2000),
+  authorName: z.string().min(1),
+  createdAt: z.iso.datetime(),
+});
+export type TeamMemberNote = z.infer<typeof TeamMemberNoteSchema>;
+
+/** `GET /v1/team/members/:memberId/notes` (newest first) and `POST` with `AddTeamMemberNoteBodySchema`. */
+export const TeamMemberNoteListSchema = z.object({ notes: z.array(TeamMemberNoteSchema) });
+export const AddTeamMemberNoteBodySchema = z.object({ body: z.string().trim().min(1).max(2000) });

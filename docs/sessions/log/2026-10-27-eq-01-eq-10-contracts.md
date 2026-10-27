@@ -1,0 +1,7 @@
+# 2026-10-27 — EQ-01 et EQ-10 : contrats des membres et des liens d'invitation — done
+Fait : `packages/contracts/src/team-members.ts` (membre tel qu'Équipe › Membres le montre, liste, ajout avec premier taux et lien d'invitation, modification partielle, statut, taux daté, historique des taux, préréglages, notes internes) et `invitation-links.ts` (but `invitation` ou `reset`, jeton dans le fragment de l'URL, aperçu sans consommer, usage unique qui pose le mot de passe et ouvre la session, `PASSWORD_MIN_LENGTH`). Fichiers ajoutés seulement, avec l'accord de Bilan sur la PR ; fiches EQ-01 et EQ-10 notées.
+Pas fait : le module `team` et ses routes `/v1/team` (suite de ce fil), la partie serveur des liens (Bilan), les écrans (Équipe › Membres chez Extension ; pages « Bienvenue » et « Nouveau mot de passe » dans ce fil).
+Décisions : le nom du glossaire, « Lien d'invitation » (`invitation_link`), sert aussi au mot de passe oublié, avec `purpose: 'reset'`. Lien inconnu, utilisé, annulé ou expiré : un seul code, `invitation_link_not_found` (404), pour ne rien révéler. L'e-mail reste dans `user`, joint à la lecture. `invitationPending` dit qu'un membre n'a pas encore choisi son mot de passe. Aucun champ horaire (commission seule, ADR 0023).
+Découvertes : `auth.ts` garde sa propre constante de longueur minimale du mot de passe (12) ; elle pourra lire `PASSWORD_MIN_LENGTH` des contrats.
+Candidats à suppression : aucun.
+Vérifié : pnpm check ✓, pnpm test ✓ (contrats : `team-members.test.ts`, `invitation-links.test.ts`).
