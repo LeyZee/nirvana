@@ -44,7 +44,10 @@ function periodStart(period: DashboardPeriod, now: Date, dayStart: Date): Date {
   return new Date(now.getTime() - (period === 'week' ? 7 : 30) * DAY_MS);
 }
 
-/** `GET /v1/dashboard?creatorId=&period=`: everything the Dashboard shows for one creator, computed here. */
+/**
+ * `GET /v1/dashboard?creatorId=&period=`: everything the Dashboard shows for one creator, computed here. Read by the
+ * creator herself, it leaves out « À traiter » and her best fans (ADR 0023).
+ */
 export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAsyncZod {
   return (app) => {
     app.get(
@@ -72,7 +75,7 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           deps.automatic.read(creatorId),
           deps.deadJobs(creatorId),
         ]);
-        return assembleDashboard({
+        const dashboard = assembleDashboard({
           creatorId,
           period,
           facts: read.facts,
@@ -83,6 +86,16 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           telegram,
           automatic,
         });
+        // ADR 0023: a creator never sees a conversation nor a fan, nor the agency's figures (the day's AI spend of
+        // every creator, the jobs of no creator). Her Dashboard keeps her own aggregates only.
+        if (user.role !== 'creator') return dashboard;
+        return {
+          ...dashboard,
+          todos: [],
+          fans: [],
+          budget: { ...dashboard.budget, spentToday: null },
+          jobs: { dead: null },
+        };
       },
     );
     return Promise.resolve();

@@ -36,7 +36,7 @@ export interface Todo {
 }
 
 /** One card of the « L'agent » fold. `rows` feed the tip; `gauge` is a spend or a rate against a mark. */
-interface AgentCard {
+export interface AgentCard {
   readonly id: string;
   readonly tone: Tone;
   readonly title: string;
