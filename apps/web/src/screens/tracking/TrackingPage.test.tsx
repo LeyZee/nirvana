@@ -39,6 +39,7 @@ function conversation(id: string, patch: Partial<ConversationSummary> = {}): Con
     lastOutboundAt: null,
     unreadCount: 0,
     updatedAt: '2026-10-17T20:00:00Z',
+    desire: null,
     ...patch,
   });
 }

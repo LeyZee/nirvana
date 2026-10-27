@@ -51,7 +51,7 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 - [x] `sexualizationDecision` (seuil dans `no_opening`) et `offerDecision` (`low_desire` à la place de `not_sexualizing`). Aucun écran ne montre aujourd'hui pourquoi une offre est refusée (`causes.ts` ne porte que les causes de passation) : le libellé de `low_desire` viendra avec cet affichage.
 - [x] `ComposeInput.desire`, `desire` sur les résultats `draft` et `held`, projection, événement `desire_scored` écrit par le worker, migration 0022 (Bilan, #221).
 - [x] Le moteur rend `desire` avec chaque résultat calculé sur un message du fan (Agent).
-- [ ] Lecture du Suivi (Bilan) : le DTO donne la note déjà retombée côté serveur (`desireNow`), ou `null` avant la première, et l'API rend les points de la courbe (les `desire_scored`). Extension ne code l'écran qu'une fois cette lecture exposée.
+- [x] Lecture du Suivi (Bilan) : le DTO donne la note déjà retombée côté serveur (`desireNow`), ou `null` avant la première, et l'API rend les points de la courbe (les `desire_scored`). Extension ne code l'écran qu'une fois cette lecture exposée. Fait : `ConversationSummary.desire` (`{ score, band } | null`) et `GET /v1/conversations/{id}/desire` (`DesireCurveSchema`).
 - [ ] Affichage dans le Suivi et le lecteur, un libellé par code de `DESIRE_SIGNALS` ; réglage des seuils dans l'écran Persona, qui montre dans quelle bande tombe chaque seuil (Extension).
 - [ ] Ligne de la note Reveal (après la capture, contre `FakeReveal` d'abord).
 - [ ] Calibration hors dépôt sur le corpus de vente (`/mnt/project-files/onlychat/corpus-vente/`) : la note juste avant chacune des ventes et avant chaque refus ; les chiffres agrégés vont au journal, jamais un message.

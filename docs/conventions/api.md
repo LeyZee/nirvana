@@ -15,6 +15,8 @@ Dernière revue : 2026-10-16. S'applique à `apps/api` (routes Fastify) et à se
 
 Toujours par curseur, jamais par offset : `GET /v1/conversations/{id}/messages?creatorId=…&limit=50&cursor=…` → `{ "items": [...], "nextCursor": "…" | null }`. `limit` borné (défaut 50, max 200). Le curseur est opaque (base64 de `(created_at, id)`).
 
+Seule exception, une lecture bornée par construction qui n’est pas une liste à parcourir : la courbe de désir `GET /v1/conversations/{id}/desire?creatorId=…` rend `{ "points": [...] }`, au plus 200 points (les plus récents, du plus ancien au plus récent), sans curseur (P3-12).
+
 ## Erreurs
 
 Un seul format, produit par le gestionnaire central :

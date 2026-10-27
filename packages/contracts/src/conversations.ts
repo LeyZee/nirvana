@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { DesireBandSchema, DesireScoreSchema, DesireSignalSchema, DESIRE_SIGNALS_MAX } from './desire';
 import {
   ConversationModeSchema,
   ConversationStateSchema,
@@ -26,6 +27,13 @@ export function pageOf<T extends z.ZodType>(
   return z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 }
 
+/**
+ * His desire score as the tracking screens show it (P3-12): already cooled to the time of the answer (`desireNow`) and
+ * its band taken from that cooled score, so the screen computes nothing. `null` while no `desire_scored` exists yet.
+ */
+export const ConversationDesireSchema = z.object({ score: DesireScoreSchema, band: DesireBandSchema });
+export type ConversationDesire = z.infer<typeof ConversationDesireSchema>;
+
 export const ConversationSummarySchema = z.object({
   id: ConversationIdSchema,
   fanId: FanIdSchema,
@@ -36,6 +44,7 @@ export const ConversationSummarySchema = z.object({
   lastOutboundAt: z.iso.datetime().nullable(),
   unreadCount: z.number().int().min(0),
   updatedAt: z.iso.datetime(),
+  desire: ConversationDesireSchema.nullable(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 
@@ -72,6 +81,26 @@ export const ConversationEventViewSchema = z.intersection(
   EventBodySchema,
 );
 export type ConversationEventView = z.infer<typeof ConversationEventViewSchema>;
+
+/** At most this many points in the reader's desire curve: the most recent ones. */
+export const DESIRE_POINTS_MAX = 200;
+
+/**
+ * One point of the reader's desire curve: one `desire_scored` event. `before` is the stored score cooled to this
+ * message (`null` on the first point); the cooling between two messages reads as the gap between a point's `score` and
+ * the next one's `before`.
+ */
+export const DesirePointSchema = z.object({
+  at: z.iso.datetime(),
+  before: DesireScoreSchema.nullable(),
+  score: DesireScoreSchema,
+  signals: z.array(DesireSignalSchema).max(DESIRE_SIGNALS_MAX),
+});
+export type DesirePoint = z.infer<typeof DesirePointSchema>;
+
+/** `GET /conversations/:id/desire`: the points, oldest first. */
+export const DesireCurveSchema = z.object({ points: z.array(DesirePointSchema).max(DESIRE_POINTS_MAX) });
+export type DesireCurve = z.infer<typeof DesireCurveSchema>;
 
 /** Bodies of the dashboard's commands. */
 export const ApproveDraftBodySchema = z.object({
