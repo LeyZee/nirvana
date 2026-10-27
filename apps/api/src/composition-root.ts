@@ -19,6 +19,7 @@ import {
 } from './auth';
 import { publishBudgetThreshold } from './budget-events';
 import { secretOrNull, type Config } from './config';
+import { assertDatabaseRoles } from './database-roles';
 import { createInvitationLinkRoutes, liveInvitationLinksUnscoped } from './invitation-links';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import { createAppLlm } from './llm';
@@ -135,6 +136,13 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     };
     pool.on('error', onError);
     pool.on('connect', (client) => client.on('error', onError));
+  }
+  // A role that silences RLS (or skips it) must stop the process, not answer empty lists.
+  try {
+    await assertDatabaseRoles(db.db, adminDb.db);
+  } catch (error) {
+    await Promise.all([db.close(), adminDb.close(), rateLimitDb.close()]);
+    throw error;
   }
   const jobs = await createJobQueue(adminDb.pool);
   const auth = createAuth(config, db.db, logger);
