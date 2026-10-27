@@ -133,7 +133,7 @@ async function readMembers(tx: Transaction, today: string, id?: TeamMemberId): P
                 effectiveFrom: rate.effectiveFrom,
               },
         invitationPending: !withPassword.has(row.userId),
-        // Read from the links of EQ-10 once its server is in (Bilan); until then no link is out.
+        // The links' table is not the module's: the service adds it from `InvitationLinkDirectory`.
         invitationExpiresAt: null,
       });
     })

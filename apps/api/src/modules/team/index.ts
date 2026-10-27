@@ -2,7 +2,7 @@ import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createTeamService } from './application/team';
-import type { CreatorRoster } from './domain/ports';
+import type { CreatorRoster, InvitationLinkDirectory } from './domain/ports';
 import { createTeamRoutes, type RequireRole } from './infra/http/routes';
 import { createDrizzleTeamStore } from './infra/team-store';
 
@@ -21,14 +21,18 @@ export interface TeamDeps {
   readonly db: Database;
   /** The creators that exist, to refuse an unknown one in `creatorIds` (the `persona` module's directory). */
   readonly creators: CreatorRoster;
+  /** Each member's link out (EQ-10), for when it stops working. */
+  readonly invitationLinks: InvitationLinkDirectory;
   readonly now?: () => Date;
 }
 
 export function createTeamModule(deps: TeamDeps): TeamModule {
   const now = deps.now ?? (() => new Date());
-  const service = createTeamService(createDrizzleTeamStore(deps.db, now), deps.creators, {
-    agencyTimeZone: DEFAULT_AGENCY_TIME_ZONE,
-    now,
-  });
+  const service = createTeamService(
+    createDrizzleTeamStore(deps.db, now),
+    deps.creators,
+    deps.invitationLinks,
+    { agencyTimeZone: DEFAULT_AGENCY_TIME_ZONE, now },
+  );
   return { name: 'team', routes: (requireRole) => createTeamRoutes(service, requireRole) };
 }

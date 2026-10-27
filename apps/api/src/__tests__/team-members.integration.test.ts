@@ -4,10 +4,12 @@ import {
   CommissionPresetSchema,
   CommissionRateHistorySchema,
   CommissionRateSchema,
+  InvitationLinkCreatedSchema,
   TeamMemberListSchema,
   TeamMemberNoteListSchema,
   TeamMemberSchema,
   type CreatorId,
+  type InvitationLinkCreated,
   type TeamMember,
 } from '@nirvana/contracts';
 import { eq, schema } from '@nirvana/db';
@@ -385,5 +387,65 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
       rows.filter((row) => JSON.stringify(row.details).includes('"left"')),
     );
     expect(left?.details).toEqual({ from: 'active', to: 'left', sessionsEnded: 1 });
+  });
+
+  it('shows when a member’s link stops working: none, live, expired, used, then a new password link', async () => {
+    const created = await call('POST', '/team/members', owner, {
+      ...theoBody(),
+      email: 'basile@example.test',
+      firstName: 'Basile',
+      lastName: 'Morel',
+      displayName: 'Basile',
+    });
+    expect(created.statusCode).toBe(201);
+    const basile = TeamMemberSchema.parse(created.json());
+    const expiresAtOf = async (): Promise<string | null> => {
+      const one = TeamMemberSchema.parse((await call('GET', `/team/members/${basile.id}`, owner)).json());
+      const listed = TeamMemberListSchema.parse(
+        (await call('GET', '/team/members', owner)).json(),
+      ).members.find((member) => member.id === basile.id);
+      // The record and the list say the same.
+      expect(listed?.invitationExpiresAt).toBe(one.invitationExpiresAt);
+      return one.invitationExpiresAt;
+    };
+    const newLink = async (
+      purpose: 'invitation' | 'reset' = 'invitation',
+    ): Promise<InvitationLinkCreated> => {
+      const response = await call('POST', `/team/members/${basile.id}/invitation-link`, owner, { purpose });
+      expect(response.statusCode).toBe(200);
+      return InvitationLinkCreatedSchema.parse(response.json());
+    };
+
+    // No link made yet.
+    expect(basile.invitationExpiresAt).toBeNull();
+    expect(await expiresAtOf()).toBeNull();
+
+    // A live link: its own end, 72 h on.
+    const live = await newLink();
+    expect(await expiresAtOf()).toBe(live.expiresAt);
+
+    // Expired, it stays, so the screen can say « Lien expiré » rather than offer a first link.
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await test.admin.db
+      .update(schema.invitationLinks)
+      .set({ createdAt: new Date(past.getTime() - 72 * 60 * 60 * 1000), expiresAt: past })
+      .where(eq(schema.invitationLinks.memberId, basile.id));
+    expect(await expiresAtOf()).toBe(past.toISOString());
+
+    // Used, nothing is out any more.
+    const fresh = await newLink();
+    const token = new URL(fresh.url).hash.replace('#t=', '');
+    const redeemed = await server.inject({
+      method: 'POST',
+      url: '/v1/invitation-links/redeem',
+      headers: { origin: DASHBOARD_ORIGIN },
+      payload: { token, password: 'une phrase de passe inventée' },
+    });
+    expect(redeemed.statusCode).toBe(200);
+    expect(await expiresAtOf()).toBeNull();
+
+    // A link for a new password shows too: the owner sees it is out, rather than make a second that cancels it.
+    const reset = await newLink('reset');
+    expect(await expiresAtOf()).toBe(reset.expiresAt);
   });
 });
