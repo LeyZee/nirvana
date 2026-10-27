@@ -125,7 +125,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   }
   const jobs = await createJobQueue(adminDb.pool);
   const auth = createAuth(config, db.db, logger);
-  const requireRole = createRequireRole(auth);
+  const requireRole = createRequireRole(auth, db.db);
 
   const fans = createFansModule({ db: db.db, adminDb: adminDb.db });
   const sessionKeys = secretOrNull(config.SESSION_ENCRYPTION_KEYS);
