@@ -23,19 +23,17 @@ export type MinuteRange = z.infer<typeof MinuteRangeSchema>;
 /** ISO day of the week: 1 is Monday, 7 is Sunday. */
 export const IsoDaySchema = z.number().int().min(1).max(7);
 
-/** A reply slot on one day; one that ends at or before its start ends the next day (« jusqu'au lendemain »). */
-export const AgentSlotSchema = z
-  .object({
-    day: IsoDaySchema,
-    startMinute: MinuteOfDaySchema,
-    endMinute: MinuteOfDaySchema,
-    /** Switched off without being deleted. */
-    enabled: z.boolean(),
-  })
-  .refine((slot) => slot.startMinute !== slot.endMinute, {
-    message: 'Un créneau commence et finit à des heures différentes',
-    path: ['endMinute'],
-  });
+/**
+ * A reply slot on one day; one that ends before its start ends the next day (« jusqu'au lendemain »), one that ends
+ * at its start lasts a whole day (« toute la journée »).
+ */
+export const AgentSlotSchema = z.object({
+  day: IsoDaySchema,
+  startMinute: MinuteOfDaySchema,
+  endMinute: MinuteOfDaySchema,
+  /** Switched off without being deleted. */
+  enabled: z.boolean(),
+});
 export type AgentSlot = z.infer<typeof AgentSlotSchema>;
 
 export const AGENT_SLOTS_MAX = 28;
@@ -43,9 +41,26 @@ export const AGENT_SLOTS_MAX = 28;
 /** Where a slot sits in the week, in minutes from Monday 00:00: its end may pass Sunday night. */
 const weekSpan = (slot: AgentSlot): { readonly from: number; readonly to: number } => {
   const from = (slot.day - 1) * MINUTES_PER_DAY + slot.startMinute;
-  const length = (slot.endMinute - slot.startMinute + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const length = (slot.endMinute - slot.startMinute + MINUTES_PER_DAY) % MINUTES_PER_DAY || MINUTES_PER_DAY;
   return { from, to: from + length };
 };
+
+const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'] as const;
+const NBSP = '\u00a0';
+
+/** « 9 h », « 9 h 30 », with the spaces the planning uses. */
+const clockWords = (minute: number): string => {
+  const m = minute % 60;
+  return `${String(Math.floor(minute / 60))}${NBSP}h${m === 0 ? '' : `${NBSP}${String(m).padStart(2, '0')}`}`;
+};
+
+/** « le créneau du lundi, 9 h – 1 h », or « toute la journée ». */
+const slotWords = (slot: AgentSlot): string =>
+  `le créneau du ${DAY_NAMES[slot.day - 1] ?? ''}, ${
+    slot.startMinute === slot.endMinute
+      ? 'toute la journée'
+      : `${clockWords(slot.startMinute)}${NBSP}–${NBSP}${clockWords(slot.endMinute)}`
+  }`;
 
 const WEEK_MINUTES = 7 * MINUTES_PER_DAY;
 
@@ -62,13 +77,21 @@ const ReplyHoursSchema = z.discriminatedUnion('mode', [
       message: 'Au moins un créneau actif ; pour tout couper, c’est l’arrêt',
       path: ['slots'],
     })
-    .refine(
-      (reply) => {
-        const spans = reply.slots.filter((slot) => slot.enabled).map(weekSpan);
-        return spans.every((span, i) => spans.slice(i + 1).every((other) => !overlap(span, other)));
-      },
-      { message: 'Deux créneaux actifs se chevauchent', path: ['slots'] },
-    ),
+    // One issue per pair, on the later slot, at its index in the list: the screen marks the line and names the other.
+    .superRefine((reply, context) => {
+      const active = reply.slots.flatMap((slot, index) => (slot.enabled ? [{ slot, index }] : []));
+      active.forEach((later, j) => {
+        const earlier = active
+          .slice(0, j)
+          .find((other) => overlap(weekSpan(other.slot), weekSpan(later.slot)));
+        if (earlier === undefined) return;
+        context.addIssue({
+          code: 'custom',
+          message: `Chevauche ${slotWords(earlier.slot)}`,
+          path: ['slots', later.index, 'startMinute'],
+        });
+      });
+    }),
 ]);
 
 export const AgentHoursSchema = z.object({

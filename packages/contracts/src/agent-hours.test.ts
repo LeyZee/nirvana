@@ -101,13 +101,12 @@ describe('agent hours (P3-14)', () => {
     expect(replyOpenAt(autumn, PARIS, new Date('2026-10-25T08:00:00Z'))).toBe(true);
   });
 
-  it('refuses a whole-day range, slots all off, and two active slots that overlap', () => {
+  it('refuses a whole-day quiet range, slots all off, and two active slots that overlap', () => {
     const parse = (hours: unknown) => AgentHoursSchema.safeParse(hours).success;
     expect(parse(SUGGESTED)).toBe(true);
     expect(parse({ ...DEFAULT_AGENT_HOURS, followUpQuiet: { startMinute: 600, endMinute: 600 } })).toBe(
       false,
     );
-    expect(parse(withSlots(slot(1, '09:00', '09:00')))).toBe(false);
     expect(parse(withSlots(slot(1, '09:00', '12:00', false)))).toBe(false);
     expect(parse(withSlots(slot(1, '09:00', '12:00'), slot(1, '11:00', '13:00')))).toBe(false);
     // Monday's slot runs past midnight into Tuesday's.
@@ -154,5 +153,41 @@ describe('agent hours (P3-14)', () => {
     expect(nextFollowUpAllowed(hours, PARIS, paris('2026-10-26T15:00:00'))).toEqual(
       paris('2026-11-01T10:00:00'),
     );
+  });
+
+  it('reads a slot that ends at its start as a whole day', () => {
+    const saturday = withSlots(slot(6, '00:00', '00:00'), slot(7, '00:00', '00:00'));
+    expect(AgentHoursSchema.safeParse(saturday).success).toBe(true);
+    expect(replyOpenAt(saturday, PARIS, paris('2026-10-31T00:00:00'))).toBe(true);
+    expect(replyOpenAt(saturday, PARIS, paris('2026-10-31T23:59:00'))).toBe(true);
+    expect(replyOpenAt(saturday, PARIS, paris('2026-11-02T00:00:00'))).toBe(false);
+    expect(replyOpenedAt(saturday, PARIS, paris('2026-11-01T15:00:00'))).toEqual(
+      paris('2026-10-31T00:00:00'),
+    );
+    // A whole Monday from 9:00 runs to Tuesday 9:00, over Tuesday's 8:00 slot.
+    expect(
+      AgentHoursSchema.safeParse(withSlots(slot(1, '09:00', '09:00'), slot(2, '08:00', '10:00'))).success,
+    ).toBe(false);
+  });
+
+  it('marks each slot that overlaps an earlier one, at its place in the list, naming the other', () => {
+    const hours = withSlots(
+      slot(1, '09:00', '01:00'),
+      slot(3, '10:00', '12:00', false),
+      slot(2, '00:30', '02:00'),
+      slot(1, '20:00', '21:30'),
+    );
+    const result = AgentHoursSchema.safeParse(hours);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => ({ path: issue.path, message: issue.message }))).toEqual([
+      {
+        path: ['reply', 'slots', 2, 'startMinute'],
+        message: 'Chevauche le créneau du lundi, 9\u00a0h\u00a0–\u00a01\u00a0h',
+      },
+      {
+        path: ['reply', 'slots', 3, 'startMinute'],
+        message: 'Chevauche le créneau du lundi, 9\u00a0h\u00a0–\u00a01\u00a0h',
+      },
+    ]);
   });
 });
