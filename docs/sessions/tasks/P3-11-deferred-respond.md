@@ -1,9 +1,9 @@
-# Réponse différée après « attends, je reviens »
+# P3-11 Réponse différée après « attends, je reviens »
 
-Statut : proposed
+Statut : todo (ID validé par Charles le 27/10 à 19h56)
 Phase : 3
 Dépend de : P3-10 (relances, worker et moteur)
-Branche : task/<id>-deferred-respond
+Branche : task/P3-11-deferred-respond
 
 ## Objectif
 
