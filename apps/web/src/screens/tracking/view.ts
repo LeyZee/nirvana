@@ -1,5 +1,7 @@
 import type { ConversationMode, ConversationState, ConversationSummary } from '@nirvana/contracts';
 
+import { DESIRE_BAND_LABELS } from '@/agent/desire';
+
 /** The labels of `nv-status--<state>` (docs/design/README.md, « Pastilles d'état »). */
 export const STATE_LABELS: Readonly<Record<ConversationState, string>> = {
   idle: 'Rien à faire',
@@ -67,13 +69,60 @@ export const MODE_MEANINGS: Readonly<Record<ConversationMode, string>> = {
   auto: 'En automatique : l’agent répond seul.',
 };
 
-/** The line under the fan's name: when he last wrote, after the mode when the lines do not share one. */
+/**
+ * The line under the fan's name: when he last wrote, after the mode when the lines do not share one, then the band of
+ * his desire score in a word once he has one (P3-12). Never its number, never a colour: the list is no heat map.
+ */
 export function subline(conversation: ConversationSummary, now: Date, withMode: boolean): string {
   const ago = lastMessageAgo(conversation.lastInboundAt, now);
   const wrote = ago === null ? 'N’a pas encore écrit' : `A écrit ${ago}`;
-  return withMode
+  const line = withMode
     ? `${MODE_LABELS[conversation.mode]} · ${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}`
     : wrote;
+  return conversation.desire === null ? line : `${line} · ${DESIRE_BAND_LABELS[conversation.desire.band]}`;
+}
+
+/** How « Toutes les conversations » is ordered: the most recent first unless the reader asks for the hottest. */
+export const LIST_ORDERS = ['recent', 'hot'] as const;
+export type ListOrder = (typeof LIST_ORDERS)[number];
+
+export const LIST_ORDER_LABELS: Readonly<Record<ListOrder, string>> = {
+  recent: 'Récents',
+  hot: 'Chauds d’abord',
+};
+
+/**
+ * The hottest first, then the most recent; a conversation without a score yet comes last. The lines arrive most
+ * recent first and the sort is stable, so equal scores keep that order.
+ */
+export function orderLines<T extends { readonly conversation: ConversationSummary }>(
+  lines: readonly T[],
+  order: ListOrder,
+): T[] {
+  if (order === 'recent') return [...lines];
+  return lines.toSorted(
+    (a, b) => (b.conversation.desire?.score ?? -1) - (a.conversation.desire?.score ?? -1),
+  );
+}
+
+const ORDER_KEY = 'nirvana.suivi.order';
+
+/** The order chosen on this device, like the appearance; storage can throw, and the list is then most recent first. */
+export function readListOrder(): ListOrder {
+  try {
+    const stored = window.localStorage.getItem(ORDER_KEY);
+    return LIST_ORDERS.find((order) => order === stored) ?? 'recent';
+  } catch {
+    return 'recent';
+  }
+}
+
+export function storeListOrder(order: ListOrder): void {
+  try {
+    window.localStorage.setItem(ORDER_KEY, order);
+  } catch {
+    // Not remembered: the choice lasts the visit.
+  }
 }
 
 /** `/suivi?conversation=<id>`: the conversation the reader opens (the link of a Telegram alert, a line of the list). */

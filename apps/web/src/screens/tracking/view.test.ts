@@ -5,6 +5,7 @@ import {
   bubblesFromText,
   lastMessageAgo,
   mergeConversations,
+  orderLines,
   parseTrackingSearch,
   sharedMode,
   statusClass,
@@ -96,5 +97,28 @@ describe('bubblesFromText', () => {
     expect(bubblesFromText('  \n ')).toBeNull();
     expect(bubblesFromText(Array.from({ length: 11 }, (_, i) => `b${String(i)}`).join('\n'))).toBeNull();
     expect(bubblesFromText('x'.repeat(2_001))).toBeNull();
+  });
+});
+
+describe('the desire score in the list (P3-12)', () => {
+  it('ends the subline with the band in a word once he has a score', () => {
+    expect(subline(conversation('1', { desire: { score: 45, band: 'playful' } }), NOW, false)).toBe(
+      'N’a pas encore écrit · joueur',
+    );
+    expect(subline(conversation('1', { mode: 'auto', desire: { score: 82, band: 'hot' } }), NOW, true)).toBe(
+      'Automatique · n’a pas encore écrit · chaud',
+    );
+  });
+
+  it('orders the hottest first, keeps the order of equal scores, and puts the unscored last', () => {
+    const line = (id: string, score: number | null) => ({
+      conversation: conversation(id, {
+        desire: score === null ? null : { score, band: score >= 70 ? 'hot' : 'neutral' },
+      }),
+    });
+    const lines = [line('1', null), line('2', 30), line('3', 80), line('4', 30)];
+    const ids = (ordered: typeof lines) => ordered.map((l) => l.conversation.id.slice(-1));
+    expect(ids(orderLines(lines, 'hot'))).toEqual(['3', '2', '4', '1']);
+    expect(ids(orderLines(lines, 'recent'))).toEqual(['1', '2', '3', '4']);
   });
 });

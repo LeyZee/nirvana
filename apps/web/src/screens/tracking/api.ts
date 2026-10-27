@@ -2,12 +2,14 @@ import {
   ConversationDetailSchema,
   ConversationEventViewSchema,
   ConversationSummarySchema,
+  DesireCurveSchema,
   FanFlagsViewSchema,
   MessageViewSchema,
   pageOf,
   type ConversationDetail,
   type ConversationEventView,
   type ConversationSummary,
+  type DesirePoint,
   type FanFlags,
   type MessageView,
   type SetFanFlagBody,
@@ -80,6 +82,16 @@ export async function fetchConversation(
     events: events.items,
     isPartial: messages.nextCursor !== null,
   };
+}
+
+/** `GET /v1/conversations/:id/desire`: his desire curve, one point per change of score, oldest first (P3-12). */
+export async function fetchDesireCurve(
+  creatorId: string,
+  conversationId: string,
+): Promise<readonly DesirePoint[]> {
+  const path = `/v1/conversations/${encodeURIComponent(conversationId)}/desire`;
+  const curve = await read(path, new URLSearchParams({ creatorId }), (body) => DesireCurveSchema.parse(body));
+  return curve.points;
 }
 
 /** A decision went through, or why not (the draft and the conversation stay as they were). */
