@@ -28,7 +28,7 @@ export interface OfferContext {
   readonly limits: OfferLimits;
 }
 
-type OfferBlock =
+export type OfferBlock =
   | 'do_not_contact'
   | 'risk'
   | 'sales_frozen'
@@ -58,12 +58,14 @@ export function offerDecision(context: OfferContext): OfferDecision {
   const { flags, limits } = context;
   if (flags.doNotContact === true) return { allowed: false, reason: 'do_not_contact' };
   if (context.risks.some((risk) => NO_SALE_RISKS.includes(risk))) return { allowed: false, reason: 'risk' };
-  if (flags.salesFrozen !== undefined) return { allowed: false, reason: 'sales_frozen' };
+  // Frozen because he said he cannot pay: that one lifts when he comes back to paid content himself, like `hasNoBudget`.
+  const noBudget = context.hasNoBudget || flags.salesFrozen?.reason === 'money_trouble';
+  if (flags.salesFrozen !== undefined && !noBudget) return { allowed: false, reason: 'sales_frozen' };
   // A script is explicit content: never before he is confirmed an adult.
   if (flags.ageConfirmedAt === undefined) return { allowed: false, reason: 'age_unconfirmed' };
   // He came back to paid content himself: no waiting on the cooldown or on his budget.
   if (context.fanAsksForPaid) return { allowed: true };
-  if (context.hasNoBudget) return { allowed: false, reason: 'no_budget' };
+  if (noBudget) return { allowed: false, reason: 'no_budget' };
   if (
     context.lastOfferAt !== null &&
     context.now.getTime() - context.lastOfferAt.getTime() < limits.cooldownHours * HOUR_MS

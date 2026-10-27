@@ -38,6 +38,8 @@ export interface Protection {
   readonly unconfirmAge: boolean;
   /** Distress or a threat: nothing more is written to him. */
   readonly stopContact: boolean;
+  /** He said he cannot pay: no sale until he comes back to paid content himself (méthode, « budget nul »). */
+  readonly freezeSales: boolean;
   /** The risks and media flags behind it, for the event's reason. */
   readonly because: readonly string[];
 }
@@ -53,12 +55,21 @@ const STOP_SIGNS: readonly string[] = [
   'weapon',
 ];
 
+const MONEY_SIGNS: readonly string[] = ['money_trouble'];
+const PROTECTED_SIGNS: readonly string[] = [...MINOR_SIGNS, ...STOP_SIGNS, ...MONEY_SIGNS];
+
 /** The limits the policy sets itself from the brain's risks and the media flags; code decides, the brain reports. */
 export function protectionFor(signs: readonly string[]): Protection {
-  const because = [...new Set(signs.filter((s) => MINOR_SIGNS.includes(s) || STOP_SIGNS.includes(s)))];
+  const because = [...new Set(signs.filter((s) => PROTECTED_SIGNS.includes(s)))];
   return {
     unconfirmAge: because.some((s) => MINOR_SIGNS.includes(s)),
     stopContact: because.some((s) => STOP_SIGNS.includes(s)),
+    freezeSales: because.some((s) => MONEY_SIGNS.includes(s)),
     because,
   };
+}
+
+/** What she keeps while still answering him: only that he cannot pay; his other limits come with a handoff. */
+export function protectionWhileAnswering(signs: readonly string[]): Protection {
+  return protectionFor(signs.filter((s) => MONEY_SIGNS.includes(s)));
 }

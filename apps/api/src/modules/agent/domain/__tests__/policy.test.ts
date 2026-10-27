@@ -75,6 +75,28 @@ describe('offerDecision', () => {
   });
 });
 
+describe('offerDecision on a fan frozen for money', () => {
+  const frozen = {
+    ...base,
+    flags: {
+      ...base.flags,
+      salesFrozen: { reason: 'money_trouble' as const, since: '2026-10-16T10:00:00Z' },
+    },
+  };
+
+  it('remembers he said he cannot pay, on every later message', () => {
+    expect(offerDecision(frozen)).toEqual({ allowed: false, reason: 'no_budget' });
+  });
+
+  it('lifts it only when he comes back to paid content himself, his other limits still first', () => {
+    expect(offerDecision({ ...frozen, fanAsksForPaid: true })).toEqual({ allowed: true });
+    expect(offerDecision({ ...frozen, fanAsksForPaid: true, risks: ['money_trouble'] })).toEqual({
+      allowed: false,
+      reason: 'risk',
+    });
+  });
+});
+
 describe('offerable scripts', () => {
   it('never offers again a script he refused, even days later', () => {
     const scripts = [{ id: 'douche' }, { id: 'lingerie' }, { id: 'reveil' }];

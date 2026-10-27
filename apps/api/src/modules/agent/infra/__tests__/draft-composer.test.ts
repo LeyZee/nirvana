@@ -5,6 +5,7 @@ import type {
   HealthReport,
   LlmGateway,
   LlmFailure,
+  VoiceInput,
   VoiceOutput,
 } from '@nirvana/llm';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +15,7 @@ import type { Protection } from '../../domain/hold';
 import {
   createDraftComposer,
   type AgentComposeInput,
+  type DraftComposerDeps,
   type MediaSight,
   type MediaToSee,
 } from '../draft-composer';
@@ -91,6 +93,7 @@ interface Seen {
   traces: unknown[];
   brainInputs?: ConversationInput[];
   dropped?: { conversationId: string; count: number }[];
+  voiceInputs?: VoiceInput[];
 }
 
 function gateway(script: Script, seen: Seen): LlmGateway {
@@ -106,8 +109,9 @@ function gateway(script: Script, seen: Seen): LlmGateway {
           : { ok: false, error: script.brain },
       );
     },
-    voice: () => {
+    voice: (input) => {
       seen.voiceCalls += 1;
+      seen.voiceInputs?.push(input);
       const voice = script.voice ?? { bubbles: ['Coucou toi ✨'] };
       return Promise.resolve(
         'bubbles' in voice ? { ok: true, value: { output: voice, meta: META } } : { ok: false, error: voice },
@@ -135,9 +139,14 @@ const INPUT: AgentComposeInput = {
   fan: { notes: [], spentMinor: 0, firstMessageAt: new Date('2026-10-17T09:58:00Z') },
 };
 
-function composer(script: Script = {}, sight?: MediaSight, limits?: FanLimits) {
+function composer(
+  script: Script = {},
+  sight?: MediaSight,
+  limits?: FanLimits,
+  offer: Pick<DraftComposerDeps, 'offerLimits' | 'lastOfferAt'> = {},
+) {
   const traces: unknown[] = [];
-  const seen: Seen = { voiceCalls: 0, traces, brainInputs: [], dropped: [] };
+  const seen: Seen = { voiceCalls: 0, traces, brainInputs: [], dropped: [], voiceInputs: [] };
   const draftComposer = createDraftComposer({
     onDroppedNotes: (event) => seen.dropped?.push(event),
     gateway: gateway(script, seen),
@@ -146,6 +155,7 @@ function composer(script: Script = {}, sight?: MediaSight, limits?: FanLimits) {
     voicePrompt: '1.2.0',
     ...(sight !== undefined && { sight }),
     ...(limits !== undefined && { limits }),
+    ...offer,
   });
   return { draftComposer, seen };
 }
@@ -541,7 +551,12 @@ describe('createDraftComposer, his limits (P3-02)', () => {
     expect(minor.protections).toEqual([
       {
         fanId: 'fan-1',
-        protection: { unconfirmAge: true, stopContact: false, because: ['minor_suspected'] },
+        protection: {
+          unconfirmAge: true,
+          stopContact: false,
+          freezeSales: false,
+          because: ['minor_suspected'],
+        },
         correlationId: 'correlation-1',
       },
     ]);
@@ -553,7 +568,7 @@ describe('createDraftComposer, his limits (P3-02)', () => {
     ).draftComposer.compose(INPUT);
     expect(held).toMatchObject({ kind: 'held', reason: 'handoff', detail: ['distress'] });
     expect(distress.protections.map((p) => p.protection)).toEqual([
-      { unconfirmAge: false, stopContact: true, because: ['distress'] },
+      { unconfirmAge: false, stopContact: true, freezeSales: true, because: ['distress', 'money_trouble'] },
     ]);
   });
 
@@ -568,7 +583,7 @@ describe('createDraftComposer, his limits (P3-02)', () => {
       cause: 'minor',
     });
     expect(protections.map((p) => p.protection)).toEqual([
-      { unconfirmAge: true, stopContact: true, because: ['possible_minor', 'weapon'] },
+      { unconfirmAge: true, stopContact: true, freezeSales: false, because: ['possible_minor', 'weapon'] },
     ]);
   });
 
@@ -577,6 +592,37 @@ describe('createDraftComposer, his limits (P3-02)', () => {
     const { draftComposer } = composer({ brief: { ...BRIEF, risks: ['harassment'] } }, undefined, limits);
     expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
     expect(protections).toEqual([]);
+  });
+
+  it('answers a fan who says he cannot pay, and freezes his sales for the next messages', async () => {
+    const { limits, protections } = limitsOf({});
+    const { draftComposer } = composer({ brief: { ...BRIEF, risks: ['money_trouble'] } }, undefined, limits);
+    expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
+    expect(protections.map((p) => p.protection)).toEqual([
+      { unconfirmAge: false, stopContact: false, freezeSales: true, because: ['money_trouble'] },
+    ]);
+  });
+
+  it('freezes his sales even when nothing is written: she waits, or a guard blocks her answer', async () => {
+    const scripts: Script[] = [
+      { brief: { ...BRIEF, risks: ['money_trouble'], action: 'wait' } },
+      { brief: { ...BRIEF, risks: ['money_trouble'] }, voice: { bubbles: ['Je suis une IA'] } },
+    ];
+    for (const script of scripts) {
+      const { limits, protections } = limitsOf({});
+      expect((await composer(script, undefined, limits).draftComposer.compose(INPUT)).kind).toBe('held');
+      expect(protections.map((p) => p.protection.freezeSales)).toEqual([true]);
+    }
+  });
+
+  it('hands over when his money trouble cannot be kept: the next message would forget it', async () => {
+    const { limits } = limitsOf({}, { failWrite: true });
+    const { draftComposer } = composer({ brief: { ...BRIEF, risks: ['money_trouble'] } }, undefined, limits);
+    expect(await draftComposer.compose(INPUT)).toMatchObject({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['money_trouble', 'limits_not_saved'],
+    });
   });
 
   it('still hands over when his limits cannot be saved, and says so', async () => {
@@ -612,5 +658,79 @@ describe('createDraftComposer, his limits (P3-02)', () => {
         { category: 'identity', key: 'first_name', value: 'Hugo', kind: 'declared', confidence: 0.9 },
       ],
     });
+  });
+});
+
+describe('createDraftComposer, the offer policy', () => {
+  const OFFER: Brief = {
+    ...BRIEF,
+    intent: 'sexting',
+    sentiment: 'aroused',
+    action: 'offer',
+    replyBrief: 'Lui proposer la vidéo de la douche.',
+  };
+  const ADULT: FanFlags = { ageConfirmedAt: '2026-10-01T09:00:00Z' };
+  const policy = (lastOfferAt: Date | null) => ({
+    offerLimits: { cooldownHours: 10 },
+    lastOfferAt: () => Promise.resolve(lastOfferAt),
+  });
+  const written = (seen: Seen) => seen.voiceInputs?.[0]?.brief;
+
+  it('writes the brain’s offer when the policy allows it', async () => {
+    const { draftComposer, seen } = composer(
+      { brief: OFFER },
+      undefined,
+      limitsOf(ADULT).limits,
+      policy(null),
+    );
+    expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
+    expect(written(seen)).toMatchObject({ action: 'offer', replyBrief: OFFER.replyBrief });
+  });
+
+  it('writes a plain answer instead of an offer inside the cooldown', async () => {
+    const lastOffer = new Date(INPUT.now.getTime() - 3 * 3_600_000);
+    const { draftComposer, seen } = composer(
+      { brief: OFFER },
+      undefined,
+      limitsOf(ADULT).limits,
+      policy(lastOffer),
+    );
+    expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
+    expect(written(seen)?.action).toBe('reply');
+    expect(written(seen)?.replyBrief).not.toContain('vidéo');
+  });
+
+  it('offers nothing to a fan whose age is not confirmed, or frozen for money', async () => {
+    for (const flags of [
+      {},
+      { ...ADULT, salesFrozen: { reason: 'money_trouble', since: '2026-10-16T10:00:00Z' } },
+    ]) {
+      const { draftComposer, seen } = composer(
+        { brief: OFFER },
+        undefined,
+        limitsOf(flags).limits,
+        policy(null),
+      );
+      await draftComposer.compose(INPUT);
+      expect(written(seen)?.action).toBe('reply');
+    }
+  });
+
+  it('offers nothing when the policy cannot decide: no limits, no pace, or no offer history', async () => {
+    const cases = [
+      composer({ brief: OFFER }, undefined, undefined, policy(null)),
+      composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, {
+        lastOfferAt: () => Promise.resolve(null),
+      }),
+      composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, { offerLimits: { cooldownHours: 10 } }),
+      composer({ brief: OFFER }, undefined, limitsOf(ADULT).limits, {
+        offerLimits: { cooldownHours: 10 },
+        lastOfferAt: () => Promise.reject(new Error('down')),
+      }),
+    ];
+    for (const { draftComposer, seen } of cases) {
+      expect((await draftComposer.compose(INPUT)).kind).toBe('draft');
+      expect(written(seen)?.action).toBe('reply');
+    }
   });
 });

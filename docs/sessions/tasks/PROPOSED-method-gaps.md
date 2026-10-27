@@ -81,15 +81,16 @@ Légende : **appliquée** (code et test), **partielle**, **manquante**, **autrem
 
 Dans la zone de l'agent, sans capture ni clé (PR à part) :
 
-- [ ] Brancher `offerDecision` sur le chemin réel : quand la règle refuse, la voix reçoit `reply` au lieu de `offer`, et sans les limites du fan aucune offre n'est écrite.
-- [ ] Garder le manque d'argent : `money_trouble` pose `salesFrozen` (raison `money_trouble`) par la politique, levé seulement par un humain.
-- [ ] Garde de la voix sur la négociation et la remise.
+- [x] Brancher `offerDecision` sur le chemin réel : quand la règle refuse, la voix reçoit une réponse sans rien à vendre, et sans les limites du fan ou l'historique des offres aucune offre n'est écrite.
+- [x] Garder le manque d'argent : `money_trouble` pose `salesFrozen` (raison `money_trouble`) par la politique ; les offres reprennent seulement s'il revient de lui-même au payant.
+- [x] Garde de la voix sur la négociation et la remise (`discount`).
+
+Le gel `money_trouble` ne s'efface jamais de lui-même, même après un achat : seul un humain le lève, et d'ici là une offre ne part que s'il redemande du payant de lui-même. C'est conforme à la méthode, et c'est un point d'entrée pour P6-01 et pour les relances : un fan gelé ne reçoit aucune relance de vente.
 
 Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 
-- [ ] Curseur de sexualisation et minimum de KYC (`initiate_after_hours`, `min_hours_before_following`) : règle de code, et la voix qui recadre.
-- [ ] Rien d'explicite dans le texte tant que l'âge n'est pas confirmé (garde de la voix).
-- [ ] Relances et « jamais sans réponse » : un job qui lit `follow_ups` (fil Bilan pour le worker).
+- [ ] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `PROPOSED-sexualization-cursor.md`.
+- [ ] Relances et « jamais sans réponse » : `PROPOSED-follow-ups.md` (partage avec Bilan pour le worker).
 - [ ] Scripts déjà reçus, packs refusés, dossier Jour / Nuit, première offre, attention après achat : après P6-01.
 
 ## Critères d'acceptation
@@ -103,4 +104,4 @@ Le texte de la méthode elle-même, les prompts de vente propres à Messa, tout 
 
 ## Notes de session
 
-27/10 : audit fait par le fil agent sur main ac74188. Les trois points de la zone agent partent dans une PR à part.
+27/10 : audit fait par le fil agent sur main ac74188. Les trois points de la zone agent sont corrigés dans une PR à part ; tant que l'historique des scripts Reveal n'existe pas (P6-01), l'agent réel ne propose aucune offre.

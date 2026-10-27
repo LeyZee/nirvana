@@ -10,6 +10,8 @@ import {
   isBlocked,
   type GuardSettings,
   type GuardViolation,
+  type OfferInput,
+  type OfferLimits,
   type RatedMoment,
   type Situation,
   type TrapAssessment,
@@ -81,6 +83,11 @@ export interface PlaygroundDeps {
   readonly voiceExamples?: readonly string[];
   readonly timeZone?: string;
   readonly now?: () => Date;
+  /**
+   * Her pace of scripts: with it, the simulated fan is an invented adult and the policy decides on each offer as
+   * for a real fan. Without it, she offers nothing.
+   */
+  readonly offerLimits?: OfferLimits;
 }
 
 /** Why nothing was written, for the trace: the daily cap, or each model that failed. */
@@ -106,6 +113,18 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
     spentCents: 0,
   };
   let lastExchange: PlaygroundExchange | undefined;
+  // When the policy last let her offer, on the simulated clock: the cooldown is tested with `advance`.
+  let lastOfferAt: Date | null = null;
+  const offerAt = (now: Date): OfferInput | undefined =>
+    deps.offerLimits === undefined
+      ? undefined
+      : {
+          now,
+          lastOfferAt,
+          hasNoBudget: false,
+          flags: { ageConfirmedAt: startedAt.toISOString() },
+          limits: deps.offerLimits,
+        };
 
   return {
     history,
@@ -121,6 +140,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       history.length = 0;
       fanNotes.length = 0;
       lastExchange = undefined;
+      lastOfferAt = null;
       situation = { ...situation, relationshipStartedAt: situation.now, spentCents: 0 };
     },
 
@@ -184,6 +204,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
         fanNotes: fanNotes.join('\n'),
         situation,
       };
+      const offer = offerAt(situation.now);
       const composed = await composeTurn(
         deps.gateway,
         {
@@ -192,8 +213,18 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
           guardSettings: deps.guardSettings,
           ...(deps.splitMessages !== undefined && { splitMessages: deps.splitMessages }),
         },
-        { history: [...history], fanText: text, media, fanNotes: moment.fanNotes, situation },
+        {
+          history: [...history],
+          fanText: text,
+          media,
+          fanNotes: moment.fanNotes,
+          situation,
+          ...(offer !== undefined && { offer }),
+        },
       );
+      if (composed.brief?.action === 'offer' && composed.offerRefused === undefined && !composed.isBlocked) {
+        lastOfferAt = situation.now;
+      }
       // In-memory fan notes until the fans module stores facts (P3-02).
       for (const fact of withoutOrders(composed.brief?.factsProposed ?? []))
         fanNotes.push(`${fact.category} / ${fact.key} : ${fact.value} (${fact.kind})`);

@@ -21,6 +21,14 @@ export function withFlag(flags: FanFlags, change: FlagChange): FanFlags | null {
   return FanFlagsSchema.parse({ ...flags, [change.flag]: change.value });
 }
 
+/**
+ * His limits with this one set only where it was not set at all, or `null`: a freeze a human set keeps its reason
+ * when the policy would add its own. Read under the row lock, so nothing can slip in between.
+ */
+export function withFlagIfUnset(flags: FanFlags, change: FlagChange): FanFlags | null {
+  return flags[change.flag] === undefined ? withFlag(flags, change) : null;
+}
+
 /** His limits without this one, or `null` when it was not set. */
 export function withoutFlag(flags: FanFlags, flag: FanFlagName): FanFlags | null {
   if (flags[flag] === undefined) return null;

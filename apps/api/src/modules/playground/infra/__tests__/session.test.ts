@@ -34,13 +34,14 @@ function fakeGateway(
   voice: VoiceOutput,
   voiceInputs: VoiceInput[] = [],
   brainInputs: ConversationInput[] = [],
+  brief: Brief = BRIEF,
 ): LlmGateway {
   return {
     sense: () => Promise.reject(new Error('not used')),
     transcribe: () => Promise.reject(new Error('not used')),
     brain: (input) => {
       brainInputs.push(input);
-      return Promise.resolve({ ok: true, value: { output: BRIEF, meta: META } });
+      return Promise.resolve({ ok: true, value: { output: brief, meta: META } });
     },
     voice: (input) => {
       voiceInputs.push(input);
@@ -300,5 +301,40 @@ describe('persona file', () => {
 
   it('refuses a file outside the persona schema', () => {
     expect(() => readPersonaFile('identity:\n  first_name: Lina\n', 'X', '2026-10-17')).toThrow();
+  });
+});
+
+describe('playground session, the offer policy', () => {
+  const OFFER: Brief = {
+    ...BRIEF,
+    intent: 'sexting',
+    sentiment: 'aroused',
+    action: 'offer',
+    replyBrief: 'Lui proposer la vidéo de la douche.',
+  };
+  const session = (voiceInputs: VoiceInput[], withPace: boolean) =>
+    createPlaygroundSession({
+      gateway: fakeGateway({ bubbles: ['Mmh tu me chauffes 😏'] }, voiceInputs, [], OFFER),
+      creatorName: 'Lina',
+      personaSheet: 'fiche',
+      guardSettings: settings,
+      now: () => new Date('2026-10-17T20:00:00Z'),
+      ...(withPace && { offerLimits: { cooldownHours: 10 } }),
+    });
+
+  it('lets the policy decide each offer on the simulated clock, as for a real fan', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    const playground = session(voiceInputs, true);
+    await playground.handleFanMessage('T’es trop bonne');
+    await playground.handleFanMessage('Encore');
+    playground.advance(11 * 3_600_000);
+    await playground.handleFanMessage('Je pense qu’à toi');
+    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['offer', 'reply', 'offer']);
+  });
+
+  it('offers nothing without her pace of scripts', async () => {
+    const voiceInputs: VoiceInput[] = [];
+    await session(voiceInputs, false).handleFanMessage('T’es trop bonne');
+    expect(voiceInputs.map((input) => input.brief.action)).toEqual(['reply']);
   });
 });

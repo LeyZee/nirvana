@@ -137,6 +137,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
     guardSettings: guardSettingsOf(deps.persona),
     splitMessages: deps.persona.splitMessages,
     voiceExamples: voiceExamples(deps.records),
+    offerLimits: deps.persona.offerLimits,
     ...(deps.timeZone !== undefined && { timeZone: deps.timeZone }),
     ...(deps.now !== undefined && { now: deps.now }),
   });

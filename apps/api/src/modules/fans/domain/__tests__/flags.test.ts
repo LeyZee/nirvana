@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { requestedChange, withFlag, withoutFlag } from '../flags';
+import { requestedChange, withFlag, withFlagIfUnset, withoutFlag } from '../flags';
 
 const frozen = { reason: 'money_trouble', since: '2026-10-02T10:00:00Z' } as const;
 
@@ -61,5 +61,18 @@ describe('withoutFlag', () => {
   it('lifts one limit, or changes nothing when it was not set', () => {
     expect(withoutFlag({ fragile: true, noExplicit: true }, 'fragile')).toEqual({ noExplicit: true });
     expect(withoutFlag({ noExplicit: true }, 'fragile')).toBeNull();
+  });
+});
+
+describe('withFlagIfUnset', () => {
+  const money = { reason: 'money_trouble', since: '2026-10-17T20:00:00.000Z' } as const;
+
+  it('sets a limit nobody set yet', () => {
+    expect(withFlagIfUnset({}, { flag: 'salesFrozen', value: money })).toEqual({ salesFrozen: money });
+  });
+
+  it('keeps a freeze a human set, whatever its reason', () => {
+    const operator = { salesFrozen: { reason: 'operator', since: '2026-10-10T09:00:00.000Z' } } as const;
+    expect(withFlagIfUnset(operator, { flag: 'salesFrozen', value: money })).toBeNull();
   });
 });
