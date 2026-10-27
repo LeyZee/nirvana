@@ -7,6 +7,7 @@ import {
   PlatformAccountIdSchema,
   SchedulingSettingsSchema,
   ShiftSchema,
+  ShiftTemplateIdSchema,
   ShiftTemplateListSchema,
   ShiftTemplateSchema,
   TeamMemberSchema,
@@ -15,7 +16,7 @@ import {
   type Shift,
   type TeamMember,
 } from '@nirvana/contracts';
-import { eq, schema } from '@nirvana/db';
+import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -499,13 +500,15 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
     expect((await planning(theoCookie, from, to)).conflicts).toEqual([]);
 
     // The job makes nothing twice; a shift moved by hand stays its occurrence.
+    const warned: object[] = [];
+    const jobLogger = { warn: (object: object) => warned.push(object) };
     const first = fromTemplate[0];
     if (first === undefined) throw new Error('no shift from the template');
     const moved = await call('PATCH', `/scheduling/shifts/${first.id}`, owner, {
       startsAt: iso(new Date(new Date(first.startsAt).getTime() + HOUR)),
     });
     expect(moved.statusCode).toBe(200);
-    expect(await app.modules.scheduling.jobs.makeShifts()).toBe(0);
+    expect(await app.modules.scheduling.jobs.makeShifts(jobLogger)).toBe(0);
 
     const templates = ShiftTemplateListSchema.parse(
       (await call('GET', '/scheduling/shift-templates', owner)).json(),
@@ -520,7 +523,61 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
     expect(afterEnd.conflicts).toEqual([]);
     const twice = await call('DELETE', `/scheduling/shift-templates/${made.id}`, owner);
     expect([twice.statusCode, codeOf(twice)]).toEqual([404, 'shift_template_not_found']);
-    expect(await app.modules.scheduling.jobs.makeShifts()).toBe(0);
+    expect(await app.modules.scheduling.jobs.makeShifts(jobLogger)).toBe(0);
+    expect(warned).toEqual([]);
+  });
+
+  it('the job makes what a template is owed, one template at a time, and waits for one being ended', async () => {
+    const warned: object[] = [];
+    const jobLogger = { warn: (object: object) => warned.push(object) };
+    const owed = newId(ShiftTemplateIdSchema);
+    const ending = newId(ShiftTemplateIdSchema);
+    const templateOn = (id: string, day: number) => ({
+      id,
+      creatorId: ines,
+      platformAccountId: inesAccount,
+      memberId: basile.id,
+      weekday: weekdayOf(parisDay(day)),
+      startMinute: 1410,
+      endMinute: 1430,
+      validFrom: parisDay(0),
+      createdBy: nora.userId,
+    });
+    // Written straight in the table: two templates whose shifts were never made.
+    await test.admin.db.insert(schema.shiftTemplates).values([templateOn(owed, 3), templateOn(ending, 4)]);
+    const someoneWaitsOnALock = async () =>
+      (
+        await test.admin.db.execute<{ waiting: number }>(
+          sql`select count(*)::int as waiting from pg_stat_activity where wait_event_type = 'Lock'`,
+        )
+      ).rows[0]?.waiting !== 0;
+
+    // Ended as `endTemplate` ends it, locked, while the job runs: the job waits for it, then reads it ended.
+    const { job } = await test.admin.db.transaction(async (tx) => {
+      const byId = eq(schema.shiftTemplates.id, ending);
+      await tx.select({ id: schema.shiftTemplates.id }).from(schema.shiftTemplates).where(byId).for('update');
+      await tx
+        .update(schema.shiftTemplates)
+        .set({ validUntil: parisDay(5) })
+        .where(byId);
+      const running = app.modules.scheduling.jobs.makeShifts(jobLogger);
+      for (let tries = 0; !(await someoneWaitsOnALock()); tries += 1) {
+        if (tries > 250) throw new Error('the job never waited for the template being ended');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return { job: running };
+    });
+    expect(await job).toBe(5);
+
+    const read = await planning(owner, parisInstant(parisDay(0), 0), parisInstant(parisDay(28), 0), ines);
+    const startsOf = (templateId: string) =>
+      read.shifts.filter((shift) => shift.templateId === templateId).map((shift) => shift.startsAt);
+    expect(startsOf(owed)).toEqual(
+      [3, 10, 17, 24].map((day) => parisInstant(parisDay(day), 1410).toISOString()),
+    );
+    expect(startsOf(ending)).toEqual([parisInstant(parisDay(4), 1410).toISOString()]);
+    expect(await app.modules.scheduling.jobs.makeShifts(jobLogger)).toBe(0);
+    expect(warned).toEqual([]);
   });
 
   it('writes who planned what in the audit trail, never a name', async () => {

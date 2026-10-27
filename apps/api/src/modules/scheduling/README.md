@@ -22,7 +22,7 @@
 - propriétaire et managers actifs : `GET /scheduling/on-duty`, `POST /scheduling/shifts`, `PATCH /scheduling/shifts/:shiftId` (204 quand l'arrêt tombe dans la première minute et annule le shift), `DELETE /scheduling/shifts/:shiftId`, `GET /scheduling/shift-templates`, `POST /scheduling/shift-templates`, `DELETE /scheduling/shift-templates/:templateId` ;
 - propriétaire seul : `PUT /scheduling/settings`.
 
-**Job.** `scheduling.make_shifts`, chaque heure (`crontab.ts`) : les modèles en cours font leurs shifts à l'avance ; rejoué, il ne fait rien deux fois.
+**Job.** `scheduling.make_shifts`, chaque heure (`crontab.ts`) : les modèles en cours font leurs shifts à l'avance ; rejoué, il ne fait rien deux fois. Une transaction par modèle : un modèle en échec ne fait rien cette heure-là (un `warn` avec son id), les autres sont faits, et l'heure suivante le retente. Le modèle est verrouillé comme le verrouille sa fin (`endTemplate`) : un modèle qu'on termine pendant le job est lu terminé, et ne fait aucun shift après sa fin.
 
 **Pour les autres modules.** `onShift(creatorId, at)` : les membres actifs dont un shift couvre `at` sur un compte de la créatrice, sans la marge (le routage d'une passation « sale », EQ-13). La liste des créatrices d'ADR 0025 (`shiftCreatorIds`, avec la marge) viendra avec EQ-13, en une lecture `*Unscoped`.
 

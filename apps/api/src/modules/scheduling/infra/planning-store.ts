@@ -702,10 +702,19 @@ export function createDrizzlePlanningAdmin(adminDb: Database): PlanningAdmin {
         return row === undefined ? null : SchedulingSettingsSchema.parse(row);
       }),
 
-    makeShiftsUnscoped: (clock) =>
+    runningTemplatesUnscoped: (today) =>
       withAdmin(adminDb, async (tx) => {
-        const today = calendarDayIn(clock.now, clock.timeZone);
-        const running = await tx
+        const rows = await tx
+          .select({ id: shiftTemplates.id })
+          .from(shiftTemplates)
+          .where(sql`${shiftTemplates.validUntil} is null or ${shiftTemplates.validUntil} >= ${today}`);
+        return rows.map((row) => ShiftTemplateIdSchema.parse(row.id));
+      }),
+
+    makeTemplateShiftsUnscoped: (id, clock) =>
+      withAdmin(adminDb, async (tx) => {
+        // Locked as `endTemplate` locks it: a template ended meanwhile is read ended, and makes nothing past its end.
+        const [row] = await tx
           .select({
             template: templateColumns,
             createdBy: shiftTemplates.createdBy,
@@ -715,16 +724,14 @@ export function createDrizzlePlanningAdmin(adminDb: Database): PlanningAdmin {
           .from(shiftTemplates)
           .innerJoin(teamMembers, eq(teamMembers.id, shiftTemplates.memberId))
           .innerJoin(user, eq(user.id, teamMembers.userId))
-          .where(sql`${shiftTemplates.validUntil} is null or ${shiftTemplates.validUntil} >= ${today}`);
-        let made = 0;
-        for (const row of running) {
-          const template = toTemplate(row.template);
-          // A member who left, is away or no longer works on the creator gets no new shift from it.
-          if (row.status !== 'active' || !row.creatorIds.includes(template.creatorId)) continue;
-          // One statement per template: an occurrence that overlaps another template's is skipped, not an error.
-          made += await makeShifts(tx, template, row.createdBy, clock);
-        }
-        return made;
+          .where(eq(shiftTemplates.id, id))
+          .for('update', { of: shiftTemplates });
+        if (row === undefined) return 0;
+        const template = toTemplate(row.template);
+        // A member who left, is away or no longer works on the creator gets no new shift from it.
+        if (row.status !== 'active' || !row.creatorIds.includes(template.creatorId)) return 0;
+        // An occurrence that overlaps another shift is skipped, not an error (`ON CONFLICT DO NOTHING`).
+        return makeShifts(tx, template, row.createdBy, clock);
       }),
   };
 }

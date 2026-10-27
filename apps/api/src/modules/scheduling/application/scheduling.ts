@@ -55,8 +55,6 @@ export interface SchedulingService {
   templates(actor: UserId): Promise<ShiftTemplate[]>;
   createTemplate(actor: Actor, body: CreateShiftTemplateBody): Promise<ShiftTemplate>;
   endTemplate(actor: Actor, id: ShiftTemplateId): Promise<void>;
-  /** The job: the shifts every running template makes ahead; how many were new. */
-  makeShifts(): Promise<number>;
 }
 
 const toShift = (shift: StoredShift): Shift => ({
@@ -248,11 +246,5 @@ export function createSchedulingService(
     },
 
     endTemplate: async (actor, id) => store.endTemplate(actor, id, await clockOf(actor.userId)),
-
-    makeShifts: async () =>
-      admin.makeShiftsUnscoped({
-        now: now(),
-        timeZone: ((await admin.settingsUnscoped()) ?? DEFAULT_SCHEDULING_SETTINGS).timeZone,
-      }),
   };
 }

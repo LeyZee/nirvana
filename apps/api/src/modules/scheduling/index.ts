@@ -2,8 +2,9 @@ import type { CreatorId } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
+import { makeShifts } from './application/make-shifts';
 import { createSchedulingService } from './application/scheduling';
-import type { CreatorDirectory, OnShift } from './domain/ports';
+import type { CreatorDirectory, JobLogger, OnShift } from './domain/ports';
 import { createDrizzlePlanningAdmin, createDrizzlePlanningStore } from './infra/planning-store';
 import { createSchedulingRoutes, type RequireRole } from './infra/routes';
 
@@ -19,8 +20,11 @@ export interface SchedulingModule {
    */
   onShift(creatorId: CreatorId, at: Date): Promise<OnShift[]>;
   readonly jobs: {
-    /** `scheduling.make_shifts`: the shifts every running template makes ahead; how many were new. */
-    readonly makeShifts: () => Promise<number>;
+    /**
+     * `scheduling.make_shifts`: the shifts every running template makes ahead; how many were new. A template that
+     * fails is logged (`warn`) and tried again next hour, the others are made.
+     */
+    readonly makeShifts: (logger: JobLogger) => Promise<number>;
   };
 }
 
@@ -38,17 +42,18 @@ export interface SchedulingDeps {
 }
 
 export function createSchedulingModule(deps: SchedulingDeps): SchedulingModule {
+  const now = deps.now ?? (() => new Date());
   const admin = createDrizzlePlanningAdmin(deps.adminDb);
   const service = createSchedulingService(
     createDrizzlePlanningStore(deps.db, deps.adminDb),
     admin,
     deps.creators,
-    deps.now,
+    now,
   );
   return {
     name: 'scheduling',
     onShift: (creatorId, at) => admin.onShiftUnscoped(creatorId, at),
     routes: (requireRole) => createSchedulingRoutes(service, requireRole),
-    jobs: { makeShifts: () => service.makeShifts() },
+    jobs: { makeShifts: (logger) => makeShifts(admin, logger, now()) },
   };
 }

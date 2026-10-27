@@ -468,7 +468,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger,
       async (_payload, context) => {
         context.logger.info(
-          { made: await modules.scheduling.jobs.makeShifts() },
+          { made: await modules.scheduling.jobs.makeShifts(context.logger) },
           'scheduling: template shifts made',
         );
       },

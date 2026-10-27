@@ -176,6 +176,16 @@ export interface PlanningAdmin {
   onShiftUnscoped(creatorId: CreatorId, at: Date): Promise<OnShift[]>;
   /** The settings, for the job (no member behind it). */
   settingsUnscoped(): Promise<SchedulingSettings | null>;
-  /** The shifts every running template makes ahead, for its member while `active` on its creator; how many new. */
-  makeShiftsUnscoped(clock: PlanningClock): Promise<number>;
+  /** The templates running on `today` (a calendar day in the grid's zone), for the job. */
+  runningTemplatesUnscoped(today: string): Promise<ShiftTemplateId[]>;
+  /**
+   * One template's shifts ahead, in a transaction of its own with the template locked as `endTemplate` locks it: none
+   * once it has ended, or while its member is not `active` on its creator; how many were new.
+   */
+  makeTemplateShiftsUnscoped(id: ShiftTemplateId, clock: PlanningClock): Promise<number>;
+}
+
+/** What the job logs through; the composition root passes the job's own logger. */
+export interface JobLogger {
+  warn(object: object, message: string): void;
 }
