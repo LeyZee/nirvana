@@ -209,7 +209,8 @@ export function createRequireRecentLogin(
 
 /**
  * The signed-in account with its team role and scope (ADR 0024), read through `withMember`: the scope is the one the
- * database policies apply, never a second computation. A row that does not validate counts as no membership.
+ * database policies apply, never a second computation. No row, no membership; a row that does not validate has
+ * already failed `withMember`, like here.
  */
 async function me(db: Database, user: CurrentUser): Promise<Me> {
   return withMember(db, user.id, async (tx, teamScope) => {
@@ -217,8 +218,7 @@ async function me(db: Database, user: CurrentUser): Promise<Me> {
       .select({ role: schema.teamMembers.teamRole, status: schema.teamMembers.status })
       .from(schema.teamMembers)
       .where(eq(schema.teamMembers.userId, user.id));
-    const team = TeamMembershipSchema.safeParse(row);
-    return { ...user, team: team.success ? team.data : null, teamScope };
+    return { ...user, team: row === undefined ? null : TeamMembershipSchema.parse(row), teamScope };
   });
 }
 
