@@ -25,7 +25,7 @@ export const InvitationLinkTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22,128
 /**
  * `POST /v1/team/members/:memberId/invitation-link` (owner): a new link cancels the one before; valid 72 h. It needs a
  * recent sign-in (`requireRecentLogin`, otherwise 403 `reauthentication_forbidden`: the page asks for the password and
- * retries), and refuses a member who left (403 `member_forbidden`).
+ * retries), and refuses a member who left (409 `member_left_conflict`, as every route of `/v1/team`).
  */
 export const CreateInvitationLinkBodySchema = z.object({ purpose: InvitationLinkPurposeSchema });
 export const InvitationLinkCreatedSchema = z.object({
@@ -69,7 +69,7 @@ export type PasswordInvalidReason = z.infer<typeof PasswordInvalidReasonSchema>;
 export const INVITATION_LINK_ERROR_CODES = [
   'invitation_link_not_found',
   'password_invalid',
-  'member_forbidden',
+  'member_left_conflict',
   REAUTHENTICATION_ERROR_CODE,
 ] as const;
 export type InvitationLinkErrorCode = (typeof INVITATION_LINK_ERROR_CODES)[number];
