@@ -186,3 +186,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | Équipe : les trous et l’utile d’Imperium en fiches (EQ-12 à EQ-19), chatteurs seuls à vendre au lancement | done | `log/2026-10-27-eq-trous.md` |
 | 2026-10-27 | EQ-11 : shell par rôle, rail, « Plus » et gardes de route | done | `log/2026-10-27-eq-11-role-based-shell.md` |
 | 2026-10-27 | Conversations routées : un chatteur n’atteint que les siennes (prérequis EQ-08, EQ-10) | done | `log/2026-10-27-routed-conversations.md` |
+| 2026-10-27 | Conversations fermées au rôle creator, même les siennes (ADR 0023) | done | `log/2026-10-27-creator-off-conversations.md` |
