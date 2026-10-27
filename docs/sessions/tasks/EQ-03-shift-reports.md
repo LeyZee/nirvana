@@ -23,6 +23,7 @@ Le chatteur déclare à la fin de son shift ce qu'il a généré, directement da
 - Tests : double envoi du même rapport sans doublon, période verrouillée, ajustement après validation, un compte en « détecté » n'accepte pas de montant déclaré pour cette période, shift commencé le 15 à 23 h rangé dans la première quinzaine.
 - Test d'intégration RLS : un chatteur ne lit pas le rapport d'un autre chatteur de la même créatrice.
 - Aucune dépendance à Telegram.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Calcul de la paie, ventes détectées par le connecteur.

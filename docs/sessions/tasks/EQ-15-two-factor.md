@@ -22,6 +22,7 @@ Un compte qui valide de l'argent (propriétaire, manager) ne s'ouvre pas avec un
 ## Critères d'acceptation
 - Tests : un manager sans double authentification ne lit aucune route de l'équipe avant de l'avoir activée ; un code faux ou rejoué est refusé ; un code de secours ne sert qu'une fois ; une rafale de codes est bloquée par le limiteur ; « payé » sans code récent répond 403 avec un motif que l'écran sait lire ; une réinitialisation par lien remet la double authentification à zéro et ferme les sessions ; un manager repassé chatteur garde sa double authentification.
 - Le secret TOTP n'apparaît dans aucun log ni aucune réponse après l'activation.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Clés d'accès (passkeys), codes par e-mail ou SMS, authentification unique (SSO).

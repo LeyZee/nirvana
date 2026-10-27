@@ -21,6 +21,7 @@ ADR 0024 (§ Rôles et scopes), `packages/db/src/client.ts` (`withMember`), `app
 ## Critères d'acceptation
 - Tests : pendant la vue, chaque route d'écriture répond 403 ; une lecture renvoie ce que renverrait la session du chatteur au même instant, et rien de ce que le propriétaire verrait en plus ; un manager ne peut pas voir le propriétaire ni un autre manager ; un manager hors statut actif ne peut rien voir ; la vue se ferme à la fin du délai ; aucune session du chatteur n'est créée.
 - Test : l'ouverture et la fermeture apparaissent dans le journal et dans Moi du chatteur.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Prise de contrôle à distance, partage d'écran, voir comme une créatrice.

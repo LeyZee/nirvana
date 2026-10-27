@@ -25,6 +25,7 @@ Chaque chatteur se connecte à son propre espace, depuis son téléphone ou son 
 - Tests : un lien utilisé deux fois est refusé, y compris par deux requêtes simultanées ; un compte invité ne peut pas se connecter avant d'avoir utilisé son lien ; le limiteur de la route du lien bloque une rafale ; un lien expiré est refusé ; un nouveau lien annule l'ancien ; le jeton n'apparaît dans aucun log ; un membre parti ne peut pas utiliser un lien ; une réinitialisation révoque les sessions ouvertes.
 - Un chatteur connecté arrive sur Aujourd'hui ; une route qui n'est pas la sienne le ramène sur Aujourd'hui, et l'API répond 403.
 - Aucun vrai prénom, numéro ni pièce dans les tests et les captures (ADR 0010).
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Envoi d'e-mails, notifications sur le téléphone (EQ-12), double authentification (EQ-15), espace de la créatrice (EQ-09).

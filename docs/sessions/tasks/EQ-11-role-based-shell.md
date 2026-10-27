@@ -24,6 +24,7 @@ Le rail, la barre du téléphone et les routes du CRM dépendent du rôle, avant
 - Tests : chaque rôle voit exactement ses onglets, dans l'ordre de l'ADR 0024 ; un chatteur qui ouvre `/reglages` revient sur le premier onglet de son rôle ; la feuille Plus se ferme par Échap et garde le focus ; sur téléphone, Plus est actif quand la section affichée y est rangée.
 - Le rail du propriétaire suit l'ADR 0024 dès cette PR : ses onglets, leur ordre et l'intertitre Chatting ; l'intertitre Agence n'apparaît que lorsque Équipe ou Paie existe.
 - Aucune durée en dur ; captures avant et après, ordinateur et téléphone, Nuit et Jour.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Les écrans de l'équipe (EQ-01 à EQ-06, EQ-10), la PWA de la créatrice (EQ-09).

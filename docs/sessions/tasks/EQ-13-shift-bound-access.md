@@ -20,6 +20,7 @@ Un chatteur ne lit les fans et les conversations de ses créatrices que pendant 
 ## Critères d'acceptation
 - Tests d'intégration : hors shift, un chatteur ne lit ni fan ni conversation de sa créatrice ; pendant son shift, il les lit ; dans la marge, il les lit encore ; une passation prise reste lisible jusqu'à « Rendre la main » ; le manager actif n'est pas borné ; un shift de nuit à cheval sur minuit ouvre l'accès sur toute sa durée.
 - Un changement de planning (shift retiré) ferme l'accès sans attendre une nouvelle connexion.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Filigrane, détection de copie d'écran.

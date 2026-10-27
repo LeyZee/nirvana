@@ -22,6 +22,7 @@ Valider et payer les paies depuis l'écran de paie, à la place que fixe l'ADR 0
 - Valider deux fois le même relevé ne fait rien de plus ; un brouillon modifié entre l'affichage et la validation donne le message du 409, pas une erreur brute.
 - « Payé » est absent pour un manager (masqué et refusé par l'API).
 - Tests de la prévision : période vide, période terminée (la prévision vaut le réalisé), rapport validé tard ; un chatteur ne lit que sa progression, jamais les montants d'un autre.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Factures, avoirs et export comptable (EQ-06), facturation des créatrices et pénalités de retard, rapprochement bancaire (plus tard selon l'ADR).

@@ -24,6 +24,7 @@ Prévenir chaque membre de l'équipe sur son téléphone, même quand il n'a pas
 - Tests : rappel envoyé une seule fois par shift (idempotence) ; heures calmes respectées dans le fuseau du membre, changement d'heure compris ; un membre parti ne reçoit plus rien ; un shift pris à temps ne déclenche aucune alerte, un shift non pris en déclenche une seule ; un abonnement expiré est retiré.
 - Le refus des notifications par le membre laisse tout visible dans Aujourd'hui.
 - Aucune durée en dur dans les écrans ; textes en français, apostrophes typographiques.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Envoi d'e-mails ou de SMS, notifications de la créatrice (EQ-09), signaux de coaching (plus tard).

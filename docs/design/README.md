@@ -68,6 +68,19 @@ Donnés sur la maquette du Dashboard (fil de revue 08), valables pour tout le CR
 - **Créatrices et Réglages ne se mélangent pas** : sous Créatrices, tout ce qui est propre à une créatrice (persona, plus tard catalogue et chiffres par créatrice) ; sous Réglages, le CRM lui-même (clés, appareils, mode, notifications).
 - **Tout doit être intuitif** : se mettre à la place de quelqu'un qui découvre l'écran, repérer ce qui est flou ou ambigu, simplifier les mots et les chiffres, sans le prendre pour un idiot (section « Clarté »).
 
+## Finition d'un écran (Charles, 2026-10-27)
+
+« Il faut que tout soit très joli… cohérent avec le design système de Nirvana… que ça respire, qu'il y ait des hovers partout, que ça interagisse avec l'utilisateur, que la navigation soit fluide, agréable, intuitive, avec une belle hiérarchie des informations partout. C'est très, très important. » Valable pour chaque écran nouveau, à commencer par ceux de l'équipe (fiches EQ). Un écran est prêt quand :
+
+- **Hiérarchie** : il se lit en deux secondes ; un seul chiffre ou une seule action domine, le secondaire est replié ou au survol (section « Hiérarchie »).
+- **Ça respire** : espacements des jetons, contenu sur plaques, au plus trois chiffres secondaires côte à côte, jamais un mur de champs ; un formulaire long se fait par étapes.
+- **Tout réagit** : survol, pression, focus et sélection sur chaque élément cliquable, par les classes communes (section « États ») ; rien n'apparaît sans animation (`nv-enter`, `stagger`) ; les chiffres comptent (`countUp`) ; un graphique passe par `nv-chart`.
+- **Navigation fluide** : la lentille glisse entre les onglets, la page entre en fondu, un retour garde la position et les filtres, le focus clavier suit, aucune animation ne bloque une saisie.
+- **Le design system, rien d'autre** : jetons de couleur, de durée et de courbe (aucune valeur en dur), un seul néon par écran, verre seulement sur ce qui flotte, textes en français avec apostrophes typographiques, montants en euros (ADR 0011).
+- **États honnêtes** : chargement, vide qui propose l'action, erreur « Le serveur ne répond pas », jamais un faux contenu.
+- **Accessible** : contraste vérifié dans les deux thèmes, `prefers-reduced-motion` respecté (tout reste lisible au repos), cibles d'au moins 44px sur téléphone.
+- **Prouvé** : captures Nuit et Jour, bureau (1 440 px) et téléphone (390 px), mouvement réduit compris, avec des données inventées, jointes à la PR et relues par le fil propriétaire d'`apps/web`.
+
 ## Où vivent les choses
 
 | Fichier                                                 | Rôle                                                                                                                                                |

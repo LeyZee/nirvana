@@ -22,6 +22,7 @@ Un nouveau chatteur s'exerce à la méthode de l'agence contre des fans simulés
 ## Critères d'acceptation
 - Tests : une session d'entraînement n'écrit rien dans `conversations` ni dans les tables de vente ; le quota par membre bloque la session suivante avec le bon message ; le plafond de l'agence atteint coupe l'entraînement avant l'agent ; un chatteur ne lit jamais la persona d'une créatrice par ces routes.
 - Évals : le juge reconnaît, sur des réponses écrites à la main, une remise, une promesse de rencontre et une vente avant le KYC.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Coach sur les vraies conversations d'un chatteur (signaux de coaching, plus tard), classement, certification.

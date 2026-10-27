@@ -20,6 +20,7 @@ Le propriétaire retrouve en quelques secondes qui a changé un taux, validé ou
 ## Critères d'acceptation
 - Tests : un manager et un chatteur reçoivent 403 sur `/v1/audit` ; les filtres et le curseur ne sautent ni ne répètent aucune ligne quand des entrées arrivent pendant la lecture ; l'export CSV contient exactement la sélection ; aucun `details` ne porte de secret ni de contenu de fan.
 - Chaque écriture d'argent des fiches EQ-04 à EQ-06 a son libellé et son test de rendu.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Journal des conversations (`conversation_events`), traces des appels aux modèles (`llm_calls`), alertes sur le journal.

@@ -21,6 +21,7 @@ Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « 
 ## Critères d'acceptation
 - Tests du domaine : créneau de nuit à cheval sur minuit, changement d'heure été/hiver, conflit détecté, modèle récurrent rejoué sans doublon.
 - Tests d'intégration : un chatteur ne voit que les shifts de ses créatrices et ne lit pas les congés d'un autre chatteur de la même créatrice ; la créatrice ne lit ni taux ni pays par la vue « en poste ».
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Rapports de fin de shift (fiche suivante), paie, routage hybride.

@@ -21,6 +21,7 @@ La première vraie paie et la première vraie facture ne partent que lorsque les
 ## Critères d'acceptation
 - Tests : sans validation du comptable, la validation d'une période réussit et n'émet aucune facture ; avec, elle en émet ; un export de base plus vieux que le délai affiche l'avertissement ; l'archive annuelle relue donne les mêmes empreintes que les PDF stockés.
 - La recette a été jouée une fois sur le vrai déploiement, et son résultat est dans le journal des sessions.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Rapprochement bancaire (Qonto), transmission à une plateforme agréée (EQ-06, hors périmètre), déploiement lui-même.

@@ -27,6 +27,7 @@ Quand la méthode dit qu'il est temps de vendre, l'agent passe la main au chatte
 - Test : un `sale` ne déclenche ni `protectionFor` ni l'alerte « Il n'écrit plus à ce fan », et ne change pas le taux en réel.
 - Test contre `FakeReveal` : passage, prise en main, vente détectée attribuée au membre, rendre la main avec `sold`, l'agent reprend avec l'aftercare.
 - Évals : la reprise après une vente faite par un humain reste dans la voix de la créatrice.
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Commission sur une vente partagée entre agent et humain (règle unique : celui qui tient la conversation), contrôle qualité des ventes humaines.

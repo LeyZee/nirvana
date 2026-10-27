@@ -24,6 +24,7 @@ Le départ d'un chatteur ou d'un manager se fait en un seul parcours, sans oubli
 - Tests : à l'heure de fin, le membre ne lit plus aucun fan ni conversation, même avec une session ouverte juste avant ; ses shifts futurs disparaissent et une seule alerte « à pourvoir » part par créneau ; une passation prise est rendue à l'agent ; un report sous le minimum est versé dans le relevé final ; le job rejoué ne fait rien de plus.
 - Test d'intégration RLS : dans l'espace de départ, le membre lit ses relevés et ses factures, rien d'autre ; après sa fermeture, il ne lit plus rien.
 - Aucun vrai prénom ni montant réel dans les tests (ADR 0010).
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Coordonnées de paiement, solde des litiges hors de l'application, suppression des données sur demande du membre (à traiter avec le comptable, plus tard).

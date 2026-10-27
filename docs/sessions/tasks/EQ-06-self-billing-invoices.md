@@ -38,6 +38,7 @@ Branche : task/eq-06-self-billing-invoices
 - Sans mandat accepté ou sans régime pour le pays, aucune facture n'est émise et le relevé reste validable.
 - Une contestation résolue par avoir laisse la facture d'origine intacte et l'avoir dans la même séquence.
 - Un chatteur ne lit que ses factures ; aucun vrai nom, adresse ni identifiant fiscal dans les tests (ADR 0010).
+- Finition (Charles, 27/10, 15h22 : « que ce soit vraiment très joli… des hovers partout… une belle hiérarchie des informations ») : chaque écran passe la barre de `docs/design/README.md` § Finition d'un écran, preuves comprises (captures Nuit et Jour, bureau et téléphone, mouvement réduit).
 
 ## Hors périmètre
 Transmission à une plateforme agréée (e-reporting des achats aux prestataires étrangers et factures électroniques des prestataires français, à partir du 1er septembre 2027 pour une PME), coordonnées de paiement, facturation des créatrices, rapprochement bancaire, import des factures d'Imperium (EQ-07).
