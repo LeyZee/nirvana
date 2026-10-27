@@ -85,6 +85,36 @@ describe('threadOf', () => {
     expect(lastHandoff({ events })).toBe('L’agent passe la main (Demande de rencontre)');
     expect(lastHandoff({ events: [] })).toBeNull();
   });
+
+  it('says once that his answer waits for her opening, on the reader’s clock (P3-14)', () => {
+    // 12:01 and 12:05 in UTC are 14:01 and 14:05 in Paris; her slot opens the next morning, then the Monday after.
+    const deferred = (seq: number, minute: number, until: string) =>
+      event(seq, minute, { type: 'reply_deferred', payload: { reason: 'outside_hours', until } });
+    const items = threadOf(
+      {
+        messages: [message(4), message(1)],
+        events: [
+          deferred(9, 6, '2026-10-26T08:00:00Z'),
+          deferred(8, 5, '2026-10-20T07:00:00Z'),
+          deferred(7, 1, '2026-10-20T07:00:00Z'),
+        ],
+      },
+      'Europe/Paris',
+    );
+    expect(items.map((i) => i.text)).toEqual([
+      'Message 1',
+      'Hors de ses heures : la réponse attend l’ouverture de son créneau, demain à 9\u00a0h',
+      'Message 4',
+      'Hors de ses heures : la réponse attend l’ouverture de son créneau, lundi à 9\u00a0h',
+    ]);
+    const sameDay = threadOf(
+      { messages: [], events: [deferred(1, 1, '2026-10-19T16:30:00Z')] },
+      'Europe/Paris',
+    );
+    expect(sameDay.map((i) => i.text)).toEqual([
+      'Hors de ses heures : la réponse attend l’ouverture de son créneau, à 18\u00a0h\u00a030',
+    ]);
+  });
 });
 
 describe('decisionError', () => {
