@@ -49,6 +49,7 @@ function fakeGateway(
     health: () => {
       throw new Error('not used');
     },
+    judge: () => Promise.reject(new Error('not used')),
     testConnection: () => Promise.reject(new Error('not used')),
   };
 }

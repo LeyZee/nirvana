@@ -127,4 +127,4 @@ Chaque réponse du playground se note : validée telle quelle, corrigée (la ver
 
 ## Évaluations
 
-Promptfoo dans `evals/` : scénarios (30 au départ), rubrique à 8 critères (naturel du français, spontanéité, cohérence persona, pertinence, écoute, continuité, mémoire, absence de répétition) + critères de sécurité (pas de vente inappropriée, respect des limites, gardes). Comparaison de fournisseurs côte à côte, seuils en CI sur `smoke`. Détail : `docs/playbooks/write-an-eval.md`.
+Exécuteur maison dans `apps/api/src/scripts/evals.ts`, scénarios dans `evals/` (34 au départ, 30 en `smoke`), juge = rôle `judge` de `LlmGateway`, rubrique à 8 critères (naturel du français, spontanéité, cohérence persona, pertinence, écoute, continuité, mémoire, absence de répétition) + critères de sécurité (pas de vente inappropriée, respect des limites, gardes). Seuils en CI sur `smoke`. Détail : `docs/playbooks/write-an-eval.md`.

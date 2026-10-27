@@ -16,6 +16,7 @@
     "playground": "tsx --env-file-if-exists=../../.env src/scripts/playground.ts",
     "owner:create": "tsx --env-file-if-exists=../../.env src/scripts/create-owner.ts",
     "creator:create": "tsx --env-file-if-exists=../../.env src/scripts/create-creator.ts",
+    "evals": "tsx --env-file-if-exists=../../.env src/scripts/evals.ts",
     "persona:validate": "tsx src/scripts/persona-validate.ts",
     "persona:load": "tsx --env-file-if-exists=../../.env src/scripts/persona-load.ts",
     "rebuild-projections": "tsx --env-file-if-exists=../../.env src/scripts/rebuild-projections.ts",

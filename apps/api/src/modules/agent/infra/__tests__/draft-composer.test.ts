@@ -113,6 +113,7 @@ function gateway(script: Script, seen: Seen): LlmGateway {
       );
     },
     health: () => health(script.hasKey ?? true),
+    judge: () => Promise.reject(new Error('not used')),
     testConnection: () => Promise.reject(new Error('not used')),
   };
 }
