@@ -50,10 +50,13 @@ export async function checkEncryptionKeys(
   adminDb: Database,
   keys: { readonly session: readonly EncryptionKey[]; readonly credentials: readonly EncryptionKey[] },
 ): Promise<readonly SealedFamily[]> {
-  const providers = await checkProviderKeys(adminDb, keys.credentials);
-  const bots = await checkTelegramTokens(adminDb, keys.credentials);
+  const [sessions, providers, bots] = await Promise.all([
+    checkPlatformSessions(adminDb, keys.session),
+    checkProviderKeys(adminDb, keys.credentials),
+    checkTelegramTokens(adminDb, keys.credentials),
+  ]);
   return [
-    await checkPlatformSessions(adminDb, keys.session),
+    sessions,
     { label: 'Clés des services IA', keys: 'CREDENTIALS_ENCRYPTION_KEYS', ...providers },
     { label: 'Jetons des bots Telegram', keys: 'CREDENTIALS_ENCRYPTION_KEYS', ...bots },
   ];
