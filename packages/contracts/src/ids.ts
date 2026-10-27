@@ -69,3 +69,7 @@ export type CommissionPresetId = z.infer<typeof CommissionPresetIdSchema>;
 
 export const CommissionRateIdSchema = uuid.brand<'CommissionRateId'>();
 export type CommissionRateId = z.infer<typeof CommissionRateIdSchema>;
+
+/** A single-use link to choose a password, for a member's first access or a reset (EQ-10). */
+export const InvitationLinkIdSchema = uuid.brand<'InvitationLinkId'>();
+export type InvitationLinkId = z.infer<typeof InvitationLinkIdSchema>;

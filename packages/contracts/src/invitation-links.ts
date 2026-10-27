@@ -69,6 +69,7 @@ export type PasswordInvalidReason = z.infer<typeof PasswordInvalidReasonSchema>;
 export const INVITATION_LINK_ERROR_CODES = [
   'invitation_link_not_found',
   'password_invalid',
+  'member_not_found',
   'member_left_conflict',
   REAUTHENTICATION_ERROR_CODE,
 ] as const;

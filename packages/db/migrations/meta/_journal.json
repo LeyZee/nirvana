@@ -127,6 +127,13 @@
       "when": 1793118865083,
       "tag": "0017_rate_limit_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793121152610,
+      "tag": "0018_invitation_links",
+      "breakpoints": true
     }
   ]
 }
