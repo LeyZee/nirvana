@@ -14,12 +14,12 @@ Un propriétaire qui ouvre Nirvana pour la première fois sait quoi faire dans l
 Guide « Premiers pas » en étapes cochées (connecter un compte, synchroniser les médias, remplir le profil, créer des scripts, régler les horaires, activer l'IA), palette ⌘K, raccourcis « g » puis une lettre pour changer de page.
 
 ## À faire
-- [ ] Premiers pas (propriétaire) : carte sur le Dashboard, étapes lues dans l'état réel (clés posées, compte Reveal relié, persona active, médias décrits, heures réglées, Telegram testé), chacune avec son lien ; disparaît quand tout est fait ; aucune étape factice.
-- [ ] Palette ⌘K (Ctrl K) : pages, créatrices, réglages, actions sûres seulement (jamais un envoi ni une approbation).
-- [ ] Raccourcis « g » puis lettre, listés par « ? » ; désactivés dans un champ de saisie.
+- [ ] Premiers pas (propriétaire) : carte sur le Dashboard, placée sous le héros et sans néon, pour ne pas faire un second héros (l'action du héros reste la seule) ; étapes lues dans l'état réel (clés posées, compte Reveal relié, persona active, médias décrits, heures réglées, Telegram testé), chacune avec son lien ; étapes faites cochées en encre, progression en jauge neutre ; la carte disparaît quand tout est fait ; aucune étape factice.
+- [ ] Palette ⌘K (Ctrl K) : pages, créatrices, réglages, actions sûres seulement (jamais un envoi ni une approbation). C'est un combobox accessible (`aria-activedescendant`) qui flotte en verre, s'ouvre sans rebond en mouvement réduit, et n'existe pas sur téléphone, où il n'y a pas de clavier.
+- [ ] Raccourcis « g » puis lettre, listés par « ? » ; désactivés dans un champ de saisie ; ils ne prennent aucune touche déjà utilisée par un écran (flèches du `nv-seg`, Échap des dialogues, Tab des pièges de focus).
 
 ## Critères d'acceptation
-- Rendu à 1 440 px et 400 px ; navigation au clavier testée ; animations du design system.
+- Nuit et Jour, 1 440 et 400 px, mouvement réduit, état « Le serveur ne répond pas » ; navigation au clavier testée ; animations du design system.
 
 ## Hors périmètre
 Le tutoriel du chatteur (EQ).

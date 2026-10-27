@@ -14,14 +14,17 @@ Remplacer le texte libre `additional_info` par des blocs guidés que l'agent lit
 Profil du modèle en sections : identité, apparence, mode de vie, goûts, personnalité, limites, style d'écriture (longueur, emojis, ponctuation, fautes voulues), exemples de réponses, avec un pourcentage de complétion. Notes du fan : une liste « Notes à collecter » réglable (prénom, âge, ville, métier, situation, goûts…), recopiées dans la note de la plateforme.
 
 ## À faire
-- [ ] Contrat (Bilan) : blocs `lifestyle`, `tastes`, `intimate`, `writing_style` (longueur, emojis préférés et interdits, ponctuation, majuscules), `sample_replies` (dix au plus, inventées pour les fixtures), chacun borné ; `additional_info` reste lu le temps de la migration de la persona puis disparaît dans une version suivante (ADR 0012).
-- [ ] Compteur de complétion : une règle pure qui pèse chaque bloc ; l'écran Persona l'affiche, sans bloquer l'activation.
-- [ ] « Infos à collecter » : liste réglable par créatrice, rangée par `FactCategory` ; le cerveau la reçoit comme objectif de KYC (`strategies.kyc.targets`) et l'écran Suivi montre ce qui manque pour ce fan.
+- [ ] Contrat (Bilan) : blocs `lifestyle`, `tastes`, `intimate`, `writing_style` (longueur, emojis préférés et interdits, ponctuation, majuscules), `sample_replies` (dix au plus, inventées pour les fixtures), chacun borné. C'est une nouvelle version du schéma de persona : les versions publiées existantes (`persona_versions`) continuent de se lire, par un parseur tolérant ou une migration de données qui écrit une nouvelle version, jamais par la réécriture d'une version publiée. `additional_info` reste lu le temps de cette transition puis disparaît dans une version suivante (ADR 0012).
+- [ ] Compteur de complétion : une règle pure qui pèse chaque bloc ; aucun bloc n'est obligatoire et le compteur ne bloque pas l'activation, donc il ne prend aucune couleur. L'écran Persona l'affiche en jauge neutre avec le pourcentage en encre, et dessous la liste de ce qui manque, chaque ligne menant à son bloc.
+- [ ] « Infos à collecter » : liste réglable par créatrice, rangée par `FactCategory` ; le cerveau la reçoit comme objectif de KYC (`strategies.kyc.targets`). Le Suivi montre ce qui manque pour ce fan sur une ligne neutre de la fiche du fan du lecteur, à côté de « Limites du fan » (#144) : « À apprendre : ville, métier » ; jamais dans chaque ligne de la liste.
+- [ ] Écran (Extension) : les emojis préférés et interdits de `writing_style` sont des données, montrés dans leurs champs en pastilles neutres (la règle « pas d'emoji » vise les textes de l'interface) ; les réponses types sont une liste de champs avec « Ajouter », qui disparaît au dixième, et un aperçu en bulle de la créatrice (`neon-solid`) comme au playground.
 - [ ] Les prompts lisent les blocs dans des sections délimitées ; aucune règle métier n'y entre (règle 3).
 
 ## Critères d'acceptation
 - La persona `personas/demo` passe dans les blocs sans perte ; les évals de voix ne régressent pas.
+- Une version de persona publiée avant P5-01 se lit toujours, sans réécriture.
 - Aucune vraie donnée de créatrice dans le dépôt (ADR 0010).
+- Écran : Nuit et Jour, 1 440 et 400 px, mouvement réduit, état « Le serveur ne répond pas ».
 
 ## Hors périmètre
 La persona réelle de Messa (chez Charles), les vocaux.

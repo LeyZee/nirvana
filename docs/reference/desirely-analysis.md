@@ -22,7 +22,7 @@ Sources, lues en entier le 27/10/2026 : le centre d'aide public de Desirely en f
 
 - Alertes système (plus de script, vente, services demandés, fonds du compte) et alertes à soi : une phrase évaluée sur chaque message du fan, avec prudence, des mots-clés sans IA, et une option qui arrête la conversation. Activation et sourdine par créatrice, diffusion choisie alerte par alerte (message direct ou canal Telegram).
 - Page Notifications : alerte, créatrice, fan, raison, date, lien vers la conversation, filtres lues / non lues, type, créatrice, « marquer comme vu ».
-- **Nirvana** : mots-clés d'alerte dans la persona, risques du Brief, Telegram par sujet (ADR 0020). Manquent les alertes personnalisées, la demande de service, l'alerte sur `asks_if_bot` et la page Notifications : `P4-01-custom-alerts.md`.
+- **Nirvana** : mots-clés d'alerte dans la persona, risques du Brief, Telegram par sujet (ADR 0020). Manquent les alertes personnalisées, la demande de service, l'alerte sur `asks_if_bot` et un historique des alertes, sous-vue du Suivi ; ce qui demande une main reste dans « À traiter » : `P4-01-custom-alerts.md`.
 
 ## Horaires
 
