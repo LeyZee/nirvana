@@ -1,3 +1,4 @@
+import type { RestoreTestEntry, StoredRestoreTest } from './restore-tests';
 import type { BackupRun } from './status';
 
 export interface BackupRunsReader {
@@ -21,4 +22,25 @@ export interface BackupAlerts {
 
 export interface Clock {
   now(): Date;
+}
+
+/** Who entered a test, for `audit_log`. */
+export interface RestoreTestActor {
+  readonly userId: string;
+  readonly ip: string | null;
+}
+
+export interface RestoreTestsStore {
+  /** The export that succeeded with this fingerprint (lower case); null for none, or one that failed. */
+  findSucceededBackup(sha256: string): Promise<{ readonly id: string; readonly finishedAt: Date } | null>;
+  /**
+   * Inserts the test and its `audit_log` line in one transaction, unless its `id` is already there: then the stored
+   * test comes back, untouched (the table is append-only).
+   */
+  record(
+    entry: RestoreTestEntry,
+    actor: RestoreTestActor,
+  ): Promise<{ readonly inserted: boolean; readonly test: StoredRestoreTest }>;
+  /** The latest test by `testedAt`. */
+  latest(): Promise<StoredRestoreTest | null>;
 }

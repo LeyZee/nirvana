@@ -85,6 +85,8 @@ describe('/v1/backups/status and the 26-hour check', () => {
       lastSucceededAt: null,
       overdueAfterHours: 26,
       lastRun: null,
+      lastRestoreTest: null,
+      restoreTestFresh: false,
     });
 
     const finishedAt = new Date(Date.now() - 3 * HOUR_MS);

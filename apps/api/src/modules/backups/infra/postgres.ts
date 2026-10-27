@@ -1,8 +1,14 @@
-import { BackupRunStatusSchema, EventIdSchema, EVENT_PAYLOADS, newId } from '@nirvana/contracts';
-import { eq, schema, sql, withAdmin, type Database } from '@nirvana/db';
+import {
+  AuditEntryIdSchema,
+  BackupRunStatusSchema,
+  EventIdSchema,
+  EVENT_PAYLOADS,
+  newId,
+} from '@nirvana/contracts';
+import { and, eq, schema, sql, withAdmin, type Database } from '@nirvana/db';
 import { z } from 'zod';
 
-import type { BackupAlerts, BackupRunsReader } from '../domain/ports';
+import type { BackupAlerts, BackupRunsReader, RestoreTestsStore } from '../domain/ports';
 import type { BackupRun } from '../domain/status';
 
 /**
@@ -92,6 +98,82 @@ export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
         });
         return true;
       });
+    },
+  };
+}
+
+const StoredRestoreTestSchema = z.object({
+  id: z.uuid(),
+  backupRunId: z.uuid(),
+  backupSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  backupFinishedAt: z.date(),
+  testedAt: z.date(),
+  durationSeconds: z.number().int().positive(),
+  rowCountMismatches: z.number().int().nonnegative(),
+  notes: z.string().nullable(),
+  enteredByUserId: z.string().min(1),
+  createdAt: z.date(),
+});
+
+const restoreTestColumns = {
+  id: schema.restoreTests.id,
+  backupRunId: schema.restoreTests.backupRunId,
+  backupSha256: schema.backupRuns.sha256,
+  backupFinishedAt: schema.backupRuns.finishedAt,
+  testedAt: schema.restoreTests.testedAt,
+  durationSeconds: schema.restoreTests.durationSeconds,
+  rowCountMismatches: schema.restoreTests.rowCountMismatches,
+  notes: schema.restoreTests.notes,
+  enteredByUserId: schema.restoreTests.enteredByUserId,
+  createdAt: schema.restoreTests.createdAt,
+};
+
+/**
+ * `restore_tests`, with the application role: SELECT and INSERT only, and a trigger that refuses UPDATE and DELETE
+ * (migration 0019). The `audit_log` line goes in the same transaction, without the notes (free text).
+ */
+export function createPostgresRestoreTestsStore(db: Database): RestoreTestsStore {
+  const joined = (tx: Pick<Database, 'select'>) =>
+    tx
+      .select(restoreTestColumns)
+      .from(schema.restoreTests)
+      .innerJoin(schema.backupRuns, eq(schema.backupRuns.id, schema.restoreTests.backupRunId));
+  return {
+    async findSucceededBackup(sha256) {
+      const [row] = await db
+        .select({ id: schema.backupRuns.id, finishedAt: schema.backupRuns.finishedAt })
+        .from(schema.backupRuns)
+        .where(and(eq(schema.backupRuns.sha256, sha256), eq(schema.backupRuns.status, 'succeeded')));
+      if (row === undefined) return null;
+      return z.object({ id: z.uuid(), finishedAt: z.date() }).parse(row);
+    },
+    record(entry, actor) {
+      return db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(schema.restoreTests)
+          .values(entry)
+          .onConflictDoNothing({ target: schema.restoreTests.id })
+          .returning({ id: schema.restoreTests.id });
+        if (inserted.length > 0) {
+          await tx.insert(schema.auditLog).values({
+            id: newId(AuditEntryIdSchema),
+            userId: actor.userId,
+            action: 'restore_test.record',
+            entity: 'restore_test',
+            entityId: entry.id,
+            ip: actor.ip,
+            details: { backupRunId: entry.backupRunId, rowCountMismatches: entry.rowCountMismatches },
+          });
+        }
+        const [row] = await joined(tx).where(eq(schema.restoreTests.id, entry.id));
+        return { inserted: inserted.length > 0, test: StoredRestoreTestSchema.parse(row) };
+      });
+    },
+    async latest() {
+      const [row] = await joined(db)
+        .orderBy(sql`${schema.restoreTests.testedAt} desc, ${schema.restoreTests.createdAt} desc`)
+        .limit(1);
+      return row === undefined ? null : StoredRestoreTestSchema.parse(row);
     },
   };
 }

@@ -353,6 +353,8 @@ describe('DashboardPage of the owner', () => {
             lastSucceededAt: state === 'never' ? null : '2026-10-26T02:12:00.000Z',
             overdueAfterHours: 26,
             lastRun: null,
+            lastRestoreTest: null,
+            restoreTestFresh: false,
           },
         }
       : { status: 200, body: apiDashboard() };
