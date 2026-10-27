@@ -3,10 +3,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 
+import { NewPasswordPage } from './auth/NewPasswordPage';
 import { SignInPage } from './auth/SignInPage';
 import { Unreachable } from './auth/Unreachable';
+import { WelcomePage } from './auth/WelcomePage';
+import { linkPageOf } from './auth/api';
 import { fetchCurrentUser, signOut } from './auth/session';
 import { createAppRouter, type RouterContext } from './router';
+import { railOf } from './shell/nav';
 
 type Session =
   | { status: 'loading' }
@@ -27,6 +31,9 @@ const RETRY_MS = [3_000, 10_000, 30_000] as const;
  */
 export function App(): JSX.Element {
   const [session, setSession] = useState<Session>({ status: 'loading' });
+  // An invitation link (EQ-10) opens its own page before any session is read, signed in or not: using it opens the
+  // member's session in place of the one before.
+  const [linkPage, setLinkPage] = useState(() => linkPageOf(window.location.pathname));
 
   const refresh = useCallback(() => {
     fetchCurrentUser().then(
@@ -42,7 +49,9 @@ export function App(): JSX.Element {
     );
   }, []);
 
-  useEffect(refresh, [refresh]);
+  useEffect(() => {
+    if (linkPage === null) refresh();
+  }, [linkPage, refresh]);
   useEffect(() => {
     if (session.status !== 'unreachable') return undefined;
     const timer = setTimeout(refresh, RETRY_MS[Math.min(session.attempt, RETRY_MS.length - 1)]);
@@ -51,6 +60,22 @@ export function App(): JSX.Element {
     };
   }, [session, refresh]);
 
+  if (linkPage !== null) {
+    const Page = linkPage === 'invitation' ? WelcomePage : NewPasswordPage;
+    return (
+      <Page
+        onSignedIn={(me) => {
+          // The app reads the new session as after a sign-in, and opens on the member's first screen.
+          window.history.replaceState(null, '', me === null ? '/' : railOf(me).home);
+          setLinkPage(null);
+        }}
+        onLeave={() => {
+          window.history.replaceState(null, '', '/');
+          setLinkPage(null);
+        }}
+      />
+    );
+  }
   if (session.status === 'loading') {
     // A breathing dot while the session is read: the page is not blank, and says nothing it does not know yet.
     return (

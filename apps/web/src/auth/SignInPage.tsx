@@ -76,6 +76,9 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
         <button className="nv-btn nv-btn--neon" type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Connexion…' : 'Se connecter'}
         </button>
+        <p className="text-center text-sm text-[var(--nv-ink-faint)]">
+          Mot de passe oublié ? Demande un nouveau lien à ton responsable.
+        </p>
       </form>
     </main>
   );
