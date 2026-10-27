@@ -1,6 +1,6 @@
 # 0029. L'export garde les droits de la base, et s'outille sans binaire hors d'Alpine
 
-Statut : proposed
+Statut : accepted (Charles, 27/10 17h56, carte « J’accepte l’ADR 0029 »)
 Date : 2026-10-27
 Remplace : dans l'ADR 0028, le drapeau `--no-privileges` du § 2, et au § 1 `rclone` et `supercronic`
 
@@ -25,7 +25,7 @@ L'image reste `postgres:16-alpine` (version épinglée), plus `age`, `curl` et `
 - Une restauration ne demande aucun `GRANT` à la main : le rôle `nirvana_app` existe, et la base restaurée lui donne exactement les droits des migrations.
 - Les droits du dump nomment `nirvana_app` : restaurer sur un serveur sans ce rôle échoue, ce que `restore.md` dit avant la commande.
 - Rien ne change pour `backup_runs`, le chiffrement, le bucket ni l'essai trimestriel.
-- À l'acceptation, l'ADR 0028 passe en « accepted (§ 1 outils et § 2 `--no-privileges` remplacés par 0029) ».
+- L'ADR 0028 passe en « accepted (§ 1 outils et § 2 `--no-privileges` remplacés par 0029) ».
 
 ## Alternatives rejetées
 

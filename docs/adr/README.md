@@ -52,5 +52,5 @@ Date : AAAA-MM-JJ
 | 0025 | Le chatteur chatte dans Reveal ; dans Nirvana, il traite sa créatrice pendant son shift, et rien hors shift | accepted |
 | 0026 | Serveur MCP de Nirvana : une seconde porte sur les mêmes commandes | accepted |
 | 0027 | Mise en production : deux images, un compose Coolify, un limiteur partagé en Postgres | accepted |
-| 0028 | Export quotidien chiffré de la base, hors de Neon | accepted |
-| 0029 | L'export garde les droits de la base, et s'outille sans binaire hors d'Alpine | proposed |
+| 0028 | Export quotidien chiffré de la base, hors de Neon | accepted (§ 1 outils et § 2 `--no-privileges` remplacés par 0029) |
+| 0029 | L'export garde les droits de la base, et s'outille sans binaire hors d'Alpine | accepted |
