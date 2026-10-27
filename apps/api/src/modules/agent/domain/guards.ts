@@ -1,32 +1,13 @@
+import type { GuardCode } from '@nirvana/contracts';
+
 import { normalise, unmask } from './normalise';
 
 /**
  * Guards on the voice output, before anything can be sent (docs/architecture/ai-engine.md, « Les gardes »).
- * Pure code: a blocking violation forbids sending, a soft one asks for a regeneration.
+ * Pure code: a blocking violation forbids sending, a soft one asks for a regeneration. Their codes are a closed list
+ * in the contracts (`GUARD_CODES`).
  */
-export type GuardCode =
-  | 'ai_disclosure'
-  | 'love_declaration'
-  | 'meeting_promise'
-  | 'contact_info'
-  | 'assistant_output'
-  | 'ai_tic'
-  | 'forbidden_term'
-  | 'too_many_bubbles'
-  | 'bubble_too_long'
-  | 'asks_for_nudes'
-  | 'contempt'
-  | 'payment_lie'
-  | 'discount'
-  | 'explicit_before_age'
-  | 'guilt_trip'
-  | 'pet_name'
-  | 'stage_direction'
-  | 'media_not_sent'
-  | 'platform_meeting_word'
-  | 'fake_emergency'
-  | 'repetition'
-  | 'closed_question_streak';
+export type { GuardCode };
 
 export interface GuardViolation {
   readonly code: GuardCode;
@@ -420,9 +401,13 @@ function spelledNumber(text: string): string | undefined {
 
 // An action written for him to imagine, never a girl's own message (Desirely): « *sourit* », « (rires) »,
 // « *t'envoie un bisou* ». On the raw bubble, where the asterisks and parentheses still are; emojis stay hers.
+// The action that opens it: her verbs in the third person, or what she does to him (« t'envoie un bisou »). A word
+// stressed between asterisks (« c'est *trop* bon ») is hers.
+const ACTION =
+  "(rires?|rit|sourire|sourit|souris|rougit|rougis|soupire?|soupir|clin d['’]?\\s?(oe|œ)il|bisous?|calin|câlin|gemit|gémit|gemis|gémis|ricane|glousse|chuchote|murmure|boude|frissonne|se mord|mord|se cache|cache|tire la langue|fait la moue|fait un clin|hausse les [ée]paules|haussement|s['’]?\\s?[ée]tire|se l[èe]ve|l[èe]ve les yeux|te regarde|te fixe|te sourit|t['’]?\\s?envoie|t['’]?\\s?embrasse|te fait|te prend|te caresse|se rapproche|se mordille|mordille|s['’]?\\s?approche)";
 const STAGE_DIRECTION: readonly RegExp[] = [
-  /\*[^*\n]*\p{L}[^*\n]*\*/u,
-  /\((rires?|rire|sourire|sourit|souris|rougit|rougis|soupire?|soupir|clin d['’]?\s?(oe|œ)il|bisous?|calin|câlin|gemit|gémit|gemis|gémis|ricane|glousse|chuchote|murmure|boude|mord[^)]*|se mord[^)]*|tire la langue|fait la moue|hausse les epaules|hausse les épaules|s['’]?\s?etire|s['’]?\s?étire|te regarde[^)]*|t['’]?\s?envoie[^)]*|t['’]?\s?embrasse[^)]*|te fait[^)]*|leve les yeux[^)]*|lève les yeux[^)]*|haussement[^)]*)\)/iu,
+  new RegExp(`\\*\\s*${ACTION}\\b[^*\\n]*\\*`, 'iu'),
+  new RegExp(`\\(\\s*${ACTION}\\b[^)\\n]*\\)`, 'iu'),
 ];
 
 // She says she sent him a media, now or just before: « je t'envoie une photo », « regarde ce que je viens de
@@ -432,7 +417,7 @@ const MEDIA_NOUN =
   '(photo|photos|video|videos|vid|vids|selfie|pic|pics|image|images|vocal|audio|extrait|apercu|teaser|clip|snap)';
 const MEDIA_ANNOUNCED = new RegExp(
   [
-    `(?<!\\bque )(?<!\\bsi tu veux,? )\\bje (te |t')(envoie|envoies|mets|joins|balance|partage) (une?|la|le|les|des|ma|mon|mes|cette|ce|ces|ta|ton|tes|un petit|une petite|deux|trois) ?(petite? |nouvelle |derniere )?${MEDIA_NOUN}\\b(?! (si|quand|des que|demain|plus tard|ce soir|tout a l'heure|bientot|apres))`,
+    `(?<!\\b(que|tu veux|si tu veux|tu voudrais|veux-tu|tu aimerais),? )\\bje (te |t')(envoie|envoies|mets|joins|balance|partage) (une?|la|le|les|des|ma|mon|mes|cette|ce|ces|ta|ton|tes|un petit|une petite|deux|trois) ?(petite? |nouvelle |derniere )?${MEDIA_NOUN}\\b(?! (si|quand|des que|demain|plus tard|ce soir|tout a l'heure|bientot|apres))`,
     `\\bje (viens de )?(te |t')(ai )?(envoye|envoyer|mis|partage)e?s? (une?|la|le|les|des|ma|mon|mes|cette|ce|ces|deux|trois) ?(petite? |nouvelle |derniere )?${MEDIA_NOUN}\\b`,
     "\\b(regarde|t'as vu|tu as vu) ce que je (viens de )?(te |t')(ai )?(envoye|envoyer|mis)\\b",
     `\\b(voila|voici|tiens|regarde) (la|ta|une|ma|cette|le|mon|ce) ?(petite? |nouvelle )?${MEDIA_NOUN}\\b`,
@@ -444,17 +429,28 @@ const MEDIA_ANNOUNCED = new RegExp(
 // a sale or money cue, in the same message. A plain fact of her life (« je suis crevée ») is not one; asking him for
 // money on her own is, whatever the reason.
 const EMERGENCY =
-  /\b(malade|maladie|hopital|hosto|urgences?|accident|operation|operee|chirurgie|medicaments?|ordonnance|loyer|dettes?|huissier|expulsee?|facture|factures|decouvert|banque m'a|a la rue|ma mere est|mon pere est|ma grand-mere est|mon chat est malade|veto|veterinaire)\b/;
+  /\b(malade|maladie|hopital|hosto|aux urgences|une urgence (medicale|familiale)|accident|operation|operee|chirurgie|medicaments?|ordonnance|loyer|dettes?|huissier|expulsee?|facture|factures|decouvert|banque m'a|a la rue|ma mere est|mon pere est|ma grand-mere est|mon chat est malade|veto|veterinaire)\b/;
 const SALE_CUE =
   /\b(achete[rsz]?|achetes|pack|bundle|ppv|debloque[rsz]?|tip|tips|pourboire|soutiens-moi|soutiens moi|me soutenir|aide-moi|aide moi|paie[sz]?|payer|payez|argent|thunes|fric|euros?|balles)\b|€|\b\d+ ?(e|eur)\b/;
 const MONEY_PLEA =
   /\b(j'ai besoin (d'argent|de sous|de thunes|de fric|de ton aide pour payer)|aide-? ?moi a (payer|regler|rembourser)|pour payer (mon|ma|le|la|mes) (loyer|facture|factures|dette|dettes|credit|operation|medicaments))\b/;
 
+// Over and told as news, not as a reason to buy: « j'étais malade hier mais là ça va ».
+const PAST_TROUBLE =
+  /\b(j'etais|j'ai ete|etait|hier|la semaine derniere|ca va mieux|c'est passe|guerie?|je suis remise)\b/;
+
+/** Her sentences that are not questions, joined: what she states, not what she offers. */
+function statements(text: string): string {
+  return (text.match(/[^.!?…]+[.!?…]*/g) ?? [])
+    .filter((sentence) => !sentence.trim().endsWith('?'))
+    .join(' ');
+}
+
 function emergencyMatch(text: string): string | undefined {
   const plea = MONEY_PLEA.exec(text)?.[0];
   if (plea !== undefined) return plea;
   const emergency = EMERGENCY.exec(text)?.[0];
-  return emergency !== undefined && SALE_CUE.test(text) ? emergency : undefined;
+  return emergency !== undefined && SALE_CUE.test(text) && !PAST_TROUBLE.test(text) ? emergency : undefined;
 }
 
 /** The text a repetition compares: normalised, without emojis or punctuation. */
@@ -589,7 +585,9 @@ export function checkVoiceOutput(
       violations.push({ code: 'fake_emergency', severity: 'blocking', bubbleIndex, match: emergency });
     }
     if (context.hasMedia === false) {
-      const announced = MEDIA_ANNOUNCED.exec(text)?.[0];
+      // A question offers (« je t'envoie une photo ? »): only what she states counts.
+      const stated = statements(text);
+      const announced = MEDIA_ANNOUNCED.exec(stated)?.[0];
       if (announced !== undefined) {
         violations.push({ code: 'media_not_sent', severity: 'blocking', bubbleIndex, match: announced });
       }

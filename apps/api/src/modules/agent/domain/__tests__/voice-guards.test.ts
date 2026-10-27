@@ -1,6 +1,8 @@
+import { GUARD_CODES } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkExplicit,
   checkVoiceOutput,
   DEFAULT_GUARD_SETTINGS,
   previousTurnsOf,
@@ -24,6 +26,9 @@ describe('voice guards (P3-13)', () => {
     // Her own aside in brackets is not an action.
     expect(codes(['J’ai fini (enfin presque) ma journée'])).toEqual([]);
     expect(codes(['Note 5*/5 pour toi 😌'])).toEqual([]);
+    // A word stressed between asterisks is hers (relecture de #226).
+    expect(codes(['c’est *trop* bon 😏'])).toEqual([]);
+    expect(codes(['t’es *vraiment* pas sage toi'])).toEqual([]);
   });
 
   it('blocks a media she says she sent when the draft carries none', () => {
@@ -36,6 +41,9 @@ describe('voice guards (P3-13)', () => {
     expect(codes(['Je t’envoie une photo 📸'], { hasMedia: true })).toEqual([]);
     // An offer, a promise for later, a kiss: hers.
     expect(codes(['Tu veux que je t’envoie une photo ?'], none)).toEqual([]);
+    expect(codes(['tu veux je t’envoie une photo ?'], none)).toEqual([]);
+    expect(codes(['je t’envoie une photo ?'], none)).toEqual([]);
+    expect(codes(['Hmm… je t’envoie une photo ? 😏'], none)).toEqual([]);
     expect(codes(['Je t’envoie une photo demain 😘'], none)).toEqual([]);
     expect(codes(['Je t’envoie plein de bisous'], none)).toEqual([]);
     expect(codes(['Je t’ai envoyé un bisou ce matin'], none)).toEqual([]);
@@ -52,6 +60,8 @@ describe('voice guards (P3-13)', () => {
       'Pas d’IRL avec moi',
       'Se voir en vrai, jamais',
       'Une rencontre réelle c’est non',
+      // The platform reads the word, whatever it means.
+      'Je vais te rencontrer dans mes rêves 😘',
     ]) {
       expect(codes([bubble]), bubble).toContain('platform_meeting_word');
     }
@@ -73,6 +83,9 @@ describe('voice guards (P3-13)', () => {
     expect(codes(['J’ai besoin d’argent ce mois-ci'])).toEqual(['fake_emergency']);
     expect(codes(['Je suis crevée ce soir 😴'])).toEqual([]);
     expect(codes(['J’étais malade hier, ça va mieux 🙂'])).toEqual([]);
+    // A catchword, and a past fact with no tie to the sale (relecture de #226).
+    expect(codes(['ce pack c’est une urgence 😏'])).toEqual([]);
+    expect(codes(['j’étais malade hier mais là ça va, tu veux voir mon pack ?'])).toEqual([]);
   });
 
   it('warns on a bubble sent again or a third same opening, without blocking', () => {
@@ -111,5 +124,32 @@ describe('voice guards (P3-13)', () => {
       i % 2 === 0 ? her(`h${String(i)}`) : him(`f${String(i)}`),
     );
     expect(previousTurnsOf(long)[0]).toEqual(['h6']);
+  });
+
+  it('emits only codes of GUARD_CODES, and each of them has a case that emits it', () => {
+    const settings = { ...DEFAULT_GUARD_SETTINGS, forbiddenTerms: ['brocoli'], petNames: ['loulou'] };
+    const read = (bubbles: string[], context: GuardContext = {}) =>
+      checkVoiceOutput(bubbles, settings, context).map((v) => v.code);
+    const emitted = new Set<string>([
+      ...read(['Je suis une IA', 'je t’aime', 'On se voit samedi ?', 'mon snap c’est lina']),
+      ...read([
+        'Voici la recette : 200 g de farine',
+        'n’hésite pas',
+        'J’adore le brocoli',
+        'salut mon chéri',
+      ]),
+      ...read(['a', 'b', 'c', 'd', 'x'.repeat(300)]),
+      ...read(['Envoie-moi des nudes', 'sale radin', 'rien à payer', 'je te fais un petit prix']),
+      ...read(['tu me déçois', '*sourit*', 'pas de rdv', 'j’ai besoin d’argent']),
+      ...read(['Je t’envoie une photo'], { hasMedia: false }),
+      ...read(['Tu fais quoi de beau ce soir ?'], {
+        previousTurns: [['Tu aimes le sport ?'], ['Tu fais quoi de beau ce soir ?']],
+      }),
+      ...read(['Tu as un chien ?'], { previousTurns: [['Tu aimes le sport ?'], ['Tu bosses demain ?']] }),
+      ...checkExplicit(['J’ai envie de te sucer']).map((v) => v.code),
+    ]);
+    const known: readonly string[] = GUARD_CODES;
+    expect([...emitted].filter((code) => !known.includes(code))).toEqual([]);
+    expect(known.filter((code) => !emitted.has(code))).toEqual([]);
   });
 });
