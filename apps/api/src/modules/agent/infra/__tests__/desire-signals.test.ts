@@ -32,9 +32,9 @@ describe('desire signals', () => {
       ...BriefSchema.shape.risks.element.options.map((risk) => ({ ...base, risks: [risk] })),
       { ...base, ageDisputed: true },
     ];
-    const emitted = new Set(turns.flatMap((turn) => desireScore(turn).signals));
+    const emitted: readonly string[] = [...new Set(turns.flatMap((turn) => desireScore(turn).signals))];
     const known: readonly string[] = DESIRE_SIGNALS;
-    expect([...emitted].filter((signal) => !known.includes(signal))).toEqual([]);
-    expect([...known].filter((signal) => !emitted.has(signal))).toEqual([]);
+    expect(emitted.filter((signal) => !known.includes(signal))).toEqual([]);
+    expect(known.filter((signal) => !emitted.includes(signal))).toEqual([]);
   });
 });
