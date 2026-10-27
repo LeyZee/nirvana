@@ -14,7 +14,7 @@ Dernière revue : 2026-10-17 (vente avancée en phase 3, Grok 4.7, plus d'Inbox)
 | **7** | Instagram | Agent de veille et d'idées de reels avec apprentissage accepter/refuser ; réponses aux commentaires ; publication | P7-xx |
 | **8** | Plateforme propre | `apps/platform`, `NirvanaPlatformConnector` in-process, paiements, conformité ; voir `architecture/own-platform.md` | P8-xx |
 
-Équipe (ADR 0023, proposée le 27/10) : la gestion de l'équipe reprise d'Imperium avance en parallèle des phases, car elle n'attend ni les clés ni la capture Reveal : membres → planning → rapports de fin de shift et paie ; le mode hybride (passage à l'humain pour vendre) suit la capture ; la PWA de la créatrice est la phase 5.
+Équipe (ADR 0023, acceptée le 27/10) : la gestion de l'équipe reprise d'Imperium, avec ses règles inchangées, avance en parallèle des phases, car elle n'attend ni les clés ni la capture Reveal : membres → planning → rapports de fin de shift, paie, factures des prestataires, import de l'historique d'Imperium ; le mode hybride (passage à l'humain pour vendre) suit la capture ; la PWA de la créatrice est la phase 5.
 
 Transversal : sessions d'hygiène `H-xx` toutes les ~10 tâches ; revue du modèle de menaces à chaque phase ; test de restauration trimestriel ; rotation des secrets semestrielle.
 

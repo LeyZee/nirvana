@@ -107,21 +107,27 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Routage | `telegram_route` | Quel sujet va dans quel groupe, pour une créatrice ou pour toutes. |
 | Astreinte | `on_call` | Le groupe Telegram qui reçoit l'urgent la nuit. « Personne n'est prévenu la nuit » quand aucune créatrice n'en a un joignable. |
 | Apparence (Nuit, Jour, Appareil) | `appearance` (`night`, `day`, `device`) | Le thème du CRM, choisi dans Réglages › Apparence et gardé par le navigateur. Nuit par défaut ; Appareil suit le mode clair ou sombre de l'ordinateur ou du téléphone. |
-| Membre de l'équipe | `team_member` | Le profil d'un chatteur ou d'un manager de l'agence, lié à son compte : rôle d'équipe, fuseau, mode et taux de rémunération, statut (ADR 0023). |
+| Membre de l'équipe | `team_member` | Le profil d'un chatteur ou d'un manager de l'agence, lié à son compte : rôle d'équipe, fuseau, taux de commission, statut (ADR 0023). Pour l'agence, c'est un prestataire indépendant, jamais un salarié. |
 | Rôle d'équipe | `team_role` (`chatter`, `manager`) | Ce qu'un membre fait dans l'équipe. Distinct du rôle d'accès (`operator`) : un manager voit toute l'équipe et valide rapports et paies jusqu'à « validée ». |
 | Shift | `shift` | Une plage où un membre chatte sur un compte d'une créatrice, début et fin en UTC. |
-| Créneau | `slot` | Une des plages fixes de la journée de l'agence (4 × 6 h par défaut) sur lesquelles se posent les shifts. |
+| Créneau | `shift_slot`, `ShiftSlot` | Une des plages fixes de la journée de l'agence (4 × 6 h par défaut) sur lesquelles se posent les shifts. Jamais `slot` seul, réservé aux slots KYC (`KycSlot`). |
 | En poste | `onShift` | Le membre dont le shift couvre cet instant sur cette créatrice ; il reçoit en premier les passages à l'humain pour vendre. |
 | Rapport de fin de shift | `shift_report` | Ce que le chatteur déclare avoir généré pendant son shift, saisi dans Nirvana, validé par un manager. |
 | Source de revenus | `earnings_source` (`declared`, `detected`) | D'où la paie lit les montants d'un compte pour une période : rapports de fin de shift validés ou ventes détectées par le connecteur, jamais les deux. |
-| Qui vend | `sellerMode` (`agent`, `team`, `both`) | Réglage d'une créatrice : quand il est temps de vendre, l'agent vend, ou il passe la main au chatteur en poste (motif `sale`), ou les deux. |
+| Qui vend | `sellerMode` (`agent`, `team`, `both`) | Réglage d'une créatrice : quand il est temps de vendre, l'agent vend, ou il passe la main au chatteur en poste (motif `sale`), ou les deux. Avec `team` et personne en poste, l'agent continue la relation sans vendre. |
+| Issue de la passation | `releaseOutcome` (`sold`, `refused`, `none`) | Ce que le chatteur indique en rendant la main après un passage pour vendre ; le code en tire la suite (aftercare après un achat, pas de bouderie après un refus traité). |
 | Période de paie | `pay_period` | Une quinzaine (1-15, 16-fin du mois) dans le fuseau de l'agence. |
-| Fiche de paie | `payslip` | Le calcul d'un membre pour une période, avec les règles et le taux de change copiés : `draft`, `validated`, `paid`. |
+| Relevé de commissions | `commission_statement` | Le calcul d'un membre pour une période, avec les règles et le taux de change copiés : `draft`, `validated`, `paid`. Jamais « fiche de paie » : un chatteur est un prestataire. |
 | Palier | `bonus_tier` | Seuil de net hors taxes qui débloque une prime ; le plus haut atteint compte. |
-| Prime | `bonus` | Montant ajouté à une fiche : palier, objectif collectif ou prime manuelle avec motif. |
-| Malus | `penalty` | Retenue fixe ou en pourcentage avec motif, plafonnée à la part du membre plus ses primes. |
+| Prime | `bonus` | Montant ajouté à un relevé : palier, objectif collectif ou prime manuelle avec motif. |
+| Malus | `penalty` | Retenue fixe ou en pourcentage avec motif, plafonnée à la part du membre plus ses primes. Sur la facture, une ligne négative (réfaction prévue au contrat). |
 | Report | `carry_over` | Montant sous le minimum de versement, reporté sur la période suivante. |
-| Ajustement | `pay_adjustment` | Correction d'une fiche déjà validée, portée sur la prochaine période ouverte. |
+| Ajustement | `pay_adjustment` | Correction d'un relevé déjà validé, portée sur la prochaine période ouverte. |
+| Dossier prestataire | `contractor_profile` | L'identité légale et fiscale d'un membre pour ses factures : nom complet, adresse, pays, identifiant fiscal, attestation de résidence datée, mandat et contrat acceptés. |
+| Autofacturation | `self_billing` | L'agence établit la facture au nom et pour le compte du prestataire (art. 289 I-2 du CGI) ; la facture porte la mention « Autofacturation ». |
+| Mandat de facturation | `billing_mandate` | L'accord, accepté par le prestataire avant sa première facture, qui autorise l'autofacturation et fixe le délai de contestation. |
+| Avoir | `credit_note` | Document numéroté dans la séquence du prestataire qui annule ou réduit une facture émise, en la citant. Une facture émise ne se modifie jamais. |
+| Régime de facturation | `billing_regime` | Les règles de facture d'un pays de prestataire (mentions, TVA, retenue à la source), réglées par le propriétaire et validées par le comptable. |
 | Part de l'agence | `agency_share` | La part des revenus d'une créatrice qui revient à l'agence. |
 | Routine | `routine` | Les tâches quotidiennes qu'une créatrice coche dans son application : celles de l'agence comptent pour la série, les siennes non. |
 | Série | `streak` | Le nombre de jours d'affilée où la créatrice a coché ses tâches essentielles. |
@@ -132,3 +138,4 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 - `user` pour un fan → `fan`. `user` désigne un utilisateur du dashboard.
 - `bot` dans le code → `agent` ou le rôle précis.
 - `client` pour un fan (vocabulaire Imperium « relation client ») → `fan`.
+- « fiche de paie », « salaire », « sanction » pour un chatteur → relevé de commissions, commission, malus. Un chatteur est un prestataire.

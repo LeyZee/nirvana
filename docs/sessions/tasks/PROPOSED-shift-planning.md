@@ -12,15 +12,15 @@ Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « 
 
 ## À faire
 - [ ] Contrats : `Shift` (créatrice, compte plateforme, membre, début et fin en UTC), `ShiftTemplate` (jour de semaine, créneau, membre), `LeaveRequest`, `ShiftSwapRequest` avec leurs états.
-- [ ] Domaine pur : créneaux de l'agence (4 × 6 h par défaut, réglables), conversion dans le fuseau d'un membre, conflits (un membre sur deux shifts qui se chevauchent ; deux membres sur le même compte et le même créneau), génération des shifts depuis les modèles récurrents (idempotente), « en poste » à un instant donné.
-- [ ] Base (via le propriétaire de `packages/db`) : `shifts`, `shift_templates`, `leave_requests`, `shift_swap_requests`, avec `creator_id` et RLS par créatrice.
+- [ ] Domaine pur : créneaux de l'agence (`ShiftSlot`, 4 × 6 h par défaut, réglables ; jamais `slot` seul, pris par `KycSlot`), conversion dans le fuseau d'un membre, conflits (un membre sur deux shifts qui se chevauchent ; deux membres sur le même compte et le même créneau), génération des shifts depuis les modèles récurrents (idempotente), « en poste » à un instant donné.
+- [ ] Base (via le propriétaire de `packages/db`) : `shifts`, `shift_templates`, `leave_requests`, `shift_swap_requests`, avec `creator_id` et `member_id` ; RLS sur les deux pour les congés et les échanges (la créatrice **et** le membre lui-même ou le scope `agency`). Vue « en poste » pour la créatrice : nom affiché et créneau seulement, jamais `team_members`.
 - [ ] Module `scheduling` : CRUD, matérialisation des modèles par un job Graphile rejouable, demandes de congé et d'échange (manager ou propriétaire valident), `onShift(creatorId, at)` exporté par `index.ts`.
 - [ ] Écrans : Équipe > Planning (semaine, par créatrice, fuseau au choix, conflits signalés) et Mon planning pour un chatteur.
 - [ ] Rappel de shift et « shift sans rapport » dans l'application (À traiter du membre), pas sur Telegram.
 
 ## Critères d'acceptation
 - Tests du domaine : créneau de nuit à cheval sur minuit, changement d'heure été/hiver, conflit détecté, modèle récurrent rejoué sans doublon.
-- Test d'intégration : un chatteur ne voit que les shifts de ses créatrices.
+- Tests d'intégration : un chatteur ne voit que les shifts de ses créatrices et ne lit pas les congés d'un autre chatteur de la même créatrice ; la créatrice ne lit ni taux ni pays par la vue « en poste ».
 
 ## Hors périmètre
 Rapports de fin de shift (fiche suivante), paie, routage hybride.
