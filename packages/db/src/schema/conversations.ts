@@ -2,6 +2,9 @@ import {
   ConversationModeSchema,
   ConversationStateSchema,
   CurrencySchema,
+  DESIRE_SCORE_MAX,
+  DESIRE_SCORE_MIN,
+  DesireBandSchema,
   DraftStatusSchema,
   EVENT_TYPES,
   MessageAuthorSchema,
@@ -61,11 +64,27 @@ export const conversations = pgTable(
      * and acts on a conversation of his creators only through this column (ADR 0024). Null: routed to nobody.
      */
     routedToUserId: text('routed_to_user_id').references(() => user.id),
+    /**
+     * The fan's desire score as of its last change (`desire_scored`, P3-12), its band, and when it was computed: the
+     * engine lets it cool from then on. Null until the engine first scores him.
+     */
+    desireScore: integer('desire_score'),
+    desireBand: enumText('desire_band'),
+    desireAt: timestampTz('desire_at'),
     updatedAt: updatedAt(),
   },
   (t) => [
     enumCheck('conversations', t.state, ConversationStateSchema.options),
     enumCheck('conversations', t.mode, ConversationModeSchema.options),
+    enumCheck('conversations', t.desireBand, DesireBandSchema.options),
+    check(
+      'conversations_desire_score_check',
+      sql`${t.desireScore} between ${sql.raw(String(DESIRE_SCORE_MIN))} and ${sql.raw(String(DESIRE_SCORE_MAX))}`,
+    ),
+    check(
+      'conversations_desire_together_check',
+      sql`(${t.desireScore} is null) = (${t.desireBand} is null) and (${t.desireScore} is null) = (${t.desireAt} is null)`,
+    ),
     unique('conversations_platform_conversation_unique').on(t.platformAccountId, t.platformConversationId),
     index('conversations_account_state_idx').on(t.platformAccountId, t.state),
     index('conversations_creator_last_inbound_idx').on(t.creatorId, t.lastInboundAt.desc()),

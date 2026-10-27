@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { AutomaticMissingSchema } from './automatic';
+import { DESIRE_SIGNALS_MAX, DesireScoreSchema, DesireSignalSchema } from './desire';
 import {
   ActorSchema,
   ConversationModeSchema,
@@ -148,6 +149,7 @@ export const EVENT_TYPES = [
   'summary_refreshed',
   'handoff_requested',
   'reply_skipped',
+  'desire_scored',
   'takeover_started',
   'takeover_ended',
   'mode_changed',
@@ -201,6 +203,16 @@ export const EVENT_PAYLOADS = {
     detail: z.array(z.string().max(500)).max(20),
     /** She chose to wait (P3-11): her answer is tried again at that time, unless he writes first. */
     retryAt: z.iso.datetime().exactOptional(),
+  }),
+  /**
+   * The engine's desire score of the fan changed (P3-12): written with the answer it came with, only when it moved.
+   * The conversation projects the last one; `before` is the score it replaced, `null` for the first.
+   */
+  desire_scored: z.object({
+    before: DesireScoreSchema.nullable(),
+    score: DesireScoreSchema,
+    signals: z.array(DesireSignalSchema).max(DESIRE_SIGNALS_MAX),
+    weightsVersion: z.string().min(1).max(64),
   }),
   takeover_started: takeoverPayload,
   takeover_ended: takeoverPayload,
@@ -284,6 +296,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('summary_refreshed'),
   typedEvent('handoff_requested'),
   typedEvent('reply_skipped'),
+  typedEvent('desire_scored'),
   typedEvent('takeover_started'),
   typedEvent('takeover_ended'),
   typedEvent('mode_changed'),

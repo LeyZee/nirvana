@@ -39,6 +39,26 @@ describe('conversation projection', () => {
     expect(applyEvent(routed, inbound, at(1)).routedToUserId).toBe(USER);
   });
 
+  it('keeps the last desire score, its band and its time, without moving the state', () => {
+    const scored = (before: number | null, score: number) =>
+      EventBodySchema.parse({
+        type: 'desire_scored',
+        payload: { before, score, signals: ['flirt'], weightsVersion: 'w1' },
+      });
+    const projection = rebuildProjection([
+      { body: inbound, at: at(1) },
+      { body: scored(null, 45), at: at(2) },
+      { body: scored(45, 71), at: at(3) },
+    ]);
+    expect(projection).toMatchObject({
+      state: 'pending',
+      desireScore: 71,
+      desireBand: 'hot',
+      desireAt: at(3),
+    });
+    expect(INITIAL_PROJECTION).toMatchObject({ desireScore: null, desireBand: null, desireAt: null });
+  });
+
   it('ignores an event the state machine refuses, so a journal always folds', () => {
     const approved = EventBodySchema.parse({
       type: 'draft_approved',

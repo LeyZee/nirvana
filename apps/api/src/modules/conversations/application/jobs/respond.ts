@@ -1,4 +1,5 @@
 import {
+  DESIRE_SIGNALS_MAX,
   DraftIdSchema,
   jobKeyFor,
   newId,
@@ -68,6 +69,39 @@ export const noteLine = (fact: {
 }): string => (fact.category === 'operator_note' ? `Note : ${fact.value}` : `${fact.key} : ${fact.value}`);
 
 const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
+
+/** Longest signal name kept in `desire_scored`. */
+const DESIRE_SIGNAL_MAX_LENGTH = 64;
+
+/**
+ * Journals the engine's desire score with the result it came with (P3-12), only when it moved: an unchanged score
+ * writes nothing, not even its time, so that the projection is the last `desire_scored` and a rebuild finds it exactly.
+ */
+async function recordDesire(
+  tx: Transaction,
+  conversation: Conversation,
+  result: ComposeResult,
+  meta: EventMeta,
+): Promise<Conversation> {
+  const desire = result.desire;
+  if (desire === undefined || desire.score === conversation.desireScore) return conversation;
+  return appendEvent(
+    tx,
+    conversation,
+    {
+      type: 'desire_scored',
+      payload: {
+        before: conversation.desireScore,
+        score: desire.score,
+        signals: desire.signals
+          .slice(0, DESIRE_SIGNALS_MAX)
+          .map((signal) => signal.slice(0, DESIRE_SIGNAL_MAX_LENGTH)),
+        weightsVersion: desire.weightsVersion,
+      },
+    },
+    meta,
+  );
+}
 
 /** Why the second pass after a wait has nothing to do: he wrote since (another job answers), or she did. */
 function waitedOver(conversation: Conversation, waitedFor: Date): string | null {
@@ -152,6 +186,10 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
       history: read.history,
       fan: { ...read.stats, notes: notes.map(noteLine) },
       ...(waitedFor !== null && { waited: 1 }),
+      ...(read.conversation.desireScore !== null &&
+        read.conversation.desireAt !== null && {
+          desire: { score: read.conversation.desireScore, at: read.conversation.desireAt },
+        }),
     };
     const source = read.history.findLast((message) => message.author === 'fan') ?? null;
 
@@ -165,13 +203,14 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
     }
 
     await uow.inTenant(payload.creatorId, async (tx) => {
-      const conversation = await tx.conversations.lock(payload.conversationId);
-      if (conversation === null || !(await stillPending(tx, conversation, logger, waitedFor))) return;
-      if (lastInboundKey(conversation) !== read.lastInbound) {
+      const locked = await tx.conversations.lock(payload.conversationId);
+      if (locked === null || !(await stillPending(tx, locked, logger, waitedFor))) return;
+      if (lastInboundKey(locked) !== read.lastInbound) {
         logger.info({ draftId }, 'respond: fan wrote again, result dropped');
         return;
       }
       const meta: EventMeta = { actor: 'ai', correlationId: payload.correlationId, at: clock.now() };
+      const conversation = await recordDesire(tx, locked, result, meta);
       if (result.kind === 'draft') {
         await tx.drafts.insert({
           id: draftId,
