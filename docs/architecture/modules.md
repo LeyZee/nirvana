@@ -27,8 +27,8 @@ conversations ──▶ fans, persona, agent, media
 agent ──▶ fans, persona, media, packages/llm
 supervision ──▶ conversations, fans
 media ──▶ packages/llm
-sales ──▶ conversations, media            (phase 6)
-scripts ──▶ sales, media, conversations   (phase 6)
+sales ──▶ conversations, media            (phase 6, non créé)
+scripts ──▶ sales, media, conversations   (phase 6, non créé)
 playground ──▶ agent, packages/llm        (écran Entraîner, P3-06)
 fans, persona, providers, telegram ──▶ (feuilles)
 ```
@@ -68,8 +68,8 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | agent | 3 | composeur sens → cerveau → politique → voix → gardes, drapeaux posés sur un risque ; aucun message réel tant que les clés manquent |
 | media | 3 (sens), 6 (catalogue) | descriptions au vocabulaire Nirvana, ffmpeg vérifié au démarrage ; la lecture des médias Reveal attend la capture |
 | supervision | 4 | Dashboard (`/v1/dashboard`) : santé, jobs bloqués, taux en réel |
-| sales | 6 | réservé |
-| scripts | 6 | réservé |
+| sales | 6 | non créé : offres à prix codés, ventes détectées, règles de prix ; propriétaire de `offers`, `sales` (montants en centimes entiers + devise) |
+| scripts | 6 | non créé : structures, étapes, cartons, runs de script par conversation (machine d'état explicite) ; propriétaire de `scripts`, `script_steps`, `script_runs`, `cards` |
 | playground | 3 | API de l'écran Entraîner (P3-06) |
 | providers (clés des services IA, ADR 0016) | 3 | clés vérifiées et scellées, routes `/v1/settings/providers`, page Services, revérification toutes les 15 minutes (P3-03) |
 | telegram (alertes de l'équipe, ADR 0020) | 3 | bots et groupes depuis Réglages › Telegram (`/v1/settings/telegram`), alertes vérifiées de bout en bout (P3-07) |

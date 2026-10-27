@@ -8,7 +8,8 @@ export type UntrustedKind =
   | 'creator_media_description'
   | 'media_transcript'
   | 'fan_notes'
-  | 'brief';
+  | 'brief'
+  | 'candidate_reply';
 
 // Invisible, bidirectional and tag characters (soft hyphen, joiners, Unicode tags): used to hide or
 // reorder text the model would still read.
