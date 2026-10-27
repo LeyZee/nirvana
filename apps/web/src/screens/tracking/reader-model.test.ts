@@ -97,6 +97,9 @@ describe('decisionError', () => {
     expect(decisionError(422, apiError('draft_unprocessable', { guards: ['discount'] }))).toBe(
       'Ce message ne peut pas partir : une remise ou une négociation. Retouche-le ou refuse-le.',
     );
+    expect(decisionError(422, apiError('draft_unprocessable', { guards: ['explicit_before_age'] }))).toBe(
+      'Ce message ne peut pas partir : du contenu explicite avant l’âge confirmé. Retouche-le ou refuse-le.',
+    );
     expect(decisionError(422, apiError('draft_unprocessable'))).toBe(
       'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.',
     );
