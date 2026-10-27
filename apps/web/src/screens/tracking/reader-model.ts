@@ -106,6 +106,7 @@ const GUARD_LABELS: Readonly<Record<string, string>> = {
   contempt: 'du mépris',
   payment_lie: 'un mensonge sur un paiement',
   guilt_trip: 'de la culpabilisation',
+  discount: 'une remise ou une négociation',
 };
 
 const GuardsSchema = z.object({ guards: z.array(z.string()) });
