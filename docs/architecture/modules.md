@@ -74,7 +74,7 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | providers (clés des services IA, ADR 0016) | 3 | clés vérifiées et scellées, routes `/v1/settings/providers`, page Services, revérification toutes les 15 minutes (P3-03) |
 | telegram (alertes de l'équipe, ADR 0020) | 3 | bots et groupes depuis Réglages › Telegram (`/v1/settings/telegram`), alertes vérifiées de bout en bout (P3-07) |
 | team (équipe, ADR 0023, ADR 0024) | équipe | membres, taux de commission datés, préréglages, notes internes, routes `/v1/team` (EQ-01) ; les créatrices existantes lui viennent de `persona` par le composition root |
-| scheduling (planning, ADR 0023, ADR 0025) | équipe | réglages, shifts, modèles de la semaine et leur job horaire, « en poste » et « mes shifts », routes `/v1/scheduling` (EQ-02) ; les créatrices et leurs noms lui viennent de `persona` par le composition root |
+| scheduling (planning, ADR 0023, ADR 0025, ADR 0031) | équipe | réglages, shifts, modèles de la semaine et leur job horaire, « en poste » et « mes shifts », congés et échanges de shifts (job `scheduling.lapse_swaps`), routes `/v1/scheduling` (EQ-02) ; les créatrices et leurs noms lui viennent de `persona` par le composition root |
 | backups (sauvegardes, ADR 0028) | mise en production | lecture de `backup_runs` écrite par le service `backup`, route `/v1/backups/status` (propriétaire), contrôle horaire des 26 h qui publie `backup_overdue` (OPS-02) |
 | content (Instagram) | 7 | non créé |
 | platform (Nirvana propre) | 8 | non créé, voir `own-platform.md` |

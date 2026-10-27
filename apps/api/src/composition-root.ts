@@ -492,6 +492,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         );
       },
     ),
+    'scheduling.lapse_swaps': defineTask(
+      'scheduling.lapse_swaps',
+      JOB_PAYLOADS['scheduling.lapse_swaps'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { lapsed: await modules.scheduling.jobs.lapseSwaps() },
+          'scheduling: swap proposals lapsed',
+        );
+      },
+    ),
     'rate_limit.purge': defineTask(
       'rate_limit.purge',
       JOB_PAYLOADS['rate_limit.purge'],
