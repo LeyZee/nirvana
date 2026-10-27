@@ -14,7 +14,7 @@ ADR 0024, ADR 0025 (le chatteur chatte dans Reveal), EQ-02, EQ-13, `apps/api/src
 « L'IA gère le volume, l'humain garde la valeur. » L'IA s'arrête quand un fan devient chaud ou stratégique et prévient le chatteur. Priorités de l'inbox : gros acheteurs en ligne, nouveaux, réguliers, le reste ; six à quinze conversations épinglées ; un tour toutes les 20 à 30 minutes ; checklist de début et de cours de shift.
 
 ## À faire
-- [ ] Règle pure de passation par valeur : seuil de dépense cumulée (réglage propriétaire, défaut 100 €) ou note de désir en bande « chaud » (`PROPOSED-desire-score.md`) ; seulement si un chatteur est en poste pour cette créatrice ; sinon l'agent continue.
+- [ ] Règle pure de passation par valeur : seuil de dépense cumulée (réglage propriétaire, défaut 100 €) ou note de désir en bande « chaud » (`P3-12-desire-score.md`) ; seulement si un chatteur est en poste pour cette créatrice ; sinon l'agent continue.
 - [ ] Brief de début de shift (écran Aujourd'hui du chatteur) : fans à reprendre, triés par valeur puis par attente, avec la raison en une ligne et le lien Reveal ; rien du texte des conversations hors poste (ADR 0025).
 - [ ] Rappel de tour (Telegram ou écran) toutes les 25 minutes pendant le shift, coupable.
 - [ ] Journal : chaque passation par valeur est une passation EQ-13, avec sa cause.

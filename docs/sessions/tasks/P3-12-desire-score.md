@@ -1,8 +1,8 @@
-# Note de désir : mesurer la tension sexuelle de chaque fan, et ne vendre que quand elle est haute
-Statut : proposed (ID à donner par Charles ; idée de Desirely retenue par Charles le 27/10 à 20h24 : « plus la note est élevée, plus on peut passer à l'action et vendre des médias »)
+# P3-12 Note de désir : la tension sexuelle de chaque fan, et ne vendre que quand elle est haute
+Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 3 (politique de l'agent)
 Dépend de : P3-09 (curseur de sexualisation, livré), `offerDecision` (livré), P3-02 (mémoire et limites du fan) ; la note Reveal attend la capture (`setFanNote`), le reste se code sans capture ni clé
-Branche : task/<id>-desire-score
+Branche : task/P3-12-desire-score
 
 ## Objectif
 Chaque fan a une note de désir de 0 à 100, calculée par le code à chaque message à partir de signaux fermés, qui monte quand il s'échauffe et retombe quand il refroidit ou se tait. La politique s'en sert pour décider quand elle ouvre l'intime et quand un script peut partir ; le Suivi la montre avec ce qui l'a fait bouger.

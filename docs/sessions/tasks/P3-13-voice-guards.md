@@ -1,8 +1,8 @@
-# Gardes de voix : ce que Desirely et son playbook interdisent et que nous laissons passer
-Statut : proposed (ID à donner par Charles ; née de l'étude de Desirely du 27/10)
+# P3-13 Gardes de voix : didascalies, média annoncé, mots de rencontre, fausse urgence, répétitions
+Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 3
 Dépend de : rien de bloquant (ni capture ni clé : les gardes sont du code pur, les évals tournent dès la clé xAI)
-Branche : task/<id>-voice-guards
+Branche : task/P3-13-voice-guards
 
 ## Objectif
 Ajouter aux gardes de `checkVoiceOutput` les fautes de voix que Desirely corrige déjà, pour qu'aucune ne parte chez un fan, que le brouillon vienne de l'agent ou d'un humain (G5).

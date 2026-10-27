@@ -1,8 +1,8 @@
-# Heures d'activité de l'agent, par créatrice
-Statut : proposed (ID à donner par Charles ; née de l'étude de Desirely du 27/10)
+# P3-14 Heures d'activité de l'agent, par créatrice
+Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 3
 Dépend de : P3-10 (relances, heures calmes), EQ-02 (planning, hybride), ADR 0025
-Branche : task/<id>-agent-hours
+Branche : task/P3-14-agent-hours
 
 ## Objectif
 Charles règle, créatrice par créatrice, les créneaux pendant lesquels l'agent peut écrire ; hors créneau l'agent se tait, garde les messages et y répond à la reprise.

@@ -54,4 +54,4 @@ Date : AAAA-MM-JJ
 | 0027 | Mise en production : deux images, un compose Coolify, un limiteur partagé en Postgres | accepted |
 | 0028 | Export quotidien chiffré de la base, hors de Neon | accepted (§ 1 outils et § 2 `--no-privileges` remplacés par 0029) |
 | 0029 | L'export garde les droits de la base, et s'outille sans binaire hors d'Alpine | accepted |
-| 0030 | Médiathèque : un média, ses liaisons par plateforme, le coffre fait foi | proposed |
+| 0030 | Médiathèque : un média, ses liaisons par plateforme, le coffre fait foi | accepted |

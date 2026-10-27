@@ -1,8 +1,8 @@
-# Alertes personnalisées, demandes de service et page Notifications
-Statut : proposed (ID à donner par Charles ; née de l'étude de Desirely du 27/10)
+# P4-01 Alertes personnalisées, demandes de service et page Notifications
+Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 4 (supervision)
 Dépend de : P3-07 (Telegram, routage par sujet), persona (`notifications.alert_keywords`), cerveau (`BriefSchema.risks`)
-Branche : task/<id>-custom-alerts
+Branche : task/P4-01-custom-alerts
 
 ## Objectif
 Charles crée ses propres alertes (une phrase en langage naturel, des mots-clés, ou les deux), choisit si elles mettent l'agent en pause sur ce fan, les active par créatrice, et retrouve chaque déclenchement dans une page Notifications.

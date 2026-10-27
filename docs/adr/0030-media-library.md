@@ -1,6 +1,6 @@
 # 0030. Médiathèque : un média, ses liaisons par plateforme, le coffre fait foi
 
-Statut : proposed
+Statut : accepted (Charles, 27/10 20h37, carte « J'accepte, vignette seule »)
 Date : 2026-10-27
 
 ## Contexte

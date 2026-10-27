@@ -1,6 +1,6 @@
 # Desirely : analyse de l'outil concurrent
 
-Sources, lues en entier le 27/10/2026 : le centre d'aide public de Desirely en français (58 articles, 9 collections) et son playbook « Construire et Scaler Agence OFM 2026 » (88 pages, fourni par Charles, hors dépôt). Desirely est un agent de chatting IA pour OnlyFans et Reveal, comme le nôtre. Observations reformulées, aucune phrase recopiée, aucun code, aucune donnée de compte (ADR 0010). Ce document informe ; l'ADR 0030 et les fiches `PROPOSED-*` décident.
+Sources, lues en entier le 27/10/2026 : le centre d'aide public de Desirely en français (58 articles, 9 collections) et son playbook « Construire et Scaler Agence OFM 2026 » (88 pages, fourni par Charles, hors dépôt). Desirely est un agent de chatting IA pour OnlyFans et Reveal, comme le nôtre. Observations reformulées, aucune phrase recopiée, aucun code, aucune donnée de compte (ADR 0010). Ce document informe ; l'ADR 0030 et les fiches de tâche décident.
 
 ## Médias
 
@@ -22,12 +22,12 @@ Sources, lues en entier le 27/10/2026 : le centre d'aide public de Desirely en f
 
 - Alertes système (plus de script, vente, services demandés, fonds du compte) et alertes à soi : une phrase évaluée sur chaque message du fan, avec prudence, des mots-clés sans IA, et une option qui arrête la conversation. Activation et sourdine par créatrice, diffusion choisie alerte par alerte (message direct ou canal Telegram).
 - Page Notifications : alerte, créatrice, fan, raison, date, lien vers la conversation, filtres lues / non lues, type, créatrice, « marquer comme vu ».
-- **Nirvana** : mots-clés d'alerte dans la persona, risques du Brief, Telegram par sujet (ADR 0020). Manquent les alertes personnalisées, la demande de service, l'alerte sur `asks_if_bot` et la page Notifications : `PROPOSED-custom-alerts.md`.
+- **Nirvana** : mots-clés d'alerte dans la persona, risques du Brief, Telegram par sujet (ADR 0020). Manquent les alertes personnalisées, la demande de service, l'alerte sur `asks_if_bot` et la page Notifications : `P4-01-custom-alerts.md`.
 
 ## Horaires
 
 - Par créatrice : fuseau, 24/7 par défaut ou créneaux jour par jour activables ; hors créneau, ni réponse ni relance, reprise des messages en attente. Raison : une créatrice qui répond toujours à 4 h éveille les soupçons, et des plages restent aux humains.
-- **Nirvana** : heures calmes des relances et bascule Jour / Nuit en dur, aucune heure d'activité de l'agent. `PROPOSED-agent-hours.md`, avec un défaut qui n'est pas 24/7.
+- **Nirvana** : heures calmes des relances et bascule Jour / Nuit en dur, aucune heure d'activité de l'agent. `P3-14-agent-hours.md`, avec un défaut qui n'est pas 24/7.
 
 ## Relances
 
@@ -38,17 +38,17 @@ Sources, lues en entier le 27/10/2026 : le centre d'aide public de Desirely en f
 
 - Défauts documentés comme à corriger : didascalies (« *sourit* »), répétitions, annonce d'un média qui ne part pas ; délai de réponse d'au moins 30 secondes, souvent une à trois minutes, bulles décalées.
 - Le playbook ajoute : ne jamais écrire les mots que la plateforme repère autour d'une rencontre, même pour refuser ; jamais de fausse urgence (maladie, accident) pour vendre ; rebondir plutôt qu'enchaîner les questions fermées.
-- **Nirvana** : seize gardes, dont `ai_disclosure`, `meeting_promise`, `discount`, `guilt_trip` ; délai de réponse de 45 s par défaut. Manquent les six gardes de `PROPOSED-voice-guards.md`.
+- **Nirvana** : seize gardes, dont `ai_disclosure`, `meeting_promise`, `discount`, `guilt_trip` ; délai de réponse de 45 s par défaut. Manquent les six gardes de `P3-13-voice-guards.md`.
 
 ## Persona
 
 - Profil en sections (identité, apparence, mode de vie, goûts, personnalité, limites, style d'écriture, exemples de réponses) avec un pourcentage de complétion. Notes du fan : liste « à collecter » réglable, recopiée dans la note de la plateforme ; panneau Mémoire éditable.
-- **Nirvana** : `PersonaSchema` riche mais un `additional_info` libre ; KYC par `strategies.kyc.targets` ; notes recopiées dans la note Reveal (ADR 0018). `PROPOSED-persona-blocks.md`.
+- **Nirvana** : `PersonaSchema` riche mais un `additional_info` libre ; KYC par `strategies.kyc.targets` ; notes recopiées dans la note Reveal (ADR 0018). `P5-01-persona-blocks.md`.
 
 ## Conversations
 
 - Liste des conversations avec désir (neutre, joueur, acheteur), scripts « x / y », état de l'IA, fiche du fan, actions en masse ; phases accroche, montée, vente, après-vente ; prénom et âge obtenus avant l'érotique.
-- **Nirvana** : Suivi (file « À traiter », lecteur, décisions), curseur de sexualisation qui exige un âge déclaré par le fan et le KYC minimum (P3-09). Manquent la note de désir, que Charles retient en premier (27/10 : plus elle est haute, plus on peut vendre), calculée par le code et qui ne fait que retenir les offres (`PROPOSED-desire-score.md`), puis phase, scripts x / y, actions en masse, mémoire corrigible (`PROPOSED-tracking-sales.md`).
+- **Nirvana** : Suivi (file « À traiter », lecteur, décisions), curseur de sexualisation qui exige un âge déclaré par le fan et le KYC minimum (P3-09). Manquent la note de désir, que Charles retient en premier (27/10 : plus elle est haute, plus on peut vendre), calculée par le code et qui ne fait que retenir les offres (`P3-12-desire-score.md`), puis phase, scripts x / y, actions en masse, mémoire corrigible (`PROPOSED-tracking-sales.md`).
 
 ## Transactions
 

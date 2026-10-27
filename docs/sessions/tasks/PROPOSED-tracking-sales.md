@@ -14,7 +14,7 @@ Dans le Suivi, voir d'un coup d'œil où en est chaque fan (phase, désir, scrip
 Page Conversations : colonnes Désir (neutre, joueur, acheteur), Scripts « x / y », dernier message, état de l'IA ; fiche du fan à droite ; sélection multiple pour couper ou rendre l'IA. Panneau Mémoire éditable. Page Transactions : date, fan, montant, script, étape, vendu par l'IA ou non.
 
 ## À faire
-- [ ] Phase et désir, en deux colonnes, calculés par une règle pure côté serveur (jamais par le modèle ni par l'écran) : la phase à partir du curseur de sexualisation et des `script_runs` (découverte, sexualisation, vente, après-vente) ; le désir est la bande de la note de désir (`PROPOSED-desire-score.md` : neutre, joueur, chaud), jamais recalculée ici.
+- [ ] Phase et désir, en deux colonnes, calculés par une règle pure côté serveur (jamais par le modèle ni par l'écran) : la phase à partir du curseur de sexualisation et des `script_runs` (découverte, sexualisation, vente, après-vente) ; le désir est la bande de la note de désir (`P3-12-desire-score.md` : neutre, joueur, chaud), jamais recalculée ici.
 - [ ] Colonnes : scripts vus / scripts proposables, total dépensé, prochaine étape prévue (relance, script, attente), lien direct vers la conversation Reveal.
 - [ ] Actions en masse (propriétaire et manager) : rendre la main, reprendre, mettre en pause l'agent, marquer comme traité ; une action, une ligne de journal par conversation.
 - [ ] Mémoire du fan : corriger, ajouter ou retirer un fait, avec auteur et date ; un fait corrigé à la main prime sur ce que l'agent déduit ensuite ; la note Reveal reste la source (ADR 0018).

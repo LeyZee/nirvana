@@ -1,8 +1,8 @@
-# Persona par blocs, compteur de complétion et « infos à collecter » réglables
-Statut : proposed (ID à donner par Charles ; complète l'écran Persona en cours, née de l'étude de Desirely du 27/10)
+# P5-01 Persona par blocs, compteur de complétion et infos à collecter
+Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 5
 Dépend de : écran Persona (`PROPOSED-persona-screen.md`), P0-08 (`PersonaSchema`), P3-02 (mémoire du fan)
-Branche : task/<id>-persona-blocks
+Branche : task/P5-01-persona-blocks
 
 ## Objectif
 Remplacer le texte libre `additional_info` par des blocs guidés que l'agent lit mieux, montrer ce qui manque à la persona, et laisser Charles choisir ce que l'agent cherche à apprendre de chaque fan.
