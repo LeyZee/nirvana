@@ -310,13 +310,19 @@ export const MyShiftSchema = ShiftSchema.extend({
 export type MyShift = z.infer<typeof MyShiftSchema>;
 
 /**
- * `GET /v1/scheduling/my-shifts` (any team member), for Aujourd'hui. `current` is the shift the member is on now,
- * `onShift` without the margin (`startsAt ≤ now < endsAt`): « En poste ». `next` is the earliest shift that starts
- * after now, even when its start margin is already open: « Bientôt en poste ». A shift whose end margin is still open
- * after its end is in neither; its creator stays open through the creators' list of ADR 0025. Both `null` for an
- * account that is not in the team, and for a member who is not `active`.
+ * `GET /v1/scheduling/my-shifts` (any team member), for Aujourd'hui and Suivi. `current` is the shift the member is on
+ * now, `onShift` without the margin (`startsAt ≤ now < endsAt`): « En poste ». `next` is the earliest shift that starts
+ * after now, even when its start margin is already open: « Bientôt en poste ». `ended` is the latest shift that has
+ * ended while its end margin is still open (`endsAt ≤ now < accessEndsAt`): its creator stays open until
+ * `accessEndsAt`, through the creators' list of ADR 0025, but no sale is routed to the member. A stopped shift is never
+ * `ended`, its window having closed with it; `ended` and `current` may both be set when two shifts follow one another.
+ * All three `null` for an account that is not in the team, and for a member who is not `active`.
  */
-export const MyShiftsSchema = z.object({ current: MyShiftSchema.nullable(), next: MyShiftSchema.nullable() });
+export const MyShiftsSchema = z.object({
+  current: MyShiftSchema.nullable(),
+  next: MyShiftSchema.nullable(),
+  ended: MyShiftSchema.nullable(),
+});
 export type MyShifts = z.infer<typeof MyShiftsSchema>;
 
 /**

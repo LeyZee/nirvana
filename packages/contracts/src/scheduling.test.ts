@@ -146,11 +146,16 @@ describe('shifts and templates', () => {
       accessStartsAt: '2026-10-28T22:45:00Z',
       accessEndsAt: '2026-10-29T05:15:00Z',
     };
-    expect(MyShiftsSchema.parse({ current: null, next: mine }).next?.handle).toBe('nora');
-    expect(MyShiftsSchema.safeParse({ current: null, next: { ...mine, platform: undefined } }).success).toBe(
-      false,
+    expect(MyShiftsSchema.parse({ current: null, next: mine, ended: null }).next?.handle).toBe('nora');
+    expect(
+      MyShiftsSchema.safeParse({ current: null, next: { ...mine, platform: undefined }, ended: null })
+        .success,
+    ).toBe(false);
+    // In the end margin: on no shift, the creator still open until `accessEndsAt`.
+    expect(MyShiftsSchema.parse({ current: null, next: null, ended: mine }).ended?.accessEndsAt).toBe(
+      '2026-10-29T05:15:00Z',
     );
-    expect(MyShiftsSchema.parse({ current: null, next: null })).toEqual({ current: null, next: null });
+    expect(MyShiftsSchema.safeParse({ current: null, next: null }).success).toBe(false);
   });
 
   it('gives every error code a suffix that sets its status (api.md)', () => {
