@@ -1,5 +1,5 @@
 {
-  "id": "77d99680-4d31-423d-9c5e-4385f203c093",
+  "id": "617b61ac-8073-4318-a535-9993a478d512",
   "prevId": "2741094d-0350-4af3-8a72-11163072c517",
   "version": "7",
   "dialect": "postgresql",
@@ -3257,7 +3257,7 @@
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner'"
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"commission_presets\".\"created_by\" = nullif(current_setting('app.user_id', true), '')"
         }
       },
       "checkConstraints": {
@@ -3377,7 +3377,7 @@
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner'"
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"member_commission_rates\".\"created_by\" = nullif(current_setting('app.user_id', true), '')"
         }
       },
       "checkConstraints": {
@@ -3479,7 +3479,7 @@
           "as": "PERMISSIVE",
           "for": "SELECT",
           "to": ["public"],
-          "using": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency')"
+          "using": "nullif(current_setting('app.team_scope', true), '') = 'owner' or (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"team_member_notes\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')))"
         },
         "team_insert": {
           "name": "team_insert",

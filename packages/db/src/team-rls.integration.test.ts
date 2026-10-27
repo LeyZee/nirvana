@@ -120,13 +120,17 @@ describe('team tables (EQ-01): one policy per account, through withMember', () =
     expect(seen.presets).toEqual([]);
   });
 
-  it('an active manager reads the whole team and writes notes, but never a rate nor a preset', async () => {
+  it('an active manager reads the whole team and writes notes, but not the notes on his own card, nor a rate or a preset', async () => {
     const seen = await withMember(test.app.db, manager, async (tx) => ({
       members: (await tx.select().from(s.teamMembers)).length,
       rates: (await tx.select().from(s.memberCommissionRates)).length,
-      notes: (await tx.select().from(s.teamMemberNotes)).length,
+      notes: (await tx.select({ memberId: s.teamMemberNotes.memberId }).from(s.teamMemberNotes)).map(
+        (row) => row.memberId,
+      ),
     }));
-    expect(seen).toEqual({ members: 3, rates: 3, notes: 3 });
+    expect(seen.members).toBe(3);
+    expect(seen.rates).toBe(3);
+    expect(seen.notes.sort()).toEqual([member(chatterA), member(chatterB)].sort());
     await withMember(test.app.db, manager, (tx) =>
       tx.insert(s.teamMemberNotes).values({
         id: newId(TeamMemberNoteIdSchema),
@@ -197,7 +201,7 @@ describe('team tables (EQ-01): one policy per account, through withMember', () =
     ).toMatch(/row-level security/);
   });
 
-  it('the owner alone sets a rate and a preset, and neither is ever changed nor removed', async () => {
+  it('the owner alone sets a rate and a preset, signed by his own account, and neither is ever changed nor removed', async () => {
     const presetId = newId(CommissionPresetIdSchema);
     await withMember(test.app.db, owner, async (tx) => {
       await tx.insert(s.commissionPresets).values({
@@ -220,6 +224,15 @@ describe('team tables (EQ-01): one policy per account, through withMember', () =
     ]) {
       expect(await failure(change())).toMatch(/permission denied/);
     }
+    expect(
+      await failure(
+        withMember(test.app.db, owner, (tx) =>
+          tx
+            .insert(s.memberCommissionRates)
+            .values({ ...rateRow(member(chatterB), '2026-11-01'), createdBy: manager }),
+        ),
+      ),
+    ).toMatch(/row-level security/);
     expect(await failure(withAdmin(test.admin.db, (tx) => tx.delete(s.memberCommissionRates)))).toMatch(
       /append-only/,
     );

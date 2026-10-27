@@ -6,7 +6,7 @@ import { user } from './auth';
 import { createdAt, enumCheck, enumText, id, updatedAt } from './columns';
 
 /**
- * The agency's team (ADR 0023, EQ-01): out of the creators' RLS (no `creator_id`), under a policy per account.
+ * The agency's team (ADR 0023, scopes ADR 0024, EQ-01): out of the creators' RLS (no `creator_id`), under a policy per account.
  * `withMember` sets `app.user_id` and `app.team_scope` (`owner` | `agency` | `self`), both derived by the server in
  * the same transaction. Outside it neither is set and every policy matches nothing.
  */
@@ -50,7 +50,10 @@ export const teamMembers = pgTable(
   ],
 );
 
-/** Internal notes about a member, read by the owner and the managers only: never on his own row (RLS is per row). */
+/**
+ * Internal notes about a member, read by the owner and the active managers only, and never by the member they are
+ * about: not on his own row (RLS is per row), and a manager does not read the notes on his own record (ADR 0024).
+ */
 export const teamMemberNotes = pgTable(
   'team_member_notes',
   {
@@ -67,7 +70,10 @@ export const teamMemberNotes = pgTable(
   (t) => [
     check('team_member_notes_body_check', sql`char_length(${t.body}) between 1 and 2000`),
     index('team_member_notes_member_idx').on(t.memberId, t.createdAt),
-    pgPolicy('team_read', { for: 'select', using: readsTeam }),
+    pgPolicy('team_read', {
+      for: 'select',
+      using: sql`${isOwner} or (${readsTeam} and not exists (select 1 from team_members m where m.id = ${t.memberId} and m.user_id = ${currentUser}))`,
+    }),
     pgPolicy('team_insert', {
       for: 'insert',
       withCheck: sql`${readsTeam} and ${t.authorUserId} = ${currentUser}`,
@@ -93,7 +99,10 @@ export const commissionPresets = pgTable(
     check('commission_presets_rate_check', sql`${t.rateBps} between 0 and 10000`),
     unique('commission_presets_name_from_unique').on(t.name, t.effectiveFrom),
     pgPolicy('team_read', { for: 'select', using: readsTeam }),
-    pgPolicy('owner_insert', { for: 'insert', withCheck: isOwner }),
+    pgPolicy('owner_insert', {
+      for: 'insert',
+      withCheck: sql`${isOwner} and ${t.createdBy} = ${currentUser}`,
+    }),
   ],
 );
 
@@ -128,6 +137,9 @@ export const memberCommissionRates = pgTable(
       for: 'select',
       using: sql`${readsTeam} or exists (select 1 from team_members m where m.id = ${t.memberId} and m.user_id = ${currentUser})`,
     }),
-    pgPolicy('owner_insert', { for: 'insert', withCheck: isOwner }),
+    pgPolicy('owner_insert', {
+      for: 'insert',
+      withCheck: sql`${isOwner} and ${t.createdBy} = ${currentUser}`,
+    }),
   ],
 );

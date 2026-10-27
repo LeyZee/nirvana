@@ -20,7 +20,7 @@ export const TeamMemberStatusSchema = z.enum(TEAM_MEMBER_STATUSES);
 export type TeamMemberStatus = z.infer<typeof TeamMemberStatusSchema>;
 
 /**
- * What a transaction of `withMember` may read of the team (ADR 0023 § Données et RLS, EQ-01): `owner` everything and
+ * What a transaction of `withMember` may read of the team (ADR 0024, EQ-01): `owner` everything and
  * alone writes rates and presets, `agency` the whole team, `self` one's own rows. Decided by the server, never read
  * from a request.
  */
