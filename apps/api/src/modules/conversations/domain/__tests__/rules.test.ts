@@ -56,11 +56,13 @@ describe('conversation rules', () => {
     expect(followUpIdempotencyKey('c', AT, 1)).toBe(`follow_up:c:${String(AT.getTime())}:1`);
   });
 
-  it('puts a follow-up off within a day, never into the past nor further', () => {
+  it('puts a follow-up off within eight days, never into the past nor further', () => {
     expect(followUpRetry(undefined, AT)).toBeNull();
     expect(followUpRetry(later(9 * 3_600), AT)).toEqual(later(9 * 3_600));
     expect(followUpRetry(later(24 * 3_600), AT)).toEqual(later(24 * 3_600));
-    expect(followUpRetry(later(24 * 3_600 + 1), AT)).toBeNull();
+    // Her next reply slot may be days away (P3-14): up to eight days.
+    expect(followUpRetry(later(8 * 24 * 3_600), AT)).toEqual(later(8 * 24 * 3_600));
+    expect(followUpRetry(later(8 * 24 * 3_600 + 1), AT)).toBeNull();
     expect(followUpRetry(AT, AT)).toBeNull();
   });
 

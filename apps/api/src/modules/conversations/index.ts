@@ -6,6 +6,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { createConversationCommands, type ConversationCommands } from './application/commands';
 import { createFollowUpJob } from './application/jobs/follow-up';
 import { createRecordFactsJob } from './application/jobs/record-facts';
+import { createReopenJob } from './application/jobs/reopen';
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
 import type {
@@ -17,6 +18,8 @@ import type {
   FollowUpPlan,
   JobLogger,
   OutboundSender,
+  ReplyHours,
+  ShiftPresence,
 } from './domain/ports';
 import { createDrizzleConversationReader } from './infra/db/reader';
 import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
@@ -44,6 +47,7 @@ export interface ConversationsModule extends ConversationCommands {
     send(payload: JobPayload<'conversation.send'>, logger: JobLogger, attempt: number): Promise<void>;
     recordFacts(payload: JobPayload<'conversation.record_facts'>, logger: JobLogger): Promise<void>;
     followUp(payload: JobPayload<'conversation.follow_up'>, logger: JobLogger): Promise<void>;
+    reopen(payload: JobPayload<'conversation.reopen'>, logger: JobLogger): Promise<void>;
   };
 }
 
@@ -64,6 +68,10 @@ export interface ConversationsDeps {
   readonly composer?: DraftComposer;
   /** Her follow-up delays (P3-10, agent module's adapter); without it, no follow-up is scheduled. */
   readonly followUps?: FollowUpPlan;
+  /** Her hours (P3-14, `persona`); without them she is always open and quiet from 23:00 to 9:00, as before. */
+  readonly replyHours?: ReplyHours;
+  /** Who works her conversations now (ADR 0025, `scheduling`); without it, nobody does. */
+  readonly presence?: ShiftPresence;
   readonly clock?: Clock;
 }
 
@@ -93,6 +101,8 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
         voice: deps.voice,
         fans: deps.fans,
         ...(deps.composer === undefined ? {} : { composer: deps.composer }),
+        ...(deps.replyHours === undefined ? {} : { replyHours: deps.replyHours }),
+        ...(deps.presence === undefined ? {} : { presence: deps.presence }),
       }),
       send: createSendJob({
         uow,
@@ -107,7 +117,9 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
         fans: deps.fans,
         ...(deps.composer === undefined ? {} : { composer: deps.composer }),
         ...(deps.followUps === undefined ? {} : { followUps: deps.followUps }),
+        ...(deps.replyHours === undefined ? {} : { replyHours: deps.replyHours }),
       }),
+      reopen: createReopenJob({ uow, clock }),
     },
   };
 }

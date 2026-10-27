@@ -169,6 +169,13 @@
       "when": 1793135886202,
       "tag": "0023_leaves_and_swaps",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793139620797,
+      "tag": "0024_agent_hours",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,8 @@ Dernière revue : 2026-10-16. Le schéma Drizzle (`packages/db/src/schema/`, P0-
 ## Tenant et comptes
 
 ```
-creators            id, display_name, timezone, settings jsonb (schéma Zod CreatorSettings), created_at
+creators            id, display_name, timezone, settings jsonb (schéma Zod CreatorSettings),
+                    agent_hours jsonb (AgentHoursSchema, null = DEFAULT_AGENT_HOURS, P3-14), created_at
 platform_accounts   id, creator_id, platform (reveal|onlyfans|instagram|nirvana), handle,
                     session_state (none|valid|warning|expired), session_ciphertext bytea, session_updated_at,
                     last_poll_at, consecutive_errors, paused_until (coupe-circuit), connector_config jsonb (ConnectorConfigSchema)

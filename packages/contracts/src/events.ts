@@ -149,6 +149,7 @@ export const EVENT_TYPES = [
   'summary_refreshed',
   'handoff_requested',
   'reply_skipped',
+  'reply_deferred',
   'desire_scored',
   'takeover_started',
   'takeover_ended',
@@ -204,6 +205,11 @@ export const EVENT_PAYLOADS = {
     /** She chose to wait (P3-11): her answer is tried again at that time, unless he writes first. */
     retryAt: z.iso.datetime().exactOptional(),
   }),
+  /**
+   * Out of her reply slots, with nobody on shift (P3-14): no draft, his message waits for `until`, the opening of her
+   * next slot, when the answer is tried again. The conversation stays pending.
+   */
+  reply_deferred: z.object({ reason: z.enum(['outside_hours']), until: z.iso.datetime() }),
   /**
    * The engine's desire score of the fan changed (P3-12): written with the result it came with, only when it moved.
    * The conversation projects the last one; `before` is the stored score cooled down to that moment, `null` for the
@@ -297,6 +303,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('summary_refreshed'),
   typedEvent('handoff_requested'),
   typedEvent('reply_skipped'),
+  typedEvent('reply_deferred'),
   typedEvent('desire_scored'),
   typedEvent('takeover_started'),
   typedEvent('takeover_ended'),
