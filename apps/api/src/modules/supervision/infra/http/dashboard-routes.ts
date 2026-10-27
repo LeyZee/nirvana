@@ -86,8 +86,16 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           telegram,
           automatic,
         });
-        // ADR 0023: a creator never sees a conversation nor a fan. Her Dashboard keeps the aggregates only.
-        return user.role === 'creator' ? { ...dashboard, todos: [], fans: [] } : dashboard;
+        // ADR 0023: a creator never sees a conversation nor a fan, nor the agency's figures (the day's AI spend of
+        // every creator, the jobs of no creator). Her Dashboard keeps her own aggregates only.
+        if (user.role !== 'creator') return dashboard;
+        return {
+          ...dashboard,
+          todos: [],
+          fans: [],
+          budget: { ...dashboard.budget, spentToday: null },
+          jobs: { dead: null },
+        };
       },
     );
     return Promise.resolve();

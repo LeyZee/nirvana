@@ -78,7 +78,7 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
  */
 export function DashboardPage({ forCreator = false }: { forCreator?: boolean }): JSX.Element {
   const [period, setPeriod] = useState<Period>('day');
-  const view = useDashboard(period);
+  const view = useDashboard(period, forCreator);
   if (view.status === 'loading') {
     return (
       <div className="db" aria-busy="true">

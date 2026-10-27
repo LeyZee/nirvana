@@ -261,6 +261,8 @@ describe('GET /v1/dashboard', () => {
     expect(response.body).not.toContain('Julien');
     expect(dashboard.reveal).toMatchObject({ connected: true, conversations: 3 });
     expect(dashboard.guards.today.minor).toBe(1);
+    expect(dashboard.budget.spentToday).toBeNull();
+    expect(dashboard.jobs.dead).toBeNull();
   });
 
   it('asks a human to look at a send that failed for good', async () => {
