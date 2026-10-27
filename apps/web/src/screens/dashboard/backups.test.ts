@@ -8,8 +8,13 @@ const status = (patch: Partial<BackupStatus>): BackupStatus => ({
   lastSucceededAt: '2026-10-26T02:12:00.000Z',
   overdueAfterHours: 26,
   lastRun: null,
-  lastRestoreTest: null,
-  restoreTestFresh: false,
+  lastRestoreTest: {
+    testedAt: '2026-10-01T10:00:00.000Z',
+    backupFinishedAt: '2026-09-30T01:05:00.000Z',
+    durationSeconds: 420,
+    rowCountMismatches: 0,
+  },
+  restoreTestFresh: true,
   ...patch,
 });
 
@@ -22,6 +27,7 @@ describe('the backup banner', () => {
     expect(backupBannerOf(status({ state: 'overdue' }), 'Europe/Paris')).toEqual({
       title: 'Aucune sauvegarde réussie depuis le 26 octobre à 03:12',
       text: 'Elle doit réussir au moins toutes les 26 h : d’ici là, rien de récent n’est copié hors de la base.',
+      restore: null,
     });
   });
 
@@ -56,5 +62,49 @@ describe('the backup banner', () => {
     expect(backupBannerOf(status({ state: 'overdue', lastRun }))?.text).toMatch(
       /Une sauvegarde est en cours\.$/u,
     );
+  });
+
+  it('says when no restore test is recent, even with the export on time', () => {
+    expect(backupBannerOf(status({ lastRestoreTest: null, restoreTestFresh: false }))).toEqual({
+      title: 'Aucun essai de restauration récent',
+      text: 'Aucun essai de restauration n’est encore noté. Il en faut un de moins de 90 jours pour valider une paie.',
+      restore: null,
+    });
+    const old = {
+      testedAt: '2026-07-12T10:00:00.000Z',
+      backupFinishedAt: '2026-09-30T01:05:00.000Z',
+      durationSeconds: 420,
+      rowCountMismatches: 0,
+    };
+    expect(
+      backupBannerOf(status({ lastRestoreTest: old, restoreTestFresh: false }), 'Europe/Paris')?.text,
+    ).toBe(
+      'Le dernier essai de restauration date du 12 juillet. Il en faut un de moins de 90 jours pour valider une paie.',
+    );
+  });
+
+  it('says a recent test that missed rows by its outcome only', () => {
+    const missed = {
+      testedAt: '2026-10-20T10:00:00.000Z',
+      backupFinishedAt: '2026-09-30T01:05:00.000Z',
+      durationSeconds: 420,
+      rowCountMismatches: 3,
+    };
+    expect(
+      backupBannerOf(status({ lastRestoreTest: missed, restoreTestFresh: false }), 'Europe/Paris')?.text,
+    ).toBe(
+      'Le dernier essai de restauration, le 20 octobre, n’a pas retrouvé toutes les lignes. Il en faut un de moins de 90 jours pour valider une paie.',
+    );
+  });
+
+  it('adds the restore test as one more line when the export is late too', () => {
+    const banner = backupBannerOf(
+      status({ state: 'overdue', lastRestoreTest: null, restoreTestFresh: false }),
+    );
+    expect(banner?.title).toMatch(/^Aucune sauvegarde réussie depuis/u);
+    expect(banner?.restore).toBe(
+      'Aucun essai de restauration n’est encore noté. Il en faut un de moins de 90 jours pour valider une paie.',
+    );
+    expect(backupBannerOf(status({ state: 'overdue' }))?.restore).toBeNull();
   });
 });

@@ -2,7 +2,10 @@ import type { JSX } from 'react';
 
 import { backupBannerOf, useBackupStatus } from './backups';
 
-/** The owner's banner on the daily export (OPS-02): shown only when it is missing, amber, with nothing to click. */
+/**
+ * The owner's banner on the daily export and its restore test (OPS-02): shown only when one is missing, amber, with
+ * nothing to click.
+ */
 export function BackupBanner({ enabled }: { enabled: boolean }): JSX.Element | null {
   const status = useBackupStatus(enabled);
   const banner = enabled && status !== undefined ? backupBannerOf(status) : null;
@@ -28,6 +31,7 @@ export function BackupBanner({ enabled }: { enabled: boolean }): JSX.Element | n
           {banner.title}
         </p>
         <p className="db-backup__text">{banner.text}</p>
+        {banner.restore === null ? null : <p className="db-backup__text">{banner.restore}</p>}
       </div>
     </aside>
   );
