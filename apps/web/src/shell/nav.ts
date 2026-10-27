@@ -25,7 +25,16 @@ export const SECTIONS = [
 export type Section = (typeof SECTIONS)[number];
 
 /** The sections whose screen exists: a tab appears only then, never empty nor greyed out (ADR 0024). */
-export const READY_SECTIONS = ['/', '/suivi', '/entrainer', '/equipe', '/creatrices', '/reglages'] as const;
+export const READY_SECTIONS = [
+  '/',
+  '/aujourdhui',
+  '/suivi',
+  '/entrainer',
+  '/planning',
+  '/equipe',
+  '/creatrices',
+  '/reglages',
+] as const;
 export type ReadySection = (typeof READY_SECTIONS)[number];
 
 export type Family = 'chatting' | 'agency';
