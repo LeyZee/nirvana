@@ -24,12 +24,15 @@ export function TrackingPage({
   selected,
   onSelect,
   canDecide,
+  canAddCreator,
 }: {
   /** The conversation open in the reader (`/suivi?conversation=<id>`), or null for the list alone. */
   selected: string | null;
   onSelect: (conversationId: string | null) => void;
   /** Owners and chatters decide on drafts and take over; a creator reads. */
   canDecide: boolean;
+  /** Créatrices is in the account's rail: the owner adds a creator from there; a team member waits for his. */
+  canAddCreator: boolean;
 }): JSX.Element {
   const creatorsQuery = useCreators();
   const creators = creatorsQuery.data ?? [];
@@ -96,7 +99,7 @@ export function TrackingPage({
             <i />
           </div>
         </Panel>
-      ) : creators.length === 0 ? (
+      ) : creators.length === 0 && canAddCreator ? (
         <Notice
           title="Aucune créatrice pour l’instant"
           text="Ajoute ta première créatrice : ses conversations arriveront ici dès que sa session Reveal sera reliée."
@@ -105,6 +108,11 @@ export function TrackingPage({
             Aller à Créatrices
           </Link>
         </Notice>
+      ) : creators.length === 0 ? (
+        <Notice
+          title="Rien pour toi pour l’instant"
+          text="Les conversations des créatrices qui te sont confiées arrivent ici."
+        />
       ) : (
         <div className="tr-layout">
           <div className="tr-side">

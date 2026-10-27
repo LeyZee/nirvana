@@ -13,6 +13,7 @@ import {
   FanIdSchema,
   MessageIdSchema,
   PlatformAccountIdSchema,
+  UserIdSchema,
 } from '@nirvana/contracts';
 import type { schema } from '@nirvana/db';
 import { z } from 'zod';
@@ -33,6 +34,7 @@ export function toConversation(row: typeof schema.conversations.$inferSelect): C
     lastInboundAt: row.lastInboundAt,
     lastOutboundAt: row.lastOutboundAt,
     unreadCount: row.unreadCount,
+    routedToUserId: row.routedToUserId === null ? null : UserIdSchema.parse(row.routedToUserId),
   };
 }
 

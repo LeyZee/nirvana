@@ -1,4 +1,4 @@
-import type { CurrentUser } from '@nirvana/contracts';
+import type { Me } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useCallback, useEffect, useState, type JSX } from 'react';
@@ -13,7 +13,7 @@ type Session =
   /** `attempt` counts the failed reads in a row, so the next one waits a little longer. */
   | { status: 'unreachable'; attempt: number }
   | { status: 'signed_out' }
-  | { status: 'signed_in'; user: CurrentUser };
+  | { status: 'signed_in'; user: Me };
 
 /**
  * When the app asks again while the server does not answer: quickly at first (a local server still starting), then

@@ -394,7 +394,10 @@ export interface PageRequest {
 
 /** Read side of the dashboard (no lock, no event): implemented in `infra/db`. */
 export interface ConversationReader {
-  list(creatorId: CreatorId, page: PageRequest): Promise<Page<ConversationSummary>>;
+  /** Every conversation of the creator, or with `routedTo` only those routed to that account (ADR 0024). */
+  list(creatorId: CreatorId, page: PageRequest, routedTo?: UserId): Promise<Page<ConversationSummary>>;
+  /** Whether the conversation is routed to that account: the only way a member whose scope is `self` reaches it. */
+  isRoutedTo(creatorId: CreatorId, id: ConversationId, userId: UserId): Promise<boolean>;
   get(creatorId: CreatorId, id: ConversationId): Promise<ConversationDetail | null>;
   messages(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<MessageView>>;
   events(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<ConversationEventView>>;

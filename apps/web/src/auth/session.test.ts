@@ -15,7 +15,16 @@ afterEach(() => {
 
 describe('dashboard session', () => {
   it('reads the signed-in user, or null without a session', async () => {
-    const user = { id: 'u1', email: 'owner@example.test', name: 'Owner', role: 'owner', creatorIds: [] };
+    const user = {
+      id: 'u1',
+      email: 'owner@example.test',
+      name: 'Owner',
+      role: 'owner',
+      creatorIds: [],
+      routedCreatorIds: [],
+      team: null,
+      teamScope: 'owner',
+    };
     answer(200, user);
     expect(await fetchCurrentUser()).toEqual(user);
     answer(401);

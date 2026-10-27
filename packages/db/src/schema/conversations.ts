@@ -24,6 +24,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
+import { user } from './auth';
 import { createdAt, enumCheck, enumText, id, tenantPolicy, timestampTz, updatedAt } from './columns';
 import { fans } from './fans';
 import { personaVersions } from './persona';
@@ -55,6 +56,11 @@ export const conversations = pgTable(
     unreadCount: integer('unread_count').notNull().default(0),
     cooldowns: jsonb('cooldowns').notNull().default({}),
     activeScriptRunId: uuid('active_script_run_id'),
+    /**
+     * The team member this conversation is routed to (a `sale` handoff, EQ-08): a member whose scope is `self` reads
+     * and acts on a conversation of his creators only through this column (ADR 0024). Null: routed to nobody.
+     */
+    routedToUserId: text('routed_to_user_id').references(() => user.id),
     updatedAt: updatedAt(),
   },
   (t) => [
@@ -63,6 +69,9 @@ export const conversations = pgTable(
     unique('conversations_platform_conversation_unique').on(t.platformAccountId, t.platformConversationId),
     index('conversations_account_state_idx').on(t.platformAccountId, t.state),
     index('conversations_creator_last_inbound_idx').on(t.creatorId, t.lastInboundAt.desc()),
+    index('conversations_routed_to_idx')
+      .on(t.routedToUserId, t.updatedAt.desc())
+      .where(sql`${t.routedToUserId} is not null`),
     tenantPolicy(t.creatorId),
   ],
 );

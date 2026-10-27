@@ -101,7 +101,7 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags)', () => {
 
   it('reads his limits, none at first', async () => {
     expect((await server.inject({ method: 'GET', url: url(fan, anna) })).statusCode).toBe(401);
-    const read = await get(creator);
+    const read = await get(operator);
     expect(read.statusCode).toBe(200);
     expect(read.json()).toEqual({ fanId: fan, flags: {} });
   });
@@ -143,6 +143,8 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags)', () => {
   });
 
   it('refuses the creator, another creator, an unknown fan and a malformed request', async () => {
+    // A creator never sees her fans' data (ADR 0023), not even his limits.
+    expect((await get(creator)).statusCode).toBe(403);
     expect((await put(creator, { flag: 'fragile', set: true })).statusCode).toBe(403);
     expect((await put(operator, { flag: 'fragile', set: true }, bea)).statusCode).toBe(403);
     // The owner sees every creator, but Anna's fan is not Bea's.

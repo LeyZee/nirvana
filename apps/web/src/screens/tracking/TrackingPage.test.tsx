@@ -136,7 +136,7 @@ function serve(routes: {
 }
 
 /** Suivi as the app mounts it: the open conversation lives in the address. */
-function renderPage(at = '/suivi', canDecide = true): void {
+function renderPage(at = '/suivi', canDecide = true, canAddCreator = true): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute();
   const tracking = createRoute({
@@ -151,6 +151,7 @@ function renderPage(at = '/suivi', canDecide = true): void {
           selected={conversation ?? null}
           onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
           canDecide={canDecide}
+          canAddCreator={canAddCreator}
         />
       );
     },
@@ -185,6 +186,14 @@ describe('TrackingPage', () => {
     expect(await screen.findByText('Aucune créatrice pour l’instant')).toBeDefined();
     expect(screen.getByRole('link', { name: 'Aller à Créatrices' }).getAttribute('href')).toBe('/creatrices');
     expect(screen.queryByText(/pnpm/u)).toBeNull();
+  });
+
+  it('never sends a team member to Créatrices, which is not in his rail', async () => {
+    serve({ creators: { status: 200, body: { creators: [] } } });
+    renderPage('/suivi', true, false);
+    expect(await screen.findByText('Rien pour toi pour l’instant')).toBeDefined();
+    expect(screen.queryByText('Aucune créatrice pour l’instant')).toBeNull();
+    expect(document.querySelector('a[href="/creatrices"]')).toBeNull();
   });
 
   it('says the server does not answer, and Réessayer reads again', async () => {
