@@ -26,7 +26,7 @@ export const GUARD_LABELS: Readonly<Record<GuardCode, string>> = {
   stage_direction: 'une didascalie (« *sourit* », « (rires) »)',
   media_not_sent: 'un média annoncé qui n’est pas joint',
   platform_meeting_word: 'un mot de rencontre que Reveal repère',
-  fake_emergency: 'une maladie ou une urgence pour vendre',
+  fake_emergency: 'une maladie, une dette ou une urgence pour vendre',
   repetition: 'une phrase déjà dite',
   closed_question_streak: 'trop de questions fermées d’affilée',
 };

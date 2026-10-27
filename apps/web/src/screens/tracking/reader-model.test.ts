@@ -113,7 +113,7 @@ describe('decisionError', () => {
         }),
       ),
     ).toBe(
-      'Ce message ne peut pas partir : un mot de rencontre que Reveal repère, une maladie ou une urgence pour vendre. Retouche-le ou refuse-le.',
+      'Ce message ne peut pas partir : un mot de rencontre que Reveal repère, une maladie, une dette ou une urgence pour vendre. Retouche-le ou refuse-le.',
     );
     expect(decisionError(422, apiError('draft_unprocessable'))).toBe(
       'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.',
