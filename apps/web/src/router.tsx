@@ -17,6 +17,8 @@ import {
   SettingsLayout,
   TelegramPage,
 } from './screens/settings/SettingsLayout';
+import { MembersPage } from './screens/team/MembersPage';
+import { parseTeamSearch } from './screens/team/model';
 import { TrackingPage } from './screens/tracking/TrackingPage';
 import { parseTrackingSearch } from './screens/tracking/view';
 import { CorrectionsPage } from './screens/train/CorrectionsPage';
@@ -80,6 +82,30 @@ const tracking = createRoute({
   },
 });
 
+const team = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/equipe',
+  validateSearch: parseTeamSearch,
+  component: function Team() {
+    const { onglet, membre } = team.useSearch();
+    const navigate = team.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <MembersPage
+        tab={onglet === 'managers' ? 'manager' : 'chatter'}
+        selected={membre ?? null}
+        canManage={user.role === 'owner'}
+        onTab={(tab) =>
+          void navigate({
+            search: (before) => ({ ...before, onglet: tab === 'manager' ? 'managers' : undefined }),
+          })
+        }
+        onSelect={(id) => void navigate({ search: (before) => ({ ...before, membre: id ?? undefined }) })}
+      />
+    );
+  },
+});
+
 const train = createRoute({ getParentRoute: () => rootRoute, path: '/entrainer', component: TrainLayout });
 const trainIndex = createRoute({
   getParentRoute: () => train,
@@ -137,6 +163,7 @@ const routeTree = rootRoute.addChildren([
   creators,
   train.addChildren([trainIndex, playground, corrections, tests]),
   tracking,
+  team,
   settings.addChildren([settingsIndex, aiModels, telegram, devices, appearance, agentMode]),
 ]);
 
