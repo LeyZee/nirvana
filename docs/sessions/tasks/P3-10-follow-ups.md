@@ -1,9 +1,9 @@
-# Relances : un fan n'est jamais laissé sans réponse
+# P3-10 Relances : un fan n'est jamais laissé sans réponse
 
-Statut : proposed
+Statut : todo (ID validé par Charles le 27/10 à 18h37)
 Phase : 3
 Dépend de : P0-05 (conversations), P3-02, `PROPOSED-method-gaps.md`
-Branche : task/<id>-follow-ups
+Branche : task/P3-10-follow-ups
 
 ## Objectif
 

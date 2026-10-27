@@ -1,9 +1,9 @@
-# Curseur de sexualisation, minimum de KYC et âge confirmé
+# P3-09 Curseur de sexualisation, minimum de KYC et âge confirmé
 
-Statut : proposed
+Statut : in_progress (ID validé par Charles le 27/10 à 18h37)
 Phase : 3
 Dépend de : P3-02 (limites du fan), `PROPOSED-method-gaps.md`
-Branche : task/<id>-sexualization-cursor
+Branche : task/P3-09-sexualization-cursor
 
 ## Objectif
 
@@ -25,9 +25,11 @@ Faire appliquer par le code, jamais par le prompt, les trois réglages de la mé
 - [ ] Le playground suit la même règle (horloge simulée, `advance`).
 - [ ] Tests unitaires sur chaque seuil, scénarios d'évals sur le recadrage.
 
-## Question pour Charles
+## Décision de Charles (27/10, 18h38) : l'âge confirmé par sa déclaration
 
-Qui confirme l'âge ? Aujourd'hui seul un humain pose `ageConfirmedAt` : sans lui, l'agent n'écrit rien d'explicite et ne vend rien. Recommandation : un âge de 18 ans ou plus dit clairement par le fan, sans aucun signe de mineur (texte ou média), le confirme par la politique (auteur `system`, retirable par un humain et retiré par le code au moindre signe de mineur, comme aujourd'hui).
+Aujourd'hui seul un humain pose `ageConfirmedAt`. Désormais, un âge de 18 ans ou plus dit clairement par le fan, sans aucun signe de mineur (texte ou média), le confirme par la politique (auteur `system`). Un humain peut le retirer, et le code le retire au moindre signe de mineur, comme aujourd'hui.
+
+- [ ] Règle pure : un fait déclaré `age` ≥ 18 (proposé par le cerveau, `kind: declared`), sans risque `minor_suspected` ni signe de mineur dans le tour, pose `ageConfirmedAt`.
 
 ## Critères d'acceptation
 
@@ -35,6 +37,6 @@ Qui confirme l'âge ? Aujourd'hui seul un humain pose `ageConfirmedAt` : sans lu
 
 ## Hors périmètre
 
-Les relances (`PROPOSED-follow-ups.md`), les scripts (P6-01).
+Les relances (`P3-10-follow-ups.md`), les scripts (P6-01).
 
 ## Notes de session

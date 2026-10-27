@@ -89,8 +89,8 @@ Le gel `money_trouble` ne s'efface jamais de lui-même, même après un achat : 
 
 Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 
-- [ ] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `PROPOSED-sexualization-cursor.md`.
-- [ ] Relances et « jamais sans réponse » : `PROPOSED-follow-ups.md` (partage avec Bilan pour le worker).
+- [ ] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `P3-09-sexualization-cursor.md`.
+- [ ] Relances et « jamais sans réponse » : `P3-10-follow-ups.md` (partage avec Bilan pour le worker).
 - [ ] Scripts déjà reçus, packs refusés, dossier Jour / Nuit, première offre, attention après achat : après P6-01.
 
 ## Critères d'acceptation
