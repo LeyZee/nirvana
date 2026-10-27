@@ -109,6 +109,18 @@ describe('the rail of each role', () => {
     expect(tabs()).toEqual(['Suivi']);
   });
 
+  it('sends a creator who opens Suivi to the Dashboard: she never sees a conversation', async () => {
+    const router = renderApp(
+      { ...base, role: 'creator', team: null, teamScope: 'self' },
+      '/suivi?conversation=c1',
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/');
+    });
+    expect(tabs()).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
+    expect(screen.getByText('Créatrice')).toBeDefined();
+  });
+
   it('keeps a manager out of Entraîner and Réglages', async () => {
     const router = renderApp(manager, '/reglages/modeles-ia');
     await waitFor(() => {

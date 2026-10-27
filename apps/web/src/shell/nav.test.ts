@@ -35,7 +35,7 @@ describe('railKindOf', () => {
     const away: Me = { ...manager, team: { role: 'manager', status: 'on_leave' }, teamScope: 'self' };
     expect(railKindOf(away)).toBe('chatter');
     expect(railKindOf(operator)).toBe('operator');
-    expect(railKindOf(creator)).toBe('operator');
+    expect(railKindOf(creator)).toBe('creator');
   });
 });
 
@@ -82,6 +82,8 @@ describe('railOf, with the screens of today', () => {
     expect(labels(operator)).toEqual(labels(owner));
     expect(labels(manager)).toEqual(['Dashboard', 'Suivi']);
     expect(labels(chatter)).toEqual(['Suivi']);
+    // A creator never sees a conversation (ADR 0023): no Suivi.
+    expect(labels(creator)).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
   });
 
   it('titles Chatting, but not a lone Créatrices, and needs no « Plus »', () => {
@@ -112,5 +114,6 @@ describe('sectionOf and canOpen', () => {
       expect(canOpen(rail, section)).toBe(false);
     }
     expect(canOpen(railOf(owner), '/reglages')).toBe(true);
+    expect(canOpen(railOf(creator), '/suivi')).toBe(false);
   });
 });
