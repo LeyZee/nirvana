@@ -250,6 +250,10 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           onDroppedNotes: (event) => {
             logger.warn(event, 'fan notes shaped like an order kept out of the prompt');
           },
+          // His declared age could not be saved: the next answer stays careful, the miss is counted here (P3-09).
+          onLimitsNotSaved: (event) => {
+            logger.warn(event, 'fan limit not saved');
+          },
           // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
           timeZoneOf: async (creatorId) => {
             const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);
