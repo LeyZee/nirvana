@@ -52,3 +52,12 @@ Branche : task/<id>-<slug>
 | P3-07 | Notifications Telegram : bots, groupes, routage, page Réglages › Telegram | 3 | in_progress | P0-05, P0-07b, P3-03 |
 | H-01 | Première session d'hygiène | 0 | todo | P0-07b |
 | D-01 | Design system « Liquid Glass » | 4 | in_progress | P0-01 |
+| EQ-01 | Équipe : membres, pays, commission, paramètres de paie des plateformes | équipe | todo | ADR 0023, carte de navigation |
+| EQ-02 | Planning des shifts et « qui est en poste » | équipe | todo | EQ-01 |
+| EQ-03 | Rapport de fin de shift dans Nirvana | équipe | todo | EQ-02 |
+| EQ-04 | Moteur de paie : calcul pur, périodes, verrou | équipe | todo | EQ-01, EQ-03 |
+| EQ-05 | Paie : écrans de validation, de paiement et « Mes commissions » | équipe | todo | EQ-04 |
+| EQ-06 | Factures des prestataires : autofacturation, avoirs, export comptable | équipe | todo | EQ-04, EQ-05 |
+| EQ-07 | Import de l'historique d'Imperium (optionnel) | équipe | blocked (pas de base d'Imperium) | EQ-01 à EQ-06 |
+| EQ-08 | Mode hybride : passage à l'humain pour vendre, routage et attribution | 3-4 | blocked (capture Reveal, clés) | EQ-02, P6-01 |
+| EQ-09 | PWA de la créatrice : routine, revenus, qui est en poste | 5 | todo | EQ-01, EQ-02, EQ-04 |

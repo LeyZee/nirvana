@@ -1,8 +1,8 @@
-# Rapport de fin de shift dans Nirvana (ID à proposer)
-Statut : proposed (lot 3 de l'ADR 0023, ID à valider par Charles)
+# EQ-03 Rapport de fin de shift dans Nirvana
+Statut : todo (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
-Dépend de : fiche Planning (`PROPOSED-shift-planning.md`)
-Branche : task/<id>-shift-reports
+Dépend de : EQ-02 ; pour l'écran, la PR du shell par rôle (ordre dans EQ-01)
+Branche : task/eq-03-shift-reports
 
 ## Objectif
 Le chatteur déclare à la fin de son shift ce qu'il a généré, directement dans l'application ; un manager le valide ; ces montants nourrissent la paie des comptes en source « déclaré ». Remplace les rapports postés dans Telegram puis lus par un bot dans Imperium.
@@ -16,7 +16,7 @@ Le chatteur déclare à la fin de son shift ce qu'il a généré, directement da
 - [ ] Base (via le propriétaire de `packages/db`) : `shift_reports` avec `creator_id` et `member_id`, unicité par shift, `audit_log`. RLS sur les deux : la créatrice **et** (le membre lui-même ou le scope `agency`), sinon deux chatteurs d'une même créatrice liraient leurs montants.
 - [ ] Créer ou modifier un rapport prend le verrou consultatif (membre, période) que prend aussi la validation de la paie. Un shift appartient à la période où il commence, dans le fuseau de l'agence.
 - [ ] Réglage du compte plateforme : source de revenus `declared` | `detected`, qui ne change qu'à une frontière de période.
-- [ ] Écrans : « Faire mon rapport » au bout du shift (trois champs, envoi en un geste), Mes rapports pour le chatteur, Équipe > Rapports pour valider en lot, avec annulation de quelques secondes.
+- [ ] Écrans, à la place que fixe la carte de navigation : « Faire mon rapport » au bout du shift (trois champs, envoi en un geste), les rapports passés du chatteur, les rapports de l'équipe à valider en lot, avec annulation de quelques secondes.
 
 ## Critères d'acceptation
 - Tests : double envoi du même rapport sans doublon, période verrouillée, ajustement après validation, un compte en « détecté » n'accepte pas de montant déclaré pour cette période, shift commencé le 15 à 23 h rangé dans la première quinzaine.

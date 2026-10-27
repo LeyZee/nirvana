@@ -1,8 +1,8 @@
-# Planning des shifts et « qui est en poste » (ID à proposer)
-Statut : proposed (lot 2 de l'ADR 0023, ID à valider par Charles)
+# EQ-02 Planning des shifts et « qui est en poste »
+Statut : todo (lot 2 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
-Dépend de : fiche Équipe (`PROPOSED-team-members.md`)
-Branche : task/<id>-shift-planning
+Dépend de : EQ-01 ; pour l'écran, la PR du shell par rôle (ordre dans EQ-01)
+Branche : task/eq-02-shift-planning
 
 ## Objectif
 Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « qui est en poste sur cette créatrice maintenant ? ».
@@ -15,7 +15,7 @@ Planifier qui chatte sur quelle créatrice et quand, et répondre partout à « 
 - [ ] Domaine pur : créneaux de l'agence (`ShiftSlot`, 4 × 6 h par défaut, réglables ; jamais `slot` seul, pris par `KycSlot`), conversion dans le fuseau d'un membre, conflits (un membre sur deux shifts qui se chevauchent ; deux membres sur le même compte et le même créneau), génération des shifts depuis les modèles récurrents (idempotente), « en poste » à un instant donné.
 - [ ] Base (via le propriétaire de `packages/db`) : `shifts`, `shift_templates`, `leave_requests`, `shift_swap_requests`, avec `creator_id` et `member_id` ; RLS sur les deux pour les congés et les échanges (la créatrice **et** le membre lui-même ou le scope `agency`). Vue « en poste » pour la créatrice : nom affiché et créneau seulement, jamais `team_members`.
 - [ ] Module `scheduling` : CRUD, matérialisation des modèles par un job Graphile rejouable, demandes de congé et d'échange (manager ou propriétaire valident), `onShift(creatorId, at)` exporté par `index.ts`.
-- [ ] Écrans : Équipe > Planning (semaine, par créatrice, fuseau au choix, conflits signalés) et Mon planning pour un chatteur.
+- [ ] Écrans, à la place que fixe la carte de navigation : le planning de l'équipe (semaine, par créatrice, fuseau au choix, conflits signalés) et celui d'un chatteur (le sien, celui de l'équipe, congés et échanges).
 - [ ] Rappel de shift et « shift sans rapport » dans l'application (À traiter du membre), pas sur Telegram.
 
 ## Critères d'acceptation

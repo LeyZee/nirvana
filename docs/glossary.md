@@ -107,7 +107,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Routage | `telegram_route` | Quel sujet va dans quel groupe, pour une créatrice ou pour toutes. |
 | Astreinte | `on_call` | Le groupe Telegram qui reçoit l'urgent la nuit. « Personne n'est prévenu la nuit » quand aucune créatrice n'en a un joignable. |
 | Apparence (Nuit, Jour, Appareil) | `appearance` (`night`, `day`, `device`) | Le thème du CRM, choisi dans Réglages › Apparence et gardé par le navigateur. Nuit par défaut ; Appareil suit le mode clair ou sombre de l'ordinateur ou du téléphone. |
-| Membre de l'équipe | `team_member` | Le profil d'un chatteur ou d'un manager de l'agence, lié à son compte : rôle d'équipe, fuseau, taux de commission, statut (ADR 0023). Pour l'agence, c'est un prestataire indépendant, jamais un salarié. |
+| Membre de l'équipe | `team_member` | Le profil d'un chatteur ou d'un manager de l'agence, lié à son compte : rôle d'équipe, pays, fuseau, taux de commission, statut (actif, en congé, malade, en déplacement, suspendu, parti) (ADR 0023). Pour l'agence, c'est un prestataire indépendant, jamais un salarié. |
+| Préréglage de commission | `commission_preset` | Un taux de commission nommé (par exemple Recrue, Confirmé, Qualifié) que le propriétaire règle et qu'on choisit en un geste sur la fiche d'un membre. |
 | Rôle d'équipe | `team_role` (`chatter`, `manager`) | Ce qu'un membre fait dans l'équipe. Distinct du rôle d'accès (`operator`) : un manager voit toute l'équipe et valide rapports et paies jusqu'à « validée ». |
 | Shift | `shift` | Une plage où un membre chatte sur un compte d'une créatrice, début et fin en UTC. |
 | Créneau | `shift_slot`, `ShiftSlot` | Une des plages fixes de la journée de l'agence (4 × 6 h par défaut) sur lesquelles se posent les shifts. Jamais `slot` seul, réservé aux slots KYC (`KycSlot`). |
