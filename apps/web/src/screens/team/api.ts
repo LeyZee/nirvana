@@ -1,0 +1,111 @@
+import {
+  ApiErrorSchema,
+  CommissionPresetListSchema,
+  InvitationLinkCreatedSchema,
+  REAUTHENTICATION_ERROR_CODE,
+  TEAM_MEMBER_ERROR_CODES,
+  TeamMemberListSchema,
+  TeamMemberNoteListSchema,
+  TeamMemberNoteSchema,
+  TeamMemberSchema,
+  type CommissionPreset,
+  type CreateTeamMemberBody,
+  type InvitationLinkCreated,
+  type InvitationLinkPurpose,
+  type TeamMember,
+  type TeamMemberErrorCode,
+  type TeamMemberNote,
+} from '@nirvana/contracts';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+
+import type { TeamRefusalCode } from './model';
+
+/**
+ * `/v1/team` as Équipe › Membres reads it (EQ-01, EQ-10). Every answer is parsed with the contract: a shape the page
+ * does not expect is an error, not a guess.
+ */
+
+const JSON_HEADERS = { 'content-type': 'application/json' };
+
+async function read<T>(url: string, parse: (body: unknown) => T): Promise<T> {
+  const response = await fetch(url, { credentials: 'include' });
+  if (!response.ok) throw new Error(`GET ${url}: ${String(response.status)}`);
+  return parse(await response.json());
+}
+
+export const fetchMembers = (): Promise<TeamMember[]> =>
+  read('/v1/team/members', (body) => TeamMemberListSchema.parse(body).members);
+
+export const fetchPresets = (): Promise<CommissionPreset[]> =>
+  read('/v1/team/commission-presets', (body) => CommissionPresetListSchema.parse(body).presets);
+
+export const fetchNotes = (memberId: string): Promise<TeamMemberNote[]> =>
+  read(`/v1/team/members/${memberId}/notes`, (body) => TeamMemberNoteListSchema.parse(body).notes);
+
+export const MEMBERS_KEY = ['team', 'members'] as const;
+
+export function useMembers(): UseQueryResult<TeamMember[]> {
+  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers });
+}
+
+/** The presets are the owner's settings: a manager who cannot read them sees the figures alone. */
+export function usePresets(): UseQueryResult<CommissionPreset[]> {
+  return useQuery({ queryKey: ['team', 'presets'], queryFn: fetchPresets, retry: false });
+}
+
+export function useNotes(memberId: string): UseQueryResult<TeamMemberNote[]> {
+  return useQuery({ queryKey: ['team', 'notes', memberId], queryFn: () => fetchNotes(memberId) });
+}
+
+/** A refusal the screen says in its own words, or a server that does not answer. */
+export type Refusal =
+  | { readonly kind: 'refused'; readonly code: TeamRefusalCode }
+  | { readonly kind: 'reauth' }
+  | { readonly kind: 'failed' };
+
+export type Outcome<T> = { readonly kind: 'ok'; readonly value: T } | Refusal;
+
+const isTeamCode = (code: string): code is TeamMemberErrorCode =>
+  TEAM_MEMBER_ERROR_CODES.some((known) => known === code);
+
+async function refusalOf(response: Response): Promise<Refusal> {
+  const parsed = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) return { kind: 'failed' };
+  const { code } = parsed.data.error;
+  if (code === REAUTHENTICATION_ERROR_CODE) return { kind: 'reauth' };
+  // A manager whose status changed since the page opened: the role guard, not a server down.
+  if (code === 'role_forbidden') return { kind: 'refused', code };
+  return isTeamCode(code) ? { kind: 'refused', code } : { kind: 'failed' };
+}
+
+async function send<T>(url: string, body: unknown, parse: (json: unknown) => T): Promise<Outcome<T>> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return await refusalOf(response);
+    return { kind: 'ok', value: parse(await response.json()) };
+  } catch {
+    return { kind: 'failed' };
+  }
+}
+
+/** `POST /v1/team/members` (owner): the account, the record and the first rate; the link comes next. */
+export const createMember = (body: CreateTeamMemberBody): Promise<Outcome<TeamMember>> =>
+  send('/v1/team/members', body, (json) => TeamMemberSchema.parse(json));
+
+/** `POST /v1/team/members/:memberId/invitation-link` (owner, recent sign-in): a new link cancels the one before. */
+export const createInvitationLink = (
+  memberId: string,
+  purpose: InvitationLinkPurpose,
+): Promise<Outcome<InvitationLinkCreated>> =>
+  send(`/v1/team/members/${memberId}/invitation-link`, { purpose }, (json) =>
+    InvitationLinkCreatedSchema.parse(json),
+  );
+
+/** `POST /v1/team/members/:memberId/notes` (owner, active manager). */
+export const addNote = (memberId: string, body: string): Promise<Outcome<TeamMemberNote>> =>
+  send(`/v1/team/members/${memberId}/notes`, { body }, (json) => TeamMemberNoteSchema.parse(json));

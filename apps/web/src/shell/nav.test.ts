@@ -78,16 +78,24 @@ describe('layoutRail, once every screen exists', () => {
 
 describe('railOf, with the screens of today', () => {
   it('shows only the tabs whose screen exists', () => {
-    expect(labels(owner)).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Créatrices', 'Réglages']);
-    expect(labels(operator)).toEqual(labels(owner));
-    expect(labels(manager)).toEqual(['Dashboard', 'Suivi']);
+    expect(labels(owner)).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Équipe', 'Créatrices', 'Réglages']);
+    // An operator without a team row keeps today's rail: no Équipe.
+    expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Créatrices', 'Réglages']);
+    expect(labels(manager)).toEqual(['Dashboard', 'Suivi', 'Équipe']);
     expect(labels(chatter)).toEqual(['Suivi']);
     // A creator never sees a conversation (ADR 0023): no Suivi.
     expect(labels(creator)).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
   });
 
-  it('titles Chatting, but not a lone Créatrices, and needs no « Plus »', () => {
+  it('titles Chatting and Agence, and puts what the phone bar cannot hold under « Plus »', () => {
     const rail = railOf(owner);
+    expect([...rail.headed]).toEqual(['chatting', 'agency']);
+    // The bar keeps Dashboard, Suivi and Équipe first (ADR 0024), then Entraîner, in the rail's order.
+    expect([...rail.more]).toEqual(['/creatrices', '/reglages']);
+  });
+
+  it('titles nothing for an operator, whose Créatrices is alone, and needs no « Plus »', () => {
+    const rail = railOf(operator);
     expect([...rail.headed]).toEqual(['chatting']);
     expect(rail.more.size).toBe(0);
   });

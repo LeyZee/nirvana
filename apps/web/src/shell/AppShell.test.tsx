@@ -67,17 +67,20 @@ function renderApp(user: Me, path: string): AppRouter {
 }
 
 const tabs = (): string[] =>
-  [...screen.getByRole('navigation', { name: 'Navigation' }).querySelectorAll('.nv-rail__item')].map(
-    (tab) => tab.getAttribute('title') ?? '',
-  );
+  [
+    ...screen
+      .getByRole('navigation', { name: 'Navigation' })
+      .querySelectorAll('.nv-rail__item:not(.nv-rail__more)'),
+  ].map((tab) => tab.getAttribute('title') ?? '');
 
 describe('the rail of each role', () => {
-  it('gives the owner his tabs in the order of ADR 0024, with the Chatting heading', async () => {
+  it('gives the owner his tabs in the order of ADR 0024, under Chatting and Agence', async () => {
     renderApp(owner, '/');
     await screen.findByText('Chatting');
-    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Créatrices', 'Réglages']);
-    expect(screen.queryByText('Agence')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Plus' })).toBeNull();
+    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Équipe', 'Créatrices', 'Réglages']);
+    expect(screen.getByText('Agence')).toBeDefined();
+    // Six places: the phone keeps four on its bar and folds the rest under « Plus ».
+    expect(screen.getByRole('button', { name: 'Plus' })).toBeDefined();
     expect(screen.getByText('Propriétaire')).toBeDefined();
   });
 
@@ -126,7 +129,7 @@ describe('the rail of each role', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/');
     });
-    expect(tabs()).toEqual(['Dashboard', 'Suivi']);
+    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Équipe']);
   });
 });
 
