@@ -71,15 +71,20 @@ export const MODE_MEANINGS: Readonly<Record<ConversationMode, string>> = {
 
 /**
  * The line under the fan's name: when he last wrote, after the mode when the lines do not share one, then the band of
- * his desire score in a word once he has one (P3-12). Never its number, never a colour: the list is no heat map.
+ * his desire score in a word once he has one (P3-12). Never its number, never a colour: the list is no heat map. The
+ * band comes apart, so that a narrow line cuts what comes before it and never the band itself.
  */
-export function subline(conversation: ConversationSummary, now: Date, withMode: boolean): string {
+export function subline(
+  conversation: ConversationSummary,
+  now: Date,
+  withMode: boolean,
+): { readonly text: string; readonly band: string | null } {
   const ago = lastMessageAgo(conversation.lastInboundAt, now);
   const wrote = ago === null ? 'N’a pas encore écrit' : `A écrit ${ago}`;
-  const line = withMode
+  const text = withMode
     ? `${MODE_LABELS[conversation.mode]} · ${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}`
     : wrote;
-  return conversation.desire === null ? line : `${line} · ${DESIRE_BAND_LABELS[conversation.desire.band]}`;
+  return { text, band: conversation.desire === null ? null : DESIRE_BAND_LABELS[conversation.desire.band] };
 }
 
 /** How « Toutes les conversations » is ordered: the most recent first unless the reader asks for the hottest. */

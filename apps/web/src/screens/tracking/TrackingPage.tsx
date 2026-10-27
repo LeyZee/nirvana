@@ -355,6 +355,7 @@ function Row({
   onOpen: () => void;
 }): JSX.Element {
   const name = conversation.fanDisplayName.trim() === '' ? 'Fan sans nom' : conversation.fanDisplayName;
+  const line = subline(conversation, now, withMode);
   return (
     <li className="nv-enter">
       <button
@@ -368,9 +369,12 @@ function Row({
         </span>
         <span className="nv-convo__main">
           <span className="nv-convo__name">{name}</span>
-          <span className="nv-convo__preview">
-            {creatorName === undefined ? null : `${creatorName} · `}
-            {subline(conversation, now, withMode)}
+          <span className="nv-convo__preview tr-preview">
+            <span className="tr-preview__text">
+              {creatorName === undefined ? null : `${creatorName} · `}
+              {line.text}
+            </span>
+            {line.band === null ? null : <span className="tr-preview__band">{` · ${line.band}`}</span>}
           </span>
         </span>
         <span className="nv-convo__side">

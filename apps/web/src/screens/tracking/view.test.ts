@@ -59,10 +59,10 @@ describe('lastMessageAgo', () => {
 
 describe('subline, sharedMode and statusClass', () => {
   it('says when he last wrote, with the mode only when the lines do not share one', () => {
-    expect(subline(conversation('1'), NOW, false)).toBe('N’a pas encore écrit');
+    expect(subline(conversation('1'), NOW, false)).toEqual({ text: 'N’a pas encore écrit', band: null });
     const auto = conversation('2', { mode: 'auto', lastInboundAt: '2026-10-17T20:55:00Z' });
-    expect(subline(auto, NOW, false)).toBe('A écrit il y a 5 min');
-    expect(subline(auto, NOW, true)).toBe('Automatique · a écrit il y a 5 min');
+    expect(subline(auto, NOW, false).text).toBe('A écrit il y a 5 min');
+    expect(subline(auto, NOW, true).text).toBe('Automatique · a écrit il y a 5 min');
   });
 
   it('finds the mode all lines share, or none', () => {
@@ -102,12 +102,16 @@ describe('bubblesFromText', () => {
 
 describe('the desire score in the list (P3-12)', () => {
   it('ends the subline with the band in a word once he has a score', () => {
-    expect(subline(conversation('1', { desire: { score: 45, band: 'playful' } }), NOW, false)).toBe(
-      'N’a pas encore écrit · joueur',
-    );
-    expect(subline(conversation('1', { mode: 'auto', desire: { score: 82, band: 'hot' } }), NOW, true)).toBe(
-      'Automatique · n’a pas encore écrit · chaud',
-    );
+    expect(subline(conversation('1', { desire: { score: 45, band: 'playful' } }), NOW, false)).toEqual({
+      text: 'N’a pas encore écrit',
+      band: 'joueur',
+    });
+    expect(
+      subline(conversation('1', { mode: 'auto', desire: { score: 82, band: 'hot' } }), NOW, true),
+    ).toEqual({
+      text: 'Automatique · n’a pas encore écrit',
+      band: 'chaud',
+    });
   });
 
   it('orders the hottest first, keeps the order of equal scores, and puts the unscored last', () => {
