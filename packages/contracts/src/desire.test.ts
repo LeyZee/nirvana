@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { DesireCurveSchema, DesirePointSchema } from './conversations';
 import { desireBandOf, desireNow } from './desire';
 import { EventBodySchema } from './events';
 
@@ -50,5 +51,22 @@ describe('desireNow', () => {
     expect(desireNow({ score: 80, at: minutesAgo(90) }, NOW, 20)).toBe(50);
     expect(desireNow({ score: 80, at: minutesAgo(24 * 60) }, NOW, 20)).toBe(20);
     expect(desireNow({ score: 10, at: minutesAgo(90) }, NOW, 20)).toBe(10);
+  });
+});
+
+describe('desire curve', () => {
+  const point = { at: '2026-10-27T21:00:00.000Z', before: null, score: 46, signals: ['intent:flirt'] };
+
+  it('takes a first point without a score before it, and closed signals only', () => {
+    expect(DesirePointSchema.safeParse(point).success).toBe(true);
+    expect(DesirePointSchema.safeParse({ ...point, before: 30 }).success).toBe(true);
+    expect(DesirePointSchema.safeParse({ ...point, signals: ['made_up'] }).success).toBe(false);
+    expect(DesirePointSchema.safeParse({ ...point, score: 101 }).success).toBe(false);
+  });
+
+  it('holds at most 200 points', () => {
+    const points = (count: number) => ({ points: Array.from({ length: count }, () => point) });
+    expect(DesireCurveSchema.safeParse(points(200)).success).toBe(true);
+    expect(DesireCurveSchema.safeParse(points(201)).success).toBe(false);
   });
 });

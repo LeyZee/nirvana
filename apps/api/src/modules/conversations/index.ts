@@ -74,7 +74,7 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
   return {
     name: 'conversations',
     ...commands,
-    routes: createConversationRoutes(createDrizzleConversationReader(deps.db), commands, {
+    routes: createConversationRoutes(createDrizzleConversationReader(deps.db, clock), commands, {
       requireRole: deps.requireRole,
       recentLogin: deps.recentLogin,
     }),

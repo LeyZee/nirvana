@@ -1,5 +1,5 @@
 # P3-12 (écrans) Note de désir dans le Suivi, le lecteur et la Persona
-Statut : blocked (attend la lecture du Suivi posée par Bilan, ci-dessous ; partie Extension de `P3-12-desire-score.md`, même ID)
+Statut : todo (la lecture du Suivi est posée par Bilan ; partie Extension de `P3-12-desire-score.md`, même ID)
 Phase : 3 (politique de l'agent)
 Dépend de : `P3-12-desire-score.md` (moteur, #222), liste fermée `DESIRE_SIGNALS` et bandes dans `packages/contracts/src/desire.ts` (accord de Bilan du 27/10), DTO du Suivi (Bilan)
 Branche : claude/extension-reveal-playground-45axcj
@@ -41,3 +41,4 @@ Le calcul de la note et ses poids (`P3-12-desire-score.md`), le DTO et sa route 
 ## Notes de session
 - 2026-10-27 (fil Extension) : fiche écrite après la relecture de #222. Elle attend la lecture du Suivi par Bilan.
 - 2026-10-27 (fil Extension) : précisions de Bilan reportées (`desireNow` dans les contrats, plancher à 0 jusqu'à P6-01, `before` à `null` sur le premier point).
+- 2026-10-27 (fil Bilan) : lecture posée. `ConversationSummarySchema.desire` (`ConversationDesireSchema`, aussi dans le détail) et `GET /v1/conversations/{id}/desire?creatorId=…` → `DesireCurveSchema` (`{ points }`, `DesirePointSchema`, au plus `DESIRE_POINTS_MAX`), mêmes droits que `/events`.

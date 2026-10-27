@@ -3,12 +3,16 @@ import {
   ConversationModeSchema,
   ConversationStateSchema,
   CurrencySchema,
+  DESIRE_POINTS_MAX,
+  desireBandOf,
+  desireNow,
   DraftIdSchema,
   DraftStatusSchema,
   FanIdSchema,
   MessageAuthorSchema,
   MessageDirectionSchema,
   MessageIdSchema,
+  type ConversationDesire,
   type ConversationSummary,
 } from '@nirvana/contracts';
 import {
@@ -22,7 +26,7 @@ import {
   type Transaction,
 } from '@nirvana/db';
 
-import type { ConversationReader, PageRequest } from '../../domain/ports';
+import type { Clock, ConversationReader, PageRequest } from '../../domain/ports';
 
 import { decodeCursor, decodeSeqCursor, encodeCursor, toStoredEvent } from './rows';
 
@@ -35,10 +39,24 @@ function paged<T>(rows: readonly T[], page: PageRequest, cursorOf: (last: T) => 
   return { items, nextCursor: rows.length > page.limit && last !== undefined ? cursorOf(last) : null };
 }
 
+/**
+ * The purchase floor of the cooling: 20 once he bought in the last seven days, read from `sales` once P6-01 exists;
+ * 0 until then, as for the engine.
+ */
+const DESIRE_FLOOR = 0;
+
+/** The stored score cooled to `now`, and the band of that cooled score (never the stored band). */
+function desireAt(score: number | null, at: Date | null, now: Date): ConversationDesire | null {
+  if (score === null || at === null) return null;
+  const cooled = desireNow({ score, at }, now, DESIRE_FLOOR);
+  return { score: cooled, band: desireBandOf(cooled) };
+}
+
 async function summaries(
   tx: Transaction,
   where: ReturnType<typeof and>,
   limit: number,
+  now: Date,
 ): Promise<ConversationSummary[]> {
   const rows = await tx
     .select({
@@ -51,6 +69,8 @@ async function summaries(
       lastOutboundAt: schema.conversations.lastOutboundAt,
       unreadCount: schema.conversations.unreadCount,
       updatedAt: schema.conversations.updatedAt,
+      desireScore: schema.conversations.desireScore,
+      desireAt: schema.conversations.desireAt,
     })
     .from(schema.conversations)
     .innerJoin(schema.fans, eq(schema.fans.id, schema.conversations.fanId))
@@ -67,11 +87,12 @@ async function summaries(
     lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,
     unreadCount: row.unreadCount,
     updatedAt: row.updatedAt.toISOString(),
+    desire: desireAt(row.desireScore, row.desireAt, now),
   }));
 }
 
 /** The inbox's queries, in tenant transactions like everything else (RLS). */
-export function createDrizzleConversationReader(db: Database): ConversationReader {
+export function createDrizzleConversationReader(db: Database, clock: Clock): ConversationReader {
   return {
     list: (creatorId, page, routedTo) =>
       withTenant(db, creatorId, async (tx) => {
@@ -85,6 +106,7 @@ export function createDrizzleConversationReader(db: Database): ConversationReade
             routedTo === undefined ? undefined : eq(schema.conversations.routedToUserId, routedTo),
           ),
           page.limit + 1,
+          clock.now(),
         );
         return paged(rows, page, (last) => encodeCursor(new Date(last.updatedAt), last.id));
       }),
@@ -104,7 +126,7 @@ export function createDrizzleConversationReader(db: Database): ConversationReade
         db,
         creatorId,
         async (tx) => {
-          const [summary] = await summaries(tx, eq(schema.conversations.id, id), 1);
+          const [summary] = await summaries(tx, eq(schema.conversations.id, id), 1, clock.now());
           if (summary === undefined) return null;
           const drafts = await tx
             .select()
@@ -185,6 +207,30 @@ export function createDrizzleConversationReader(db: Database): ConversationReade
           page,
           (last) => String(last.seq),
         );
+      }),
+
+    desireCurve: (creatorId, id) =>
+      withTenant(db, creatorId, async (tx) => {
+        const rows = await tx
+          .select()
+          .from(schema.conversationEvents)
+          .where(
+            and(
+              eq(schema.conversationEvents.conversationId, id),
+              eq(schema.conversationEvents.type, 'desire_scored'),
+            ),
+          )
+          .orderBy(sql`${schema.conversationEvents.seq} desc`)
+          .limit(DESIRE_POINTS_MAX);
+        // `weightsVersion` stays in the journal: the screen reads the movement and its signals.
+        return {
+          points: rows.toReversed().flatMap((row) => {
+            const event = toStoredEvent(row);
+            if (event.body.type !== 'desire_scored') return [];
+            const { before, score, signals } = event.body.payload;
+            return [{ at: event.at.toISOString(), before, score, signals }];
+          }),
+        };
       }),
   };
 }

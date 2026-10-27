@@ -1,6 +1,8 @@
 import {
   ConversationDetailSchema,
   ConversationIdSchema,
+  DesireCurveSchema,
+  EventIdSchema,
   MeSchema,
   CreatorIdSchema,
   MessageViewSchema,
@@ -12,7 +14,7 @@ import {
   type ConversationId,
   type CreatorId,
 } from '@nirvana/contracts';
-import { eq, schema } from '@nirvana/db';
+import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
@@ -227,6 +229,7 @@ describe('/v1/conversations', () => {
       `/v1/conversations/${id}?creatorId=${creatorId}`,
       `/v1/conversations/${id}/messages?creatorId=${creatorId}`,
       `/v1/conversations/${id}/events?creatorId=${creatorId}`,
+      `/v1/conversations/${id}/desire?creatorId=${creatorId}`,
     ]) {
       const response = await call('GET', url, cookie);
       expect(response.statusCode).toBe(403);
@@ -282,10 +285,14 @@ describe('/v1/conversations', () => {
     expect(
       (await call('GET', `/v1/conversations/${routed}?creatorId=${creatorId}`, chatter)).statusCode,
     ).toBe(200);
+    expect(
+      (await call('GET', `/v1/conversations/${routed}/desire?creatorId=${creatorId}`, chatter)).statusCode,
+    ).toBe(200);
     for (const url of [
       `/v1/conversations/${other}?creatorId=${creatorId}`,
       `/v1/conversations/${other}/messages?creatorId=${creatorId}`,
       `/v1/conversations/${other}/events?creatorId=${creatorId}`,
+      `/v1/conversations/${other}/desire?creatorId=${creatorId}`,
     ]) {
       const refused = await call('GET', url, chatter);
       expect(refused.statusCode).toBe(403);
@@ -322,6 +329,81 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
     );
     expect(all.items).toHaveLength(2);
+  });
+
+  it('shows his desire score cooled to now with the band of that score, and none before a first score (P3-12)', async () => {
+    const [scoredId, unscoredId] = conversationIds;
+    if (scoredId === undefined || unscoredId === undefined) throw new Error('seed missing');
+    // Stored at 80 (« chaud ») one half-life ago: it reads 40 now, so « joueur », whatever the stored band says.
+    await test.admin.db
+      .update(schema.conversations)
+      .set({ desireScore: 80, desireBand: 'hot', desireAt: new Date(Date.now() - 90 * 60_000) })
+      .where(eq(schema.conversations.id, scoredId));
+
+    const list = pageOf(ConversationSummarySchema).parse(
+      (await call('GET', `/v1/conversations?creatorId=${creatorId}`, ownerCookie)).json(),
+    );
+    const desireOf = (id: ConversationId) => list.items.find((item) => item.id === id)?.desire;
+    expect(desireOf(scoredId)).toEqual({ score: 40, band: 'playful' });
+    expect(desireOf(unscoredId)).toBeNull();
+    const detail = ConversationDetailSchema.parse(
+      (await call('GET', `/v1/conversations/${scoredId}?creatorId=${creatorId}`, ownerCookie)).json(),
+    );
+    expect(detail.desire).toEqual({ score: 40, band: 'playful' });
+  });
+
+  it('reads the desire curve from the journal, oldest first, the 200 most recent points (P3-12)', async () => {
+    const id = conversationIds[1] ?? newId(ConversationIdSchema);
+    const empty = await call('GET', `/v1/conversations/${id}/desire?creatorId=${creatorId}`, ownerCookie);
+    expect(empty.statusCode, empty.body).toBe(200);
+    expect(DesireCurveSchema.parse(empty.json())).toEqual({ points: [] });
+
+    const [last] = await test.admin.db
+      .select({ seq: schema.conversationEvents.seq })
+      .from(schema.conversationEvents)
+      .where(eq(schema.conversationEvents.conversationId, id))
+      .orderBy(sql`${schema.conversationEvents.seq} desc`)
+      .limit(1);
+    const start = last?.seq ?? 0;
+    const t0 = Date.parse('2026-10-17T20:00:00Z');
+    // 205 changes: 1 → 205 % 100, each one minute after the last; the first one has no score before it.
+    await test.admin.db.insert(schema.conversationEvents).values(
+      Array.from({ length: 205 }, (_, index) => ({
+        id: newId(EventIdSchema),
+        creatorId,
+        conversationId: id,
+        seq: start + index + 1,
+        type: 'desire_scored',
+        payload: {
+          before: index === 0 ? null : index % 100,
+          score: (index + 1) % 100,
+          signals: index === 204 ? ['intent:flirt', 'suggestive_emoji', 'suggestive_emoji'] : ['long_reply'],
+          weightsVersion: 'w1',
+        },
+        actor: 'ai',
+        correlationId: 'test',
+        createdAt: new Date(t0 + index * 60_000),
+      })),
+    );
+
+    const response = await call('GET', `/v1/conversations/${id}/desire?creatorId=${creatorId}`, ownerCookie);
+    expect(response.statusCode, response.body).toBe(200);
+    const { points } = DesireCurveSchema.parse(response.json());
+    expect(points).toHaveLength(200);
+    // The five oldest fall out: the curve starts at the sixth change.
+    expect(points[0]).toEqual({
+      at: new Date(t0 + 5 * 60_000).toISOString(),
+      before: 5,
+      score: 6,
+      signals: ['long_reply'],
+    });
+    expect(points.at(-1)).toEqual({
+      at: new Date(t0 + 204 * 60_000).toISOString(),
+      before: 4,
+      score: 5,
+      signals: ['intent:flirt', 'suggestive_emoji', 'suggestive_emoji'],
+    });
+    expect(points.map((point) => point.at)).toEqual(points.map((point) => point.at).toSorted());
   });
 
   it('answers 404 for a conversation that does not exist and 400 for a bad cursor', async () => {

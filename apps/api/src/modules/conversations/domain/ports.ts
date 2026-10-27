@@ -9,6 +9,7 @@ import type {
   CreatorId,
   Currency,
   DecidedDraft,
+  DesireCurve,
   DesireSignal,
   DraftId,
   DraftStatus,
@@ -456,4 +457,6 @@ export interface ConversationReader {
   get(creatorId: CreatorId, id: ConversationId): Promise<ConversationDetail | null>;
   messages(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<MessageView>>;
   events(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<ConversationEventView>>;
+  /** Its `desire_scored` events as the reader's curve: the most recent `DESIRE_POINTS_MAX`, oldest first. */
+  desireCurve(creatorId: CreatorId, id: ConversationId): Promise<DesireCurve>;
 }

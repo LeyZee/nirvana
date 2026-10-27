@@ -5,6 +5,7 @@ import {
   ConversationIdSchema,
   ConversationSummarySchema,
   CreatorIdSchema,
+  DesireCurveSchema,
   DomainError,
   DraftIdSchema,
   MessageViewSchema,
@@ -172,6 +173,23 @@ export function createConversationRoutes(
         await actorOn(request, creatorId, request.params.id);
         const page = await reader.events(creatorId, request.params.id, { limit, cursor });
         return { items: [...page.items], nextCursor: page.nextCursor };
+      },
+    );
+
+    // His desire curve (P3-12): the conversation's own rights, so a chatter reads it only while it is routed to him.
+    app.get(
+      '/conversations/:id/desire',
+      {
+        ...read,
+        schema: {
+          params: ConversationParamsSchema,
+          querystring: CreatorQuerySchema,
+          response: { 200: DesireCurveSchema },
+        },
+      },
+      async (request) => {
+        await actorOn(request, request.query.creatorId, request.params.id);
+        return reader.desireCurve(request.query.creatorId, request.params.id);
       },
     );
 
