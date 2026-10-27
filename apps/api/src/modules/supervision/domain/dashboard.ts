@@ -4,6 +4,8 @@ import {
   FanIdSchema,
   LIVE_TARGET,
   liveRate,
+  replyOpenedAt,
+  type AgentHours,
   type AgentMode,
   type AutomaticGate,
   type LiveRateReading,
@@ -46,6 +48,25 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   send_failed: 'Un message n’a pas pu partir. L’agent ne réessaie plus, un humain doit le renvoyer.',
   unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
 };
+
+/** « Sans réponse » after this long with nothing written (P3-11), counted while she may answer. */
+const UNANSWERED_AFTER_MINUTES = 30;
+
+/**
+ * Since when his last message counts as unanswered (P3-14), or `null` while it is not yet: out of her reply slots
+ * the net is silent (her hours hold the answer, `reply_deferred`), and from her opening it counts again, so that the
+ * messages of her night do not all fall in at once. Always open (no setting), it counts from his message.
+ */
+export function unansweredSince(
+  lastInboundAt: Date,
+  now: Date,
+  her: { readonly hours: AgentHours; readonly timeZone: string },
+): Date | null {
+  const opened = replyOpenedAt(her.hours, her.timeZone, now);
+  if (opened === null) return null;
+  const since = opened > lastInboundAt ? opened : lastInboundAt;
+  return now.getTime() - since.getTime() >= UNANSWERED_AFTER_MINUTES * MINUTE_MS ? since : null;
+}
 
 /** Safety first: a possible minor, consent or distress before everything else. */
 const GRAVE: ReadonlySet<WaitingConversation['kind']> = new Set(['minor', 'non_consent', 'distress']);

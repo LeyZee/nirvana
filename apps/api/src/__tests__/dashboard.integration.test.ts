@@ -2,12 +2,15 @@ import {
   ConversationDetailSchema,
   CreatorIdSchema,
   DashboardSchema,
+  DEFAULT_AGENT_HOURS,
   DraftIdSchema,
   EventIdSchema,
   KillSwitchIdSchema,
+  localClock,
   MessageIdSchema,
   newId,
   PlatformAccountIdSchema,
+  type AgentHours,
   type ConversationId,
   type CreatorId,
   type PlatformAccountId,
@@ -334,6 +337,51 @@ describe('GET /v1/dashboard', () => {
       ['Marc', 'send_failed', 'warn'],
     ]);
     expect(todos[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
+
+    // Her hours (P3-14): out of her slots the net is silent, and from her opening it counts again.
+    const slotFrom = (minutesAgo: number) => {
+      const start = localClock(new Date(Date.now() - minutesAgo * 60_000), 'America/Montreal');
+      return {
+        mode: 'slots' as const,
+        slots: [
+          {
+            day: start.day,
+            startMinute: start.minute,
+            endMinute: (start.minute + minutesAgo + 60) % 1440,
+            enabled: true,
+          },
+        ],
+      };
+    };
+    const hoursAre = (reply: AgentHours['reply'] | null) =>
+      test.admin.db
+        .update(schema.creators)
+        .set({ agentHours: reply === null ? null : { ...DEFAULT_AGENT_HOURS, reply } })
+        .where(eq(schema.creators.id, creatorId));
+    // Closed: her only slot is in three hours.
+    const later3h = localClock(new Date(Date.now() + 3 * 3_600_000), 'America/Montreal');
+    await hoursAre({
+      mode: 'slots',
+      slots: [
+        {
+          day: later3h.day,
+          startMinute: later3h.minute,
+          endMinute: (later3h.minute + 60) % 1440,
+          enabled: true,
+        },
+      ],
+    });
+    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+    // Opened ten minutes ago: not yet thirty minutes of hers.
+    await hoursAre(slotFrom(10));
+    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+    // Opened 35 minutes ago: back in the net, counted from her opening, not from his message 40 minutes ago.
+    await hoursAre(slotFrom(35));
+    const fromOpening = await read();
+    expect(fromOpening.map((t) => t.kind)).toEqual(['minor', 'unanswered', 'unanswered', 'send_failed']);
+    expect(fromOpening[1]?.waitingMinutes).toBeGreaterThanOrEqual(34);
+    expect(fromOpening[1]?.waitingMinutes).toBeLessThan(39);
+    await hoursAre(null);
 
     // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.
     const sessionIs = (state: 'valid' | 'expired') =>

@@ -1,12 +1,13 @@
 import {
   CreatorIdSchema,
+  DEFAULT_AGENT_HOURS,
   DashboardSchema,
   type AutomaticGate,
   type LiveRateReading,
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assembleDashboard, todos, type VoiceHealth } from '../dashboard';
+import { assembleDashboard, todos, unansweredSince, type VoiceHealth } from '../dashboard';
 import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
@@ -162,5 +163,38 @@ describe('à traiter', () => {
     );
     expect(todo).toMatchObject({ kind: 'unanswered', tone: 'warn', waitingMinutes: 42 });
     expect(todo?.why).toContain('plus de 30 minutes');
+  });
+});
+
+describe('unansweredSince (P3-14)', () => {
+  const PARIS = 'Europe/Paris';
+  // Tuesday 27 October 2026, winter time in Paris (UTC+1); her slot from 9:00 to 18:00 on Tuesdays.
+  const her = {
+    hours: {
+      ...DEFAULT_AGENT_HOURS,
+      reply: {
+        mode: 'slots' as const,
+        slots: [{ day: 2, startMinute: 540, endMinute: 1080, enabled: true }],
+      },
+    },
+    timeZone: PARIS,
+  };
+  const at = (hhmm: string): Date => new Date(`2026-10-27T${hhmm}:00+01:00`);
+
+  it('counts from his message without a setting', () => {
+    const always = { hours: DEFAULT_AGENT_HOURS, timeZone: PARIS };
+    expect(unansweredSince(at('03:00'), at('03:30'), always)).toEqual(at('03:00'));
+    expect(unansweredSince(at('03:00'), at('03:29'), always)).toBeNull();
+  });
+
+  it('is silent out of her slots, and counts again from her opening', () => {
+    // He wrote at 3:00: nothing at 4:00, nothing at 9:20, from her 9:00 opening at 9:30.
+    expect(unansweredSince(at('03:00'), at('04:00'), her)).toBeNull();
+    expect(unansweredSince(at('03:00'), at('09:20'), her)).toBeNull();
+    expect(unansweredSince(at('03:00'), at('09:30'), her)).toEqual(at('09:00'));
+    // Written in her slot: from his message.
+    expect(unansweredSince(at('10:00'), at('10:30'), her)).toEqual(at('10:00'));
+    // Her slot closed at 18:00: silent again.
+    expect(unansweredSince(at('10:00'), at('18:30'), her)).toBeNull();
   });
 });
