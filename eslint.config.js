@@ -25,6 +25,7 @@ const MODULE_DEPENDENCIES = {
   telegram: [],
   team: [],
   backups: [],
+  scheduling: [],
 };
 
 const moduleNames = Object.keys(MODULE_DEPENDENCIES);

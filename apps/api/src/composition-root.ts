@@ -43,6 +43,7 @@ import { createMediaModule, missingMediaBinaries, type MediaModule } from './mod
 import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
+import { createSchedulingModule, type SchedulingModule } from './modules/scheduling';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
 import { createTeamModule, type TeamModule } from './modules/team';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
@@ -61,6 +62,7 @@ interface Modules {
   readonly supervision: SupervisionModule;
   readonly providers: ProvidersModule;
   readonly team: TeamModule;
+  readonly scheduling: SchedulingModule;
   /** Null in the worker, or when its persona cannot be read: the API starts without the playground and says why. */
   readonly playground: PlaygroundModule | null;
   /** Null without CREDENTIALS_ENCRYPTION_KEYS: a bot token is never kept unsealed (ADR 0020 §5). */
@@ -215,6 +217,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     // The links' table is read through `withAdmin` only (EQ-10): the module gets this function, never the table.
     invitationLinks: { live: (memberIds) => liveInvitationLinksUnscoped(adminDb.db, memberIds) },
   });
+  const scheduling = createSchedulingModule({
+    db: db.db,
+    adminDb: adminDb.db,
+    creators: { list: () => persona.creators.list('all') },
+  });
   const playground =
     options.withPlayground === false
       ? null
@@ -297,6 +304,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     fans,
     persona,
     team,
+    scheduling,
     agent: createAgentModule(),
     media: createMediaModule(),
     supervision: createSupervisionModule({
@@ -454,6 +462,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           context.logger.warn('backups: no export succeeded for 26 hours, owner alerted');
       },
     ),
+    'scheduling.make_shifts': defineTask(
+      'scheduling.make_shifts',
+      JOB_PAYLOADS['scheduling.make_shifts'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { made: await modules.scheduling.jobs.makeShifts() },
+          'scheduling: template shifts made',
+        );
+      },
+    ),
     'rate_limit.purge': defineTask(
       'rate_limit.purge',
       JOB_PAYLOADS['rate_limit.purge'],
@@ -495,6 +514,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.persona.routes,
       modules.fans.routes(requireRole),
       modules.team.routes(requireRole),
+      modules.scheduling.routes(requireRole),
       modules.backups.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,

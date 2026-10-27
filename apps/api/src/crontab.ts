@@ -40,6 +40,9 @@ const CRON_JOBS: readonly CronJob[] = [
   { task: 'rate_limit.purge', match: '*/10 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
   // A daily export missing for 26 hours alerts the owner (ADR 0028 § 5); the next hour is the retry.
   { task: 'backups.check', match: '17 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
+  // The running templates make their shifts four weeks ahead (EQ-02); each occurrence is made once, so the hour that
+  // follows a failure, a member back from leave or a new day simply catches up.
+  { task: 'scheduling.make_shifts', match: '41 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
 ];
 
 export function parsedCronJobs(jobs: readonly CronJob[] = CRON_JOBS): ParsedCronItem[] {
