@@ -28,7 +28,7 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 6. **Qui calcule, qui écrit** :
    - `ComposeInput` gagne `desire?: { score, at }`, lu dans la projection de la conversation (port `conversations`, en ajout, Bilan) ;
    - le moteur (fonction pure `desireScore`) calcule la nouvelle note et la rend dans son résultat ; l'agent n'écrit jamais le journal lui-même ;
-   - le worker tient la projection sur `conversations` (`desire_score`, `desire_band`, `desire_at`, migration additive attribuée par Bilan) à chaque calcul, et n'écrit l'événement `desire_scored` (note avant, note après, signaux, version des poids) **que si la bande change ou si la note s'écarte d'au moins 10 points du dernier événement**, pour que le journal reste lisible. Une reconstruction des projections (`rebuild-projections`) retrouve donc la note à 10 points près, ce qui suffit à une règle qui raisonne par bandes.
+   - le worker écrit l'événement `desire_scored` (note avant, note après, signaux, version des poids) **à chaque calcul qui change la note**, et rien quand elle ne bouge pas ; la projection sur `conversations` (`desire_score`, `desire_band`, `desire_at`, migration additive attribuée par Bilan) suit ces événements. Une reconstruction des projections (`rebuild-projections`) retrouve donc exactement la note que la politique a lue (relecture de Bilan, 27/10).
 
 ## Avec le curseur (P3-09) et `offerDecision`
 - **Ouvrir l'intime elle-même** (`sexualizationDecision`) : la note doit être au moins au seuil d'ouverture (`strategies.sexualization.min_desire_to_open`, défaut 40), en plus des conditions actuelles de `no_opening` (âge confirmé, pas de `noExplicit`, délai `initiate_after_hours`). La branche « il amorce » ne change pas : elle reste celle de P3-09 (âge déclaré, KYC minimum, `noExplicit`).
@@ -55,7 +55,7 @@ Un niveau de désir par conversation, affiché en colonne dans la liste des conv
 - [ ] Calibration hors dépôt sur le corpus de vente (`/mnt/project-files/onlychat/corpus-vente/`) : la note juste avant chacune des ventes et avant chaque refus ; les chiffres agrégés vont au journal, jamais un message.
 
 ## Critères d'acceptation
-- Tests du domaine : retombée à mi-vie calculée à la lecture ; bornes 0 et 100 ; un message de la créatrice ne fait rien ; risque qui fige ; `minor_suspected` qui remet à 0 ; événement écrit seulement au changement de bande ou à 10 points d'écart.
+- Tests du domaine : retombée à mi-vie calculée à la lecture ; bornes 0 et 100 ; un message de la créatrice ne fait rien ; risque qui fige ; `minor_suspected` qui remet à 0 ; un événement par changement de note et aucun quand elle ne bouge pas ; `rebuild-projections` retrouve exactement la note lue par la politique.
 - Test par propriétés sur `offerDecision` : aucune offre sans âge confirmé ni sur un risque, quel que soit le reste ; sous budget nul ou pendant le délai, une offre seulement si `fanAsksForPaid` ; sous le seuil de désir, une offre seulement si `fanAsksForPaid`.
 - Les YAML de persona existants passent sans les nouveaux champs.
 - Évals : fan qui s'échauffe sur dix messages (l'offre n'arrive qu'en bande « chaud ») ; fan qui flirte une fois puis parle de son travail (aucune offre) ; fan chaud qui dit « je suis au boulot » (la note baisse, pas d'offre).
