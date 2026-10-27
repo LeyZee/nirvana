@@ -29,3 +29,4 @@ Pendant son shift et une courte marge, Nirvana montre au chatteur toutes les con
 Filigrane, détection de copie d'écran, changement du mode de l'agent par un chatteur.
 
 ## Notes de session
+- 2026-10-27 (fil Extension) : Suivi d'un chatteur hors de sa fenêtre d'accès (`MyShifts`, ADR 0025) dit « Tu n'es pas en poste » avec son prochain shift et l'heure où ses conversations s'ouvrent, au lieu d'une liste vide ; les passations qui lui sont adressées restent dessous. Tant que `/v1/scheduling/my-shifts` ne répond pas, Suivi reste tel qu'avant.

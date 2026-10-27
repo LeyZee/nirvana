@@ -16,66 +16,65 @@ Confronter chaque règle de la méthode de chatting qui fait foi (document hors 
 - `packages/contracts/src/persona.ts` (`strategies`, `follow_ups`), `packages/contracts/src/fans.ts` (limites du fan)
 - `packages/llm/prompts/brain/default.md`, `packages/llm/prompts/voice/default.md`
 
-## État au 27/10 (main ac74188)
+## État au 27/10 soir (main 5a3e09d, après #194, #200, #207)
 
-Légende : **appliquée** (code et test), **partielle**, **manquante**, **autrement** (appliquée d'une autre façon que la méthode).
+Légende : **appliquée** (code et test), **partielle**, **manquante**, **autrement** (appliquée d'une autre façon que la méthode), **attend P6-01** (demande l'historique des scripts et des ventes Reveal).
 
 ### Sécurité
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Un mineur possible : un humain prend la main, l'âge n'est plus confirmé | appliquée | `hold.ts` (`holdDecision`, `protectionFor`), `fan-limits.ts`, `draft-composer.ts` ; tests `hold.test.ts`, `draft-composer.test.ts` |
-| Détresse, idées noires, récit de violences réelles, menace : un humain, plus rien d'écrit | appliquée | `hold.ts` (`HANDOFF_RISKS`, `STOP_SIGNS`) ; tests idem |
-| Médias toujours regardés avant de répondre, sinon un humain | appliquée | `draft-composer.ts` (`seeHisMedia`) ; `media-sight.test.ts`, `draft-composer.test.ts` |
-| Le message du fan est une donnée, pièges et injections refusés | appliquée | `injection.ts`, `traps.ts` ; `injection.test.ts`, `traps.test.ts`, évals |
-| Elle ne dit jamais qu'elle est une IA | appliquée | garde `ai_disclosure` (`guards.ts`, ADR 0021) ; `guards.test.ts` |
+| Un mineur possible : un humain prend la main, l'âge n'est plus confirmé et reste contesté | appliquée | `hold.ts`, `fan-limits.ts`, drapeau `ageDisputed` (#200) ; `hold.test.ts`, `fan-limits.integration.test.ts` |
+| Détresse, idées noires, violences, menace : un humain, plus rien d'écrit, aucune relance | appliquée | `hold.ts`, `followUpDecision` (#207) ; `follow-up.test.ts` |
+| Médias toujours regardés avant de répondre, sinon un humain | appliquée | `draft-composer.ts` (`seeHisMedia`) |
+| Le message du fan est une donnée, pièges et injections refusés | appliquée | `injection.ts`, `traps.ts`, évals |
+| Elle ne dit jamais qu'elle est une IA | appliquée | garde `ai_disclosure` (ADR 0021) |
 
 ### Relation
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Jamais de déclaration d'amour | appliquée | garde `love_declaration` ; `guards.test.ts` |
-| Jamais de rencontre concrète ; un « un jour peut-être » vague reste permis | appliquée | garde `meeting_promise` (rencontres concrètes seulement) ; `guards.test.ts` |
-| Petits noms pris dans une liste fermée | appliquée (souple) | garde `pet_name` sur `behavior.pet_names` ; `guards.test.ts` |
-| Ne jamais laisser un fan sans réponse, toujours dire au revoir | manquante | rien ne relance une conversation restée sans réponse ; dépend des relances (plus bas) |
+| Jamais de déclaration d'amour, jamais de rencontre concrète, « un jour peut-être » vague permis | appliquée | gardes `love_declaration`, `meeting_promise` |
+| Petits noms pris dans une liste fermée | appliquée (souple) | garde `pet_name` |
+| Un fan silencieux est relancé aux délais de la persona | appliquée | `conversation.follow_up` (#204), `followUpDecision` et écriture sans cerveau (#207) |
+| Jamais quitter une conversation sans un au revoir | partielle | prompt seulement |
+| Alerte à l'opérateur sur tout fan qui écrit sans réponse | partielle | « À traiter » montre les passations et les brouillons non lus depuis 10 min ; quand le cerveau choisit d'attendre (« attends, je reviens »), rien n'alerte et aucune relance n'est programmée (le worker ne programme qu'après un envoi d'elle) |
 
 ### KYC et sexualisation
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Apprendre prénom, âge, métier, passions, situation, ville | partielle | le cerveau liste ce qui manque (`kycMissing`, prompt `brain`) ; aucune règle de code ne s'en sert |
-| Rien d'explicite avant un âge connu et majeur | partielle | une offre exige `ageConfirmedAt` (`offerDecision`, `policy.test.ts`) ; le texte de la voix, lui, n'a aucune garde quand l'âge n'est pas confirmé |
-| Elle ouvre la sexualisation seulement après un délai réglé dans le CRM | manquante | `strategies.sexualization.initiate_after_hours` existe dans le schéma de persona mais n'est lu nulle part |
-| Elle suit un fan qui sexualise seulement après un minimum de KYC ; avant, elle le recadre avec sa voix | manquante | `strategies.kyc.min_hours_before_following` existe dans le schéma mais n'est lu nulle part |
+| Apprendre prénom, âge, métier, passions, situation, ville | partielle | le cerveau liste ce qui manque (`kycMissing`) ; aucune règle de code ne s'en sert, ce qui est voulu (la méthode n'en fait pas une condition) |
+| Rien d'explicite avant un âge confirmé majeur, ni pour un fan marqué « rien d'explicite » | appliquée | garde `explicit_before_age`, âge par sa propre déclaration (#200) |
+| Elle ouvre la sexualisation après le délai du CRM | appliquée | `sexualizationDecision` (`initiate_after_hours`) |
+| Elle suit un fan qui sexualise après le minimum de KYC, sinon elle le recadre | appliquée | `sexualizationDecision` (`min_hours_before_following`, âge confirmé) |
 
 ### Vente
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Au plus un script par fan sur le délai réglé (10 h par défaut) | autrement | `offerDecision` (`cooldownHours` lu dans `strategies.script_launch.cooldown_hours`) est testé mais **n'est appelé que par les évals** : en production, si le cerveau propose `offer`, la voix écrit l'offre sans que la règle soit consultée |
-| Une offre suit sa chaleur, ne l'ouvre jamais ; il peut demander lui-même | autrement | même fonction, même constat |
-| Rien après un manque d'argent avoué, jusqu'à ce qu'il revienne de lui-même au payant | partielle | le risque `money_trouble` bloque l'offre du tour (`NO_SALE_RISKS`) ; il n'est **pas gardé** : au message suivant, plus rien ne s'en souvient (`protectionFor` ne pose pas `salesFrozen`) |
-| Jamais reproposer un pack refusé | partielle | `offerableScripts` existe et est testé ; aucun appelant, faute d'historique des scripts Reveal (P6-01) |
-| Jamais renvoyer un script déjà reçu | manquante | dépend du même historique (P6-01, ADR 0018) |
-| Dossier Jour ou Nuit choisi par l'heure chez elle | partielle | `situation.ts` (`dayPart`, `isNight`) ; le choix du dossier attend le catalogue (P6-01) |
-| Jamais de négociation ni de remise | partielle | seulement dans le prompt (`brain` : les prix sont décidés par des règles) ; aucune garde sur le texte de la voix |
-| Aider à payer en une phrase ; « je dois payer ? » est un signal d'achat | partielle | `offerSignals` lit `asks_for_media` ; « je dois payer ? » n'est pas un signal distinct |
-| Première offre pas avant un certain temps après son premier message | manquante | aucune règle sur la première offre |
+| La politique décide de chaque offre | appliquée | `offerDecision` sur le chemin réel, fail closed (#194) |
+| Au plus un script par fan sur le délai réglé | attend P6-01 | `lastOfferAt` n'est pas branché : d'ici là, l'agent réel ne propose aucune offre (voulu) |
+| Rien après un manque d'argent avoué, jusqu'à ce qu'il revienne de lui-même au payant | appliquée | gel `money_trouble` permanent (#194) |
+| Jamais de négociation ni de remise | appliquée | garde `discount` (#194) |
+| Jamais reproposer un pack refusé, jamais renvoyer un script reçu, dossier Jour ou Nuit | attend P6-01 | fiche P6-01 |
+| Au plus 3 offres par jour, au plus 5 offres sans achat (réglages du CRM) | manquante | ni réglage dans la persona, ni règle ; pas dans P6-01 : `PROPOSED-after-offer.md` |
+| Aider à payer en une phrase, puis un humain ; « je dois payer ? » est un signal d'achat | manquante | `PROPOSED-after-offer.md` |
 
 ### Après un refus, après un achat
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Après un refus : comprendre, insister un peu, bouder une fois, lâcher | partielle | `maySulk` (pas de bouderie si ventes gelées, fan fragile ou à ne plus contacter) est testé mais **sans appelant** ; la garde `guilt_trip` (souple) lit la culpabilisation |
-| Pas de bouderie après un achat, ni avec un fan qui a parlé d'argent, de ses limites ou de détresse | partielle | `maySulk` ne lit ni l'achat récent ni le manque d'argent du tour |
-| Après chaque achat, de l'attention, pas de nouvelle vente tout de suite | manquante | aucun signal d'achat dans le chemin de l'agent (attend les événements de vente de Reveal) |
-| Relance automatique tous les X jours, au plus deux relances de vente | manquante | `follow_ups` et `strategies.post_offer.delay_days` sont dans le schéma de persona, aucun job ne les lit |
+| Après un refus : comprendre, insister un peu, une bouderie au plus, puis « tant pis » | manquante | `maySulk` existe sans appelant ; il faut savoir qu'une offre a été refusée : `PROPOSED-after-offer.md` |
+| Pas de bouderie après un achat, ni avec un fan qui a parlé d'argent, de ses limites ou de détresse | partielle | `maySulk` lit les drapeaux, pas l'achat récent : `PROPOSED-after-offer.md` |
+| Aftercare systématique après chaque achat, pas de nouvelle vente tout de suite | manquante | `PROPOSED-after-offer.md` |
+| Au plus deux relances de vente sans réponse, au délai de `post_offer.delay_days` | manquante | les relances de #207 ne vendent jamais : `PROPOSED-after-offer.md` |
 
 ### Mémoire du fan
 
 | Règle reformulée | État | Où |
 |---|---|---|
-| Une note par fan : identité, phase, ventes, sécurité, faits datés | partielle | faits proposés par le cerveau et gardés par `fans` (P3-02) ; la partie « ventes » attend l'historique Reveal ; Reveal fait foi pour la note (ADR 0018) |
+| Une note par fan : identité, phase, ventes, sécurité, faits datés | partielle | faits gardés par `fans` (P3-02), limites du fan ; la partie « ventes » attend P6-01 ; Reveal fait foi pour la note (ADR 0018) |
 
 ## À faire
 
@@ -89,9 +88,11 @@ Le gel `money_trouble` ne s'efface jamais de lui-même, même après un achat : 
 
 Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 
-- [ ] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `P3-09-sexualization-cursor.md`.
-- [ ] Relances et « jamais sans réponse » : `P3-10-follow-ups.md` (partage avec Bilan pour le worker).
-- [ ] Scripts déjà reçus, packs refusés, dossier Jour / Nuit, première offre, attention après achat : après P6-01.
+- [x] Curseur de sexualisation, minimum de KYC, rien d'explicite avant l'âge confirmé : `P3-09-sexualization-cursor.md`.
+- [x] Relances et « jamais sans réponse » : `P3-10-follow-ups.md` (partage avec Bilan pour le worker).
+- [ ] Scripts déjà reçus, packs refusés, dossier Jour / Nuit : P6-01.
+- [ ] Refus, bouderie, aftercare, aide au paiement, offres par jour et sans achat, relances de vente : `PROPOSED-after-offer.md` (après P6-01).
+- [ ] Relance après un « attends, je reviens » et alerte quand rien ne lui répond : à proposer à Bilan (worker et « À traiter »).
 
 ## Critères d'acceptation
 
@@ -103,5 +104,7 @@ Hors zone ou en attente (nouvelles fiches à décider avec Charles) :
 Le texte de la méthode elle-même, les prompts de vente propres à Messa, tout ce qui demande la capture Reveal.
 
 ## Notes de session
+
+27/10 soir : nouvelle passe sur main 5a3e09d, après #194, #200 et #207 ; tableau mis à jour. Ce qui reste demande l'historique des scripts et des ventes Reveal, sauf la relance après « attends, je reviens » (worker).
 
 27/10 : audit fait par le fil agent sur main ac74188. Les trois points de la zone agent sont corrigés dans une PR à part ; tant que l'historique des scripts Reveal n'existe pas (P6-01), l'agent réel ne propose aucune offre.

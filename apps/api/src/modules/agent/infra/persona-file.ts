@@ -14,6 +14,11 @@ export interface PersonaForModels {
   readonly offerLimits: OfferLimits;
   /** When she opens sexualization or follows him there (`strategies.sexualization`, `strategies.kyc`), applied by code. */
   readonly sexualizationLimits: SexualizationLimits;
+  /**
+   * Her follow-ups on his silence (`follow_ups`), scheduled and decided by code: the delays in hours after his last
+   * message, none when she has them off, and the spirit of hers when her type is « custom ».
+   */
+  readonly followUps: { readonly delaysHours: readonly number[]; readonly spirit: string | null };
   /** False: her answer goes out as one message, whatever the voice wrote (`behavior.split_messages`). */
   readonly splitMessages: boolean;
   /** The only pet names she gives fans (`behavior.pet_names`); a guard flags any other. */
@@ -75,6 +80,10 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     sexualizationLimits: {
       initiateAfterHours: persona.strategies.sexualization.initiate_after_hours,
       minHoursBeforeFollowing: persona.strategies.kyc.min_hours_before_following,
+    },
+    followUps: {
+      delaysHours: persona.follow_ups.enabled ? persona.follow_ups.delays_hours : [],
+      spirit: persona.follow_ups.text,
     },
     splitMessages: persona.behavior.split_messages,
     petNames: persona.behavior.pet_names.filter((term) => !isPlaceholder(term)),

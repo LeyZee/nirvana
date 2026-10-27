@@ -57,8 +57,20 @@ export interface ComposeTurnInput {
     /** A human's « rien d'explicite » for him. */
     readonly noExplicit: boolean;
   };
+  /**
+   * A follow-up on his silence (P3-10), not an answer: nothing of his to read, so no brain call. The voice writes a
+   * light message from a brief set by code, with nothing to buy and nothing sexual, checked by every guard.
+   */
+  readonly followUp?: FollowUpTurn;
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
+}
+
+/** A follow-up as the voice writes it: how long he has been silent, and her own way of following up if she wrote one. */
+interface FollowUpTurn {
+  readonly silentHours: number;
+  /** `follow_ups.text` when her type is « custom »: the spirit of her follow-ups, written by the team. */
+  readonly spirit: string | null;
 }
 
 /** The policy's facts on him for an offer; his heat and the risks come from the brain. */
@@ -93,6 +105,22 @@ const STEER_BACK_BRIEF: Readonly<Record<'age_unconfirmed' | 'too_early', string>
 };
 const NO_OPENING_HINT = 'aucune allusion sexuelle, elle n’ouvre pas ce terrain';
 const SUGGESTIVE_HINT = 'suggestive seulement, jamais explicite';
+
+/** What the voice writes for a follow-up: decided by code, never by the brain (CLAUDE.md rule 3). */
+function followUpBrief(followUp: FollowUpTurn): Brief {
+  const hours = Math.max(1, Math.round(followUp.silentHours));
+  const spirit = followUp.spirit === null ? '' : ` Dans l’esprit de ses relances : ${followUp.spirit}`;
+  return {
+    intent: 'other',
+    sentiment: 'neutral',
+    factsProposed: [],
+    kycMissing: [],
+    risks: [],
+    action: 'reply',
+    replyBrief: `Il ne lui a rien répondu depuis ${String(hours)} h. Elle lui écrit un petit message léger qui rebondit sur ce dont ils parlaient ou prend de ses nouvelles, sans reproche, sans rien proposer de payant, sans parler de prix.${spirit}`,
+    toneHints: [NO_OPENING_HINT, 'court, une seule bulle'],
+  };
+}
 
 /** The brief as the cursor lets the voice write it. */
 function withinCursor(brief: Brief, decision: SexualizationDecision): Brief {
@@ -161,6 +189,37 @@ const NEUTRAL_BRIEF: Brief = {
   toneHints: [],
 };
 
+/**
+ * A follow-up: the voice from the code's brief, then every guard, the explicit one whatever his age. No trap, cursor
+ * or offer to decide: there is no new message of his.
+ */
+async function writeFollowUp(
+  gateway: LlmGateway,
+  persona: ComposerPersona,
+  base: Omit<VoiceInput, 'brief'>,
+  brief: Brief,
+  droppedNotes: readonly string[],
+): Promise<ComposedTurn> {
+  const voiceInput: VoiceInput = { ...base, brief };
+  const voice = await gateway.voice(voiceInput);
+  const written = voice.ok ? voice.value.output.bubbles : [];
+  const violations = [...checkVoiceOutput(written, persona.guardSettings), ...checkExplicit(written)];
+  return {
+    ...(droppedNotes.length > 0 && { droppedNotes }),
+    brief,
+    voiceBrief: brief,
+    voiceInput,
+    bubbles: asSent(written, persona.splitMessages),
+    ...(!voice.ok && { voiceFailure: voice.error }),
+    violations,
+    isBlocked: isBlocked(violations) || !voice.ok,
+    costUsd: voice.ok ? (voice.value.meta.costUsd ?? 0) : 0,
+    latencyMs: voice.ok ? voice.value.meta.latencyMs : 0,
+    ...(voice.ok && { model: voice.value.meta.model }),
+    isFallback: voice.ok && voice.value.meta.isFallback,
+  };
+}
+
 /** Brain, then voice, then guards. Writes nothing and sends nothing: the caller decides what the answer becomes. */
 export async function composeTurn(
   gateway: LlmGateway,
@@ -188,6 +247,8 @@ export async function composeTurn(
     history: input.history,
     ...(input.trace !== undefined && { trace: input.trace }),
   };
+  if (input.followUp !== undefined)
+    return writeFollowUp(gateway, persona, base, followUpBrief(input.followUp), notes.dropped);
   const brain = await gateway.brain(base);
   const brief = brain.ok ? brain.value.output : undefined;
   // A trap overrides whatever the brain suggested: she does not play along (agent/domain/traps.ts).

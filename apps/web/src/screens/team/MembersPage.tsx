@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent } from 
 
 import { AddMemberPanel } from './AddMemberPanel';
 import { MemberSheet } from './MemberSheet';
+import { TeamNav } from './TeamNav';
 import { useMembers, usePresets } from './api';
 import { creatorNames, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
 import { Avatar, Notice, StatusPill } from './parts';
@@ -29,7 +30,7 @@ export function MembersPage({
   onSelect,
 }: {
   tab: TeamRole;
-  /** The member open on the right (`/equipe?membre=<id>`), or null for the list alone. */
+  /** The member open on the right (`/equipe/membres?membre=<id>`), or null for the list alone. */
   selected: string | null;
   /** The owner adds members, makes their links and sees their rates; a manager reads. */
   canManage: boolean;
@@ -71,7 +72,12 @@ export function MembersPage({
         eyebrow="Membres"
         title="Équipe"
         lead={summary ?? 'Les chatteurs et les managers de l’agence, leurs créatrices et leur taux.'}
-        actions={all.length === 0 ? undefined : add}
+        actions={
+          <>
+            <TeamNav />
+            {all.length === 0 ? null : add}
+          </>
+        }
       />
       {members.isError ? (
         <Notice

@@ -51,6 +51,7 @@ import {
   ratingRecord,
   readPersonaFile,
   withExamples,
+  type PlaygroundFollowUp,
   type PlaygroundTurn,
 } from '../modules/playground/index';
 
@@ -111,6 +112,7 @@ const session = createPlaygroundSession({
   timeZone: values.fuseau,
   offerLimits: persona.offerLimits,
   sexualizationLimits: persona.sexualizationLimits,
+  followUps: persona.followUps,
 });
 let isRated = true;
 
@@ -159,6 +161,28 @@ async function describeFile(path: string, origin: 'fan' | 'creator'): Promise<Me
   console.log(dim(`         ${d.factualDescription}`));
   if (d.textVisible !== null) console.log(dim(`         texte lu : « ${d.textVisible} »`));
   return d;
+}
+
+/** Why /relance wrote nothing, in French. */
+function followUpLabel(followUp: Exclude<PlaygroundFollowUp, { kind: 'written' }>): string {
+  const at = (date: Date): string =>
+    date.toLocaleString('fr-FR', {
+      timeZone: session.situation.timeZone,
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  switch (followUp.kind) {
+    case 'nothing_to_follow_up':
+      return 'pas de relance : elle n’a pas encore répondu à son dernier message';
+    case 'not_due':
+      return `relance ${String(followUp.step + 1)} pas encore due : le ${at(followUp.dueAt)}`;
+    case 'later':
+      return `ses heures calmes : la relance partirait le ${at(followUp.at)}`;
+    case 'skip':
+      return followUp.reason === 'follow_up_plan_over'
+        ? 'plus de relance prévue après ce silence'
+        : `pas de relance (${followUp.reason})`;
+  }
 }
 
 let showBrief = true;
@@ -308,6 +332,7 @@ const HELP = [
   'Noter la dernière réponse : /ok · /corrige <texte, bulles séparées par |> · /rejet <raison> [précision]',
   `  raisons : ${REJECT_REASONS.map((r) => REJECT_REASON_LABELS[r]).join(', ')} (ou ia, perso, long, tot, vente, oubli, autre)`,
   'Mettre en situation : /fans · /fan <id> · /heure 23:30 · /avance 3h|2j · /depuis 2j · /achat 30',
+  'Relancer un fan silencieux : /avance 12h puis /relance',
   'Rejouer et comparer : /rejouer <n° du message du fan> · /compare <modèle> · /tests',
   'Médias : /media <fichier> (il envoie) · /envoi <fichier> [verrouillé] (elle envoie)',
   'Autres : /taux · /brief · /notes · /moment · /health · /save · /reset · /aide · /quit',
@@ -448,6 +473,14 @@ for (;;) {
     const { now, timeZone } = session.situation;
     session.advance(nextLocalTime(now, timeZone, hour, minute).getTime() - now.getTime());
     console.log(dim(`  ${describeSituation(session.situation).split('\n')[0] ?? ''}`));
+    continue;
+  }
+  if (line === '/relance') {
+    const followUp = await session.followUp();
+    if (followUp.kind === 'written') {
+      console.log(dim(`  relance ${String(followUp.step + 1)}`));
+      print(followUp.turn);
+    } else console.log(dim(`  ${followUpLabel(followUp)}`));
     continue;
   }
   if (line.startsWith('/avance ') || line.startsWith('/depuis ')) {

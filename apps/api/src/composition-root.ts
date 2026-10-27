@@ -29,6 +29,7 @@ import {
   startBubbleGuard,
   startSharedBubbleGuard,
   startDraftComposer,
+  startFollowUpPlan,
   type AgentModule,
 } from './modules/agent';
 import { startBackupsModule, type BackupsModule } from './modules/backups';
@@ -270,6 +271,15 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           logger.warn({ err: error }, 'draft composer not started: persona unreadable');
           return undefined;
         }));
+  // Her follow-up delays only beside the agent's own composer, the one that writes what `conversation.follow_up`
+  // asks for (P3-10): a composer plugged by a test would answer his last message again.
+  const followUps =
+    composer === undefined || options.composer !== undefined
+      ? undefined
+      : await startFollowUpPlan({ personaPath }).catch((error: unknown) => {
+          logger.warn({ err: error }, 'follow-ups not scheduled: persona unreadable');
+          return undefined;
+        });
   // Every approval passes the hard guards again (revue 09, G5): her own limits when her persona is readable,
   // otherwise the ones every creator shares (never an AI, no meeting, no contact). Never no guard at all.
   const guard =
@@ -293,6 +303,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     voice: activeVoice,
     guard,
     ...(composer !== undefined && { composer }),
+    ...(followUps !== undefined && { followUps }),
   });
   const modules: Modules = {
     backups: startBackupsModule({

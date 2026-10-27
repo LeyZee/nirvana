@@ -84,12 +84,28 @@ describe('the rail of each role', () => {
     expect(screen.getByText('Propriétaire')).toBeDefined();
   });
 
+  it('opens Équipe on its Planning, Membres a tab away', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    const router = renderApp(owner, '/equipe');
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/equipe/planning');
+    });
+    const sub = await screen.findByRole('navigation', { name: 'Équipe' });
+    expect(within(sub).getByRole('link', { name: 'Membres' }).getAttribute('href')).toBe('/equipe/membres');
+  });
+
   it('sends a chatter who opens Réglages back to his first tab, and shows him only his own', async () => {
     const router = renderApp(chatter, '/reglages');
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/suivi');
+      expect(router.state.location.pathname).toBe('/aujourdhui');
     });
-    expect(tabs()).toEqual(['Suivi']);
+    expect(tabs()).toEqual(['Aujourd’hui', 'Suivi', 'Planning']);
     expect(screen.getByText('Chatteur')).toBeDefined();
     // No Dashboard in his rail: no agent pill reading it either.
     expect(screen.queryByText('Agent')).toBeNull();
@@ -98,18 +114,23 @@ describe('the rail of each role', () => {
   it('sends a chatter away from the Dashboard and from Entraîner too', async () => {
     const router = renderApp(chatter, '/entrainer/playground');
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/suivi');
+      expect(router.state.location.pathname).toBe('/aujourdhui');
     });
     await router.navigate({ to: '/' });
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/suivi');
+      expect(router.state.location.pathname).toBe('/aujourdhui');
+    });
+    // Équipe is the agency's: its Planning is not his.
+    await router.navigate({ to: '/equipe/planning' });
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/aujourdhui');
     });
   });
 
   it('names a manager on leave a manager, though he has the chatter’s rail', async () => {
     renderApp({ ...manager, team: { role: 'manager', status: 'on_leave' }, teamScope: 'self' }, '/suivi');
     expect(await screen.findByText('Manager')).toBeDefined();
-    expect(tabs()).toEqual(['Suivi']);
+    expect(tabs()).toEqual(['Aujourd’hui', 'Suivi', 'Planning']);
   });
 
   it('sends a creator who opens Suivi to the Dashboard: she never sees a conversation', async () => {
