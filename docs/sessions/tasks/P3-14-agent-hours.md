@@ -25,7 +25,7 @@ Onglet Horaires par modèle : fuseau d'abord, mode 24/7 par défaut ou créneaux
 - [x] Contrat `AgentHours` (fuseau de la créatrice, créneaux de réponse par jour activables, heures calmes des relances, bascule Jour / Nuit) ; stockage en colonne jsonb validée par Zod sur `creators`, sans nouvelle table (Bilan attribue la migration).
 - [x] `follow-up.ts` et `situation.ts` lisent `AgentHours` au lieu de leurs constantes ; les valeurs par défaut reproduisent le comportement actuel.
 - [x] Politique côté worker (Bilan) : hors créneau, pas de brouillon, chatteur en poste ou non ; `reply_deferred` et un job `conversation.reopen` par créatrice à l'ouverture, qui répond aux fans en attente, l'attente la plus longue d'abord ; colonne `creators.agent_hours` (migration 0024) ; route `GET`/`PUT /v1/creators/:id/agent-hours` (propriétaire, connexion récente pour changer) ; `hours` passé au moteur par `ComposeInput`.
-- [x] Filet « Sans réponse » muet hors créneau, compté depuis `replyOpenedAt` (Agent).
+- [x] Filet « Sans réponse » muet hors créneau, déclenché 30 min après `replyOpenedAt` ; l'attente affichée reste comptée depuis le message du fan (Agent).
 - [ ] Écran (Extension), dans Créatrices, réservé au propriétaire (onglet et adresse, leçon de #217) : la grille et les mots du planning EQ-02 (« 9 h – 1 h » avec espaces insécables, « jusqu'au lendemain »), un en-tête qui dit le fuseau lu (« À l'heure de Nora (Paris) », car le planning se lit à l'heure de l'agence et ces heures à celle de la créatrice), un créneau désactivé grisé en encre pâle, jamais rouge.
 
 ## Critères d'acceptation

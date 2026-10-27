@@ -53,9 +53,10 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
 const UNANSWERED_AFTER_MINUTES = 30;
 
 /**
- * Since when his last message counts as unanswered (P3-14), or `null` while it is not yet: out of her reply slots
- * the net is silent (her hours hold the answer, `reply_deferred`), and from her opening it counts again, so that the
- * messages of her night do not all fall in at once. Always open (no setting), it counts from his message.
+ * Since when his last message waits (P3-14), or `null` while it is not yet unanswered: out of her reply slots the net
+ * is silent (her hours hold the answer, `reply_deferred`), and its thirty minutes run from the later of his message
+ * and her opening, so that the messages of her night do not all fall in at once. The wait shown stays his own, from
+ * his message, so that « À traiter » keeps them in the order they wrote. Always open (no setting), nothing changes.
  */
 export function unansweredSince(
   lastInboundAt: Date,
@@ -64,8 +65,8 @@ export function unansweredSince(
 ): Date | null {
   const opened = replyOpenedAt(her.hours, her.timeZone, now);
   if (opened === null) return null;
-  const since = opened > lastInboundAt ? opened : lastInboundAt;
-  return now.getTime() - since.getTime() >= UNANSWERED_AFTER_MINUTES * MINUTE_MS ? since : null;
+  const counted = opened > lastInboundAt ? opened : lastInboundAt;
+  return now.getTime() - counted.getTime() >= UNANSWERED_AFTER_MINUTES * MINUTE_MS ? lastInboundAt : null;
 }
 
 /** Safety first: a possible minor, consent or distress before everything else. */

@@ -375,12 +375,16 @@ describe('GET /v1/dashboard', () => {
     // Opened ten minutes ago: not yet thirty minutes of hers.
     await hoursAre(slotFrom(10));
     expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
-    // Opened 35 minutes ago: back in the net, counted from her opening, not from his message 40 minutes ago.
+    // Opened 35 minutes ago: back in the net, still waiting since his message 40 minutes ago, not since her opening.
     await hoursAre(slotFrom(35));
     const fromOpening = await read();
-    expect(fromOpening.map((t) => t.kind)).toEqual(['minor', 'unanswered', 'unanswered', 'send_failed']);
-    expect(fromOpening[1]?.waitingMinutes).toBeGreaterThanOrEqual(34);
-    expect(fromOpening[1]?.waitingMinutes).toBeLessThan(39);
+    expect(fromOpening.map((t) => [t.title, t.kind])).toEqual([
+      ['Leo', 'minor'],
+      ['Nico', 'unanswered'],
+      ['Sami', 'unanswered'],
+      ['Marc', 'send_failed'],
+    ]);
+    expect(fromOpening[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
     await hoursAre(null);
 
     // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.

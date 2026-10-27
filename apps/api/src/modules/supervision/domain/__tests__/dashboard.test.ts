@@ -188,10 +188,12 @@ describe('unansweredSince (P3-14)', () => {
   });
 
   it('is silent out of her slots, and counts again from her opening', () => {
-    // He wrote at 3:00: nothing at 4:00, nothing at 9:20, from her 9:00 opening at 9:30.
+    // He wrote at 3:00: nothing at 4:00, nothing at 9:20, thirty minutes after her 9:00 opening he is back,
+    // waiting since his own message, so that the fans of her night keep the order they wrote in.
     expect(unansweredSince(at('03:00'), at('04:00'), her)).toBeNull();
     expect(unansweredSince(at('03:00'), at('09:20'), her)).toBeNull();
-    expect(unansweredSince(at('03:00'), at('09:30'), her)).toEqual(at('09:00'));
+    expect(unansweredSince(at('03:00'), at('09:30'), her)).toEqual(at('03:00'));
+    expect(unansweredSince(at('05:00'), at('09:30'), her)).toEqual(at('05:00'));
     // Written in her slot: from his message.
     expect(unansweredSince(at('10:00'), at('10:30'), her)).toEqual(at('10:00'));
     // Her slot closed at 18:00: silent again.
