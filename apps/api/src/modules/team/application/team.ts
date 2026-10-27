@@ -28,7 +28,7 @@ import {
   presetsInForce,
   uniqueCreatorIds,
 } from '../domain/members';
-import type { Actor, CreatorRoster, NewRate, TeamStore } from '../domain/ports';
+import type { Actor, CreatorRoster, InvitationLinkDirectory, NewRate, TeamStore } from '../domain/ports';
 
 /** Équipe › Membres (EQ-01): reads for the owner and the managers, writes for the owner. */
 export interface TeamService {
@@ -55,15 +55,27 @@ export interface TeamServiceOptions {
 export function createTeamService(
   store: TeamStore,
   roster: CreatorRoster,
+  links: InvitationLinkDirectory,
   options: TeamServiceOptions,
 ): TeamService {
   const now = options.now ?? (() => new Date());
   const today = (): string => calendarDayIn(now(), options.agencyTimeZone);
 
+  /** When each member's link out stops working (« Lien valable jusqu'à… », « Lien expiré »); `null` with none. */
+  const withLinks = async (members: TeamMember[]): Promise<TeamMember[]> => {
+    if (members.length === 0) return members;
+    const live = await links.live(members.map((member) => member.id));
+    return members.map((member) => ({
+      ...member,
+      invitationExpiresAt: live.get(member.id)?.expiresAt.toISOString() ?? null,
+    }));
+  };
+
   const read = async (actor: UserId, id: TeamMemberId): Promise<TeamMember> => {
     const member = await store.member(actor, id, today());
     if (member === null) throw new MemberNotFound();
-    return member;
+    const [withLink] = await withLinks([member]);
+    return withLink ?? member;
   };
 
   const knownCreators = async (ids: readonly CreatorId[]): Promise<CreatorId[]> => {
@@ -89,7 +101,7 @@ export function createTeamService(
   };
 
   return {
-    members: (actor) => store.members(actor, today()),
+    members: async (actor) => withLinks(await store.members(actor, today())),
     member: read,
 
     addMember: async (actor, body) => {

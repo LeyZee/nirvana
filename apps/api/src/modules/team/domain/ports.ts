@@ -93,3 +93,11 @@ export interface TeamStore {
 export interface CreatorRoster {
   existing(ids: readonly CreatorId[]): Promise<ReadonlySet<CreatorId>>;
 }
+
+/**
+ * The link out of each member asked for (EQ-10), injected by the composition root from the links' table, which the
+ * module never reads: at most one per member, neither used nor replaced, expired or not; a member with none is absent.
+ */
+export interface InvitationLinkDirectory {
+  live(memberIds: readonly TeamMemberId[]): Promise<ReadonlyMap<string, { readonly expiresAt: Date }>>;
+}

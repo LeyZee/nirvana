@@ -19,7 +19,7 @@ import {
 } from './auth';
 import { publishBudgetThreshold } from './budget-events';
 import { secretOrNull, type Config } from './config';
-import { createInvitationLinkRoutes } from './invitation-links';
+import { createInvitationLinkRoutes, liveInvitationLinksUnscoped } from './invitation-links';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
 import { createAppLlm } from './llm';
 import { createDrizzleLlmCallStore } from './llm-call-store';
@@ -210,6 +210,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     creators: {
       existing: async (ids) => new Set((await persona.creators.list(ids)).map((creator) => creator.id)),
     },
+    // The links' table is read through `withAdmin` only (EQ-10): the module gets this function, never the table.
+    invitationLinks: { live: (memberIds) => liveInvitationLinksUnscoped(adminDb.db, memberIds) },
   });
   const playground =
     options.withPlayground === false
