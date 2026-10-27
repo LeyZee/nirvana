@@ -301,6 +301,28 @@ describe('createDraftComposer', () => {
     });
   });
 
+  it('holds a media she says she sent, and warns on a bubble she already sent him (P3-13)', async () => {
+    const announced = composer({ voice: { bubbles: ['Je t’envoie une photo 📸'] } });
+    expect(await announced.draftComposer.compose(INPUT)).toMatchObject({
+      kind: 'held',
+      reason: 'guard_blocked',
+      detail: ['media_not_sent'],
+    });
+    const again = composer({ voice: { bubbles: ['Tu fais quoi de beau ce soir ?'] } });
+    const history = [
+      {
+        direction: 'outbound' as const,
+        text: 'Tu fais quoi de beau ce soir ?',
+        at: new Date('2026-10-17T09:50:00Z'),
+      },
+      ...INPUT.history,
+    ];
+    expect(await again.draftComposer.compose({ ...INPUT, history })).toMatchObject({
+      kind: 'draft',
+      softViolations: ['repetition'],
+    });
+  });
+
   it('tells the daily cap apart from a model failure', async () => {
     const budget = composer({ voice: { code: 'budget_reached', attempts: [] } });
     expect(await budget.draftComposer.compose(INPUT)).toMatchObject({

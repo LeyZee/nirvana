@@ -6,6 +6,7 @@ import {
   checkVoiceOutput,
   composeTurn,
   followUpDecision,
+  guardContextOf,
   withExamples,
   withoutOrders,
   isBlocked,
@@ -225,7 +226,7 @@ export function createPlaygroundSession(deps: PlaygroundDeps): PlaygroundSession
       if (input === undefined) return undefined;
       const voice = await gateway.voice(input);
       const written = voice.ok ? voice.value.output.bubbles : [];
-      const violations = checkVoiceOutput(written, deps.guardSettings);
+      const violations = checkVoiceOutput(written, deps.guardSettings, guardContextOf(input.history));
       const bubbles = asSent(written, deps.splitMessages);
       return {
         bubbles,

@@ -84,10 +84,14 @@ describe('voice guards', () => {
     expect(codes(['On se retrouve au lit 😏', 'On se voit au prochain live ?'])).toEqual([]);
   });
 
-  it('keeps the ambiguity about meeting one day, without a promise', () => {
+  it('keeps the ambiguity about meeting one day, without a promise nor a word the platforms flag', () => {
+    expect(codes(['Si j’ai assez confiance en toi, un jour peut-être… qui sait', 'Pourquoi pas 🫣'])).toEqual(
+      [],
+    );
+    // The same with « se rencontrer »: no promise, but a word Reveal flags (P3-13).
     expect(
       codes(['Si j’ai assez confiance en toi, un jour peut-être qu’on se rencontrera', 'Pourquoi pas 🫣']),
-    ).toEqual([]);
+    ).toEqual(['platform_meeting_word']);
   });
 
   it('blocks contacts and links', () => {
@@ -315,7 +319,6 @@ describe('voice guards', () => {
     for (const bubbles of [
       ['J’ai zéro envie de dormir'],
       ['Le 06/12/2024 c’est mon anniversaire'],
-      ['Rendez-vous le 06/12 🎂'],
       ['Il est 06 h 12'],
       ['Je suis pas sage ce soir'],
       ['Je suis pas une vraie fille sage 😇'],
@@ -331,7 +334,7 @@ describe('voice guards', () => {
       ['Je t’attends au lit'],
       ['On se retrouve dans mes DM'],
       ['Étape 2 : tu viens me chercher'],
-      ['Si j’ai assez confiance, un jour peut-être qu’on se rencontrera'],
+      ['Si j’ai assez confiance, un jour peut-être 🫣'],
     ]) {
       expect(codes(bubbles), bubbles.join(' | ')).toEqual([]);
     }

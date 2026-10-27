@@ -56,7 +56,7 @@ export {
   type RatedMoment,
 } from './infra/calibration-record';
 export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
-export { asSent, composeTurn, withExamples, type OfferInput } from './infra/compose';
+export { asSent, composeTurn, guardContextOf, withExamples, type OfferInput } from './infra/compose';
 export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
 export type { AgentDraftComposer } from './infra/draft-composer';

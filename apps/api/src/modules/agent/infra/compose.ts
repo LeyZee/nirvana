@@ -12,6 +12,8 @@ import {
 import {
   checkExplicit,
   checkVoiceOutput,
+  previousTurnsOf,
+  type GuardContext,
   isBlocked,
   type GuardSettings,
   type GuardViolation,
@@ -206,6 +208,19 @@ export function withExamples(sheet: string, examples: readonly string[]): string
   return `${sheet}\n\nExemples de ses messages, corrigés par l'équipe :\n${examples.map((e) => `- ${e}`).join('\n')}`;
 }
 
+/**
+ * What her guards read the draft against (P3-13): an engine draft never carries a media (a media goes out through
+ * a script or a human), and her last turns are in the history.
+ */
+export function guardContextOf(history: readonly ConversationTurn[]): GuardContext {
+  return {
+    hasMedia: false,
+    previousTurns: previousTurnsOf(
+      history.map((turn) => ({ fromFan: turn.from === 'fan', text: turn.text })),
+    ),
+  };
+}
+
 /** His messages before the ones she is answering: the history without its last run of fan turns. */
 function earlierFanTexts(history: readonly ConversationTurn[]): string[] {
   let end = history.length;
@@ -241,7 +256,10 @@ async function writeFollowUp(
   const voiceInput: VoiceInput = { ...base, brief };
   const voice = await gateway.voice(voiceInput);
   const written = voice.ok ? voice.value.output.bubbles : [];
-  const violations = [...checkVoiceOutput(written, persona.guardSettings), ...checkExplicit(written)];
+  const violations = [
+    ...checkVoiceOutput(written, persona.guardSettings, guardContextOf(base.history)),
+    ...checkExplicit(written),
+  ];
   return {
     ...(droppedNotes.length > 0 && { droppedNotes }),
     brief,
@@ -383,7 +401,7 @@ export async function composeTurn(
   const written = voice.ok ? voice.value.output.bubbles : [];
   // Checked as written: the length and count guards read the voice's bubbles, not the joined message.
   const violations = [
-    ...checkVoiceOutput(written, persona.guardSettings),
+    ...checkVoiceOutput(written, persona.guardSettings, guardContextOf(input.history)),
     ...(ageConfirmed && !noExplicit ? [] : checkExplicit(written)),
   ];
   const bubbles = asSent(written, persona.splitMessages);
