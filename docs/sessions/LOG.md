@@ -16,6 +16,7 @@ Index des sessions. Depuis le 16/10/2026 (soir), chaque session écrit son entr�
 | 2026-10-17 | Vocaux générés, conception (Opus) | proposed | `log/2026-10-17-vocaux.md` |
 | 2026-10-17 | Connexion Reveal : inventaire, capture, FakeReveal (Opus) | done | `log/2026-10-17-reveal-connexion.md` |
 | 2026-10-17 | ADR 0018 port connecteur étendu (Opus) | done | `log/2026-10-17-adr-0018.md` |
+| 2026-10-27 | FakeReveal et capture express (Opus) | done | `log/2026-10-27-fake-reveal.md` |
 | 2026-10-17 | P3-03 Connexion des services IA, conception (Opus) | done | `log/2026-10-17-p3-03-conception.md` |
 | 2026-10-17 | P3-03 Connexion des services IA, module `providers` (Opus) | done (PR #27) | `log/2026-10-17-p3-03.md` |
 | 2026-10-17 | P3-03 Corrections de la recette des clés IA (Opus) | in_progress (PR #58) | `log/2026-10-17-p3-03-recette.md` |
