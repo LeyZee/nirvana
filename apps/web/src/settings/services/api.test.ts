@@ -130,7 +130,15 @@ describe('Services API client', () => {
         );
         const body =
           url === '/v1/me'
-            ? { id: 'u1', email: 'owner@example.test', name: 'Owner', role: 'owner', creatorIds: [] }
+            ? {
+                id: 'u1',
+                email: 'owner@example.test',
+                name: 'Owner',
+                role: 'owner',
+                creatorIds: [],
+                team: null,
+                teamScope: 'owner',
+              }
             : { user: {} };
         return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
       }),

@@ -1,5 +1,11 @@
-import type { CurrentUser } from '@nirvana/contracts';
-import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router';
+import type { Me } from '@nirvana/contracts';
+import {
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  redirect,
+  type RouterHistory,
+} from '@tanstack/react-router';
 
 import { CreatorsPage } from './creators/CreatorsPage';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
@@ -18,14 +24,24 @@ import { PlaygroundPage } from './screens/train/PlaygroundPage';
 import { TestsPage } from './screens/train/TestsPage';
 import { TrainLayout } from './screens/train/TrainLayout';
 import { AppShell } from './shell/AppShell';
+import { canOpen, railOf, sectionOf } from './shell/nav';
 
 /** What every screen can read: who is signed in, and how to sign out. Given by `App` once the session is known. */
 export interface RouterContext {
-  readonly user: CurrentUser;
+  readonly user: Me;
   readonly onSignOut: () => void;
 }
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
+  // A section outside the account's rail sends it to its first tab (ADR 0024); the server's 403 stays the barrier.
+  beforeLoad: ({ context, location }) => {
+    const rail = railOf(context.user);
+    const section = sectionOf(location.pathname);
+    if (section !== null && !canOpen(rail, section)) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: rail.home, replace: true });
+    }
+  },
   component: function Root() {
     const { user, onSignOut } = rootRoute.useRouteContext();
     return <AppShell user={user} onSignOut={onSignOut} />;
@@ -116,13 +132,19 @@ const routeTree = rootRoute.addChildren([
   settings.addChildren([settingsIndex, aiModels, telegram, devices, appearance, agentMode]),
 ]);
 
-const buildRouter = (context: RouterContext) =>
-  createRouter({ routeTree, context, defaultPreload: 'intent' });
+const buildRouter = (context: RouterContext, history?: RouterHistory) =>
+  createRouter({
+    routeTree,
+    context,
+    defaultPreload: 'intent',
+    ...(history === undefined ? {} : { history }),
+  });
 
 export type AppRouter = ReturnType<typeof buildRouter>;
 
-export function createAppRouter(context: RouterContext): AppRouter {
-  return buildRouter(context);
+/** `history` is for tests, which start on an address of their choosing. */
+export function createAppRouter(context: RouterContext, history?: RouterHistory): AppRouter {
+  return buildRouter(context, history);
 }
 
 declare module '@tanstack/react-router' {
