@@ -14,7 +14,7 @@ describe('the desire score in words (P3-12)', () => {
     expect(signalsLine(['steers_to_intimate', 'long_reply', 'suggestive_emoji', 'suggestive_emoji'])).toBe(
       'Il ramène vers l’intime, réponse longue, emoji suggestif ×2',
     );
-    expect(signalsLine(['frozen'])).toBe('Figée : risque sur le message');
+    expect(signalsLine(['frozen'])).toBe('Figée : vente arrêtée sur ce message');
   });
 
   it('says what a message moved, and the first score as such', () => {

@@ -146,7 +146,7 @@ function DesireChart({ points, now }: { points: readonly DesirePoint[]; now: num
         ? {
             when: 'Maintenant',
             movement: movementOf({ before: recorded, score: now }),
-            why: now < recorded ? 'Retombée depuis son dernier message' : 'Depuis son dernier message',
+            why: `${now < recorded ? 'Retombée depuis' : 'Depuis'} son dernier message : ${String(recorded)} → ${String(now)}`,
           }
         : undefined;
     }

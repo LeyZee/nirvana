@@ -43,7 +43,7 @@ export const DESIRE_SIGNAL_LABELS: Readonly<Record<DesireSignal, string>> = {
   several_messages: 'plusieurs messages d’affilée',
   minor_suspected: 'remise à zéro : mineur possible',
   age_disputed: 'remise à zéro : âge douteux',
-  frozen: 'figée : risque sur le message',
+  frozen: 'figée : vente arrêtée sur ce message',
 };
 
 /** « il ramène vers l’intime, réponse longue, emoji suggestif ×2 »: a repeated code counts once per time. */

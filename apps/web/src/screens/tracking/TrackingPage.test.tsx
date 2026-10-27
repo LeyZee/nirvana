@@ -679,7 +679,7 @@ describe('his desire score in Suivi (P3-12)', () => {
     const tip = await screen.findByRole('status');
     expect(tip.textContent).toContain('Maintenant');
     expect(tip.textContent).toContain('−16');
-    expect(tip.textContent).toContain('Retombée depuis son dernier message');
+    expect(tip.textContent).toContain('Retombée depuis son dernier message : 78 → 62');
     fireEvent.keyDown(chart, { key: 'ArrowLeft' });
     expect(screen.getByRole('status').textContent).toContain('+32');
     expect(screen.getByRole('status').textContent).toContain('Sexto');
