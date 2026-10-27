@@ -34,10 +34,11 @@ Ce choix a une conséquence sur la base. Les politiques de `shifts` (migration 0
 
 **Les écritures restent sous RLS.** Pas de connexion admin pour le geste d'un chatteur, et pas de fonction `SECURITY DEFINER` (il n'y en a aucune dans le dépôt).
 
-- L'acceptation d'un échange passe par une politique d'écriture dédiée sur `shifts` : un chatteur peut changer le membre d'un shift quand un échange `accepted`, dont il est le collègue sollicité, nomme ce shift ; le nouveau membre doit être l'autre membre de cet échange. L'échange accepté est sa propre preuve. Les autres propositions qui nomment ces shifts passent `lapsed` dans la même transaction, sous une politique dédiée de la même forme.
+- L'acceptation d'un échange passe par une politique d'écriture dédiée sur `shifts` : un chatteur peut changer le membre d'un shift quand un échange `accepted` dans la transaction en cours, dont il est le collègue sollicité, nomme ce shift ; le nouveau membre doit être l'autre membre de cet échange, et les heures celles que l'échange a notées à la proposition. L'échange accepté est sa propre preuve. Une politique de lecture de la même forme lui laisse lire le shift qu'on lui propose.
+- Les autres propositions qui nomment ces shifts ne peuvent plus être acceptées : l'acceptation vérifie que chaque shift a encore le membre et les heures notés à la proposition. Un job les passe `lapsed` juste après (connexion admin, comme le job des modèles). Une politique des échanges qui lirait `shifts` bouclerait avec celle de `shifts` qui lit les échanges, et Postgres refuse ces boucles.
 - Quand l'échange porte sur deux créatrices, la transaction pose la créatrice de chaque shift tour à tour avant de l'écrire. L'annulation d'un échange par le propriétaire ou un manager actif fait le même aller-retour, sous la politique d'écriture de l'équipe.
 - Le chatteur qui accepte ne lit jamais les congés de l'autre membre. Celui qui propose voit les siens quand il propose, et un congé validé après la proposition la fait tomber (point des congés ci-dessus).
-- La validation d'un congé lit les shifts du membre créatrice par créatrice, dans la même transaction.
+- La validation d'un congé lit les shifts du membre et fait tomber ses propositions créatrice par créatrice, dans sa transaction et sous la politique de l'équipe.
 
 **Un verrou par membre.** Chaque écriture qui pose un shift sur un membre, et la validation d'un congé, prennent `pg_advisory_xact_lock` sur une clé propre au planning, `hashtextextended('scheduling.member:' || member_id, 0)`. Ce n'est pas un `FOR UPDATE` sur `team_members` : une transaction d'une créatrice ne voit pas forcément la ligne du membre sous la RLS des tables de l'équipe, alors que le verrou consultatif ne dépend pas de la RLS. Les chemins qui le prennent sont la création et la modification d'un shift, le job des modèles, l'acceptation et l'annulation d'un échange, et la validation d'un congé. Quand deux membres sont en jeu, les deux verrous se prennent dans l'ordre de leurs identifiants.
 
@@ -45,7 +46,7 @@ Ce choix a une conséquence sur la base. Les politiques de `shifts` (migration 0
 
 - La table des congés ne prend pas de `creator_id`. Les autres points de l'ADR 0023 sur les données ne changent pas.
 - Un congé validé et un shift posé au même moment ne peuvent pas réussir tous les deux.
-- La migration des tables (numéro attribué par le propriétaire de `packages/db` à l'acceptation) écrit les politiques dédiées de l'acceptation et des propositions qui tombent. Les tests d'intégration vérifient qu'un chatteur ne déplace un shift que par un échange accepté qui le nomme, et vers l'autre membre de cet échange.
+- La migration des tables (numéro attribué par le propriétaire de `packages/db`) écrit les politiques dédiées de l'acceptation. Les tests d'intégration vérifient qu'un chatteur ne déplace un shift que par un échange accepté dans la même transaction qui le nomme, et vers l'autre membre de cet échange, et que la validation d'un congé et l'acceptation d'un échange se sérialisent dans les deux ordres.
 - `PlanningConflict` prend une troisième raison, `member_on_leave`, qui ne pointe vers aucun shift.
 - Les lectures « en congé à cet instant » prennent les congés `approved`, et les congés `cancelled` avant leur `cancelledAt`.
 - Les rappels et les notifications d'un échange ou d'un congé viennent avec EQ-12. D'ici là, le manager voit les échanges et les congés dans le planning.

@@ -472,8 +472,8 @@ export const SHIFT_SWAP_RECENT_DAYS = 14;
 
 /**
  * `proposed` until the colleague answers: `accepted` (the shifts have moved) or `declined`. The requester, or the
- * owner or an active manager, `withdrawn` a proposal; it `lapsed` when one of its shifts started, was cancelled or
- * changed hands first, or when another swap on the same shift was accepted. The owner or an active manager `reverted`
+ * owner or an active manager, `withdrawn` a proposal; it `lapsed` when one of its shifts started, was cancelled,
+ * changed hands or hours first, or when another swap on the same shift was accepted. The owner or an active manager `reverted`
  * an accepted swap: the shifts went back to their members.
  */
 export const SHIFT_SWAP_STATUSES = [
@@ -500,8 +500,10 @@ export const ShiftSwapRequestSchema = z.object({
   /** What the requester wrote to the colleague. */
   message: z.string().nullable(),
   status: ShiftSwapStatusSchema,
-  /** When it stopped being `proposed`, or was reverted; `null` while proposed. */
+  /** When it stopped being `proposed`: answered, withdrawn or lapsed; `null` while proposed. */
   resolvedAt: z.iso.datetime().nullable(),
+  /** When the owner or an active manager reverted it; `resolvedAt` keeps the acceptance. */
+  revertedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
 });
 export type ShiftSwapRequest = z.infer<typeof ShiftSwapRequestSchema>;
@@ -556,10 +558,11 @@ export type CreateShiftSwapRequestBody = z.input<typeof CreateShiftSwapRequestBo
 /**
  * `POST /v1/scheduling/swap-requests/:shiftSwapRequestId/answer` (the colleague asked, alone) → `ShiftSwapRequestSchema`.
  * Only a proposed swap is answered (`shift_swap_answered_conflict`). Accepting moves both shifts in one transaction,
- * under the rules of a shift set by hand: neither has started nor changed hands since the proposal (otherwise the swap
+ * under the rules of a shift set by hand: neither has started nor changed hands or hours since the proposal (otherwise the swap
  * lapses and answers 409 `shift_swap_lapsed_conflict`), and the move puts nobody on two shifts at once, no account under
  * two members, no shift on a member on an approved leave (`shift_member_conflict`, `shift_account_conflict`,
- * `member_on_leave_conflict`, and the swap stays proposed). The other proposals on these shifts lapse.
+ * `member_on_leave_conflict`, and the swap stays proposed). The other proposals on these shifts can no longer be
+ * accepted, and lapse just after (ADR 0031).
  */
 export const AnswerShiftSwapRequestBodySchema = z.object({ answer: z.enum(['accept', 'decline']) });
 export type AnswerShiftSwapRequestBody = z.infer<typeof AnswerShiftSwapRequestBodySchema>;
@@ -592,7 +595,7 @@ export type AnswerShiftSwapRequestBody = z.infer<typeof AnswerShiftSwapRequestBo
  * before today in the member's zone ; `shift_swap_not_found` 404 ; `shift_swap_conflict` 409, the same `id` with other
  * values ; `shift_swap_open_conflict` 409, the same proposal still open (`details.shiftSwapRequestId`) ;
  * `shift_swap_answered_conflict` 409, a swap no longer proposed ; `shift_swap_lapsed_conflict` 409, a shift started,
- * was cancelled or changed hands since the proposal ; `shift_swap_revert_conflict` 409, an accepted swap that can no
+ * was cancelled, or changed hands or hours since the proposal ; `shift_swap_revert_conflict` 409, an accepted swap that can no
  * longer go back ; `shift_swap_self_invalid` 400, a swap with oneself.
  */
 export const SCHEDULING_ERROR_CODES = [

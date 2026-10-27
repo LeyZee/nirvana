@@ -322,6 +322,7 @@ describe('swaps (ADR 0031)', () => {
           message: null,
           status: 'proposed',
           resolvedAt: null,
+          revertedAt: null,
           createdAt: '2026-10-27T20:00:00Z',
         },
       ],
