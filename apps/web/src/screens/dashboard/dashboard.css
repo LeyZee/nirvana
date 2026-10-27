@@ -571,3 +571,41 @@
   border-radius: var(--nv-radius-lg);
   color: var(--nv-ink-muted);
 }
+/* The owner's banner on the daily export: amber, a copy is missing, not an urgency (the red stays the urgencies'). */
+.db-backup {
+  --_c: var(--nv-warning);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nv-space-3);
+  align-items: center;
+  padding: var(--nv-space-3) var(--nv-space-4) var(--nv-space-3) var(--nv-space-3);
+}
+.db-backup__orb {
+  width: var(--nv-space-10);
+  height: var(--nv-space-10);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--_c);
+  background: color-mix(in srgb, var(--_c) 14%, transparent);
+}
+.db-backup__orb svg {
+  width: var(--nv-space-5);
+  height: var(--nv-space-5);
+}
+.db-backup__body {
+  min-width: 0;
+}
+.db-backup__title {
+  margin: 0;
+  font-size: var(--nv-text-body);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.db-backup__text {
+  margin: var(--nv-space-1) 0 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+  text-wrap: pretty;
+}

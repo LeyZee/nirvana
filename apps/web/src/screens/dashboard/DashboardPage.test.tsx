@@ -51,7 +51,7 @@ afterEach(() => {
 /** Where the page's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderDashboard(forCreator = false): QueryClient {
+function renderDashboard(forCreator = false, forOwner = false): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   // The night banner links to Réglages: the page needs a router around it.
@@ -61,7 +61,7 @@ function renderDashboard(forCreator = false): QueryClient {
       createRoute({
         getParentRoute: () => root,
         path: '/',
-        component: () => <DashboardPage forCreator={forCreator} />,
+        component: () => <DashboardPage forCreator={forCreator} forOwner={forOwner} />,
       }),
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
@@ -340,6 +340,46 @@ describe('DashboardPage changing the mode', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Le mode n’a pas changé');
     expect(checked('Copilote')).toBe('true');
     expect(headline()).not.toContain('arrêté');
+  });
+});
+
+describe('DashboardPage of the owner', () => {
+  const backups = (state: 'ok' | 'overdue' | 'never') => (url: URL) =>
+    url.pathname === '/v1/backups/status'
+      ? {
+          status: 200,
+          body: {
+            state,
+            lastSucceededAt: state === 'never' ? null : '2026-10-26T02:12:00.000Z',
+            overdueAfterHours: 26,
+            lastRun: null,
+          },
+        }
+      : { status: 200, body: apiDashboard() };
+
+  it('says in amber when no export succeeded for too long', async () => {
+    serveDashboard(backups('overdue'));
+    renderDashboard(false, true);
+    expect(await screen.findByText(/^Aucune sauvegarde réussie depuis le 26 octobre/u)).toBeDefined();
+  });
+
+  it('says when none was ever made, and nothing while they are on time', async () => {
+    serveDashboard(backups('never'));
+    renderDashboard(false, true);
+    expect(await screen.findByText('Aucune sauvegarde encore')).toBeDefined();
+    cleanup();
+    serveDashboard(backups('ok'));
+    renderDashboard(false, true);
+    await screen.findByRole('radio', { name: 'Arrêt' });
+    expect(screen.queryByText(/Aucune sauvegarde/u)).toBeNull();
+  });
+
+  it('is the owner’s alone: nobody else reads the exports', async () => {
+    const fetched = serveDashboard(backups('never'));
+    renderDashboard();
+    await screen.findByRole('radio', { name: 'Arrêt' });
+    expect(screen.queryByText('Aucune sauvegarde encore')).toBeNull();
+    expect(fetched.mock.calls.map(([input]) => String(input))).not.toContain('/v1/backups/status');
   });
 });
 

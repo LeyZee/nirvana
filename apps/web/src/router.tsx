@@ -55,7 +55,7 @@ const dashboard = createRoute({
   path: '/',
   component: function Dashboard() {
     const { user } = rootRoute.useRouteContext();
-    return <DashboardPage forCreator={user.role === 'creator'} />;
+    return <DashboardPage forCreator={user.role === 'creator'} forOwner={user.role === 'owner'} />;
   },
 });
 const creators = createRoute({
