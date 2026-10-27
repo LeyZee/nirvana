@@ -181,3 +181,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | Équipe : ADR 0024 (rôles et navigation), connexion du chatteur, shell par rôle | done | `log/2026-10-27-adr-0024-roles.md` |
 | 2026-10-27 | EQ-01 : base de l’équipe, `withMember` et RLS par compte | done | `log/2026-10-27-eq-01-team-base.md` |
 | 2026-10-27 | EQ-01 : rôle d’équipe et scope dans `/v1/me` | done | `log/2026-10-27-eq-01-me-team-role.md` |
+| 2026-10-27 | Mise en production, lot 1 : images Docker (Opus) | in_progress | `log/2026-10-27-deploy-images.md` |

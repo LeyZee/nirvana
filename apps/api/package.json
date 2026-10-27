@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsup src/index.ts src/worker.ts --format esm --target node22 --clean",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",
@@ -28,10 +28,6 @@
     "@fastify/cors": "11.3.0",
     "@fastify/helmet": "13.1.1",
     "@fastify/rate-limit": "11.2.0",
-    "@nirvana/contracts": "workspace:*",
-    "@nirvana/db": "workspace:*",
-    "@nirvana/llm": "workspace:*",
-    "better-auth": "1.7.7",
     "fastify": "5.12.7",
     "fastify-type-provider-zod": "7.0.0",
     "graphile-worker": "0.18.0",
@@ -41,8 +37,12 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@nirvana/contracts": "workspace:*",
+    "@nirvana/db": "workspace:*",
+    "@nirvana/llm": "workspace:*",
     "@types/node": "22.20.5",
     "@types/pg": "8.23.1",
+    "better-auth": "1.7.7",
     "eslint": "10.13.0",
     "tsup": "9.0.0",
     "tsx": "4.23.15",
