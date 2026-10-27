@@ -169,7 +169,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     expect(await state(id)).toBe('human');
     expect((await events(id)).at(-1)).toEqual({
       type: 'handoff_requested',
-      payload: { conversationId: id, cause: 'guard', reason: 'guard_blocked : meeting_promise' },
+      payload: { conversationId: id, cause: 'guard', detail: ['guard_blocked', 'meeting_promise'] },
     });
     const outbox = await test.admin.db
       .select()
@@ -249,7 +249,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     expect(await state(broken)).toBe('human');
     expect((await events(broken)).at(-1)).toEqual({
       type: 'handoff_requested',
-      payload: { conversationId: broken, cause: 'llm_unavailable', reason: 'llm_unavailable' },
+      payload: { conversationId: broken, cause: 'llm_unavailable', detail: ['llm_unavailable'] },
     });
 
     const keyless = await fanWrites('c-keyless', 'Hello');
@@ -261,7 +261,8 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
       payload: {
         conversationId: keyless,
         cause: 'llm_unavailable',
-        reason: 'llm_unavailable : no voice key',
+        // A chatter reads the cause in words; the codes stay in the journal, never as a reason.
+        detail: ['llm_unavailable', 'no voice key'],
       },
     });
   });

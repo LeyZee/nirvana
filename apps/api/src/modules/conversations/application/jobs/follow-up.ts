@@ -19,7 +19,7 @@ import { readProposedFacts } from '../facts';
 import { enqueueFollowUp, followUpJobKey } from '../follow-ups';
 import { appendEvent } from '../journal';
 
-import { DEFAULT_CAUSES, HISTORY_LIMIT, noteLine } from './respond';
+import { DEFAULT_CAUSES, handoffDetail, HISTORY_LIMIT, noteLine } from './respond';
 
 /** Holds of a follow-up that still give the conversation to the chatters. */
 const FOLLOW_UP_HANDOFFS: readonly HoldReason[] = ['guard_blocked', 'handoff'];
@@ -175,12 +175,15 @@ export function createFollowUpJob({ uow, clock, fans, composer, followUps }: Fol
       // A guard or the engine's own call goes to a human, as after a fan message. No model or no budget for a silent
       // fan is no emergency: the follow-up is simply not written.
       if (FOLLOW_UP_HANDOFFS.includes(result.reason)) {
-        const reason = [result.reason, ...result.detail].join(' : ').slice(0, 500);
+        const detail = handoffDetail([result.reason, ...result.detail]);
         const cause = result.cause ?? DEFAULT_CAUSES[result.reason] ?? 'other';
         await appendEvent(
           tx,
           conversation,
-          { type: 'handoff_requested', payload: { conversationId: conversation.id, cause, reason } },
+          {
+            type: 'handoff_requested',
+            payload: { conversationId: conversation.id, cause, detail: [...detail] },
+          },
           { ...at, actor: 'ai' },
         );
         logger.info({ reason: result.reason, costUsd: result.costUsd }, 'follow_up: handed over');

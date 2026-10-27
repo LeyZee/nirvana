@@ -240,7 +240,9 @@ describe('conversation.respond after a wait', () => {
     const handoff = (await events(conversationId)).at(-1);
     expect(handoff?.type).toBe('handoff_requested');
     expect(handoff?.payload).toMatchObject({ cause: 'other' });
-    expect(z.object({ reason: z.string() }).parse(handoff?.payload).reason).toMatch(/^waited_no_reply/);
+    expect(z.object({ detail: z.array(z.string()) }).parse(handoff?.payload).detail[0]).toBe(
+      'waited_no_reply',
+    );
     // Never a third pass: the only respond job left is the one that just ran.
     expect(
       (await respondJobs(conversationId)).every((j) => j.payload.waitedFor === job.payload.waitedFor),

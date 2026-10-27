@@ -105,7 +105,10 @@ export type HandoffCause = z.infer<typeof HandoffCauseSchema>;
 const handoffPayload = z.object({
   conversationId: ConversationIdSchema,
   cause: HandoffCauseSchema,
+  /** A sentence a chatter reads, in French; never a machine code: those go in `detail`. */
   reason: z.string().min(1).max(500).optional(),
+  /** What the engine held on, as codes (`guard_blocked`, `meeting_promise`…), for the journal: never shown as is. */
+  detail: z.array(z.string().min(1).max(500)).max(20).optional(),
 });
 
 /** Who took the conversation, with its id: an alert sent for it is closed by this event (ADR 0020). */
