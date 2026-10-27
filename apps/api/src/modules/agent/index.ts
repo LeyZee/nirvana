@@ -32,7 +32,7 @@ export type { TrapAssessment } from './domain/traps';
 export { holdDecision } from './domain/hold';
 export { withoutOrders } from './domain/injection';
 /** @public */
-export { offerDecision, offerSignals, type OfferContext } from './domain/policy';
+export { offerDecision, offerSignals, type OfferContext, type OfferLimits } from './domain/policy';
 export { describeSituation, isNight, isTimeZone, nextLocalTime, type Situation } from './domain/situation';
 export {
   parseRejection,
@@ -52,7 +52,7 @@ export {
   type RatedMoment,
 } from './infra/calibration-record';
 export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
-export { asSent, composeTurn, withExamples } from './infra/compose';
+export { asSent, composeTurn, withExamples, type OfferInput } from './infra/compose';
 export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
 export type { AgentDraftComposer } from './infra/draft-composer';
@@ -94,6 +94,7 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     },
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,
+    offerLimits: persona.offerLimits,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),

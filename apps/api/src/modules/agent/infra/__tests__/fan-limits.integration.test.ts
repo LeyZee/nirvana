@@ -12,6 +12,9 @@ describe('fan limits set by the policy, through the fans module', () => {
   let limits: FanLimits;
   const creatorId = newId(CreatorIdSchema);
   const fanId = newId(FanIdSchema);
+  const brokeFanId = newId(FanIdSchema);
+  const frozenFanId = newId(FanIdSchema);
+  const AT = new Date('2026-10-17T20:00:00.000Z');
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
@@ -33,6 +36,25 @@ describe('fan limits set by the policy, through the fans module', () => {
         displayName: 'Basile',
         flags: { ageConfirmedAt: '2026-10-01T09:00:00.000Z' },
       });
+      // Two more: one who will say he cannot pay, one a human already froze.
+      await tx.insert(schema.fans).values([
+        {
+          id: brokeFanId,
+          creatorId,
+          platformAccountId: accountId,
+          platformFanId: 'fan-2',
+          displayName: 'Théo',
+          flags: { ageConfirmedAt: '2026-10-01T09:00:00.000Z' },
+        },
+        {
+          id: frozenFanId,
+          creatorId,
+          platformAccountId: accountId,
+          platformFanId: 'fan-3',
+          displayName: 'Hugo',
+          flags: { salesFrozen: { reason: 'operator', since: '2026-10-10T09:00:00.000Z' } },
+        },
+      ]);
     });
   });
 
@@ -42,9 +64,9 @@ describe('fan limits set by the policy, through the fans module', () => {
 
   it('stops contact and takes back his age, authored by the system, once', async () => {
     const protection = protectionFor(['possible_minor', 'distress']);
-    await limits.protect(creatorId, fanId, protection, 'correlation-1');
+    await limits.protect(creatorId, fanId, protection, 'correlation-1', AT);
     // A replayed job changes nothing more.
-    await limits.protect(creatorId, fanId, protection, 'correlation-1');
+    await limits.protect(creatorId, fanId, protection, 'correlation-1', AT);
     expect(await limits.flags(creatorId, fanId)).toEqual({ doNotContact: true });
     const events = await test.admin.db
       .select()
@@ -60,5 +82,17 @@ describe('fan limits set by the policy, through the fans module', () => {
       ['fan_flag_set', 'system'],
     ]);
     expect(events[0]?.payload).toMatchObject({ reason: 'possible_minor, distress' });
+  });
+
+  it('freezes his sales when he says he cannot pay, dated, and keeps a freeze a human set', async () => {
+    const money = protectionFor(['money_trouble']);
+    await limits.protect(creatorId, brokeFanId, money, 'correlation-2', AT);
+    await limits.protect(creatorId, brokeFanId, money, 'correlation-2', AT);
+    expect(await limits.flags(creatorId, brokeFanId)).toEqual({
+      ageConfirmedAt: '2026-10-01T09:00:00.000Z',
+      salesFrozen: { reason: 'money_trouble', since: AT.toISOString() },
+    });
+    await limits.protect(creatorId, frozenFanId, money, 'correlation-3', AT);
+    expect((await limits.flags(creatorId, frozenFanId)).salesFrozen?.reason).toBe('operator');
   });
 });

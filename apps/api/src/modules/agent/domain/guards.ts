@@ -17,6 +17,7 @@ export type GuardCode =
   | 'asks_for_nudes'
   | 'contempt'
   | 'payment_lie'
+  | 'discount'
   | 'guilt_trip'
   | 'pet_name';
 
@@ -162,6 +163,14 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
     pattern:
       /\b(rien a payer|pas besoin (de payer|d'argent|de sous)|(t'?as|tu (n'?)?as) (rien|pas) a payer)\b(?! pour (me |te )?(parler|discuter|ecrire))/,
   },
+  // Never a negotiation nor a discount, not even once (méthode de chatting): the price is the script's, set in code.
+  // Her « je fais pas de promo » or « pas de réduc avec moi 😌 » pass.
+  {
+    code: 'discount',
+    pattern:
+      /\b(je (te|vous) (fais|fait|ferai|ferais|laisse|propose|offre) (un|une|le|la) (petit |petite |bon |super )?(prix|remise|reduc|reduction|ristourne|promo|rabais|geste)|(un|une|le) (prix d'ami|prix special|petit prix|code promo)|a moitie prix|\d+ ?% de (remise|reduc|reduction|rabais)|je (te |vous )?(baisse|descends|brade) (le|mon|son|ce) prix|au lieu de \d+ ?(€|euros?|balles)|je (te |vous )?(le|la|les) (laisse|fais) (a|pour) \d+|on (peut )?(negocie|negocier|s'arrange|s'arranger) (sur|pour) le prix)/,
+  },
+  { code: 'discount', pattern: /(^|\s)(moins |-) ?\d+ ?%/ },
 ];
 
 // After a refusal she whines once, playfully, then lets go: no guilt (sales corpus, §2.4). A regeneration, not a block.

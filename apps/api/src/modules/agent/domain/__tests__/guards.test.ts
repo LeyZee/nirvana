@@ -127,6 +127,29 @@ describe('voice guards', () => {
     expect(codes(['Cette vidéo est à 6 €, tu l’ouvres en touchant le cadenas'])).toEqual([]);
   });
 
+  it('blocks a discount or a negotiation, and lets her refusal of one through', () => {
+    for (const bubble of [
+      'Allez je te fais un petit prix 😘',
+      'Pour toi ce sera 15 € au lieu de 25 €',
+      'Je te la laisse à 10 si tu la prends maintenant',
+      'Je te baisse le prix rien que pour ce soir',
+      '-30 % sur le pack, juste ce soir',
+      'Je te fais une réduc si tu prends les deux',
+      'On peut s’arranger sur le prix',
+      'Elle est à moitié prix pour toi',
+    ]) {
+      expect(codes([bubble])).toContain('discount');
+    }
+    for (const bubble of [
+      'Je fais pas de promo moi 😌',
+      'Pas de réduc avec moi, c’est mon prix',
+      'Cette vidéo est à 6 €, tu l’ouvres en touchant le cadenas',
+      'Je finis à 18 h au lieu de 20 h ce soir',
+    ]) {
+      expect(codes([bubble])).toEqual([]);
+    }
+  });
+
   it('asks for a regeneration when she makes him feel guilty, without blocking', () => {
     const violations = checkVoiceOutput(['Bon… tu me déçois un peu là'], DEFAULT_GUARD_SETTINGS);
     expect(violations.map((v) => [v.code, v.severity])).toEqual([['guilt_trip', 'soft']]);

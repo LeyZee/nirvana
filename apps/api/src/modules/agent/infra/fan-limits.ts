@@ -6,14 +6,21 @@ import type { Protection } from '../domain/hold';
 /** His limits as the composer sees them: read before anything is written, set by the policy on a risk. */
 export interface FanLimits {
   flags(creatorId: string, fanId: string): Promise<FanFlags>;
-  protect(creatorId: string, fanId: string, protection: Protection, correlationId: string): Promise<void>;
+  /** `at` dates a sales freeze: the moment he said it. */
+  protect(
+    creatorId: string,
+    fanId: string,
+    protection: Protection,
+    correlationId: string,
+    at: Date,
+  ): Promise<void>;
 }
 
 /** The `fans` module behind the port; the policy is the author (`system`), the risks are the reason. */
 export function createFanLimits(fans: Pick<FansModule, 'flags' | 'setFlag' | 'clearFlag'>): FanLimits {
   return {
     flags: (creatorId, fanId) => fans.flags(CreatorIdSchema.parse(creatorId), FanIdSchema.parse(fanId)),
-    async protect(creatorId, fanId, protection, correlationId) {
+    async protect(creatorId, fanId, protection, correlationId, at) {
       const creator = CreatorIdSchema.parse(creatorId);
       const fan = FanIdSchema.parse(fanId);
       const reason = protection.because.join(', ').slice(0, 500);
@@ -25,6 +32,11 @@ export function createFanLimits(fans: Pick<FansModule, 'flags' | 'setFlag' | 'cl
       if (protection.stopContact)
         await fans.setFlag(creator, fan, { flag: 'doNotContact', value: true }, command);
       if (protection.unconfirmAge) await fans.clearFlag(creator, fan, 'ageConfirmedAt', command);
+      // A freeze a human set (operator, spending limit) keeps its reason: the policy only adds one where none is.
+      if (protection.freezeSales && (await fans.flags(creator, fan)).salesFrozen === undefined) {
+        const value = { reason: 'money_trouble', since: at.toISOString() } satisfies FanFlags['salesFrozen'];
+        await fans.setFlag(creator, fan, { flag: 'salesFrozen', value }, command);
+      }
     },
   };
 }

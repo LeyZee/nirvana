@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { holdDecision, protectionFor } from '../hold';
+import { holdDecision, protectionFor, protectionWhileAnswering } from '../hold';
 
 describe('holdDecision', () => {
   it('hands a possible minor, distress or self-harm to a chatter, whatever the brain suggests', () => {
@@ -43,6 +43,7 @@ describe('protectionFor', () => {
     expect(protectionFor(['minor_suspected', 'possible_minor'])).toEqual({
       unconfirmAge: true,
       stopContact: false,
+      freezeSales: false,
       because: ['minor_suspected', 'possible_minor'],
     });
   });
@@ -53,11 +54,33 @@ describe('protectionFor', () => {
     }
   });
 
-  it('changes nothing for the other risks', () => {
-    expect(protectionFor(['money_trouble', 'meet_request', 'drugs'])).toEqual({
+  it('freezes sales when he says he cannot pay', () => {
+    expect(protectionFor(['money_trouble'])).toEqual({
       unconfirmAge: false,
       stopContact: false,
+      freezeSales: true,
+      because: ['money_trouble'],
+    });
+  });
+
+  it('changes nothing for the other risks', () => {
+    expect(protectionFor(['meet_request', 'drugs'])).toEqual({
+      unconfirmAge: false,
+      stopContact: false,
+      freezeSales: false,
       because: [],
     });
+  });
+});
+
+describe('protectionWhileAnswering', () => {
+  it('keeps only his money trouble: the other limits come with a handoff', () => {
+    expect(protectionWhileAnswering(['harassment', 'money_trouble'])).toEqual({
+      unconfirmAge: false,
+      stopContact: false,
+      freezeSales: true,
+      because: ['money_trouble'],
+    });
+    expect(protectionWhileAnswering(['harassment']).because).toEqual([]);
   });
 });

@@ -109,6 +109,7 @@ const session = createPlaygroundSession({
   splitMessages: persona.splitMessages,
   voiceExamples: examples,
   timeZone: values.fuseau,
+  offerLimits: persona.offerLimits,
 });
 let isRated = true;
 

@@ -1,11 +1,12 @@
-import type { HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
+import type { FanFlags, HandoffCause, MediaDescription, MediaFlag, Result } from '@nirvana/contracts';
 import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
 
-import { holdDecision, protectionFor, type HoldDecision } from '../domain/hold';
+import { holdDecision, protectionFor, protectionWhileAnswering, type HoldDecision } from '../domain/hold';
 import { withoutOrders } from '../domain/injection';
+import type { OfferLimits } from '../domain/policy';
 import { handoffCauseOf } from '../domain/traps';
 
-import { composeTurn, type ComposerPersona } from './compose';
+import { composeTurn, type ComposerPersona, type OfferInput } from './compose';
 import type { FanLimits } from './fan-limits';
 
 /**
@@ -103,6 +104,13 @@ export interface DraftComposerDeps {
   readonly sight?: MediaSight;
   /** His limits: read before anything is written, set on a detected risk (P3-02). */
   readonly limits?: FanLimits;
+  /** Her pace of scripts (`PersonaForModels.offerLimits`): without it, or without his limits, she offers nothing. */
+  readonly offerLimits?: OfferLimits;
+  /**
+   * When a script was last offered to him, bought or not: Reveal's script history (ADR 0018, P6-01). Without it
+   * the cooldown cannot be read, so she offers nothing.
+   */
+  readonly lastOfferAt?: (creatorId: string, fanId: string) => Promise<Date | null>;
   /** Lines of her notes kept out of the prompt for looking like an order: counted, never their text. */
   readonly onDroppedNotes?: (event: { readonly conversationId: string; readonly count: number }) => void;
 }
@@ -195,22 +203,59 @@ async function protect(
   const protection = protectionFor(signs);
   if (limits === undefined || protection.because.length === 0) return held;
   try {
-    await limits.protect(input.creatorId, input.fanId, protection, input.correlationId);
+    await limits.protect(input.creatorId, input.fanId, protection, input.correlationId, input.now);
     return held;
   } catch {
     return { ...held, detail: [...held.detail, 'limits_not_saved'] };
   }
 }
 
-/** Nothing is written to a fan a human stopped, or the policy did: a new message of his goes to a chatter. */
-async function stopped(limits: FanLimits | undefined, input: AgentComposeInput): Promise<Held | null> {
-  if (limits === undefined) return null;
+/**
+ * Nothing is written to a fan a human stopped, or the policy did: a new message of his goes to a chatter.
+ * Otherwise his limits, when there are any to read, for the offer.
+ */
+async function stopped(
+  limits: FanLimits | undefined,
+  input: AgentComposeInput,
+): Promise<{ readonly held: Held } | { readonly flags: FanFlags | undefined }> {
+  if (limits === undefined) return { flags: undefined };
   try {
     const flags = await limits.flags(input.creatorId, input.fanId);
-    return flags.doNotContact === true ? { ...HANDOFF, detail: ['do_not_contact'] } : null;
+    return flags.doNotContact === true ? { held: { ...HANDOFF, detail: ['do_not_contact'] } } : { flags };
   } catch {
     // His limits unknown, nothing is written: a chatter answers.
-    return { ...HANDOFF, detail: ['limits_unreadable'] };
+    return { held: { ...HANDOFF, detail: ['limits_unreadable'] } };
+  }
+}
+
+/** What the policy needs to let her offer; any of it unknown, there is no offer to decide on (fail closed). */
+async function offerInput(
+  deps: DraftComposerDeps,
+  input: AgentComposeInput,
+  flags: FanFlags | undefined,
+): Promise<OfferInput | undefined> {
+  if (flags === undefined || deps.offerLimits === undefined || deps.lastOfferAt === undefined)
+    return undefined;
+  try {
+    const lastOfferAt = await deps.lastOfferAt(input.creatorId, input.fanId);
+    return { now: input.now, lastOfferAt, hasNoBudget: false, flags, limits: deps.offerLimits };
+  } catch {
+    return undefined;
+  }
+}
+
+async function keepWhileAnswering(
+  limits: FanLimits | undefined,
+  input: AgentComposeInput,
+  risks: readonly string[],
+): Promise<Held | null> {
+  const protection = protectionWhileAnswering(risks);
+  if (limits === undefined || protection.because.length === 0) return null;
+  try {
+    await limits.protect(input.creatorId, input.fanId, protection, input.correlationId, input.now);
+    return null;
+  } catch {
+    return { ...HANDOFF, detail: [...protection.because, 'limits_not_saved'] };
   }
 }
 
@@ -218,7 +263,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
   return {
     async compose(input) {
       const stop = await stopped(deps.limits, input);
-      if (stop !== null) return stop;
+      if ('held' in stop) return stop.held;
       const lastAnswer = input.history.findLastIndex((m) => m.direction === 'outbound');
       const sinceAnswer = input.history.slice(lastAnswer + 1);
       const looked = await seeHisMedia(deps.sight, input, sinceAnswer);
@@ -242,11 +287,13 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       });
       // What he wrote since her last answer: the traps read it as one message.
       const fanText = sinceAnswer.map((m) => m.text).join('\n');
+      const offer = await offerInput(deps, input, stop.flags);
       const composed = await composeTurn(deps.gateway, deps.persona, {
         history,
         fanText,
         media,
         fanNotes: input.fan.notes.join('\n'),
+        ...(offer !== undefined && { offer }),
         situation: {
           now: input.now,
           timeZone: await deps.timeZoneOf(input.creatorId),
@@ -275,12 +322,16 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         return { kind: 'held', reason, detail: failure === undefined ? [] : failureDetail(failure), costUsd };
       }
       const decision: HoldDecision = holdDecision(composed.brief);
-      if (decision.kind === 'no_reply')
-        return { kind: 'held', reason: 'no_reply', detail: decision.detail, costUsd };
       if (decision.kind === 'handoff') {
         const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
         return protect(deps.limits, input, composed.brief.risks, held);
       }
+      // He said he cannot pay: whatever is written now, the policy remembers it for his next messages. Not
+      // saved, a chatter answers: the next message would forget it.
+      const kept = await keepWhileAnswering(deps.limits, input, composed.brief.risks);
+      if (kept !== null) return { ...kept, costUsd };
+      if (decision.kind === 'no_reply')
+        return { kind: 'held', reason: 'no_reply', detail: decision.detail, costUsd };
       if (composed.voiceFailure !== undefined) {
         const reason = composed.voiceFailure.code === 'budget_reached' ? 'budget_reached' : 'llm_unavailable';
         return { kind: 'held', reason, detail: failureDetail(composed.voiceFailure), costUsd };

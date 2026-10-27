@@ -3,6 +3,7 @@ import type { Brief, CallTrace, ConversationTurn, LlmFailure, LlmGateway, VoiceI
 
 import { checkVoiceOutput, isBlocked, type GuardSettings, type GuardViolation } from '../domain/guards';
 import { screenNotes } from '../domain/injection';
+import { offerDecision, offerSignals, type OfferBlock, type OfferContext } from '../domain/policy';
 import { describeSituation, type Situation } from '../domain/situation';
 import { assessTrap, screenMedia, type TrapAssessment } from '../domain/traps';
 
@@ -29,8 +30,29 @@ export interface ComposeTurnInput {
   readonly fanNotes: string;
   readonly situation: Situation;
   readonly trace?: CallTrace;
+  /**
+   * What the policy reads to let her offer, besides the brain's reading (`offerDecision`). Absent, the policy
+   * cannot decide and she offers nothing: a brain's « offer » is written as a plain answer.
+   */
+  readonly offer?: OfferInput;
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
+}
+
+/** The policy's facts on him for an offer; his heat and the risks come from the brain. */
+export type OfferInput = Omit<OfferContext, 'fanSexualizes' | 'fanAsksForPaid' | 'risks'>;
+
+/** Why the brain's offer was not written: the policy's reason, or nothing to decide on. */
+type OfferRefusal = OfferBlock | 'no_offer_context';
+
+/** What the voice writes instead of an offer the policy refused: an answer, nothing to buy. */
+const NO_OFFER_BRIEF =
+  'Réponds à ce qu’il vient de dire et garde la complicité, sans rien proposer de payant, sans parler de prix ni de contenu à acheter.';
+
+function offerRefusal(brief: Brief, offer: OfferInput | undefined): OfferRefusal | undefined {
+  if (offer === undefined) return 'no_offer_context';
+  const decision = offerDecision({ ...offer, ...offerSignals(brief), risks: brief.risks });
+  return decision.allowed ? undefined : decision.reason;
 }
 
 /** One answer, from the brain to the guards: the same path for the playground and for a real fan. */
@@ -42,6 +64,8 @@ export interface ComposedTurn {
   readonly droppedNotes?: readonly string[];
   readonly brief?: Brief;
   readonly briefFailure?: LlmFailure;
+  /** The brain suggested an offer and the policy refused it: the voice wrote a plain answer. */
+  readonly offerRefused?: OfferRefusal;
   /** What the voice was asked to write: kept for a comparison or a rating. */
   readonly voiceBrief?: Brief;
   readonly voiceInput?: VoiceInput;
@@ -120,7 +144,7 @@ export async function composeTurn(
     media: input.media,
     ...(brief && { brain: brief }),
   });
-  const voiceBrief: Brief =
+  const read: Brief =
     trap.replyBrief === undefined
       ? (brief ?? NEUTRAL_BRIEF)
       : {
@@ -129,6 +153,10 @@ export async function composeTurn(
           replyBrief: trap.replyBrief,
           toneHints: [...(trap.toneHints ?? [])],
         };
+  // The brain may suggest an offer, only the policy decides (CLAUDE.md rule 3): refused, she just answers.
+  const offerRefused = read.action === 'offer' ? offerRefusal(read, input.offer) : undefined;
+  const voiceBrief: Brief =
+    offerRefused === undefined ? read : { ...read, action: 'reply', replyBrief: NO_OFFER_BRIEF };
   const brainCostUsd = brain.ok ? (brain.value.meta.costUsd ?? 0) : 0;
   const brainLatencyMs = brain.ok ? brain.value.meta.latencyMs : 0;
   if (input.skipVoice?.(brief) === true) {
@@ -137,6 +165,7 @@ export async function composeTurn(
       ...(notes.dropped.length > 0 && { droppedNotes: notes.dropped }),
       ...(brief && { brief }),
       ...(!brain.ok && { briefFailure: brain.error }),
+      ...(offerRefused !== undefined && { offerRefused }),
       bubbles: [],
       violations: [],
       isBlocked: true,
@@ -157,6 +186,7 @@ export async function composeTurn(
     ...(notes.dropped.length > 0 && { droppedNotes: notes.dropped }),
     ...(brief && { brief }),
     ...(!brain.ok && { briefFailure: brain.error }),
+    ...(offerRefused !== undefined && { offerRefused }),
     voiceBrief,
     voiceInput,
     bubbles,

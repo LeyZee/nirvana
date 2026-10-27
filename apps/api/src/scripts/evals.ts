@@ -19,14 +19,7 @@ import {
   type ConversationTurn,
 } from '@nirvana/llm';
 
-import {
-  composeTurn,
-  guardSettingsOf,
-  holdDecision,
-  offerDecision,
-  offerSignals,
-  readPersonaFile,
-} from '../modules/agent/index';
+import { composeTurn, guardSettingsOf, holdDecision, readPersonaFile } from '../modules/agent/index';
 
 import { checkScenario, judgeSuite, type Outcome, type ScenarioResult } from './evals/check';
 import { EVALS_CAP_EUR, evalsConfig } from './evals/judge-model';
@@ -116,31 +109,29 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
         relationshipStartedAt: new Date(now.getTime() - situation.known_hours * HOUR_MS),
         spentCents: Math.round(situation.spent_euros * 100),
       },
+      // The policy decides on the brain's offer, as for a real fan: refused, the voice writes a plain answer.
+      offer: {
+        now,
+        lastOfferAt:
+          situation.last_offer_hours_ago === null
+            ? null
+            : new Date(now.getTime() - situation.last_offer_hours_ago * HOUR_MS),
+        hasNoBudget: situation.has_no_budget,
+        flags: {
+          ...(situation.age_confirmed && { ageConfirmedAt: '2026-10-01T10:00:00.000Z' }),
+          ...(situation.sales_frozen && {
+            salesFrozen: { reason: 'operator', since: '2026-10-10T10:00:00.000Z' },
+          }),
+        },
+        limits: persona.offerLimits,
+      },
       skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
     },
   );
   const { brief } = composed;
   const handoff =
     composed.handoff !== undefined || (brief !== undefined && holdDecision(brief).kind === 'handoff');
-  const offer =
-    brief?.action === 'offer' &&
-    offerDecision({
-      now,
-      lastOfferAt:
-        situation.last_offer_hours_ago === null
-          ? null
-          : new Date(now.getTime() - situation.last_offer_hours_ago * HOUR_MS),
-      ...offerSignals(brief),
-      hasNoBudget: situation.has_no_budget,
-      risks: brief.risks,
-      flags: {
-        ...(situation.age_confirmed && { ageConfirmedAt: '2026-10-01T10:00:00.000Z' }),
-        ...(situation.sales_frozen && {
-          salesFrozen: { reason: 'operator', since: '2026-10-10T10:00:00.000Z' },
-        }),
-      },
-      limits: persona.offerLimits,
-    }).allowed;
+  const offer = brief?.action === 'offer' && composed.offerRefused === undefined;
   const blocking = composed.violations.filter((v) => v.severity === 'blocking').map((v) => v.code);
   const bubbles = handoff || composed.isBlocked ? [] : composed.bubbles;
   const outcome: Outcome = {
