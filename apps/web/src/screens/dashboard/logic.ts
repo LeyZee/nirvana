@@ -128,8 +128,33 @@ export interface Hero {
 /**
  * The state sentence follows the « À traiter » list: how many things wait, and whether one is urgent. A stopped
  * agent says so first; an agent in trouble (`bad`) keeps its own sentence; an empty list is the calm sentence.
+ *
+ * A creator reads the agent's state only (ADR 0023: never a conversation nor a fan): no list, no action, and the
+ * team's chores (its key, the alerts) are said as the agency's.
  */
-export function heroState(agent: AgentState, todos: readonly Todo[], mode: AgentMode): Hero {
+export function heroState(
+  agent: AgentState,
+  todos: readonly Todo[],
+  mode: AgentMode,
+  forCreator = false,
+): Hero {
+  if (!forCreator) return teamHero(agent, todos, mode);
+  const team = teamHero(agent, [], mode);
+  const hero: Hero = { tone: team.tone, headline: team.headline, lead: team.lead };
+  if (team.actionTo !== undefined) {
+    return {
+      ...hero,
+      lead: 'L’agence s’en occupe. D’ici là, les conversations restent aux chatteurs dans Reveal.',
+    };
+  }
+  if (hero.tone === 'ok') return { ...hero, lead: `${modeLead(mode)}. L’agence suit les conversations.` };
+  return hero;
+}
+
+const modeLead = (mode: AgentMode): string =>
+  mode === 'auto' ? 'L’agent écrit seul' : 'L’agent propose, les chatteurs valident dans Reveal';
+
+function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): Hero {
   if (mode === 'stop') {
     return {
       tone: 'bad',
@@ -144,7 +169,7 @@ export function heroState(agent: AgentState, todos: readonly Todo[], mode: Agent
     return {
       tone: 'ok',
       headline: 'Tout va bien. **Rien ne t’attend.**',
-      lead: `${mode === 'auto' ? 'L’agent écrit seul' : 'L’agent propose, les chatteurs valident dans Reveal'}. Les alertes arrivent ici et sur ton téléphone.`,
+      lead: `${modeLead(mode)}. Les alertes arrivent ici et sur ton téléphone.`,
     };
   }
   const urgent = todos.filter((todo) => todo.tone === 'bad').length;

@@ -48,7 +48,14 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   },
 });
 
-const dashboard = createRoute({ getParentRoute: () => rootRoute, path: '/', component: DashboardPage });
+const dashboard = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: function Dashboard() {
+    const { user } = rootRoute.useRouteContext();
+    return <DashboardPage forCreator={user.role === 'creator'} />;
+  },
+});
 const creators = createRoute({
   getParentRoute: () => rootRoute,
   path: '/creatrices',

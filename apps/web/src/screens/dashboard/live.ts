@@ -7,7 +7,7 @@ import {
 } from '@nirvana/contracts';
 
 import { eur } from './logic';
-import type { AgentState, Dashboard, Fan, Todo, Tone } from './model';
+import type { AgentCard, AgentState, Dashboard, Fan, Todo } from './model';
 
 import { CAUSE_LABELS } from '@/agent/causes';
 import { percent } from '@/agent/mode';
@@ -89,15 +89,34 @@ function today(iso: string, timeZone: string): string {
   return `${date}, ${clock(iso, timeZone)}`;
 }
 
-function agentState(api: ApiDashboard, now: Date): AgentState {
+function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentState {
   const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
   // Never read once and not connected: no account was ever linked. A step to come, not an outage.
   const unlinked = !reveal.connected && reveal.lastReadAt === null;
   const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
   const rateText = liveRate.rate === null ? 'pas encore mesuré' : `${percent(liveRate.rate)} sans retouche`;
   const rateOk = liveRate.rate !== null && liveRate.rate >= liveRate.target;
-  const budgetTone: Tone =
-    budget.spentToday >= budget.cap ? 'bad' : budget.spentToday >= budget.alertAt ? 'warn' : 'ok';
+  // Null for a creator: the agency's spend is not hers (ADR 0023), and her fold leaves the card out.
+  const spent = budget.spentToday;
+  const budgetCard: AgentCard | null =
+    spent === null
+      ? null
+      : {
+          id: 'budget',
+          tone: spent >= budget.cap ? 'bad' : spent >= budget.alertAt ? 'warn' : 'ok',
+          title: 'Budget IA du jour',
+          value: `${euroCents(spent)} sur ${eur(budget.cap)}`,
+          rows: [
+            ['Compté', 'pour toutes les créatrices'],
+            ['Alerte', `à ${eur(budget.alertAt)}`],
+            [`Au-delà de ${eur(budget.cap)}`, 'l’agent s’arrête'],
+          ],
+          gauge: {
+            kind: 'spend',
+            value: budget.cap > 0 ? Math.min(100, Math.round((spent / budget.cap) * 100)) : 0,
+            mark: budget.cap > 0 ? Math.round((budget.alertAt / budget.cap) * 100) : 0,
+          },
+        };
   const cards: AgentState['cards'] = [
     {
       id: 'reveal',
@@ -116,7 +135,7 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
       title: 'IA qui écrit les messages',
       value: voice.ok ? 'En service' : voice.keyMissing ? 'Clé manquante' : 'Ne répond plus',
       rows: [
-        ...(voice.keyMissing ? [['À poser dans', 'Réglages › Modèles IA'] as const] : []),
+        ...(voice.keyMissing && !forCreator ? [['À poser dans', 'Réglages › Modèles IA'] as const] : []),
         [
           'Temps pour écrire',
           voice.medianWriteMs === null
@@ -141,10 +160,19 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
       rows: [
         ['Conversations en cours', String(replies.conversationsOpen)],
         ['Fans qui attendent plus de 10 min', String(replies.fansWaitingOver10Min)],
-        [
-          'Tâches bloquées',
-          jobs.dead === null ? 'pas lu' : jobs.dead === 0 ? 'aucune' : `${String(jobs.dead)}, à regarder`,
-        ],
+        // The agency's work queue: a creator does not read it (ADR 0023).
+        ...(forCreator
+          ? []
+          : [
+              [
+                'Tâches bloquées',
+                jobs.dead === null
+                  ? 'pas lu'
+                  : jobs.dead === 0
+                    ? 'aucune'
+                    : `${String(jobs.dead)}, à regarder`,
+              ] as const,
+            ]),
       ],
     },
     {
@@ -163,22 +191,7 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
         ],
       ],
     },
-    {
-      id: 'budget',
-      tone: budgetTone,
-      title: 'Budget IA du jour',
-      value: `${euroCents(budget.spentToday)} sur ${eur(budget.cap)}`,
-      rows: [
-        ['Compté', 'pour toutes les créatrices'],
-        ['Alerte', `à ${eur(budget.alertAt)}`],
-        [`Au-delà de ${eur(budget.cap)}`, 'l’agent s’arrête'],
-      ],
-      gauge: {
-        kind: 'spend',
-        value: budget.cap > 0 ? Math.min(100, Math.round((budget.spentToday / budget.cap) * 100)) : 0,
-        mark: budget.cap > 0 ? Math.round((budget.alertAt / budget.cap) * 100) : 0,
-      },
-    },
+    ...(budgetCard === null ? [] : [budgetCard]),
     {
       id: 'live-rate',
       tone: rateOk ? 'ok' : 'warn',
@@ -201,7 +214,7 @@ function agentState(api: ApiDashboard, now: Date): AgentState {
     plural(reveal.conversations, 'conversation', 'conversations'),
     plural(guardCount, 'garde', 'gardes'),
     ...(jobs.dead !== null && jobs.dead > 0 ? [plural(jobs.dead, 'tâche bloquée', 'tâches bloquées')] : []),
-    `${euroCents(budget.spentToday)} sur ${eur(budget.cap)}`,
+    ...(spent === null ? [] : [`${euroCents(spent)} sur ${eur(budget.cap)}`]),
     rateText,
   ].join(' · ');
   const base = {
@@ -294,12 +307,12 @@ function fanOf(fan: DashboardFan, now: Date): Fan {
 }
 
 /** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
-export function fromApi(api: ApiDashboard): Dashboard {
+export function fromApi(api: ApiDashboard, forCreator = false): Dashboard {
   const now = new Date(api.creator.now);
   const timeZone = api.creator.timezone;
   return {
     creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
-    agent: agentState(api, now),
+    agent: agentState(api, now, forCreator),
     todos: api.todos.map((todo) => todoOf(todo, timeZone)),
     sales: null,
     telegram: telegramNightOf(api),

@@ -51,14 +51,18 @@ afterEach(() => {
 /** Where the page's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderDashboard(): QueryClient {
+function renderDashboard(forCreator = false): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   // The night banner links to Réglages: the page needs a router around it.
   const root = createRootRoute();
   const router = createRouter({
     routeTree: root.addChildren([
-      createRoute({ getParentRoute: () => root, path: '/', component: DashboardPage }),
+      createRoute({
+        getParentRoute: () => root,
+        path: '/',
+        component: () => <DashboardPage forCreator={forCreator} />,
+      }),
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
       createRoute({ getParentRoute: () => root, path: '/suivi' }),
@@ -336,6 +340,43 @@ describe('DashboardPage changing the mode', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Le mode n’a pas changé');
     expect(checked('Copilote')).toBe('true');
     expect(headline()).not.toContain('arrêté');
+  });
+});
+
+describe('DashboardPage of a creator', () => {
+  it('shows the agent’s state, never a conversation nor a fan, even if the server sent one', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard(true);
+    await waitFor(() => {
+      expect(headline()).toBe('Tout va bien. Rien ne t’attend.');
+    });
+    expect(screen.queryByText('Kévin')).toBeNull();
+    expect(screen.queryByText('Théo')).toBeNull();
+    expect(screen.queryByText('Meilleurs fans')).toBeNull();
+    expect(screen.queryByText('Rien à traiter pour l’instant.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Voir l’urgence' })).toBeNull();
+    expect(screen.getByText(/L’agence suit les conversations/u)).toBeDefined();
+  });
+
+  it('leaves the mode and the key to the agency', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({ voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 } }),
+    });
+    renderDashboard(true);
+    await waitFor(() => {
+      expect(headline()).toBe('L’IA qui écrit attend sa clé');
+    });
+    expect(screen.queryByRole('link', { name: 'Poser la clé' })).toBeNull();
+    expect(screen.getByText(/L’agence s’en occupe/u)).toBeDefined();
+    expect(screen.getByRole('radio', { name: 'Arrêt' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('says nothing of the night’s alerts, the team’s', async () => {
+    serveDashboard({ status: 200, body: apiDashboard({ telegramCoverage: { urgentReachable: false } }) });
+    renderDashboard(true);
+    await screen.findByRole('radio', { name: 'Arrêt' });
+    expect(screen.queryByText('Personne n’est prévenu la nuit')).toBeNull();
   });
 });
 

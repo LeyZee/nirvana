@@ -107,7 +107,8 @@ export const DashboardSchema = z.object({
   }),
   /**
    * Stuck jobs for her or for no creator: given up on (attempts spent), or due for 15 minutes under a name no worker
-   * task takes. Work that will not happen until someone looks (operations.md). `null` when the count could not be read.
+   * task takes. Work that will not happen until someone looks (operations.md). `null` when the count could not be read,
+   * and for a creator: jobs of no creator are the agency's (ADR 0023).
    */
   jobs: z.object({ dead: count.nullable() }),
   replies: z.object({
@@ -128,8 +129,11 @@ export const DashboardSchema = z.object({
    */
   telegramCoverage: z.object({ urgentReachable: z.boolean() }).nullable(),
   budget: z.object({
-    /** The day's AI spend, every creator together: the cap is one for the whole CRM. */
-    spentToday: euros,
+    /**
+     * The day's AI spend, every creator together: the cap is one for the whole CRM. Null for a creator: the agency's
+     * spend is not hers (ADR 0023).
+     */
+    spentToday: euros.nullable(),
     cap: euros,
     alertAt: euros,
     /** Null until sales are observed. */
