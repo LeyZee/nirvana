@@ -36,6 +36,18 @@ export type CommissionPreset = z.infer<typeof CommissionPresetSchema>;
 export const CommissionPresetListSchema = z.object({ presets: z.array(CommissionPresetSchema) });
 
 /**
+ * `POST /v1/team/commission-presets` (owner only, the database refuses anyone else) → `CommissionPresetSchema`: a new
+ * preset, or a new rate for an existing name from a day on, never before today (`commission_date_invalid`). The members
+ * already on the old rate keep it: their own rates are rows of their own.
+ */
+export const CreateCommissionPresetBodySchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  rateBps: BasisPointsSchema,
+  effectiveFrom: CalendarDaySchema,
+});
+export type CreateCommissionPresetBody = z.infer<typeof CreateCommissionPresetBodySchema>;
+
+/**
  * A member's rate from a day on (`member_commission_rates`, added only). `teamShareBps` is a manager's share of the
  * team's net, `null` for a chatter.
  */
@@ -167,14 +179,16 @@ export const AddTeamMemberNoteBodySchema = z.object({ body: z.string().trim().mi
  * The error codes of `/v1/team`, for the screen to say them in French (the suffix gives the status, api.md):
  * `member_not_found` 404 ; `member_conflict` 409, an account already has this e-mail ; `member_left_conflict` 409, a
  * member who left is not changed any more (EQ-14) ; `commission_preset_not_found` 404 ; `commission_date_invalid` 400,
- * a rate that starts before today ; `team_share_invalid` 400, a share for a chatter ; `creator_not_found` 404, an
- * unknown creator in `creatorIds`.
+ * a rate or a preset that starts before today ; `commission_preset_conflict` 409, this name already has a rate from
+ * that day ; `team_share_invalid` 400, a share for a chatter ; `creator_not_found` 404, an unknown creator in
+ * `creatorIds`.
  */
 export const TEAM_MEMBER_ERROR_CODES = [
   'member_not_found',
   'member_conflict',
   'member_left_conflict',
   'commission_preset_not_found',
+  'commission_preset_conflict',
   'commission_date_invalid',
   'team_share_invalid',
   'creator_not_found',

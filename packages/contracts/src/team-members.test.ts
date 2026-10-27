@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CommissionChoiceSchema,
+  CreateCommissionPresetBodySchema,
   CreateTeamMemberBodySchema,
   SetCommissionRateBodySchema,
   TeamMemberSchema,
@@ -77,5 +78,16 @@ describe('team members', () => {
       invitationExpiresAt: '2026-10-30T16:00:00.000Z',
     });
     expect(member.invitationPending).toBe(true);
+  });
+
+  it('names a preset and its rate from a day on, trimmed', () => {
+    const body = CreateCommissionPresetBodySchema.parse({
+      name: '  Palier inventé ',
+      rateBps: 1250,
+      effectiveFrom: '2026-11-01',
+    });
+    expect(body.name).toBe('Palier inventé');
+    expect(CreateCommissionPresetBodySchema.safeParse({ ...body, name: ' ' }).success).toBe(false);
+    expect(CreateCommissionPresetBodySchema.safeParse({ ...body, rateBps: 10_001 }).success).toBe(false);
   });
 });
