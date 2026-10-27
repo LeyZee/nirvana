@@ -48,7 +48,7 @@ Et un **tableau de bord opérationnel** dans `apps/web` alimenté par des vues S
 | Doublons | contrainte unique (compte) | 0 |
 | Taux d'intervention humaine | drafts édités ou rejetés / total | < 30 % en phase 5 |
 | Coût LLM par conversation et par jour | `llm_calls` | suivi, plafond |
-| Qualité conversationnelle | scores Promptfoo + notes humaines | seuil fixé avec Messa |
+| Qualité conversationnelle | scores du juge (`pnpm evals`) + notes humaines | seuil fixé avec Messa |
 
 ## Coûts et coupe-circuits
 

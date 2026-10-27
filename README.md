@@ -50,7 +50,7 @@
 
 **Aucun message n'a encore été généré par Grok** : `pnpm probe` et `pnpm playground` attendent la clé `LLM_XAI_API_KEY` dans l'environnement. Le premier verdict sur le sexting en français viendra de là.
 
-**La CI verte teste le socle, pas encore le produit** : 96 tests unitaires, mais 0 test d'intégration (`test:integration` passe à vide) et 0 éval Promptfoo. Ils arrivent avec la base (P0-03) et le premier scénario de bout en bout.
+**La CI verte teste le code, pas encore la qualité des réponses** : tests unitaires et d'intégration (Postgres) tournent à chaque PR, mais les 34 scénarios d'évaluation (`pnpm evals`) n'ont jamais tourné contre un vrai modèle : ils attendent la clé `LLM_XAI_API_KEY`, et la nuit reste rouge d'ici là.
 
 ## Le projet en une minute
 
@@ -155,7 +155,7 @@ Les principes qui structurent tout ([`docs/architecture/overview.md`](docs/archi
 | IA | Vercel AI SDK derrière `LlmGateway` |
 | Interface | Vite, React 19, TanStack, Tailwind v4, shadcn/ui |
 | Extension | WXT (Chrome, Manifest V3) |
-| Qualité | Vitest, Testcontainers, Promptfoo |
+| Qualité | Vitest, Testcontainers, évals maison avec juge LLM |
 | Hébergement | Hetzner + Coolify |
 
 ## Interface et design system
@@ -192,7 +192,7 @@ Les principes qui structurent tout ([`docs/architecture/overview.md`](docs/archi
 │   ├── design-system/        tokens, pont Tailwind v4, classes nv-*, aides d'animation
 │   └── llm/                  passerelle, fournisseurs, prompts versionnés, journal des appels
 ├── personas/                 placeholders seulement (la vraie persona est hors dépôt)
-├── evals/                    test express (probe) et évaluations Promptfoo
+├── evals/                    test express (probe) et évaluations (scénarios, seuils)
 ├── brand/                    logo, lockups, favicon, bannière
 ├── brainstorm/               01 → 06 : les échanges de conception, figés
 └── docs/

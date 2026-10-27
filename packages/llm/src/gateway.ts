@@ -12,8 +12,9 @@ import { describeBrief, notesBlock, toMessages } from './conversation-messages';
 import type { LlmGateway, LlmGatewayDeps, VideoKeyframes } from './gateway-types';
 import { computeHealth } from './health';
 import { loadPrompt, renderPrompt } from './prompts';
-import { BriefSchema, SenseOutputSchema, VoiceOutputSchema } from './schemas';
+import { BriefSchema, JudgeOutputSchema, SenseOutputSchema, VoiceOutputSchema } from './schemas';
 import { senseContent } from './sense-content';
+import { wrapUntrusted } from './untrusted';
 
 export type * from './gateway-types';
 
@@ -24,6 +25,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
     brain: loadPrompt('brain'),
     sense: loadPrompt('sense'),
   };
+  const judgePrompt = prompts.judge ?? loadPrompt('judge');
   const canary = deps.canary ?? `nv-${randomBytes(6).toString('hex')}`;
 
   const reportRefusal = (provider: ProviderId, status: 401 | 403): void => {
@@ -144,6 +146,27 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         system,
         () => Promise.resolve(toMessages(input.history)),
         VoiceOutputSchema,
+        input.trace,
+      );
+    },
+
+    judge(input) {
+      const system = renderPrompt(judgePrompt, {
+        creator_name: input.creatorName,
+        persona_sheet: input.personaSheet,
+        fan_notes: notesBlock(input.fanNotes),
+        situation: input.situation ?? 'Pas d’information sur le moment.',
+        criteria: input.criteria.join(', '),
+        canary,
+      });
+      // The reply may quote him: it is read as data, like his messages.
+      const reply = wrapUntrusted('candidate_reply', input.reply.join('\n'));
+      return run(
+        'judge',
+        judgePrompt,
+        system,
+        () => Promise.resolve([...toMessages(input.history), { role: 'user', content: reply }]),
+        JudgeOutputSchema,
         input.trace,
       );
     },

@@ -89,3 +89,14 @@ export function offerableScripts<T extends { readonly id: string }>(
 export function maySulk(flags: FanFlags): boolean {
   return flags.salesFrozen === undefined && flags.fragile !== true && flags.doNotContact !== true;
 }
+
+/** What the brain read that the policy needs: he follows his own heat, or asks for paid content himself. */
+export function offerSignals(brief: {
+  readonly intent: string;
+  readonly sentiment: string;
+}): Pick<OfferContext, 'fanSexualizes' | 'fanAsksForPaid'> {
+  return {
+    fanSexualizes: brief.intent === 'flirt' || brief.intent === 'sexting' || brief.sentiment === 'aroused',
+    fanAsksForPaid: brief.intent === 'asks_for_media',
+  };
+}

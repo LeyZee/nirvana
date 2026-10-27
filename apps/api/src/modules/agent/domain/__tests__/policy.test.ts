@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { maySulk, offerableScripts, offerDecision, type OfferContext } from '../policy';
+import { maySulk, offerableScripts, offerDecision, offerSignals, type OfferContext } from '../policy';
 
 const NOW = new Date('2026-10-17T20:00:00Z');
 const hoursAgo = (hours: number): Date => new Date(NOW.getTime() - hours * 3_600_000);
@@ -89,5 +89,23 @@ describe('maySulk', () => {
     expect(maySulk({ fragile: true })).toBe(false);
     expect(maySulk({ doNotContact: true })).toBe(false);
     expect(maySulk({ salesFrozen: { reason: 'distress', since: '2026-10-10T10:00:00Z' } })).toBe(false);
+  });
+});
+
+describe('offerSignals', () => {
+  it('reads his heat from the brain, and his own ask for paid content', () => {
+    expect(offerSignals({ intent: 'sexting', sentiment: 'neutral' })).toEqual({
+      fanSexualizes: true,
+      fanAsksForPaid: false,
+    });
+    expect(offerSignals({ intent: 'small_talk', sentiment: 'aroused' }).fanSexualizes).toBe(true);
+    expect(offerSignals({ intent: 'asks_for_media', sentiment: 'neutral' })).toEqual({
+      fanSexualizes: false,
+      fanAsksForPaid: true,
+    });
+    expect(offerSignals({ intent: 'small_talk', sentiment: 'positive' })).toEqual({
+      fanSexualizes: false,
+      fanAsksForPaid: false,
+    });
   });
 });

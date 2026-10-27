@@ -78,6 +78,7 @@ function gateway(voice: VoiceOutput, control: GatewayControl = { hasKey: true })
       return { ok: true, value: { output: voice, meta: META } };
     },
     health: () => health(control.hasKey),
+    judge: () => Promise.reject(new Error('not used')),
     testConnection: () => Promise.reject(new Error('not used')),
   };
 }
