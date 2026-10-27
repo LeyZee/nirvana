@@ -71,3 +71,4 @@ Branche : task/<id>-<slug>
 | EQ-17 | Mise en service de la paie : sauvegardes, comptable, paie à blanc | équipe | todo | EQ-04 à EQ-06, EQ-15, déploiement |
 | EQ-18 | Journal : qui a fait quoi, lisible par le propriétaire | équipe | todo | EQ-11 |
 | EQ-19 | « Voir comme » : l'écran exact d'un chatteur, en lecture seule | équipe | todo | EQ-10, EQ-11, EQ-15, EQ-18 |
+| OPS-01 | Mise en production : images, limiteur partagé, runbook | exploitation | in_progress | ADR 0027 |

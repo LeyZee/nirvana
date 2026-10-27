@@ -130,6 +130,51 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
+  images:
+    name: Docker images (build and boot)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [check]
+    env:
+      COMPOSE: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod
+    steps:
+      - uses: actions/checkout@v7
+      # The production stack of docker-compose.prod.yml (ADR 0027) against the development Postgres, with throwaway
+      # secrets generated for this run only.
+      - name: Throwaway settings
+        run: |
+          {
+            echo "DATABASE_URL=postgres://nirvana_app:change-me@postgres:5432/nirvana"
+            echo "DATABASE_ADMIN_URL=postgres://nirvana_admin:change-me@postgres:5432/nirvana"
+            echo "SESSION_ENCRYPTION_KEYS=v1:$(openssl rand -base64 32)"
+            echo "CREDENTIALS_ENCRYPTION_KEYS=v1:$(openssl rand -base64 32)"
+            echo "AUTH_SECRET=$(openssl rand -base64 32)"
+            echo "AUTH_BASE_URL=http://127.0.0.1:8080"
+            echo "WEB_ORIGIN=http://127.0.0.1:8080"
+            echo "EXTENSION_DEVICE_TOKEN=$(openssl rand -hex 24)"
+          } > .env.prod
+      - run: docker compose up -d --wait postgres
+      - run: $COMPOSE up -d --build
+      # Migrations applied, worker seen, dashboard served, /v1 forwarded to the API.
+      - name: The stack answers
+        run: |
+          for attempt in $(seq 1 30); do
+            if $COMPOSE exec -T api wget -q -O - http://127.0.0.1:3000/ready | grep '"status":"ready"' >/dev/null; then break; fi
+            if [ "$attempt" = 30 ]; then exit 1; fi
+            sleep 2
+          done
+          # nginx starts last: give it the same patience.
+          for attempt in $(seq 1 15); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/me)" = 401 ]; then break; fi
+            if [ "$attempt" = 15 ]; then exit 1; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/ | grep '<div id="root">' >/dev/null
+          curl -fsSI http://127.0.0.1:8080/ | grep -i "content-security-policy: default-src 'none'" >/dev/null
+      - name: Logs
+        if: failure()
+        run: $COMPOSE logs --no-color
+
   nightly:
     name: Nightly e2e and evals smoke
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

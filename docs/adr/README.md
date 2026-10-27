@@ -51,3 +51,4 @@ Date : AAAA-MM-JJ
 | 0024 | Rôles et navigation : chacun ne voit que ce qui le concerne | accepted (Suivi du chatteur remplacé par 0025) |
 | 0025 | Le chatteur chatte dans Reveal ; dans Nirvana, il traite sa créatrice pendant son shift, et rien hors shift | accepted |
 | 0026 | Serveur MCP de Nirvana : une seconde porte sur les mêmes commandes | accepted |
+| 0027 | Mise en production : deux images, un compose Coolify, un limiteur partagé en Postgres | accepted |
