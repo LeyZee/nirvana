@@ -1,6 +1,6 @@
 /** Public entry point of the `providers` module (ADR 0002, ADR 0016). Other modules import this file only. */
 import type { AiProvider } from '@nirvana/contracts';
-import { parseEncryptionKeys, type Database } from '@nirvana/db';
+import { parseEncryptionKeys, type Database, type EncryptionKey } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import {
@@ -174,4 +174,21 @@ export async function startProvidersModule(options: ProvidersStartOptions): Prom
   });
   await module.start().catch(options.onLoadError);
   return module;
+}
+
+/**
+ * `pnpm ops:check-keys` (ADR 0028 § 7): how many saved AI service keys the given encryption keys open, read only,
+ * no call to any provider.
+ */
+export async function checkProviderKeys(
+  adminDb: Database,
+  keys: readonly EncryptionKey[],
+): Promise<{ readonly total: number; readonly unreadable: readonly AiProvider[] }> {
+  const saved = await createPostgresCredentialStore({ adminDb, keys }).list();
+  return {
+    total: saved.length,
+    unreadable: saved
+      .filter((credential) => credential.key === null)
+      .map((credential) => credential.provider),
+  };
 }

@@ -131,3 +131,18 @@ export function resealTelegramTokens(
 ): Promise<ResealReport> {
   return createPostgresTelegramStore({ adminDb, keys }).resealTokens();
 }
+
+/**
+ * `pnpm ops:check-keys` (ADR 0028 § 7): how many bot tokens the given keys open, read only, nothing sent to Telegram.
+ * The unreadable ones are named by the bot's username, never by a token.
+ */
+export async function checkTelegramTokens(
+  adminDb: Database,
+  keys: readonly EncryptionKey[],
+): Promise<{ readonly total: number; readonly unreadable: readonly string[] }> {
+  const bots = await createPostgresTelegramStore({ adminDb, keys }).bots.listBots();
+  return {
+    total: bots.length,
+    unreadable: bots.filter((bot) => bot.token === null).map((bot) => bot.username),
+  };
+}

@@ -123,6 +123,17 @@ Une fois, avant toute donnée réelle qu'on ne pourrait pas recréer, et dans to
 2. **Le bucket**, Hetzner → Object Storage, même région que le VPS : un bucket `nirvana-backups` avec le **versioning** et le **verrou d'objets** (Object Lock, mode gouvernance, 30 jours), une règle de cycle de vie qui supprime les objets de plus de 30 jours. Les factures sur dix ans (EQ-17) auront **leur propre bucket**, jamais celui-ci.
 3. **Deux clés d'accès** : une pour le serveur, qui peut écrire et rien d'autre (ni lister, ni supprimer) ; une en lecture seule pour l'essai trimestriel, gardée avec la clé privée. Dans Coolify, avec la première : `BACKUP_S3_ENDPOINT` (`https://<région>.your-objectstorage.com`), `BACKUP_S3_REGION` (`fsn1`, `nbg1`…), `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, et `BACKUP_AGE_RECIPIENT`. `BACKUP_DATABASE_URL` reste vide : le service prend `DATABASE_ADMIN_URL`, dont le rôle a `BYPASSRLS` (§ 1.1), sans quoi `pg_dump` échoue sur les tables en `FORCE ROW LEVEL SECURITY`.
 4. **Premier export sans attendre la nuit** : Coolify → `backup` → Terminal, `/app/export.sh`. Il affiche `backup: backups/nirvana-<date>.tar.age (<taille> bytes, sha256 <empreinte>)` et la ligne de `backup_runs` passe à `succeeded`. Puis jouer tout de suite l'essai de `restore.md` § C.
+5. **Vérifier la copie des clés** (§ 4.2).
+
+### 4.2 Vérifier la copie des clés de l'application
+
+La copie de `SESSION_ENCRYPTION_KEYS` et `CREDENTIALS_ENCRYPTION_KEYS` gardée avec la clé privée doit ouvrir les données (ADR 0028 § 7). À faire après le § 4.1, après chaque rotation (`rotate-secrets.md`) et avec chaque essai trimestriel. Coolify → `api` → Terminal :
+
+```sh
+node dist/scripts/ops-check-keys.js
+```
+
+Coller les deux valeurs **de la copie gardée** quand la commande les demande (rien ne s'affiche à la frappe ; elle ne lit pas celles du serveur). Elle ouvre en mémoire chaque session de plateforme, chaque clé de service IA et chaque jeton de bot Telegram, sur une connexion que la base garde en lecture seule, sans rien appeler ni rien afficher de déchiffré. Attendu : « La copie des clés ouvre toutes les données chiffrées. » Sinon, elle nomme ce qui ne s'ouvre pas (compte, service, bot) : remettre la copie à jour depuis Coolify, puis relancer.
 
 ## 5. Coupe-circuit
 
@@ -133,7 +144,7 @@ node dist/scripts/ops-kill-switch.js --on --scope global --reason "<raison>"
 node dist/scripts/ops-kill-switch.js --off --scope global --reason "<raison>"
 ```
 
-Les autres commandes d'exploitation des runbooks (`pnpm ops:revoke-sessions`, `pnpm ops:reencrypt-sessions`, `pnpm ops:reencrypt-credentials`, `pnpm db:rebuild-projections`) ont leur équivalent dans l'image : `node dist/scripts/<nom>.js` (`ops-revoke-sessions`, `ops-reencrypt-sessions`, `ops-reencrypt-credentials`, `rebuild-projections`), mêmes arguments.
+Les autres commandes d'exploitation des runbooks (`pnpm ops:revoke-sessions`, `pnpm ops:reencrypt-sessions`, `pnpm ops:reencrypt-credentials`, `pnpm ops:check-keys`, `pnpm db:rebuild-projections`) ont leur équivalent dans l'image : `node dist/scripts/<nom>.js` (`ops-revoke-sessions`, `ops-reencrypt-sessions`, `ops-reencrypt-credentials`, `ops-check-keys`, `rebuild-projections`), mêmes arguments.
 
 Si Neon ne répond plus, le limiteur de débit laisse passer les requêtes ordinaires (un `warn` « rate limit store unavailable » par requête dans les journaux de `api`), mais la connexion au dashboard répond 503 `service_unavailable` jusqu'au retour de la base (`security.md`). Ce n'est pas une panne de l'API : regarder `/ready` et Neon.
 

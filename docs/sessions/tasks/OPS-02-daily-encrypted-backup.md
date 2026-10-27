@@ -19,7 +19,7 @@ ADR 0028, ADR 0005, ADR 0027, `docs/runbooks/restore.md`, `docs/runbooks/deploy.
 - [x] `restore.md` § B et test trimestriel réécrits selon l'ADR ; `deploy.md` : création du bucket (versioning, verrou d'objets, cycle de vie 30 jours, identifiants sans suppression), génération de la paire `age` sur le PC de Charles, garde des clés de l'application avec la clé privée.
 - [x] Script d'essai de restauration pour la session Remote Control du PC de Charles : conteneur Postgres jetable sans volume, restauration sans les clés de chiffrement de l'application, file `graphile_worker` vidée juste après `pg_restore`, API seule (jamais le worker), comparaison des comptes, suppression du conteneur et du dump déchiffré en fin d'essai (même en échec), empreinte SHA-256 de l'export affichée pour la saisie du propriétaire (EQ-17).
 - [x] Alerte des 26 h côté serveur : module `backups`, `GET /v1/backups/status` (propriétaire), job horaire `backups.check` qui publie `backup_overdue` (sans créatrice, une fois par jour), message Telegram « important » ; la bannière ambre du Dashboard revient au fil Dashboard.
-- [ ] Script en lecture seule qui prouve que les clés de l'application gardées avec la clé privée déchiffrent une ligne de la copie, sans rien appeler.
+- [x] Script en lecture seule qui prouve que les clés de l'application gardées avec la clé privée déchiffrent les données, sans rien appeler : `pnpm ops:check-keys` (`deploy.md` § 4.2), connexion que la base garde en lecture seule, clés tapées sans écho.
 - [ ] Premier essai joué, saisi par le propriétaire dans l'état de mise en service (EQ-17), rapproché d'une ligne réussie de `backup_runs`.
 
 ## Critères d'acceptation

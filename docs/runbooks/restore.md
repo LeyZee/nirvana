@@ -35,4 +35,4 @@ L'export (ADR 0028, service `backup`) est un tar chiffré par `age` : le dump `p
 5. En fin d'essai, réussi ou non : `docker stop nirvana-restore-db` (le conteneur `--rm` part avec son volume anonyme), `docker network rm nirvana-restore-test`, suppression de l'export téléchargé et de tout fichier déchiffré. Le compte rendu ne cite aucune donnée, seulement l'empreinte, la durée et des comptes.
 6. Charles saisit l'essai dans l'application (état de mise en service, EQ-17) : date, durée, nombre d'écarts, empreinte. Le serveur le rapproche d'un export réussi de `backup_runs` et refuse une empreinte inconnue.
 
-Les clés gardées avec la clé privée se vérifient à part, sans rien appeler : un script en lecture seule déchiffre une ligne de la copie (fiche OPS-02).
+Les clés gardées avec la clé privée se vérifient à part, jamais pendant l'essai : `pnpm ops:check-keys` (`deploy.md` § 4.2), en lecture seule, sans rien appeler.
