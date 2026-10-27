@@ -189,14 +189,14 @@ async function deferReply(
  * she may answer now: in a slot, or a human works her conversations (a chatter on shift is not bound by her hours).
  */
 async function closedUntil(
-  clock: { readonly hours: AgentHours; readonly timeZone: string } | null,
+  her: { readonly hours: AgentHours; readonly timeZone: string } | null,
   presence: ShiftPresence | undefined,
   creatorId: CreatorId,
   now: Date,
 ): Promise<Date | null> {
-  if (clock === null || replyOpenAt(clock.hours, clock.timeZone, now)) return null;
+  if (her === null || replyOpenAt(her.hours, her.timeZone, now)) return null;
   if (presence !== undefined && (await presence.someoneOnShift(creatorId, now))) return null;
-  const opening = nextReplyOpening(clock.hours, clock.timeZone, now);
+  const opening = nextReplyOpening(her.hours, her.timeZone, now);
   // Her hours always have an active slot (the contract); stored hours that had none never put a job off to now.
   return opening.getTime() > now.getTime() ? opening : null;
 }
