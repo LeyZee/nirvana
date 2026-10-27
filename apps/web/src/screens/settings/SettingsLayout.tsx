@@ -1,12 +1,16 @@
 import { Outlet, useRouteContext } from '@tanstack/react-router';
 import type { JSX } from 'react';
 
+import { BackupsSection } from '@/settings/backups/BackupsSection';
 import { ServicesSection } from '@/settings/services/ServicesSection';
 import { TelegramSection } from '@/settings/telegram/TelegramSection';
-import { ComingSoon, Page, PageHeader, SubNav } from '@/shell/layout';
+import { ComingSoon, Page, PageHeader, SubNav, type SubNavItem } from '@/shell/layout';
+
+/** The backups are the owner's alone (ADR 0028): anyone else gets no tab that would only answer 403. */
+const BACKUPS_TAB: SubNavItem = { to: '/reglages/sauvegardes', label: 'Sauvegardes' };
 
 export function SettingsLayout(): JSX.Element {
-  const { onSignOut } = useRouteContext({ from: '__root__' });
+  const { user, onSignOut } = useRouteContext({ from: '__root__' });
   return (
     <Page>
       <PageHeader
@@ -18,6 +22,7 @@ export function SettingsLayout(): JSX.Element {
               items={[
                 { to: '/reglages/modeles-ia', label: 'Modèles IA' },
                 { to: '/reglages/telegram', label: 'Telegram' },
+                ...(user.role === 'owner' ? [BACKUPS_TAB] : []),
                 { to: '/reglages/appareils', label: 'Appareils' },
                 { to: '/reglages/apparence', label: 'Apparence' },
                 { to: '/reglages/mode', label: 'Mode de l’agent' },
@@ -42,6 +47,11 @@ export function AiModelsPage(): JSX.Element {
 /** Réglages › Telegram: bots, groups and who gets which alert (fiche P3-07). */
 export function TelegramPage(): JSX.Element {
   return <TelegramSection />;
+}
+
+/** Réglages › Sauvegardes: the nightly export and the restore test (EQ-17, ADR 0028). */
+export function BackupsPage(): JSX.Element {
+  return <BackupsSection />;
 }
 
 export function DevicesPage(): JSX.Element {

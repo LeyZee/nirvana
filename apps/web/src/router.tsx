@@ -15,6 +15,7 @@ import {
   DevicesPage,
   AgentModePage,
   AiModelsPage,
+  BackupsPage,
   SettingsLayout,
   TelegramPage,
 } from './screens/settings/SettingsLayout';
@@ -179,6 +180,18 @@ const appearance = createRoute({
   path: '/apparence',
   component: AppearancePage,
 });
+const backups = createRoute({
+  getParentRoute: () => settings,
+  path: '/sauvegardes',
+  // The owner's alone (ADR 0028): anyone else is sent to Réglages, not to a page the server would refuse.
+  beforeLoad: ({ context }) => {
+    if (context.user.role !== 'owner') {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: '/reglages', replace: true });
+    }
+  },
+  component: BackupsPage,
+});
 const agentMode = createRoute({ getParentRoute: () => settings, path: '/mode', component: AgentModePage });
 
 const routeTree = rootRoute.addChildren([
@@ -189,7 +202,7 @@ const routeTree = rootRoute.addChildren([
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamMembers]),
-  settings.addChildren([settingsIndex, aiModels, telegram, devices, appearance, agentMode]),
+  settings.addChildren([settingsIndex, aiModels, telegram, backups, devices, appearance, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext, history?: RouterHistory) =>

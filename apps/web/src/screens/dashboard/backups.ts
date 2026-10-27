@@ -1,25 +1,26 @@
 import { BackupStatusSchema, RESTORE_TEST_FRESH_DAYS, type BackupStatus } from '@nirvana/contracts';
-import { useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 
 /** The export is daily: reading its state again every five minutes is plenty. */
 const REFRESH_MS = 300_000;
 
-/** `GET /v1/backups/status`, owner only (ADR 0028, OPS-02), parsed with the contract. */
-async function fetchBackupStatus(): Promise<BackupStatus> {
-  const response = await fetch('/v1/backups/status', { credentials: 'include' });
-  if (!response.ok) throw new Error(`GET /v1/backups/status: ${String(response.status)}`);
-  return BackupStatusSchema.parse(await response.json());
-}
+/**
+ * `GET /v1/backups/status`, owner only (ADR 0028, OPS-02), parsed with the contract. The one reader of its cache: the
+ * Dashboard's banner and Réglages › Sauvegardes both read through it, so that they always say the same thing.
+ */
+export const backupStatusQuery = queryOptions({
+  queryKey: ['backups', 'status'],
+  queryFn: async (): Promise<BackupStatus> => {
+    const response = await fetch('/v1/backups/status', { credentials: 'include' });
+    if (!response.ok) throw new Error(`GET /v1/backups/status: ${String(response.status)}`);
+    return BackupStatusSchema.parse(await response.json());
+  },
+  retry: 1,
+});
 
 /** The state of the daily export, read for the owner only; undefined until it answers, or while it fails. */
 export function useBackupStatus(enabled: boolean): BackupStatus | undefined {
-  return useQuery({
-    queryKey: ['backups', 'status'],
-    queryFn: fetchBackupStatus,
-    enabled,
-    refetchInterval: REFRESH_MS,
-    retry: 1,
-  }).data;
+  return useQuery({ ...backupStatusQuery, enabled, refetchInterval: REFRESH_MS }).data;
 }
 
 export interface BackupBanner {
