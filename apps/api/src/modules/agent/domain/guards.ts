@@ -20,7 +20,13 @@ export type GuardCode =
   | 'discount'
   | 'explicit_before_age'
   | 'guilt_trip'
-  | 'pet_name';
+  | 'pet_name'
+  | 'stage_direction'
+  | 'media_not_sent'
+  | 'platform_meeting_word'
+  | 'fake_emergency'
+  | 'repetition'
+  | 'closed_question_streak';
 
 export interface GuardViolation {
   readonly code: GuardCode;
@@ -36,6 +42,20 @@ export interface GuardSettings {
   readonly forbiddenTerms: readonly string[];
   /** The only pet names she gives (`behavior.pet_names`); undefined: not checked. */
   readonly petNames?: readonly string[];
+}
+
+/**
+ * What the draft is written into (P3-13): what it carries and what she already sent him. Each guard that needs a
+ * fact here is read only when the fact is given.
+ */
+export interface GuardContext {
+  /** The draft carries a media; absent, `media_not_sent` is not read. */
+  readonly hasMedia?: boolean;
+  /**
+   * Her messages to him among the last twenty of the conversation, grouped by turn (her messages between two of
+   * his), oldest first; absent, neither `repetition` nor `closed_question_streak` is read.
+   */
+  readonly previousTurns?: readonly (readonly string[])[];
 }
 
 export const DEFAULT_GUARD_SETTINGS: GuardSettings = {
@@ -60,6 +80,20 @@ const ONLINE =
   " ?(\\d|(le |un |mon |ton |ma |ta |mes |tes |la |du )?(lit|live|prochain|prochaine|plus|tout a l'heure|tout de suite|tchat|chat|prive|dm|mp|messages?|story|video|appel|sur|ici|en (live|prive|dm|mp|story|video))\\b)";
 const CITY =
   '(paris|lyon|marseille|geneve|bruxelles|lausanne|bordeaux|lille|nice|toulouse|nantes|montpellier|strasbourg)';
+
+/** @public Bumped whenever the list below changes: to enrich from the Reveal capture. */
+export const PLATFORM_MEETING_WORDS_VERSION = 'meeting-words-1';
+const PLATFORM_MEETING_WORDS = new RegExp(
+  [
+    '\\b(rdv|rendez ?-? ?vous|irl|in real life|real life|in person|meet ?up|date irl)\\b',
+    // Him, her or both meeting: « se rencontrer », « te rencontrer », « qu'on se rencontre », « nous rencontrer ».
+    "\\b(se|te|me|nous|vous|t'|m') ?rencontr\\w*",
+    '\\brencontres? (reelle|en vrai|irl|physique|en personne|pour de vrai)s?\\b',
+    // « se voir en vrai », « te voir pour de vrai », « en chair et en os », « en personne ».
+    "\\b(se|te|me|nous|vous|t'|m') ?voir (en vrai|pour de vrai|en personne|irl|en chair et en os|dans la vraie vie)\\b",
+    '\\b(en chair et en os|dans la vraie vie|en vrai de vrai)\\b',
+  ].join('|'),
+);
 
 const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
   {
@@ -177,6 +211,10 @@ const BLOCKING_PATTERNS: readonly { code: GuardCode; pattern: RegExp }[] = [
     pattern:
       /(^|\s)(moins |-) ?\d+ ?% (sur (le|la|les|ce|cette|ces|mon|ma|mes|ton|ta|tes|tout)|pour toi|de remise|de reduc|si tu)|\b\d+ ?% (de moins|moins cher) (sur|pour)\b/,
   },
+  // The words the platforms flag in a message, even in a refusal (P3-13, `PLATFORM_MEETING_WORDS_VERSION`):
+  // `meeting_promise` blocks the promise, this the word. « En vrai » alone is a tic, and « j'ai rencontré une
+  // copine » or « on se voit au prochain live » are not about meeting him.
+  { code: 'platform_meeting_word', pattern: PLATFORM_MEETING_WORDS },
 ];
 
 // After a refusal she whines once, playfully, then lets go: no guilt (sales corpus, §2.4). A regeneration, not a block.
@@ -380,6 +418,109 @@ function spelledNumber(text: string): string | undefined {
   return undefined;
 }
 
+// An action written for him to imagine, never a girl's own message (Desirely): « *sourit* », « (rires) »,
+// « *t'envoie un bisou* ». On the raw bubble, where the asterisks and parentheses still are; emojis stay hers.
+const STAGE_DIRECTION: readonly RegExp[] = [
+  /\*[^*\n]*\p{L}[^*\n]*\*/u,
+  /\((rires?|rire|sourire|sourit|souris|rougit|rougis|soupire?|soupir|clin d['’]?\s?(oe|œ)il|bisous?|calin|câlin|gemit|gémit|gemis|gémis|ricane|glousse|chuchote|murmure|boude|mord[^)]*|se mord[^)]*|tire la langue|fait la moue|hausse les epaules|hausse les épaules|s['’]?\s?etire|s['’]?\s?étire|te regarde[^)]*|t['’]?\s?envoie[^)]*|t['’]?\s?embrasse[^)]*|te fait[^)]*|leve les yeux[^)]*|lève les yeux[^)]*|haussement[^)]*)\)/iu,
+];
+
+// She says she sent him a media, now or just before: « je t'envoie une photo », « regarde ce que je viens de
+// t'envoyer », « voilà la vidéo ». An offer (« tu veux que je t'envoie… », « si tu veux je t'envoie… ») and a promise
+// for later stay hers; a media sent without a word about it too.
+const MEDIA_NOUN =
+  '(photo|photos|video|videos|vid|vids|selfie|pic|pics|image|images|vocal|audio|extrait|apercu|teaser|clip|snap)';
+const MEDIA_ANNOUNCED = new RegExp(
+  [
+    `(?<!\\bque )(?<!\\bsi tu veux,? )\\bje (te |t')(envoie|envoies|mets|joins|balance|partage) (une?|la|le|les|des|ma|mon|mes|cette|ce|ces|ta|ton|tes|un petit|une petite|deux|trois) ?(petite? |nouvelle |derniere )?${MEDIA_NOUN}\\b(?! (si|quand|des que|demain|plus tard|ce soir|tout a l'heure|bientot|apres))`,
+    `\\bje (viens de )?(te |t')(ai )?(envoye|envoyer|mis|partage)e?s? (une?|la|le|les|des|ma|mon|mes|cette|ce|ces|deux|trois) ?(petite? |nouvelle |derniere )?${MEDIA_NOUN}\\b`,
+    "\\b(regarde|t'as vu|tu as vu) ce que je (viens de )?(te |t')(ai )?(envoye|envoyer|mis)\\b",
+    `\\b(voila|voici|tiens|regarde) (la|ta|une|ma|cette|le|mon|ce) ?(petite? |nouvelle )?${MEDIA_NOUN}\\b`,
+    '\\b(ci-?joint|en piece jointe)\\b',
+  ].join('|'),
+);
+
+// Illness, an accident, a debt or the rent used to push a sale (méthode de chatting; playbook): one of these near
+// a sale or money cue, in the same message. A plain fact of her life (« je suis crevée ») is not one; asking him for
+// money on her own is, whatever the reason.
+const EMERGENCY =
+  /\b(malade|maladie|hopital|hosto|urgences?|accident|operation|operee|chirurgie|medicaments?|ordonnance|loyer|dettes?|huissier|expulsee?|facture|factures|decouvert|banque m'a|a la rue|ma mere est|mon pere est|ma grand-mere est|mon chat est malade|veto|veterinaire)\b/;
+const SALE_CUE =
+  /\b(achete[rsz]?|achetes|pack|bundle|ppv|debloque[rsz]?|tip|tips|pourboire|soutiens-moi|soutiens moi|me soutenir|aide-moi|aide moi|paie[sz]?|payer|payez|argent|thunes|fric|euros?|balles)\b|€|\b\d+ ?(e|eur)\b/;
+const MONEY_PLEA =
+  /\b(j'ai besoin (d'argent|de sous|de thunes|de fric|de ton aide pour payer)|aide-? ?moi a (payer|regler|rembourser)|pour payer (mon|ma|le|la|mes) (loyer|facture|factures|dette|dettes|credit|operation|medicaments))\b/;
+
+function emergencyMatch(text: string): string | undefined {
+  const plea = MONEY_PLEA.exec(text)?.[0];
+  if (plea !== undefined) return plea;
+  const emergency = EMERGENCY.exec(text)?.[0];
+  return emergency !== undefined && SALE_CUE.test(text) ? emergency : undefined;
+}
+
+/** The text a repetition compares: normalised, without emojis or punctuation. */
+function plain(text: string): string {
+  return normalise(text)
+    .replace(/[^\p{L}\p{N}' ]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Shorter than this, the same bubble twice is a « ok » or a « mdrr », not a repetition. */
+const REPEATED_MIN_CHARS = 15;
+/** Her opening is its first two words: « coucou toi », « hey bébé ». */
+const OPENING_WORDS = 2;
+const OPENING_STREAK = 3;
+
+const openingOf = (turn: readonly string[]): string | undefined => {
+  const words = plain(turn[0] ?? '')
+    .split(' ')
+    .filter((word) => word !== '');
+  return words.length >= OPENING_WORDS ? words.slice(0, OPENING_WORDS).join(' ') : undefined;
+};
+
+// A question he answers with yes or no; an open one asks how, why, what (« raconte »).
+const OPEN_QUESTION =
+  /\b(quoi|comment|pourquoi|quel|quelle|quels|quelles|qu'est-ce|qu'est ce|ou|combien|quand|raconte|dis-moi|dis moi|parle-moi|parle moi|lequel|laquelle|qui)\b/;
+
+/** The last question of a turn: undefined without one, true when it is closed. */
+function closedQuestion(turn: readonly string[]): boolean | undefined {
+  const questions = turn
+    .flatMap((bubble) => bubble.split(/(?<=\?)/))
+    .filter((part) => part.trim().endsWith('?'));
+  const last = questions.at(-1);
+  return last === undefined ? undefined : !OPEN_QUESTION.test(normalise(last));
+}
+
+/**
+ * Against what she already sent him: a bubble sent again, the same opening a third time in a row, a third closed
+ * question in a row in her last turns. Soft: they serve the calibration first (P3-13).
+ */
+function againstHistory(bubbles: readonly string[], turns: readonly (readonly string[])[]): GuardViolation[] {
+  const violations: GuardViolation[] = [];
+  const sent = new Set(turns.flat().map(plain));
+  bubbles.forEach((bubble, bubbleIndex) => {
+    const text = plain(bubble);
+    if (text.length >= REPEATED_MIN_CHARS && sent.has(text)) {
+      violations.push({ code: 'repetition', severity: 'soft', bubbleIndex, match: text });
+    }
+  });
+  const opening = openingOf(bubbles);
+  const lastOpenings = turns.slice(-(OPENING_STREAK - 1)).map(openingOf);
+  if (
+    opening !== undefined &&
+    lastOpenings.length === OPENING_STREAK - 1 &&
+    lastOpenings.every((previous) => previous === opening) &&
+    !violations.some((v) => v.code === 'repetition' && v.bubbleIndex === 0)
+  ) {
+    violations.push({ code: 'repetition', severity: 'soft', bubbleIndex: 0, match: opening });
+  }
+  const asked = [...turns.map(closedQuestion), closedQuestion(bubbles)].filter((q) => q !== undefined);
+  if (closedQuestion(bubbles) === true && asked.length >= 3 && asked.slice(-3).every((closed) => closed)) {
+    violations.push({ code: 'closed_question_streak', severity: 'soft' });
+  }
+  return violations;
+}
+
 function forbiddenMatch(text: string, term: string): boolean {
   // Whole words only: the disgust « anal » must not block « banal » or « canal ».
   return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(term)}($|[^\\p{L}\\p{N}])`, 'u').test(text);
@@ -407,6 +548,11 @@ function wholeMessage(
     const match = readings.map((text) => pattern.exec(text)?.[0]).find((m) => m !== undefined);
     if (match !== undefined) violations.push({ code, severity: 'blocking', match });
   }
+  const emergency = has('fake_emergency')
+    ? undefined
+    : readings.map(emergencyMatch).find((m) => m !== undefined);
+  if (emergency !== undefined)
+    violations.push({ code: 'fake_emergency', severity: 'blocking', match: emergency });
   const spelled = readings.map(spelledNumber).find((m) => m !== undefined);
   if (spelled !== undefined && !has('contact_info')) {
     violations.push({ code: 'contact_info', severity: 'blocking', match: spelled });
@@ -420,7 +566,11 @@ function wholeMessage(
   return violations;
 }
 
-export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSettings): GuardViolation[] {
+export function checkVoiceOutput(
+  bubbles: readonly string[],
+  settings: GuardSettings,
+  context: GuardContext = {},
+): GuardViolation[] {
   const violations: GuardViolation[] = [];
   const forbidden = settings.forbiddenTerms.map(normalise).filter((term) => term !== '');
 
@@ -429,6 +579,20 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
     for (const { code, pattern } of BLOCKING_PATTERNS) {
       const match = pattern.exec(text);
       if (match) violations.push({ code, severity: 'blocking', bubbleIndex, match: match[0] });
+    }
+    const stage = STAGE_DIRECTION.map((pattern) => pattern.exec(bubble)?.[0]).find((m) => m !== undefined);
+    if (stage !== undefined) {
+      violations.push({ code: 'stage_direction', severity: 'blocking', bubbleIndex, match: stage });
+    }
+    const emergency = emergencyMatch(text);
+    if (emergency !== undefined) {
+      violations.push({ code: 'fake_emergency', severity: 'blocking', bubbleIndex, match: emergency });
+    }
+    if (context.hasMedia === false) {
+      const announced = MEDIA_ANNOUNCED.exec(text)?.[0];
+      if (announced !== undefined) {
+        violations.push({ code: 'media_not_sent', severity: 'blocking', bubbleIndex, match: announced });
+      }
     }
     const assistant =
       ASSISTANT_OUTPUT.map((pattern) => pattern.exec(bubble)?.[0]).find((m) => m !== undefined) ??
@@ -459,8 +623,31 @@ export function checkVoiceOutput(bubbles: readonly string[], settings: GuardSett
     }
   });
   violations.push(...wholeMessage(bubbles, forbidden, violations));
+  if (context.previousTurns !== undefined) violations.push(...againstHistory(bubbles, context.previousTurns));
   if (bubbles.length > settings.maxBubbles) violations.push({ code: 'too_many_bubbles', severity: 'soft' });
   return violations;
+}
+
+/** How far back her messages count against a repetition: the last twenty messages of the conversation. */
+const HISTORY_WINDOW = 20;
+
+/** Her turns among the last twenty messages (`GuardContext.previousTurns`): her messages between two of his. */
+export function previousTurnsOf(
+  history: readonly { readonly fromFan: boolean; readonly text: string }[],
+): string[][] {
+  const turns: string[][] = [];
+  let inTurn = false;
+  for (const message of history.slice(-HISTORY_WINDOW)) {
+    if (message.fromFan) {
+      inTurn = false;
+    } else if (inTurn) {
+      turns.at(-1)?.push(message.text);
+    } else {
+      turns.push([message.text]);
+      inTurn = true;
+    }
+  }
+  return turns;
 }
 
 export function isBlocked(violations: readonly GuardViolation[]): boolean {

@@ -1,8 +1,8 @@
 # P3-13 Gardes de voix : didascalies, média annoncé, mots de rencontre, fausse urgence, répétitions
-Statut : todo (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
+Statut : in_progress (ID validé par Charles le 27/10 à 20h37, carte « Les 5 sans capture, désir en tête »)
 Phase : 3
 Dépend de : rien de bloquant (ni capture ni clé : les gardes sont du code pur, les évals tournent dès la clé xAI)
-Branche : task/P3-13-voice-guards
+Branche : claude/project-thread-e0j3ow (fil Agent)
 
 ## Objectif
 Ajouter aux gardes de `checkVoiceOutput` les fautes de voix que Desirely corrige déjà, pour qu'aucune ne parte chez un fan, que le brouillon vienne de l'agent ou d'un humain (G5).
@@ -19,10 +19,10 @@ Ajouter aux gardes de `checkVoiceOutput` les fautes de voix que Desirely corrige
 6. **`closed_question_streak`** (avertissement) : trois questions fermées de suite dans la découverte (le playbook demande de rebondir et d'ouvrir) ; sert la calibration, ne bloque pas.
 
 ## À faire
-- [ ] Les six codes dans `GuardCode`, leurs motifs et leurs tests (un cas qui passe, un cas bloqué, un faux positif connu par garde, dont « j'ai rencontré une copine » pour `platform_meeting_word`).
-- [ ] Élargir le port `guard.check` en ajout (Bilan) : il reçoit aujourd'hui les seules bulles ; `media_not_sent` a besoin des médias du brouillon et `repetition` des bulles déjà envoyées à ce fan. Sans cela, G5 ne repasse pas ces deux gardes à l'approbation humaine et elles ne protègent que les brouillons de l'agent.
-- [ ] La raison lisible de chaque garde dans `apps/web/src/agent/causes.ts`.
-- [ ] Scénarios d'éval : refus de rencontre sans mot repéré, média annoncé sans pièce, relance sans répétition.
+- [x] Les six codes dans `GuardCode`, leurs motifs et leurs tests (un cas qui passe, un cas bloqué, un faux positif connu par garde, dont « j'ai rencontré une copine » pour `platform_meeting_word`). Contexte `GuardContext` (`hasMedia`, `previousTurns`), lu par le moteur (un brouillon du moteur ne porte jamais de média) et le playground.
+- [ ] Élargir le port `guard.check` en ajout (Bilan) : `AgentBubbleGuard.check(bubbles, context?)` l'accepte déjà, avec `GuardContext` ; reste à le passer depuis `approveDraft` : il reçoit aujourd'hui les seules bulles ; `media_not_sent` a besoin des médias du brouillon et `repetition` des bulles déjà envoyées à ce fan. Sans cela, G5 ne repasse pas ces deux gardes à l'approbation humaine et elles ne protègent que les brouillons de l'agent.
+- [ ] La raison lisible de chaque garde côté web (`GUARD_LABELS` de `apps/web/src/screens/tracking/reader-model.ts`, où vivent les libellés des gardes ; `causes.ts` ne porte que les causes de passation) : Extension. Celles du playground sont faites (`playground/domain/labels.ts`).
+- [x] Scénarios d'éval : refus de rencontre sans mot repéré, média annoncé sans pièce, ouverture non répétée (`tier: full`).
 
 ## Critères d'acceptation
 - `pnpm check`, `pnpm test` verts ; aucune garde existante affaiblie ; les évals existantes ne régressent pas.
@@ -31,3 +31,4 @@ Ajouter aux gardes de `checkVoiceOutput` les fautes de voix que Desirely corrige
 Le style (longueur, emojis, tics) déjà couvert par `bubble_too_long`, `too_many_bubbles` et la persona.
 
 ## Notes de session
+- 2026-10-27 (fil Agent) : gardes, contexte et scénarios faits. `repetition` et `closed_question_streak` restent souples jusqu'à la calibration. Deux tests existants changent de sens, voulu par la fiche : « un jour peut-être qu'on se rencontrera » et « Rendez-vous le 06/12 » sont désormais bloqués par `platform_meeting_word`.
