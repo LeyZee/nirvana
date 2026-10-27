@@ -30,7 +30,7 @@ media ──▶ packages/llm
 sales ──▶ conversations, media            (phase 6, non créé)
 scripts ──▶ sales, media, conversations   (phase 6, non créé)
 playground ──▶ agent, packages/llm        (écran Entraîner, P3-06)
-fans, persona, providers, telegram ──▶ (feuilles)
+fans, persona, providers, telegram, team ──▶ (feuilles)
 ```
 
 Ce graphe est **sans cycle**, et `import-x/no-cycle` le vérifie. Deux inversions le rendent possible :
@@ -73,6 +73,7 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | playground | 3 | API de l'écran Entraîner (P3-06) |
 | providers (clés des services IA, ADR 0016) | 3 | clés vérifiées et scellées, routes `/v1/settings/providers`, page Services, revérification toutes les 15 minutes (P3-03) |
 | telegram (alertes de l'équipe, ADR 0020) | 3 | bots et groupes depuis Réglages › Telegram (`/v1/settings/telegram`), alertes vérifiées de bout en bout (P3-07) |
+| team (équipe, ADR 0023, ADR 0024) | équipe | membres, taux de commission datés, préréglages, notes internes, routes `/v1/team` (EQ-01) ; les créatrices existantes lui viennent de `persona` par le composition root |
 | content (Instagram) | 7 | non créé |
 | platform (Nirvana propre) | 8 | non créé, voir `own-platform.md` |
 

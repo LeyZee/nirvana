@@ -41,6 +41,7 @@ import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
 import { createSupervisionModule, type SupervisionModule } from './modules/supervision';
+import { createTeamModule, type TeamModule } from './modules/team';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
 import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
 
@@ -54,6 +55,7 @@ interface Modules {
   readonly media: MediaModule;
   readonly supervision: SupervisionModule;
   readonly providers: ProvidersModule;
+  readonly team: TeamModule;
   /** Null in the worker, or when its persona cannot be read: the API starts without the playground and says why. */
   readonly playground: PlaygroundModule | null;
   /** Null without CREDENTIALS_ENCRYPTION_KEYS: a bot token is never kept unsealed (ADR 0020 §5). */
@@ -193,6 +195,12 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
   const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
   const persona = createPersonaModule({ db: db.db, requireRole });
+  const team = createTeamModule({
+    db: db.db,
+    creators: {
+      existing: async (ids) => new Set((await persona.creators.list(ids)).map((creator) => creator.id)),
+    },
+  });
   const playground =
     options.withPlayground === false
       ? null
@@ -266,6 +274,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     conversations,
     fans,
     persona,
+    team,
     agent: createAgentModule(),
     media: createMediaModule(),
     supervision: createSupervisionModule({
@@ -428,6 +437,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.conversations.routes,
       modules.persona.routes,
       modules.fans.routes(requireRole),
+      modules.team.routes(requireRole),
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,
       modules.supervision.routes,

@@ -196,3 +196,4 @@ Découvertes (CI, PR #1) : la CI est rouge sur `main` comme sur la PR, pour deux
 | 2026-10-27 | OPS-01 Mise en production, lot 1 : images Docker (Opus) | in_progress | `log/2026-10-27-ops-01-images.md` |
 | 2026-10-27 | Pièges : batterie d’injection (langues, encodages, médias, notes, messages coupés) | done | `log/2026-10-27-injection-battery.md` |
 | 2026-10-27 | EQ-01 et EQ-10 : contrats des membres et des liens d’invitation | done | `log/2026-10-27-eq-01-eq-10-contracts.md` |
+| 2026-10-27 | EQ-01 : module `team` et routes `/v1/team` (membres, taux, préréglages, notes) | done | `log/2026-10-27-eq-01-team-module.md` |
