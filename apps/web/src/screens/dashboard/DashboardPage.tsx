@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type JSX } from 'react';
 
 import { AgentHero } from './AgentHero';
+import { BackupBanner } from './BackupBanner';
 import { FunnelPanel } from './Funnel';
 import { ModeControl } from './ModeControl';
 import { Reader } from './Reader';
@@ -76,7 +77,14 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
  * A creator's keeps her aggregates only (ADR 0023: never a conversation nor a fan): the agent's state and mode,
  * read only, its health, the sales; no « À traiter », no best fans, no way into Suivi. The server sends her neither.
  */
-export function DashboardPage({ forCreator = false }: { forCreator?: boolean }): JSX.Element {
+export function DashboardPage({
+  forCreator = false,
+  forOwner = false,
+}: {
+  forCreator?: boolean;
+  /** The owner also reads the state of the daily export (OPS-02), the one figure that is his alone. */
+  forOwner?: boolean;
+}): JSX.Element {
   const [period, setPeriod] = useState<Period>('day');
   const view = useDashboard(period, forCreator);
   if (view.status === 'loading') {
@@ -87,7 +95,9 @@ export function DashboardPage({ forCreator = false }: { forCreator?: boolean }):
     );
   }
   if (view.status === 'offline') return <Offline creatorName={view.creatorName} />;
-  return <Loaded view={view} period={period} onPeriod={setPeriod} forCreator={forCreator} />;
+  return (
+    <Loaded view={view} period={period} onPeriod={setPeriod} forCreator={forCreator} forOwner={forOwner} />
+  );
 }
 
 function Loaded({
@@ -95,11 +105,13 @@ function Loaded({
   period,
   onPeriod,
   forCreator,
+  forOwner,
 }: {
   view: Extract<DashboardView, { status: 'live' | 'sample' }>;
   period: Period;
   onPeriod: (period: Period) => void;
   forCreator: boolean;
+  forOwner: boolean;
 }): JSX.Element {
   const [fanId, setFanId] = useState<string | null>(null);
   const tip = useFloatingTip();
@@ -183,6 +195,9 @@ function Loaded({
         onResume={status === 'live' && !globalStop && !forCreator ? resume : undefined}
         forCreator={forCreator}
       />
+
+      {/* The sample reads nothing: the banner speaks of the server's exports only. */}
+      <BackupBanner enabled={forOwner && status === 'live'} />
 
       {/* The night's alerts and where they go are the team's (Réglages › Telegram). */}
       {forCreator ? null : <NightBanner night={data.telegram} creatorName={data.creator.name} />}
