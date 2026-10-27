@@ -52,6 +52,14 @@ function desireAt(score: number | null, at: Date | null, now: Date): Conversatio
   return { score: cooled, band: desireBandOf(cooled) };
 }
 
+/** The latest of his messages, on the platform's clock; `null` before his first. */
+const lastInboundOnPlatform = sql`(select max(${schema.messages.platformCreatedAt}) from ${schema.messages}
+  where ${schema.messages.conversationId} = ${schema.conversations.id} and ${schema.messages.direction} = 'inbound')`.mapWith(
+  // As the column's own decoder does: the driver hands a timestamptz back as text.
+  (value: string | Date | null): Date | null =>
+    value === null ? null : value instanceof Date ? value : new Date(value),
+);
+
 async function summaries(
   tx: Transaction,
   where: ReturnType<typeof and>,
@@ -65,7 +73,9 @@ async function summaries(
       fanDisplayName: schema.fans.displayName,
       state: schema.conversations.state,
       mode: schema.conversations.mode,
-      lastInboundAt: schema.conversations.lastInboundAt,
+      // When he wrote, on the platform's clock: `conversations.last_inbound_at` is when Nirvana read it, which a capture
+      // reading back his history puts hours late. The column keeps its own use, the order of arrival (message-flow.md).
+      lastInboundAt: lastInboundOnPlatform,
       lastOutboundAt: schema.conversations.lastOutboundAt,
       unreadCount: schema.conversations.unreadCount,
       updatedAt: schema.conversations.updatedAt,

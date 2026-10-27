@@ -424,4 +424,41 @@ describe('/v1/conversations', () => {
     const badCursor = await call('GET', `/v1/conversations?creatorId=${creatorId}&cursor=nope`, ownerCookie);
     expect(badCursor.statusCode).toBe(400);
   });
+
+  it('says when he wrote on the platform, not when a capture read it back', async () => {
+    const [account] = await test.admin.db
+      .select({ id: schema.platformAccounts.id })
+      .from(schema.platformAccounts)
+      .where(eq(schema.platformAccounts.creatorId, creatorId));
+    if (account === undefined) throw new Error('no account');
+    // Read back five hours after he wrote it.
+    const wrote = new Date(Date.now() - 5 * 3_600_000).toISOString();
+    const { conversationId } = await app.modules.conversations.ingestMessage({
+      creatorId,
+      platformAccountId: PlatformAccountIdSchema.parse(account.id),
+      platformConversationId: 'c-Basile',
+      platformFanId: 'f-Basile',
+      fanDisplayName: 'Basile',
+      message: {
+        ref: { platform: 'reveal', id: 'm-Basile' },
+        conversationRef: { platform: 'reveal', id: 'c-Basile' },
+        direction: 'inbound',
+        text: 'Tu es là ?',
+        media: [],
+        priceMinor: null,
+        currency: null,
+        isPaid: false,
+        createdAt: wrote,
+      },
+      correlationId: 'capture',
+    });
+    const detail = ConversationDetailSchema.parse(
+      (await call('GET', `/v1/conversations/${conversationId}?creatorId=${creatorId}`, ownerCookie)).json(),
+    );
+    expect(detail.lastInboundAt).toBe(wrote);
+    const list = pageOf(ConversationSummarySchema).parse(
+      (await call('GET', `/v1/conversations?creatorId=${creatorId}`, ownerCookie)).json(),
+    );
+    expect(list.items.find((item) => item.id === conversationId)?.lastInboundAt).toBe(wrote);
+  });
 });
