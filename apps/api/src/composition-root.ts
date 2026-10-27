@@ -27,6 +27,7 @@ import { createDrizzleLlmCallStore } from './llm-call-store';
 import type { Logger } from './logger';
 import {
   createAgentModule,
+  guardContextOf,
   startBubbleGuard,
   startSharedBubbleGuard,
   startDraftComposer,
@@ -37,6 +38,7 @@ import { startBackupsModule, type BackupsModule } from './modules/backups';
 import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
 import {
   createConversationsModule,
+  type BubbleGuard,
   type ConversationsModule,
   type DraftComposer,
 } from './modules/conversations';
@@ -290,13 +292,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         });
   // Every approval passes the hard guards again (revue 09, G5): her own limits when her persona is readable,
   // otherwise the ones every creator shares (never an AI, no meeting, no contact). Never no guard at all.
-  const guard =
+  const agentGuard =
     (isDemoPersonaInProduction
       ? undefined
       : await startBubbleGuard({ personaPath }).catch((error: unknown) => {
           logger.warn({ err: error }, 'bubble guard without her persona: shared guards only');
           return undefined;
         })) ?? startSharedBubbleGuard();
+  // Read against what she already sent him (P3-13); an approved draft never carries a media.
+  const guard: BubbleGuard = {
+    check: (bubbles, { history }) => agentGuard.check(bubbles, guardContextOf(history)),
+  };
   // The voice version the server writes with now, the one Automatique is proved on (ADR 0019): defined here only.
   const activeVoice = {
     voicePrompt: loadPrompt('voice').header.version,

@@ -3,6 +3,7 @@ import {
   type AutomaticMissing,
   type ConversationState,
   type DraftStatus,
+  type GuardCode,
 } from '@nirvana/contracts';
 
 import type { BlockedReason } from './ports';
@@ -41,7 +42,7 @@ export class AutomaticLocked extends DomainError {
 
 /** Bubbles a hard guard refuses (revue 09, G5): nothing is approved, the draft stays as it was. */
 export class DraftGuarded extends DomainError {
-  constructor(codes: readonly string[]) {
+  constructor(codes: readonly GuardCode[]) {
     super(
       'draft_unprocessable',
       'Ce message ne peut pas partir : une garde le bloque (identité, rencontre, contact ou limite de la créatrice)',

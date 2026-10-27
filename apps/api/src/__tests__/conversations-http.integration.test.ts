@@ -159,6 +159,14 @@ describe('/v1/conversations', () => {
         error: { code: 'draft_unprocessable', details: { guards: ['ai_disclosure'] } },
       });
     }
+    // A draft never carries a media: announcing one he will not receive is refused too (P3-13).
+    const announced = await call('POST', `${base}/approve?creatorId=${creatorId}`, ownerCookie, {
+      bubbles: ['Regarde, je t’envoie une photo 😘'],
+    });
+    expect(announced.statusCode, announced.body).toBe(422);
+    expect(announced.json()).toMatchObject({
+      error: { code: 'draft_unprocessable', details: { guards: ['media_not_sent'] } },
+    });
     const [stillOpen] = await test.admin.db
       .select({ status: schema.drafts.status })
       .from(schema.drafts)
