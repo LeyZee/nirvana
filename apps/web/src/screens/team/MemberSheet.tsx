@@ -136,18 +136,20 @@ export function MemberSheet({
           <p className="tm-hint">
             {access.kind === 'signed-in'
               ? 'Son mot de passe est choisi. S’il l’oublie, envoie-lui un lien pour en choisir un nouveau.'
-              : access.kind === 'valid'
-                ? `Invitation envoyée, pas encore ouverte. Le lien marche jusqu’à ${deadline(access.until)}.`
-                : access.kind === 'expired'
-                  ? 'Son lien d’invitation a expiré sans être ouvert. Crée-lui un nouveau lien.'
-                  : 'Il n’a pas encore de lien pour choisir son mot de passe.'}
+              : access.kind === 'reset-sent'
+                ? `Son mot de passe est choisi. Un lien pour en choisir un nouveau lui a été envoyé : il marche jusqu’à ${deadline(access.until)}.`
+                : access.kind === 'valid'
+                  ? `Invitation envoyée, pas encore ouverte. Le lien marche jusqu’à ${deadline(access.until)}.`
+                  : access.kind === 'expired'
+                    ? 'Son lien d’invitation a expiré sans être ouvert. Crée-lui un nouveau lien.'
+                    : 'Il n’a pas encore de lien pour choisir son mot de passe.'}
           </p>
           {canManage ? (
             <ShareLink
               key={`${member.id}-${access.kind}`}
               memberId={member.id}
               name={member.displayName}
-              purpose={access.kind === 'signed-in' ? 'reset' : 'invitation'}
+              purpose={access.kind === 'signed-in' || access.kind === 'reset-sent' ? 'reset' : 'invitation'}
               label={
                 access.kind === 'signed-in'
                   ? 'Lien de nouveau mot de passe'

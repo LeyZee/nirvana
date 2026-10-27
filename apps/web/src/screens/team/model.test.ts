@@ -140,6 +140,14 @@ describe('the first access', () => {
 
   it('tells a member who signed in from one still invited, with or without a live link', () => {
     expect(invitationState(member(), now).kind).toBe('signed-in');
+    // A reset link out for one who signed in: said, so that a second one does not cancel it unawares.
+    expect(invitationState(member({ invitationExpiresAt: '2026-10-28T12:00:00.000Z' }), now)).toEqual({
+      kind: 'reset-sent',
+      until: new Date('2026-10-28T12:00:00.000Z'),
+    });
+    expect(invitationState(member({ invitationExpiresAt: '2026-10-26T12:00:00.000Z' }), now).kind).toBe(
+      'signed-in',
+    );
     expect(invitationState(member({ invitationPending: true }), now).kind).toBe('no-link');
     expect(
       invitationState(

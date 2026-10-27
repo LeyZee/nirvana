@@ -216,15 +216,21 @@ export const suggestedZone = (country: string): string | null => ZONES[country] 
 /** Where a member's first access stands, read from his record and the clock. */
 export type InvitationState =
   | { readonly kind: 'signed-in' }
+  /** His password is chosen and a link to choose a new one is out: a second one would cancel it. */
+  | { readonly kind: 'reset-sent'; readonly until: Date }
   | { readonly kind: 'no-link' }
   | { readonly kind: 'valid'; readonly until: Date }
   | { readonly kind: 'expired' };
 
 export function invitationState(member: TeamMember, now: Date): InvitationState {
-  if (!member.invitationPending) return { kind: 'signed-in' };
-  if (member.invitationExpiresAt === null) return { kind: 'no-link' };
-  const until = new Date(member.invitationExpiresAt);
-  return until.getTime() > now.getTime() ? { kind: 'valid', until } : { kind: 'expired' };
+  const until = member.invitationExpiresAt === null ? null : new Date(member.invitationExpiresAt);
+  const live = until !== null && until.getTime() > now.getTime();
+  if (!member.invitationPending) {
+    // An expired reset link changes nothing for him: he still signs in with his password.
+    return live ? { kind: 'reset-sent', until } : { kind: 'signed-in' };
+  }
+  if (until === null) return { kind: 'no-link' };
+  return live ? { kind: 'valid', until } : { kind: 'expired' };
 }
 
 const DAY = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', hour: 'numeric', minute: '2-digit' });
