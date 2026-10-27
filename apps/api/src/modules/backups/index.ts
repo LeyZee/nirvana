@@ -31,8 +31,6 @@ export interface BackupsStartOptions {
   readonly db: Database;
   /** The admin role: writes the creator-less `backup_overdue` event. */
   readonly adminDb: Database;
-  /** NODE_ENV is production: an export is expected, none at all is an alert too. */
-  readonly expectsExports: boolean;
   /** Tests only: the day an alert counts in follows this clock. */
   readonly clock?: Clock;
 }
@@ -42,6 +40,5 @@ export function startBackupsModule(options: BackupsStartOptions): BackupsModule 
     runs: createPostgresBackupRunsReader(options.db),
     alerts: createPostgresBackupAlerts(options.adminDb),
     clock: options.clock ?? { now: () => new Date() },
-    expectsExports: options.expectsExports,
   });
 }

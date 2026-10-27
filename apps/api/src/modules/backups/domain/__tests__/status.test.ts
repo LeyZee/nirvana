@@ -13,11 +13,18 @@ describe('the 26-hour rule (ADR 0028 § 5)', () => {
     expect(backupState(null, now)).toBe('never');
   });
 
-  it('alerts when overdue, and for never only where exports are expected', () => {
-    expect(needsAlert('ok', true)).toBe(false);
-    expect(needsAlert('overdue', false)).toBe(true);
-    expect(needsAlert('never', true)).toBe(true);
-    expect(needsAlert('never', false)).toBe(false);
+  it('alerts when overdue, whatever the first run', () => {
+    expect(needsAlert('overdue', hoursAgo(100), now)).toBe(true);
+    expect(needsAlert('ok', hoursAgo(100), now)).toBe(false);
+  });
+
+  it('alerts for never only once the service has been trying for 26 hours, never without any row', () => {
+    // Right after a deployment, before the first night: no success yet is no news.
+    expect(needsAlert('never', hoursAgo(5), now)).toBe(false);
+    expect(needsAlert('never', hoursAgo(26), now)).toBe(false);
+    expect(needsAlert('never', hoursAgo(27), now)).toBe(true);
+    // The service never ran: amber on the Dashboard only.
+    expect(needsAlert('never', null, now)).toBe(false);
   });
 
   it('counts the day in Paris, summer time and winter time', () => {

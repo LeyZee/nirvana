@@ -52,13 +52,22 @@ export function createPostgresBackupRunsReader(db: Database): BackupRunsReader {
         .limit(1);
       return row === undefined ? null : toRun(row);
     },
+    async firstRunStartedAt() {
+      const [row] = await db
+        .select(columns)
+        .from(schema.backupRuns)
+        .orderBy(sql`${schema.backupRuns.startedAt} asc`)
+        .limit(1);
+      return row === undefined ? null : toRun(row).startedAt;
+    },
   };
 }
 
 /**
  * `backup_overdue` in the outbox (ADR 0020 § 3), as `budget_threshold_crossed`: it belongs to no creator, so the row
  * has `creator_id` null and is written with the admin role (RLS). The API never runs the check, but two workers can:
- * the first writes the day's row, the other finds it (advisory lock).
+ * the first writes the day's row, the other finds it (advisory lock). The payload is parsed by its contract before
+ * it is written (docs/architecture/jsonb.md).
  */
 export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
   return {
@@ -78,7 +87,7 @@ export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
           type: 'backup_overdue',
           payload,
           actor: 'system',
-          correlationId: `backup_overdue:${day}`,
+          correlationId: `backup:${day}`,
           createdAt: new Date(),
         });
         return true;

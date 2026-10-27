@@ -7,8 +7,6 @@ export interface BackupsDeps {
   readonly runs: BackupRunsReader;
   readonly alerts: BackupAlerts;
   readonly clock: Clock;
-  /** Production: no export at all is an alert too (`needsAlert`). */
-  readonly expectsExports: boolean;
 }
 
 /** `GET /v1/backups/status`: where the daily export stands, for the owner's Dashboard. */
@@ -39,8 +37,11 @@ export type BackupCheck = 'ok' | 'alerted' | 'already_alerted';
  */
 export async function checkBackups(deps: BackupsDeps): Promise<BackupCheck> {
   const now = deps.clock.now();
-  const lastSucceededAt = await deps.runs.lastSucceededAt();
-  if (!needsAlert(backupState(lastSucceededAt, now), deps.expectsExports)) return 'ok';
+  const [lastSucceededAt, firstRunStartedAt] = await Promise.all([
+    deps.runs.lastSucceededAt(),
+    deps.runs.firstRunStartedAt(),
+  ]);
+  if (!needsAlert(backupState(lastSucceededAt, now), firstRunStartedAt, now)) return 'ok';
   const published = await deps.alerts.publishOverdue({ lastSucceededAt, day: backupDay(now) });
   return published ? 'alerted' : 'already_alerted';
 }

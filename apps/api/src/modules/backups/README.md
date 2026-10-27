@@ -9,7 +9,8 @@
 **Règles propres** (`domain/status.ts`, testées) :
 
 - `ok` si un export a réussi dans les 26 dernières heures, `overdue` au-delà, `never` si aucun n'a jamais réussi ;
-- l'alerte part pour `overdue`, et pour `never` seulement en production (une base de développement n'a pas de service `backup`) ;
+- l'alerte Telegram part pour `overdue` ; pour `never`, seulement si la plus ancienne ligne de `backup_runs` a plus de 26 h (juste après une mise en service, avant la première nuit, pas de bruit) ; sans aucune ligne (le service n'a jamais tourné), seulement l'ambre du Dashboard ;
+- un `running` de plus de 26 h n'est pas un succès ;
 - au plus une alerte par jour, à l'heure de Paris, tant que ça dure : elle revient chaque matin jusqu'au prochain export réussi.
 
 **Routes** (montées sous `/v1`, contrat `packages/contracts/src/backups.ts`) : `GET /backups/status`, propriétaire seul. La réponse ne donne ni le chemin du fichier, ni le bucket, ni l'empreinte.

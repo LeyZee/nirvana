@@ -287,7 +287,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     backups: startBackupsModule({
       db: db.db,
       adminDb: adminDb.db,
-      expectsExports: config.NODE_ENV === 'production',
     }),
     connectors,
     conversations,

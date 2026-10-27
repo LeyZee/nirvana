@@ -1,5 +1,5 @@
--- `backup_overdue` (ADR 0028 § 5, OPS-02): no export of the database succeeded for 26 hours. A new event type in both
--- CHECKs (additive: every existing row still passes), and in the Telegram trigger's list, which mirrors
+-- `backup_overdue` (ADR 0028 § 5, OPS-02): no export of the database succeeded for 26 hours. Additive. A new event type
+-- in both CHECKs (every existing row still passes), and in the Telegram trigger's list, which mirrors
 -- SCANNED_EVENT_TYPES in the telegram module (a test compares them); the trigger's function is unchanged.
 ALTER TABLE "conversation_events" DROP CONSTRAINT "conversation_events_type_check";--> statement-breakpoint
 ALTER TABLE "domain_events" DROP CONSTRAINT "domain_events_type_check";--> statement-breakpoint

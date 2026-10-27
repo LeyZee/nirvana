@@ -5,6 +5,8 @@ export interface BackupRunsReader {
   lastSucceededAt(): Promise<Date | null>;
   /** The latest export started, whatever its outcome. */
   latestRun(): Promise<BackupRun | null>;
+  /** When the oldest row of `backup_runs` started: the service's first try. Null without any row. */
+  firstRunStartedAt(): Promise<Date | null>;
 }
 
 export interface BackupOverduePayload {

@@ -7,10 +7,15 @@ import { checkBackups, readBackupStatus } from '../backups';
 const now = new Date('2026-10-27T12:00:00Z');
 const clock = { now: () => now };
 
-function reader(lastSucceededAt: Date | null, latestRun: BackupRun | null = null): BackupRunsReader {
+function reader(
+  lastSucceededAt: Date | null,
+  latestRun: BackupRun | null = null,
+  firstRunStartedAt: Date | null = lastSucceededAt,
+): BackupRunsReader {
   return {
     lastSucceededAt: () => Promise.resolve(lastSucceededAt),
     latestRun: () => Promise.resolve(latestRun),
+    firstRunStartedAt: () => Promise.resolve(firstRunStartedAt),
   };
 }
 
@@ -60,25 +65,23 @@ describe('backups', () => {
   it('alerts once per Paris day while the export is overdue', async () => {
     const sink = alerts();
     const last = new Date('2026-10-26T01:00:00Z');
-    const deps = { runs: reader(last), alerts: sink, clock, expectsExports: true };
+    const deps = { runs: reader(last), alerts: sink, clock };
     expect(await checkBackups(deps)).toBe('alerted');
     expect(await checkBackups(deps)).toBe('already_alerted');
     expect(sink.published).toEqual([{ lastSucceededAt: last, day: '2026-10-27' }]);
   });
 
-  it('stays quiet when an export succeeded in time, and without any export outside production', async () => {
+  it('stays quiet when an export succeeded in time, or when the service never ran or just started', async () => {
     const sink = alerts();
-    const fresh = {
-      runs: reader(new Date('2026-10-27T01:00:00Z')),
-      alerts: sink,
-      clock,
-      expectsExports: true,
-    };
-    expect(await checkBackups(fresh)).toBe('ok');
-    expect(await checkBackups({ runs: reader(null), alerts: sink, clock, expectsExports: false })).toBe('ok');
-    expect(sink.published).toEqual([]);
-    expect(await checkBackups({ runs: reader(null), alerts: sink, clock, expectsExports: true })).toBe(
-      'alerted',
+    expect(await checkBackups({ runs: reader(new Date('2026-10-27T01:00:00Z')), alerts: sink, clock })).toBe(
+      'ok',
     );
+    expect(await checkBackups({ runs: reader(null), alerts: sink, clock })).toBe('ok');
+    const justDeployed = reader(null, null, new Date('2026-10-27T09:00:00Z'));
+    expect(await checkBackups({ runs: justDeployed, alerts: sink, clock })).toBe('ok');
+    expect(sink.published).toEqual([]);
+    const tryingForTwoDays = reader(null, null, new Date('2026-10-25T09:00:00Z'));
+    expect(await checkBackups({ runs: tryingForTwoDays, alerts: sink, clock })).toBe('alerted');
+    expect(sink.published).toEqual([{ lastSucceededAt: null, day: '2026-10-27' }]);
   });
 });

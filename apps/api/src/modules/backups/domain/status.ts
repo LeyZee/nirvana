@@ -20,18 +20,28 @@ export interface BackupRun {
   readonly error: string | null;
 }
 
+const olderThanOverdue = (at: Date, now: Date): boolean =>
+  now.getTime() - at.getTime() > BACKUP_OVERDUE_HOURS * HOUR_MS;
+
+/**
+ * `ok`: the last success is 26 hours old at most. `overdue`: it is older. `never`: no export ever succeeded. Only
+ * `succeeded` rows count: a run still `running` after 26 hours is no success.
+ */
 export function backupState(lastSucceededAt: Date | null, now: Date): BackupState {
   if (lastSucceededAt === null) return 'never';
-  return now.getTime() - lastSucceededAt.getTime() > BACKUP_OVERDUE_HOURS * HOUR_MS ? 'overdue' : 'ok';
+  return olderThanOverdue(lastSucceededAt, now) ? 'overdue' : 'ok';
 }
 
 /**
- * Whether the state calls for the Telegram alert. `never` only where an export is expected (production): a
- * development database has no `backup` service, and would otherwise alert every day.
+ * Whether the state calls for the Telegram alert, given when the first run of the service started (`null`: no row
+ * at all). `overdue` always does. `never` does once the service has been trying for 26 hours: right after a
+ * deployment, before the first night, no success yet is no news. No row at all means the service never ran (a
+ * development database, or a deployment without it): the Dashboard shows it in amber, Telegram says nothing.
  */
-export function needsAlert(state: BackupState, expectsExports: boolean): boolean {
+export function needsAlert(state: BackupState, firstRunStartedAt: Date | null, now: Date): boolean {
   if (state === 'overdue') return true;
-  return state === 'never' && expectsExports;
+  if (state === 'ok' || firstRunStartedAt === null) return false;
+  return olderThanOverdue(firstRunStartedAt, now);
 }
 
 /** `2026-10-27`: the day `at` falls on in Paris. */

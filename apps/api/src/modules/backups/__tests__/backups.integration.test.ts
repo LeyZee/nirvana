@@ -119,19 +119,32 @@ describe('/v1/backups/status and the 26-hour check', () => {
     });
   });
 
-  it('says nothing without any export outside production, and alerts in production', async () => {
+  it('says nothing without any row, then alerts for never once the service has failed for 26 hours', async () => {
     expect(await app.modules.backups.jobs.check()).toBe('ok');
     const day = new Date('2031-01-15T09:00:00Z');
-    const production = startBackupsModule({
-      db: app.db.db,
-      adminDb: app.adminDb.db,
-      expectsExports: true,
-      clock: { now: () => day },
+    const module = startBackupsModule({ db: app.db.db, adminDb: app.adminDb.db, clock: { now: () => day } });
+    expect(await module.jobs.check()).toBe('ok');
+    // A first night that failed, then nothing: the service has been trying for more than 26 hours.
+    await test.admin.db.insert(schema.backupRuns).values({
+      startedAt: new Date('2031-01-14T02:00:00Z'),
+      finishedAt: new Date('2031-01-14T02:00:05Z'),
+      status: 'failed',
+      error: 'failed at step upload',
     });
-    expect(await production.jobs.check()).toBe('alerted');
+    expect(await module.jobs.check()).toBe('alerted');
     expect(await overdueEvents('2031-01-15')).toEqual([
       { creatorId: null, payload: { lastSucceededAt: null, day: '2031-01-15' } },
     ]);
+  });
+
+  it('does not count a run still running after 26 hours as a success', async () => {
+    const day = new Date('2031-02-10T09:00:00Z');
+    await test.admin.db
+      .insert(schema.backupRuns)
+      .values({ startedAt: new Date('2031-02-08T02:00:00Z'), status: 'running' });
+    const module = startBackupsModule({ db: app.db.db, adminDb: app.adminDb.db, clock: { now: () => day } });
+    expect(await module.status()).toMatchObject({ state: 'never', lastRun: { status: 'running' } });
+    expect(await module.jobs.check()).toBe('alerted');
   });
 
   it('refuses a row the service wrote with negative row counts, instead of reading it as a success', async () => {
