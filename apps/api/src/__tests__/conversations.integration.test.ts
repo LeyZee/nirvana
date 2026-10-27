@@ -27,6 +27,7 @@ import {
   createConversationsModule,
   type Clock,
   type ConversationsModule,
+  type GuardReadContext,
   type OutboundSender,
 } from '../modules/conversations';
 import { createFansModule } from '../modules/fans';
@@ -302,6 +303,35 @@ describe('conversations module (P0-05)', () => {
     expect(await conversationRow(conversationId)).toEqual(before.row);
     const [draft] = await test.admin.db.select().from(schema.drafts).where(eq(schema.drafts.id, draftId));
     expect(draft).toMatchObject({ status: 'pending', finalBubbles: null });
+  });
+
+  it('reads the approved bubbles against the conversation so far, his messages and hers (P3-13)', async () => {
+    const seen: { bubbles: readonly string[]; context: GuardReadContext }[] = [];
+    conversations = createConversationsModule({
+      db: test.app.db,
+      fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
+      sender,
+      requireRole: () => () => Promise.resolve(),
+      recentLogin: () => Promise.resolve(),
+      voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+      guard: {
+        check: (bubbles, context) => {
+          seen.push({ bubbles, context });
+          return { isBlocked: false, codes: [] };
+        },
+      },
+      clock,
+    });
+    const { conversationId } = await ingest('c-guard', fanMessage('c-guard', 'Tu fais quoi ce soir ?'));
+    const draftId = await respond(conversationId);
+    await conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Je pense à toi'] });
+
+    expect(seen).toEqual([
+      {
+        bubbles: ['Je pense à toi'],
+        context: { history: [{ from: 'fan', text: 'Tu fais quoi ce soir ?' }] },
+      },
+    ]);
   });
 
   it('sends approved bubbles once each, resumes after a failure, and goes back to idle', async () => {
