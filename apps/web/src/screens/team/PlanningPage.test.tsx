@@ -27,8 +27,11 @@ const THEO = id(21);
 const NIGHT = id(101);
 const TEMPLATE = id(31);
 const NOW = new Date('2026-10-28T00:00:00Z');
+const OWNER_USER = id(70);
+const BASILE = id(22);
+const LEAVE = id(41);
 
-const member = (patch: Partial<TeamMember>): TeamMember =>
+const member = (patch: Record<string, unknown>): TeamMember =>
   TeamMemberSchema.parse({
     id: THEO,
     userId: id(71),
@@ -60,11 +63,13 @@ const night = {
   stoppedAt: null,
 };
 
+const ACCOUNTS = [
+  { id: NORA_REVEAL, creatorId: NORA, creatorName: 'Nora Vidal', platform: 'reveal', handle: 'nora' },
+];
+
 const planning = (conflicts: unknown[] = []): unknown => ({
   settings: { timeZone: 'Europe/Paris', slotStartMinute: 0, slotLengthMinutes: 360, accessMarginMinutes: 15 },
-  accounts: [
-    { id: NORA_REVEAL, creatorId: NORA, creatorName: 'Nora Vidal', platform: 'reveal', handle: 'nora' },
-  ],
+  accounts: ACCOUNTS,
   members: [{ id: THEO, displayName: 'Théo', color: '#c2410c' }],
   shifts: [night],
   conflicts,
@@ -82,6 +87,48 @@ const template = {
   validUntil: null,
 };
 
+const leave = (patch: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id: LEAVE,
+  memberId: THEO,
+  firstDay: '2026-10-29',
+  lastDay: '2026-10-30',
+  timeZone: 'Africa/Porto-Novo',
+  startsAt: '2026-10-28T23:00:00Z',
+  endsAt: '2026-10-30T23:00:00Z',
+  note: 'Examens',
+  status: 'pending',
+  decidedAt: null,
+  cancelledAt: null,
+  decisionNote: null,
+  createdAt: '2026-10-27T10:00:00Z',
+  ...patch,
+});
+
+const swap = (patch: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id: id(61),
+  requesterId: THEO,
+  shiftId: id(102),
+  creatorId: NORA,
+  shiftStartsAt: '2026-10-29T22:00:00Z',
+  shiftEndsAt: '2026-10-30T04:00:00Z',
+  targetMemberId: BASILE,
+  targetShiftId: null,
+  targetCreatorId: null,
+  targetShiftStartsAt: null,
+  targetShiftEndsAt: null,
+  message: null,
+  status: 'proposed',
+  resolvedAt: null,
+  revertedAt: null,
+  withdrawnByAgency: false,
+  createdAt: '2026-10-27T10:00:00Z',
+  ...patch,
+});
+
+/** Text as read: no-break spaces (« 23 h ») as plain ones. */
+const text = (element: Element | null | undefined): string =>
+  (element?.textContent ?? '').replaceAll('\u00a0', ' ');
+
 interface Reply {
   readonly status: number;
   readonly body?: unknown;
@@ -94,7 +141,13 @@ interface Written {
 
 /** A fake `/v1/scheduling` and `/v1/team/members`: every write is kept in the list returned and answered by `write`. */
 function serve(
-  routes: { planning?: unknown; write?: (method: string, path: string, body: unknown) => Reply } = {},
+  routes: {
+    planning?: unknown;
+    members?: TeamMember[];
+    leaves?: unknown[];
+    swaps?: unknown[];
+    write?: (method: string, path: string, body: unknown) => Reply;
+  } = {},
 ): Written[] {
   const written: Written[] = [];
   vi.stubGlobal(
@@ -126,7 +179,29 @@ function serve(
             ],
           },
         };
-      else if (path === '/v1/team/members') reply = { status: 200, body: { members: [member({})] } };
+      else if (path === '/v1/team/members')
+        reply = { status: 200, body: { members: routes.members ?? [member({})] } };
+      else if (path === '/v1/scheduling/leave-requests')
+        reply = {
+          status: 200,
+          body: {
+            leaveRequests: routes.leaves ?? [],
+            members: [{ id: THEO, displayName: 'Théo', color: '#c2410c' }],
+          },
+        };
+      else if (path === '/v1/scheduling/swap-requests')
+        reply = {
+          status: 200,
+          body: {
+            swapRequests: routes.swaps ?? [],
+            shifts: [],
+            accounts: ACCOUNTS,
+            members: [
+              { id: THEO, displayName: 'Théo', color: '#c2410c' },
+              { id: BASILE, displayName: 'Basile', color: null },
+            ],
+          },
+        };
       else reply = { status: 404 };
       return Promise.resolve(
         new Response(reply.status === 204 ? null : JSON.stringify(reply.body ?? null), {
@@ -141,7 +216,11 @@ function serve(
 function renderPage(): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute();
-  const page = createRoute({ getParentRoute: () => root, path: '/equipe/planning', component: PlanningPage });
+  const page = createRoute({
+    getParentRoute: () => root,
+    path: '/equipe/planning',
+    component: () => <PlanningPage userId={OWNER_USER} />,
+  });
   const router = createRouter({
     routeTree: root.addChildren([page]),
     history: createMemoryHistory({ initialEntries: ['/equipe/planning'] }),
@@ -223,17 +302,25 @@ describe('Équipe › Planning', () => {
     );
   });
 
-  it('says a member on leave in amber, a shift to fill with no shift to open (ADR 0031)', async () => {
-    serve({
+  it('says a member on leave in amber, a shift to fill on its hours by someone else (ADR 0031)', async () => {
+    const written = serve({
       planning: planning([
         {
           templateId: TEMPLATE,
           startsAt: '2026-10-29T22:00:00Z',
           endsAt: '2026-10-30T04:00:00Z',
           reason: 'member_on_leave',
-          leaveRequestId: id(41),
+          leaveRequestId: LEAVE,
         },
       ]),
+      members: [
+        member({}),
+        member({ id: BASILE, userId: id(72), firstName: 'Basile', displayName: 'Basile', color: null }),
+      ],
+      write: (_method, _path, body) => ({
+        status: 201,
+        body: { ...night, ...(typeof body === 'object' ? body : {}), id: id(102), templateId: null },
+      }),
     });
     renderPage();
     const amber = await screen.findByRole('status', {
@@ -242,6 +329,156 @@ describe('Équipe › Planning', () => {
     expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
     expect(amber.textContent).toContain('Théo est en congé : ce shift est à pourvoir.');
     expect(within(amber).queryByRole('button', { name: 'Voir le shift' })).toBe(null);
+    fireEvent.click(within(amber).getByRole('button', { name: 'Pourvoir' }));
+    const panel = await screen.findByRole('dialog', { name: 'Pourvoir un shift' });
+    expect(panel.textContent).toContain('Théo est en congé : choisis qui prend ce shift.');
+    // Théo is away: Basile alone is offered, on the template's hours, which are none of the slots.
+    const who = within(panel).getByLabelText('Membre');
+    if (!(who instanceof HTMLSelectElement)) throw new Error('no member list');
+    expect([...who.options].map((option) => option.text)).toEqual(['Basile']);
+    // One occurrence, never a template of its own.
+    expect(within(panel).queryByRole('switch', { name: /Chaque semaine/u })).toBe(null);
+    expect(within(panel).getByRole('radio', { name: 'Autres heures' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: 'Placer Basile' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBe(null);
+    });
+    expect(written).toEqual([
+      {
+        method: 'POST',
+        path: '/v1/scheduling/shifts',
+        body: {
+          creatorId: NORA,
+          platformAccountId: NORA_REVEAL,
+          memberId: BASILE,
+          startsAt: '2026-10-29T22:00:00.000Z',
+          endsAt: '2026-10-30T04:00:00.000Z',
+        },
+      },
+    ]);
+  });
+
+  it('approves a leave, and points at the shifts still in its way when there are some', async () => {
+    const written = serve({
+      leaves: [leave()],
+      write: () => ({
+        status: 409,
+        body: {
+          error: {
+            code: 'leave_shifts_conflict',
+            message: 'shifts',
+            details: { shiftIds: [NIGHT] },
+            requestId: 'r3',
+          },
+        },
+      }),
+    });
+    renderPage();
+    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    expect(text(decide)).toContain('Théo · Du jeu. 29 oct. au ven. 30 oct., 2 jours');
+    expect(text(decide)).toContain('« Examens »');
+    fireEvent.click(within(decide).getByRole('button', { name: 'Valider' }));
+    expect(text(await within(decide).findByRole('alert'))).toBe(
+      'Un shift de Théo tombe encore pendant ce congé : donne-le à quelqu’un d’autre ou annule-le d’abord.Voir le shift',
+    );
+    expect(written).toEqual([
+      {
+        method: 'POST',
+        path: `/v1/scheduling/leave-requests/${LEAVE}/decision`,
+        body: { decision: 'approve' },
+      },
+    ]);
+    expect(screen.queryAllByRole('button', { name: /pendant un congé à valider$/u })).toEqual([]);
+    fireEvent.click(within(decide).getByRole('button', { name: 'Voir le shift' }));
+    const flagged = await screen.findAllByRole('button', { name: /pendant un congé à valider$/u });
+    expect(flagged.map((chip) => chip.getAttribute('data-flagged'))).toEqual(flagged.map(() => 'true'));
+  });
+
+  it('refuses a leave with a word for the member', async () => {
+    const written = serve({
+      leaves: [leave()],
+      write: () => ({ status: 200, body: leave({ status: 'refused', decisionNote: 'Semaine chargée' }) }),
+    });
+    renderPage();
+    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    fireEvent.click(within(decide).getByRole('button', { name: 'Refuser' }));
+    fireEvent.change(within(decide).getByLabelText(/Un mot pour Théo/u), {
+      target: { value: 'Semaine chargée' },
+    });
+    fireEvent.click(within(decide).getByRole('button', { name: 'Refuser la demande' }));
+    await waitFor(() => {
+      expect(written).toEqual([
+        {
+          method: 'POST',
+          path: `/v1/scheduling/leave-requests/${LEAVE}/decision`,
+          body: { decision: 'refuse', note: 'Semaine chargée' },
+        },
+      ]);
+    });
+  });
+
+  it('leaves a manager’s own leave to the owner', async () => {
+    serve({ leaves: [leave()], members: [member({ userId: OWNER_USER, teamRole: 'manager' })] });
+    renderPage();
+    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    await waitFor(() => {
+      expect(text(decide)).toContain('Le propriétaire décide de ton congé.');
+    });
+    expect(within(decide).queryByRole('button', { name: 'Valider' })).toBe(null);
+  });
+
+  it('says who is on leave this week, and cancels a leave after a confirmation', async () => {
+    const written = serve({
+      leaves: [leave({ status: 'approved', decidedAt: '2026-10-27T12:00:00Z' })],
+      write: () => ({ status: 204 }),
+    });
+    renderPage();
+    const away = await screen.findByRole('region', { name: 'En congé cette semaine' });
+    expect(screen.queryByRole('region', { name: 'Un congé à valider' })).toBe(null);
+    fireEvent.click(within(away).getByRole('button', { name: /^Théo/u }));
+    const confirm = within(away).getByRole('alertdialog', { name: 'Congé de Théo' });
+    expect(text(confirm)).toContain('L’annuler rend Théo planifiable dès maintenant');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Annuler le congé' }));
+    await waitFor(() => {
+      expect(written).toEqual([
+        { method: 'DELETE', path: `/v1/scheduling/leave-requests/${LEAVE}`, body: null },
+      ]);
+    });
+  });
+
+  it('folds the chatters’ swaps, withdraws a proposal and undoes an accepted one', async () => {
+    const written = serve({
+      swaps: [
+        swap(),
+        swap({ id: id(62), status: 'accepted', resolvedAt: '2026-10-27T12:00:00Z' }),
+        swap({
+          id: id(63),
+          status: 'withdrawn',
+          withdrawnByAgency: true,
+          resolvedAt: '2026-10-27T13:00:00Z',
+        }),
+      ],
+      write: () => ({ status: 204 }),
+    });
+    renderPage();
+    const fold = (await screen.findByText('Échanges entre chatteurs')).closest('details');
+    if (fold === null) throw new Error('no swaps');
+    expect(text(fold)).toContain('1 en attente · 1 accepté');
+    expect(text(fold)).toContain('Théo donne son shift à Basile');
+    expect(text(fold)).toContain('En attente de Basile');
+    expect(text(fold)).toContain('Retiré par l’agence');
+    fireEvent.click(within(fold).getByRole('button', { name: 'Retirer la proposition' }));
+    fireEvent.click(within(fold).getByRole('button', { name: 'Annuler l’échange' }));
+    const confirm = within(fold).getByRole('alertdialog', { name: 'Confirmer' });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Annuler l’échange' }));
+    await waitFor(() => {
+      expect(written.map(({ method, path }) => `${method} ${path}`)).toEqual([
+        `DELETE /v1/scheduling/swap-requests/${id(61)}`,
+        `DELETE /v1/scheduling/swap-requests/${id(62)}`,
+      ]);
+    });
   });
 
   it('places a shift, and names the one in the way when the member is taken', async () => {

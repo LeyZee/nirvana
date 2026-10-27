@@ -3,13 +3,23 @@ import { useState, type JSX } from 'react';
 
 import { ShiftPanel, type ShiftStart } from './ShiftPanel';
 import { ShiftSheet } from './ShiftSheet';
+import { OnLeave, PendingLeaves, TeamSwaps } from './TeamExchanges';
 import { TeamNav } from './TeamNav';
 import { useMembers } from './api';
 import './team.css';
 
 import { WeekNav } from '@/scheduling/WeekNav';
-import { usePlanning, useOnDuty, useTemplates } from '@/scheduling/api';
-import { accountLine, conflictLines, gridOf, phaseOf, type Chip, type GridRow } from '@/scheduling/model';
+import { useLeaves, usePlanning, useOnDuty, useSwaps, useTemplates } from '@/scheduling/api';
+import '@/scheduling/exchanges.css';
+import {
+  accountLine,
+  conflictLines,
+  gridOf,
+  phaseOf,
+  type Chip,
+  type Fill,
+  type GridRow,
+} from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
 import {
   addDays,
@@ -32,12 +42,30 @@ type Open =
   { readonly kind: 'add'; readonly start: ShiftStart } | { readonly kind: 'shift'; readonly id: string };
 
 /**
+ * The leaves read for the page: from the week shown, or this week when it is earlier, over a year less a day, so that
+ * every request still to decide is there whatever the week.
+ */
+function leaveRangeOf(monday: string, thisMonday: string, zone: string): { from: string; to: string } {
+  const start =
+    monday < thisMonday
+      ? monday
+      : addDays(monday, 7) > addDays(thisMonday, 365)
+        ? addDays(monday, 7 - 365)
+        : thisMonday;
+  return {
+    from: zonedInstant(start, 0, zone).toISOString(),
+    to: zonedInstant(addDays(start, 365), 0, zone).toISOString(),
+  };
+}
+
+/**
  * Équipe › Planning (EQ-02, ADR 0024): the week as rows of accounts and columns of days, each shift on its member's
  * colour; who is on shift right now above it, and the weekly shifts the server could not place in amber. Read at the
  * agency's hour, the one the team speaks in, or at the reader's own. The owner and an active manager place, move and
- * stop shifts; the server checks every write.
+ * stop shifts; the server checks every write. The leaves and the chatters' swaps sit around it (ADR 0031): requests to
+ * decide first, who is away this week, a shift to fill when its member is on leave, the swaps folded below.
  */
-export function PlanningPage(): JSX.Element {
+export function PlanningPage({ userId }: { userId: string }): JSX.Element {
   const now = useNow();
   const mine = readerZone();
   const [own, setOwn] = useState(false);
@@ -55,6 +83,11 @@ export function PlanningPage(): JSX.Element {
   const members = useMembers();
   const templates = useTemplates(true);
   const onDuty = useOnDuty(true);
+  const leaves = useLeaves(leaveRangeOf(monday, thisMonday, zone));
+  const swaps = useSwaps();
+  // Shifts a leave's approval found in its way: lit on the grid until the week changes.
+  const [flagged, setFlagged] = useState<ReadonlySet<string>>(new Set());
+  const ownMemberId = members.data?.find((member) => member.userId === userId)?.id ?? null;
   const data = shown.data;
   if (data !== undefined && data.settings.timeZone !== agency) setAgency(data.settings.timeZone);
   const pickedIndex = picked ?? Math.max(0, days.indexOf(today));
@@ -123,6 +156,7 @@ export function PlanningPage(): JSX.Element {
               onMonday={(next) => {
                 setMonday(next);
                 setPicked(next === thisMonday ? null : 0);
+                setFlagged(new Set());
               }}
             />
             <Filters
@@ -135,6 +169,19 @@ export function PlanningPage(): JSX.Element {
               onOwn={setOwn}
             />
           </div>
+          {leaves.data === undefined ? null : (
+            <PendingLeaves
+              list={leaves.data}
+              ownMemberId={ownMemberId}
+              onShowShifts={(leave, shiftIds) => {
+                const first = dayOf(leave.startsAt, zone);
+                const week = mondayOf(first);
+                setMonday(week);
+                setPicked(weekOf(week).indexOf(first));
+                setFlagged(new Set(shiftIds));
+              }}
+            />
+          )}
           <OnDutyStrip
             list={onDuty.data ?? null}
             planning={data}
@@ -143,12 +190,18 @@ export function PlanningPage(): JSX.Element {
               setOpen({ kind: 'shift', id });
             }}
           />
+          {leaves.data === undefined ? null : (
+            <OnLeave list={leaves.data} from={days[0] ?? monday} to={days[6] ?? monday} now={now} />
+          )}
           <Conflicts
             planning={data}
             templates={templates.data ?? []}
             zone={zone}
             onShow={(id) => {
               setOpen({ kind: 'shift', id });
+            }}
+            onFill={(fill) => {
+              setOpen({ kind: 'add', start: { accountId: fill.accountId, day: fill.day, fill } });
             }}
           />
           <Grid
@@ -163,6 +216,7 @@ export function PlanningPage(): JSX.Element {
             now={now}
             zone={zone}
             loading={shown.isFetching && shown.isPlaceholderData}
+            flagged={flagged}
             onAdd={(start) => {
               setOpen({ kind: 'add', start });
             }}
@@ -170,6 +224,7 @@ export function PlanningPage(): JSX.Element {
               setOpen({ kind: 'shift', id });
             }}
           />
+          {swaps.data === undefined ? null : <TeamSwaps list={swaps.data} now={now} zone={zone} />}
         </div>
       )}
       {data === undefined || open === null ? null : (
@@ -393,17 +448,22 @@ function OnDutyStrip({
   );
 }
 
-/** The weekly shifts the server could not place this week, in amber, each with the shift in its way. */
+/**
+ * The weekly shifts the server could not place this week, in amber, each with the shift in its way, or « Pourvoir »
+ * when its member is on leave (ADR 0031).
+ */
 function Conflicts({
   planning,
   templates,
   zone,
   onShow,
+  onFill,
 }: {
   planning: Planning;
   templates: readonly ShiftTemplate[];
   zone: string;
   onShow: (shiftId: string) => void;
+  onFill: (fill: Fill) => void;
 }): JSX.Element | null {
   const lines = conflictLines(planning.conflicts, templates, planning, zone);
   if (lines.length === 0) return null;
@@ -424,7 +484,17 @@ function Conflicts({
                 <p className="sc-conflicts__when nv-num">{line.when}</p>
                 <p className="sc-conflicts__what">{line.what}.</p>
               </div>
-              {shiftId === null ? null : (
+              {line.fill !== null ? (
+                <button
+                  type="button"
+                  className="nv-btn nv-btn--soft nv-btn--sm"
+                  onClick={() => {
+                    if (line.fill !== null) onFill(line.fill);
+                  }}
+                >
+                  Pourvoir
+                </button>
+              ) : shiftId === null ? null : (
                 <button
                   type="button"
                   className="nv-btn nv-btn--plain nv-btn--sm"
@@ -453,6 +523,7 @@ function Grid({
   now,
   zone,
   loading,
+  flagged,
   onAdd,
   onShow,
 }: {
@@ -466,6 +537,8 @@ function Grid({
   now: Date;
   zone: string;
   loading: boolean;
+  /** Shifts to point at: those a leave's approval found in its way. */
+  flagged: ReadonlySet<string>;
   onAdd: (start: ShiftStart) => void;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
@@ -561,6 +634,7 @@ function Grid({
                 past={day < today}
                 now={now}
                 zone={zone}
+                flagged={flagged}
                 onAdd={onAdd}
                 onShow={onShow}
               />
@@ -582,6 +656,7 @@ function Cell({
   past,
   now,
   zone,
+  flagged,
   onAdd,
   onShow,
 }: {
@@ -594,6 +669,7 @@ function Cell({
   past: boolean;
   now: Date;
   zone: string;
+  flagged: ReadonlySet<string>;
   onAdd: (start: ShiftStart) => void;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
@@ -606,7 +682,14 @@ function Cell({
       data-past={past ? 'true' : undefined}
     >
       {chips.map((chip) => (
-        <ShiftChip key={chip.shift.id} chip={chip} now={now} zone={zone} onShow={onShow} />
+        <ShiftChip
+          key={chip.shift.id}
+          chip={chip}
+          now={now}
+          zone={zone}
+          flagged={flagged.has(chip.shift.id)}
+          onShow={onShow}
+        />
       ))}
       {past ? null : (
         <button
@@ -630,11 +713,13 @@ function ShiftChip({
   chip,
   now,
   zone,
+  flagged,
   onShow,
 }: {
   chip: Chip;
   now: Date;
   zone: string;
+  flagged: boolean;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
   const { shift, member } = chip;
@@ -645,9 +730,10 @@ function ShiftChip({
       type="button"
       className="sc-chip"
       data-phase={phase}
+      data-flagged={flagged ? 'true' : undefined}
       data-color={member?.color === null || member === null ? undefined : 'true'}
       style={member?.color === null || member === null ? undefined : { '--sc-color': member.color }}
-      aria-label={`${name}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}${chip.continued ? ', commencé la veille' : ''}${chip.overnight ? ', jusqu’au lendemain' : ''}${phase === 'live' ? ', en poste' : ''}`}
+      aria-label={`${name}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}${chip.continued ? ', commencé la veille' : ''}${chip.overnight ? ', jusqu’au lendemain' : ''}${phase === 'live' ? ', en poste' : ''}${flagged ? ', pendant un congé à valider' : ''}`}
       onClick={() => {
         onShow(shift.id);
       }}

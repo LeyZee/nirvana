@@ -92,7 +92,10 @@ const today = createRoute({ getParentRoute: () => rootRoute, path: '/aujourdhui'
 const myPlanning = createRoute({
   getParentRoute: () => rootRoute,
   path: '/planning',
-  component: MyPlanningPage,
+  component: function MyPlanning() {
+    const { user } = rootRoute.useRouteContext();
+    return <MyPlanningPage userId={user.id} />;
+  },
 });
 
 const team = createRoute({ getParentRoute: () => rootRoute, path: '/equipe' });
@@ -104,7 +107,14 @@ const teamIndex = createRoute({
     throw redirect({ to: '/equipe/planning', replace: true });
   },
 });
-const teamPlanning = createRoute({ getParentRoute: () => team, path: '/planning', component: PlanningPage });
+const teamPlanning = createRoute({
+  getParentRoute: () => team,
+  path: '/planning',
+  component: function TeamPlanning() {
+    const { user } = rootRoute.useRouteContext();
+    return <PlanningPage userId={user.id} />;
+  },
+});
 const teamMembers = createRoute({
   getParentRoute: () => team,
   path: '/membres',

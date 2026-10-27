@@ -166,6 +166,20 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', {
 });
 const MONTH_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+
+/** « mar. 28 oct. »: a day further than this week. */
+export const dayMonth = (day: string): string => DAY_MONTH.format(utcMidnight(day));
+
+/** Calendar days from `from` to `to`, `to` excluded. */
+export const daysFrom = (from: string, to: string): number =>
+  Math.round((utcMidnight(to) - utcMidnight(from)) / DAY_MS);
+
 /** « mar. 28 ». */
 export const shortDay = (day: string): string => SHORT_DAY.format(utcMidnight(day));
 

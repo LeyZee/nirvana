@@ -1,9 +1,21 @@
-import type { Planning, PlanningAccount, Shift } from '@nirvana/contracts';
+import type {
+  LeaveRequest,
+  Planning,
+  PlanningAccount,
+  Shift,
+  ShiftSwapList,
+  TeamMember,
+} from '@nirvana/contracts';
 import { useState, type JSX } from 'react';
 
+import { Answers, MyLeaves, MySwaps, namesOf } from './Exchanges';
+import { LeavePanel } from './LeavePanel';
+import { SwapPanel } from './SwapPanel';
+
 import { WeekNav } from '@/scheduling/WeekNav';
-import { usePlanning } from '@/scheduling/api';
-import { accountLine, phaseOf, type Phase } from '@/scheduling/model';
+import { useLeaves, usePlanning, useSwaps } from '@/scheduling/api';
+import '@/scheduling/exchanges.css';
+import { accountLine, leaveDaysLine, phaseOf, type Phase } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
 import {
   addDays,
@@ -18,62 +30,164 @@ import {
   zonedInstant,
 } from '@/scheduling/time';
 import { useNow } from '@/scheduling/useNow';
+import { useMembers } from '@/screens/team/api';
+import '@/screens/team/team.css';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const PHASE_LABELS: Readonly<Record<Phase, string>> = { later: 'À venir', live: 'En poste', past: 'Fini' };
 
+type Open = { readonly kind: 'leave' } | { readonly kind: 'swap'; readonly shiftId: string };
+
+/** A leave read a month back and eleven ahead: what is under way, what is coming, what was just answered. */
+function leaveRangeOf(today: string, zone: string): { from: string; to: string } {
+  return {
+    from: zonedInstant(addDays(today, -31), 0, zone).toISOString(),
+    to: zonedInstant(addDays(today, 334), 0, zone).toISOString(),
+  };
+}
+
 /**
  * Planning of a chatter (ADR 0024, EQ-02): their own shifts, week by week, in their own time; the agency's hour
- * beside it when it differs, since that is the hour the team speaks in. The server sends their shifts alone.
+ * beside it when it differs, since that is the hour the team speaks in. The server sends their shifts alone. Their
+ * leaves and swaps sit around it (ADR 0031): the proposals waiting for their answer first, a shift ahead offered to a
+ * colleague from its row, a leave asked from the header, and their own leaves and swaps folded below.
  */
-export function MyPlanningPage(): JSX.Element {
+export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
   const now = useNow();
   const zone = readerZone();
   const today = dayOf(now, zone);
   const [monday, setMonday] = useState(() => mondayOf(today));
+  const [open, setOpen] = useState<Open | null>(null);
   const days = weekOf(monday);
   const planning = usePlanning({
     from: zonedInstant(monday, 0, zone).toISOString(),
     to: zonedInstant(addDays(monday, 7), 0, zone).toISOString(),
     creatorId: null,
   });
+  // A chatter reads their own record alone: who they are, in which zone their leave days fall.
+  const me = useMembers().data?.find((member) => member.userId === userId) ?? null;
+  const leaves = useLeaves(leaveRangeOf(today, zone));
+  const swaps = useSwaps();
+  const opened =
+    open?.kind === 'swap' ? (planning.data?.shifts.find((shift) => shift.id === open.shiftId) ?? null) : null;
 
   return (
     <Page>
       <PageHeader
         title="Planning"
         lead={`Tes shifts, à ton heure (${cityOf(zone)}).`}
-        actions={<WeekNav monday={monday} thisMonday={mondayOf(today)} onMonday={setMonday} />}
-      />
-      {planning.isError ? (
-        <Panel className="nv-coming">
-          <div className="nv-coming__in sc-notice">
-            <h2>Le serveur ne répond pas</h2>
-            <p>Ton planning n’a pas pu être lu. Réessaie dans un instant.</p>
+        actions={
+          <>
+            <WeekNav monday={monday} thisMonday={mondayOf(today)} onMonday={setMonday} />
             <button
               type="button"
-              className="nv-btn nv-btn--soft nv-btn--sm"
+              className="nv-btn nv-btn--soft"
+              disabled={me === null}
               onClick={() => {
-                void planning.refetch();
+                setOpen({ kind: 'leave' });
               }}
             >
-              Réessayer
+              Demander un congé
             </button>
+          </>
+        }
+      />
+      {/* One body under the header: the page's grid gives its free height to that one. */}
+      <div className="sc-stack">
+        {me === null || swaps.data === undefined ? null : (
+          <Answers
+            swaps={swaps.data.swapRequests.filter(
+              (swap) => swap.targetMemberId === me.id && swap.status === 'proposed',
+            )}
+            list={swaps.data}
+            zone={zone}
+          />
+        )}
+        {planning.isError ? (
+          <Panel className="nv-coming">
+            <div className="nv-coming__in sc-notice">
+              <h2>Le serveur ne répond pas</h2>
+              <p>Ton planning n’a pas pu être lu. Réessaie dans un instant.</p>
+              <button
+                type="button"
+                className="nv-btn nv-btn--soft nv-btn--sm"
+                onClick={() => {
+                  void planning.refetch();
+                }}
+              >
+                Réessayer
+              </button>
+            </div>
+          </Panel>
+        ) : planning.data === undefined ? (
+          <Panel>
+            <div className="sc-skeleton" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+          </Panel>
+        ) : (
+          <Week
+            planning={planning.data}
+            days={days}
+            zone={zone}
+            today={today}
+            now={now}
+            away={(leaves.data?.leaveRequests ?? []).filter(
+              (leave) =>
+                (leave.status === 'approved' || leave.status === 'pending') &&
+                leave.firstDay <= addDays(monday, 6) &&
+                leave.lastDay >= monday,
+            )}
+            offers={offersOf(swaps.data, me)}
+            onSwap={(shiftId) => {
+              setOpen({ kind: 'swap', shiftId });
+            }}
+          />
+        )}
+        {me === null ? null : (
+          <div className="sc-folds">
+            {leaves.data === undefined ? null : <MyLeaves leaves={leaves.data.leaveRequests} now={now} />}
+            {swaps.data === undefined ? null : <MySwaps list={swaps.data} memberId={me.id} zone={zone} />}
           </div>
-        </Panel>
-      ) : planning.data === undefined ? (
-        <Panel>
-          <div className="sc-skeleton" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </div>
-        </Panel>
-      ) : (
-        <Week planning={planning.data} days={days} zone={zone} today={today} now={now} />
-      )}
+        )}
+        {open?.kind === 'leave' && me !== null ? (
+          <LeavePanel
+            today={dayOf(now, me.timeZone)}
+            timeZone={me.timeZone}
+            onClose={() => {
+              setOpen(null);
+            }}
+          />
+        ) : null}
+        {opened === null ? null : (
+          <SwapPanel
+            shift={opened}
+            creatorName={
+              planning.data?.accounts.find((account) => account.id === opened.platformAccountId)?.creatorName
+            }
+            zone={zone}
+            onClose={() => {
+              setOpen(null);
+            }}
+          />
+        )}
+      </div>
     </Page>
   );
+}
+
+/** The reader's open proposals by shift, with the colleague each one waits on. */
+function offersOf(list: ShiftSwapList | undefined, me: TeamMember | null): ReadonlyMap<string, string[]> {
+  const offers = new Map<string, string[]>();
+  if (list === undefined || me === null) return offers;
+  const names = namesOf(list);
+  for (const swap of list.swapRequests) {
+    if (swap.requesterId !== me.id || swap.status !== 'proposed') continue;
+    offers.set(swap.shiftId, [...(offers.get(swap.shiftId) ?? []), names.member(swap.targetMemberId)]);
+  }
+  return offers;
 }
 
 function Week({
@@ -82,12 +196,19 @@ function Week({
   zone,
   today,
   now,
+  away,
+  offers,
+  onSwap,
 }: {
   planning: Planning;
   days: readonly string[];
   zone: string;
   today: string;
   now: Date;
+  /** The reader's leaves that touch this week, approved or waiting. */
+  away: readonly LeaveRequest[];
+  offers: ReadonlyMap<string, readonly string[]>;
+  onSwap: (shiftId: string) => void;
 }): JSX.Element {
   const accounts = new Map(planning.accounts.map((account) => [account.id, account]));
   const agency = planning.settings.timeZone;
@@ -104,16 +225,36 @@ function Week({
     0,
   );
 
+  const leaves =
+    away.length === 0 ? null : (
+      <ul className="sc-away">
+        {away.map((leave) => (
+          <li key={leave.id} className="sc-away__one" data-status={leave.status}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M3.5 3.5h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM2.5 6.5h11M5.5 2v3M10.5 2v3M6 10h4" />
+            </svg>
+            <span className="sc-away__what">
+              {leave.status === 'approved' ? 'En congé' : 'Congé demandé, en attente'}
+            </span>
+            <span className="sc-away__when">{leaveDaysLine(leave)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+
   if (byDay.length === 0) {
     return (
-      <Panel className="nv-coming nv-swap" key={days[0]}>
-        <div className="nv-coming__in sc-notice">
-          <h2>Aucun shift cette semaine</h2>
-          <p>
-            Ton responsable te place sur le planning : tes shifts s’afficheront ici dès qu’ils sont posés.
-          </p>
-        </div>
-      </Panel>
+      <div className="sc-mine nv-swap" key={days[0]}>
+        {leaves}
+        <Panel className="nv-coming">
+          <div className="nv-coming__in sc-notice">
+            <h2>Aucun shift cette semaine</h2>
+            <p>
+              Ton responsable te place sur le planning : tes shifts s’afficheront ici dès qu’ils sont posés.
+            </p>
+          </div>
+        </Panel>
+      </div>
     );
   }
 
@@ -123,6 +264,7 @@ function Week({
         {planning.shifts.length === 1 ? '1 shift' : `${String(planning.shifts.length)} shifts`} ·{' '}
         {lengthOf(total)}
       </p>
+      {leaves}
       {byDay.map(({ day, shifts }, index) => (
         <section
           key={day}
@@ -143,6 +285,8 @@ function Week({
                 zone={zone}
                 agency={agency}
                 phase={phaseOf(shift, now)}
+                offeredTo={offers.get(shift.id) ?? []}
+                onSwap={onSwap}
               />
             ))}
           </ul>
@@ -158,18 +302,27 @@ function MyShiftRow({
   zone,
   agency,
   phase,
+  offeredTo,
+  onSwap,
 }: {
   shift: Shift;
   account: PlanningAccount | null;
   zone: string;
   agency: string;
   phase: Phase;
+  /** The colleagues an open proposal of this shift waits on. */
+  offeredTo: readonly string[];
+  onSwap: (shiftId: string) => void;
 }): JSX.Element {
   const length = new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime();
   const sameHours =
     rangeAt(shift.startsAt, shift.endsAt, zone) === rangeAt(shift.startsAt, shift.endsAt, agency);
   return (
-    <li className="nv-plate sc-mine__shift" data-phase={phase}>
+    <li
+      className="nv-plate sc-mine__shift"
+      data-phase={phase}
+      data-actions={phase === 'later' ? 'true' : undefined}
+    >
       <div className="sc-mine__hours">
         <p className="sc-mine__range nv-num">{rangeAt(shift.startsAt, shift.endsAt, zone)}</p>
         <p className="sc-mine__length">{lengthOf(length)}</p>
@@ -185,11 +338,29 @@ function MyShiftRow({
             </span>
           )}
         </p>
+        {offeredTo.length === 0 ? null : (
+          <p className="sc-mine__offer">Proposé à {offeredTo.join(', ')} · en attente de réponse</p>
+        )}
       </div>
       <span className={`nv-status sc-phase sc-phase--${phase}`}>
         <span className={`nv-dot${phase === 'live' ? ' nv-tone--ok nv-dot--live' : ''}`} />
         {PHASE_LABELS[phase]}
       </span>
+      {phase === 'later' ? (
+        <button
+          type="button"
+          className="sc-link sc-mine__swap"
+          aria-label={`Échanger ton shift du ${longDay(dayOf(shift.startsAt, zone))}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}`}
+          onClick={() => {
+            onSwap(shift.id);
+          }}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 5.5h9.5M10 3l2.5 2.5L10 8M13 10.5H3.5M6 8l-2.5 2.5L6 13" />
+          </svg>
+          Échanger
+        </button>
+      ) : null}
     </li>
   );
 }
