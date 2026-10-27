@@ -56,8 +56,21 @@ export const DEFAULT_CAUSES: Partial<Record<HoldReason, HandoffCause>> = {
   llm_unavailable: 'llm_unavailable',
 };
 
-/** The reason of the handoff when the second pass after a wait wrote nothing. */
+/** The code of the handoff when the second pass after a wait wrote nothing. */
 const WAITED_NO_REPLY = 'waited_no_reply';
+
+/**
+ * What an engine handoff keeps in the journal: its codes in `detail`, never in `reason`, which a chatter reads. The
+ * cause already says why in her words (the reader's labels).
+ */
+export const handoffDetail = (codes: readonly string[]): readonly string[] =>
+  codes
+    .map((code) => code.slice(0, 500))
+    .filter((code) => code !== '')
+    .slice(0, 20);
+
+/** After a wait, a known situation, not a technical cause: the chatter reads why he takes over (P3-11). */
+const WAITED_NO_REPLY_REASON = 'après l’attente, l’agent n’avait plus rien à lui écrire';
 
 const EMPTY_DRAFT: ComposeResult = { kind: 'draft', bubbles: [], softViolations: [], costUsd: 0 };
 
@@ -234,12 +247,20 @@ export function createRespondJob({ uow, clock, voice, fans, composer }: RespondD
       // After a wait, nothing written is nothing to wait for any more: a human answers him (P3-11).
       if (HANDOFF_REASONS.includes(result.reason) || waitedFor !== null) {
         const held = waitedFor !== null && !HANDOFF_REASONS.includes(result.reason);
-        const reason = [held ? WAITED_NO_REPLY : result.reason, ...result.detail].join(' : ').slice(0, 500);
+        const detail = handoffDetail([held ? WAITED_NO_REPLY : result.reason, ...result.detail]);
         const cause = result.cause ?? DEFAULT_CAUSES[result.reason] ?? 'other';
         await appendEvent(
           tx,
           conversation,
-          { type: 'handoff_requested', payload: { conversationId: conversation.id, cause, reason } },
+          {
+            type: 'handoff_requested',
+            payload: {
+              conversationId: conversation.id,
+              cause,
+              ...(held && { reason: WAITED_NO_REPLY_REASON }),
+              detail: [...detail],
+            },
+          },
           meta,
         );
       } else {

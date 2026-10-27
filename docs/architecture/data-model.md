@@ -80,7 +80,7 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
-| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` |
+| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi) |
 | `takeover_started`, `takeover_ended` | `conversationId`, `userId?`, `reason?` |
 | `mode_changed` | `userId?`, `reason?`, `mode?` |
 | `kill_switch_toggled` | `scope`, `scopeId`, `active`, `reason` |

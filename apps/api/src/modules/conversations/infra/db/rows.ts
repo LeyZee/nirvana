@@ -86,6 +86,22 @@ export function toDraft(row: typeof schema.drafts.$inferSelect): Draft {
 
 const PayloadObjectSchema = z.record(z.string(), z.unknown());
 
+/** The holds the engine wrote as a handoff's `reason` before it had `detail`: their first code opens the line. */
+const ENGINE_HOLD_CODES = [
+  'guard_blocked',
+  'handoff',
+  'budget_reached',
+  'llm_unavailable',
+  'waited_no_reply',
+];
+
+/** « guard_blocked : meeting_promise » → its codes; a sentence a human wrote → `null`. */
+function engineCodes(reason: string): string[] | null {
+  const codes = reason.split(' : ');
+  // An old reason was cut at 500 characters, maybe right after a « : »: no empty code (`detail` refuses one).
+  return ENGINE_HOLD_CODES.includes(codes[0] ?? '') ? codes.filter((code) => code !== '').slice(0, 20) : null;
+}
+
 /**
  * Payload shapes the journal still holds from before a contract change, brought to the current shape on read (ADR
  * 0007, « Évolution des payloads »): the journal is never rewritten. A field the current shape requires and an old
@@ -95,9 +111,15 @@ function upcast(row: typeof schema.conversationEvents.$inferSelect): unknown {
   const payload = PayloadObjectSchema.safeParse(row.payload);
   if (!payload.success) return row.payload;
   switch (row.type) {
-    // Before #54: { userId?, reason?, mode? }, no cause (alerts rank an unknown cause as `other`).
-    case 'handoff_requested':
-      return { conversationId: row.conversationId, cause: 'other', ...payload.data };
+    // Before #54: { userId?, reason?, mode? }, no cause (alerts rank an unknown cause as `other`). Before the
+    // handoff detail: the engine's codes joined in `reason` (« llm_unavailable : no voice key »), moved to `detail`.
+    case 'handoff_requested': {
+      const { reason, ...rest } = payload.data;
+      const codes = typeof reason === 'string' && !('detail' in rest) ? engineCodes(reason) : null;
+      return codes === null
+        ? { conversationId: row.conversationId, cause: 'other', ...payload.data }
+        : { conversationId: row.conversationId, cause: 'other', ...rest, detail: codes };
+    }
     // Before #60 (takeover_started) and R-G4 (the others): without the conversation it belongs to.
     case 'takeover_started':
     case 'takeover_ended':
