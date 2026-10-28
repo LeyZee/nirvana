@@ -176,6 +176,13 @@
       "when": 1793139620797,
       "tag": "0024_agent_hours",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793146397883,
+      "tag": "0026_shift_reports",
+      "breakpoints": true
     }
   ]
 }
