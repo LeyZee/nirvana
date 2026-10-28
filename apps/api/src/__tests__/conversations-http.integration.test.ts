@@ -183,6 +183,40 @@ describe('/v1/conversations', () => {
     expect(rejected.json()).toMatchObject({ error: { code: 'draft_conflict' } });
   });
 
+  it('shows, in error, the draft whose send failed for good, until the conversation leaves the error', async () => {
+    const id = conversationIds[0]!;
+    const read = async () =>
+      ConversationDetailSchema.parse(
+        (await call('GET', `/v1/conversations/${id}?creatorId=${creatorId}`, ownerCookie)).json(),
+      );
+    const sending = await read();
+    expect(sending.failedDraft).toBeNull();
+    const draftId = sending.openDrafts[0]!.id;
+    // The last attempt: whatever the platform answers, nothing retries it.
+    await app.modules.conversations.jobs.send(
+      { creatorId, conversationId: id, draftId, correlationId: 'test' },
+      NO_LOG,
+      3,
+    );
+
+    const failed = await read();
+    expect(failed).toMatchObject({ state: 'error', openDrafts: [] });
+    expect(failed.failedDraft).toMatchObject({
+      id: draftId,
+      status: 'failed',
+      finalBubbles: ['Coucou Julien'],
+    });
+
+    const takeover = await call(
+      'POST',
+      `/v1/conversations/${id}/takeover?creatorId=${creatorId}`,
+      ownerCookie,
+      {},
+    );
+    expect(takeover.statusCode, takeover.body).toBe(204);
+    expect((await read()).failedDraft).toBeNull();
+  });
+
   it('takes over and releases a conversation', async () => {
     const id = conversationIds[1]!;
     const takeover = await call(

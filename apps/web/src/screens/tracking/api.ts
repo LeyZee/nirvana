@@ -18,7 +18,7 @@ import {
 } from '@nirvana/contracts';
 
 import { flagError } from './flags-model';
-import { decisionError } from './reader-model';
+import { decisionError, isOutdated } from './reader-model';
 
 const PageSchema = pageOf(ConversationSummarySchema);
 
@@ -96,8 +96,12 @@ export async function fetchDesireCurve(
   return curve.points;
 }
 
-/** A decision went through, or why not (the draft and the conversation stay as they were). */
-export type Decision = { readonly ok: true } | { readonly ok: false; readonly message: string };
+/**
+ * A decision went through, or why not (the draft and the conversation stay as they were). `outdated`: it came too late
+ * (decided elsewhere, moved on, gone), and what the reader shows must be read again.
+ */
+export type Decision =
+  { readonly ok: true } | { readonly ok: false; readonly message: string; readonly outdated: boolean };
 
 async function command(
   creatorId: string,
@@ -115,9 +119,14 @@ async function command(
       body: JSON.stringify(body),
     });
     if (response.status === 204) return { ok: true };
-    return { ok: false, message: decisionError(response.status, await response.json().catch(() => null)) };
+    const answer: unknown = await response.json().catch(() => null);
+    return {
+      ok: false,
+      message: decisionError(response.status, answer),
+      outdated: isOutdated(response.status, answer),
+    };
   } catch {
-    return { ok: false, message: decisionError(0, null) };
+    return { ok: false, message: decisionError(0, null), outdated: false };
   }
 }
 
@@ -167,9 +176,13 @@ export function giveBack(creatorId: string, conversationId: string, note?: strin
 const flagsPath = (creatorId: string, fanId: string): string =>
   `/v1/fans/${encodeURIComponent(fanId)}/flags?${new URLSearchParams({ creatorId }).toString()}`;
 
+/** The server will not show this fan's limits to this person (403): asking again changes nothing. */
+export class FanFlagsRefused extends Error {}
+
 /** `GET /v1/fans/:id/flags`: the fan's limits, as the policy reads them before any offer. */
 export async function fetchFanFlags(creatorId: string, fanId: string): Promise<FanFlags> {
   const response = await fetch(flagsPath(creatorId, fanId), { credentials: 'include' });
+  if (response.status === 403) throw new FanFlagsRefused(`GET flags: ${String(response.status)}`);
   if (!response.ok) throw new Error(`GET flags: ${String(response.status)}`);
   return FanFlagsViewSchema.parse(await response.json()).flags;
 }

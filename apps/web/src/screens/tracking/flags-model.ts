@@ -1,4 +1,4 @@
-import type { FanFlags, SalesFreezeReason } from '@nirvana/contracts';
+import { SPENDING_LIMIT_MAX_MINOR, type FanFlags, type SalesFreezeReason } from '@nirvana/contracts';
 
 /** The switches of the fan's limits: on or off, nothing else to say when setting them. */
 export type SwitchFlag = 'doNotContact' | 'salesFrozen' | 'noExplicit' | 'fragile';
@@ -69,10 +69,21 @@ export function centsOf(text: string): number | null {
   return Math.round(Number(clean) * 100);
 }
 
+/** Why the ceiling typed cannot be saved, under the field; null while it can, or while nothing is typed yet. */
+export function ceilingProblem(text: string): string | null {
+  if (text.trim() === '') return null;
+  const cents = centsOf(text);
+  if (cents === null) return 'Un montant en euros, par exemple 50 ou 49,90.';
+  if (cents === 0) return 'Un plafond de 0 € n’en est pas un : pour arrêter ses achats, gèle les ventes.';
+  if (cents > SPENDING_LIMIT_MAX_MINOR) return `Au plus ${euros(SPENDING_LIMIT_MAX_MINOR)}.`;
+  return null;
+}
+
 /** Why a change was refused (`fan_not_found` 404, `creator_forbidden` or a creator's role 403): nothing changed. */
 export function flagError(status: number): string {
   if (status === 404) return 'Ce fan n’existe plus.';
-  if (status === 403) return 'Seuls le propriétaire et les chatteurs changent les limites d’un fan.';
+  // A creator has no switch: a 403 is a member this fan's conversation is not open to (EQ-13).
+  if (status === 403) return 'Tu ne peux pas changer les limites de ce fan : rien n’a changé.';
   if (status === 401) return 'Ta session a expiré : reconnecte-toi.';
   if (status === 400) return 'Ce changement n’est pas accepté tel quel.';
   return 'Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.';

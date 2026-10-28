@@ -2,6 +2,7 @@
 import {
   ConversationDetailSchema,
   ConversationSummarySchema,
+  DraftIdSchema,
   MessageViewSchema,
   type ConversationDetail,
   type ConversationSummary,
@@ -27,7 +28,7 @@ import { apiDashboard } from '@/test/fakes';
 /* Invented creators and fans: no real data. */
 const LEA = { id: '0192f3a0-0000-7000-8000-0000000000c1', displayName: 'Léa', timezone: 'Europe/Paris' };
 const NINA = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Nina', timezone: 'Europe/Paris' };
-const DRAFT = '0192f3a0-0000-7000-8000-0000000000d1';
+const DRAFT = DraftIdSchema.parse('0192f3a0-0000-7000-8000-0000000000d1');
 
 function conversation(id: string, patch: Partial<ConversationSummary> = {}): ConversationSummary {
   return ConversationSummarySchema.parse({
@@ -58,6 +59,7 @@ function waiting(patch: Partial<ConversationDetail> = {}): ConversationDetail {
         createdAt: '2026-10-17T20:01:00Z',
       },
     ],
+    failedDraft: null,
     ...patch,
   });
 }
@@ -101,6 +103,10 @@ function serve(routes: {
   desire?: Reply;
   /** The canvas lines left to learn about him (`/kyc`), none when not given; `down` answers 500. */
   kyc?: KycSlot[] | 'down';
+  /** What happened to the conversation, newest first; none when not given. */
+  events?: unknown[];
+  /** `GET` of his limits answers 403: the server will not show them to this person. */
+  flagsRefused?: boolean;
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -125,7 +131,7 @@ function serve(routes: {
             ? { status: 500 }
             : { status: 200, body: { fanId: path.split('/')[3], toLearn: routes.kyc ?? [] } };
       } else if (path.startsWith('/v1/fans/')) {
-        reply = flagsView(routes.flags?.before);
+        reply = routes.flagsRefused === true ? { status: 403 } : flagsView(routes.flags?.before);
       } else if (path === '/v1/creators') {
         reply = typeof routes.creators === 'function' ? routes.creators() : routes.creators;
       } else if (path === '/v1/conversations') {
@@ -135,7 +141,7 @@ function serve(routes: {
       } else if (path.endsWith('/messages')) {
         reply = { status: 200, body: { items: [FAN_MESSAGE], nextCursor: null } };
       } else if (path.endsWith('/events')) {
-        reply = { status: 200, body: { items: [], nextCursor: null } };
+        reply = { status: 200, body: { items: routes.events ?? [], nextCursor: null } };
       } else if (path.endsWith('/desire')) {
         reply = routes.desire ?? { status: 200, body: { points: [] } };
       } else {
@@ -184,11 +190,16 @@ function renderPage(at = '/suivi', canDecide = true, canAddCreator = true): void
   );
 }
 
+/** jsdom has no scrolling: what the reader brings into view is recorded here. */
+const scrollIntoView = vi.fn();
+
 const ONE = { creators: { status: 200, body: { creators: [LEA] } } };
 const OPEN = `/suivi?conversation=${conversation('1').id}`;
 
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
+  scrollIntoView.mockClear();
+  Element.prototype.scrollIntoView = scrollIntoView;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -308,6 +319,47 @@ describe('TrackingPage', () => {
     fireEvent.click(within(queue).getByRole('button'));
     expect(await screen.findByText('Salut, ça va ?')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Rendre la main à l’agent' })).toBeDefined();
+  });
+});
+
+describe('the list of Suivi', () => {
+  it('finds a fan by his pseudo, without case nor accents, among the conversations read', async () => {
+    serve({
+      ...ONE,
+      conversations: {
+        [LEA.id]: {
+          items: [
+            conversation('1', { fanDisplayName: 'Jérôme' }),
+            conversation('2', { fanDisplayName: 'Max' }),
+          ],
+          nextCursor: null,
+        },
+      },
+    });
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    const search = screen.getByRole('searchbox', { name: 'Chercher un fan par son pseudo' });
+    fireEvent.change(search, { target: { value: 'jero' } });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([expect.stringContaining('Jérôme')]);
+    fireEvent.change(search, { target: { value: 'Paul' } });
+    expect(screen.getByText('Aucun fan ne porte ce pseudo dans la liste.')).toBeDefined();
+  });
+
+  it('says a long wait of « À traiter » in days, as the list does', async () => {
+    const [todo] = apiDashboard().todos;
+    if (todo === undefined) throw new Error('no todo');
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      dashboard: { status: 200, body: apiDashboard({ todos: [{ ...todo, waitingMinutes: 49 * 60 }] }) },
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    expect(queue.querySelector('.tr-wait')?.textContent).toBe('2 j');
   });
 });
 
@@ -549,9 +601,120 @@ describe('the reader of Suivi', () => {
     const fragile = await screen.findByRole('switch', { name: /Fan fragile/u });
     fireEvent.click(fragile);
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'Seuls le propriétaire et les chatteurs changent les limites d’un fan.',
+      'Tu ne peux pas changer les limites de ce fan : rien n’a changé.',
     );
     expect(fragile).toHaveProperty('checked', false);
+  });
+
+  it('opens on the draft that waits, not at the top of the thread', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    const draft = await screen.findByRole('region', { name: 'Brouillon à valider' });
+    await waitFor(() => {
+      expect(scrollIntoView.mock.contexts).toContain(draft.parentElement);
+    });
+  });
+
+  it('reads the conversation again at once when the draft was decided elsewhere, and says so', async () => {
+    let decided = false;
+    serve({
+      ...withDraft,
+      detail: () => ({
+        status: 200,
+        body: decided ? waiting({ state: 'idle', openDrafts: [] }) : waiting(),
+      }),
+      command: () => {
+        decided = true;
+        return {
+          status: 409,
+          body: { error: { code: 'draft_conflict', message: 'x', details: {}, requestId: 'r' } },
+        };
+      },
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'Brouillon à valider' })).toBeNull();
+    });
+    expect(screen.getByText(/La conversation a changé entre-temps/u)).toBeDefined();
+  });
+
+  it('says why a retouched text cannot be sent, under the field', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retoucher' }));
+    fireEvent.change(screen.getByLabelText('Une bulle par ligne'), {
+      target: { value: Array.from({ length: 11 }, (_, i) => `Bulle ${String(i)}`).join('\n') },
+    });
+    expect(screen.getByText('10 bulles au plus, une par ligne : il y en a 11.')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Envoyer la retouche' })).toHaveProperty('disabled', true);
+  });
+
+  it('shows what did not leave after a send failed for good, and why', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({
+        status: 200,
+        body: waiting({
+          state: 'error',
+          openDrafts: [],
+          failedDraft: {
+            id: DRAFT,
+            status: 'failed',
+            bubbles: ['Coucou toi'],
+            finalBubbles: ['Coucou toi, tu es là ?'],
+            createdAt: '2026-10-17T20:01:00Z',
+          },
+        }),
+      }),
+      events: [
+        {
+          seq: 4,
+          actor: 'system',
+          createdAt: '2026-10-17T20:02:00Z',
+          type: 'send_failed',
+          payload: {
+            conversationId: conversation('1').id,
+            draftId: DRAFT,
+            idempotencyKey: 'k',
+            attempt: 1,
+            error: 'connector_writes_disabled',
+            isFinal: true,
+          },
+        },
+      ],
+    });
+    renderPage(OPEN);
+    expect(await screen.findByText('Coucou toi, tu es là ?')).toBeDefined();
+    expect(screen.getByText('N’est pas parti : à envoyer dans Reveal')).toBeDefined();
+    expect(
+      screen.getByText('L’envoi a échoué, rien n’est parti : l’envoi est désactivé pour ce compte Reveal'),
+    ).toBeDefined();
+    expect(screen.queryByText('Envoi en cours')).toBeNull();
+  });
+
+  it('says a ceiling of 0 € or past 100 000 € cannot be saved, and why', async () => {
+    const posted = serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fixer un plafond' }));
+    fireEvent.change(screen.getByLabelText('Plafond en euros'), { target: { value: '0' } });
+    expect(screen.getByText(/gèle les ventes/u)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Enregistrer' })).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Plafond en euros'), { target: { value: '99999999999' } });
+    expect(screen.getByText(/^Au plus 100/u)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Enregistrer' })).toHaveProperty('disabled', true);
+    expect(posted).toEqual([]);
+  });
+
+  it('says the limits are not for this person, without blaming the server nor asking again', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), flagsRefused: true });
+    renderPage(OPEN);
+    expect(await screen.findByText('Tu ne peux pas voir ses limites')).toBeDefined();
+    expect(screen.queryByText('Le serveur ne répond pas')).toBeNull();
+    const flagCalls = vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => typeof input === 'string' && input.includes('/flags?'));
+    expect(flagCalls).toHaveLength(1);
   });
 
   it('lets a creator read, never decide', async () => {
@@ -640,7 +803,7 @@ describe('his desire score in Suivi (P3-12)', () => {
 
   const reading = (desire: ConversationDetail['desire']): Reply => ({
     status: 200,
-    body: ConversationDetailSchema.parse({ ...conversation('1'), desire, openDrafts: [] }),
+    body: ConversationDetailSchema.parse({ ...conversation('1'), desire, openDrafts: [], failedDraft: null }),
   });
   const listed = { [LEA.id]: { items: [conversation('1')], nextCursor: null } };
 
@@ -733,6 +896,35 @@ describe('his desire score in Suivi (P3-12)', () => {
     fireEvent.keyDown(chart, { key: 'ArrowLeft' });
     expect(screen.getByRole('status').textContent).toContain('+32');
     expect(screen.getByRole('status').textContent).toContain('Sexto');
+  });
+
+  it('leaves no empty line in the tip of a point with no signal', async () => {
+    serve({
+      ...ONE,
+      conversations: listed,
+      detail: () => reading({ score: 20, band: 'neutral' }),
+      desire: {
+        status: 200,
+        body: {
+          points: [
+            { at: '2026-10-17T19:00:00Z', before: null, score: 10, signals: [] },
+            { at: '2026-10-17T20:00:00Z', before: 10, score: 20, signals: ['long_reply'] },
+          ],
+        },
+      },
+    });
+    renderPage(OPEN);
+    const sheet = (await screen.findByRole('meter', { name: 'Note de désir' })).closest('details');
+    if (sheet === null) throw new Error('no desire sheet');
+    sheet.open = true;
+    fireEvent(sheet, new Event('toggle'));
+    const chart = await screen.findByLabelText(/Note de désir au fil de ses messages/u);
+    fireEvent.focus(chart);
+    expect((await screen.findByRole('status')).querySelector('.tr-desire__signals')).not.toBeNull();
+    fireEvent.keyDown(chart, { key: 'ArrowLeft' });
+    const tip = screen.getByRole('status');
+    expect(tip.textContent).toContain('Première note : 10');
+    expect(tip.querySelector('.tr-desire__signals')).toBeNull();
   });
 
   it('says when there is not enough for a curve yet', async () => {

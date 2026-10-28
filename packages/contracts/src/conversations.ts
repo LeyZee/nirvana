@@ -60,6 +60,11 @@ export type DraftView = z.infer<typeof DraftViewSchema>;
 export const ConversationDetailSchema = ConversationSummarySchema.extend({
   /** Drafts still waiting for a decision or being sent, oldest first. */
   openDrafts: z.array(DraftViewSchema),
+  /**
+   * While the conversation is in `error`: the draft whose send failed for good, so that a person reads what did not
+   * leave and sends it in Reveal. `null` otherwise.
+   */
+  failedDraft: DraftViewSchema.nullable(),
 });
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
 

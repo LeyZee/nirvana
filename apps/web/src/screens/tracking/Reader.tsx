@@ -1,6 +1,6 @@
 import type { DraftView } from '@nirvana/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { DesireSheet } from './Desire';
 import { FanLimits } from './FanLimits';
@@ -15,8 +15,9 @@ import {
   type ConversationRead,
   type Decision,
 } from './api';
-import { lastHandoff, threadOf } from './reader-model';
-import { bubblesFromText, STATE_LABELS, statusClass } from './view';
+import { draftsOf, threadOf, whyHuman } from './reader-model';
+import { bringIntoView, useEndInView } from './scroll';
+import { bubblesFromText, bubblesProblem, STATE_LABELS, statusClass } from './view';
 
 /** The reader follows the conversation more closely than the list: a draft or a fan's message shows up quickly. */
 const REFRESH_MS = 10_000;
@@ -105,27 +106,57 @@ function Loaded({
 }): JSX.Element {
   const { detail } = read;
   const name = detail.fanDisplayName.trim() === '' ? 'Fan sans nom' : detail.fanDisplayName;
-  const isHuman = detail.state === 'human';
-  const handoff = isHuman ? lastHandoff(read) : null;
+  const drafts = draftsOf(read);
+  const isHuman = drafts.state === 'human';
+  const why = isHuman ? whyHuman(read) : null;
   const [hand, setHand] = useState<{ pending: boolean; error: string | null }>({
     pending: false,
     error: null,
   });
+  /** A decision that came too late: said here, since the draft it was about leaves the screen. */
+  const [outdated, setOutdated] = useState<string | null>(null);
 
   const [note, setNote] = useState('');
 
   const toggleHand = async (): Promise<void> => {
     setHand({ pending: true, error: null });
+    setOutdated(null);
     const kept = note.trim();
     const result = await (isHuman
       ? giveBack(creatorId, detail.id, kept === '' ? undefined : kept)
       : takeOver(creatorId, detail.id));
-    if (result.ok) {
-      setNote('');
-      await settle();
-    }
+    if (result.ok) setNote('');
+    // A takeover or a release that came too late: what shows is read again at once, as after a success.
+    if (result.ok || result.outdated) await settle();
     setHand({ pending: false, error: result.ok ? null : result.message });
   };
+
+  const decided = async (decision: Decision): Promise<string | null> => {
+    if (decision.ok) {
+      setOutdated(null);
+      await settle();
+      return null;
+    }
+    if (!decision.outdated) return decision.message;
+    setOutdated(decision.message);
+    await settle();
+    return null;
+  };
+
+  // Like any messenger, the reader opens on the end of the thread: the draft waiting for a decision, else the last
+  // message. A new draft brings it into view again only if the end of the thread was in view: a person reading higher
+  // up is not pulled down. From 900 px the thread scrolls on its own, so the list beside it never moves.
+  const pendingId = detail.openDrafts.find((draft) => draft.status === 'pending')?.id ?? null;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<HTMLDivElement>(null);
+  const endInView = useEndInView(endRef);
+  const openedId = useRef<string | null>(null);
+  useEffect(() => {
+    const opening = openedId.current !== detail.id;
+    openedId.current = detail.id;
+    if (opening || endInView.current) bringIntoView(bodyRef.current, draftRef.current, endRef.current);
+  }, [detail.id, pendingId, endInView]);
 
   return (
     <>
@@ -135,9 +166,9 @@ function Loaded({
         </span>
         <span className="tr-reader__who">
           <h2>{name}</h2>
-          <span className={`nv-status ${statusClass(detail.state)}`}>
+          <span className={`nv-status ${statusClass(drafts.state)}`}>
             <span className="nv-status__dot" />
-            {STATE_LABELS[detail.state]}
+            {STATE_LABELS[drafts.state]}
           </span>
         </span>
         {canDecide ? (
@@ -159,10 +190,15 @@ function Loaded({
           {hand.error}
         </p>
       )}
+      {outdated === null ? null : (
+        <p className="tr-warn tr-line" role="status">
+          {outdated}
+        </p>
+      )}
       {isHuman ? (
         <p className="tr-hand">
-          {handoff === null ? 'Un humain a la main.' : `${handoff}.`} Il répond dans Reveal ; l’agent n’écrit
-          plus à ce fan jusqu’à ce qu’on lui rende la main.
+          {why === null ? 'Un humain a la main.' : `${why}.`} Il répond dans Reveal ; l’agent n’écrit plus à
+          ce fan jusqu’à ce qu’on lui rende la main.
         </p>
       ) : null}
       {isHuman && canDecide ? (
@@ -184,7 +220,7 @@ function Loaded({
       {/* A creator never reads what is known of her fans (ADR 0023): the server answers her 403. */}
       {canDecide ? <FanToLearn creatorId={creatorId} fanId={detail.fanId} /> : null}
       <DesireSheet creatorId={creatorId} conversationId={detail.id} desire={detail.desire} />
-      <div className="tr-reader__body">
+      <div className="tr-reader__body" ref={bodyRef}>
         {read.isPartial ? (
           <p className="tr-more">Seuls les derniers messages sont affichés ; le reste se lit dans Reveal.</p>
         ) : null}
@@ -208,25 +244,38 @@ function Loaded({
           )}
           {detail.openDrafts.map((draft) =>
             draft.status === 'pending' ? (
-              <DraftPanel
-                key={draft.id}
-                draft={draft}
-                creatorId={creatorId}
-                conversationId={detail.id}
-                canDecide={canDecide && !isHuman}
-                settle={settle}
-              />
-            ) : (
-              <div key={draft.id} className="tr-draft-sending">
-                {(draft.finalBubbles ?? draft.bubbles).map((bubble, i) => (
-                  <div key={i} className="nv-bubble nv-bubble--draft">
-                    {bubble}
-                  </div>
-                ))}
-                <span className="nv-meta nv-meta--end">Envoi en cours</span>
+              <div key={draft.id} ref={draft.id === pendingId ? draftRef : undefined}>
+                <DraftPanel
+                  draft={draft}
+                  creatorId={creatorId}
+                  conversationId={detail.id}
+                  canDecide={canDecide && !isHuman}
+                  decided={decided}
+                />
               </div>
-            ),
+            ) : null,
           )}
+          {drafts.sending.map((draft) => (
+            <div key={draft.id} className="tr-draft-sending">
+              {(draft.finalBubbles ?? draft.bubbles).map((bubble, i) => (
+                <div key={i} className="nv-bubble nv-bubble--draft">
+                  {bubble}
+                </div>
+              ))}
+              <span className="nv-meta nv-meta--end">Envoi en cours</span>
+            </div>
+          ))}
+          {drafts.failed === null ? null : (
+            <div className="tr-draft-sending tr-draft-failed">
+              {(drafts.failed.finalBubbles ?? drafts.failed.bubbles).map((bubble, i) => (
+                <div key={i} className="nv-bubble nv-bubble--draft">
+                  {bubble}
+                </div>
+              ))}
+              <span className="nv-meta nv-meta--end">N’est pas parti : à envoyer dans Reveal</span>
+            </div>
+          )}
+          <div ref={endRef} />
         </div>
       </div>
     </>
@@ -241,13 +290,14 @@ function DraftPanel({
   creatorId,
   conversationId,
   canDecide,
-  settle,
+  decided,
 }: {
   draft: DraftView;
   creatorId: string;
   conversationId: string;
   canDecide: boolean;
-  settle: () => Promise<void>;
+  /** What follows a decision: the sentence to show here when it was refused, null when it went through or came late. */
+  decided: (decision: Decision) => Promise<string | null>;
 }): JSX.Element {
   const [step, setStep] = useState<Step>('idle');
   const [text, setText] = useState(() => draft.bubbles.join('\n'));
@@ -255,15 +305,15 @@ function DraftPanel({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const edited = bubblesFromText(text);
-  const isChanged = edited !== null && edited.join('\n') !== draft.bubbles.join('\n');
+  const problem = step === 'editing' ? bubblesProblem(text) : null;
+  // An invalid text is a retouch too: the button keeps its name while it is off.
+  const isChanged = edited?.join('\n') !== draft.bubbles.join('\n');
 
   const run = async (decide: () => Promise<Decision>): Promise<void> => {
     setPending(true);
     setError(null);
-    const result = await decide();
     // A refused decision leaves the draft as it was, waiting: the sentence says why, the panel stays.
-    if (result.ok) await settle();
-    else setError(result.message);
+    setError(await decided(await decide()));
     setPending(false);
   };
 
@@ -304,6 +354,11 @@ function DraftPanel({
           />
         </label>
       ) : null}
+      {problem === null ? null : (
+        <p className="tr-warn tr-line" role="status">
+          {problem}
+        </p>
+      )}
       {error === null ? null : (
         <p className="tr-warn" role="alert">
           {error}
@@ -352,7 +407,12 @@ function DraftPanel({
             disabled={pending || edited === null}
             onClick={() =>
               void run(() =>
-                approveDraft(creatorId, conversationId, draft.id, isChanged ? edited : undefined),
+                approveDraft(
+                  creatorId,
+                  conversationId,
+                  draft.id,
+                  isChanged && edited !== null ? edited : undefined,
+                ),
               )
             }
           >

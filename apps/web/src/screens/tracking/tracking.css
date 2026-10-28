@@ -169,6 +169,14 @@
   gap: var(--nv-space-2);
   min-width: 0;
 }
+/* From 900 px the thread scrolls on its own: opening a long conversation never moves the list beside it. */
+@media (min-width: 900px) {
+  .tr-reader__body {
+    max-height: min(40rem, 70vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
 .tr-reader__empty {
   margin: 0;
   padding: var(--nv-space-4);
@@ -282,6 +290,9 @@
   line-height: var(--nv-text-caption-leading);
   color: var(--nv-ink-muted);
 }
+.tr-limit__hint.tr-warn {
+  color: var(--nv-warning);
+}
 .tr-limit__actions {
   display: flex;
   align-items: center;
@@ -332,7 +343,19 @@
   display: flex;
   min-width: 0;
 }
+/* A narrow line cuts whose fan and the mode first, then when he wrote, never the band. */
+.tr-preview__lead {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tr-preview__sep {
+  flex: none;
+  white-space: pre;
+}
 .tr-preview__text {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -346,6 +369,12 @@
 .tr-order {
   display: flex;
   padding: var(--nv-space-2) var(--nv-space-2) var(--nv-space-3);
+}
+
+/* The search on the pseudos of the conversations already read, above the list. */
+.tr-search {
+  display: block;
+  padding: 0 var(--nv-space-2) var(--nv-space-3);
 }
 
 /* « Désir » in the reader's sheet of the fan (P3-12): a neutral gauge and the band in a word, then the curve. */

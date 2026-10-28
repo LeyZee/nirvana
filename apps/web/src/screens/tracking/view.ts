@@ -45,15 +45,20 @@ export function mergeConversations(
     .sort((a, b) => Date.parse(b.conversation.updatedAt) - Date.parse(a.conversation.updatedAt));
 }
 
+/** « 5 min », « 3 h », « 2 j »: past a day, days, as everywhere in Suivi. */
+export function duration(minutes: number): string {
+  if (minutes < 60) return `${String(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${String(hours)} h`;
+  return `${String(Math.floor(hours / 24))} j`;
+}
+
 /** « il y a 5 min », « il y a 3 h », « il y a 2 j » ; nothing for a conversation he never wrote in. */
 export function lastMessageAgo(iso: string | null, now: Date): string | null {
   if (iso === null) return null;
   const minutes = Math.max(0, Math.floor((now.getTime() - Date.parse(iso)) / 60_000));
   if (minutes < 1) return 'à l’instant';
-  if (minutes < 60) return `il y a ${String(minutes)} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `il y a ${String(hours)} h`;
-  return `il y a ${String(Math.floor(hours / 24))} j`;
+  return `il y a ${duration(minutes)}`;
 }
 
 /** The mode every line shares, said once above the list; null when they differ and each line says its own. */
@@ -72,19 +77,37 @@ export const MODE_MEANINGS: Readonly<Record<ConversationMode, string>> = {
 /**
  * The line under the fan's name: when he last wrote, after the mode when the lines do not share one, then the band of
  * his desire score in a word once he has one (P3-12). Never its number, never a colour: the list is no heat map. The
- * band comes apart, so that a narrow line cuts what comes before it and never the band itself.
+ * mode and the band come apart, so that a narrow line cuts the mode first and never when he wrote nor the band.
  */
 export function subline(
   conversation: ConversationSummary,
   now: Date,
   withMode: boolean,
-): { readonly text: string; readonly band: string | null } {
+): { readonly mode: string | null; readonly text: string; readonly band: string | null } {
   const ago = lastMessageAgo(conversation.lastInboundAt, now);
   const wrote = ago === null ? 'N’a pas encore écrit' : `A écrit ${ago}`;
-  const text = withMode
-    ? `${MODE_LABELS[conversation.mode]} · ${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}`
-    : wrote;
-  return { text, band: conversation.desire === null ? null : DESIRE_BAND_LABELS[conversation.desire.band] };
+  return {
+    mode: withMode ? MODE_LABELS[conversation.mode] : null,
+    text: withMode ? `${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}` : wrote,
+    band: conversation.desire === null ? null : DESIRE_BAND_LABELS[conversation.desire.band],
+  };
+}
+
+/** A pseudo as the search compares it: without case nor accents. */
+const folded = (text: string): string =>
+  text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr-FR').trim();
+
+/**
+ * The lines whose fan's pseudo holds what was typed, without case nor accents; all of them while nothing is typed. It
+ * searches the conversations already read, the most recent ones: the screen says so when there are more.
+ */
+export function searchLines<T extends { readonly conversation: ConversationSummary }>(
+  lines: readonly T[],
+  query: string,
+): readonly T[] {
+  const wanted = folded(query);
+  if (wanted === '') return lines;
+  return lines.filter((l) => folded(l.conversation.fanDisplayName).includes(wanted));
 }
 
 /** How « Toutes les conversations » is ordered: the most recent first unless the reader asks for the hottest. */
@@ -141,16 +164,32 @@ export function parseTrackingSearch(search: Record<string, unknown>): TrackingSe
   return typeof conversation === 'string' && /^[0-9a-f-]{36}$/iu.test(conversation) ? { conversation } : {};
 }
 
+/** The most bubbles of a draft, and the longest bubble: what the server accepts (`ApproveDraftBodySchema`). */
+const BUBBLES_MAX = 10;
+const BUBBLE_MAX = 2_000;
+
+/** One bubble per line; empty lines are left out. */
+const linesOf = (text: string): string[] =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+
+/** Why the retouched text cannot be sent, said under the field while the button is off; null when it can. */
+export function bubblesProblem(text: string): string | null {
+  const bubbles = linesOf(text);
+  if (bubbles.length === 0) return 'Écris au moins une bulle.';
+  if (bubbles.length > BUBBLES_MAX)
+    return `${String(BUBBLES_MAX)} bulles au plus, une par ligne : il y en a ${String(bubbles.length)}.`;
+  if (bubbles.some((b) => b.length > BUBBLE_MAX))
+    return `${BUBBLE_MAX.toLocaleString('fr-FR')} caractères au plus par bulle.`;
+  return null;
+}
+
 /**
  * One draft's bubbles as a person edits them: one bubble per line. `null` when the text is not a valid answer (no
  * bubble, more than 10, or one too long), so the button stays off instead of the server refusing it.
  */
 export function bubblesFromText(text: string): string[] | null {
-  const bubbles = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '');
-  return bubbles.length === 0 || bubbles.length > 10 || bubbles.some((b) => b.length > 2_000)
-    ? null
-    : bubbles;
+  return bubblesProblem(text) === null ? linesOf(text) : null;
 }

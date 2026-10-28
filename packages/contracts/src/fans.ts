@@ -78,6 +78,12 @@ export type FanFlagsView = z.infer<typeof FanFlagsViewSchema>;
 const flagReason = z.string().trim().min(1).max(500).exactOptional();
 
 /**
+ * The highest ceiling a person sets, in cents (100 000 €): past it, a typing slip rather than his word. A ceiling of
+ * 0 € is no ceiling but a freeze, which `salesFrozen` says.
+ */
+export const SPENDING_LIMIT_MAX_MINOR = 10_000_000;
+
+/**
  * `PUT /v1/fans/:id/flags`: a human sets or lifts one limit. The server dates `ageConfirmedAt` and the start of a
  * freeze itself; a freeze says why, a ceiling says how much.
  */
@@ -96,7 +102,7 @@ export const SetFanFlagBodySchema = z.union([
   z.object({
     flag: z.literal('spendingLimitMinor'),
     set: z.literal(true),
-    limitMinor: z.number().int().nonnegative(),
+    limitMinor: z.number().int().positive().max(SPENDING_LIMIT_MAX_MINOR),
     reason: flagReason,
   }),
   z.object({ flag: FanFlagNameSchema, set: z.literal(false), reason: flagReason }),

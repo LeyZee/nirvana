@@ -1,4 +1,4 @@
-import type { AlertTriggerItem, CreatorSummary, CustomAlertGroupId } from '@nirvana/contracts';
+import type { AlertTriggerItem, CreatorSummary } from '@nirvana/contracts';
 import { useId, useRef, useState, type JSX, type ReactNode } from 'react';
 
 import { Reader } from '../Reader';
@@ -17,6 +17,8 @@ import './history.css';
 import {
   alertChoices,
   alertsOf,
+  ownedAlerts,
+  type KnownAlert,
   choiceOf,
   markAllTargets,
   markedLine,
@@ -218,10 +220,10 @@ function History({
   const refresh = useRefreshHistory();
   const owned = useAlerts({ enabled: isOwner });
   // Her alerts named once read, so that the filter still offers them when it narrows the list to one.
-  const named = useRef(new Map<CustomAlertGroupId, string>());
-  for (const one of [...(owned.data?.custom ?? []), ...alertsOf(items)])
-    named.current.set(one.groupId, one.name);
-  const choices = alertChoices([...named.current].map(([groupId, name]) => ({ groupId, name })));
+  const named = useRef(new Map<string, KnownAlert>());
+  for (const one of [...ownedAlerts(owned.data?.custom ?? []), ...alertsOf(items)])
+    named.current.set(`${one.groupId} ${one.creatorId}`, one);
+  const choices = alertChoices([...named.current.values()], creator, alert);
   const [marking, setMarking] = useState<ReadonlySet<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
   const [said, setSaid] = useState<{ readonly text: string; readonly failed: boolean } | null>(null);

@@ -1,16 +1,19 @@
 import {
   ConversationEventViewSchema,
   DashboardTodoSchema,
+  DraftViewSchema,
   MessageViewSchema,
   type ConversationEventView,
+  type DraftView,
   type MessageView,
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { decisionError, lastHandoff, threadOf, todoLabel } from './reader-model';
+import { decisionError, draftsOf, isOutdated, threadOf, todoLabel, whyHuman } from './reader-model';
 
 /* Invented messages: no real fan. */
 const CONVERSATION = '0192f3a0-0000-7000-8000-000000000001';
+const DRAFT = '0192f3a0-0000-7000-8000-0000000000d1';
 
 function message(n: number, patch: Partial<MessageView> = {}): MessageView {
   return MessageViewSchema.parse({
@@ -82,8 +85,54 @@ describe('threadOf', () => {
       event(5, 9, { type: 'handoff_requested', payload: { conversationId: CONVERSATION, cause: 'meeting' } }),
       event(1, 1, { type: 'handoff_requested', payload: { conversationId: CONVERSATION, cause: 'minor' } }),
     ];
-    expect(lastHandoff({ events })).toBe('L’agent passe la main (Demande de rencontre)');
-    expect(lastHandoff({ events: [] })).toBeNull();
+    expect(whyHuman({ events })).toBe('L’agent passe la main (Demande de rencontre)');
+    expect(whyHuman({ events: [] })).toBeNull();
+  });
+
+  it('says a person took the hand, not an old handoff the hand was given back for', () => {
+    const handoff = event(1, 1, {
+      type: 'handoff_requested',
+      payload: { conversationId: CONVERSATION, cause: 'meeting' },
+    });
+    const ended = event(2, 2, { type: 'takeover_ended', payload: { conversationId: CONVERSATION } });
+    const started = event(3, 3, { type: 'takeover_started', payload: { conversationId: CONVERSATION } });
+    expect(whyHuman({ events: [started, ended, handoff] })).toBe('Un humain a repris la main');
+    expect(whyHuman({ events: [started] })).toBe('Un humain a repris la main');
+  });
+
+  it('says why a send failed for good, when the code is one a person can act on', () => {
+    const failed = (error?: string) =>
+      threadOf({
+        messages: [],
+        events: [
+          event(1, 1, {
+            type: 'send_failed',
+            payload: {
+              conversationId: CONVERSATION,
+              draftId: DRAFT,
+              idempotencyKey: 'k',
+              attempt: 3,
+              isFinal: true,
+              ...(error === undefined ? {} : { error }),
+            },
+          }),
+        ],
+      }).map((i) => i.text);
+    expect(failed('connector_session_expired')).toEqual([
+      'L’envoi a échoué, rien n’est parti : la session Reveal a expiré',
+    ]);
+    expect(failed('send_error')).toEqual(['L’envoi a échoué, rien n’est parti']);
+    expect(failed('connector_unavailable')).toEqual([
+      'L’envoi a échoué, rien n’est parti : aucun connecteur n’est branché pour cette plateforme',
+    ]);
+    // A key every object has is not a code.
+    expect(failed('toString')).toEqual(['L’envoi a échoué, rien n’est parti']);
+    expect(failed()).toEqual(['L’envoi a échoué, rien n’est parti']);
+  });
+
+  it('writes the price of a paid media with its cents (ADR 0011)', () => {
+    const [item] = threadOf({ messages: [message(1, { priceMinor: 4990, currency: 'EUR' })], events: [] });
+    expect(item).toMatchObject({ ppv: { price: '49,90\u00a0€' } });
   });
 
   it('says once that his answer waits for her opening, on the reader’s clock (P3-14)', () => {
@@ -114,6 +163,41 @@ describe('threadOf', () => {
     expect(sameDay.map((i) => i.text)).toEqual([
       'Hors de ses heures : la réponse attend l’ouverture de son créneau, à 18\u00a0h\u00a030',
     ]);
+  });
+});
+
+describe('draftsOf', () => {
+  const draft = (status: DraftView['status']): DraftView =>
+    DraftViewSchema.parse({
+      id: DRAFT,
+      status,
+      bubbles: ['Coucou'],
+      finalBubbles: null,
+      createdAt: '2026-10-19T12:01:00Z',
+    });
+  const finalFailure = event(4, 3, {
+    type: 'send_failed',
+    payload: { conversationId: CONVERSATION, draftId: DRAFT, idempotencyKey: 'k', attempt: 3, isFinal: true },
+  });
+
+  it('never says « Envoi en cours » and the failure at once: the final failure wins', () => {
+    const read = draftsOf({
+      detail: { state: 'sending', openDrafts: [draft('approved')], failedDraft: null },
+      events: [finalFailure],
+    });
+    expect(read).toEqual({ state: 'error', sending: [], failed: draft('approved') });
+  });
+
+  it('keeps a draft on its way while nothing says it failed, and the failed one the server gives', () => {
+    expect(
+      draftsOf({
+        detail: { state: 'sending', openDrafts: [draft('edited')], failedDraft: null },
+        events: [],
+      }),
+    ).toEqual({ state: 'sending', sending: [draft('edited')], failed: null });
+    expect(
+      draftsOf({ detail: { state: 'error', openDrafts: [], failedDraft: draft('failed') }, events: [] }),
+    ).toEqual({ state: 'error', sending: [], failed: draft('failed') });
   });
 });
 
@@ -154,7 +238,10 @@ describe('decisionError', () => {
     expect(decisionError(409, apiError('kill_switch_conflict'))).toContain('L’arrêt est actif');
     expect(decisionError(409, apiError('session_expired_conflict'))).toContain('La session Reveal a expiré');
     expect(decisionError(409, apiError('draft_conflict'))).toContain('a changé entre-temps');
-    expect(decisionError(403, apiError('forbidden'))).toContain('Seuls le propriétaire et les chatteurs');
+    // Only a chatter whose shift or handover closed gets a 403 there: never « only chatters decide ».
+    expect(decisionError(403, apiError('forbidden'))).toBe(
+      'Cette conversation n’est plus ouverte pour toi (shift terminé ou passation rendue).',
+    );
     expect(decisionError(400, apiError('draft_invalid'))).toBe(
       'Ce message ne peut pas partir tel quel : une bulle est vide ou trop longue (2 000 caractères au plus, 10 bulles au plus).',
     );
@@ -165,6 +252,17 @@ describe('decisionError', () => {
     expect(decisionError(0, null)).toBe(
       'Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.',
     );
+  });
+});
+
+describe('isOutdated', () => {
+  it('is a decision that came too late: decided elsewhere, moved on, or gone', () => {
+    expect(isOutdated(409, apiError('draft_conflict'))).toBe(true);
+    expect(isOutdated(409, apiError('transition_conflict'))).toBe(true);
+    expect(isOutdated(404, null)).toBe(true);
+    expect(isOutdated(409, apiError('kill_switch_conflict'))).toBe(false);
+    expect(isOutdated(422, apiError('draft_unprocessable'))).toBe(false);
+    expect(isOutdated(0, null)).toBe(false);
   });
 });
 

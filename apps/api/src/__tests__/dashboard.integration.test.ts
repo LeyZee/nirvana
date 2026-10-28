@@ -407,4 +407,57 @@ describe('GET /v1/dashboard', () => {
     });
     expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
   });
+
+  it('lists a handoff until the hand is given back, never a takeover a person chose (recette 28/10)', async () => {
+    const seed = async (name: string): Promise<ConversationId> => {
+      const { conversationId } = await app.modules.conversations.ingestMessage({
+        creatorId,
+        platformAccountId,
+        platformConversationId: `c-${name}`,
+        platformFanId: `f-${name}`,
+        fanDisplayName: name,
+        message: {
+          ref: { platform: 'reveal', id: `m-${name}` },
+          conversationRef: { platform: 'reveal', id: `c-${name}` },
+          direction: 'inbound',
+          text: `Bonsoir, c'est ${name}`,
+          media: [],
+          priceMinor: null,
+          currency: null,
+          isPaid: false,
+          createdAt: new Date().toISOString(),
+        },
+        correlationId: 'seed',
+      });
+      return conversationId;
+    };
+    const act = async (id: ConversationId, action: 'takeover' | 'release') => {
+      expect((await post(`/v1/conversations/${id}/${action}?creatorId=${creatorId}`, {})).statusCode).toBe(
+        204,
+      );
+    };
+    const titles = async () =>
+      DashboardSchema.parse(
+        (await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json(),
+      ).todos.map((t) => t.title);
+
+    // Nina: a person took the hand of their own accord, without any handoff.
+    await act(await seed('Nina'), 'takeover');
+    // Paul: the agent handed him over for a meeting, a person gave the hand back, then took it again.
+    const paul = await seed('Paul');
+    await act(paul, 'takeover');
+    await test.admin.db.execute(sql`
+      insert into conversation_events (id, creator_id, conversation_id, seq, type, payload, actor, correlation_id)
+      select ${newId(EventIdSchema)}::uuid, ${creatorId}::uuid, ${paul}::uuid, max(seq) + 1, 'handoff_requested',
+             ${JSON.stringify({ conversationId: paul, cause: 'meeting' })}::jsonb, 'ai', 'seed'
+      from conversation_events where conversation_id = ${paul}::uuid`);
+    expect(await titles()).toContain('Paul');
+    await act(paul, 'release');
+    await act(paul, 'takeover');
+
+    const listed = await titles();
+    expect(listed).toContain('Leo');
+    expect(listed).not.toContain('Nina');
+    expect(listed).not.toContain('Paul');
+  });
 });
