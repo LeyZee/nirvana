@@ -166,7 +166,10 @@ export interface TrackingSearch {
 const isId = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f-]{36}$/iu.test(value);
 
-/** Anything else in the address is ignored: a broken link opens the list, never an error. A creator alone opens nothing. */
+/**
+ * Anything else in the address is ignored: a broken link opens the list, never an error.
+ * A creator alone opens nothing.
+ */
 export function parseTrackingSearch(search: Record<string, unknown>): TrackingSearch {
   const { conversation, creatrice } = search;
   if (!isId(conversation)) return {};
