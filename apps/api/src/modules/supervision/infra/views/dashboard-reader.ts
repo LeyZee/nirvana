@@ -1,5 +1,6 @@
 import {
   AgentHoursSchema,
+  ConnectorConfigSchema,
   DEFAULT_AGENT_HOURS,
   HandoffCauseSchema,
   LIVE_WINDOW,
@@ -94,9 +95,11 @@ async function facts(
     z.object({
       session_state: z.string(),
       last_poll_at: timestamp.nullable(),
+      session_updated_at: timestamp.nullable(),
       paused_until: timestamp.nullable(),
+      connector_config: z.unknown(),
     }),
-    sql`select session_state, last_poll_at, paused_until from platform_accounts
+    sql`select session_state, last_poll_at, session_updated_at, paused_until, connector_config from platform_accounts
         where platform = 'reveal' order by created_at limit 1`,
   );
   const voice = await first(
@@ -197,6 +200,7 @@ async function facts(
     z.object({
       id: z.string(),
       name: z.string(),
+      conversation_id: z.string(),
       first_seen_at: timestamp,
       spent_minor: int,
       by_agent_minor: int,
@@ -204,6 +208,7 @@ async function facts(
       alert: HandoffCauseSchema.nullable(),
     }),
     sql`select f.id, f.display_name as name, f.first_seen_at,
+               (array_agg(c.id order by m.platform_created_at desc))[1] as conversation_id,
                sum(m.price_minor) as spent_minor,
                coalesce(sum(m.price_minor) filter (where m.author = 'ai'), 0) as by_agent_minor,
                (select array_agg(n.value order by n.observed_at desc) from (
@@ -230,6 +235,10 @@ async function facts(
     account.paused_until > window.now;
   const connected =
     account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused;
+  // Its rhythm as the connectors read it (`account-store.ts`): unreadable is the defaults, as there.
+  const rhythm = ConnectorConfigSchema.catch(ConnectorConfigSchema.parse({})).parse(
+    account?.connector_config ?? {},
+  );
   // Stopped, or Reveal unread (session expired, paused): every conversation would fall in the net, the banner says it.
   const quiet = stopped.some((s) => s.active) || !connected;
   return {
@@ -242,6 +251,8 @@ async function facts(
     reveal: {
       connected,
       lastReadAt: account?.last_poll_at ?? null,
+      sessionSince: account?.session_updated_at ?? null,
+      pollEverySeconds: rhythm.pollIntervalSeconds + rhythm.jitterSeconds,
       conversations: counts.total,
     },
     voice: { medianWriteMs: voice.median_ms, outageHoursLast7d: voice.outage_hours },
@@ -292,6 +303,7 @@ async function facts(
     fans: fans.map((f) => ({
       id: f.id,
       name: f.name,
+      conversationId: f.conversation_id,
       firstSeenAt: f.first_seen_at,
       spentMinor: f.spent_minor,
       byAgentMinor: f.by_agent_minor,

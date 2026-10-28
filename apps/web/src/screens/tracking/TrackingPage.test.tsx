@@ -167,11 +167,12 @@ function renderPage(at = '/suivi', canDecide = true, canAddCreator = true): void
     path: '/suivi',
     validateSearch: parseTrackingSearch,
     component: function Tracking() {
-      const { conversation } = tracking.useSearch();
+      const { conversation, creatrice } = tracking.useSearch();
       const navigate = tracking.useNavigate();
       return (
         <TrackingPage
           selected={conversation ?? null}
+          selectedCreator={creatrice ?? null}
           onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
           canDecide={canDecide}
           canAddCreator={canAddCreator}
@@ -302,6 +303,27 @@ describe('TrackingPage', () => {
       .map((row) => row.textContent);
     expect(text.some((line) => line.includes('Léa · '))).toBe(true);
     expect(text.some((line) => line.includes('Nina · '))).toBe(true);
+  });
+
+  it('opens a conversation outside every list when the link names its creator (Dashboard, fan reader)', async () => {
+    const routes = {
+      creators: { status: 200, body: { creators: [LEA, NINA] } },
+      conversations: {
+        [LEA.id]: { items: [conversation('1')], nextCursor: null },
+        [NINA.id]: { items: [], nextCursor: null },
+      },
+      detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
+    };
+    serve(routes);
+    const elsewhere = conversation('9').id;
+    renderPage(`/suivi?conversation=${elsewhere}&creatrice=${NINA.id}`);
+    expect(await screen.findByText('Salut, ça va ?')).toBeDefined();
+
+    // Without the creator, several creators and no list holding it: the page cannot tell whose it is.
+    cleanup();
+    serve(routes);
+    renderPage(`/suivi?conversation=${elsewhere}`);
+    expect(await screen.findByText('Cette conversation n’est pas dans la liste.')).toBeDefined();
   });
 
   it('puts first what waits for a human, as the server computed it, and opens it', async () => {

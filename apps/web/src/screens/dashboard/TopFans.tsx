@@ -4,6 +4,8 @@ import { eur } from './logic';
 import type { Fan } from './model';
 import { Chevron, type FloatingTip } from './parts';
 
+import { initialOf } from '@/lib/utils';
+
 /** Level 3: the best fans by what they spent, split agent / chatters. Each one opens the reader. */
 export function TopFans({
   fans,
@@ -31,7 +33,7 @@ export function TopFans({
           }}
         >
           <span className="nv-avatar" aria-hidden="true">
-            {fan.name.slice(0, 1)}
+            {initialOf(fan.name)}
           </span>
           <span className="db-fan__who">
             <span className="db-fan__name">{fan.name}</span>

@@ -7,7 +7,7 @@ import {
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assembleDashboard, todos, unansweredSince, type VoiceHealth } from '../dashboard';
+import { assembleDashboard, revealLate, todos, unansweredSince, type VoiceHealth } from '../dashboard';
 import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
@@ -20,7 +20,13 @@ const FACTS: DashboardFacts = {
   switches: { global: false, creator: false },
   autoConversations: 0,
   decidedThreeWeeksAgo: [],
-  reveal: { connected: true, lastReadAt: minutesAgo(1), conversations: 4 },
+  reveal: {
+    connected: true,
+    lastReadAt: minutesAgo(1),
+    sessionSince: minutesAgo(90),
+    pollEverySeconds: 80,
+    conversations: 4,
+  },
   voice: { medianWriteMs: 1412.5, outageHoursLast7d: 0 },
   replies: { medianReplyMinutes: 3.25, fansWaitingOver10Min: 1, conversationsOpen: 2 },
   handoffsToday: [{ cause: 'meeting', count: 2 }],
@@ -29,6 +35,7 @@ const FACTS: DashboardFacts = {
     {
       id: FAN,
       name: 'Julien',
+      conversationId: CONVERSATION,
       firstSeenAt: minutesAgo(600),
       spentMinor: 4_500,
       byAgentMinor: 3_000,
@@ -140,6 +147,52 @@ describe('dashboard', () => {
     expect(everyone).toMatchObject({ mode: 'stop', globalStop: true });
     expect(assemble({ autoConversations: 1 }).mode).toBe('auto');
     expect(assemble().mode).toBe('copilot');
+  });
+});
+
+describe('revealLate (recette 28/10, G8)', () => {
+  it('says late once three polls, each at its longest, have gone by without a read', () => {
+    const read = (lastReadAt: Date) => ({ lastReadAt, sessionSince: minutesAgo(90) });
+    // 80 s between polls at most, plus a minute for the dispatcher: 7 minutes.
+    expect(revealLate(read(minutesAgo(7)), NOW, 80)).toBe(false);
+    expect(revealLate(read(minutesAgo(8)), NOW, 80)).toBe(true);
+    // An account polled every hour is not late after ten minutes.
+    expect(revealLate(read(minutesAgo(10)), NOW, 3_600)).toBe(false);
+  });
+
+  it('counts from the session when nothing was ever read: the first day is late too', () => {
+    // The session set an hour ago, never read: the worker is stopped or the first read failed.
+    expect(revealLate({ lastReadAt: null, sessionSince: minutesAgo(60) }, NOW, 80)).toBe(true);
+    // Set five minutes ago: the first read may still come.
+    expect(revealLate({ lastReadAt: null, sessionSince: minutesAgo(5) }, NOW, 80)).toBe(false);
+    // A read after the session counts, not the session.
+    expect(revealLate({ lastReadAt: minutesAgo(1), sessionSince: minutesAgo(60) }, NOW, 80)).toBe(false);
+  });
+
+  it('waits for the first poll after a session captured again, whatever the old read says', () => {
+    // Read last three hours ago, session set again a minute ago: not late yet.
+    expect(revealLate({ lastReadAt: minutesAgo(180), sessionSince: minutesAgo(1) }, NOW, 80)).toBe(false);
+    // Still no read an hour after the new session: late.
+    expect(revealLate({ lastReadAt: minutesAgo(240), sessionSince: minutesAgo(60) }, NOW, 80)).toBe(true);
+  });
+
+  it('is never late with no session date and no read', () => {
+    expect(revealLate({ lastReadAt: null, sessionSince: null }, NOW, 80)).toBe(false);
+  });
+
+  it('reaches the Dashboard only while the session holds: disconnected says more', () => {
+    const stale = {
+      lastReadAt: minutesAgo(60),
+      sessionSince: minutesAgo(90),
+      pollEverySeconds: 80,
+      conversations: 4,
+    };
+    expect(assemble({ reveal: { connected: true, ...stale } }).reveal).toMatchObject({
+      connected: true,
+      late: true,
+    });
+    expect(assemble({ reveal: { connected: false, ...stale } }).reveal.late).toBe(false);
+    expect(assemble().reveal.late).toBe(false);
   });
 });
 

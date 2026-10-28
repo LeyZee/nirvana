@@ -156,12 +156,24 @@ export function storeListOrder(order: ListOrder): void {
 /** `/suivi?conversation=<id>`: the conversation the reader opens (the link of a Telegram alert, a line of the list). */
 export interface TrackingSearch {
   readonly conversation?: string;
+  /**
+   * The creator the conversation belongs to, when the link knows it (the Dashboard's fan reader): Suivi opens it
+   * even outside her 200 latest conversations and her « À traiter ».
+   */
+  readonly creatrice?: string;
 }
 
-/** Anything else in the address is ignored: a broken link opens the list, never an error. */
+const isId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9a-f-]{36}$/iu.test(value);
+
+/**
+ * Anything else in the address is ignored: a broken link opens the list, never an error.
+ * A creator alone opens nothing.
+ */
 export function parseTrackingSearch(search: Record<string, unknown>): TrackingSearch {
-  const { conversation } = search;
-  return typeof conversation === 'string' && /^[0-9a-f-]{36}$/iu.test(conversation) ? { conversation } : {};
+  const { conversation, creatrice } = search;
+  if (!isId(conversation)) return {};
+  return isId(creatrice) ? { conversation, creatrice } : { conversation };
 }
 
 /** The most bubbles of a draft, and the longest bubble: what the server accepts (`ApproveDraftBodySchema`). */

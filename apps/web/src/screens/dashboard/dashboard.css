@@ -60,7 +60,8 @@
   z-index: -1;
   left: -80px;
   top: -150px;
-  width: 720px;
+  /* Never past the hero's right edge: on a phone the page would scroll sideways (recette 28/10, G5). */
+  width: min(720px, calc(100% + 80px));
   height: 420px;
   border-radius: 50%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--_c) 22%, transparent), transparent);
@@ -320,6 +321,10 @@
   opacity: 1;
   pointer-events: auto;
 }
+/* Just closed, fading: it still catches a click, so that a double click does not reach the page under it. */
+.db-scrim.is-closing {
+  pointer-events: auto;
+}
 .db-reader.nv-glass {
   --_radius: 30px;
   position: fixed;
@@ -463,6 +468,20 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+/* Whose agent: the chips of Créatrices, on their own line above, scrolling sideways when they are many. */
+.db-creators {
+  flex-basis: 100%;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+  margin: -2px;
+}
+.db-creators .nv-chip {
+  flex: none;
 }
 .db-mode .nv-seg__opt {
   height: 36px;

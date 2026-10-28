@@ -10,6 +10,8 @@ import { fanMessageCount, needsAttention, stepOf } from './playground/logic';
 import { isHandoff, suggestedDestination } from './playground/model';
 import { usePlayground } from './playground/usePlayground';
 
+import { initialOf } from '@/lib/utils';
+
 /** The fan's name while the scenario gives none. */
 const FALLBACK_NAME = 'Le fan';
 
@@ -17,6 +19,7 @@ const ERRORS: Readonly<Record<PlaygroundErrorCode, string>> = {
   llm_unavailable: 'Grok ne répond pas : ajoute ou vérifie sa clé dans Réglages, Modèles IA.',
   not_deployed: 'Le playground n’est pas encore en ligne sur ce serveur.',
   still_writing: 'L’agent rédige encore la réponse précédente.',
+  forbidden: 'Le Playground est réservé au propriétaire pour l’instant.',
   failed: 'Le serveur n’a pas répondu. Réessaie dans un instant.',
 };
 
@@ -114,9 +117,12 @@ export function PlaygroundPage(): JSX.Element {
         {pg.isLoading ? null : (
           <div className="pg-loading__in">
             <p>{ERRORS[pg.error ?? 'failed']}</p>
-            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={pg.switchToDemo}>
-              Essayer avec des réponses écrites à l’avance
-            </button>
+            {/* Refused, the demo would only hide the reason: nothing to try. */}
+            {pg.error === 'forbidden' ? null : (
+              <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={pg.switchToDemo}>
+                Essayer avec des réponses écrites à l’avance
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -140,7 +146,7 @@ export function PlaygroundPage(): JSX.Element {
       {/* A section, not a <main>: the shell already holds the page's one landmark (recette R-C5). */}
       <section className="pg-main nv-plate" aria-label="Conversation">
         <div className="pg-top">
-          <span className="nv-avatar nv-avatar--sm">{name.slice(0, 1).toUpperCase()}</span>
+          <span className="nv-avatar nv-avatar--sm">{initialOf(name)}</span>
           <span className="pg-top__t">
             <b>{name}</b>
             <span>Fan fictif · {preset?.label.toLowerCase() ?? 'libre'}</span>

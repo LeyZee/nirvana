@@ -44,6 +44,7 @@ import { TestsPage } from './screens/train/TestsPage';
 import { TrainLayout } from './screens/train/TrainLayout';
 import { parseTelegramSearch, searchOfTab, tabOfSearch } from './settings/telegram/search';
 import { AppShell } from './shell/AppShell';
+import { NotFoundPage } from './shell/NotFoundPage';
 import { canOpen, railOf, sectionOf } from './shell/nav';
 
 /** What every screen can read: who is signed in, and how to sign out. Given by `App` once the session is known. */
@@ -73,7 +74,13 @@ const dashboard = createRoute({
   path: '/',
   component: function Dashboard() {
     const { user } = rootRoute.useRouteContext();
-    return <DashboardPage forCreator={user.role === 'creator'} forOwner={user.role === 'owner'} />;
+    return (
+      <DashboardPage
+        forCreator={user.role === 'creator'}
+        forOwner={user.role === 'owner'}
+        opensTracking={canOpen(railOf(user), '/suivi')}
+      />
+    );
   },
 });
 const creators = createRoute({
@@ -110,12 +117,13 @@ const tracking = createRoute({
   path: '/suivi',
   validateSearch: parseTrackingSearch,
   component: function Tracking() {
-    const { conversation } = tracking.useSearch();
+    const { conversation, creatrice } = tracking.useSearch();
     const navigate = tracking.useNavigate();
     const { user } = rootRoute.useRouteContext();
     const rail = railOf(user);
     const props = {
       selected: conversation ?? null,
+      selectedCreator: creatrice ?? null,
       onSelect: (id: string | null) => void navigate({ search: id === null ? {} : { conversation: id } }),
       canDecide: user.role !== 'creator',
       canAddCreator: canOpen(rail, '/creatrices'),
@@ -429,6 +437,8 @@ const buildRouter = (context: RouterContext, history?: RouterHistory) =>
     routeTree,
     context,
     defaultPreload: 'intent',
+    // An unknown address keeps the rail and says so in French, in place of the router's « Not Found ».
+    defaultNotFoundComponent: NotFoundPage,
     ...(history === undefined ? {} : { history }),
   });
 

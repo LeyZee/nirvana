@@ -4,9 +4,11 @@ import type { AgentMode } from '@/agent/mode';
 
 /* Pure helpers of the Dashboard: formatting and the few decisions the screen makes on its data. */
 
-/** « 1 846 € » */
+/** « 1 846 € », « 10,50 € »: the cents only when there are some, never rounded away (ADR 0011: exact money). */
 export function eur(value: number): string {
-  return `${Math.round(value).toLocaleString('fr-FR')} €`;
+  const cents = Math.round(value * 100);
+  const digits = cents % 100 === 0 ? 0 : 2;
+  return `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} €`;
 }
 
 /** « 2 h 05 » from minutes. */

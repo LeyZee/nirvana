@@ -49,6 +49,7 @@ const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, A
  */
 export function TrackingPage({
   selected,
+  selectedCreator = null,
   onSelect,
   canDecide,
   canAddCreator,
@@ -57,6 +58,8 @@ export function TrackingPage({
 }: {
   /** The conversation open in the reader (`/suivi?conversation=<id>`), or null for the list alone. */
   selected: string | null;
+  /** The creator the link names for it (`&creatrice=<id>`), read first when she is one of this account's. */
+  selectedCreator?: string | null;
   onSelect: (conversationId: string | null) => void;
   /** Owners and chatters decide on drafts and take over; a creator reads. */
   canDecide: boolean;
@@ -104,14 +107,16 @@ export function TrackingPage({
     if (creatorsQuery.isError) void creatorsQuery.refetch();
     for (const q of failed) void q.refetch();
   };
-  // The queue is the first creator's (as the Dashboard): its conversations open with her id.
-  const todos = dashboard.kind === 'live' ? dashboard.data.todos : [];
-  const queueCreator = creators[0]?.id ?? null;
+  // The queue is the Dashboard's answer, for the creator it was read for: its conversations open with her id.
+  const queue = dashboard.kind === 'live' ? dashboard.data : null;
+  const todos = queue?.todos ?? [];
+  const queueCreator = queue?.creator.id ?? null;
   const open =
     selected === null
       ? null
       : (lines.find((l) => l.conversation.id === selected)?.creatorId ??
-        (creators.length === 1 ? queueCreator : null));
+        creators.find((c) => c.id === selectedCreator)?.id ??
+        (creators.length === 1 || todos.some((t) => t.conversationId === selected) ? queueCreator : null));
 
   return (
     <Page className={selected === null ? '' : 'tr-is-reading'}>
@@ -161,7 +166,10 @@ export function TrackingPage({
         <div className="tr-layout">
           <div className="tr-side">
             {todos.length === 0 ? null : (
-              <Panel className="tr-panel" eyebrow="À traiter">
+              <Panel
+                className="tr-panel"
+                eyebrow={showsCreator && queue !== null ? `À traiter · ${queue.creator.name}` : 'À traiter'}
+              >
                 <ul className="nv-list tr-list" aria-label="À traiter">
                   {todos.map((todo) => (
                     <QueueRow

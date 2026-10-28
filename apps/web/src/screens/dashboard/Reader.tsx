@@ -5,11 +5,26 @@ import { createPortal } from 'react-dom';
 import type { Fan } from './model';
 import { lightUp } from './parts';
 
+import { initialOf } from '@/lib/utils';
+import { keepTabInside } from '@/shell/focus';
+
 /**
  * The conversation of one fan, read only (revue 08): what she knows about him, the thread, and the agent's
- * notes where it stopped. Writing happens in Reveal; an answer to fix goes to Entraîner › Corrections.
+ * notes where it stopped. Writing happens in Reveal. While Corrections does not exist, the way on is his conversation
+ * in Suivi, offered only to an account whose rail holds Suivi and when the fan comes from the server's data.
  */
-export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void }): JSX.Element {
+export function Reader({
+  fan,
+  creatorId,
+  onClose,
+  opensTracking,
+}: {
+  fan: Fan | null;
+  /** Hers, for Suivi to open his conversation even outside her latest ones; null on the sample. */
+  creatorId: string | null;
+  onClose: () => void;
+  opensTracking: boolean;
+}): JSX.Element {
   const closeRef = useRef<HTMLButtonElement>(null);
   const open = fan !== null;
 
@@ -31,18 +46,22 @@ export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void 
   return createPortal(
     <>
       <div className={`db-scrim${open ? ' is-on' : ''}`} onClick={onClose} aria-hidden="true" />
-      <aside
+      {/* A modal dialog over the page: Tab stays inside until it closes (recette 28/10, M5). */}
+      <div
         className={`db-reader nv-glass nv-glass--thick${open ? ' is-on' : ''}`}
+        role="dialog"
+        aria-modal="true"
         aria-label="Conversation"
         aria-hidden={!open}
         inert={!open}
         ref={lightUp}
+        onKeyDown={keepTabInside}
       >
         {fan === null ? null : (
           <>
             <div className="db-reader__head">
               <span className="nv-avatar" aria-hidden="true">
-                {fan.name.slice(0, 1)}
+                {initialOf(fan.name)}
               </span>
               <span className="db-fan__who">
                 <span className="db-fan__name">{fan.name}</span>
@@ -93,13 +112,22 @@ export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void 
             </div>
             <div className="db-reader__foot">
               <p>Lecture seule. Pour écrire, reprends la main dans Reveal.</p>
-              <Link to="/entrainer/corrections" className="nv-btn nv-btn--soft nv-btn--sm">
-                Noter une réponse dans Corrections
-              </Link>
+              {opensTracking && fan.conversationId !== undefined ? (
+                <Link
+                  to="/suivi"
+                  search={{
+                    conversation: fan.conversationId,
+                    ...(creatorId === null ? {} : { creatrice: creatorId }),
+                  }}
+                  className="nv-btn nv-btn--soft nv-btn--sm"
+                >
+                  Ouvrir dans Suivi
+                </Link>
+              ) : null}
             </div>
           </>
         )}
-      </aside>
+      </div>
     </>,
     document.body,
   );

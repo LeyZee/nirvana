@@ -16,7 +16,7 @@ describe('SignInPage', () => {
       vi.fn(() => Promise.resolve(new Response('{}', { status: 429 }))),
     );
     render(<SignInPage onSignedIn={() => undefined} />);
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@example.test' } });
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'a@example.test' } });
     fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'x' } });
     fireEvent.submit(screen.getByLabelText('Mot de passe').closest('form') ?? document.body);
     expect(await screen.findByText('Trop de tentatives. Réessaie dans un quart d’heure.')).toBeDefined();

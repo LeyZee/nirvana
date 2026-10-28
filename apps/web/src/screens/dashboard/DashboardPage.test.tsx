@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { AgentModeResultSchema, type AgentMode, type Dashboard as ApiDashboard } from '@nirvana/contracts';
+import {
+  AgentModeResultSchema,
+  CreatorIdSchema,
+  type AgentMode,
+  type Dashboard as ApiDashboard,
+} from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -51,7 +56,7 @@ afterEach(() => {
 /** Where the page's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderDashboard(forCreator = false, forOwner = false): QueryClient {
+function renderDashboard(forCreator = false, forOwner = false, opensTracking = true): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   // The night banner links to Réglages: the page needs a router around it.
@@ -61,7 +66,9 @@ function renderDashboard(forCreator = false, forOwner = false): QueryClient {
       createRoute({
         getParentRoute: () => root,
         path: '/',
-        component: () => <DashboardPage forCreator={forCreator} forOwner={forOwner} />,
+        component: () => (
+          <DashboardPage forCreator={forCreator} forOwner={forOwner} opensTracking={opensTracking} />
+        ),
       }),
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
@@ -79,7 +86,12 @@ function renderDashboard(forCreator = false, forOwner = false): QueryClient {
 }
 
 const headline = (): string => document.querySelector('h1')?.textContent ?? '';
-const dialog = (): HTMLElement => screen.getByRole('dialog', { hidden: true });
+/** The stop dialog; the fan reader is a dialog too. */
+const dialog = (): HTMLElement =>
+  screen
+    .getAllByRole('dialog', { hidden: true })
+    .find((d) => d.getAttribute('aria-labelledby') === 'db-stop-title') ??
+  screen.getByRole('dialog', { name: 'Arrêter l’agent ?' });
 
 describe('DashboardPage on the server’s data', () => {
   it('waits for the server without showing any figure', async () => {
@@ -484,5 +496,119 @@ describe('DashboardPage before any creator exists', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Arrêt' }));
     expect(dialog().getAttribute('aria-hidden')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Marquer comme traité' })).toBeNull();
+  });
+});
+
+describe('DashboardPage with several creators (recette 28/10, G1)', () => {
+  // Before Léa in the alphabet: the server lists her first.
+  const ANA = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Ana', timezone: 'Europe/Paris' };
+  const writes: { creatorId: string; mode: AgentMode }[] = [];
+
+  /** Each creator's own Dashboard, by the id asked for. */
+  function serveBoth(): void {
+    writes.length = 0;
+    serveDashboard(
+      (url) => {
+        const ana = url.searchParams.get('creatorId') === ANA.id;
+        return {
+          status: 200,
+          body: apiDashboard({
+            creator: {
+              id: CreatorIdSchema.parse(ana ? ANA.id : CREATOR.id),
+              name: ana ? 'Ana' : 'Léa',
+              timezone: 'Europe/Paris',
+              now: '2026-10-19T12:00:00Z',
+            },
+          }),
+        };
+      },
+      [ANA, CREATOR],
+      (body) => {
+        writes.push(body);
+        return { status: 200, body: { mode: body.mode, globalStop: false } };
+      },
+    );
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows the first creator until another is chosen, then hers, and stops the one on screen', async () => {
+    serveBoth();
+    renderDashboard();
+    expect((await screen.findByRole('radio', { name: 'Ana' })).getAttribute('aria-checked')).toBe('true');
+    expect(document.querySelector('.db-top__name')?.textContent).toBe('Ana');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Léa' }));
+    await waitFor(() => {
+      expect(document.querySelector('.db-top__name')?.textContent).toBe('Léa');
+    });
+    expect(screen.getByRole('radio', { name: 'Léa' }).getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Arrêt' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’agent' }));
+      await tick();
+    });
+    expect(writes).toEqual([{ creatorId: CREATOR.id, mode: 'stop' }]);
+  });
+
+  it('keeps the choice over a reload, and moves it with the arrow keys', async () => {
+    serveBoth();
+    localStorage.setItem('nirvana.followed-creator', CREATOR.id);
+    renderDashboard();
+    const lea = await screen.findByRole('radio', { name: 'Léa' });
+    expect(lea.getAttribute('aria-checked')).toBe('true');
+    expect(lea.tabIndex).toBe(0);
+    fireEvent.keyDown(lea, { key: 'ArrowLeft' });
+    await waitFor(() => {
+      expect(document.querySelector('.db-top__name')?.textContent).toBe('Ana');
+    });
+    expect(localStorage.getItem('nirvana.followed-creator')).toBe(ANA.id);
+  });
+
+  it('offers no choice with a single creator', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    expect(await screen.findByText('Kévin')).toBeDefined();
+    expect(screen.queryByRole('radiogroup', { name: 'Créatrice suivie' })).toBeNull();
+  });
+});
+
+describe('DashboardPage, its fan reader', () => {
+  it('is a modal dialog that keeps Tab inside (recette 28/10, M5)', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    fireEvent.click(await screen.findByText('Théo'));
+    const reader = screen.getByRole('dialog', { name: 'Conversation' });
+    expect(reader.getAttribute('aria-modal')).toBe('true');
+    const close = screen.getByRole('button', { name: 'Fermer' });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+    expect(reader.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(close);
+  });
+
+  it('opens his conversation in Suivi, never a Corrections screen that does not exist yet', async () => {
+    const [theo] = apiDashboard().fans;
+    if (theo === undefined) throw new Error('the fixture has a fan');
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    fireEvent.click(await screen.findByText('Théo'));
+    expect(screen.queryByText(/Corrections/)).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'Ouvrir dans Suivi' }));
+    await waitFor(() => {
+      expect(location()).toBe(`/suivi?conversation=${theo.conversationId}&creatrice=${CREATOR.id}`);
+    });
+  });
+
+  it('offers no way on to an account whose rail has no Suivi', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard(false, false, false);
+    fireEvent.click(await screen.findByText('Théo'));
+    expect(screen.getByRole('dialog', { name: 'Conversation' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Ouvrir dans Suivi' })).toBeNull();
+    expect(screen.queryByText(/Corrections/)).toBeNull();
   });
 });

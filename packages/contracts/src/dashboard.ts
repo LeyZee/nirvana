@@ -73,6 +73,8 @@ export type DashboardTodo = z.infer<typeof DashboardTodoSchema>;
 export const DashboardFanSchema = z.object({
   id: FanIdSchema,
   name: z.string().min(1),
+  /** The conversation of his latest purchase over the period: « Ouvrir dans Suivi » opens it. */
+  conversationId: ConversationIdSchema,
   firstSeenAt: at,
   /** Paid over the period, and the part sold by the agent. */
   spent: euros,
@@ -100,7 +102,16 @@ export const DashboardSchema = z.object({
     /** The same rate as it stood three weeks ago, for the trend. */
     threeWeeksAgo: percent.nullable(),
   }),
-  reveal: z.object({ connected: z.boolean(), lastReadAt: at.nullable(), conversations: count }),
+  reveal: z.object({
+    connected: z.boolean(),
+    lastReadAt: at.nullable(),
+    /**
+     * Connected, but the last read is older than three of the account's polls: the session holds and nobody reads
+     * (worker stopped, polls failing). The screen says « en retard », not « connectée ».
+     */
+    late: z.boolean(),
+    conversations: count,
+  }),
   voice: z.object({
     ok: z.boolean(),
     /**

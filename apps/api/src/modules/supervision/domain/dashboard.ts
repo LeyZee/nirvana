@@ -76,6 +76,29 @@ export function unansweredSince(
   return now.getTime() - counted.getTime() >= UNANSWERED_AFTER_MINUTES * MINUTE_MS ? lastInboundAt : null;
 }
 
+/** The dispatcher looks for due polls once a minute: a poll can start that much after it is due. */
+const DISPATCH_SECONDS = 60;
+/** Polls missed in a row before the screen says Reveal is read late: one can fail or wait, three is a stop. */
+const LATE_AFTER_POLLS = 3;
+
+/**
+ * Whether Reveal is read late (recette 28/10, G8): the session holds, but the latest of its last read and of the
+ * session being set is older than three of the account's polls, each one counted at its longest. A worker stopped or
+ * polls failing then show, instead of a green « Connectée », the first day included; a session captured again waits
+ * for its first poll before it can be late.
+ */
+export function revealLate(
+  read: { readonly lastReadAt: Date | null; readonly sessionSince: Date | null },
+  now: Date,
+  pollEverySeconds: number,
+): boolean {
+  const dates = [read.lastReadAt, read.sessionSince].filter((d): d is Date => d !== null);
+  if (dates.length === 0) return false;
+  const from = Math.max(...dates.map((d) => d.getTime()));
+  const allowedMs = LATE_AFTER_POLLS * (pollEverySeconds + DISPATCH_SECONDS) * 1_000;
+  return now.getTime() - from > allowedMs;
+}
+
 /** Safety first: a possible minor, consent or distress before everything else. */
 const GRAVE: ReadonlySet<WaitingConversation['kind']> = new Set(['minor', 'non_consent', 'distress']);
 
@@ -173,6 +196,7 @@ export function assembleDashboard(input: {
     reveal: {
       connected: facts.reveal.connected,
       lastReadAt: facts.reveal.lastReadAt?.toISOString() ?? null,
+      late: facts.reveal.connected && revealLate(facts.reveal, window.now, facts.reveal.pollEverySeconds),
       conversations: facts.reveal.conversations,
     },
     voice: {
@@ -206,6 +230,7 @@ export function assembleDashboard(input: {
     fans: facts.fans.map((fan) => ({
       id: FanIdSchema.parse(fan.id),
       name: fanNameOf(fan.name),
+      conversationId: ConversationIdSchema.parse(fan.conversationId),
       firstSeenAt: fan.firstSeenAt.toISOString(),
       spent: euros(fan.spentMinor),
       byAgent: euros(fan.byAgentMinor),

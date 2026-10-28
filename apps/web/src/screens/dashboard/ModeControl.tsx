@@ -12,6 +12,13 @@ import { createPortal } from 'react-dom';
 import type { FloatingTip } from './parts';
 
 import { MODES, missingRows, nextMode, type AgentMode, type AutomaticGate } from '@/agent/mode';
+import { keepTabInside } from '@/shell/focus';
+
+/**
+ * How long the veil still catches clicks once the dialog has closed: the length of its fade. A double click on
+ * « Arrêter l'agent » would otherwise land its second click on the « À traiter » line under it (recette 28/10, G2).
+ */
+const CLOSING_MS = 500;
 
 /** Arrow keys of the radio group and the way they move. */
 const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
@@ -210,6 +217,8 @@ function StopDialog({
   onConfirm: () => void;
 }): JSX.Element {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const [closing, setClosing] = useState(false);
+  const wasOpen = useRef(open);
   // The latest handlers, so a re-render of the page while the dialog is open does not re-run the opening effect.
   const cancel = useRef(onCancel);
   const target = useRef(focusOnClose);
@@ -232,10 +241,29 @@ function StopDialog({
     };
   }, [open]);
 
+  // Just closed: the veil keeps catching clicks while it fades.
+  useEffect(() => {
+    const closed = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (!closed) return undefined;
+    setClosing(true);
+    const timer = setTimeout(() => {
+      setClosing(false);
+    }, CLOSING_MS);
+    return () => {
+      clearTimeout(timer);
+      setClosing(false);
+    };
+  }, [open]);
+
   // On the body: a transformed ancestor (the entering header, the stage) would capture `position: fixed`.
   return createPortal(
     <>
-      <div className={`db-scrim${open ? ' is-on' : ''}`} onClick={onCancel} aria-hidden="true" />
+      <div
+        className={`db-scrim${open ? ' is-on' : closing ? ' is-closing' : ''}`}
+        onClick={open ? onCancel : undefined}
+        aria-hidden="true"
+      />
       <div
         className={`db-dialog nv-glass nv-glass--thick${open ? ' is-on' : ''}`}
         role="dialog"
@@ -243,6 +271,7 @@ function StopDialog({
         aria-labelledby="db-stop-title"
         aria-hidden={!open}
         inert={!open}
+        onKeyDown={keepTabInside}
       >
         <h3 id="db-stop-title">Arrêter l’agent ?</h3>
         <p>Plus aucun message ne part au nom de {creatorName}, ni proposé ni envoyé.</p>

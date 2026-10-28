@@ -27,6 +27,7 @@ export interface WaitingConversation {
 interface TopFan {
   readonly id: string;
   readonly name: string;
+  readonly conversationId: string;
   readonly firstSeenAt: Date;
   readonly spentMinor: number;
   readonly byAgentMinor: number;
@@ -48,6 +49,10 @@ export interface DashboardFacts {
   readonly reveal: {
     readonly connected: boolean;
     readonly lastReadAt: Date | null;
+    /** When the session was last set: the start of the wait for a first read, when none came yet. */
+    readonly sessionSince: Date | null;
+    /** The longest the account waits between two polls (its interval plus its jitter), in seconds. */
+    readonly pollEverySeconds: number;
     readonly conversations: number;
   };
   readonly voice: { readonly medianWriteMs: number | null; readonly outageHoursLast7d: number };

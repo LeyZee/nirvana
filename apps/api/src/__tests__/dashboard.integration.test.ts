@@ -255,6 +255,8 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.budget).toMatchObject({ cap: 20, alertAt: 16, costPerEuroSold: null });
     expect(dashboard.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
     expect(dashboard.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([['Julien', 25, 25]]);
+    // « Ouvrir dans Suivi » in the fan reader opens his conversation.
+    expect(dashboard.fans[0]?.conversationId).toBe(conversations.get('Julien'));
   });
 
   it('shows a creator her aggregates, never a conversation nor a fan', async () => {
@@ -459,5 +461,37 @@ describe('GET /v1/dashboard', () => {
     expect(listed).toContain('Leo');
     expect(listed).not.toContain('Nina');
     expect(listed).not.toContain('Paul');
+  });
+
+  it('says Reveal is read late once three of its polls have gone by without a read (recette 28/10, G8)', async () => {
+    const account = (set: Partial<typeof schema.platformAccounts.$inferInsert>) =>
+      test.admin.db
+        .update(schema.platformAccounts)
+        .set(set)
+        .where(eq(schema.platformAccounts.id, platformAccountId));
+    const reveal = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json()).reveal;
+
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    // The session holds, but nothing read it for an hour: the default rhythm (60 s + 20 s) allows 7 minutes.
+    await account({ lastPollAt: new Date(Date.now() - 3_600_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: true });
+    // An account read every hour is not late after one.
+    await account({ connectorConfig: { pollIntervalSeconds: 3_600, jitterSeconds: 300 } });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    await account({ lastPollAt: new Date(), connectorConfig: {} });
+    // The session set an hour ago and never read (worker stopped, first read failed): late from the first day.
+    await account({ lastPollAt: null, sessionUpdatedAt: new Date(Date.now() - 3_600_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: true });
+    // Set a minute ago: the first read may still come.
+    await account({ sessionUpdatedAt: new Date(Date.now() - 60_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    // Captured again a minute ago, last read three hours ago: the new session waits for its first poll.
+    await account({
+      lastPollAt: new Date(Date.now() - 3 * 3_600_000),
+      sessionUpdatedAt: new Date(Date.now() - 60_000),
+    });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    await account({ lastPollAt: new Date() });
   });
 });

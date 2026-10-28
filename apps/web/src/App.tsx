@@ -34,6 +34,8 @@ export function App(): JSX.Element {
   // An invitation link (EQ-10) opens its own page before any session is read, signed in or not: using it opens the
   // member's session in place of the one before.
   const [linkPage, setLinkPage] = useState(() => linkPageOf(window.location.pathname));
+  // A sign-out the server did not make: the session stays open, and the page says so instead of doing nothing.
+  const [signOutFailed, setSignOutFailed] = useState(false);
 
   const refresh = useCallback(() => {
     fetchCurrentUser().then(
@@ -48,6 +50,13 @@ export function App(): JSX.Element {
       },
     );
   }, []);
+
+  const leave = useCallback(() => {
+    setSignOutFailed(false);
+    signOut().then(refresh, () => {
+      setSignOutFailed(true);
+    });
+  }, [refresh]);
 
   useEffect(() => {
     if (linkPage === null) refresh();
@@ -88,7 +97,16 @@ export function App(): JSX.Element {
   if (session.status === 'signed_out') {
     return <SignInPage onSignedIn={refresh} />;
   }
-  return <SignedIn user={session.user} onSignOut={() => void signOut().then(refresh)} />;
+  return (
+    <>
+      <SignedIn user={session.user} onSignOut={leave} />
+      {signOutFailed ? (
+        <p className="nv-signout-failed nv-glass nv-glass--thick" role="alert">
+          La déconnexion n’a pas abouti : réessaie.
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 /** The dashboard itself: one router per signed-in user, so a new session starts on a clean state. */

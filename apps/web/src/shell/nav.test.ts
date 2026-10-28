@@ -88,11 +88,12 @@ describe('railOf, with the screens of today', () => {
       'Réglages',
     ]);
     // An operator without a team row keeps today's rail: no Équipe.
-    expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Créatrices', 'Réglages']);
+    // Nor Entraîner: the server keeps the playground to the owner.
+    expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Créatrices', 'Réglages']);
     expect(labels(manager)).toEqual(['Dashboard', 'Suivi', 'Équipe', 'Paie']);
     expect(labels(chatter)).toEqual(['Aujourd’hui', 'Suivi', 'Planning', 'Commissions']);
     // A creator never sees a conversation (ADR 0023): no Suivi.
-    expect(labels(creator)).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
+    expect(labels(creator)).toEqual(['Dashboard', 'Créatrices', 'Réglages']);
   });
 
   it('titles Chatting and Agence, and puts what the phone bar cannot hold under « Plus »', () => {
@@ -102,9 +103,9 @@ describe('railOf, with the screens of today', () => {
     expect([...rail.more]).toEqual(['/entrainer', '/creatrices', '/reglages']);
   });
 
-  it('titles nothing for an operator, whose Créatrices is alone, and needs no « Plus »', () => {
+  it('titles nothing for an operator, whose Suivi and Créatrices are alone, and needs no « Plus »', () => {
     const rail = railOf(operator);
-    expect([...rail.headed]).toEqual(['chatting']);
+    expect([...rail.headed]).toEqual([]);
     expect(rail.more.size).toBe(0);
   });
 
