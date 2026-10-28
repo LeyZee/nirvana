@@ -3,9 +3,11 @@ import {
   collectiveGoalFor,
   mayValidateStatement,
   type CommissionStatement,
+  type ExchangeRates,
   type PayPeriod,
   type PayPeriodClosing,
   type PayrollPeriod,
+  type PayrollSettings,
   type UserId,
 } from '@nirvana/contracts';
 
@@ -34,6 +36,10 @@ const toStatement = (stored: StoredStatement, reader: PayReader): CommissionStat
 export interface PayrollReads {
   /** `GET /v1/payroll/periods/:period` (EQ-04): the period as its reader may see it. */
   period(userId: UserId, period: PayPeriod): Promise<PayrollPeriod>;
+  /** `GET /v1/payroll/settings`: the minimum payout, the default before the owner sets one. */
+  settings(userId: UserId): Promise<PayrollSettings>;
+  /** `GET /v1/payroll/exchange-rates`: the latest rate the job read, `null` before the first one. */
+  exchangeRates(userId: UserId): Promise<ExchangeRates>;
 }
 
 export function createPayrollReads(store: PayrollReadStore, now: () => Date): PayrollReads {
@@ -52,5 +58,7 @@ export function createPayrollReads(store: PayrollReadStore, now: () => Date): Pa
         settings: view.settings,
       };
     },
+    settings: (userId) => store.settings(userId),
+    exchangeRates: (userId) => store.exchangeRates(userId),
   };
 }

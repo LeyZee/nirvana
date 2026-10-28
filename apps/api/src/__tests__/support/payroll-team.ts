@@ -15,6 +15,7 @@ import {
 import { and, eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import type { LightMyRequestResponse } from 'fastify';
+import type { PoolClient } from 'pg';
 import { expect } from 'vitest';
 import { z } from 'zod';
 
@@ -24,6 +25,7 @@ import { createLogger } from '../../logger';
 import { buildServer, type Server } from '../../server';
 
 import { testConfig } from './config';
+import { lockWaits } from './lock-waits';
 import { DASHBOARD_ORIGIN, signIn } from './sign-in';
 
 /**
@@ -42,7 +44,7 @@ export interface PayrollTeam {
   readonly annas: PlatformAccountId;
   readonly beas: PlatformAccountId;
   call(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     url: string,
     cookie: string,
     payload?: object,
@@ -78,6 +80,14 @@ export interface PayrollTeam {
   /** The payloads of the `payroll.recalculate` jobs waiting for `period`. */
   jobsFor(period: PayPeriod): Promise<unknown[]>;
   forgetJobs(period: PayPeriod): Promise<unknown>;
+  /** How many advisory locks some transaction of this test's database waits for: a write held behind another. */
+  waiting(): Promise<number>;
+  /** Waits until `check` holds, five seconds at most. */
+  until(check: () => Promise<boolean>): Promise<void>;
+  /** A transaction that holds pay's locks, as a validation or another write would, until `release`. */
+  holding(keys: readonly string[]): Promise<{ readonly release: () => Promise<void> }>;
+  /** How many lines of the audit log say `action`. */
+  audited(action: string): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -247,6 +257,37 @@ export async function startPayrollTeam(superuserUrl: string): Promise<PayrollTea
       test.admin.db.execute(
         sql`delete from graphile_worker._private_jobs where key = ${`payroll.recalculate:${period}`}`,
       ),
+
+    waiting: () => lockWaits(test.admin.db),
+
+    async until(check) {
+      for (let tries = 0; tries < 250; tries += 1) {
+        if (await check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error('Never happened');
+    },
+
+    async holding(keys) {
+      const client: PoolClient = await test.admin.pool.connect();
+      await client.query('begin');
+      for (const key of keys)
+        await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
+      return {
+        release: async () => {
+          await client.query('rollback');
+          client.release();
+        },
+      };
+    },
+
+    async audited(action) {
+      const rows = await test.admin.db
+        .select({ id: schema.auditLog.id })
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, action));
+      return rows.length;
+    },
 
     async close() {
       await server.close();

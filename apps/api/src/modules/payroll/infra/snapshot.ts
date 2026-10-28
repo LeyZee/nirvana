@@ -15,8 +15,12 @@ import {
   ShiftReportIdSchema,
   TeamMemberIdSchema,
   type Bonus,
+  type BonusTierSet,
+  type CollectiveGoal,
+  type ExchangeRate,
   type PayAdjustment,
   type PayPeriod,
+  type PayrollSettings,
   type Penalty,
   type ShiftReportId,
 } from '@nirvana/contracts';
@@ -92,6 +96,20 @@ export const penaltyOfRow = (row: typeof penalties.$inferSelect): Penalty =>
 
 export const adjustmentOfRow = (row: typeof payAdjustments.$inferSelect): PayAdjustment =>
   PayAdjustmentSchema.parse({ ...row, createdAt: iso(row.createdAt) });
+
+export const bonusTierSetOfRow = (row: typeof bonusTierSets.$inferSelect): BonusTierSet =>
+  BonusTierSetSchema.parse({ ...row, createdAt: iso(row.createdAt) });
+
+export const collectiveGoalOfRow = (row: typeof collectiveGoals.$inferSelect): CollectiveGoal =>
+  CollectiveGoalSchema.parse({ ...row, createdAt: iso(row.createdAt) });
+
+export const exchangeRateOfRow = (row: typeof exchangeRates.$inferSelect): ExchangeRate =>
+  ExchangeRateSchema.parse({ ...row, fetchedAt: iso(row.fetchedAt) });
+
+/** The minimum payout as the owner set it, the default before they do. */
+export const settingsOf = (row: typeof payrollSettings.$inferSelect | undefined): PayrollSettings => ({
+  minimumPayoutMinor: row?.minimumPayoutMinor ?? DEFAULT_MINIMUM_PAYOUT_MINOR,
+});
 
 /** The registry's period of each report among `ids` a closing counted. */
 export async function registeredAmong(
@@ -187,12 +205,10 @@ export async function readSnapshot(
     penalties: penaltyRows.map(penaltyOfRow),
     carryOvers: carryRows.map((row) => CarryOverSchema.parse({ ...row, createdAt: iso(row.createdAt) })),
     adjustments: adjustmentRows.map(adjustmentOfRow),
-    bonusTierSets: tierRows.map((row) => BonusTierSetSchema.parse({ ...row, createdAt: iso(row.createdAt) })),
-    collectiveGoals: goalRows.map((row) =>
-      CollectiveGoalSchema.parse({ ...row, createdAt: iso(row.createdAt) }),
-    ),
-    minimumPayoutMinor: settings?.minimumPayoutMinor ?? DEFAULT_MINIMUM_PAYOUT_MINOR,
-    latestRates: rateRows.map((row) => ExchangeRateSchema.parse({ ...row, fetchedAt: iso(row.fetchedAt) })),
+    bonusTierSets: tierRows.map(bonusTierSetOfRow),
+    collectiveGoals: goalRows.map(collectiveGoalOfRow),
+    minimumPayoutMinor: settingsOf(settings).minimumPayoutMinor,
+    latestRates: rateRows.map(exchangeRateOfRow),
     statements: statementRows.map((row) => ({
       id: CommissionStatementIdSchema.parse(row.id),
       memberId: TeamMemberIdSchema.parse(row.memberId),

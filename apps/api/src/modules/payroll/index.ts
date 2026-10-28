@@ -11,6 +11,7 @@ import { createDrizzlePayrollEntryStore } from './infra/entry-store';
 import { createDrizzlePayrollJobStore } from './infra/job-store';
 import { createDrizzlePayrollReadStore } from './infra/read-store';
 import { createPayrollRoutes, type RequireRole } from './infra/routes';
+import { createDrizzlePayrollRuleStore } from './infra/rule-store';
 import type { PayInputReads } from './infra/snapshot';
 import { createDrizzlePayrollValidationStore } from './infra/validation-store';
 
@@ -58,9 +59,10 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
     reads,
   );
   const entries = createPayrollEntries(createDrizzlePayrollEntryStore(deps.db, deps.reads, now), reads);
+  const rules = createDrizzlePayrollRuleStore(deps.db, deps.reads, now);
   return {
     name: 'payroll',
-    routes: (requireRole) => createPayrollRoutes(reads, validation, entries, requireRole),
+    routes: (requireRole) => createPayrollRoutes(reads, validation, entries, rules, requireRole),
     jobs: {
       recalculate: (period, logger) => createRecalculation(jobStore, logger, now).recalculate(period),
       recalculateOpen: (logger) => createRecalculation(jobStore, logger, now).recalculateOpen(),

@@ -6,8 +6,11 @@ import type {
   CommissionStatement,
   CommissionStatementId,
   CreateBonusBody,
+  CreateBonusTierSetBody,
+  CreateCollectiveGoalBody,
   CreatePenaltyBody,
   DomainError,
+  ExchangeRates,
   PayAdjustment,
   PayAdjustmentId,
   PayPeriod,
@@ -121,6 +124,18 @@ export interface PayrollEntryStore {
   ): Promise<{ readonly period: PayPeriod }>;
 }
 
+/**
+ * The team's rules (EQ-04, ADR 0032), set by the owner alone, each in one transaction as the owner (`withMember`)
+ * under `payroll.close`: individual tiers and a collective goal for a period no statement is validated for yet, and
+ * the minimum payout. Throws the module's errors, nothing is written then.
+ */
+export interface PayrollRuleStore {
+  createBonusTierSet(actor: Actor, body: CreateBonusTierSetBody): Promise<Recorded<BonusTierSet>>;
+  createCollectiveGoal(actor: Actor, body: CreateCollectiveGoalBody): Promise<Recorded<CollectiveGoal>>;
+  /** The minimum as it stands once set; the same value again writes nothing. */
+  setSettings(actor: Actor, settings: PayrollSettings): Promise<PayrollSettings>;
+}
+
 /** Who reads pay: their scope (`withMember`) and their own member, `null` for the owner. */
 export interface PayReader {
   readonly scope: TeamScope;
@@ -148,4 +163,7 @@ export interface PeriodView {
 
 export interface PayrollReadStore {
   period(userId: UserId, period: PayPeriod): Promise<PeriodView>;
+  settings(userId: UserId): Promise<PayrollSettings>;
+  /** The latest rate of each currency the job read. */
+  exchangeRates(userId: UserId): Promise<ExchangeRates>;
 }

@@ -133,12 +133,19 @@ export class PayPeriodReportsUnread extends DomainError {
   }
 }
 
-/** A bonus, a penalty or an adjustment for a period the member's validated statements have closed (EQ-04). */
+/**
+ * A bonus, a penalty or an adjustment for a period the member's validated statements have closed, or tiers and a goal
+ * for a period some statement is validated for, or an earlier one (EQ-04).
+ */
 export class PayPeriodClosed extends DomainError {
-  constructor(period: PayPeriod) {
-    super('pay_period_closed_conflict', 'Cette quinzaine est déjà validée pour ce membre', {
-      details: { period },
-    });
+  constructor(period: PayPeriod, { forTeam = false }: { readonly forTeam?: boolean } = {}) {
+    super(
+      'pay_period_closed_conflict',
+      forTeam
+        ? 'Un relevé de cette quinzaine, ou d’une plus récente, est déjà validé'
+        : 'Cette quinzaine est déjà validée pour ce membre',
+      { details: { period } },
+    );
   }
 }
 
@@ -151,7 +158,14 @@ export class PenaltyCancelConflict extends DomainError {
 
 /** The same `id` sent again with other values: a retry gives back what was recorded, never something else. */
 export class PayEntryConflict extends DomainError {
-  constructor(code: 'bonus_conflict' | 'penalty_conflict' | 'pay_adjustment_conflict') {
+  constructor(
+    code:
+      | 'bonus_conflict'
+      | 'penalty_conflict'
+      | 'pay_adjustment_conflict'
+      | 'bonus_tier_set_conflict'
+      | 'collective_goal_conflict',
+  ) {
     super(code, 'Cet identifiant est déjà pris par une autre saisie');
   }
 }
