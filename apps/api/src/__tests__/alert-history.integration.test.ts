@@ -101,7 +101,9 @@ describe('history of her alerts (P4-01, /v1/alerts/triggers)', () => {
       conversationId,
       seq: (last?.seq ?? 0) + 1,
       type: pauses ? 'handoff_requested' : 'alert_triggered',
-      payload: pauses ? { conversationId, cause: 'custom_alert', trigger } : { conversationId, trigger },
+      payload: pauses
+        ? { conversationId, cause: 'custom_alert', trigger }
+        : { conversationId, trigger, notify: true },
       actor: 'ai',
       correlationId: 'history',
       // `null`: the base's own clock, to the microsecond, as the agent will write.
