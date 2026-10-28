@@ -295,6 +295,13 @@ describe('« Tester »', () => {
     expect(testBodyOf(both, 'x'.repeat(4_001))).toBeNull();
   });
 
+  it('sends nothing the route would refuse for its words', () => {
+    expect(testBodyOf({ phrase: '', keywords: ['x'.repeat(101)] }, 'custom stp')).toBeNull();
+    expect(testBodyOf({ phrase: '', keywords: ['?!'] }, 'custom stp')).toBeNull();
+    const many = Array.from({ length: 41 }, (_, index) => `mot${String(index)}`);
+    expect(testBodyOf({ phrase: '', keywords: many }, 'custom stp')).toBeNull();
+  });
+
   it('knows an answer for another phrase, other words or another message', () => {
     const sent = testBodyOf(both, 'tu me fais une vidéo ?');
     if (sent === null) throw new Error('nothing to try');

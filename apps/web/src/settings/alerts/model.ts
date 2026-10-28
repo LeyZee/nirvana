@@ -4,7 +4,7 @@ import {
   CUSTOM_ALERT_NAME_MAX,
   CUSTOM_ALERT_PHRASE_MAX,
   LOCKED_SYSTEM_ALERTS,
-  ALERT_TEST_MESSAGE_MAX,
+  AlertTestBodySchema,
   type AlertTestBody,
   type AlertTestResult,
   type CreatorId,
@@ -247,20 +247,20 @@ export const testCostLine = (draft: Pick<AlertDraft, 'phrase'>): string =>
     : 'La phrase se teste par l’IA : un appel au modèle, compté dans le budget du jour.';
 
 /**
- * What « Tester » sends: the alert as written now, on her example message; `null` while there is nothing to try
- * (no phrase and no word, no message, or a phrase or message past their limits).
+ * What « Tester » sends: the alert as written now, on her example message, read by the contract's own schema; `null`
+ * while there is nothing the route would take (no phrase and no word, no message, a phrase or message past its
+ * limit, a word too long or with no letter nor digit, too many words).
  */
 export function testBodyOf(
   draft: Pick<AlertDraft, 'phrase' | 'keywords'>,
   message: string,
 ): AlertTestBody | null {
   const phrase = draft.phrase.trim();
-  const keywords = cleanKeywords(draft.keywords);
-  const example = message.trim();
-  if (phrase === '' && keywords.length === 0) return null;
-  if (example === '' || example.length > ALERT_TEST_MESSAGE_MAX || phrase.length > CUSTOM_ALERT_PHRASE_MAX)
-    return null;
-  return { alert: { phrase: phrase === '' ? null : phrase, keywords }, message: example };
+  const body = AlertTestBodySchema.safeParse({
+    alert: { phrase: phrase === '' ? null : phrase, keywords: cleanKeywords(draft.keywords) },
+    message,
+  });
+  return body.success ? body.data : null;
 }
 
 /** Whether an answer was for this very test: the same phrase, the same words in the same order, the same message. */
