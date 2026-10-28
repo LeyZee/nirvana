@@ -224,6 +224,32 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
       };
       return Promise.resolve();
     };
+    // His own fan of Bea, with one line learnt: nothing from the tests above (ADR 0010, invented).
+    const beaAccount = newId(PlatformAccountIdSchema);
+    const theo = newId(FanIdSchema);
+    await withAdmin(test.admin.db, async (tx) => {
+      await tx
+        .insert(schema.platformAccounts)
+        .values({ id: beaAccount, creatorId: bea, platform: 'reveal', handle: 'bea-demo' });
+      await tx.insert(schema.fans).values({
+        id: theo,
+        creatorId: bea,
+        platformAccountId: beaAccount,
+        platformFanId: 'fan-2',
+        displayName: 'Théo',
+      });
+    });
+    await app.modules.fans.proposeFacts(bea, theo, [
+      {
+        category: 'identity',
+        key: 'location',
+        value: 'Nantes',
+        kind: 'declared',
+        confidence: 0.9,
+        sourceMessageId: null,
+        observedAt: new Date(),
+      },
+    ]);
     const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
     const fans = createFansModule({ db: app.db.db, adminDb: test.admin.db });
     const bare = await buildServer({
@@ -233,12 +259,12 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
       readiness: app.readiness,
     });
     try {
-      const read = await bare.inject({ method: 'GET', url: `/v1/fans/${fan}/kyc?creatorId=${anna}` });
+      const read = await bare.inject({ method: 'GET', url: `/v1/fans/${theo}/kyc?creatorId=${bea}` });
       expect(read.statusCode, read.body).toBe(200);
-      // `location` and `job` are learnt by the test above.
       expect(FanKycViewSchema.parse(read.json()).toLearn).toEqual([
         'first_name',
         'age',
+        'job',
         'hobbies',
         'desires',
         'situation',
