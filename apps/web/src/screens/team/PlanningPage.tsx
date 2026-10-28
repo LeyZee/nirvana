@@ -1,4 +1,4 @@
-import type { OnDuty, Planning, ShiftTemplate, TeamMember } from '@nirvana/contracts';
+import type { OnDuty, Planning, ShiftReportList, ShiftTemplate, TeamMember } from '@nirvana/contracts';
 import { useMemo, useState, type JSX } from 'react';
 
 import { ShiftPanel, type ShiftStart } from './ShiftPanel';
@@ -8,6 +8,8 @@ import { TeamNav } from './TeamNav';
 import { useMembers } from './api';
 import './team.css';
 
+import { useReportsOf } from '@/reports/api';
+import { incidentsOf, periodAt } from '@/reports/model';
 import { WeekNav } from '@/scheduling/WeekNav';
 import { useLeaves, usePlanning, useOnDuty, useSwaps, useTemplates } from '@/scheduling/api';
 import '@/scheduling/exchanges.css';
@@ -42,6 +44,7 @@ type Open =
   { readonly kind: 'add'; readonly start: ShiftStart } | { readonly kind: 'shift'; readonly id: string };
 
 const NONE: ReadonlySet<string> = new Set();
+const NO_INCIDENTS: ReadonlyMap<string, readonly string[]> = new Map();
 
 /**
  * The leaves read for the page: from the week shown, or this week when it is earlier, over a year less a day, so that
@@ -101,6 +104,23 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
   );
   const data = shown.data;
   if (data !== undefined && data.settings.timeZone !== agency) setAgency(data.settings.timeZone);
+  // The reports of the week's shifts, read by their periods (one or two): an incident marks its shift (EQ-03).
+  const periods = useMemo(
+    () =>
+      data === undefined
+        ? []
+        : [
+            ...new Set(
+              data.shifts.map((shift) => periodAt(new Date(shift.startsAt), data.settings.timeZone)),
+            ),
+          ].toSorted(),
+    [data],
+  );
+  const reports = useReportsOf(periods);
+  const incidents = useMemo(
+    () => (reports === null ? NO_INCIDENTS : incidentsOf(reports.reports)),
+    [reports],
+  );
   const pickedIndex = picked ?? Math.max(0, days.indexOf(today));
 
   const add = (
@@ -230,6 +250,7 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
             zone={zone}
             loading={shown.isFetching && shown.isPlaceholderData}
             flagged={flagged}
+            incidents={incidents}
             onAdd={(start) => {
               setOpen({ kind: 'add', start });
             }}
@@ -248,6 +269,7 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
           templates={templates.data ?? []}
           zone={zone}
           now={now}
+          reports={reports}
           onOpen={setOpen}
         />
       )}
@@ -271,6 +293,7 @@ function Opened({
   templates,
   zone,
   now,
+  reports,
   onOpen,
 }: {
   open: Open;
@@ -280,6 +303,8 @@ function Opened({
   templates: readonly ShiftTemplate[];
   zone: string;
   now: Date;
+  /** The week's reports, `null` while they are not read. */
+  reports: ShiftReportList | null;
   onOpen: (open: Open | null) => void;
 }): JSX.Element | null {
   const close = (): void => {
@@ -310,6 +335,7 @@ function Opened({
       templates={templates}
       zone={zone}
       now={now}
+      reports={reports === null ? null : reports.reports.filter((one) => one.shiftId === shift.id)}
       onClose={close}
     />
   );
@@ -537,6 +563,7 @@ function Grid({
   zone,
   loading,
   flagged,
+  incidents,
   onAdd,
   onShow,
 }: {
@@ -552,6 +579,8 @@ function Grid({
   loading: boolean;
   /** Shifts to point at: those a leave's approval found in its way. */
   flagged: ReadonlySet<string>;
+  /** What the shifts' reports said went wrong, by shift. */
+  incidents: ReadonlyMap<string, readonly string[]>;
   onAdd: (start: ShiftStart) => void;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
@@ -648,6 +677,7 @@ function Grid({
                 now={now}
                 zone={zone}
                 flagged={flagged}
+                incidents={incidents}
                 onAdd={onAdd}
                 onShow={onShow}
               />
@@ -670,6 +700,7 @@ function Cell({
   now,
   zone,
   flagged,
+  incidents,
   onAdd,
   onShow,
 }: {
@@ -683,6 +714,7 @@ function Cell({
   now: Date;
   zone: string;
   flagged: ReadonlySet<string>;
+  incidents: ReadonlyMap<string, readonly string[]>;
   onAdd: (start: ShiftStart) => void;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
@@ -701,6 +733,7 @@ function Cell({
           now={now}
           zone={zone}
           flagged={flagged.has(chip.shift.id)}
+          incident={incidents.has(chip.shift.id)}
           onShow={onShow}
         />
       ))}
@@ -727,12 +760,15 @@ function ShiftChip({
   now,
   zone,
   flagged,
+  incident,
   onShow,
 }: {
   chip: Chip;
   now: Date;
   zone: string;
   flagged: boolean;
+  /** Its report says something went wrong. */
+  incident: boolean;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
   const { shift, member } = chip;
@@ -744,9 +780,10 @@ function ShiftChip({
       className="sc-chip"
       data-phase={phase}
       data-flagged={flagged ? 'true' : undefined}
+      data-incident={incident ? 'true' : undefined}
       data-color={member?.color === null || member === null ? undefined : 'true'}
       style={member?.color === null || member === null ? undefined : { '--sc-color': member.color }}
-      aria-label={`${name}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}${chip.continued ? ', commencé la veille' : ''}${chip.overnight ? ', jusqu’au lendemain' : ''}${phase === 'live' ? ', en poste' : ''}${flagged ? ', pendant un congé à valider' : ''}`}
+      aria-label={`${name}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}${chip.continued ? ', commencé la veille' : ''}${chip.overnight ? ', jusqu’au lendemain' : ''}${phase === 'live' ? ', en poste' : ''}${flagged ? ', pendant un congé à valider' : ''}${incident ? ', incident signalé' : ''}`}
       onClick={() => {
         onShow(shift.id);
       }}
@@ -754,6 +791,12 @@ function ShiftChip({
       <span className="sc-chip__who">
         {phase === 'live' ? <span className="nv-dot nv-tone--ok nv-dot--live" /> : null}
         {name}
+        {incident ? (
+          <svg className="sc-chip__incident" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 2.6 14.2 13.4H1.8Z" />
+            <path d="M8 6.6v3M8 11.5v.01" />
+          </svg>
+        ) : null}
       </span>
       <span className="sc-chip__hours nv-num">
         {chip.continued ? '… ' : ''}

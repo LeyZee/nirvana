@@ -25,9 +25,11 @@ import {
   type ValidateShiftReportsBody,
   type ValidateShiftReportsResult,
 } from '@nirvana/contracts';
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { z } from 'zod';
+
+import { mergeLists } from './model';
 
 import { SCHEDULING_KEY } from '@/scheduling/api';
 
@@ -67,18 +69,29 @@ export function useReportContext(shiftId: string): UseQueryResult<ShiftReportCon
 }
 
 /** A period's reports and the shifts that take one; without a period, what is still open. */
+const listQuery = (period: PayPeriod | null) => ({
+  queryKey: [...REPORTS_KEY, 'list', period],
+  queryFn: () =>
+    read(
+      period === null ? '/v1/scheduling/shift-reports' : `/v1/scheduling/shift-reports?period=${period}`,
+      (body) => ShiftReportListSchema.parse(body),
+    ),
+  // A colleague's validation lands without a write here: read again every minute, like the swaps.
+  refetchInterval: 60_000,
+});
+
 export function useReports(period: PayPeriod | null, enabled = true): UseQueryResult<ShiftReportList> {
-  return useQuery({
-    queryKey: [...REPORTS_KEY, 'list', period],
-    queryFn: () =>
-      read(
-        period === null ? '/v1/scheduling/shift-reports' : `/v1/scheduling/shift-reports?period=${period}`,
-        (body) => ShiftReportListSchema.parse(body),
-      ),
-    enabled,
-    placeholderData: (before) => before,
-    // A colleague's validation lands without a write here: read again every minute, like the swaps.
-    refetchInterval: 60_000,
+  return useQuery({ ...listQuery(period), enabled, placeholderData: (before) => before });
+}
+
+/** The reports of some periods as one list, `null` until each is read: a planning week spans one or two. */
+export function useReportsOf(periods: readonly PayPeriod[]): ShiftReportList | null {
+  return useQueries({
+    queries: periods.map((period) => listQuery(period)),
+    combine: (results) => {
+      const lists = results.flatMap((result) => (result.data === undefined ? [] : [result.data]));
+      return lists.length === 0 || lists.length < results.length ? null : mergeLists(lists);
+    },
   });
 }
 

@@ -133,6 +133,16 @@ export function toDoOf(list: ShiftReportList): ToDo[] {
     .toSorted((a, b) => a.shift.startsAt.localeCompare(b.shift.startsAt));
 }
 
+/** The incidents said in reports, shift by shift, in the order they were said: the planning marks those shifts. */
+export function incidentsOf(reports: readonly ShiftReport[]): ReadonlyMap<string, readonly string[]> {
+  const byShift = new Map<string, readonly string[]>();
+  for (const report of reports.toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    if (report.incident !== null)
+      byShift.set(report.shiftId, [...(byShift.get(report.shiftId) ?? []), report.incident]);
+  }
+  return byShift;
+}
+
 /** Several reads of the list as one: each report, shift, account and member once. */
 export function mergeLists(lists: readonly ShiftReportList[]): ShiftReportList {
   const once = <T extends { readonly id: string }>(items: readonly T[]): T[] => [

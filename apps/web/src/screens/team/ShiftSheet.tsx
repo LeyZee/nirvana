@@ -1,8 +1,17 @@
-import type { Planning, Shift, ShiftTemplate, TeamMember, UpdateShiftBody } from '@nirvana/contracts';
+import type {
+  Planning,
+  Shift,
+  ShiftReport,
+  ShiftTemplate,
+  TeamMember,
+  UpdateShiftBody,
+} from '@nirvana/contracts';
 import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
 
+import { AGENCY_STATUS, amountText, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
+import '@/reports/reports.css';
 import {
   cancelShift,
   endTemplate,
@@ -34,7 +43,8 @@ type Arming = 'cancel' | 'stop' | 'template' | null;
 /**
  * One shift (EQ-02): who, where, when, in the zone shown, the agency's and the member's own. Before it starts it
  * changes member or hours, or is cancelled; under way it ends earlier or stops now; once over it is kept as it was.
- * A shift that comes back says so, and its template can be stopped from here.
+ * A shift that comes back says so, and its template can be stopped from here. Its report says how it went: the amount,
+ * where it stands, and any incident (EQ-03).
  */
 export function ShiftSheet({
   shift,
@@ -43,6 +53,7 @@ export function ShiftSheet({
   templates,
   zone,
   now,
+  reports,
   onClose,
 }: {
   shift: Shift;
@@ -52,6 +63,8 @@ export function ShiftSheet({
   /** The zone the grid is read in. */
   zone: string;
   now: Date;
+  /** The shift's report and corrections, `null` while they are not read. */
+  reports: readonly ShiftReport[] | null;
   onClose: () => void;
 }): JSX.Element {
   const id = useId();
@@ -62,6 +75,8 @@ export function ShiftSheet({
   const record = members.find((member) => member.id === shift.memberId) ?? null;
   const template = templates.find((one) => one.id === shift.templateId) ?? null;
   const phase = phaseOf(shift, now);
+  const report = reports === null ? null : reportOf(reports, shift.id);
+  const corrected = reports?.some((one) => one.correctsId !== null && one.status === 'validated') ?? false;
   const startDay = dayOf(shift.startsAt, agency);
   const eligible = members
     .filter(
@@ -197,7 +212,42 @@ export function ShiftSheet({
               <span className="nv-num">{clockAt(shift.stoppedAt, zone)}</span>
             </li>
           )}
+          {report !== null ? (
+            <li>
+              <span>Rapport</span>
+              <span className="sc-sheet__report">
+                <span className="nv-num">
+                  {amountText(report.amount.amountMinor, report.amount.currency)}
+                </span>
+                <span className={`rp-chip rp-chip--${STATUS_TONES[report.status]}`}>
+                  {AGENCY_STATUS[report.status]}
+                </span>
+              </span>
+            </li>
+          ) : reports !== null && phase === 'past' ? (
+            <li>
+              <span>Rapport</span>
+              <span className="sc-sheet__report" data-warn="true">
+                Sans rapport
+              </span>
+            </li>
+          ) : null}
+          {report === null || reports === null || !corrected ? null : (
+            <li>
+              <span>Validé, corrections comprises</span>
+              <span className="nv-num">
+                {amountText(validatedTotal(reports, shift.id), report.amount.currency)}
+              </span>
+            </li>
+          )}
         </ul>
+        {(reports ?? []).map((one) =>
+          one.incident === null ? null : (
+            <p key={one.id} className="rp-review__incident sc-sheet__incident">
+              <span className="rp-review__flag">Incident</span> {one.incident}
+            </p>
+          ),
+        )}
 
         {phase === 'past' ? (
           <p className="tm-hint">Ce shift est fini : il reste au planning tel qu’il a eu lieu.</p>
