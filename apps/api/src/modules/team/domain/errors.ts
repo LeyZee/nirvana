@@ -53,6 +53,22 @@ export class CommissionStartInvalid extends DomainError {
   }
 }
 
+/** A change of role starts a period, like a rate (Charles, 28/10): no period is paid under two roles. */
+export class RoleDateInvalid extends DomainError {
+  constructor() {
+    super(
+      'role_date_invalid',
+      'Un changement de rôle commence le 1er ou le 16 d’un mois, aujourd’hui au plus tôt',
+    );
+  }
+}
+
+export class RoleChangeConflict extends DomainError {
+  constructor() {
+    super('role_change_conflict', 'Ce membre a déjà un rôle qui commence ce jour-là');
+  }
+}
+
 export class TeamShareInvalid extends DomainError {
   constructor() {
     super('team_share_invalid', 'Seul un manager a une part du net de l’équipe');

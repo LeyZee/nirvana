@@ -135,13 +135,16 @@ export const CreateTeamMemberBodySchema = z
   });
 export type CreateTeamMemberBody = z.infer<typeof CreateTeamMemberBodySchema>;
 
-/** `PATCH /v1/team/members/:memberId` (owner): what changes; the rest stays. Status and rate have their own routes. */
+/**
+ * `PATCH /v1/team/members/:memberId` (owner): what changes; the rest stays. Status, rate and role have their own
+ * routes: a role is dated (`SetTeamRoleBodySchema`), so a `teamRole` here is refused (`request_invalid`), like any key
+ * this route does not know.
+ */
 export const UpdateTeamMemberBodySchema = z
-  .object({
+  .strictObject({
     firstName: NameSchema,
     lastName: NameSchema,
     displayName: NameSchema,
-    teamRole: TeamRoleSchema,
     country: KnownCountryCodeSchema,
     timeZone: TimezoneSchema,
     color: MemberColorSchema.nullable(),
@@ -173,6 +176,33 @@ export type SetCommissionRateBody = z.infer<typeof SetCommissionRateBodySchema>;
 /** `GET /v1/team/members/:memberId/commission`: every rate, newest first. */
 export const CommissionRateHistorySchema = z.object({ rates: z.array(CommissionRateSchema) });
 
+/**
+ * A member's team role from a day on (`member_roles`, added only): the role of a day is the latest one effective on
+ * that day. The first one starts the day he joins.
+ */
+export const TeamRoleChangeSchema = z.object({
+  teamRole: TeamRoleSchema,
+  effectiveFrom: CalendarDaySchema,
+});
+export type TeamRoleChange = z.infer<typeof TeamRoleChangeSchema>;
+
+/**
+ * `POST /v1/team/members/:memberId/role` (owner only, the database refuses anyone else) → `TeamRoleChangeSchema`: a
+ * chatter becomes a manager, or the other way round, from the first day of a period, the 1st or the 16th of a month,
+ * never before today (`role_date_invalid`): a period is paid under one role, its team share and its collective goal
+ * whole (Charles, 28/10). From today, his access changes at once and pay computes the running period again; from a
+ * later day, both follow on that day. A second role from the same day answers `role_change_conflict`, since a role is
+ * never changed. A manager made a chatter keeps his rate rows: pay gives no team share to a chatter.
+ */
+export const SetTeamRoleBodySchema = z.object({
+  teamRole: TeamRoleSchema,
+  effectiveFrom: CalendarDaySchema,
+});
+export type SetTeamRoleBody = z.infer<typeof SetTeamRoleBodySchema>;
+
+/** `GET /v1/team/members/:memberId/role`: every role, newest first, those still to come included. */
+export const TeamRoleHistorySchema = z.object({ roles: z.array(TeamRoleChangeSchema) });
+
 /** An internal note, read by the owner and the active managers only, never by the member it is about. */
 export const TeamMemberNoteSchema = z.object({
   id: TeamMemberNoteIdSchema,
@@ -192,7 +222,9 @@ export const AddTeamMemberNoteBodySchema = z.object({ body: z.string().trim().mi
  * member who left is not changed any more (EQ-14) ; `commission_preset_not_found` 404 ; `commission_date_invalid` 400,
  * a rate or a preset that starts before today, or a member's new rate that does not start on the 1st or the 16th ; `commission_preset_conflict` 409, this name already has a rate from
  * that day ; `commission_rate_conflict` 409, this member already has a rate from that day ; `team_share_invalid` 400,
- * a share for a chatter ; `creator_not_found` 404, an unknown creator in `creatorIds`.
+ * a share for a chatter ; `creator_not_found` 404, an unknown creator in `creatorIds` ; `role_date_invalid` 400, a
+ * change of role that does not start on the 1st or the 16th, or starts before today ; `role_change_conflict` 409, this
+ * member already has a role from that day.
  */
 export const TEAM_MEMBER_ERROR_CODES = [
   'member_not_found',
@@ -204,5 +236,7 @@ export const TEAM_MEMBER_ERROR_CODES = [
   'commission_date_invalid',
   'team_share_invalid',
   'creator_not_found',
+  'role_date_invalid',
+  'role_change_conflict',
 ] as const;
 export type TeamMemberErrorCode = (typeof TEAM_MEMBER_ERROR_CODES)[number];

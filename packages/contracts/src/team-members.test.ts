@@ -5,6 +5,7 @@ import {
   CreateCommissionPresetBodySchema,
   CreateTeamMemberBodySchema,
   SetCommissionRateBodySchema,
+  SetTeamRoleBodySchema,
   TeamMemberSchema,
   UpdateTeamMemberBodySchema,
 } from './team-members';
@@ -68,6 +69,18 @@ describe('team members', () => {
     // Typed in capitals, a colour is written as the database keeps it.
     expect(UpdateTeamMemberBodySchema.parse({ color: '#E8A33D' })).toEqual({ color: '#e8a33d' });
     expect(UpdateTeamMemberBodySchema.safeParse({ color: '#E8A33' }).success).toBe(false);
+  });
+
+  it('dates a change of role on its own route, never through the record (Charles, 28/10)', () => {
+    expect(UpdateTeamMemberBodySchema.safeParse({ teamRole: 'manager' }).success).toBe(false);
+    expect(SetTeamRoleBodySchema.parse({ teamRole: 'manager', effectiveFrom: '2026-11-16' })).toEqual({
+      teamRole: 'manager',
+      effectiveFrom: '2026-11-16',
+    });
+    expect(SetTeamRoleBodySchema.safeParse({ teamRole: 'manager' }).success).toBe(false);
+    expect(SetTeamRoleBodySchema.safeParse({ teamRole: 'owner', effectiveFrom: '2026-11-16' }).success).toBe(
+      false,
+    );
   });
 
   it('reads a member whose invitation is still waiting and who has no rate yet', () => {

@@ -252,6 +252,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   });
   const team = createTeamModule({
     db: db.db,
+    adminDb: adminDb.db,
     creators: {
       existing: async (ids) => new Set((await persona.creators.list(ids)).map((creator) => creator.id)),
     },
@@ -589,6 +590,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         context.logger.info(
           { lapsed: await modules.scheduling.jobs.lapseSwaps() },
           'scheduling: swap proposals lapsed',
+        );
+      },
+    ),
+    'team.apply_roles': defineTask(
+      'team.apply_roles',
+      JOB_PAYLOADS['team.apply_roles'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { applied: await modules.team.jobs.applyRoles() },
+          'team: roles of the day applied',
         );
       },
     ),

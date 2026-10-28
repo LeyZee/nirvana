@@ -156,6 +156,39 @@ export const memberCommissionRates = pgTable(
 );
 
 /**
+ * A member's team role from a date (Charles, 28/10): the role of a day is the latest row effective on that day, the
+ * first one from the day he joins, a later one from the 1st or the 16th of a month. Never changed: a new role is a new
+ * row, written by the owner only. `team_members.team_role` is the role of today, kept in step with these rows.
+ */
+export const memberRoles = pgTable(
+  'member_roles',
+  {
+    id: id(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    teamRole: enumText('team_role').notNull(),
+    effectiveFrom: date('effective_from').notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    enumCheck('member_roles', t.teamRole, TEAM_ROLES),
+    unique('member_roles_member_from_unique').on(t.memberId, t.effectiveFrom),
+    pgPolicy('member_read', {
+      for: 'select',
+      using: sql`${readsTeam} or exists (select 1 from team_members m where m.id = ${t.memberId} and m.user_id = ${currentUser})`,
+    }),
+    pgPolicy('owner_insert', {
+      for: 'insert',
+      withCheck: sql`${isOwner} and ${t.createdBy} = ${currentUser}`,
+    }),
+  ],
+);
+
+/**
  * Single-use links to choose a password (EQ-10): a member's first access, or a new password without e-mail. Out of RLS
  * and out of reach of `nirvana_app` (the migration revokes it): only `withAdmin` reads or writes it, like
  * `provider_credentials`. The token itself is never stored, only its SHA-256; it is used by one atomic `UPDATE`

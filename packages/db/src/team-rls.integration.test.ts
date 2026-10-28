@@ -1,6 +1,7 @@
 import {
   CommissionPresetIdSchema,
   CommissionRateIdSchema,
+  MemberRoleIdSchema,
   newId,
   TeamMemberIdSchema,
   TeamMemberNoteIdSchema,
@@ -236,6 +237,42 @@ describe('team tables (EQ-01): one policy per account, through withMember', () =
     expect(await failure(withAdmin(test.admin.db, (tx) => tx.delete(s.memberCommissionRates)))).toMatch(
       /append-only/,
     );
+  });
+
+  it('dated roles: the owner alone adds one, a chatter reads his own, a manager everyone’s, nobody changes one', async () => {
+    const roleRow = (userId: string, effectiveFrom: string, createdBy: string = owner) => ({
+      id: newId(MemberRoleIdSchema),
+      memberId: member(userId),
+      teamRole: 'manager',
+      effectiveFrom,
+      createdBy,
+    });
+    await withMember(test.app.db, owner, (tx) =>
+      tx.insert(s.memberRoles).values([roleRow(chatterA, '2026-11-16'), roleRow(chatterB, '2026-11-16')]),
+    );
+    const readBy = (userId: string) =>
+      withMember(test.app.db, userId, async (tx) =>
+        (await tx.select({ memberId: s.memberRoles.memberId }).from(s.memberRoles)).map(
+          (row) => row.memberId,
+        ),
+      );
+    expect(await readBy(chatterA)).toEqual([member(chatterA)]);
+    expect(await readBy(manager)).toHaveLength(2);
+    for (const [userId, row] of [
+      [manager, roleRow(chatterA, '2026-12-01', manager)],
+      [chatterA, roleRow(chatterA, '2026-12-01', chatterA)],
+      [owner, roleRow(chatterA, '2026-12-01', manager)],
+    ] as const) {
+      expect(
+        await failure(withMember(test.app.db, userId, (tx) => tx.insert(s.memberRoles).values(row))),
+      ).toMatch(/row-level security/);
+    }
+    expect(
+      await failure(
+        withMember(test.app.db, owner, (tx) => tx.update(s.memberRoles).set({ teamRole: 'chatter' })),
+      ),
+    ).toMatch(/permission denied/);
+    expect(await failure(withAdmin(test.admin.db, (tx) => tx.delete(s.memberRoles)))).toMatch(/append-only/);
   });
 
   it('a manager who is no longer active falls back to his own rows', async () => {

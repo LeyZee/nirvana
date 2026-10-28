@@ -240,6 +240,8 @@ export const ERROR_MESSAGES: Readonly<Record<TeamRefusalCode, string>> = {
   commission_date_invalid: 'Un nouveau taux commence le 1er ou le 16 d’un mois, aujourd’hui ou plus tard.',
   team_share_invalid: 'Seul un manager a une part du net de l’équipe.',
   creator_not_found: 'Une des créatrices n’existe plus. Recharge la page.',
+  role_date_invalid: 'Un changement de rôle commence le 1er ou le 16 d’un mois, aujourd’hui ou plus tard.',
+  role_change_conflict: 'Ce membre a déjà un rôle à partir de ce jour.',
 };
 
 /** A calendar day, `YYYY-MM-DD`, in the reader's own zone: today's date for « Arrivé le ». */

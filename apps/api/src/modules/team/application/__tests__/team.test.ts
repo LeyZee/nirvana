@@ -1,9 +1,11 @@
 import {
   CommissionRateSchema,
   DomainError,
+  TeamRoleChangeSchema,
   TeamMemberIdSchema,
   UserIdSchema,
   type PayPeriod,
+  type TeamRoleChange,
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
@@ -18,8 +20,14 @@ const unused = (): never => {
   throw new Error('not used here');
 };
 
-/** A store that keeps the period each new rate asks pay to compute again. */
-function storeKeeping(asked: (PayPeriod | null)[]): TeamStore {
+interface AskedRole {
+  readonly role: TeamRoleChange;
+  readonly today: string;
+  readonly running: PayPeriod;
+}
+
+/** A store that keeps the period each new rate asks pay to compute again, and each role asked with its day. */
+function storeKeeping(asked: (PayPeriod | null)[], roles: AskedRole[] = []): TeamStore {
   return {
     members: unused,
     member: unused,
@@ -31,6 +39,15 @@ function storeKeeping(asked: (PayPeriod | null)[]): TeamStore {
       return Promise.resolve(CommissionRateSchema.parse(rate));
     },
     rates: unused,
+    addRole: (_actor, _id, role, when) => {
+      const change = TeamRoleChangeSchema.parse({
+        teamRole: role.teamRole,
+        effectiveFrom: role.effectiveFrom,
+      });
+      roles.push({ role: change, ...when });
+      return Promise.resolve(change);
+    },
+    roles: unused,
     presets: unused,
     addPreset: unused,
     notes: unused,
@@ -38,9 +55,9 @@ function storeKeeping(asked: (PayPeriod | null)[]): TeamStore {
   };
 }
 
-const serviceAt = (instant: string, asked: (PayPeriod | null)[]) =>
+const serviceAt = (instant: string, asked: (PayPeriod | null)[], roles: AskedRole[] = []) =>
   createTeamService(
-    storeKeeping(asked),
+    storeKeeping(asked, roles),
     { existing: unused },
     { live: unused },
     { agencyTimeZone: 'Europe/Paris', now: () => new Date(instant) },
@@ -70,5 +87,40 @@ describe('a member’s new rate', () => {
     await expect(midPeriod).rejects.toBeInstanceOf(DomainError);
     await expect(midPeriod).rejects.toMatchObject({ code: 'commission_date_invalid' });
     expect(asked).toHaveLength(2);
+  });
+});
+
+describe('a member’s change of role (Charles, 28/10)', () => {
+  it('starts the 1st or the 16th, today at the earliest, and tells the store which day is today', async () => {
+    const roles: AskedRole[] = [];
+    const onTheSixteenth = serviceAt('2026-11-16T09:00:00Z', [], roles);
+    await onTheSixteenth.setRole(OWNER, MEMBER, { teamRole: 'manager', effectiveFrom: '2026-11-16' });
+    await onTheSixteenth.setRole(OWNER, MEMBER, { teamRole: 'chatter', effectiveFrom: '2026-12-01' });
+    expect(roles).toEqual([
+      {
+        role: { teamRole: 'manager', effectiveFrom: '2026-11-16' },
+        today: '2026-11-16',
+        running: '2026-11-16',
+      },
+      {
+        role: { teamRole: 'chatter', effectiveFrom: '2026-12-01' },
+        today: '2026-11-16',
+        running: '2026-11-16',
+      },
+    ]);
+
+    // Half past midnight on the 16th in Paris is still the 15th in UTC: the agency's day decides, the role starts today.
+    await serviceAt('2026-11-15T23:30:00Z', [], roles).setRole(OWNER, MEMBER, {
+      teamRole: 'chatter',
+      effectiveFrom: '2026-11-16',
+    });
+    expect(roles.at(-1)).toMatchObject({ today: '2026-11-16', running: '2026-11-16' });
+
+    for (const effectiveFrom of ['2026-11-17', '2026-11-01', '2026-10-16']) {
+      const refused = onTheSixteenth.setRole(OWNER, MEMBER, { teamRole: 'manager', effectiveFrom });
+      await expect(refused).rejects.toBeInstanceOf(DomainError);
+      await expect(refused).rejects.toMatchObject({ code: 'role_date_invalid' });
+    }
+    expect(roles).toHaveLength(3);
   });
 });

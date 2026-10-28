@@ -9,11 +9,14 @@ import {
   CreateTeamMemberBodySchema,
   DomainError,
   SetCommissionRateBodySchema,
+  SetTeamRoleBodySchema,
   TeamMemberIdSchema,
   TeamMemberListSchema,
   TeamMemberNoteListSchema,
   TeamMemberNoteSchema,
   TeamMemberSchema,
+  TeamRoleChangeSchema,
+  TeamRoleHistorySchema,
   UpdateTeamMemberBodySchema,
   UserIdSchema,
   type UserId,
@@ -41,7 +44,7 @@ const actorOf = (request: FastifyRequest): Actor => ({ userId: userOf(request), 
 /**
  * `/v1/team` (EQ-01, ADR 0024): the owner and the chatters' accounts reach it, a creator never; what each one reads
  * is the database's call (`withMember`): everyone for the owner and an active manager, his own record otherwise.
- * Members, rates and presets are written by the owner; the notes by the owner and the active managers.
+ * Members, rates, roles and presets are written by the owner; the notes by the owner and the active managers.
  */
 export function createTeamRoutes(team: TeamService, requireRole: RequireRole): FastifyPluginAsyncZod {
   const ownerOrMember = requireRole('owner', 'operator');
@@ -120,6 +123,29 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
         reply
           .code(201)
           .send(await team.setCommission(actorOf(request), request.params.memberId, request.body)),
+    );
+
+    app.get(
+      '/team/members/:memberId/role',
+      {
+        preValidation: ownerOrMember,
+        schema: { params: MemberParamsSchema, response: { 200: TeamRoleHistorySchema } },
+      },
+      async (request) => ({ roles: await team.roleHistory(userOf(request), request.params.memberId) }),
+    );
+
+    app.post(
+      '/team/members/:memberId/role',
+      {
+        preValidation: owner,
+        schema: {
+          params: MemberParamsSchema,
+          body: SetTeamRoleBodySchema,
+          response: { 201: TeamRoleChangeSchema },
+        },
+      },
+      async (request, reply) =>
+        reply.code(201).send(await team.setRole(actorOf(request), request.params.memberId, request.body)),
     );
 
     app.get(

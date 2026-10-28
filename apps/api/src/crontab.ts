@@ -48,6 +48,9 @@ const CRON_JOBS: readonly CronJob[] = [
   // A swap proposal lapses once one of its shifts started, was cancelled or changed hands or hours (ADR 0031). Each
   // acceptance and revert enqueues it too; the quarter hour catches a shift that started or was changed by hand.
   { task: 'scheduling.lapse_swaps', match: '*/15 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
+  // A role dated for a 1st or a 16th becomes the member's on that day (Charles, 28/10): each record takes the role in
+  // force today, before the hour's recalculation. A run missed is caught up by the next one, no backfill.
+  { task: 'team.apply_roles', match: '3 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
   // Pay's drafts of every open period, computed again each hour (EQ-04): what a report, a rate or a change of period
   // brought, should its own job have been missed. A run that finds nothing new writes nothing.
   { task: 'payroll.recalculate_open', match: '23 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },

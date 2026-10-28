@@ -5,6 +5,7 @@ import {
   assertCreatorsExist,
   assertOwnerScope,
   assertReadsTeam,
+  assertRoleStartsAPeriod,
   assertStartsAPeriod,
   assertStartsFromToday,
   assertStillInTeam,
@@ -14,6 +15,7 @@ import {
   normalizeEmail,
   presetsInForce,
   rateInForce,
+  roleOn,
   uniqueCreatorIds,
 } from '../members';
 
@@ -55,6 +57,37 @@ describe('team rules', () => {
     expect(code('2026-11-16', '2026-11-16')).toBeNull();
     expect(code('2026-10-29', '2026-10-28')).toBe('commission_date_invalid');
     expect(code('2026-10-16', '2026-10-28')).toBe('commission_date_invalid');
+  });
+
+  it('starts a change of role on the 1st or the 16th only, today at the earliest (Charles, 28/10)', () => {
+    const code = (day: string, today: string): string | null => {
+      try {
+        assertRoleStartsAPeriod(day, today);
+        return null;
+      } catch (error) {
+        return error instanceof DomainError ? error.code : 'unexpected';
+      }
+    };
+    expect(code('2026-11-01', '2026-10-28')).toBeNull();
+    expect(code('2026-11-16', '2026-10-28')).toBeNull();
+    expect(code('2026-11-16', '2026-11-16')).toBeNull();
+    expect(code('2026-12-01', '2026-11-16')).toBeNull();
+    expect(code('2026-10-30', '2026-10-28')).toBe('role_date_invalid');
+    expect(code('2026-10-16', '2026-10-28')).toBe('role_date_invalid');
+    expect(code('2026-11-15', '2026-10-28')).toBe('role_date_invalid');
+  });
+
+  it('reads the role of a day from the dated roles, the record’s own before the first one', () => {
+    const roles = [
+      { teamRole: 'chatter', effectiveFrom: '2026-10-20' },
+      { teamRole: 'manager', effectiveFrom: '2026-11-16' },
+    ] as const;
+    // The period of the 1st reads its last day, the 15th: still a chatter; the next one is a manager's whole.
+    expect(roleOn(roles, '2026-11-15', 'manager')).toBe('chatter');
+    expect(roleOn(roles, '2026-11-16', 'chatter')).toBe('manager');
+    expect(roleOn(roles, '2026-11-30', 'chatter')).toBe('manager');
+    expect(roleOn(roles, '2026-10-01', 'manager')).toBe('manager');
+    expect(roleOn([], '2026-11-30', 'chatter')).toBe('chatter');
   });
 
   it('gives a share of the team’s net to a manager only', () => {
