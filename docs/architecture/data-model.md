@@ -230,6 +230,51 @@ Congés et échanges (migration 0023, ADR 0031) suivent la même garde : rien n'
 
 Rapports de fin de shift et règles de paie d'un compte (migration 0026, EQ-03) gardent le passé de la paie (déclencheurs `refuse_pay_change`, pour tous les rôles) : rien n'est supprimé, les règles s'ajoutent sans jamais changer, et un rapport garde son shift, sa quinzaine, sa devise, son auteur et ce qu'il corrige. Chaque changement prend la `version` suivante, pour qu'une relecture nomme ce qu'elle a lu. Un rapport ne passe que de `submitted` à `submitted` (changé), `validated` ou `rejected`, et de `rejected` à `submitted` : validé, il ne change plus, et une relecture ne touche jamais au montant. Une clé composite `(shift_id, creator_id, platform_account_id, member_id)` vers `shifts` le pose sur la créatrice, le compte et le membre de son shift, qui ne changent plus une fois le shift commencé ; une autre, `(corrects_id, shift_id)`, garde une correction sur un rapport du même shift. Un shift qui a son rapport ne s'annule plus (`refuse_reported_shift_cancel`).
 
+## Paie (module `payroll`, ADR 0023, EQ-04)
+
+Hors RLS des créatrices (aucun `creator_id`) : un membre lit ses lignes, la portée `owner` | `agency` de `withMember` lit tout. Les relevés, leurs lignes, les quinzaines et les taux sont écrits par les jobs (`nirvana_admin`) ; l'application lit, valide, marque payé et écrit les entrées.
+
+```
+pay_periods                period (1er ou 16, clé), starts_at, ends_at (instants de la quinzaine dans le fuseau de
+                           l'agence ce jour-là ; la suivante part de la fin de la précédente), time_zone, created_at
+                           (ajout seul, écrit par le job)
+exchange_rates             (currency, day) clé, rate_micros bigint (euros pour une unité, en millionièmes), source,
+                           fetched_at (globale, lecture seule pour l'application, écrite par le job des taux, ajout seul)
+payroll_settings           id = 1, minimum_payout_minor (15 € sans ligne), updated_by, updated_at (propriétaire)
+bonus_tier_sets            id, from_period, tiers (jsonb : seuil, prime, libellé), created_by, created_at (propriétaire,
+                           ajout seul ; le plus récent de la dernière quinzaine ≤ la période fait foi)
+collective_goals           id, period, target_minor bigint, tiers (jsonb : pourcentage en points de base, prime par
+                           chatteur), created_by, created_at (propriétaire, ajout seul ; le plus récent fait foi, aucun
+                           palier = pas d'objectif)
+bonuses                    id, member_id, period, amount_minor (> 0), reason, created_by, created_at, cancelled_at,
+                           cancelled_by (agence, jamais pour soi ; annulée une fois, jamais supprimée)
+penalties                  id, member_id, from_period, to_period, kind (fixed|percent), amount_minor | bps, reason,
+                           created_by, created_at, cancelled_at, cancelled_by, cancelled_from (agence, jamais pour soi ;
+                           annulé à partir d'une quinzaine ouverte, les quinzaines validées le gardent)
+commission_statements      id, member_id, period → pay_periods, status (draft|validated|paid), revision, engine_version,
+                           inputs_hash (SHA-256), net, commission, part d'équipe (base, bps, montant), tier_bonus,
+                           collective_bonus, bonuses, penalties_requested, penalties, carry_overs_in, adjustments, total,
+                           carry_over_out, payable (≥ 0, = total − report), team_net_minor bigint, collective, rules
+                           (jsonb, règles et taux copiés), counted (jsonb, entrées comptées), computed_at, validated_at,
+                           validated_by, paid_at, paid_by, created_at (un par membre et quinzaine ; jamais supprimé)
+commission_statement_lines id, statement_id, revision, platform_account_id, currency, vat_bps, platform_fee_bps,
+                           rate_micros, gross, gross_eur, excl_vat, net, commission (unités mineures), shift_report_ids,
+                           late_reports (jsonb), created_at (ajout seul ; une par compte et règles d'une révision)
+pay_adjustments            id, member_id, period (première quinzaine ouverte du membre), amount_minor (≠ 0), reason,
+                           corrects_statement_id, created_by, created_at (agence, jamais pour soi ; ajout seul)
+carry_overs                id, member_id, from_period, to_period (la suivante), amount_minor (≠ 0), statement_id
+                           (unique), created_at (écrit à la validation ; un par membre et quinzaine d'origine ; ajout seul)
+```
+
+Le passé de la paie est gardé pour tous les rôles, les jobs compris (migration 0028) :
+- un relevé est un brouillon jusqu'à sa validation : il ne se crée qu'en brouillon, et seulement pour une quinzaine ouverte du membre, et chaque recalcul prend la `revision` suivante en gardant son membre et sa quinzaine (`keep_commission_statement`) ;
+- valider ne change que le statut et qui a validé, et seulement quand aucun relevé plus ancien du membre n'est un brouillon : les quinzaines se ferment dans l'ordre. Payer ne change que le statut et qui a payé. Ensuite, rien ne change plus, et rien n'est supprimé ;
+- une ligne appartient à la révision courante d'un brouillon. Les lignes, les ajustements, les reports, les paliers, les objectifs, les quinzaines et les taux sont en ajout seul (`refuse_pay_change`) ;
+- une quinzaine est fermée pour un membre dès qu'un de ses relevés de cette quinzaine ou d'une plus récente est validé (`pay_period_closed`). Rien n'y arrive plus : ni prime, ni malus, ni ajustement, ni annulation. Paliers et objectifs ne changent plus pour une quinzaine dont un relevé est validé (`pay_period_settled`) ;
+- un report vient du relevé validé de son membre, vers la quinzaine suivante, et porte exactement ce que ce relevé a reporté (`carry_over_out_minor`, `keep_carry_over`).
+
+Les droits par colonne tiennent en plus le rôle de l'application, qui part de `REVOKE ALL` : il ne touche à un relevé que par son statut, qui l'a validé et qui l'a payé.
+
 ## Système (hors RLS, sans `creator_id`)
 
 ```
@@ -269,6 +314,7 @@ Une commande enfile dans sa propre transaction (outbox, ADR 0006) par `public.en
 - **Tables du planning** (`creator_id` **et** `member_id`, ADR 0023 § Données et RLS) : `withTenantMember(db, creatorId, userId, (tx, scope) => …)` pose les trois réglages (`app.creator_id`, `app.user_id`, `app.team_scope`). Un shift ou un modèle se lit dans sa créatrice, par le membre lui-même ou par le scope `owner` | `agency` : deux chatteurs d'une même créatrice ne lisent pas les shifts l'un de l'autre. Seuls `owner` et `agency` écrivent, signé de leur compte. Un lecteur de plusieurs créatrices boucle, une transaction par créatrice. `scheduling_settings` (sans créatrice) se lit par tout scope posé et s'écrit par le propriétaire.
 - **Congés et échanges** (ADR 0031, migration 0023) : `leave_requests` n'a pas de créatrice et suit les tables de l'équipe (`withMember`) : le membre lit, demande et retire les siens ; `owner` et `agency` lisent tout et décident, signé de leur compte, mais un manager ne décide jamais de son propre congé. `shift_swap_requests` porte les deux créatrices et se lit dans l'une d'elles, par l'un des deux membres ou par `owner` | `agency` ; le membre qui propose l'écrit sur son propre shift, le collègue répond, `owner` et `agency` annulent. L'acceptation reste sous RLS : deux politiques de `shifts` (`swap_read`, `swap_update`) laissent le collègue lire le shift qu'on lui propose et déplacer un shift quand un échange `accepted` **dans la transaction en cours** (`resolved_at = now()`), dont il est le collègue, nomme ce shift, vers l'autre membre de l'échange et aux heures notées à la proposition. Les politiques des échanges ne lisent jamais `shifts` (Postgres refuse une boucle de politiques). Une transaction qui touche plusieurs créatrices passe de l'une à l'autre par `enterCreator(tx, creatorId, allowed)`, toujours en `SET LOCAL` : la créatrice doit être dans la liste que l'appelant a vérifiée (les créatrices qui existent, les deux d'un échange, celles du membre), sinon une erreur. Un collègue ne lit jamais la ligne `team_members` d'un autre : la RLS choisit des lignes, pas des colonnes, et une politique lui ouvrirait taux, pays et statut. Son nom affiché et sa couleur, pour un échange ou la liste des candidats, passent donc par une lecture `*Unscoped` du module bornée à ces colonnes, faite après que les politiques ont montré que le lecteur a droit à l'échange ou au shift (README du module `scheduling`). Chaque écriture qui pose un shift sur un membre, et la validation d'un congé, prennent d'abord le verrou consultatif du membre (`hashtextextended('scheduling.member:' || member_id, 0)`), puis lisent ses congés.
 - **Rapports et règles de paie** (EQ-03, migration 0026) : `shift_reports` suit la règle du planning, la créatrice **et** (le membre ou `owner` | `agency`). Le membre fait le rapport de son propre shift et le change tant qu'il n'est pas validé ; l'agence fait une correction (`by_agency`) ; `owner` et `agency` relisent, jamais un rapport de leur propre shift, et un manager jamais ce qu'il a envoyé lui-même (`submitted_by`) : le propriétaire relit ses propres corrections, personne ne relit pour lui. `account_pay_rules` se lit dans la créatrice par `owner` et `agency`, et par un membre qui a un shift sur le compte (la devise de ses rapports) ; seul `owner` en ajoute. Une écriture de rapport et la validation de la paie prennent le même verrou consultatif (membre, quinzaine).
+- **Paie** (EQ-04, migration 0028) : les tables de la paie suivent la règle de l'équipe. Un membre lit ses relevés, leurs lignes, ses primes, malus, ajustements et reports ; `owner` et `agency` lisent tout. Tout membre lit les quinzaines, les taux, le réglage, les paliers et les objectifs. `owner` et `agency` écrivent primes, malus, ajustements et reports, jamais pour eux-mêmes, et valident un relevé, jamais le leur ; seul `owner` marque payé et fixe paliers, objectifs et minimum de versement.
 - **Hors RLS** (pas de `creator_id`) : `creators`, les tables Better Auth, `invitation_links` (`withAdmin` seul), `provider_credentials` (migration 0002) et les cinq tables `telegram_*` (migration 0006), toutes retirées à `nirvana_app` (`REVOKE ALL`), `audit_log`, `worker_heartbeats`, `rate_limit_counters`, `backup_runs` et `restore_tests` (ADR 0028), les lignes `kill_switches` de scope `global` (lues par toutes les créatrices, politique `global_read` ; écrites, modifiées et supprimées seulement par `withAdmin`, migration 0010), les tables `graphile_worker`.
 
 ## Index de départ

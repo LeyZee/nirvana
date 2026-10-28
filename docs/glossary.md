@@ -170,6 +170,11 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Malus | `penalty` | Retenue fixe ou en pourcentage avec motif, plafonnée à la part du membre plus ses primes. Sur la facture, une ligne négative (réfaction prévue au contrat). |
 | Report | `carry_over` | Montant sous le minimum de versement, ou total sous zéro après un ajustement, reporté sur la période suivante ; rien n'est versé (EQ-04). |
 | Ajustement | `pay_adjustment` | Correction d'un relevé déjà validé, portée sur la prochaine période ouverte. |
+| Objectif collectif | `collective_goal` | Le net de toute l'équipe sur une quinzaine, ventes des managers comprises, comparé à une cible ; le palier collectif le plus haut atteint donne une prime à chaque chatteur, ventes ou pas, jamais à un manager (EQ-04). |
+| Part d'équipe | `team_share` | La part d'un manager sur le net des autres membres de l'équipe pour une quinzaine, en plus de la commission sur ses propres ventes (EQ-04). |
+| Minimum de versement | `minimum_payout` | Sous ce total, un relevé ne verse rien et reporte tout sur la quinzaine suivante ; 15 € tant que le propriétaire n'en fixe pas un autre. Le relevé final n'en a pas (EQ-04). |
+| Période ouverte | `open period` | Pour un membre, une quinzaine dont le relevé n'est pas encore validé, après la dernière qui l'est. Ce qui arrive pour une quinzaine fermée (rapport tardif, ajustement) va sur la première période ouverte (EQ-04). |
+| Taux de change | `exchange_rate` | Les euros d'une unité d'une autre devise, en millionièmes, lus chaque jour à une source et gardés ; le relevé copie celui du jour de sa validation (EQ-04). |
 | Dossier prestataire | `contractor_profile` | L'identité légale et fiscale d'un membre pour ses factures : nom complet, adresse, pays, identifiant fiscal, attestation de résidence datée, mandat et contrat acceptés. |
 | Autofacturation | `self_billing` | L'agence établit la facture au nom et pour le compte du prestataire (art. 289 I-2 du CGI) ; la facture porte la mention « Autofacturation ». |
 | Mandat de facturation | `billing_mandate` | L'accord, accepté par le prestataire avant sa première facture, qui autorise l'autofacturation et fixe le délai de contestation. |

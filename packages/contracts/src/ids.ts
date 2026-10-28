@@ -97,3 +97,31 @@ export type ShiftReportId = z.infer<typeof ShiftReportIdSchema>;
 /** The pay rules of a platform account from a pay period on: currency, VAT, platform fee, earnings source (EQ-03). */
 export const AccountPayRulesIdSchema = uuid.brand<'AccountPayRulesId'>();
 export type AccountPayRulesId = z.infer<typeof AccountPayRulesIdSchema>;
+
+/** A member's commission statement for one pay period: `draft`, `validated`, `paid` (EQ-04, ADR 0023). */
+export const CommissionStatementIdSchema = uuid.brand<'CommissionStatementId'>();
+export type CommissionStatementId = z.infer<typeof CommissionStatementIdSchema>;
+
+/** A manual bonus, with its reason, for a member and a pay period (EQ-04). */
+export const BonusIdSchema = uuid.brand<'BonusId'>();
+export type BonusId = z.infer<typeof BonusIdSchema>;
+
+/** A penalty, fixed or a percent of the member's net, with its reason, over one or more pay periods (EQ-04). */
+export const PenaltyIdSchema = uuid.brand<'PenaltyId'>();
+export type PenaltyId = z.infer<typeof PenaltyIdSchema>;
+
+/** A correction of a validated statement, carried on the member's next open pay period (EQ-04). */
+export const PayAdjustmentIdSchema = uuid.brand<'PayAdjustmentId'>();
+export type PayAdjustmentId = z.infer<typeof PayAdjustmentIdSchema>;
+
+/** What a validated statement carries to the next pay period instead of paying it (EQ-04). */
+export const CarryOverIdSchema = uuid.brand<'CarryOverId'>();
+export type CarryOverId = z.infer<typeof CarryOverIdSchema>;
+
+/** The individual bonus tiers from a pay period on (EQ-04). */
+export const BonusTierSetIdSchema = uuid.brand<'BonusTierSetId'>();
+export type BonusTierSetId = z.infer<typeof BonusTierSetIdSchema>;
+
+/** The team's collective goal for a pay period, with its tiers (EQ-04). */
+export const CollectiveGoalIdSchema = uuid.brand<'CollectiveGoalId'>();
+export type CollectiveGoalId = z.infer<typeof CollectiveGoalIdSchema>;
