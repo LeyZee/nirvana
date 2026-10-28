@@ -1,10 +1,13 @@
 import {
   ALERT_ERROR_CODES,
+  AlertTestResultSchema,
   AlertsViewSchema,
   ApiErrorSchema,
   CustomAlertGroupSchema,
   SystemAlertSettingSchema,
   type AlertErrorCode,
+  type AlertTestBody,
+  type AlertTestResult,
   type AlertsView,
   type CreateCustomAlertBody,
   type CustomAlertBody,
@@ -125,6 +128,13 @@ export const replaceAlert = (id: CustomAlertGroupId, body: CustomAlertBody): Pro
 /** Archives the alert: it stops watching, and its past triggers stay in the history. */
 export const archiveAlert = (id: CustomAlertGroupId): Promise<null> =>
   call(group(id), () => ({ success: true, data: null }), { method: 'DELETE' });
+
+/** « Tester »: the alert as written, on an example message; nothing is stored, nothing is sent. */
+export const testAlert = (body: AlertTestBody): Promise<AlertTestResult> =>
+  call('/v1/alerts/test', (answer) => AlertTestResultSchema.safeParse(answer), {
+    method: 'POST',
+    ...json(body),
+  });
 
 export const setSystemAlert = (
   code: SystemAlertCode,

@@ -1,5 +1,6 @@
 import {
   MEDIA_VOCABULARY_VERSION,
+  type BriefIntent,
   type MediaDescription,
   type PlaygroundAnswer,
   type PlaygroundComparison,
@@ -91,7 +92,7 @@ interface PresetSetup {
 }
 
 interface Brief {
-  readonly intent: string;
+  readonly intent: BriefIntent;
   readonly sentiment?: string;
   readonly action?: string;
   readonly replyBrief: string;
@@ -119,7 +120,7 @@ const ok = (bubbles: readonly string[], brief: Brief, extra: Partial<Answer> = {
 });
 
 /** The brain stepped back: a human takes over, nothing was written. */
-const handoff = (risks: readonly string[], intent: string): Answer => ({
+const handoff = (risks: readonly string[], intent: BriefIntent): Answer => ({
   bubbles: [],
   isBlocked: false,
   violations: [],

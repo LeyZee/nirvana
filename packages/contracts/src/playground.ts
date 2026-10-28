@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { BriefIntentSchema } from './brief';
 import { MediaDescriptionSchema } from './media';
 
 /**
@@ -98,7 +99,7 @@ export const PlaygroundAnswerSchema = z.object({
     .exactOptional(),
   brief: z
     .object({
-      intent: z.string(),
+      intent: BriefIntentSchema,
       sentiment: z.string(),
       risks: z.array(z.string()),
       action: z.string(),

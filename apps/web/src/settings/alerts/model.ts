@@ -4,6 +4,10 @@ import {
   CUSTOM_ALERT_NAME_MAX,
   CUSTOM_ALERT_PHRASE_MAX,
   LOCKED_SYSTEM_ALERTS,
+  ALERT_TEST_MESSAGE_MAX,
+  AlertTestBodySchema,
+  type AlertTestBody,
+  type AlertTestResult,
   type CreatorId,
   type CustomAlertBody,
   type CustomAlertGroup,
@@ -242,6 +246,77 @@ export const testCostLine = (draft: Pick<AlertDraft, 'phrase'>): string =>
   draft.phrase.trim() === ''
     ? 'Les mots-clés se testent sans IA.'
     : 'La phrase se teste par l’IA : un appel au modèle, compté dans le budget du jour.';
+
+/**
+ * What « Tester » sends: the alert as written now, on her example message, read by the contract's own schema; `null`
+ * while there is nothing the route would take (no phrase and no word, no message, a phrase or message past its
+ * limit, a word too long or with no letter nor digit, too many words).
+ */
+export function testBodyOf(
+  draft: Pick<AlertDraft, 'phrase' | 'keywords'>,
+  message: string,
+): AlertTestBody | null {
+  const phrase = draft.phrase.trim();
+  const body = AlertTestBodySchema.safeParse({
+    alert: { phrase: phrase === '' ? null : phrase, keywords: cleanKeywords(draft.keywords) },
+    message,
+  });
+  return body.success ? body.data : null;
+}
+
+/**
+ * Why « Tester » waits once a message is written: a message past its limit (the field already stops there), nothing
+ * to look for yet, or an alert the route would refuse (one word too many, said above under the keywords).
+ */
+export function testHint(draft: Pick<AlertDraft, 'phrase' | 'keywords'>, message: string): string | null {
+  if (message.trim() === '' || testBodyOf(draft, message) !== null) return null;
+  if (message.trim().length > ALERT_TEST_MESSAGE_MAX)
+    return `Ce message est trop long pour un essai : ${atMost(ALERT_TEST_MESSAGE_MAX)}`;
+  return draft.phrase.trim() === '' && cleanKeywords(draft.keywords).length === 0
+    ? 'Écris une phrase ou un mot-clé à tester.'
+    : 'Corrige l’alerte au-dessus pour la tester.';
+}
+
+/** Whether an answer was for this very test: the same phrase, the same words in the same order, the same message. */
+export const sameTest = (a: AlertTestBody, b: AlertTestBody): boolean =>
+  a.message === b.message &&
+  a.alert.phrase === b.alert.phrase &&
+  a.alert.keywords.length === b.alert.keywords.length &&
+  a.alert.keywords.every((word, index) => word === b.alert.keywords[index]);
+
+/** The answer of « Tester » in her words: whether it would ring, then why, word by word and for the phrase. */
+export interface TestVerdict {
+  readonly rings: boolean;
+  readonly headline: string;
+  readonly lines: readonly string[];
+  /** Why the phrase could not be read, as the server says it: in amber, never in red. */
+  readonly warning: string | null;
+}
+
+const quoted = (words: readonly string[]): string => words.map((word) => `« ${word} »`).join(', ');
+
+export function testVerdict(sent: AlertTestBody, result: AlertTestResult, pausesAgent: boolean): TestVerdict {
+  const rings = result.keywords.length > 0 || result.phraseMatched === true;
+  const lines: string[] = [];
+  if (sent.alert.keywords.length > 0) {
+    lines.push(
+      result.keywords.length === 0
+        ? 'Aucun de ses mots-clés n’est dans ce message.'
+        : `${result.keywords.length === 1 ? 'Mot-clé trouvé' : 'Mots-clés trouvés'} : ${quoted(result.keywords)}.`,
+    );
+  }
+  if (result.phraseMatched === true) lines.push('L’IA reconnaît la situation de la phrase.');
+  if (result.phraseMatched === false) lines.push('L’IA ne reconnaît pas la situation de la phrase.');
+  const unread = sent.alert.phrase !== null && result.phraseMatched === null;
+  const headline = rings
+    ? pausesAgent
+      ? 'Elle sonnerait, et mettrait l’agent en pause pour ce fan.'
+      : 'Elle sonnerait.'
+    : unread
+      ? 'La phrase n’a pas pu être lue.'
+      : 'Elle ne sonnerait pas.';
+  return { rings, headline, lines, warning: unread ? (result.reason ?? 'Réessaie dans un instant.') : null };
+}
 
 /**
  * The routing of Réglages › Telegram as this page reads it: who has no group for which topic, `'off'` when the
