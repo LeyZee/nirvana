@@ -246,7 +246,8 @@ export const REPORT_ERRORS: Readonly<Record<ReportRefusalCode, string>> = {
   shift_report_conflict: 'Ce rapport a déjà été envoyé avec d’autres valeurs : la liste est relue.',
   shift_report_exists_conflict: 'Ce shift a déjà son rapport : il est rouvert.',
   shift_report_early_conflict: 'Le rapport se fait à la fin du shift, 30 minutes avant au plus tôt.',
-  shift_report_changed_conflict: 'Ce rapport a changé depuis qu’il a été lu : la liste est relue.',
+  shift_report_changed_conflict:
+    'Ce rapport ou son shift a changé depuis qu’il a été lu : la liste est relue.',
   shift_report_validated_conflict: 'Un rapport validé ne change plus : il se corrige.',
   shift_report_total_conflict: 'Cette correction ferait passer le total validé du shift sous zéro.',
   shift_report_detected_conflict:
