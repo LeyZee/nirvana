@@ -29,3 +29,4 @@ Calculer la paie de chaque membre par quinzaine avec **les règles d'Imperium, s
 Écrans (EQ-05), factures et avoirs (EQ-06), import de l'historique (EQ-07), ventes détectées et attribution (EQ-08).
 
 ## Notes de session
+- 2026-10-28 (fil Équipe) : `PayPeriod` existe (`packages/contracts/src/pay-periods.ts`, EQ-03), et la TVA, la commission de la plateforme, la devise et la source de revenus sont les règles de paie d'un compte (`pay-rules.ts`), datées par quinzaine. Un rapport garde la quinzaine de son shift ; un rapport validé après la validation de sa quinzaine pour le membre est porté sur la période ouverte suivante (le test « rapport tardif » vient d'EQ-03). Si le fuseau de l'agence change, chaque relevé garde les instants de début et de fin de sa quinzaine, et la suivante part de la fin de la précédente : aucune vente détectée ne tombe entre deux périodes ni dans les deux.
