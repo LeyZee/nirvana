@@ -216,7 +216,10 @@ export const EVENT_PAYLOADS = {
   alert_triggered: z.object({
     conversationId: ConversationIdSchema,
     trigger: AlertTriggerSchema,
-    /** Sent to Telegram: her alert's `notify` when it went off, always for the system's; kept in the history either way. */
+    /**
+     * Sent to Telegram: her alert's `notify` when it went off, always for the system's; kept in the history either
+     * way.
+     */
     notify: z.boolean(),
   }),
   /**
