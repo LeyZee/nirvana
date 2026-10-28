@@ -16,6 +16,8 @@ export function PayNav(): JSX.Element {
       items={[
         { to: '/paie/quinzaine', label: 'Quinzaine', ...(count === 0 ? {} : { count }) },
         { to: '/paie/releves', label: 'Relevés' },
+        { to: '/paie/primes-malus', label: 'Primes et malus' },
+        { to: '/paie/objectifs', label: 'Objectifs' },
       ]}
     />
   );

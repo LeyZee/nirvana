@@ -1,7 +1,10 @@
 import {
+  BonusIdSchema,
   CommissionStatementIdSchema,
   newId,
+  PayAdjustmentIdSchema,
   PayPeriodSchema,
+  PayrollEntriesSchema,
   PenaltyIdSchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
@@ -9,6 +12,7 @@ import {
   UserIdSchema,
   type CommissionStatement,
   type CommissionStatementLine,
+  type PayPeriod,
   type PayPeriodSummary,
   type PayrollPeriod,
 } from '@nirvana/contracts';
@@ -18,13 +22,19 @@ import {
   carryLine,
   changeBps,
   countsLine,
+  draftPeriodsBefore,
+  entryByText,
+  entryRows,
+  firstOpenPeriod,
   flowOf,
   forecastNet,
   gaugePercent,
+  goalReachedBps,
   goalSpanBps,
   lateNetOf,
   memberFacts,
   parsePaySearch,
+  parseTarget,
   payRefusalText,
   periodAmount,
   periodToOpen,
@@ -34,10 +44,12 @@ import {
   reachedBpsOf,
   salesSplit,
   signedPercentText,
+  spanText,
   statementChips,
   statementsCsv,
   stopsThePeriod,
   summaryOf,
+  tickAmountText,
   tierAt,
   totalsOf,
   validatable,
@@ -564,5 +576,140 @@ describe('the figures of a period', () => {
     expect([gaugePercent(6_500, 13_000), gaugePercent(20_000, 13_000), gaugePercent(-5, 13_000)]).toEqual([
       50, 100, 0,
     ]);
+  });
+});
+
+describe('Primes et malus', () => {
+  const OWNER = newId(UserIdSchema);
+  const MEMBER = newId(TeamMemberIdSchema);
+  const NEXT = PayPeriodSchema.parse('2026-11-16');
+  const LAST = PayPeriodSchema.parse('2026-12-16');
+  const made = (day: number) => ({ createdBy: OWNER, createdAt: `2026-11-0${String(day)}T10:00:00.000Z` });
+  const entries = PayrollEntriesSchema.parse({
+    period: PERIOD,
+    bonuses: [
+      {
+        id: newId(BonusIdSchema),
+        memberId: MEMBER,
+        period: PERIOD,
+        amountMinor: 3_000,
+        reason: 'Formation',
+        ...made(9),
+        cancellation: null,
+      },
+    ],
+    penalties: [
+      {
+        id: newId(PenaltyIdSchema),
+        memberId: MEMBER,
+        fromPeriod: PERIOD,
+        toPeriod: LAST,
+        amount: { kind: 'percent', bps: 1_000 },
+        reason: 'Relances',
+        ...made(5),
+        cancellation: { cancelledAt: '2026-11-20T10:00:00.000Z', cancelledBy: OWNER, cancelledFrom: NEXT },
+      },
+      {
+        id: newId(PenaltyIdSchema),
+        memberId: MEMBER,
+        fromPeriod: PERIOD,
+        toPeriod: PERIOD,
+        amount: { kind: 'fixed', amountMinor: 1_500 },
+        reason: 'Retard',
+        ...made(4),
+        cancellation: { cancelledAt: '2026-11-06T10:00:00.000Z', cancelledBy: OWNER, cancelledFrom: PERIOD },
+      },
+    ],
+    adjustments: [
+      {
+        id: newId(PayAdjustmentIdSchema),
+        memberId: MEMBER,
+        period: PERIOD,
+        amountMinor: -1_240,
+        reason: 'Doublon',
+        correctsStatementId: null,
+        ...made(3),
+      },
+    ],
+  });
+
+  it('signs every amount, and strikes through what no longer counts in the period', () => {
+    const rows = entryRows(entries);
+    expect(rows.map((row) => [row.kind, plain(row.amount), row.struck, row.cancellable])).toEqual([
+      ['bonus', '+30,00 €', false, true],
+      ['percent', '−10 %', false, false],
+      ['fixed', '−15,00 €', true, false],
+      ['adjustment', '−12,40 €', false, false],
+    ]);
+    expect(rows[1]?.span).toEqual({ from: PERIOD, to: LAST });
+  });
+
+  it('says who made an entry, who cancelled it, and a penalty that still counts here', () => {
+    const [, spread, cancelled] = entryRows(entries);
+    if (spread === undefined || cancelled === undefined) throw new Error('rows');
+    const who = (): string => 'Charles';
+    expect(entryByText(cancelled, PERIOD, who, 'Europe/Paris')).toBe('annulé par Charles le ven. 6 nov.');
+    expect(entryByText(spread, PERIOD, who, 'Europe/Paris')).toBe(
+      'par Charles le jeu. 5 nov. · annulé par Charles le ven. 20 nov., à partir de la quinzaine du 16 au 30 novembre : il compte encore ici',
+    );
+    expect(spread.span === null ? '' : spanText(spread.span)).toBe(
+      'sur 4 quinzaines, du 1er nov. au 31 déc.',
+    );
+  });
+
+  it('finds where an entry goes: the member’s earliest draft in a closed period, else the team’s first open one', () => {
+    const OCT2 = PayPeriodSchema.parse('2026-10-16');
+    const summary = (period: PayPeriod, closed: boolean, draft: number) => ({
+      window: { ...WINDOW, period },
+      closedAt: closed ? '2026-11-02T08:41:00.000Z' : null,
+      statements: { draft, validated: 0, paid: 0, carried: 0 },
+    });
+    const known = draftPeriodsBefore([summary(PERIOD, false, 3), summary(OCT2, true, 1)], PERIOD);
+    expect(known).toEqual({ teamFirstOpen: PERIOD, drafts: [OCT2] });
+    const read = (statuses: Partial<Record<PayPeriod, 'draft' | 'validated'>>) => (period: PayPeriod) => {
+      const status = statuses[period];
+      return status === undefined ? undefined : { statements: [statement({ memberId: MEMBER, status })] };
+    };
+    const base = { memberId: MEMBER, joinedOn: '2026-09-01', after: null, ...known };
+    expect(firstOpenPeriod({ ...base, read: read({ [OCT2]: 'draft' }) })).toBe(OCT2);
+    expect(firstOpenPeriod({ ...base, read: read({ [OCT2]: 'validated' }) })).toBe(PERIOD);
+    // Still being read: nothing said yet.
+    expect(firstOpenPeriod({ ...base, read: read({}) })).toBeUndefined();
+    // Never at or before a statement already validated, never before the member joined.
+    expect(firstOpenPeriod({ ...base, after: OCT2, read: read({}) })).toBe(PERIOD);
+    expect(firstOpenPeriod({ ...base, joinedOn: '2026-11-20', read: read({ [OCT2]: 'draft' }) })).toBe(NEXT);
+    // No closing yet: the period under way, or an ended one where the member still has a draft.
+    expect(draftPeriodsBefore([summary(OCT2, false, 2)], PERIOD)).toEqual({
+      teamFirstOpen: PERIOD,
+      drafts: [OCT2],
+    });
+  });
+});
+
+describe('goals and tiers', () => {
+  it('reads a target up to its own ceiling, beyond an entry’s slip guard', () => {
+    expect(parseTarget('150 000')).toBe(15_000_000);
+    expect(parseTarget('1000000')).toBe(100_000_000);
+    expect(parseTarget('1000000,01')).toBeNull();
+  });
+
+  it('puts a tier’s bonus under the gauge without cents when it has none', () => {
+    expect(plain(tickAmountText(1_000))).toBe('+10 €');
+    expect(plain(tickAmountText(1_250))).toBe('+12,50 €');
+  });
+
+  it('takes the share reached as the engine froze it, else from the team’s net', () => {
+    const goal = { targetMinor: 100_000 };
+    expect(
+      goalReachedBps(
+        { statements: [statement({ netMinor: 30_000 }), statement({ netMinor: 20_000 })] },
+        goal,
+      ),
+    ).toBe(5_000);
+    const frozen = statement({
+      netMinor: 30_000,
+      team: { netMinor: 85_000, collective: { reachedBps: 8_500, tier: null } },
+    });
+    expect(goalReachedBps({ statements: [frozen] }, goal)).toBe(8_500);
   });
 });

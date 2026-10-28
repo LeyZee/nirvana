@@ -86,6 +86,7 @@ describe('an amount typed in a report', () => {
     expect(parseAmount('-5')).toBeNull();
     expect(parseAmount('50000,01')).toBeNull();
     expect(parseAmount('50000')).toBe(5_000_000);
+    expect(parseAmount('150 000', false, 100_000_000)).toBe(15_000_000);
   });
 
   it('takes a sign on a correction', () => {
@@ -193,6 +194,8 @@ describe('a rate', () => {
     expect(parsePercent('5,5 %')).toBe(550);
     expect(parsePercent('100')).toBe(10_000);
     expect(parsePercent('100,01')).toBeNull();
+    expect(parsePercent('1000')).toBeNull();
+    expect(parsePercent('120', 100_000)).toBe(12_000);
     expect(parsePercent('vingt')).toBeNull();
   });
 });

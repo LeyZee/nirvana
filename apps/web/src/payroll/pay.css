@@ -720,6 +720,20 @@
   text-decoration: line-through;
 }
 
+.py-entry .nv-confirm,
+.py-entry__refusal {
+  grid-column: 1 / -1;
+}
+.py-entry__ask {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  text-wrap: pretty;
+}
+.py-entry__refusal {
+  margin: 0;
+}
+
 /* ── Objectifs: a gauge with its tiers ── */
 .py-goal {
   display: flex;
@@ -823,6 +837,95 @@
   margin: 0;
   color: var(--nv-ink-faint);
   font-size: var(--nv-text-footnote);
+}
+
+.py-goal__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-2) var(--nv-space-3);
+}
+.py-fold__body {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+  padding: var(--nv-space-2) var(--nv-space-4) var(--nv-space-3);
+}
+
+/* ── Tiers typed in a dialog: a row per tier, its fields side by side ── */
+.py-tierform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.py-tierrows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.py-tierrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nv-space-2);
+}
+.py-tierrow--wide {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) auto;
+}
+.py-tierrow--head {
+  color: var(--nv-ink-faint);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 600;
+}
+.py-tierrow--head > :last-child {
+  grid-column: span 2;
+}
+.py-tierrow__field {
+  position: relative;
+  min-width: 0;
+}
+.py-tierrow__field .nv-field__control {
+  width: 100%;
+}
+.py-tierrow__field:has(.py-tierrow__suffix) .nv-field__control {
+  padding-right: 30px;
+}
+.py-tierrow__suffix {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--nv-ink-faint);
+  pointer-events: none;
+}
+.py-tierrow[data-invalid='true'] .nv-field__control {
+  box-shadow: inset 0 0 0 1.5px var(--nv-warning);
+}
+.py-tierform__add {
+  align-self: flex-start;
+}
+.py-foot__aside {
+  margin-right: auto;
+}
+@media (max-width: 520px) {
+  .py-tierrow--wide {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .py-tierrow--wide > :first-child {
+    grid-column: 1 / -1;
+  }
+  .py-tierrow--head.py-tierrow--wide {
+    display: none;
+  }
 }
 
 /* ── Commissions (chatter) ── */

@@ -1,13 +1,25 @@
 import {
+  BonusTierSetSchema,
+  BonusViewSchema,
+  CollectiveGoalSchema,
   CommissionStatementLineSchema,
   CommissionStatementSchema,
+  PayAdjustmentViewSchema,
+  PayrollEntriesSchema,
   PayrollPeriodSchema,
+  PenaltyViewSchema,
   TeamMemberSchema,
+  type BonusTierSet,
+  type BonusView,
+  type CollectiveGoal,
   type CommissionStatement,
   type CommissionStatementLine,
   type Me,
+  type PayAdjustmentView,
   type PayPeriodSummary,
+  type PayrollEntries,
   type PayrollPeriod,
+  type PenaltyView,
   type TeamMember,
 } from '@nirvana/contracts';
 
@@ -101,11 +113,13 @@ export const PAY_RULES = {
 export const OCT1 = '2026-10-01';
 export const OCT2 = '2026-10-16';
 export const NOV1 = '2026-11-01';
+export const NOV2 = '2026-11-16';
 
 const WINDOWS: Readonly<Record<string, { startsAt: string; endsAt: string }>> = {
   [OCT1]: { startsAt: '2026-09-30T22:00:00.000Z', endsAt: '2026-10-15T22:00:00.000Z' },
   [OCT2]: { startsAt: '2026-10-15T22:00:00.000Z', endsAt: '2026-10-31T23:00:00.000Z' },
   [NOV1]: { startsAt: '2026-10-31T23:00:00.000Z', endsAt: '2026-11-15T23:00:00.000Z' },
+  [NOV2]: { startsAt: '2026-11-15T23:00:00.000Z', endsAt: '2026-11-30T23:00:00.000Z' },
 };
 
 const windowOf = (period: string): { period: string; startsAt: string; endsAt: string; timeZone: string } => {
@@ -197,7 +211,7 @@ export function periodOf(
   return PayrollPeriodSchema.parse({
     period,
     window: windowOf(period),
-    ended: period !== NOV1,
+    ended: period < NOV1,
     closing: null,
     statements,
     bonusTiers: null,
@@ -236,3 +250,109 @@ export const SCHEDULING_SETTINGS = {
   slotLengthMinutes: 360,
   accessMarginMinutes: 15,
 };
+
+/** A bonus of `whose` for `period`, made by the owner: `n` tells it apart. */
+export function bonusOf(
+  n: number,
+  whose: TeamMember,
+  period: string,
+  patch: Partial<Record<keyof BonusView, unknown>> = {},
+): BonusView {
+  return BonusViewSchema.parse({
+    id: payId(700 + n),
+    memberId: whose.id,
+    period,
+    amountMinor: 3_000,
+    reason: 'A formé un nouveau aux relances, deux soirs.',
+    createdBy: OWNER_USER,
+    createdAt: '2026-11-09T10:00:00.000Z',
+    cancellation: null,
+    ...patch,
+  });
+}
+
+/** A fixed penalty on `whose` for `period` alone, made by the owner. */
+export function penaltyOf(
+  n: number,
+  whose: TeamMember,
+  period: string,
+  patch: Partial<Record<keyof PenaltyView, unknown>> = {},
+): PenaltyView {
+  return PenaltyViewSchema.parse({
+    id: payId(720 + n),
+    memberId: whose.id,
+    fromPeriod: period,
+    toPeriod: period,
+    amount: { kind: 'fixed', amountMinor: 1_500 },
+    reason: 'Shift commencé avec 40 minutes de retard.',
+    createdBy: OWNER_USER,
+    createdAt: '2026-11-05T10:00:00.000Z',
+    cancellation: null,
+    ...patch,
+  });
+}
+
+/** An adjustment of `whose` landed on `period`, made by the owner. */
+export function adjustmentOf(
+  n: number,
+  whose: TeamMember,
+  period: string,
+  patch: Partial<Record<keyof PayAdjustmentView, unknown>> = {},
+): PayAdjustmentView {
+  return PayAdjustmentViewSchema.parse({
+    id: payId(740 + n),
+    memberId: whose.id,
+    period,
+    amountMinor: -1_240,
+    reason: 'Rapport du 28 oct. compté deux fois.',
+    correctsStatementId: null,
+    createdBy: OWNER_USER,
+    createdAt: '2026-11-03T10:00:00.000Z',
+    ...patch,
+  });
+}
+
+/** The team's goal for `period`: 1 500 € of net, 80 % brings each chatter 10 €, 100 % brings 25 €. */
+export function goalOf(
+  period: string,
+  patch: Partial<Record<keyof CollectiveGoal, unknown>> = {},
+): CollectiveGoal {
+  return CollectiveGoalSchema.parse({
+    id: payId(760 + [OCT1, OCT2, NOV1, NOV2].indexOf(period)),
+    period,
+    targetMinor: 150_000,
+    tiers: [
+      { reachedBps: 10_000, bonusMinor: 2_500 },
+      { reachedBps: 8_000, bonusMinor: 1_000 },
+    ],
+    createdBy: OWNER_USER,
+    createdAt: '2026-10-30T17:00:00.000Z',
+    ...patch,
+  });
+}
+
+/** Individual tiers from `fromPeriod` on: Bronze at 500 € of net brings 10 €, Argent at 1 000 € brings 25 €. */
+export function tierSetOf(
+  n: number,
+  fromPeriod: string,
+  patch: Partial<Record<keyof BonusTierSet, unknown>> = {},
+): BonusTierSet {
+  return BonusTierSetSchema.parse({
+    id: payId(780 + n),
+    fromPeriod,
+    tiers: [
+      { label: 'Argent', thresholdMinor: 100_000, bonusMinor: 2_500 },
+      { label: 'Bronze', thresholdMinor: 50_000, bonusMinor: 1_000 },
+    ],
+    createdBy: OWNER_USER,
+    createdAt: '2026-09-28T17:00:00.000Z',
+    ...patch,
+  });
+}
+
+/** A period's entries as `/v1/payroll/entries` gives them. */
+export const entriesOf = (
+  period: string,
+  entries: { bonuses?: unknown[]; penalties?: unknown[]; adjustments?: unknown[] } = {},
+): PayrollEntries =>
+  PayrollEntriesSchema.parse({ period, bonuses: [], penalties: [], adjustments: [], ...entries });

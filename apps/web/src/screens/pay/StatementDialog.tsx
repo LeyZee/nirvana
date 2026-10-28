@@ -8,6 +8,7 @@ import {
 } from '@nirvana/contracts';
 import { useId, useState, type JSX } from 'react';
 
+import { EntryForm, type EntryAdded } from './EntryForm';
 import type { PayNames } from './data';
 import { Chip, Delta, MoneyPath, Swatch } from './parts';
 
@@ -34,12 +35,13 @@ import {
 import { clockAt, dayMonth, dayOf, longDay } from '@/scheduling/time';
 import { Dialog } from '@/screens/team/Dialog';
 
-type Mode = 'read' | 'pay' | 'check';
+type Mode = 'read' | 'pay' | 'check' | 'adjust';
 
 /**
  * A statement opened from its row (EQ-05): the path of the money account by account, then what adds up to what is
  * paid; folded, the rules it copied and its revision. Its one gesture: « Valider la révision n », or for the owner
- * « Marquer payé » in two steps (fill, read again).
+ * « Marquer payé » in two steps (fill, read again). A validated or paid statement no longer changes: « Ajuster » adds
+ * an adjustment on the member's next period to validate.
  */
 export function StatementDialog({
   statement,
@@ -70,6 +72,8 @@ export function StatementDialog({
   const member = names.member(statement.memberId);
   const [mode, setMode] = useState<Mode>(paying ? 'pay' : 'read');
   const [busy, setBusy] = useState(false);
+  const [adjusted, setAdjusted] = useState<EntryAdded | null>(null);
+  const own = member.userId === me.id;
   const zone = statement.window.timeZone;
   const status = statementChips(statement, period.ended).map((chip) => chip.label);
   const who = (userId: string | null): string =>
@@ -170,9 +174,14 @@ export function StatementDialog({
               </dd>
             </dl>
           </details>
+          {adjusted === null ? null : (
+            <p className="py-quiet nv-swap" role="status">
+              {adjusted.text}
+            </p>
+          )}
           <Foot
             statement={statement}
-            own={member.userId === me.id}
+            own={own}
             owner={owner}
             canValidateNow={canValidateNow}
             who={who}
@@ -183,8 +192,32 @@ export function StatementDialog({
             onPay={() => {
               setMode('pay');
             }}
+            onAdjust={
+              own || statement.status === 'draft'
+                ? null
+                : () => {
+                    setAdjusted(null);
+                    setMode('adjust');
+                  }
+            }
           />
         </div>
+      ) : mode === 'adjust' ? (
+        <EntryForm
+          kind="adjustment"
+          members={names.members.filter((one) => one.id === statement.memberId)}
+          corrects={statement}
+          pagePeriod={null}
+          busy={busy}
+          onBusy={setBusy}
+          onDone={(added) => {
+            setAdjusted(added);
+            setMode('read');
+          }}
+          onCancel={() => {
+            setMode('read');
+          }}
+        />
       ) : (
         <PayForm
           statement={statement}
@@ -227,6 +260,7 @@ function Foot({
   onClose,
   onValidate,
   onPay,
+  onAdjust,
 }: {
   statement: CommissionStatement;
   own: boolean;
@@ -236,6 +270,8 @@ function Foot({
   onClose: () => void;
   onValidate: () => void;
   onPay: () => void;
+  /** « Ajuster », on a statement validated or paid that is not the reader's. */
+  onAdjust: (() => void) | null;
 }): JSX.Element {
   const zone = statement.window.timeZone;
   const validate = statement.status === 'draft' && statement.canValidate && canValidateNow;
@@ -258,6 +294,11 @@ function Foot({
       <button type="button" className="nv-btn nv-btn--plain" onClick={onClose}>
         Fermer
       </button>
+      {onAdjust === null ? null : (
+        <button type="button" className="nv-btn nv-btn--soft" onClick={onAdjust}>
+          Ajuster
+        </button>
+      )}
       {validate ? (
         <button type="button" className="nv-btn nv-btn--neon" data-autofocus onClick={onValidate}>
           Valider la révision {statement.revision}

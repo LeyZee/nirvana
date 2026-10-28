@@ -1,6 +1,10 @@
 import {
+  PAY_TARGET_MAX_MINOR,
   payPeriodLastDay,
+  payPeriodOfDay,
   PayPeriodSchema,
+  penaltyApplies,
+  type BonusTier,
   type CollectiveGoal,
   type CollectiveTier,
   type CommissionStatement,
@@ -11,6 +15,7 @@ import {
   type PayPeriod,
   type PayPeriodSummary,
   type PayPeriodWindow,
+  type PayrollEntries,
   type PayrollPeriod,
   type Platform,
   type TeamMember,
@@ -18,7 +23,14 @@ import {
 
 import type { PayRefusal, PayRefusalCode } from './api';
 
-import { amountText, percentText, periodLine, signedAmountText } from '@/reports/model';
+import {
+  amountText,
+  followingPeriod,
+  parseAmount,
+  percentText,
+  periodLine,
+  signedAmountText,
+} from '@/reports/model';
 import { platformName } from '@/scheduling/model';
 import { clockAt, dayMonth, dayOf, daysFrom, longDay } from '@/scheduling/time';
 
@@ -648,3 +660,225 @@ export const gaugePercent = (bps: number, spanBps: number): number =>
 
 /** « 3f9c…a41e »: a statement's fingerprint, short. */
 export const shortHash = (hash: string): string => `${hash.slice(0, 4)}…${hash.slice(-4)}`;
+
+/** What an entry of Primes et malus is, in the screens' words: never « sanction ». */
+export type EntryKind = 'bonus' | 'fixed' | 'percent' | 'adjustment';
+export const ENTRY_KIND_LABELS: Readonly<Record<EntryKind, string>> = {
+  bonus: 'Prime',
+  fixed: 'Malus',
+  percent: 'Malus en pourcentage',
+  adjustment: 'Ajustement',
+};
+
+/** An entry of a period as Primes et malus lists it, whatever its kind. */
+export interface EntryRow {
+  readonly id: string;
+  readonly kind: EntryKind;
+  readonly memberId: string;
+  /** Its amount with its sign: « +30,00 € », « −15,00 € », « −10 % ». */
+  readonly amount: string;
+  readonly reason: string;
+  readonly createdBy: string | null;
+  readonly createdAt: string;
+  /** Struck through: it does not count in this period (cancelled, or a penalty cancelled from here or before). */
+  readonly struck: boolean;
+  readonly cancellation: {
+    readonly at: string;
+    readonly by: string | null;
+    /** A penalty's: the first period it stopped counting in. */
+    readonly from: PayPeriod | null;
+  } | null;
+  /** A penalty over several periods: its first and last. */
+  readonly span: { readonly from: PayPeriod; readonly to: PayPeriod } | null;
+  /** The statement an adjustment corrects. */
+  readonly corrects: string | null;
+  /** A bonus or a penalty nobody cancelled: it may be, while a period it counts in is open. */
+  readonly cancellable: boolean;
+}
+
+/** A period's entries as one list, the newest first, as the server gives each kind. */
+export function entryRows(entries: PayrollEntries): EntryRow[] {
+  const bonuses = entries.bonuses.map((bonus): EntryRow => ({
+    id: bonus.id,
+    kind: 'bonus',
+    memberId: bonus.memberId,
+    amount: signedAmountText(bonus.amountMinor, 'EUR'),
+    reason: bonus.reason,
+    createdBy: bonus.createdBy,
+    createdAt: bonus.createdAt,
+    struck: bonus.cancellation !== null,
+    cancellation:
+      bonus.cancellation === null
+        ? null
+        : { at: bonus.cancellation.cancelledAt, by: bonus.cancellation.cancelledBy, from: null },
+    span: null,
+    corrects: null,
+    cancellable: bonus.cancellation === null,
+  }));
+  const penalties = entries.penalties.map((penalty): EntryRow => ({
+    id: penalty.id,
+    kind: penalty.amount.kind,
+    memberId: penalty.memberId,
+    amount:
+      penalty.amount.kind === 'fixed'
+        ? signedAmountText(-penalty.amount.amountMinor, 'EUR')
+        : signedPercentText(-penalty.amount.bps),
+    reason: penalty.reason,
+    createdBy: penalty.createdBy,
+    createdAt: penalty.createdAt,
+    struck: !penaltyApplies(penalty, entries.period),
+    cancellation:
+      penalty.cancellation === null
+        ? null
+        : {
+            at: penalty.cancellation.cancelledAt,
+            by: penalty.cancellation.cancelledBy,
+            from: penalty.cancellation.cancelledFrom,
+          },
+    span: penalty.fromPeriod === penalty.toPeriod ? null : { from: penalty.fromPeriod, to: penalty.toPeriod },
+    corrects: null,
+    cancellable: penalty.cancellation === null,
+  }));
+  const adjustments = entries.adjustments.map((adjustment): EntryRow => ({
+    id: adjustment.id,
+    kind: 'adjustment',
+    memberId: adjustment.memberId,
+    amount: signedAmountText(adjustment.amountMinor, 'EUR'),
+    reason: adjustment.reason,
+    createdBy: adjustment.createdBy,
+    createdAt: adjustment.createdAt,
+    struck: false,
+    cancellation: null,
+    span: null,
+    corrects: adjustment.correctsStatementId,
+    cancellable: false,
+  }));
+  return [...bonuses, ...penalties, ...adjustments].toSorted((a, b) =>
+    a.createdAt === b.createdAt ? b.id.localeCompare(a.id) : b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+const DAY_SHORT_MONTH = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/** « 1er nov. », « 15 déc. »: a day of a span of periods. */
+const dayShortMonth = (day: string): string => {
+  const text = DAY_SHORT_MONTH.format(new Date(`${day}T12:00:00Z`));
+  return day.endsWith('-01') ? text.replace(/^1(?=\s)/u, '1er') : text;
+};
+
+/** The periods from `from` to `to`, both included. */
+export function periodsBetween(from: PayPeriod, to: PayPeriod): PayPeriod[] {
+  const periods: PayPeriod[] = [];
+  for (let period = from; period <= to; period = followingPeriod(period)) periods.push(period);
+  return periods;
+}
+
+/** « sur 3 quinzaines, du 1er nov. au 15 déc. »: a penalty over several periods. */
+export const spanText = (span: { readonly from: PayPeriod; readonly to: PayPeriod }): string =>
+  `sur ${String(periodsBetween(span.from, span.to).length)} quinzaines, du ${dayShortMonth(span.from)} au ${dayShortMonth(payPeriodLastDay(span.to))}`;
+
+/** Who made an entry and when, or who cancelled it: « par Charles le lun. 9 nov. », « annulé par Charles le … ». */
+export function entryByText(
+  row: Pick<EntryRow, 'createdBy' | 'createdAt' | 'cancellation'>,
+  period: PayPeriod,
+  who: (userId: string) => string,
+  timeZone: string,
+): string {
+  const by = (userId: string | null): string => (userId === null ? '' : ` par ${who(userId)}`);
+  const made = `${by(row.createdBy).trim()} le ${dayAt(row.createdAt, timeZone)}`;
+  const { cancellation } = row;
+  if (cancellation === null) return made;
+  const cancelled = `annulé${by(cancellation.by)} le ${dayAt(cancellation.at, timeZone)}`;
+  if (cancellation.from !== null && cancellation.from > period)
+    return `${made} · ${cancelled}, à partir de la quinzaine ${periodLine(cancellation.from)} : il compte encore ici`;
+  return cancelled;
+}
+
+/**
+ * The periods `GET /v1/payroll/periods` says hold drafts before the team's first open one: where a member's next
+ * statement to validate may be. The rest of the first page is enough: periods close in order (ADR 0032).
+ */
+export function draftPeriodsBefore(
+  summaries: readonly Pick<PayPeriodSummary, 'window' | 'closedAt' | 'statements'>[],
+  current: PayPeriod,
+): { readonly teamFirstOpen: PayPeriod; readonly drafts: readonly PayPeriod[] } {
+  const lastClosed = summaries.find((summary) => summary.closedAt !== null)?.window.period ?? null;
+  const teamFirstOpen = lastClosed === null ? current : followingPeriod(lastClosed);
+  const drafts = summaries
+    .filter((summary) => summary.statements.draft > 0 && summary.window.period < teamFirstOpen)
+    .map((summary) => summary.window.period)
+    .toSorted();
+  return { teamFirstOpen, drafts };
+}
+
+/**
+ * The member's first period open to an entry, as the server chooses it for an adjustment (`adjustmentPeriod`): their
+ * earliest draft before the team's first open period, or else that one; never before they joined, nor at or before
+ * `after` (a statement of theirs already validated). `undefined` while a period it needs is still being read.
+ */
+export function firstOpenPeriod({
+  memberId,
+  joinedOn,
+  after,
+  teamFirstOpen,
+  drafts,
+  read,
+}: {
+  memberId: string;
+  joinedOn: string;
+  after: PayPeriod | null;
+  teamFirstOpen: PayPeriod;
+  drafts: readonly PayPeriod[];
+  read: (period: PayPeriod) => Pick<PayrollPeriod, 'statements'> | undefined;
+}): PayPeriod | undefined {
+  let found = teamFirstOpen;
+  for (const period of drafts) {
+    if (after !== null && period <= after) continue;
+    const data = read(period);
+    if (data === undefined) return undefined;
+    if (data.statements.some((one) => one.memberId === memberId && one.status === 'draft')) {
+      found = period;
+      break;
+    }
+  }
+  const floors = [payPeriodOfDay(joinedOn), ...(after === null ? [] : [followingPeriod(after)])];
+  return floors.reduce((latest, floor) => (floor > latest ? floor : latest), found);
+}
+
+/** A target typed in euros: up to the ceiling of a goal or a tier, not the slip guard of an entry. */
+export const parseTarget = (text: string): number | null => parseAmount(text, false, PAY_TARGET_MAX_MINOR);
+
+/** A goal's tiers in their order, the lowest first. */
+export const goalTiersInOrder = (tiers: readonly CollectiveTier[]): CollectiveTier[] =>
+  tiers.toSorted((a, b) => a.reachedBps - b.reachedBps);
+
+/** Individual tiers in their order, the lowest threshold first. */
+export const bonusTiersInOrder = (tiers: readonly BonusTier[]): BonusTier[] =>
+  tiers.toSorted((a, b) => a.thresholdMinor - b.thresholdMinor);
+
+/** The team's net in a period: the sum of its members' nets, managers' sales included. */
+export const teamNetOf = (statements: readonly Pick<CommissionStatement, 'netMinor'>[]): number =>
+  statements.reduce((sum, one) => sum + one.netMinor, 0);
+
+/**
+ * How far the team is towards the period's goal, in basis points: as the engine saw it in the statements (frozen once
+ * the period is closed), else from the team's net.
+ */
+export function goalReachedBps(
+  period: Pick<PayrollPeriod, 'statements'>,
+  goal: Pick<CollectiveGoal, 'targetMinor'>,
+): number {
+  const seen = period.statements.map((one) => one.team?.collective ?? null).find((one) => one !== null);
+  return seen?.reachedBps ?? reachedBpsOf(teamNetOf(period.statements), goal.targetMinor);
+}
+
+const WHOLE_EUROS = new Intl.NumberFormat('fr-FR', {
+  style: 'currency',
+  currency: 'EUR',
+  signDisplay: 'exceptZero',
+  maximumFractionDigits: 0,
+});
+
+/** « +10 € », « +12,50 € »: a tier's bonus under the gauge, without cents when it has none. */
+export const tickAmountText = (minor: number): string =>
+  minor % 100 === 0 ? WHOLE_EUROS.format(minor / 100).replace('-', '−') : signedAmountText(minor, 'EUR');

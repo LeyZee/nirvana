@@ -11,6 +11,8 @@ import { CreatorsPage } from './creators/CreatorsPage';
 import { parseCreatorsSearch } from './creators/search';
 import { parsePaySearch } from './payroll/model';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { EntriesPage } from './screens/pay/EntriesPage';
+import { GoalsPage } from './screens/pay/GoalsPage';
 import { PeriodPage } from './screens/pay/PeriodPage';
 import { PeriodsPage } from './screens/pay/PeriodsPage';
 import { MyPlanningPage } from './screens/planning/MyPlanningPage';
@@ -234,6 +236,40 @@ const payPeriod = createRoute({
     );
   },
 });
+const payEntries = createRoute({
+  getParentRoute: () => pay,
+  path: '/primes-malus',
+  validateSearch: parsePaySearch,
+  component: function PayEntries() {
+    const { quinzaine } = payEntries.useSearch();
+    const navigate = payEntries.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <EntriesPage
+        user={user}
+        chosen={quinzaine ?? null}
+        onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
+      />
+    );
+  },
+});
+const payGoals = createRoute({
+  getParentRoute: () => pay,
+  path: '/objectifs',
+  validateSearch: parsePaySearch,
+  component: function PayGoals() {
+    const { quinzaine } = payGoals.useSearch();
+    const navigate = payGoals.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <GoalsPage
+        user={user}
+        chosen={quinzaine ?? null}
+        onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
+      />
+    );
+  },
+});
 const payPeriods = createRoute({
   getParentRoute: () => pay,
   path: '/releves',
@@ -356,7 +392,7 @@ const routeTree = rootRoute.addChildren([
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
-  pay.addChildren([payIndex, payPeriod, payPeriods]),
+  pay.addChildren([payIndex, payPeriod, payPeriods, payEntries, payGoals]),
   settings.addChildren([
     settingsIndex,
     aiModels,

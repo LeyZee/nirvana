@@ -7,8 +7,8 @@ import type {
   TeamMember,
 } from '@nirvana/contracts';
 
-import { useExchangeRates, usePayPeriod, usePayPeriods } from '@/payroll/api';
-import { periodToOpen, rateMissing, validatable } from '@/payroll/model';
+import { useExchangeRates, usePayPeriod, usePayPeriodReads, usePayPeriods } from '@/payroll/api';
+import { draftPeriodsBefore, firstOpenPeriod, periodToOpen, rateMissing, validatable } from '@/payroll/model';
 import { usePayRules, useReports, useSchedulingSettings } from '@/reports/api';
 import { periodAt } from '@/reports/model';
 import { useNow } from '@/scheduling/useNow';
@@ -81,6 +81,23 @@ export function useValidateCount(): number {
   const read = usePayPeriod(target);
   const block = usePeriodBlock(read.data);
   return read.data === undefined || block !== null ? 0 : validatable(read.data).length;
+}
+
+/**
+ * The member's first period open to an entry, where the server puts an adjustment: `undefined` while it is being read
+ * or without a member. After `after`, a statement of theirs already validated, when one is known.
+ */
+export function useFirstOpenPeriod(
+  member: Pick<TeamMember, 'id' | 'joinedOn'> | null,
+  after: PayPeriod | null,
+): PayPeriod | undefined {
+  const current = useCurrentPeriod();
+  const index = usePayPeriods();
+  // Without the list of periods (the server did not answer), the current one: the server says if it is not open.
+  const known = current === null ? null : draftPeriodsBefore(index.data?.pages[0]?.items ?? [], current);
+  const read = usePayPeriodReads(member === null || known === null ? [] : known.drafts);
+  if (member === null || known === null || (index.data === undefined && !index.isError)) return undefined;
+  return firstOpenPeriod({ memberId: member.id, joinedOn: member.joinedOn, after, ...known, read });
 }
 
 /** A member as pay names them: from the team's list, or from the reports' when the team's is not readable. */

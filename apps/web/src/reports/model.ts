@@ -24,9 +24,9 @@ const NBSP = '\u00a0';
 
 /**
  * A typed amount in minor units: « 1 234,56 », « 1234.5 », « 12 € »; a sign only where it is allowed (a correction).
- * `null` for anything else: letters, three decimals, more than the slip guard.
+ * `null` for anything else: letters, three decimals, more than `max` (the slip guard, or a target's ceiling).
  */
-export function parseAmount(text: string, signed = false): number | null {
+export function parseAmount(text: string, signed = false, max = SHIFT_REPORT_MAX_MINOR): number | null {
   const bare = text.replace(/[\s\u00a0\u202f€$]/gu, '').replace(/^(EUR|USD)|(EUR|USD)$/giu, '');
   const match = /^([+\-−]?)(\d+)(?:[.,](\d{1,2}))?$/u.exec(bare);
   if (match === null) return null;
@@ -34,7 +34,7 @@ export function parseAmount(text: string, signed = false): number | null {
   if (sign !== '' && !signed) return null;
   if (units.length > 9) return null;
   const minor = Number(units) * 100 + Number(cents.padEnd(2, '0'));
-  if (minor > SHIFT_REPORT_MAX_MINOR) return null;
+  if (minor > max) return null;
   return sign === '-' || sign === '−' ? -minor : minor;
 }
 
@@ -225,13 +225,13 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
 export const percentText = (bps: number): string =>
   `${(bps / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}${NBSP}%`;
 
-/** A typed percentage in basis points, 0 to 100 with two decimals at most; `null` otherwise. */
-export function parsePercent(text: string): number | null {
-  const match = /^(\d{1,3})(?:[.,](\d{1,2}))?$/u.exec(text.replace(/[\s\u00a0%]/gu, ''));
+/** A typed percentage in basis points, 0 to `max` (100 %) with two decimals at most; `null` otherwise. */
+export function parsePercent(text: string, max = 10_000): number | null {
+  const match = /^(\d{1,4})(?:[.,](\d{1,2}))?$/u.exec(text.replace(/[\s\u00a0%]/gu, ''));
   if (match === null) return null;
   const [, units = '0', decimals = ''] = match;
   const bps = Number(units) * 100 + Number(decimals.padEnd(2, '0'));
-  return bps <= 10_000 ? bps : null;
+  return bps <= max ? bps : null;
 }
 
 /** The periods new rules may start with: the current one for an account's first rules, then the next ones. */

@@ -31,6 +31,7 @@ import {
   daysLeft,
   forecastNet,
   gaugePercent,
+  goalReachedBps,
   goalSpanBps,
   lateNetOf,
   memberFacts,
@@ -47,6 +48,7 @@ import {
   statementsCsv,
   stopsThePeriod,
   summaryOf,
+  teamNetOf,
   tierAt,
   validatable,
   whoName,
@@ -523,18 +525,14 @@ function Summary({
   const { window, statements } = data;
   const summary = summaryOf(data);
   const phase = phaseOf(summary);
-  const net = statements.reduce((sum, one) => sum + one.netMinor, 0);
+  const net = teamNetOf(statements);
   const lastDay = payPeriodLastDay(data.period);
   const forecast = window === null ? null : forecastNet(net, lateNetOf(statements), window, now);
   const previousNet =
-    previous === undefined || previous.statements.length === 0
-      ? null
-      : previous.statements.reduce((sum, one) => sum + one.netMinor, 0);
+    previous === undefined || previous.statements.length === 0 ? null : teamNetOf(previous.statements);
   const previousName = periodTitle(previousPeriod(data.period));
   const goal = data.collectiveGoal;
-  const reached =
-    statements.map((one) => one.team?.collective ?? null).find((one) => one !== null)?.reachedBps ??
-    (goal === null ? 0 : reachedBpsOf(net, goal.targetMinor));
+  const reached = goal === null ? 0 : goalReachedBps(data, goal);
   const amount = periodAmount(summary);
   const zone = window?.timeZone ?? null;
 

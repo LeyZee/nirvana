@@ -17,6 +17,7 @@ import { PeriodPage } from './PeriodPage';
 import { parsePaySearch } from '@/payroll/model';
 import { HoldProvider } from '@/reports/Hold';
 import {
+  adjustmentOf,
   BASILE,
   IRIS,
   IRIS_ME,
@@ -44,6 +45,8 @@ vi.mock('@/scheduling/time', async (importOriginal) => ({
 const NBSP = /[\u00a0\u202f]/gu;
 const refusal = (code: string) => ({ error: { code, message: code, details: {}, requestId: 'req-1' } });
 const text = (element: Element | null | undefined): string => (element?.textContent ?? '').replace(NBSP, ' ');
+/** An adjustment's id, made by the screen. */
+const AN_ID: unknown = expect.any(String);
 
 let periods: Record<string, PayrollPeriod | 'down'>;
 let reports: unknown[];
@@ -314,6 +317,53 @@ describe('Paie › Quinzaine', () => {
         },
       ]);
     });
+  });
+
+  it('adjusts a validated statement on the member’s next period to validate, which it says before sending', async () => {
+    const validated = statementOf(THEO, OCT2, { status: 'validated', canValidate: false });
+    periods[OCT2] = periodOf(OCT2, [validated], {
+      closing: {
+        period: OCT2,
+        exchangeRates: [],
+        closedBy: OWNER_USER,
+        closedAt: '2026-11-02T08:41:00.000Z',
+      },
+    });
+    answer = () => ({
+      status: 201,
+      body: adjustmentOf(9, THEO, NOV1, { amountMinor: 500, correctsStatementId: validated.id }),
+    });
+    renderPage(OWNER, `/paie/quinzaine?quinzaine=${OCT2}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Théo' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajuster' }));
+    expect(text(await within(dialog).findByText(/^Il va sur la quinzaine/u))).toBe(
+      'Il va sur la quinzaine du 1er au 15 novembre : la prochaine de Théo à valider.',
+    );
+    fireEvent.change(within(dialog).getByLabelText('Montant'), { target: { value: '5' } });
+    fireEvent.change(within(dialog).getByLabelText('Motif'), {
+      target: { value: 'Rapport du 28 oct. oublié.' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(text(await within(dialog).findByText(/^Il corrige/u))).toBe(
+      'Il corrige son relevé du 16 au 31 octobre, qui ne change plus. Un ajustement ne s’annule pas : une erreur se corrige par un autre. Théo le lira avec son relevé.',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter l’ajustement' }));
+    expect(text(await within(dialog).findByRole('status'))).toBe(
+      'Ajustement de +5,00 € pour Théo ajouté sur la quinzaine du 1er au 15 novembre.',
+    );
+    expect(writes).toEqual([
+      {
+        path: '/v1/payroll/adjustments',
+        body: {
+          id: AN_ID,
+          memberId: THEO.id,
+          amountMinor: 500,
+          reason: 'Rapport du 28 oct. oublié.',
+          correctsStatementId: validated.id,
+        },
+      },
+    ]);
   });
 
   it('never offers a manager to mark a statement paid', async () => {

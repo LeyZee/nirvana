@@ -34,6 +34,7 @@ import {
 } from '@nirvana/contracts';
 import {
   useInfiniteQuery,
+  useQueries,
   useQuery,
   useQueryClient,
   type InfiniteData,
@@ -71,16 +72,33 @@ const codeOf = async (response: Response): Promise<string | null> => {
 export const PAYROLL_KEY = ['payroll'] as const;
 const periodKey = (period: PayPeriod) => [...PAYROLL_KEY, 'period', period] as const;
 
+const readPeriod = (period: PayPeriod): Promise<PayrollPeriod> =>
+  read(`/v1/payroll/periods/${period}`, (body) => PayrollPeriodSchema.parse(body));
+
 /** A period as its reader may see it: its statements, closing, tiers, goal and minimum. */
 export function usePayPeriod(period: PayPeriod | null): UseQueryResult<PayrollPeriod> {
   return useQuery({
     queryKey: [...PAYROLL_KEY, 'period', period],
-    queryFn: () => read(`/v1/payroll/periods/${period ?? ''}`, (body) => PayrollPeriodSchema.parse(body)),
+    queryFn: () => (period === null ? Promise.reject(new Error('No period')) : readPeriod(period)),
     enabled: period !== null,
     // A recalculation lands without a write here (a report validated, the hourly run): read again every minute.
     refetchInterval: 60_000,
     placeholderData: (before) => before,
   });
+}
+
+/** Several periods at once, from the same cache as `usePayPeriod`: those that say where a member's next entry goes. */
+export function usePayPeriodReads(
+  periods: readonly PayPeriod[],
+): (period: PayPeriod) => PayrollPeriod | undefined {
+  const reads = useQueries({
+    queries: periods.map((period) => ({
+      queryKey: periodKey(period),
+      queryFn: () => readPeriod(period),
+      refetchInterval: 60_000,
+    })),
+  });
+  return (period) => reads[periods.indexOf(period)]?.data;
 }
 
 /** The first page of a list: no cursor. */
@@ -101,10 +119,12 @@ export function usePayPeriods(): UseInfiniteQueryResult<InfiniteData<PayPeriodPa
 }
 
 /** A period's bonuses, penalties and adjustments, cancelled ones included. */
-export function usePayEntries(period: PayPeriod): UseQueryResult<PayrollEntries> {
+export function usePayEntries(period: PayPeriod | null): UseQueryResult<PayrollEntries> {
   return useQuery({
     queryKey: [...PAYROLL_KEY, 'entries', period],
-    queryFn: () => read(`/v1/payroll/entries?period=${period}`, (body) => PayrollEntriesSchema.parse(body)),
+    queryFn: () =>
+      read(`/v1/payroll/entries?period=${period ?? ''}`, (body) => PayrollEntriesSchema.parse(body)),
+    enabled: period !== null,
     placeholderData: (before) => before,
   });
 }

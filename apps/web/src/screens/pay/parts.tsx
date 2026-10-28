@@ -44,11 +44,19 @@ export function Delta({ bps, title }: { bps: number | null; title: string }): JS
   );
 }
 
-/** A gauge of the goal: how far the team is, and where the forecast puts it. */
-export function Gauge({ value, mark }: { value: number; mark: number | null }): JSX.Element {
+/** A gauge of the goal: how far the team is, and where the forecast puts it; the neon where it is the screen's one. */
+export function Gauge({
+  value,
+  mark,
+  neon = false,
+}: {
+  value: number;
+  mark: number | null;
+  neon?: boolean;
+}): JSX.Element {
   return (
     <div
-      className="nv-gauge"
+      className={neon ? 'nv-gauge nv-gauge--neon' : 'nv-gauge'}
       style={{
         '--nv-gauge-value': `${String(value)}%`,
         ...(mark === null ? {} : { '--nv-gauge-mark': `${String(mark)}%` }),
