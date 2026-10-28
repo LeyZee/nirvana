@@ -32,11 +32,14 @@ describe('team members', () => {
     expect(body.teamShareBps).toBeNull();
   });
 
-  it('refuses an unknown time zone, a lower-case country and a rate over 100 %', () => {
+  it('refuses an unknown time zone, an unknown or lower-case country and a rate over 100 %', () => {
     expect(CreateTeamMemberBodySchema.safeParse({ ...created, timeZone: 'Mars/Olympus' }).success).toBe(
       false,
     );
     expect(CreateTeamMemberBodySchema.safeParse({ ...created, country: 'bj' }).success).toBe(false);
+    // A country that does not exist (EQ-01).
+    expect(CreateTeamMemberBodySchema.safeParse({ ...created, country: 'ZZ' }).success).toBe(false);
+    expect(UpdateTeamMemberBodySchema.safeParse({ country: 'ZZ' }).success).toBe(false);
     expect(CommissionChoiceSchema.safeParse({ rateBps: 10_001 }).success).toBe(false);
     expect(CommissionChoiceSchema.safeParse({ rateBps: 1250 }).success).toBe(true);
   });
@@ -62,7 +65,9 @@ describe('team members', () => {
   it('changes only what is sent, and refuses an empty change', () => {
     expect(UpdateTeamMemberBodySchema.parse({ color: '#e8a33d' })).toEqual({ color: '#e8a33d' });
     expect(UpdateTeamMemberBodySchema.safeParse({}).success).toBe(false);
-    expect(UpdateTeamMemberBodySchema.safeParse({ color: '#E8A33D' }).success).toBe(false);
+    // Typed in capitals, a colour is written as the database keeps it.
+    expect(UpdateTeamMemberBodySchema.parse({ color: '#E8A33D' })).toEqual({ color: '#e8a33d' });
+    expect(UpdateTeamMemberBodySchema.safeParse({ color: '#E8A33' }).success).toBe(false);
   });
 
   it('reads a member whose invitation is still waiting and who has no rate yet', () => {

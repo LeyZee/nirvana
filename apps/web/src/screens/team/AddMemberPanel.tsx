@@ -541,7 +541,9 @@ function Where({ id, draft, problems, onChange }: StepProps): JSX.Element {
         ) : (
           <div className="tm-zone nv-swap">
             <span className="tm-zone__time">{localTime(draft.timeZone)}</span>
-            <span className="tm-zone__name">chez lui en ce moment · {draft.timeZone.replace('_', ' ')}</span>
+            <span className="tm-zone__name">
+              chez lui en ce moment · {draft.timeZone.replaceAll('_', ' ')}
+            </span>
             <button
               type="button"
               className="nv-btn nv-btn--plain nv-btn--sm"
@@ -587,7 +589,7 @@ function Rate({
       <Field
         id={presets.length === 0 ? `${id}-rate` : undefined}
         label="Commission"
-        hint={presets.length === 0 ? 'Aucun préréglage pour l’instant : saisis son taux.' : undefined}
+        hint={`${presets.length === 0 ? 'Aucun préréglage pour l’instant : saisis son taux. ' : ''}Il part de son arrivée ; un taux suivant partira d’un 1er ou d’un 16.`}
         problem={problems.rate}
       >
         {presets.length === 0 ? null : (
@@ -667,7 +669,7 @@ function Rate({
       <Field
         label="Créatrices"
         hint={
-          creators.length === 0 ? 'Aucune créatrice pour l’instant.' : 'Tu pourras en changer sur sa fiche.'
+          creators.length === 0 ? 'Aucune créatrice pour l’instant.' : 'Celles sur lesquelles il travaille.'
         }
       >
         {creators.length === 0 ? null : (

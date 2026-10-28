@@ -183,8 +183,11 @@ export const daysFrom = (from: string, to: string): number =>
 /** « mar. 28 ». */
 export const shortDay = (day: string): string => SHORT_DAY.format(utcMidnight(day));
 
-/** « mardi 28 octobre ». */
-export const longDay = (day: string): string => LONG_DAY.format(utcMidnight(day));
+/** « mardi 28 octobre », « dimanche 1er novembre ». */
+export const longDay = (day: string): string =>
+  LONG_DAY.formatToParts(utcMidnight(day))
+    .map((part) => (part.type === 'day' && part.value === '1' ? '1er' : part.value))
+    .join('');
 
 /** « 26 oct. – 1 nov. », the week that starts on `monday`. */
 export const weekLabel = (monday: string): string =>

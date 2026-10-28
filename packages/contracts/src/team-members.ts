@@ -8,7 +8,13 @@ import {
   UserIdSchema,
 } from './ids';
 import { TimezoneSchema } from './persona';
-import { BasisPointsSchema, CountryCodeSchema, TeamMemberStatusSchema, TeamRoleSchema } from './team';
+import {
+  BasisPointsSchema,
+  CountryCodeSchema,
+  KnownCountryCodeSchema,
+  TeamMemberStatusSchema,
+  TeamRoleSchema,
+} from './team';
 
 /**
  * Équipe › Membres (EQ-01, ADR 0023, ADR 0024), under `/v1/team`. Paid by commission only, never by the hour. The
@@ -18,8 +24,11 @@ import { BasisPointsSchema, CountryCodeSchema, TeamMemberStatusSchema, TeamRoleS
 /** A calendar day, `YYYY-MM-DD`: an arrival, the first day of a rate. */
 export const CalendarDaySchema = z.iso.date();
 
-/** The member's colour on the planning, as `team_members_color_check` takes it. */
-export const MemberColorSchema = z.string().regex(/^#[0-9a-f]{6}$/);
+/** The member's colour on the planning, as `team_members_color_check` takes it: `#FF0000` is written `#ff0000`. */
+export const MemberColorSchema = z
+  .string()
+  .toLowerCase()
+  .regex(/^#[0-9a-f]{6}$/, 'Une couleur s’écrit #rrggbb');
 
 const NameSchema = z.string().trim().min(1).max(80);
 
@@ -111,7 +120,7 @@ export const CreateTeamMemberBodySchema = z
     lastName: NameSchema,
     displayName: NameSchema,
     teamRole: TeamRoleSchema,
-    country: CountryCodeSchema,
+    country: KnownCountryCodeSchema,
     timeZone: TimezoneSchema,
     color: MemberColorSchema.nullable().default(null),
     joinedOn: CalendarDaySchema,
@@ -133,7 +142,7 @@ export const UpdateTeamMemberBodySchema = z
     lastName: NameSchema,
     displayName: NameSchema,
     teamRole: TeamRoleSchema,
-    country: CountryCodeSchema,
+    country: KnownCountryCodeSchema,
     timeZone: TimezoneSchema,
     color: MemberColorSchema.nullable(),
     creatorIds: z.array(CreatorIdSchema),
@@ -149,8 +158,9 @@ export type UpdateTeamMemberBody = z.infer<typeof UpdateTeamMemberBodySchema>;
 export const ChangeTeamMemberStatusBodySchema = z.object({ status: TeamMemberStatusSchema });
 
 /**
- * `POST /v1/team/members/:memberId/commission` (owner only, the database refuses anyone else): from a day on, never
- * before today. A share of the team's net for a chatter answers `team_share_invalid`; a second rate from the same day
+ * `POST /v1/team/members/:memberId/commission` (owner only, the database refuses anyone else): from the first day of a
+ * period, the 1st or the 16th of a month, never before today (`commission_date_invalid`): a period is paid at one rate
+ * (Charles, 28/10). The first rate, given with the member, starts the day he joins. A share of the team's net for a chatter answers `team_share_invalid`; a second rate from the same day
  * answers `commission_rate_conflict`, since a rate is never changed.
  */
 export const SetCommissionRateBodySchema = z.object({
@@ -180,7 +190,7 @@ export const AddTeamMemberNoteBodySchema = z.object({ body: z.string().trim().mi
  * The error codes of `/v1/team`, for the screen to say them in French (the suffix gives the status, api.md):
  * `member_not_found` 404 ; `member_conflict` 409, an account already has this e-mail ; `member_left_conflict` 409, a
  * member who left is not changed any more (EQ-14) ; `commission_preset_not_found` 404 ; `commission_date_invalid` 400,
- * a rate or a preset that starts before today ; `commission_preset_conflict` 409, this name already has a rate from
+ * a rate or a preset that starts before today, or a member's new rate that does not start on the 1st or the 16th ; `commission_preset_conflict` 409, this name already has a rate from
  * that day ; `commission_rate_conflict` 409, this member already has a rate from that day ; `team_share_invalid` 400,
  * a share for a chatter ; `creator_not_found` 404, an unknown creator in `creatorIds`.
  */

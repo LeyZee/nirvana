@@ -48,7 +48,8 @@ export function MemberSheet({
   const preset = presets.find((p) => p.id === member.commission?.presetId);
   const access = invitationState(member, now);
   const gone = member.status === 'left';
-  const share = member.commission?.teamShareBps ?? null;
+  // A share counts for a manager only (pay ignores a chatter's): a manager who became a chatter shows none.
+  const share = member.teamRole === 'manager' ? (member.commission?.teamShareBps ?? null) : null;
 
   return (
     <section className="nv-plate tm-sheet nv-enter" aria-label={member.displayName}>
@@ -137,13 +138,13 @@ export function MemberSheet({
           <h3>Accès</h3>
           <p className="tm-hint">
             {access.kind === 'signed-in'
-              ? 'Son mot de passe est choisi. S’il l’oublie, envoie-lui un lien pour en choisir un nouveau.'
+              ? `Son mot de passe est choisi. S’il l’oublie, ${canManage ? 'crée-lui' : 'le propriétaire peut lui créer'} un lien pour en choisir un nouveau.`
               : access.kind === 'reset-sent'
-                ? `Son mot de passe est choisi. Un lien pour en choisir un nouveau lui a été envoyé : il marche jusqu’à ${deadline(access.until)}.`
+                ? `Son mot de passe est choisi. Un lien pour en choisir un nouveau a été créé : il marche jusqu’à ${deadline(access.until)}.`
                 : access.kind === 'valid'
-                  ? `Invitation envoyée, pas encore ouverte. Le lien marche jusqu’à ${deadline(access.until)}.`
+                  ? `Lien d’invitation créé, pas encore ouvert. Il marche jusqu’à ${deadline(access.until)}.`
                   : access.kind === 'expired'
-                    ? 'Son lien d’invitation a expiré sans être ouvert. Crée-lui un nouveau lien.'
+                    ? `Son lien d’invitation a expiré sans être ouvert. ${canManage ? 'Crée-lui un nouveau lien.' : 'Le propriétaire peut lui en créer un nouveau.'}`
                     : 'Il n’a pas encore de lien pour choisir son mot de passe.'}
           </p>
           {canManage ? (

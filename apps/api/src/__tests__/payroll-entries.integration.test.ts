@@ -1,9 +1,11 @@
 import {
+  ApiErrorSchema,
   BonusIdSchema,
   BonusSchema,
   calendarDayAt,
   CommissionStatementSchema,
   newId,
+  nextPayPeriod,
   PayAdjustmentIdSchema,
   PayAdjustmentSchema,
   payPeriodAt,
@@ -101,10 +103,16 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
     expect(await refused(team.owner, { ...bonus(lea, Q1), memberId: newId(TeamMemberIdSchema) })).toBe(
       'team_member_not_found',
     );
-    // Before Léa's first rate: her statement could not be computed, nor the period with it.
-    expect(await refused(team.owner, bonus(lea, PayPeriodSchema.parse('2024-12-16')))).toBe(
-      'commission_rate_missing_conflict',
-    );
+    // A slip of the year: a bonus goes no further than the next period.
+    const far = await post('/payroll/bonuses', team.owner, bonus(lea, nextPayPeriod(nextPayPeriod(today()))));
+    expect([far.statusCode, team.refusal(far).code]).toEqual([400, 'request_invalid']);
+    // Before Léa joined: nothing is owed then, and that is what is said, not a missing rate.
+    const early = await post('/payroll/bonuses', team.owner, bonus(lea, PayPeriodSchema.parse('2024-12-16')));
+    const { code, message } = ApiErrorSchema.parse(early.json()).error;
+    expect([code, message]).toEqual([
+      'pay_period_closed_conflict',
+      'Cette quinzaine est d’avant l’arrivée de ce membre',
+    ]);
   });
 
   it('cancels a bonus once, and the same answer after', async () => {

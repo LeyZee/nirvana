@@ -67,6 +67,8 @@ export function createDrizzleColleagueReads(adminDb: Database): ColleagueReads {
               eq(teamMembers.status, 'active'),
               sql`${shift.creatorId} = any(${user.creatorIds})`,
               sql`${teamMembers.id} <> ${shift.memberId}`,
+              // Nobody before their first day, in their zone (`assertCanWork`).
+              sql`${teamMembers.joinedOn} <= (${shift.startsAt.toISOString()}::timestamptz at time zone ${teamMembers.timeZone})::date`,
               sql`not ${away}`,
             ),
           );
@@ -139,14 +141,17 @@ export function createDrizzleColleagueReads(adminDb: Database): ColleagueReads {
     memberWorkUnscoped: async (memberId) => {
       const [row] = await withAdmin(adminDb, (tx) =>
         tx
-          .select({ status: teamMembers.status, creatorIds: user.creatorIds })
+          .select({
+            status: teamMembers.status,
+            creatorIds: user.creatorIds,
+            joinedOn: teamMembers.joinedOn,
+            timeZone: teamMembers.timeZone,
+          })
           .from(teamMembers)
           .innerJoin(user, eq(user.id, teamMembers.userId))
           .where(eq(teamMembers.id, memberId)),
       );
-      return row === undefined
-        ? null
-        : { status: TeamMemberStatusSchema.parse(row.status), creatorIds: row.creatorIds };
+      return row === undefined ? null : { ...row, status: TeamMemberStatusSchema.parse(row.status) };
     },
 
     shiftUnscoped: async (id) => {

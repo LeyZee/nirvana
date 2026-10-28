@@ -1,10 +1,11 @@
-import { CreatorIdSchema, newId } from '@nirvana/contracts';
+import { CreatorIdSchema, DomainError, newId } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
   assertCreatorsExist,
   assertOwnerScope,
   assertReadsTeam,
+  assertStartsAPeriod,
   assertStartsFromToday,
   assertStillInTeam,
   assertTeamShareFits,
@@ -38,6 +39,22 @@ describe('team rules', () => {
     expect(() => {
       assertStartsFromToday('2026-11-01', '2026-10-27');
     }).not.toThrow();
+  });
+
+  it('starts a member’s new rate on the 1st or the 16th only, today at the earliest (Charles, 28/10)', () => {
+    const code = (day: string, today: string): string | null => {
+      try {
+        assertStartsAPeriod(day, today);
+        return null;
+      } catch (error) {
+        return error instanceof DomainError ? error.code : 'unexpected';
+      }
+    };
+    expect(code('2026-11-01', '2026-10-28')).toBeNull();
+    expect(code('2026-11-16', '2026-10-28')).toBeNull();
+    expect(code('2026-11-16', '2026-11-16')).toBeNull();
+    expect(code('2026-10-29', '2026-10-28')).toBe('commission_date_invalid');
+    expect(code('2026-10-16', '2026-10-28')).toBe('commission_date_invalid');
   });
 
   it('gives a share of the team’s net to a manager only', () => {

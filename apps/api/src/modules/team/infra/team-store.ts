@@ -9,6 +9,7 @@ import {
   TeamRoleSchema,
   UserIdSchema,
   type CommissionRate,
+  type PayPeriod,
   type TeamMember,
   type TeamMemberId,
   type TeamMemberStatus,
@@ -22,7 +23,7 @@ import {
   CommissionRateConflict,
   MemberConflict,
   MemberNotFound,
-  TeamScopeForbidden,
+  OwnNotesForbidden,
 } from '../domain/errors';
 import {
   assertOwnerScope,
@@ -190,12 +191,19 @@ async function audit(
   });
 }
 
+/** Pay's `payroll.recalculate` for a period, given by the composition root (the `payroll` module's, EQ-04). */
+export type EnqueuePayRecalculation = (tx: Transaction, period: PayPeriod) => Promise<void>;
+
 /**
  * The team's tables through `withMember`, plus Better Auth's `user` (account, name, creators), `account` (read: is
  * the password chosen) and `session` (ended when a member leaves), all out of RLS and written in the same
  * transaction as the record, so a member never exists without his account nor keeps creators after leaving.
  */
-export function createDrizzleTeamStore(db: Database, now: () => Date = () => new Date()): TeamStore {
+export function createDrizzleTeamStore(
+  db: Database,
+  enqueuePayRecalculation: EnqueuePayRecalculation,
+  now: () => Date = () => new Date(),
+): TeamStore {
   return {
     members: (actor, today) => withMember(db, actor, (tx) => readMembers(tx, today)),
 
@@ -239,7 +247,7 @@ export function createDrizzleTeamStore(db: Database, now: () => Date = () => new
         () => new MemberConflict(),
       ),
 
-    update: (actor, id, patch) =>
+    update: (actor, id, patch, recalculate) =>
       withMember(db, actor.userId, async (tx, scope) => {
         assertOwnerScope(scope);
         const current = await lockMember(tx, id);
@@ -260,6 +268,9 @@ export function createDrizzleTeamStore(db: Database, now: () => Date = () => new
               updatedAt: now(),
             })
             .where(eq(user.id, current.userId));
+        }
+        if (fields.teamRole !== undefined && fields.teamRole !== current.teamRole) {
+          await enqueuePayRecalculation(tx, recalculate);
         }
         await audit(
           tx,
@@ -297,7 +308,7 @@ export function createDrizzleTeamStore(db: Database, now: () => Date = () => new
         );
       }),
 
-    addRate: (actor, id, rate) =>
+    addRate: (actor, id, rate, recalculate) =>
       orConflict(
         withMember(db, actor.userId, async (tx, scope): Promise<CommissionRate> => {
           assertOwnerScope(scope);
@@ -305,6 +316,7 @@ export function createDrizzleTeamStore(db: Database, now: () => Date = () => new
           assertStillInTeam(current.status);
           assertTeamShareFits(current.teamRole, rate.teamShareBps);
           await insertRate(tx, actor, id, rate);
+          if (recalculate !== null) await enqueuePayRecalculation(tx, recalculate);
           await audit(
             tx,
             actor,
@@ -372,7 +384,7 @@ export function createDrizzleTeamStore(db: Database, now: () => Date = () => new
           .where(eq(teamMembers.id, id));
         if (member === undefined) return null;
         // The notes about him are not his to read (ADR 0024), the policy shows none: refused rather than empty.
-        if (member.userId === actor) throw new TeamScopeForbidden();
+        if (member.userId === actor) throw new OwnNotesForbidden();
         const rows = await tx
           .select({
             id: teamMemberNotes.id,
@@ -397,7 +409,7 @@ export function createDrizzleTeamStore(db: Database, now: () => Date = () => new
           .from(teamMembers)
           .where(eq(teamMembers.id, id));
         if (member === undefined) throw new MemberNotFound();
-        if (member.userId === actor.userId) throw new TeamScopeForbidden();
+        if (member.userId === actor.userId) throw new OwnNotesForbidden();
         const createdAt = now();
         await tx
           .insert(teamMemberNotes)

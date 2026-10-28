@@ -4,6 +4,7 @@ import type {
   CommissionRate,
   CommissionRateId,
   CreatorId,
+  PayPeriod,
   TeamMember,
   TeamMemberId,
   TeamMemberNote,
@@ -68,12 +69,23 @@ export interface TeamStore {
   member(actor: UserId, id: TeamMemberId, today: string): Promise<TeamMember | null>;
   /** Owner. `member_conflict` when an account already has this e-mail. */
   create(actor: Actor, member: NewMember): Promise<void>;
-  /** Owner. `member_not_found`, `member_left_conflict`. */
-  update(actor: Actor, id: TeamMemberId, patch: MemberPatch): Promise<void>;
+  /**
+   * Owner. `member_not_found`, `member_left_conflict`. A change of role has pay compute `recalculate` again (pay reads
+   * the role of the day).
+   */
+  update(actor: Actor, id: TeamMemberId, patch: MemberPatch, recalculate: PayPeriod): Promise<void>;
   /** Owner. Leaving empties his creators and ends his sessions in the same transaction. */
   changeStatus(actor: Actor, id: TeamMemberId, status: TeamMemberStatus): Promise<void>;
-  /** Owner. `team_share_invalid` for a chatter's share, `commission_rate_conflict` for a second rate that day. */
-  addRate(actor: Actor, id: TeamMemberId, rate: NewRate): Promise<CommissionRate>;
+  /**
+   * Owner. `team_share_invalid` for a chatter's share, `commission_rate_conflict` for a second rate that day. Pay
+   * computes `recalculate` again, when given: the running period, which reads the rate of its last day.
+   */
+  addRate(
+    actor: Actor,
+    id: TeamMemberId,
+    rate: NewRate,
+    recalculate: PayPeriod | null,
+  ): Promise<CommissionRate>;
   /** Every rate, newest first; `null` when the actor does not read this member. */
   rates(actor: UserId, id: TeamMemberId): Promise<CommissionRate[] | null>;
   /** Every preset row, all days; the owner and the active managers only. */

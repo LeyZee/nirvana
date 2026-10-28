@@ -10,6 +10,7 @@ import {
   conflictsOf,
   covers,
   decideUpdate,
+  firstStartOf,
   myShiftsOf,
   occurrenceKey,
   occurrences,
@@ -40,11 +41,42 @@ describe('who plans, who works', () => {
   });
 
   it('gives a shift to an active member of the creator only', () => {
-    expect(codeOf(assertCanWork, { status: 'active', creatorIds: ['c1'] }, 'c1')).toBeNull();
-    expect(codeOf(assertCanWork, { status: 'sick', creatorIds: ['c1'] }, 'c1')).toBe('member_left_conflict');
-    expect(codeOf(assertCanWork, { status: 'active', creatorIds: ['c2'] }, 'c1')).toBe(
+    const member = { status: 'active', creatorIds: ['c1'], joinedOn: '2026-10-01', timeZone: PARIS } as const;
+    const startsAt = at('2026-11-02T08:00:00Z');
+    expect(codeOf(assertCanWork, member, 'c1', startsAt)).toBeNull();
+    expect(codeOf(assertCanWork, { ...member, status: 'sick' }, 'c1', startsAt)).toBe('member_left_conflict');
+    expect(codeOf(assertCanWork, { ...member, creatorIds: ['c2'] }, 'c1', startsAt)).toBe(
       'member_creator_conflict',
     );
+  });
+
+  it('gives no shift before the member’s first day, read in their zone', () => {
+    const member = {
+      status: 'active',
+      creatorIds: ['c1'],
+      joinedOn: '2026-11-05',
+      timeZone: 'Africa/Porto-Novo',
+    } as const;
+    expect(codeOf(assertCanWork, member, 'c1', at('2026-10-28T08:00:00Z'))).toBe(
+      'member_not_joined_conflict',
+    );
+    // 23:30 UTC on the 4th is already the 5th in Porto-Novo (UTC+1).
+    expect(codeOf(assertCanWork, member, 'c1', at('2026-11-04T23:30:00Z'))).toBeNull();
+    expect(codeOf(assertCanWork, member, 'c1', at('2026-11-04T22:30:00Z'))).toBe(
+      'member_not_joined_conflict',
+    );
+  });
+
+  it('finds when a template’s first shift starts', () => {
+    // From Wednesday 28 October, on Mondays: the first is Monday 2 November, 08:00 in Paris.
+    const template = {
+      weekday: 1,
+      startMinute: 480,
+      endMinute: 840,
+      validFrom: '2026-10-28',
+      validUntil: null,
+    };
+    expect(iso(firstStartOf(template, PARIS))).toBe('2026-11-02T07:00:00.000Z');
   });
 });
 

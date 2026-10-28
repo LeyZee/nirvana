@@ -37,6 +37,15 @@ export class MemberNotActive extends DomainError {
   }
 }
 
+/** A shift that starts before the member's first day: pay would find no rate of theirs for it. */
+export class MemberNotJoined extends DomainError {
+  constructor(joinedOn: string) {
+    super('member_not_joined_conflict', 'Ce membre n’est pas encore arrivé dans l’équipe à cette date', {
+      details: { joinedOn },
+    });
+  }
+}
+
 export class MemberCreatorConflict extends DomainError {
   constructor() {
     super('member_creator_conflict', 'Ce membre ne travaille pas sur cette créatrice');

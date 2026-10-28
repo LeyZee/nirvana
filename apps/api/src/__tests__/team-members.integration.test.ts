@@ -5,6 +5,8 @@ import {
   CommissionRateHistorySchema,
   CommissionRateSchema,
   InvitationLinkCreatedSchema,
+  nextPayPeriod,
+  payPeriodOfDay,
   TeamMemberListSchema,
   TeamMemberNoteListSchema,
   TeamMemberSchema,
@@ -12,7 +14,7 @@ import {
   type InvitationLinkCreated,
   type TeamMember,
 } from '@nirvana/contracts';
-import { eq, schema } from '@nirvana/db';
+import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -181,7 +183,7 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(created?.details).toEqual({ teamRole: 'chatter', creators: 1 });
   });
 
-  it('refuses an e-mail that already has an account, an unknown creator and an unknown preset', async () => {
+  it('refuses an e-mail that already has an account, an unknown creator, preset or country', async () => {
     const twice = await call('POST', '/team/members', owner, theoBody());
     expect(twice.statusCode).toBe(409);
     expect(codeOf(twice)).toBe('member_conflict');
@@ -204,6 +206,13 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     });
     expect(unknownPreset.statusCode).toBe(404);
     expect(codeOf(unknownPreset)).toBe('commission_preset_not_found');
+
+    const unknownCountry = await call('POST', '/team/members', owner, {
+      ...theoBody(),
+      email: 'basile@example.test',
+      country: 'ZZ',
+    });
+    expect([unknownCountry.statusCode, codeOf(unknownCountry)]).toEqual([400, 'request_invalid']);
     expect(
       await test.admin.db.select().from(schema.user).where(eq(schema.user.email, 'basile@example.test')),
     ).toEqual([]);
@@ -292,41 +301,54 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(
       (await call('POST', `/team/members/${theo.id}/notes`, theoCookie, { body: 'Moi' })).statusCode,
     ).toBe(403);
-    expect((await call('GET', `/team/members/${nora.id}/notes`, noraCookie)).statusCode).toBe(403);
+    const own = await call('GET', `/team/members/${nora.id}/notes`, noraCookie);
+    expect([own.statusCode, ApiErrorSchema.parse(own.json()).error.message]).toEqual([
+      403,
+      'Les notes sur toi ne te sont pas lisibles',
+    ]);
     expect((await call('GET', '/team/commission-presets', theoCookie)).statusCode).toBe(403);
     const [audited] = await auditOf('team_member_note.create');
     expect(JSON.stringify(audited)).not.toContain('relances');
   });
 
-  it('sets a rate from a day on, never before today nor twice the same day, a share for a manager only', async () => {
+  it('sets a rate from a period on, never before today nor twice the same day, a share for a manager only', async () => {
+    // A new rate starts the 1st or the 16th (Charles, 28/10): the next period's first day, and a day that is not one.
+    const nextStart = nextPayPeriod(payPeriodOfDay(agencyDay()));
+    const notAStart = `${nextStart.slice(0, 8)}${nextStart.endsWith('-01') ? '02' : '17'}`;
     const past = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1500 },
       effectiveFrom: agencyDay(-1),
     });
     expect(codeOf(past)).toBe('commission_date_invalid');
 
+    const midPeriod = await call('POST', `/team/members/${theo.id}/commission`, owner, {
+      commission: { rateBps: 1500 },
+      effectiveFrom: notAStart,
+    });
+    expect([midPeriod.statusCode, codeOf(midPeriod)]).toEqual([400, 'commission_date_invalid']);
+
     const share = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1500 },
       teamShareBps: 300,
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     expect(share.statusCode).toBe(400);
     expect(codeOf(share)).toBe('team_share_invalid');
 
     const next = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1500 },
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     expect(next.statusCode).toBe(201);
     expect(CommissionRateSchema.parse(next.json())).toEqual({
       rateBps: 1500,
       teamShareBps: null,
       presetId: null,
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     const again = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1600 },
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     expect(again.statusCode).toBe(409);
     expect(codeOf(again)).toBe('commission_rate_conflict');
@@ -337,6 +359,38 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(history.rates.map((rate) => rate.rateBps)).toEqual([1500, 1250]);
     const today = TeamMemberSchema.parse((await call('GET', `/team/members/${theo.id}`, owner)).json());
     expect(today.commission?.rateBps).toBe(1250);
+  });
+
+  it('has pay compute the running period again after a change of role, not after a rate of a later period', async () => {
+    const running = payPeriodOfDay(agencyDay());
+    const recalculations = async () =>
+      (
+        await test.admin.db.execute<{ key: string }>(
+          sql`select key from graphile_worker._private_jobs where key like 'payroll.recalculate:%'`,
+        )
+      ).rows.map((row) => row.key);
+    const forget = () =>
+      test.admin.db.execute(
+        sql`delete from graphile_worker._private_jobs where key like 'payroll.recalculate:%'`,
+      );
+
+    // A rate from the next period changes nothing computed yet (the running period's own first day is unit-tested).
+    await forget();
+    const later = await call('POST', `/team/members/${theo.id}/commission`, owner, {
+      commission: { rateBps: 1700 },
+      effectiveFrom: nextPayPeriod(nextPayPeriod(running)),
+    });
+    expect(later.statusCode).toBe(201);
+    expect(await recalculations()).toEqual([]);
+
+    const sameRole = await call('PATCH', `/team/members/${nora.id}`, owner, { teamRole: 'manager' });
+    expect(sameRole.statusCode).toBe(200);
+    expect(await recalculations()).toEqual([]);
+    const demoted = await call('PATCH', `/team/members/${nora.id}`, owner, { teamRole: 'chatter' });
+    expect(demoted.statusCode).toBe(200);
+    expect(await recalculations()).toEqual([`payroll.recalculate:${running}`]);
+    await call('PATCH', `/team/members/${nora.id}`, owner, { teamRole: 'manager' });
+    await forget();
   });
 
   it('changes what is sent and keeps the account in step', async () => {

@@ -1,13 +1,15 @@
-import type {
-  CommissionPreset,
-  CreatorSummary,
-  TeamMember,
-  TeamMemberErrorCode,
-  TeamMemberStatus,
-  TeamRole,
+import {
+  COUNTRY_CODES,
+  type CommissionPreset,
+  type CreatorSummary,
+  type TeamMember,
+  type TeamMemberErrorCode,
+  type TeamMemberStatus,
+  type TeamRole,
 } from '@nirvana/contracts';
 
 import { countryName } from '@/lib/country';
+import { mondayOf } from '@/scheduling/time';
 
 /**
  * Équipe › Membres, without React (EQ-01): who shows in which tab, how a status, a rate, a country and an invitation
@@ -130,10 +132,6 @@ export function rateLine(
     : `${preset.name} · ${formatRate(commission.rateBps)}`;
 }
 
-/** Every ISO 3166-1 country, for the list of the add panel. */
-const CODES =
-  'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW';
-
 /** Where the agency's chatters live (Charles, 27/10): first in the list. */
 export const FIRST_COUNTRIES: readonly string[] = ['BJ', 'MG', 'FR'];
 
@@ -142,9 +140,10 @@ export interface Country {
   readonly name: string;
 }
 
-/** The other countries, by their French name. */
-export const OTHER_COUNTRIES: readonly Country[] = CODES.split(' ')
-  .filter((code) => !FIRST_COUNTRIES.includes(code))
+/** The other countries of ISO 3166-1 (contracts `COUNTRY_CODES`), by their French name. */
+export const OTHER_COUNTRIES: readonly Country[] = COUNTRY_CODES.filter(
+  (code) => !FIRST_COUNTRIES.includes(code),
+)
   .map((code) => ({ code, name: countryName(code) }))
   .toSorted((a, b) => a.name.localeCompare(b.name, 'fr'));
 
@@ -238,7 +237,7 @@ export const ERROR_MESSAGES: Readonly<Record<TeamRefusalCode, string>> = {
   commission_preset_not_found: 'Ce préréglage n’existe plus. Choisis-en un autre.',
   commission_preset_conflict: 'Ce préréglage a déjà un taux à partir de ce jour.',
   commission_rate_conflict: 'Ce membre a déjà un taux à partir de ce jour.',
-  commission_date_invalid: 'Un taux commence aujourd’hui ou plus tard, jamais avant.',
+  commission_date_invalid: 'Un nouveau taux commence le 1er ou le 16 d’un mois, aujourd’hui ou plus tard.',
   team_share_invalid: 'Seul un manager a une part du net de l’équipe.',
   creator_not_found: 'Une des créatrices n’existe plus. Recharge la page.',
 };
@@ -249,8 +248,11 @@ export const today = (now: Date = new Date()): string =>
 
 const LONG_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-/** « 27 octobre 2026 », from a calendar day. */
-export const longDay = (day: string): string => LONG_DAY.format(new Date(`${day}T12:00:00`));
+/** « 27 octobre 2026 », « 1er octobre 2026 », from a calendar day. */
+export const longDay = (day: string): string =>
+  LONG_DAY.formatToParts(new Date(`${day}T12:00:00`))
+    .map((part) => (part.type === 'day' && part.value === '1' ? '1er' : part.value))
+    .join('');
 
 /** The initial of a name, for the avatar. */
 export const initialOf = (name: string): string => name.trim().slice(0, 1).toUpperCase() || '?';
@@ -272,4 +274,18 @@ export function parseTeamSearch(search: Record<string, unknown>): TeamSearch {
     ...(onglet === 'managers' ? { onglet } : {}),
     ...(typeof membre === 'string' && /^[0-9a-f-]{36}$/iu.test(membre) ? { membre } : {}),
   };
+}
+
+/** `/equipe/planning?semaine=2026-10-26`: the week shown survives a reload and a back. */
+export interface PlanningSearch {
+  readonly semaine?: string | undefined;
+}
+
+/** A real day, said as its week's Monday; anything else opens this week. */
+export function parsePlanningSearch(search: Record<string, unknown>): PlanningSearch {
+  const { semaine } = search;
+  if (typeof semaine !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(semaine)) return {};
+  const day = new Date(`${semaine}T12:00:00Z`);
+  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== semaine) return {};
+  return { semaine: mondayOf(semaine) };
 }

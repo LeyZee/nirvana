@@ -46,6 +46,7 @@ import {
   assertShiftRange,
   assertTemplateStart,
   decideUpdate,
+  firstStartOf,
   occurrenceKey,
   occurrencesAhead,
 } from '../domain/shifts';
@@ -53,6 +54,7 @@ import { addDays, calendarDayIn } from '../domain/time';
 
 import {
   assertAccountOf,
+  assertMemberJoined,
   assertMemberWorks,
   assertNotOnLeave,
   assertNotReported,
@@ -183,7 +185,14 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
         switch (update.kind) {
           case 'plan': {
             if (update.memberId !== shift.memberId) {
-              await assertMemberWorks(tx, TeamMemberIdSchema.parse(update.memberId), creatorId);
+              await assertMemberWorks(
+                tx,
+                TeamMemberIdSchema.parse(update.memberId),
+                creatorId,
+                update.startsAt,
+              );
+            } else if (update.startsAt.getTime() < shift.startsAt.getTime()) {
+              await assertMemberJoined(tx, TeamMemberIdSchema.parse(update.memberId), update.startsAt);
             }
             await assertNotOnLeave(tx, update.memberId, update.startsAt, update.endsAt);
             const times = { memberId: update.memberId, startsAt: update.startsAt, endsAt: update.endsAt };
@@ -368,7 +377,7 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
         assertShiftRange(shift.startsAt, shift.endsAt);
         assertEndsAhead(shift.endsAt, clock.now);
         await lockMembers(tx, [shift.memberId]);
-        await assertMemberWorks(tx, shift.memberId, shift.creatorId);
+        await assertMemberWorks(tx, shift.memberId, shift.creatorId, shift.startsAt);
         await assertAccountOf(tx, shift.platformAccountId);
         await assertNotOnLeave(tx, shift.memberId, shift.startsAt, shift.endsAt);
         await placed(
@@ -436,7 +445,12 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
       withTenantMember(db, template.creatorId, actor.userId, async (tx, scope) => {
         assertPlans(scope);
         assertTemplateStart(template.validFrom, calendarDayIn(clock.now, clock.timeZone));
-        await assertMemberWorks(tx, template.memberId, template.creatorId);
+        await assertMemberWorks(
+          tx,
+          template.memberId,
+          template.creatorId,
+          firstStartOf({ ...template, validUntil: null }, clock.timeZone),
+        );
         await assertAccountOf(tx, template.platformAccountId);
         await tx.insert(shiftTemplates).values({ ...template, createdBy: actor.userId });
         const stored = { ...template, validUntil: null };

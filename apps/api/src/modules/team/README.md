@@ -2,17 +2,19 @@
 
 **Rôle.** Équipe › Membres (EQ-01, ADR 0023, ADR 0024) : les chatteurs et les managers, leur pays, leur statut, leurs créatrices, leur commission datée, les préréglages de commission et les notes internes.
 
-**Peut dépendre de.** aucun module métier (feuille). Deux ports, branchés par le composition root : les créatrices qui existent, venues du module `persona` (`CreatorRoster`), et le lien en cours de chaque membre, lu dans la table des liens d'EQ-10 (`InvitationLinkDirectory`).
+**Peut dépendre de.** aucun module métier (feuille). Deux ports, branchés par le composition root : les créatrices qui existent, venues du module `persona` (`CreatorRoster`), le lien en cours de chaque membre, lu dans la table des liens d'EQ-10 (`InvitationLinkDirectory`), et le recalcul d'une quinzaine par la paie (`enqueuePayRecalculation`, du module `payroll`).
 
 **Tables possédées.** `team_members`, `team_member_notes`, `commission_presets`, `member_commission_rates`. Toutes passent par `withMember` : la base décide de ce que lit chaque scope (`owner`, `agency` pour un manager `active`, `self` pour les autres). Hors RLS, et dans la même transaction que la fiche : il écrit dans `user` le compte d'un nouveau membre (sans mot de passe, rôle `operator`), son nom et ses créatrices ; il lit `account` pour savoir si le mot de passe est choisi ; il supprime les lignes de `session` d'un membre qui part. Ces tables restent celles de Better Auth (`auth.ts`).
 
 **Règles propres** (`domain/members.ts`, testées) :
 
 - un taux ou un préréglage commence aujourd'hui au plus tôt, dans le fuseau de l'agence (Europe/Paris tant que l'agence n'a pas son réglage), sauf le premier taux d'un membre, qui commence le jour de son arrivée ;
+- un nouveau taux d'un membre commence le 1er ou le 16 d'un mois, le premier jour d'une quinzaine (Charles, 28/10) : une quinzaine n'est jamais payée à deux taux et rien n'est recalculé en arrière ; quand il commence aujourd'hui, la paie recalcule la quinzaine en cours, comme après un changement de rôle (`payroll.recalculate`, que le composition root lui passe) ;
 - un taux n'est jamais modifié : un nouveau taux est une nouvelle ligne, une par membre et par jour ;
 - seul un manager a une part du net de l'équipe ;
 - un membre parti ne change plus ; partir vide ses créatrices et ferme ses sessions dans la même transaction (le reste du départ est EQ-14) ;
-- les notes internes et les préréglages se lisent par le propriétaire et les managers actifs, jamais par le membre dont parle la note : refusé (403) plutôt qu'une liste vide.
+- les notes internes et les préréglages se lisent par le propriétaire et les managers actifs, jamais par le membre dont parle la note : refusé (403) plutôt qu'une liste vide ;
+- un pays écrit est l'un des codes ISO 3166-1 (`KnownCountryCodeSchema`) ; une lecture garde la seule forme, pour qu'une ligne plus ancienne reste lisible.
 
 **Routes** (`routes(requireRole)`, montées sous `/v1`, contrats `packages/contracts/src/team-members.ts`) :
 

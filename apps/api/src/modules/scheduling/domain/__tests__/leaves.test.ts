@@ -100,7 +100,14 @@ describe('ending a leave', () => {
   it('lets the owner or an active manager cancel an approved leave until it ends, the member never', () => {
     expect(leaveEnding('owner', { status: 'approved', own: false, endsAt: ahead }, now)).toBe('cancel');
     expect(leaveEnding('agency', { status: 'approved', own: false, endsAt: ahead }, now)).toBe('cancel');
+    // The member's own leave, answered already: said as such, not as a lack of rights.
     expect(codeOf(leaveEnding, 'self', { status: 'approved', own: true, endsAt: ahead }, now)).toBe(
+      'leave_decided_conflict',
+    );
+    expect(codeOf(leaveEnding, 'self', { status: 'refused', own: true, endsAt: ahead }, now)).toBe(
+      'leave_decided_conflict',
+    );
+    expect(codeOf(leaveEnding, 'self', { status: 'approved', own: false, endsAt: ahead }, now)).toBe(
       'role_forbidden',
     );
     expect(codeOf(leaveEnding, 'owner', { status: 'approved', own: false, endsAt: now }, now)).toBe(

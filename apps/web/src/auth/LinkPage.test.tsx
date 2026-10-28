@@ -137,7 +137,7 @@ describe('WelcomePage', () => {
     expect(await screen.findByRole('heading', { name: 'Bienvenue, Théo' })).toBeDefined();
     // His record, to check at a glance: his name in the title, his country above it.
     expect(screen.getByText('🇧🇯 Bénin')).toBeDefined();
-    expect(screen.getByText(/Ton responsable le corrige dans ta fiche/u)).toBeDefined();
+    expect(screen.getByText(/Dis-le à ton responsable/u)).toBeDefined();
     const email = screen.getByLabelText('E-mail');
     expect(email).toHaveProperty('value', 'theo@example.test');
     expect(email).toHaveProperty('readOnly', true);

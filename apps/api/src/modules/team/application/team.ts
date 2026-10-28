@@ -2,6 +2,7 @@ import {
   CommissionPresetIdSchema,
   CommissionRateIdSchema,
   newId,
+  payPeriodOfDay,
   TeamMemberIdSchema,
   TeamMemberNoteIdSchema,
   UserIdSchema,
@@ -22,6 +23,7 @@ import {
 import { CommissionPresetNotFound, MemberNotFound } from '../domain/errors';
 import {
   assertCreatorsExist,
+  assertStartsAPeriod,
   assertStartsFromToday,
   calendarDayIn,
   normalizeEmail,
@@ -128,10 +130,15 @@ export function createTeamService(
 
     updateMember: async (actor, id, body) => {
       const { creatorIds, ...fields } = body;
-      await store.update(actor, id, {
-        ...fields,
-        ...(creatorIds !== undefined && { creatorIds: await knownCreators(creatorIds) }),
-      });
+      await store.update(
+        actor,
+        id,
+        {
+          ...fields,
+          ...(creatorIds !== undefined && { creatorIds: await knownCreators(creatorIds) }),
+        },
+        payPeriodOfDay(today()),
+      );
       return read(actor.userId, id);
     },
 
@@ -141,11 +148,15 @@ export function createTeamService(
     },
 
     setCommission: async (actor, id, body) => {
-      assertStartsFromToday(body.effectiveFrom, today());
+      const day = today();
+      assertStartsAPeriod(body.effectiveFrom, day);
+      // A rate from a later period changes nothing computed yet: only one from today, the 1st or the 16th, does.
+      const running = payPeriodOfDay(day);
       return store.addRate(
         actor,
         id,
         await resolveRate(actor.userId, body.commission, body.teamShareBps, body.effectiveFrom),
+        payPeriodOfDay(body.effectiveFrom) === running ? running : null,
       );
     },
 

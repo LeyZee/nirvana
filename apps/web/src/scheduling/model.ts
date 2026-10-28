@@ -30,8 +30,9 @@ export const ERROR_MESSAGES: Readonly<Record<SchedulingRefusalCode, string>> = {
   creator_not_found: 'Cette créatrice n’existe plus.',
   platform_account_not_found: 'Ce compte n’est pas celui de cette créatrice.',
   member_left_conflict: 'Seul un membre actif reçoit un shift.',
-  member_creator_conflict:
-    'Ce membre ne travaille pas sur cette créatrice : ajoute-la à sa fiche dans Membres.',
+  member_creator_conflict: 'Ce membre ne travaille pas sur cette créatrice.',
+  member_not_joined_conflict:
+    'Ce membre n’est pas encore arrivé ce jour-là : place-le à partir de son arrivée.',
   shift_member_conflict: 'Ce membre est déjà sur un autre shift à ces heures.',
   shift_account_conflict: 'Ce compte a déjà quelqu’un à ces heures.',
   shift_ended_conflict: 'Ce shift est fini, ou finirait avant maintenant : il ne change plus.',

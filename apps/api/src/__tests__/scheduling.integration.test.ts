@@ -83,6 +83,7 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
     displayName: string;
     teamRole: 'chatter' | 'manager';
     creatorIds: CreatorId[];
+    joinedOn?: string;
   }): Promise<{ member: TeamMember; cookie: string }> => {
     const response = await call('POST', '/team/members', owner, {
       ...body,
@@ -91,6 +92,7 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
       country: 'BJ',
       timeZone: 'Africa/Porto-Novo',
       joinedOn: parisDay(-30),
+      ...body,
       commission: { rateBps: 1000 },
       teamShareBps: body.teamRole === 'manager' ? 500 : null,
     });
@@ -684,5 +686,71 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
       'member_on_leave_conflict',
       { leaveRequestId: approved },
     ]);
+  });
+
+  it('places no shift before a member joins, nor a template that would start before', async () => {
+    const { member: zoe } = await addMember({
+      email: 'zoe@example.test',
+      displayName: 'Zoé',
+      teamRole: 'chatter',
+      creatorIds: [ines],
+      joinedOn: parisDay(10),
+    });
+    // An account of her own: the other tests' shifts stay out of the way.
+    const zoeAccount = newId(PlatformAccountIdSchema);
+    await test.admin.db
+      .insert(schema.platformAccounts)
+      .values({ id: zoeAccount, creatorId: ines, platform: 'reveal', handle: 'ines-seconde' });
+    const at = (days: number) => parisInstant(parisDay(days), 10 * 60);
+    const early = await call(
+      'POST',
+      '/scheduling/shifts',
+      owner,
+      shiftBody(zoe.id, ines, zoeAccount, at(3), new Date(at(3).getTime() + 4 * HOUR)),
+    );
+    expect([early.statusCode, codeOf(early), detailsOf(early)]).toEqual([
+      409,
+      'member_not_joined_conflict',
+      { joinedOn: parisDay(10) },
+    ]);
+
+    const onTime = await call(
+      'POST',
+      '/scheduling/shifts',
+      owner,
+      shiftBody(zoe.id, ines, zoeAccount, at(11), new Date(at(11).getTime() + 4 * HOUR)),
+    );
+    expect(onTime.statusCode).toBe(201);
+    const placedShift = ShiftSchema.parse(onTime.json());
+    const movedEarlier = await call('PATCH', `/scheduling/shifts/${placedShift.id}`, owner, {
+      startsAt: iso(at(4)),
+      endsAt: iso(new Date(at(4).getTime() + 4 * HOUR)),
+    });
+    expect([movedEarlier.statusCode, codeOf(movedEarlier)]).toEqual([409, 'member_not_joined_conflict']);
+    const toBasile = await call('PATCH', `/scheduling/shifts/${placedShift.id}`, owner, {
+      memberId: basile.id,
+    });
+    expect(toBasile.statusCode).toBe(200);
+    const backToZoeEarlier = await call('PATCH', `/scheduling/shifts/${placedShift.id}`, owner, {
+      memberId: zoe.id,
+      startsAt: iso(at(5)),
+      endsAt: iso(new Date(at(5).getTime() + 4 * HOUR)),
+    });
+    expect([backToZoeEarlier.statusCode, codeOf(backToZoeEarlier)]).toEqual([
+      409,
+      'member_not_joined_conflict',
+    ]);
+    expect((await call('DELETE', `/scheduling/shifts/${placedShift.id}`, owner)).statusCode).toBe(204);
+
+    const template = await call('POST', '/scheduling/shift-templates', owner, {
+      memberId: zoe.id,
+      creatorId: ines,
+      platformAccountId: zoeAccount,
+      weekday: 1,
+      startMinute: 600,
+      endMinute: 840,
+      validFrom: parisDay(0),
+    });
+    expect([template.statusCode, codeOf(template)]).toEqual([409, 'member_not_joined_conflict']);
   });
 });

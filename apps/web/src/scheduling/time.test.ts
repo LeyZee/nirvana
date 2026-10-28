@@ -6,6 +6,7 @@ import {
   clockOf,
   dayOf,
   lengthOf,
+  longDay,
   minuteOf,
   mondayOf,
   rangeAt,
@@ -54,6 +55,8 @@ describe('days and weeks', () => {
     expect(mondayOf('2026-10-28')).toBe('2026-10-26');
     expect(weekOf('2026-10-26').at(-1)).toBe('2026-11-01');
     expect(weekLabel('2026-10-26')).toBe('26 oct. – 1 nov.');
+    expect(longDay('2026-10-28')).toBe('mercredi 28 octobre');
+    expect(longDay('2026-11-01')).toBe('dimanche 1er novembre');
   });
 });
 

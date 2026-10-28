@@ -11,8 +11,10 @@ import {
   formatRate,
   invitationState,
   listMembers,
+  longDay,
   matches,
   OTHER_COUNTRIES,
+  parsePlanningSearch,
   parseRate,
   parseTeamSearch,
   rateLine,
@@ -111,6 +113,14 @@ describe('rates', () => {
   });
 });
 
+describe('days', () => {
+  it('says the first of the month « 1er »', () => {
+    expect(longDay('2026-10-01')).toBe('1er octobre 2026');
+    expect(longDay('2026-10-27')).toBe('27 octobre 2026');
+    expect(longDay('2026-10-11')).toBe('11 octobre 2026');
+  });
+});
+
 describe('countries and zones', () => {
   it('lists every country once, Bénin, Madagascar and France first', () => {
     const codes = [...FIRST_COUNTRIES, ...OTHER_COUNTRIES.map((c) => c.code)];
@@ -161,6 +171,14 @@ describe('the first access', () => {
 });
 
 describe('the address', () => {
+  it('keeps the planning’s week as its Monday, and drops a day that does not exist', () => {
+    expect(parsePlanningSearch({ semaine: '2026-10-26' })).toEqual({ semaine: '2026-10-26' });
+    expect(parsePlanningSearch({ semaine: '2026-10-28' })).toEqual({ semaine: '2026-10-26' });
+    expect(parsePlanningSearch({ semaine: '2026-02-30' })).toEqual({});
+    expect(parsePlanningSearch({ semaine: 'lundi' })).toEqual({});
+    expect(parsePlanningSearch({})).toEqual({});
+  });
+
   it('keeps the managers tab and a member id, and drops anything else', () => {
     const id = '0199f2a0-0000-7000-8000-0000000000a1';
     expect(parseTeamSearch({ onglet: 'managers', membre: id })).toEqual({ onglet: 'managers', membre: id });

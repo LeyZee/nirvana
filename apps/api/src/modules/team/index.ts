@@ -5,7 +5,7 @@ import { createTeamService } from './application/team';
 import type { CreatorRoster, InvitationLinkDirectory } from './domain/ports';
 import { createTeamRoutes, type RequireRole } from './infra/http/routes';
 import { membersForPay, type MemberForPay } from './infra/pay-reads';
-import { createDrizzleTeamStore } from './infra/team-store';
+import { createDrizzleTeamStore, type EnqueuePayRecalculation } from './infra/team-store';
 
 /** Until the agency has a setting of its own (ADR 0023 § Paie): where « today » is read for rates and presets. */
 const DEFAULT_AGENCY_TIME_ZONE = 'Europe/Paris';
@@ -29,13 +29,15 @@ export interface TeamDeps {
   readonly creators: CreatorRoster;
   /** Each member's link out (EQ-10), for when it stops working. */
   readonly invitationLinks: InvitationLinkDirectory;
+  /** Pay's `payroll.recalculate` for a period, which a new rate or role enqueues (the `payroll` module's, EQ-04). */
+  readonly enqueuePayRecalculation: EnqueuePayRecalculation;
   readonly now?: () => Date;
 }
 
 export function createTeamModule(deps: TeamDeps): TeamModule {
   const now = deps.now ?? (() => new Date());
   const service = createTeamService(
-    createDrizzleTeamStore(deps.db, now),
+    createDrizzleTeamStore(deps.db, deps.enqueuePayRecalculation, now),
     deps.creators,
     deps.invitationLinks,
     { agencyTimeZone: DEFAULT_AGENCY_TIME_ZONE, now },

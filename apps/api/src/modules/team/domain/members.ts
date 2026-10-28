@@ -2,6 +2,7 @@ import type { CreatorId, TeamMemberStatus, TeamRole, TeamScope } from '@nirvana/
 
 import {
   CommissionDateInvalid,
+  CommissionStartInvalid,
   CreatorNotFound,
   MemberLeftConflict,
   OwnerOnly,
@@ -34,6 +35,15 @@ export function normalizeEmail(email: string): string {
 /** A rate or a preset applies from a day on, never to a day already worked: today at the earliest. */
 export function assertStartsFromToday(effectiveFrom: string, today: string): void {
   if (effectiveFrom < today) throw new CommissionDateInvalid();
+}
+
+/**
+ * A member's new rate starts on the first day of a period, the 1st or the 16th (Charles, 28/10), today at the earliest:
+ * pay reads one rate per period, so no period is paid at two rates. The first rate starts the day he joins instead.
+ */
+export function assertStartsAPeriod(effectiveFrom: string, today: string): void {
+  assertStartsFromToday(effectiveFrom, today);
+  if (!effectiveFrom.endsWith('-01') && !effectiveFrom.endsWith('-16')) throw new CommissionStartInvalid();
 }
 
 /** A share of the team's net is a manager's; a chatter has none. */

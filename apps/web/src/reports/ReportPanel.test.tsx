@@ -227,6 +227,19 @@ describe('Faire mon rapport', () => {
     expect((await screen.findByText(/en attente de validation/u)).textContent).toContain('120,50');
   });
 
+  it('refuses « 50 € » on an account that declares in dollars, rather than reading it as $50', async () => {
+    served.rules = { currency: 'USD', earningsSource: 'declared' };
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Faire mon rapport' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Faire mon rapport' });
+    fireEvent.change(amountField(), { target: { value: '50 €' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer mon rapport' }));
+    expect(dialog.textContent).toContain('Ce compte se déclare en dollars : tape le montant sans « € ».');
+    expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.change(amountField(), { target: { value: '50 $' } });
+    expect(dialog.textContent).not.toContain('Ce compte se déclare en dollars');
+  });
+
   it('takes the report back on « Annuler », with nothing sent, and opens it again as it was', async () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Faire mon rapport' }));
@@ -376,6 +389,15 @@ describe('Mes rapports', () => {
         body: { version: 2, amountMinor: 10_000, comment: null, incident: null },
       },
     ]);
+  });
+
+  it('says nothing validated in a currency where nothing is, rather than « Validé 0,00 $US »', async () => {
+    served.reports = [report({ amount: { amountMinor: 8_000, currency: 'USD' } })];
+    renderPage();
+    const mine = await screen.findByText('Tous mes rapports');
+    const text = (mine.closest('section')?.textContent ?? '').replaceAll(/\s/gu, ' ');
+    expect(text).toContain('En attente80,00 $US');
+    expect(text).not.toContain('Validé');
   });
 
   it('sums the period: validated, what waits for the agency, what came back, counted the same way', async () => {

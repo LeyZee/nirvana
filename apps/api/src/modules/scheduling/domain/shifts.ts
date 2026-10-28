@@ -11,6 +11,7 @@ import {
 import {
   MemberCreatorConflict,
   MemberNotActive,
+  MemberNotJoined,
   PlanningForbidden,
   PlanningRangeInvalid,
   ShiftEnded,
@@ -55,13 +56,25 @@ export function assertPlans(scope: TeamScope): void {
   if (scope !== 'owner' && scope !== 'agency') throw new PlanningForbidden();
 }
 
-/** A shift goes to an `active` member who works on its creator. */
-export function assertCanWork(
-  member: { readonly status: TeamMemberStatus; readonly creatorIds: readonly string[] },
-  creatorId: string,
-): void {
+/** What decides whether a member can take a shift: their status, their creators, and the day they join. */
+export interface WorkingMember {
+  readonly status: TeamMemberStatus;
+  readonly creatorIds: readonly string[];
+  /** Their first day, in their own zone: pay has no rate of theirs before it (EQ-01). */
+  readonly joinedOn: string;
+  readonly timeZone: string;
+}
+
+/** A shift goes to an `active` member who works on its creator, and starts on the day they join or later. */
+export function assertCanWork(member: WorkingMember, creatorId: string, startsAt: Date): void {
   if (member.status !== 'active') throw new MemberNotActive();
   if (!member.creatorIds.includes(creatorId)) throw new MemberCreatorConflict();
+  assertJoined(member, startsAt);
+}
+
+/** No shift before the member's first day, read in their zone (a moved shift keeps its member). */
+export function assertJoined(member: Pick<WorkingMember, 'joinedOn' | 'timeZone'>, startsAt: Date): void {
+  if (calendarDayIn(startsAt, member.timeZone) < member.joinedOn) throw new MemberNotJoined(member.joinedOn);
 }
 
 /** On the minute, ending after it starts, a day at most. */
@@ -212,6 +225,12 @@ export function occurrences(
     if (endsAt.getTime() > startsAt.getTime()) found.push({ startsAt, endsAt });
   }
   return found;
+}
+
+/** When a template's first shift would start: what its member must have joined by (`assertCanWork`). */
+export function firstStartOf(template: TemplateRule, timeZone: string): Date {
+  const [first] = occurrences(template, template.validFrom, addDays(template.validFrom, 6), timeZone);
+  return first?.startsAt ?? wallClockToInstant(template.validFrom, template.startMinute, timeZone);
 }
 
 /**

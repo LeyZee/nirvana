@@ -257,6 +257,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     },
     // The links' table is read through `withAdmin` only (EQ-10): the module gets this function, never the table.
     invitationLinks: { live: (memberIds) => liveInvitationLinksUnscoped(adminDb.db, memberIds) },
+    enqueuePayRecalculation,
   });
   const scheduling = createSchedulingModule({
     db: db.db,
