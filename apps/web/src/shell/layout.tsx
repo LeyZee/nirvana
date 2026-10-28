@@ -161,6 +161,9 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
             key={item.to}
             to={item.to}
             className="nv-subnav__item"
+            // A tab is its own address alone: « Conversations » (/suivi) is not lit on /suivi/alertes, and a tab's
+            // query (?onglet=, ?conversation=) never turns it off.
+            activeOptions={{ exact: true, includeSearch: false }}
             activeProps={{ 'aria-current': 'page' }}
           >
             {item.label}
