@@ -186,6 +186,22 @@ export class PaymentInFuture extends DomainError {
   }
 }
 
+/**
+ * A payment dated before its statement's period began: most likely a slip of the year, which a paid statement would
+ * keep forever (EQ-05, Bilan).
+ */
+export class PaymentBeforePeriod extends DomainError {
+  constructor(period: PayPeriod) {
+    super(
+      'payment_before_period_unprocessable',
+      'Un paiement ne se date pas avant le début de sa quinzaine',
+      {
+        details: { period },
+      },
+    );
+  }
+}
+
 /** An amount sent that is not what the statement pays (EQ-05: the default while another amount has no rule). */
 export class PaymentAmountMismatch extends DomainError {
   constructor(payableMinor: number) {

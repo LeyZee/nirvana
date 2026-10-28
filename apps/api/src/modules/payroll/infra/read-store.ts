@@ -275,7 +275,8 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               draft: sql`count(*) filter (where ${commissionStatements.status} = 'draft')::text`,
               validated: sql`count(*) filter (where ${commissionStatements.status} = 'validated')::text`,
               paid: sql`count(*) filter (where ${commissionStatements.status} = 'paid')::text`,
-              carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} > 0)::text`,
+              // Under the minimum the carry-over is positive, below zero it is negative: both are carried.
+              carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} <> 0)::text`,
               net: sql`sum(${commissionStatements.netMinor})::text`,
               payable: sql`sum(${commissionStatements.payableMinor})::text`,
               sent: sql`coalesce(sum(${commissionStatements.sentMinor}), 0)::text`,

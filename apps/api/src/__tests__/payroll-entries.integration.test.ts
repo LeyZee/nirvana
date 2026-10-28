@@ -290,17 +290,26 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
     expect(team.refusal(await pay(team.owner, { revision: revision + 1 })).code).toBe(
       'commission_statement_changed_conflict',
     );
-    // A transfer to come, another amount, a method off the list, no amount: nothing is written.
+    // A transfer to come, one before the period began (a slip of the year), another amount, a method off the list,
+    // no amount, an IBAN for a reference: nothing is written.
     const later = calendarDayAt(new Date(Date.now() + 2 * 86_400_000), 'Europe/Paris');
     expect(team.refusal(await pay(team.owner, { paidOn: later })).code).toBe(
       'payment_in_future_unprocessable',
     );
+    for (const paidOn of ['2015-06-02', '2025-05-15'])
+      expect(team.refusal(await pay(team.owner, { paidOn }))).toEqual({
+        code: 'payment_before_period_unprocessable',
+        details: { period: Q2 },
+      });
     expect(team.refusal(await pay(team.owner, { sentMinor: payableMinor + 1 }))).toEqual({
       code: 'payment_amount_unprocessable',
       details: { payableMinor },
     });
     expect((await pay(team.owner, { method: 'cash' })).statusCode).toBe(400);
     expect((await pay(team.owner, { sentMinor: undefined })).statusCode).toBe(400);
+    expect(
+      (await pay(team.owner, { reference: 'Virement FR62 1234 5678 9000 00AB C123 456' })).statusCode,
+    ).toBe(400);
     expect((await team.statementOf(theo, Q2)).status).toBe('validated');
 
     const paid = await pay(team.owner, { reference: '  VIR-0412 ' });

@@ -1,3 +1,7 @@
+-- How a statement was paid (EQ-05, ADR 0023 § Factures). A database where lot 3c (#273) already paid a statement
+-- refuses this migration: the CHECK wants the day, the method and the amount of every paid statement, which 3c never
+-- recorded. Nothing is deployed and 3c was merged on 28/10/2026, so no real database holds one; a development
+-- database that refuses 0031 is created again. No backfill: nobody knows the day nor the method of those payments.
 ALTER TABLE "commission_statements" ADD COLUMN "paid_on" date;--> statement-breakpoint
 ALTER TABLE "commission_statements" ADD COLUMN "payment_method" text;--> statement-breakpoint
 ALTER TABLE "commission_statements" ADD COLUMN "payment_reference" text;--> statement-breakpoint

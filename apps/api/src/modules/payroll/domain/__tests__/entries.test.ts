@@ -140,10 +140,14 @@ describe('what a write locks and computes again (ADR 0035)', () => {
 });
 
 describe('a payment (ADR 0023 § Factures)', () => {
-  // Today is 2 May in the agency's zone; the statement pays 133,33 €.
+  // Today is 2 May in the agency's zone; the statement, of the second half of April, pays 133,33 €.
   const paying = (patch: { paidOn?: string; sentMinor?: number }, payableMinor = 13_333): string =>
     codeOf(() => {
-      assertPayment({ paidOn: '2025-05-02', sentMinor: 13_333, ...patch }, payableMinor, '2025-05-02');
+      assertPayment(
+        { paidOn: '2025-05-02', sentMinor: 13_333, ...patch },
+        { period: P4, payableMinor },
+        '2025-05-02',
+      );
     });
 
   it('records a transfer made today or before, of what the statement pays', () => {
@@ -153,6 +157,12 @@ describe('a payment (ADR 0023 § Factures)', () => {
 
   it('refuses a transfer dated after today in the agency’s zone', () => {
     expect(paying({ paidOn: '2025-05-03' })).toBe('payment_in_future_unprocessable');
+  });
+
+  it('refuses a transfer dated before the statement’s period began, a slip of the year first', () => {
+    expect(paying({ paidOn: '2015-05-02' })).toBe('payment_before_period_unprocessable');
+    expect(paying({ paidOn: '2025-04-15' })).toBe('payment_before_period_unprocessable');
+    expect(paying({ paidOn: '2025-04-16' })).toBe('no error');
   });
 
   it('refuses an amount that is not what the statement pays, a cent off included', () => {

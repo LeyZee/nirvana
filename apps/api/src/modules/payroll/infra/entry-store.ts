@@ -397,7 +397,11 @@ export function createDrizzlePayrollEntryStore(
         if (scope !== 'owner') throw new PayrollForbidden({ ownerOnly: true });
         if (row.status !== 'validated') throw new CommissionStatementStatusConflict(NOT_PAYABLE);
         if (row.revision !== revision) throw new CommissionStatementChanged(period);
-        assertPayment(payment, row.payableMinor, calendarDayAt(now(), await reads.agencyTimeZone(tx)));
+        assertPayment(
+          payment,
+          { period, payableMinor: row.payableMinor },
+          calendarDayAt(now(), await reads.agencyTimeZone(tx)),
+        );
         const paid = await tx
           .update(commissionStatements)
           .set({

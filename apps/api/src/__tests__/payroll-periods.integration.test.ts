@@ -1,6 +1,7 @@
 import {
   AccountPayRulesIdSchema,
   newId,
+  PayAdjustmentIdSchema,
   PayPeriodPageSchema,
   PayPeriodSchema,
   PayrollPeriodSchema,
@@ -45,7 +46,7 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
         draft: count((row) => row.status === 'draft'),
         validated: count((row) => row.status === 'validated'),
         paid: count((row) => row.status === 'paid'),
-        carried: count((row) => row.carryOverOutMinor > 0),
+        carried: count((row) => row.carryOverOutMinor !== 0),
       },
       netMinor: sum((row) => row.netMinor),
       payableMinor: sum((row) => row.payableMinor),
@@ -83,7 +84,8 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
       fetchedAt: new Date('2025-05-15T15:07:00Z'),
     });
 
-    // The first fortnight, closed, Théo paid; the second still in draft, Théo under the minimum payout.
+    // The first fortnight, closed, Théo paid; the second still in draft, Théo under the minimum payout and Léa below
+    // zero (an adjustment takes back more than she earns): both carry their total over.
     await team.report(theo, Q1, 10_000);
     await team.report(lea, Q1, 30_000);
     await team.report(lea, Q1, 10_000, { account: dollars, currency: 'USD' });
@@ -104,7 +106,16 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
     ).toBe(200);
     await team.report(theo, Q2, 5_000);
     await team.report(lea, Q2, 20_000);
+    const takenBack = {
+      id: newId(PayAdjustmentIdSchema),
+      memberId: lea.id,
+      amountMinor: -50_000,
+      reason: 'Remboursement d’une vente annulée',
+    };
+    expect((await team.call('POST', '/payroll/adjustments', team.owner, takenBack)).statusCode).toBe(201);
     await team.recalculate(Q2);
+    expect((await team.statementOf(theo, Q2)).carryOverOutMinor).toBeGreaterThan(0);
+    expect((await team.statementOf(lea, Q2)).carryOverOutMinor).toBeLessThan(0);
   });
 
   afterAll(() => team.close());
@@ -116,7 +127,7 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
     for (const item of owners.items)
       expect(item).toMatchObject({ ended: true, ...(await expected(item.window.period, everyone)) });
     expect(owners.items[1]?.statements).toEqual({ draft: 0, validated: 2, paid: 1, carried: 0 });
-    expect(owners.items[0]?.statements.carried).toBe(1);
+    expect(owners.items[0]?.statements.carried).toBe(2);
 
     // An active manager reads the team, as the owner does; each chatter reads their own, never the team's.
     expect(await list(monaCookie)).toEqual(owners);

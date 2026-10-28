@@ -16,6 +16,8 @@ Décisions (Bilan, 28/10) :
 - La lecture des saisies : une route par quinzaine, sans pagination mais avec un plafond explicite par liste, les auteurs à `null` pour un membre dans les saisies comme dans les relevés, la règle de couverture dans le domaine, partagée avec le moteur, jamais recopiée en SQL (Bilan).
 - Une manager active lit les relevés de l'équipe comme le propriétaire, puisqu'elle valide ceux des autres (ADR 0023) ; le changer demanderait une ADR.
 - Un membre garde `rateMicros` sur les lignes de son propre relevé : sa paie doit être vérifiable par celui qui est payé (autofacturation). Le dernier taux lu reste à l'agence.
+- Relecture de Bilan sur #279, toutes prises : un relevé sous zéro reporte aussi son total (report négatif), donc `carried` compte tout report non nul, et le test le montre avec un ajustement qui reprend plus que le net ; le jour du paiement n'est jamais avant le premier jour de la quinzaine du relevé (`payment_before_period_unprocessable`), parce qu'une faute d'année resterait figée sur un relevé payé (la borne n'est pas la validation : l'argent peut partir avant) ; la migration 0031 dit qu'une base où le lot 3c a déjà payé un relevé la refuse et se recrée, sans rattrapage inventé.
+- La référence d'un paiement ne contient jamais d'IBAN (question posée à Bilan, réponse oui) : le contrat la refuse quand un passage du texte, gardé à ses lettres et chiffres, commence par un code pays, en a exactement la longueur et passe la clé mod 97 (`containsIban`). La liste des pays est le registre ISO 13616 plus les formats nationaux hors registre (zones UEMOA et CEMAC, dont le Bénin, où la plupart des chatteurs sont payés). L'écran et le serveur appliquent la même règle.
 
 Découvertes : aucune.
 

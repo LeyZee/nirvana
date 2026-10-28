@@ -9,6 +9,7 @@ import {
 import {
   PayPeriodClosed,
   PaymentAmountMismatch,
+  PaymentBeforePeriod,
   PaymentInFuture,
   PayrollForbidden,
   PayrollOwnForbidden,
@@ -129,13 +130,16 @@ export function periodsChanged(from: PayPeriod, to: PayPeriod, current: PayPerio
 
 /**
  * A payment as the owner records it (ADR 0023 § Factures): a transfer made, so never dated after `today` (the agency's
- * zone), and of what the statement pays. Days compare as `YYYY-MM-DD` text.
+ * zone), nor before the first day of the statement's period (a slip of the year, which a paid statement would keep
+ * forever; money may leave before the validation in Nirvana, so the bound is the period, not `validated_at`), and of
+ * what the statement pays. Days compare as `YYYY-MM-DD` text, and a period is its first day.
  */
 export function assertPayment(
   payment: { readonly paidOn: string; readonly sentMinor: number },
-  payableMinor: number,
+  statement: { readonly period: PayPeriod; readonly payableMinor: number },
   today: string,
 ): void {
   if (payment.paidOn > today) throw new PaymentInFuture(today);
-  if (payment.sentMinor !== payableMinor) throw new PaymentAmountMismatch(payableMinor);
+  if (payment.paidOn < statement.period) throw new PaymentBeforePeriod(statement.period);
+  if (payment.sentMinor !== statement.payableMinor) throw new PaymentAmountMismatch(statement.payableMinor);
 }
