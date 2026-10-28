@@ -4,6 +4,7 @@ import {
   CUSTOM_ALERT_NAME_MAX,
   CUSTOM_ALERT_PHRASE_MAX,
   LOCKED_SYSTEM_ALERTS,
+  ALERT_TEST_MESSAGE_MAX,
   AlertTestBodySchema,
   type AlertTestBody,
   type AlertTestResult,
@@ -264,11 +265,13 @@ export function testBodyOf(
 }
 
 /**
- * Why « Tester » waits once a message is written: nothing to look for yet, or an alert the route would refuse (one
- * word too many, said above under the keywords).
+ * Why « Tester » waits once a message is written: a message past its limit (the field already stops there), nothing
+ * to look for yet, or an alert the route would refuse (one word too many, said above under the keywords).
  */
 export function testHint(draft: Pick<AlertDraft, 'phrase' | 'keywords'>, message: string): string | null {
   if (message.trim() === '' || testBodyOf(draft, message) !== null) return null;
+  if (message.trim().length > ALERT_TEST_MESSAGE_MAX)
+    return `Ce message est trop long pour un essai : ${atMost(ALERT_TEST_MESSAGE_MAX)}`;
   return draft.phrase.trim() === '' && cleanKeywords(draft.keywords).length === 0
     ? 'Écris une phrase ou un mot-clé à tester.'
     : 'Corrige l’alerte au-dessus pour la tester.';

@@ -306,6 +306,9 @@ describe('« Tester »', () => {
   it('says why « Tester » waits once a message is written', () => {
     expect(testHint(both, '')).toBeNull();
     expect(testHint(both, 'custom stp')).toBeNull();
+    expect(testHint(both, 'x'.repeat(4_001))).toBe(
+      'Ce message est trop long pour un essai : 4\u202f000 caractères au plus.',
+    );
     expect(testHint({ phrase: ' ', keywords: ['!!!'] }, 'custom stp')).toBe(
       'Écris une phrase ou un mot-clé à tester.',
     );
