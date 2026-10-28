@@ -385,7 +385,9 @@ export interface CreditableInvoice {
 /**
  * The lines of a credit note: the whole invoice cancelled line by line, or one line: a reduction with its reason, the
  * adjustment that corrects the invoice with its period, or a period's negative balance. Never more than what is left
- * of the invoice: a whole cancellation only of an invoice nothing was credited on yet.
+ * of the invoice: a whole cancellation only of an invoice nothing was credited on yet. A credit note takes the VAT
+ * regime and the mentions of the invoice it cites, never the regime of the day (ADR 0036): its `invoiceTotals` are
+ * computed under that invoice's regime, since a negative balance may fall on an invoice issued under another one.
  */
 export function creditNoteLines(invoice: CreditableInvoice, request: CreditRequest): InvoiceLine[] {
   const leftMinor = invoice.exclVatMinor - invoice.creditedMinor;

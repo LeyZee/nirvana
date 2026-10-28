@@ -27,6 +27,8 @@ Elle ne dit pas quelle facture cite l'avoir quand une quinzaine finit sous zéro
 
 Un avoir n'est jamais coupé en plusieurs morceaux. Il ne passe jamais non plus sur une autre facture que celles-là.
 
+**Un avoir prend le régime de TVA et les mentions de la facture qu'il cite**, jamais le régime du jour. Un solde négatif peut en effet retomber sur une facture plus ancienne, émise sous un autre régime (avant la sortie de la franchise, par exemple).
+
 **Quand aucune facture ne peut recevoir l'avoir entier, rien n'est émis et le propriétaire est alerté.** Il règle le cas avec le comptable. Cela arrive quand la quinzaine corrigée n'a pas de facture (elle précède la mise en service), quand elle est inconnue, ou quand la correction dépasse ce qui reste.
 
 **Un avoir émis à l'initiative de l'agence suit sa propre acceptation** : il démarre « en attente », comme une facture. Il ne change pas l'état de la facture qu'il cite. Seul l'avoir qui répond à une contestation fait passer la facture en « créditée ».
