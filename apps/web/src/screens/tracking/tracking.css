@@ -282,6 +282,9 @@
   line-height: var(--nv-text-caption-leading);
   color: var(--nv-ink-muted);
 }
+.tr-limit__hint.tr-warn {
+  color: var(--nv-warning);
+}
 .tr-limit__actions {
   display: flex;
   align-items: center;
@@ -332,7 +335,19 @@
   display: flex;
   min-width: 0;
 }
+/* A narrow line cuts whose fan and the mode first, then when he wrote, never the band. */
+.tr-preview__lead {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tr-preview__sep {
+  flex: none;
+  white-space: pre;
+}
 .tr-preview__text {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -346,6 +361,12 @@
 .tr-order {
   display: flex;
   padding: var(--nv-space-2) var(--nv-space-2) var(--nv-space-3);
+}
+
+/* The search on the pseudos of the conversations already read, above the list. */
+.tr-search {
+  display: block;
+  padding: 0 var(--nv-space-2) var(--nv-space-3);
 }
 
 /* « Désir » in the reader's sheet of the fan (P3-12): a neutral gauge and the band in a word, then the curve. */

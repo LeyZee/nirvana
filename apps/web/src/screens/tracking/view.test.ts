@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   bubblesFromText,
+  bubblesProblem,
+  duration,
   lastMessageAgo,
   mergeConversations,
   orderLines,
@@ -55,14 +57,26 @@ describe('lastMessageAgo', () => {
     expect(lastMessageAgo('2026-10-17T18:00:00Z', NOW)).toBe('il y a 3 h');
     expect(lastMessageAgo('2026-10-15T20:00:00Z', NOW)).toBe('il y a 2 j');
   });
+
+  it('says a wait in days past a day, as the list does: never « 49 h »', () => {
+    expect(duration(0)).toBe('0 min');
+    expect(duration(59)).toBe('59 min');
+    expect(duration(23 * 60 + 59)).toBe('23 h');
+    expect(duration(49 * 60)).toBe('2 j');
+  });
 });
 
 describe('subline, sharedMode and statusClass', () => {
   it('says when he last wrote, with the mode only when the lines do not share one', () => {
-    expect(subline(conversation('1'), NOW, false)).toEqual({ text: 'N’a pas encore écrit', band: null });
+    expect(subline(conversation('1'), NOW, false)).toEqual({
+      mode: null,
+      text: 'N’a pas encore écrit',
+      band: null,
+    });
     const auto = conversation('2', { mode: 'auto', lastInboundAt: '2026-10-17T20:55:00Z' });
     expect(subline(auto, NOW, false).text).toBe('A écrit il y a 5 min');
-    expect(subline(auto, NOW, true).text).toBe('Automatique · a écrit il y a 5 min');
+    // The mode comes apart: a narrow line cuts it first, never when he wrote.
+    expect(subline(auto, NOW, true)).toMatchObject({ mode: 'Automatique', text: 'a écrit il y a 5 min' });
   });
 
   it('finds the mode all lines share, or none', () => {
@@ -98,18 +112,29 @@ describe('bubblesFromText', () => {
     expect(bubblesFromText(Array.from({ length: 11 }, (_, i) => `b${String(i)}`).join('\n'))).toBeNull();
     expect(bubblesFromText('x'.repeat(2_001))).toBeNull();
   });
+
+  it('says why a retouched text cannot be sent', () => {
+    expect(bubblesProblem('Coucou\nÇa va ?')).toBeNull();
+    expect(bubblesProblem(' \n')).toBe('Écris au moins une bulle.');
+    expect(bubblesProblem(Array.from({ length: 11 }, (_, i) => `b${String(i)}`).join('\n'))).toBe(
+      '10 bulles au plus, une par ligne : il y en a 11.',
+    );
+    expect(bubblesProblem('x'.repeat(2_001))).toBe('2\u202f000 caractères au plus par bulle.');
+  });
 });
 
 describe('the desire score in the list (P3-12)', () => {
   it('ends the subline with the band in a word once he has a score', () => {
     expect(subline(conversation('1', { desire: { score: 45, band: 'playful' } }), NOW, false)).toEqual({
+      mode: null,
       text: 'N’a pas encore écrit',
       band: 'joueur',
     });
     expect(
       subline(conversation('1', { mode: 'auto', desire: { score: 82, band: 'hot' } }), NOW, true),
     ).toEqual({
-      text: 'Automatique · n’a pas encore écrit',
+      mode: 'Automatique',
+      text: 'n’a pas encore écrit',
       band: 'chaud',
     });
   });

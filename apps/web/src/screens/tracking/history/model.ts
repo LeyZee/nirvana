@@ -85,11 +85,26 @@ export function whenLine(at: string, now: Date, zone: string): string {
   return `${dayMonth(day)} à ${clock}`;
 }
 
-/** The alerts the filter offers: the system's, then hers by name; an archived one stays while it has lines. */
+/** One of her alerts, known from the owner's list or from a line read: what it is called, for whom it watches. */
+export interface KnownAlert {
+  readonly groupId: CustomAlertGroupId;
+  readonly name: string;
+  readonly creatorId: string;
+}
+
+/**
+ * The alerts the filter offers: the system's, then hers by name; an archived one stays while it has lines. With one
+ * creator chosen, only the alerts that watch her: another's would only answer « pas encore sonné ».
+ */
 export function alertChoices(
-  known: readonly { readonly groupId: CustomAlertGroupId; readonly name: string }[],
+  known: readonly KnownAlert[],
+  creator: string | null = null,
+  /** The alert chosen now: offered whatever the creator, so that the filter never shows another than it applies. */
+  chosen: AlertChoice | null = null,
 ): readonly { readonly value: AlertChoice; readonly label: string }[] {
-  const custom = [...new Map(known.map((one) => [one.groupId, one.name])).entries()]
+  const hers =
+    creator === null ? known : known.filter((one) => one.creatorId === creator || one.groupId === chosen);
+  const custom = [...new Map(hers.map((one) => [one.groupId, one.name])).entries()]
     .map(([value, label]) => ({ value, label }))
     .toSorted((a, b) => a.label.localeCompare(b.label, 'fr'));
   return [
@@ -107,11 +122,23 @@ export function choiceOf(value: string): AlertChoice | null {
 }
 
 /** Her alerts named on the lines read, to keep them in the filter once it narrows the list. */
-export const alertsOf = (
-  items: readonly AlertTriggerItem[],
-): readonly { readonly groupId: CustomAlertGroupId; readonly name: string }[] =>
+export const alertsOf = (items: readonly AlertTriggerItem[]): readonly KnownAlert[] =>
   items.flatMap((item) =>
-    item.alertGroupId === null ? [] : [{ groupId: item.alertGroupId, name: item.alertName }],
+    item.alertGroupId === null
+      ? []
+      : [{ groupId: item.alertGroupId, name: item.alertName, creatorId: item.creatorId }],
+  );
+
+/** The owner's alerts, once per creator they watch. */
+export const ownedAlerts = (
+  groups: readonly {
+    readonly groupId: CustomAlertGroupId;
+    readonly name: string;
+    readonly creators: readonly { readonly creatorId: string }[];
+  }[],
+): readonly KnownAlert[] =>
+  groups.flatMap((group) =>
+    group.creators.map((one) => ({ groupId: group.groupId, name: group.name, creatorId: one.creatorId })),
   );
 
 /** « 3 alertes marquées comme vues », once « Tout marquer comme vu » answered. */

@@ -14,6 +14,7 @@ import {
   MessageIdSchema,
   type ConversationDesire,
   type ConversationSummary,
+  type DraftView,
 } from '@nirvana/contracts';
 import {
   and,
@@ -105,6 +106,16 @@ async function summaries(
   }));
 }
 
+function draftView(draft: typeof schema.drafts.$inferSelect): DraftView {
+  return {
+    id: DraftIdSchema.parse(draft.id),
+    status: DraftStatusSchema.parse(draft.status),
+    bubbles: draft.bubbles,
+    finalBubbles: draft.finalBubbles,
+    createdAt: draft.createdAt.toISOString(),
+  };
+}
+
 /** The inbox's queries, in tenant transactions like everything else (RLS). */
 export function createDrizzleConversationReader(db: Database, clock: Clock): ConversationReader {
   return {
@@ -156,15 +167,20 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
               ),
             )
             .orderBy(schema.drafts.createdAt);
+          // In `error`, what did not leave: the latest draft whose send failed for good.
+          const [failed] =
+            summary.state === 'error'
+              ? await tx
+                  .select()
+                  .from(schema.drafts)
+                  .where(and(eq(schema.drafts.conversationId, id), eq(schema.drafts.status, 'failed')))
+                  .orderBy(sql`${schema.drafts.createdAt} desc`)
+                  .limit(1)
+              : [];
           return {
             ...summary,
-            openDrafts: drafts.map((draft) => ({
-              id: DraftIdSchema.parse(draft.id),
-              status: DraftStatusSchema.parse(draft.status),
-              bubbles: draft.bubbles,
-              finalBubbles: draft.finalBubbles,
-              createdAt: draft.createdAt.toISOString(),
-            })),
+            openDrafts: drafts.map(draftView),
+            failedDraft: failed === undefined ? null : draftView(failed),
           };
         },
         SNAPSHOT_READ,

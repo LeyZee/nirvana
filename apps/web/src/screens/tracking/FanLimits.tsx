@@ -2,9 +2,10 @@ import type { FanFlags, SetFanFlagBody } from '@nirvana/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type JSX } from 'react';
 
-import { fetchFanFlags, setFanFlag } from './api';
+import { FanFlagsRefused, fetchFanFlags, setFanFlag } from './api';
 import {
   ageLine,
+  ceilingProblem,
   centsOf,
   euros,
   flagsSummary,
@@ -30,7 +31,11 @@ export function FanLimits({
   canDecide: boolean;
 }): JSX.Element {
   const key = ['fan-flags', creatorId, fanId];
-  const query = useQuery({ queryKey: key, queryFn: () => fetchFanFlags(creatorId, fanId) });
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => fetchFanFlags(creatorId, fanId),
+    retry: (count, failure) => !(failure instanceof FanFlagsRefused) && count < 3,
+  });
   const client = useQueryClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +66,13 @@ export function FanLimits({
       <summary>
         <span className="tr-limits__title">Limites du fan</span>
         <span className={`tr-limits__sum${blocking ? ' tr-warn' : ''}`}>
-          {flags !== undefined ? flagsSummary(flags) : query.isError ? 'Le serveur ne répond pas' : '…'}
+          {flags !== undefined
+            ? flagsSummary(flags)
+            : query.error instanceof FanFlagsRefused
+              ? 'Tu ne peux pas voir ses limites'
+              : query.isError
+                ? 'Le serveur ne répond pas'
+                : '…'}
         </span>
       </summary>
       {flags === undefined ? null : (
@@ -211,7 +222,8 @@ function Age({ flags, canDecide, pending, change }: RowProps): JSX.Element {
 function Ceiling({ flags, canDecide, pending, change }: RowProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
-  const cents = centsOf(text);
+  const problem = ceilingProblem(text);
+  const cents = problem === null ? centsOf(text) : null;
   const limit = flags.spendingLimitMinor;
   return (
     <div className="tr-limit">
@@ -222,6 +234,11 @@ function Ceiling({ flags, canDecide, pending, change }: RowProps): JSX.Element {
             ? 'Aucun plafond.'
             : `Il a fixé ${euros(limit)} : l’agent ne propose rien au-delà.`}
         </span>
+        {editing && problem !== null ? (
+          <span className="tr-limit__hint tr-warn" role="status">
+            {problem}
+          </span>
+        ) : null}
       </span>
       {!canDecide ? null : editing ? (
         <span className="tr-limit__actions">

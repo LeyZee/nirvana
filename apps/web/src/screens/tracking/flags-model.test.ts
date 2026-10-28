@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { ageLine, centsOf, euros, flagError, flagsSummary, isBlocking, switchDetail } from './flags-model';
+import {
+  ageLine,
+  ceilingProblem,
+  centsOf,
+  euros,
+  flagError,
+  flagsSummary,
+  isBlocking,
+  switchDetail,
+} from './flags-model';
 
 describe('the fan’s limits', () => {
   it('folds to one line, and says when there is none', () => {
@@ -48,9 +57,18 @@ describe('the fan’s limits', () => {
     expect(centsOf('cinquante')).toBeNull();
   });
 
+  it('says under the field why a ceiling cannot be saved: not an amount, 0 €, past 100 000 €', () => {
+    expect(ceilingProblem('')).toBeNull();
+    expect(ceilingProblem('49,90')).toBeNull();
+    expect(ceilingProblem('100 000')).toBeNull();
+    expect(ceilingProblem('-5')).toBe('Un montant en euros, par exemple 50 ou 49,90.');
+    expect(ceilingProblem('0')).toContain('gèle les ventes');
+    expect(ceilingProblem('99999999999')).toBe('Au plus 100\u202f000\u00a0€.');
+  });
+
   it('says why a change was refused', () => {
     expect(flagError(404)).toBe('Ce fan n’existe plus.');
-    expect(flagError(403)).toBe('Seuls le propriétaire et les chatteurs changent les limites d’un fan.');
+    expect(flagError(403)).toBe('Tu ne peux pas changer les limites de ce fan : rien n’a changé.');
     expect(flagError(0)).toBe('Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.');
   });
 });

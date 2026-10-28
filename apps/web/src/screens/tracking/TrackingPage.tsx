@@ -16,12 +16,14 @@ import { Reader } from './Reader';
 import { fetchConversations } from './api';
 import { todoLabel } from './reader-model';
 import {
+  duration,
   LIST_ORDER_LABELS,
   LIST_ORDERS,
   MODE_MEANINGS,
   mergeConversations,
   orderLines,
   readListOrder,
+  searchLines,
   sharedMode,
   STATE_LABELS,
   statusClass,
@@ -80,6 +82,7 @@ export function TrackingPage({
   const dashboard = useLiveDashboard();
   const now = useNow();
   const [order, setOrder] = useState<ListOrder>(readListOrder);
+  const [search, setSearch] = useState('');
 
   const isLoading = creatorsQuery.isPending || queries.some((q) => q.isPending);
   const failed = queries.filter((q) => q.isError);
@@ -93,7 +96,8 @@ export function TrackingPage({
   const hasMore = queries.some((q) => q.data?.hasMore === true);
   // The order only offers itself once a fan has a desire score: before that, « Chauds d'abord » would sort nothing.
   const canOrder = lines.some((l) => l.conversation.desire !== null);
-  const shown = orderLines(lines, canOrder ? order : 'recent');
+  const shown = searchLines(orderLines(lines, canOrder ? order : 'recent'), search);
+  const isSearching = search.trim() !== '';
   const showsCreator = creators.length > 1;
   const mode = sharedMode(lines);
   const retry = (): void => {
@@ -191,7 +195,22 @@ export function TrackingPage({
                     }}
                   />
                 ) : null}
+                <label className="tr-search">
+                  <span className="sr-only">Chercher un fan par son pseudo</span>
+                  <input
+                    type="search"
+                    className="nv-field__control"
+                    placeholder="Chercher un fan"
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                    }}
+                  />
+                </label>
                 <div className="nv-scroll">
+                  {isSearching && shown.length === 0 ? (
+                    <p className="tr-more">Aucun fan ne porte ce pseudo dans la liste.</p>
+                  ) : null}
                   <ul className="nv-list tr-list" aria-label="Conversations">
                     {shown.map(({ conversation, creatorName }) => (
                       <Row
@@ -209,9 +228,11 @@ export function TrackingPage({
                   </ul>
                   {hasMore ? (
                     <p className="tr-more">
-                      {canOrder && order === 'hot'
-                        ? 'Seules les plus récentes sont affichées : le classement ne porte que sur elles.'
-                        : 'Seules les plus récentes sont affichées.'}
+                      {isSearching
+                        ? 'Seules les plus récentes sont affichées : la recherche ne porte que sur elles.'
+                        : canOrder && order === 'hot'
+                          ? 'Seules les plus récentes sont affichées : le classement ne porte que sur elles.'
+                          : 'Seules les plus récentes sont affichées.'}
                     </p>
                   ) : null}
                 </div>
@@ -332,11 +353,7 @@ function QueueRow({
           </span>
           <span className="nv-convo__preview">{todo.why}</span>
         </span>
-        <span className="nv-convo__side tr-wait">
-          {todo.waitingMinutes < 60
-            ? `${String(todo.waitingMinutes)} min`
-            : `${String(Math.floor(todo.waitingMinutes / 60))} h`}
-        </span>
+        <span className="nv-convo__side tr-wait">{duration(todo.waitingMinutes)}</span>
       </button>
     </li>
   );
@@ -360,6 +377,8 @@ function Row({
 }): JSX.Element {
   const name = conversation.fanDisplayName.trim() === '' ? 'Fan sans nom' : conversation.fanDisplayName;
   const line = subline(conversation, now, withMode);
+  // Whose fan and in which mode: what a narrow line cuts first, before when he wrote.
+  const lead = [creatorName, line.mode].flatMap((part) => part ?? []);
   return (
     <li className="nv-enter">
       <button
@@ -374,10 +393,13 @@ function Row({
         <span className="nv-convo__main">
           <span className="nv-convo__name">{name}</span>
           <span className="nv-convo__preview tr-preview">
-            <span className="tr-preview__text">
-              {creatorName === undefined ? null : `${creatorName} · `}
-              {line.text}
-            </span>
+            {lead.length === 0 ? null : (
+              <>
+                <span className="tr-preview__lead">{lead.join(' · ')}</span>
+                <span className="tr-preview__sep">{' · '}</span>
+              </>
+            )}
+            <span className="tr-preview__text">{line.text}</span>
             {line.band === null ? null : <span className="tr-preview__band">{` · ${line.band}`}</span>}
           </span>
         </span>

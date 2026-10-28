@@ -129,23 +129,25 @@ async function facts(
         where type = 'handoff_requested' and created_at >= ${dayStart}::timestamptz
         group by payload->>'cause'`,
   );
-  // His conversation with a human: the cause of its last handoff, or `other` when the event is missing.
+  // His conversation handed to a human by the agent, with the cause of that handoff. A handoff leaves once the hand
+  // was given back (`takeover_ended`); a person who takes the hand of their own accord is on it, so it never enters.
   const handedOver = await rows(
     tx,
     z.object({
       conversation_id: z.string(),
       fan_id: z.string(),
       fan_name: z.string(),
-      cause: HandoffCauseSchema.nullable(),
+      cause: HandoffCauseSchema,
       since: timestamp,
     }),
-    sql`select c.id as conversation_id, c.fan_id, f.display_name as fan_name, h.cause,
-               coalesce(h.created_at, c.updated_at) as since
+    sql`select c.id as conversation_id, c.fan_id, f.display_name as fan_name, h.cause, h.created_at as since
         from conversations c
         join fans f on f.id = c.fan_id
-        left join lateral (
+        join lateral (
           select payload->>'cause' as cause, created_at from conversation_events e
           where e.conversation_id = c.id and e.type = 'handoff_requested'
+            and e.seq > coalesce((select max(t.seq) from conversation_events t
+                                  where t.conversation_id = c.id and t.type = 'takeover_ended'), -1)
           order by e.seq desc limit 1) h on true
         where c.state = 'human'`,
   );
@@ -254,7 +256,7 @@ async function facts(
         conversationId: h.conversation_id,
         fanId: h.fan_id,
         fanName: h.fan_name,
-        kind: h.cause ?? 'other',
+        kind: h.cause,
         since: h.since,
       })),
       ...unread.map((u) => ({

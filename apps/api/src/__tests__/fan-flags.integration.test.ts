@@ -154,9 +154,8 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
     expect((await put(owner, { flag: 'fragile', set: true }, bea)).statusCode).toBe(404);
     expect((await get(owner, bea)).statusCode).toBe(404);
     expect((await put(owner, { flag: 'salesFrozen', set: true })).statusCode).toBe(400);
-    expect((await put(owner, { flag: 'spendingLimitMinor', set: true, limitMinor: -1 })).statusCode).toBe(
-      400,
-    );
+    for (const limitMinor of [-1, 0, 10_000_001])
+      expect((await put(owner, { flag: 'spendingLimitMinor', set: true, limitMinor })).statusCode).toBe(400);
     expect((await put(owner, { flag: 'fragile', set: true, reason: '   ' })).statusCode).toBe(400);
     expect((await get(owner)).json<{ flags: object }>().flags).not.toHaveProperty('fragile');
   });
