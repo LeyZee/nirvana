@@ -50,12 +50,15 @@ const COMMENT_MAX = 1000;
 export function ReportPanel({
   shiftId,
   draft,
+  memberName,
   hold,
   onClose,
   onReopen,
 }: {
   shiftId: string;
   draft: ReportDraft | null;
+  /** The member whose report the agency corrects; absent when the member opens their own. */
+  memberName?: string;
   hold: Hold;
   onClose: () => void;
   onReopen: (draft: ReportDraft) => void;
@@ -68,7 +71,7 @@ export function ReportPanel({
 
   return (
     <Dialog
-      title={titleOf(data, draft)}
+      title={titleOf(data, draft, memberName)}
       lead={
         data === undefined ? undefined : (
           <>
@@ -109,7 +112,12 @@ export function ReportPanel({
   );
 }
 
-function titleOf(data: ShiftReportContext | undefined, draft: ReportDraft | null): string {
+function titleOf(
+  data: ShiftReportContext | undefined,
+  draft: ReportDraft | null,
+  memberName: string | undefined,
+): string {
+  if (memberName !== undefined) return `Corriger le rapport de ${memberName}`;
   if (draft?.correcting === true) return 'Corriger mon rapport';
   const report = data === undefined ? null : reportOf(data.reports, data.shift.id);
   if (report === null) return 'Faire mon rapport';
@@ -463,7 +471,7 @@ function Form({
           {touched && amountProblem !== null
             ? amountProblem
             : correcting
-              ? 'Une vente oubliée, un remboursement : l’agence valide la correction.'
+              ? 'Une vente oubliée, un remboursement : la correction se valide ensuite comme un rapport.'
               : `Le brut de tes ventes sur ce shift, en ${currency === 'EUR' ? 'euros' : 'dollars'}, comme la plateforme l’affiche.`}
         </p>
       </div>

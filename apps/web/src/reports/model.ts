@@ -221,7 +221,8 @@ export const previousPeriod = (period: PayPeriod): PayPeriod => {
   return payPeriodOfDay(before.toISOString().slice(0, 10));
 };
 
-const followingPeriod = (period: PayPeriod): PayPeriod => {
+/** The period after `period`. */
+export const followingPeriod = (period: PayPeriod): PayPeriod => {
   const last = payPeriodLastDay(period);
   const after = new Date(`${last}T12:00:00Z`);
   after.setUTCDate(after.getUTCDate() + 1);
