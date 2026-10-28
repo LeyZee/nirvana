@@ -135,7 +135,7 @@ const trackingAlerts = createRoute({
       <AlertHistoryPage
         selected={conversation ?? null}
         onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
-        canDecide
+        canDecide={user.role !== 'creator'}
         isOwner={user.role === 'owner'}
         nav={<SuiviNav />}
       />

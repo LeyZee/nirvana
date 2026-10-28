@@ -208,6 +208,25 @@ describe('Suivi › Historique des alertes (P4-01)', () => {
     ]);
   });
 
+  it('waits for the lines of a new alert filter before « Tout marquer comme vu »', async () => {
+    const calls = serve(history);
+    renderPage();
+    await lines();
+    // The new filter's pages never answer: the lines shown stay the old filter's.
+    const fetch = vi.fn((url: string) =>
+      new URL(url, 'http://nirvana.test').searchParams.get('alert') === GROUP
+        ? new Promise<Response>(() => undefined)
+        : Promise.resolve(new Response(null, { status: 500 })),
+    );
+    vi.stubGlobal('fetch', fetch);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Alerte' }), { target: { value: GROUP } });
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled();
+    });
+    expect(screen.getByRole('button', { name: 'Tout marquer comme vu' })).toHaveProperty('disabled', true);
+    expect(calls.some((call) => call.method === 'POST')).toBe(false);
+  });
+
   it('keeps the unseen ones or one alert as the server reads them, and one creator’s lines', async () => {
     const calls = serve(history);
     renderPage();

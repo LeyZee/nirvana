@@ -8,7 +8,7 @@ import {
   type MarkAlertTriggersSeenBody,
 } from '@nirvana/contracts';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import type { AlertChoice, CreatorTriggers } from './model';
 
@@ -128,33 +128,40 @@ export interface HistoryRead {
   readonly refetch: () => void;
 }
 
-/** The history of each creator, under the same filter and depth. */
+/**
+ * The history of each creator, under the same filter and depth. « Voir plus » and a filter keep the last lines read in
+ * place, marked `stale`, while the new read comes: under `useQueries` a new key is a new observer, so `placeholderData`
+ * would have no previous data to give.
+ */
 export function useHistory(creatorIds: readonly string[], filter: HistoryFilter, pages: number): HistoryRead {
-  return useQueries({
+  const read = useQueries({
     queries: creatorIds.map((creatorId) => ({
       queryKey: [...HISTORY_KEY, creatorId, filter.unseen, filter.alert, pages],
       queryFn: () => fetchTriggers(creatorId, filter, pages),
       refetchInterval: REFRESH_MS,
-      // « Voir plus » and a filter keep the lines in place while the next read comes.
-      placeholderData: (before: CreatorTriggers | undefined) => before,
     })),
     combine: combineHistory,
   });
+  const shown = useRef<readonly CreatorTriggers[] | null>(null);
+  if (!read.pending) {
+    shown.current = read.lists;
+    return read;
+  }
+  return shown.current === null ? read : { ...read, lists: shown.current, pending: false, stale: true };
 }
 
 function combineHistory(
   results: readonly {
     readonly data: CreatorTriggers | undefined;
     readonly isPending: boolean;
-    readonly isPlaceholderData: boolean;
     readonly error: unknown;
     readonly refetch: () => Promise<unknown>;
   }[],
-): HistoryRead {
+): Omit<HistoryRead, 'stale'> & { readonly stale: false } {
   return {
     lists: results.flatMap((result) => (result.data === undefined ? [] : [result.data])),
     pending: results.some((result) => result.isPending),
-    stale: results.some((result) => result.isPlaceholderData),
+    stale: false,
     error: results.find((result) => result.error !== null)?.error ?? null,
     refetch: () => {
       for (const result of results) if (result.error !== null) void result.refetch();

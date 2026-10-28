@@ -275,7 +275,8 @@ function History({
           <button
             type="button"
             className="nv-btn nv-btn--soft nv-btn--sm"
-            disabled={markingAll}
+            // While another filter is read, the lines shown are the old one's: their newest is no `untilId` for it.
+            disabled={markingAll || stale}
             aria-busy={markingAll}
             onClick={() => {
               void seeAll();
