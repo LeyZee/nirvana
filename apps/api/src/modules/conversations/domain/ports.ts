@@ -176,6 +176,8 @@ interface EventWriter {
   publish(creatorId: CreatorId, body: EventBody, meta: EventMeta): Promise<void>;
   /** The whole journal in `seq` order. */
   list(conversationId: ConversationId): Promise<readonly StoredEvent[]>;
+  /** What set off each `alert_triggered` after `since` (all of them when null), in `seq` order (P4-01). */
+  alertsSince(conversationId: ConversationId, since: Date | null): Promise<readonly AlertTrigger[]>;
 }
 
 interface JobOptions {

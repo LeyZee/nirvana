@@ -8,6 +8,7 @@ import {
   replyOpenAt,
   reopenJobKey,
   type AgentHours,
+  type AlertTrigger,
   type HandoffCause,
   type JobPayload,
 } from '@nirvana/contracts';
@@ -87,6 +88,18 @@ export const noteLine = (fact: {
   readonly key: string;
   readonly value: string;
 }): string => (fact.category === 'operator_note' ? `Note : ${fact.value}` : `${fact.key} : ${fact.value}`);
+
+/** The same alert, however it matched: a custom one by its row, a system one by its code. */
+const alertKey = ({ alert }: AlertTrigger): string => (alert.kind === 'custom' ? alert.id : alert.code);
+
+/** Her alerts not yet sounded since her last answer: the team hears of each once until she answers. */
+function unsounded<T extends { readonly trigger: AlertTrigger }>(
+  alerts: readonly T[],
+  sounded: readonly AlertTrigger[],
+): T[] {
+  const done = new Set(sounded.map(alertKey));
+  return alerts.filter((alert) => !done.has(alertKey(alert.trigger)));
+}
 
 const lastInboundKey = (conversation: Conversation): number => conversation.lastInboundAt?.getTime() ?? 0;
 
@@ -284,8 +297,13 @@ export function createRespondJob({ uow, clock, voice, fans, composer, replyHours
       }
       const meta: EventMeta = { actor: 'ai', correlationId: payload.correlationId, at: clock.now() };
       let conversation = await recordDesire(tx, locked, result, meta);
-      // Her alerts that only let a human know (P4-01), whatever the answer becomes: named, never his words.
-      for (const alert of result.alerts ?? []) {
+      // Her alerts that only let a human know (P4-01), whatever the answer becomes: named, never his words. One
+      // already sounded since her last answer (a second pass after a wait, another message of his) is not again.
+      const sounded =
+        result.alerts === undefined || result.alerts.length === 0
+          ? []
+          : await tx.events.alertsSince(conversation.id, conversation.lastOutboundAt);
+      for (const alert of unsounded(result.alerts ?? [], sounded)) {
         conversation = await appendEvent(
           tx,
           conversation,

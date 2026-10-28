@@ -259,6 +259,38 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     ]);
   });
 
+  it('sounds each alert once until she answers, even when he writes again (P4-01)', async () => {
+    const id = await fanWrites('c-twice', 'Tu fais des appels ?');
+    const service = { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'model' } as const;
+    const doubt = { alert: { kind: 'system', code: 'identity_doubt' }, matchedBy: 'model' } as const;
+    composer.next = {
+      kind: 'held',
+      reason: 'no_reply',
+      detail: [],
+      costUsd: 0,
+      alerts: [{ trigger: service, notify: true }],
+    };
+    await respond(id);
+
+    await fanWrites('c-twice', 'T’es une vraie au moins ?');
+    composer.next = {
+      kind: 'draft',
+      bubbles: ['Bien sûr 😏'],
+      softViolations: [],
+      costUsd: 0,
+      alerts: [
+        { trigger: service, notify: true },
+        { trigger: doubt, notify: true },
+      ],
+    };
+    await respond(id);
+    const sounded = (await events(id)).filter((event) => event.type === 'alert_triggered');
+    expect(sounded.map((event) => event.payload)).toEqual([
+      { conversationId: id, trigger: service, notify: true },
+      { conversationId: id, trigger: doubt, notify: true },
+    ]);
+  });
+
   it('writes nothing more to the fan while a human is awaited, whatever the fan sends', async () => {
     const id = await fanWrites('c-awaited', 'Je vais pas bien');
     composer.next = { kind: 'held', reason: 'handoff', cause: 'distress', detail: ['distress'], costUsd: 0 };
