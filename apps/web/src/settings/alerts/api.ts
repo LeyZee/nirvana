@@ -107,8 +107,11 @@ export const ALERTS_QUERY_KEY = ['alerts'] as const;
 export const fetchAlerts = (): Promise<AlertsView> =>
   call('/v1/alerts', (body) => AlertsViewSchema.safeParse(body));
 
-export function useAlerts(): UseQueryResult<AlertsView> {
-  return useQuery({ queryKey: ALERTS_QUERY_KEY, queryFn: fetchAlerts });
+/** `enabled: false` for anyone but the owner, whom the route answers alone. */
+export function useAlerts({
+  enabled = true,
+}: { readonly enabled?: boolean } = {}): UseQueryResult<AlertsView> {
+  return useQuery({ queryKey: ALERTS_QUERY_KEY, queryFn: fetchAlerts, enabled });
 }
 
 /** Writes a new alert on its creators; the same body sent again answers what is stored. */

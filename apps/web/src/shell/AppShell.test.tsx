@@ -298,3 +298,49 @@ describe('« Plus » on the phone', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+describe('Suivi › Historique des alertes (P4-01)', () => {
+  const suiviTabs = async (): Promise<{ readonly label: string; readonly current: boolean }[]> =>
+    within(await screen.findByRole('navigation', { name: 'Suivi' }))
+      .getAllByRole('link')
+      .map((link) => ({ label: link.textContent, current: link.getAttribute('aria-current') === 'page' }));
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('is a view of Suivi for the owner and a manager, lit alone on its own address', async () => {
+    renderApp(owner, '/suivi/alertes');
+    expect(await suiviTabs()).toEqual([
+      { label: 'Conversations', current: false },
+      { label: 'Historique des alertes', current: true },
+    ]);
+    cleanup();
+    renderApp(manager, '/suivi?conversation=0192f3a0-0000-7000-8000-0000000000d1');
+    expect(await suiviTabs()).toEqual([
+      { label: 'Conversations', current: true },
+      { label: 'Historique des alertes', current: false },
+    ]);
+  });
+
+  it('sends a chatter to his own Suivi, which has no such view', async () => {
+    const router = renderApp(chatter, '/suivi/alertes');
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/suivi');
+    });
+    expect(screen.queryByRole('navigation', { name: 'Suivi' })).toBeNull();
+  });
+
+  it('sends a creator home, as from all of Suivi', async () => {
+    const router = renderApp({ ...base, role: 'creator', team: null, teamScope: 'self' }, '/suivi/alertes');
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/');
+    });
+  });
+});
