@@ -1,5 +1,5 @@
 # EQ-05 Paie : écrans de validation, de paiement et commissions du chatteur
-Statut : todo, conçue (fiche et maquettes du 28/10/2026, accord d'Extension le 28/10 après ses 12 remarques) ; l'API qu'elle attend est dans main (lots 3a à 3e d'EQ-04, #271 à #275, et ses ajouts, #279) : les écrans viennent dans la PR suivante (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
+Statut : in_progress : écrans codés et testés (28/10/2026), en PR avec la relecture d'Extension et de Bilan ; l'API qu'ils lisent est dans main (lots 3a à 3e d'EQ-04, #271 à #275, et les ajouts d'EQ-05, #279) (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-04 (lot 3 : validation, saisies, paiement, règles, taux) ; EQ-11 (fait)
 Branche : task/eq-05-payroll-screens
@@ -62,7 +62,7 @@ Ce qui vaut pour tous les écrans (relecture d'Extension, 28/10) :
   - la marque de `rp-notice` devient un trait droit de 3 px à côté du texte (`::before`, de la première ligne à la dernière), au lieu d'une ombre intérieure qui suit l'arrondi. Pas d'`overflow: hidden`, qui couperait le halo d'un bouton néon dans l'avis ;
   - `rp-account[data-missing='true']` reste neutre et « Aucune règle pour l'instant. » passe en `ink-muted` : l'avis au-dessus suffit.
 
-- [ ] **Quinzaine** (la période en cours, ou celle choisie dans Relevés).
+- [x] **Quinzaine** (la période en cours, ou celle choisie dans Relevés).
   - En-tête : les dates, un état qui dit qui a la main (« En cours, finit le 31 oct. », « Finie : à valider », « Close le 3 nov. par Charles »), et la quinzaine précédente ou suivante.
   - Le chiffre qui domine : « À verser » quand la quinzaine est finie, sinon le net de l'équipe et sa prévision de fin. Au plus trois chiffres secondaires : prévision, écart avec la quinzaine précédente, objectif collectif.
   - Une ligne par membre (`rp-review`) : couleur, nom, rôle, net, total, état, écart, et le malus signé comme partout (« malus −15,00 € »). États : Brouillon, Validé, Payé, Reporté (sous le minimum). Un report n'a qu'une marque, l'étiquette ambre « Reporté » ; sa phrase est en `ink-muted` et la ligne n'a pas de bord.
@@ -72,7 +72,7 @@ Ce qui vaut pour tous les écrans (relecture d'Extension, 28/10) :
   - Ce qui bloque la validation, en ambre et au-dessus de la liste, avec le lien qui le lève : rapports à relire (Équipe › Rapports), taux de la BCE manquant, membre sans taux de commission (Équipe › Membres). Tant qu'un blocage est affiché, ni « Valider », ni les cases, ni le compteur : le bouton de l'avis dit quoi faire.
   - Une fois la quinzaine close, un cadenas : « Close le … : un rapport validé maintenant va sur la quinzaine suivante ».
   - Il n'y a pas de route de lot. « Valider (n) » envoie relevé par relevé, dans l'ordre des membres. Chaque refus reste sur sa ligne, et les autres relevés passent.
-- [ ] **Relevé** (panneau ouvert depuis une ligne) : le parcours de l'argent.
+- [x] **Relevé** (panneau ouvert depuis une ligne) : le parcours de l'argent.
   - Compte par compte : brut dans la devise, en euros au taux de la BCE de la ligne (`rateMicros`, au survol), hors TVA, net de la plateforme, commission au taux du membre.
   - Puis : palier, objectif collectif, part d'équipe d'un manager, primes, malus (demandé et retenu, avec le plafond), reports reçus, ajustements, total, report sortant, « À verser ».
   - Replié par défaut : les règles copiées, la révision, « Calculé à », la version du moteur, les rapports derrière chaque compte.
@@ -80,32 +80,32 @@ Ce qui vaut pour tous les écrans (relecture d'Extension, 28/10) :
     - « Valider (révision n) » ;
     - « Marquer payé », propriétaire seul, en deux temps (remplir, relire) : la date (aujourd'hui par défaut, jamais après), le montant envoyé (« À verser », un autre est refusé), le moyen et la « Référence du transfert, facultative », avec l'aide « Celle que montre la banque ou le service. Jamais un IBAN ni un numéro de compte. » ;
     - « Ajuster », sur un relevé validé ou payé (l'ajustement va sur la quinzaine que choisit le serveur, et l'écran la dit avant l'envoi).
-- [ ] **Relevés** : les quinzaines, de la plus récente à la plus ancienne (l'index, deuxième ajout). Chacune montre son état (En cours, Finie : à valider, Close, Payée) et s'ouvre en Quinzaine, en lecture pour une quinzaine close.
+- [x] **Relevés** : les quinzaines, de la plus récente à la plus ancienne (l'index, deuxième ajout). Chacune montre son état (En cours, Finie : à valider, Close, Payée) et s'ouvre en Quinzaine, en lecture pour une quinzaine close.
   - La colonne de droite n'a qu'une grandeur : le versé (« versé »), ou ce qui reste à verser (« à verser à ce jour » pour la quinzaine en cours, « à verser » pour une close).
   - Le net, la clôture et le nombre de relevés par état vont sur la ligne du dessous : « Close le 2 nov. par Charles · 2 655,68 € de net · 3 payés, 1 reporté ».
-- [ ] **Primes et malus** : les saisies de la quinzaine, membre par membre, et une saisie annulée reste barrée. Chaque montant montre son signe : « +30,00 € », « −15,00 € », « −10 % », « −12,40 € ».
+- [x] **Primes et malus** : les saisies de la quinzaine, membre par membre, et une saisie annulée reste barrée. Chaque montant montre son signe : « +30,00 € », « −15,00 € », « −10 % », « −12,40 € ».
   - « Ajouter » en deux temps (remplir, relire) : prime, malus fixe, malus en pourcentage ou ajustement ; le membre (jamais soi : son nom n'est pas dans la liste) ; la quinzaine ; le montant ; le motif, obligatoire.
   - « Annuler » une prime ou un malus après une confirmation, en petit bouton discret (`nv-btn--plain nv-btn--sm`) qui se remplit au survol.
   - Jamais « sanction ».
-- [ ] **Objectifs**.
+- [x] **Objectifs**.
   - L'objectif collectif de la quinzaine : cible, paliers en pourcentage et prime par chatteur, progression avec la marque de la prévision.
   - Les paliers individuels en vigueur et leur quinzaine de départ.
   - Le propriétaire les change à partir d'une quinzaine pas encore validée, et le manager les lit. Une quinzaine figée dit pourquoi (`pay_period_closed_conflict`).
-- [ ] **Réglages › Règles de paie** (propriétaire) gagne le minimum de versement : 15 € par défaut, un changement s'applique aux brouillons.
-- [ ] **Commissions** (chatteur ; le manager lit son propre relevé dans Paie, case éteinte).
+- [x] **Réglages › Règles de paie** (propriétaire) gagne le minimum de versement : 15 € par défaut, un changement s'applique aux brouillons.
+- [x] **Commissions** (chatteur ; le manager lit son propre relevé dans Paie, case éteinte).
   - Le héros : ce que tu touches à ce jour pour la quinzaine. Il dit si c'est encore en calcul, validé ou payé, et la date du paiement quand il est payé. Un relevé payé parle au passé, en haut comme en bas (« Ce que tu as touché »).
   - « Le parcours de ton argent » : du brut à ce que tu touches, ligne par ligne, puis report et versement attendu. Jamais de date de versement promise.
   - « Ma performance » : ce qu'il te reste à faire pour le palier suivant, et ta part de l'objectif collectif quand la quinzaine en a un. Jamais de classement ni le montant d'un autre.
   - « Mes relevés » : les quinzaines passées, avec leur état et leur total.
 
 **Indicateurs de la paie**, dans Paie et jamais sur le Dashboard (ADR 0024).
-- [ ] Prévision de fin de quinzaine : un calcul pur et testé dans `apps/web`, sur le net de l'équipe, les rapports validés et le rythme des jours écoulés dans le fuseau de l'agence.
-- [ ] Progression de l'objectif collectif.
-- [ ] Répartition des ventes par plateforme et par créatrice, depuis les lignes.
-- [ ] Écart avec la quinzaine précédente, en lisant deux quinzaines.
+- [x] Prévision de fin de quinzaine : un calcul pur et testé dans `apps/web`, sur le net de l'équipe, les rapports validés et le rythme des jours écoulés dans le fuseau de l'agence.
+- [x] Progression de l'objectif collectif.
+- [x] Répartition des ventes par plateforme et par créatrice, depuis les lignes.
+- [x] Écart avec la quinzaine précédente, en lisant deux quinzaines.
 
-- [ ] **Export CSV** des relevés d'une quinzaine : membre, lignes, primes, malus, report, total, à verser.
-- [ ] **Vocabulaire du glossaire** : relevé de commissions, commission, malus, report, à verser. Jamais « fiche de paie » ni « salaire » dans ce que voit un chatteur.
+- [x] **Export CSV** des relevés d'une quinzaine : membre, lignes, primes, malus, report, total, à verser.
+- [x] **Vocabulaire du glossaire** : relevé de commissions, commission, malus, report, à verser. Jamais « fiche de paie » ni « salaire » dans ce que voit un chatteur.
 
 ## Refus de l'API, en français (codes de `PAYROLL_ERROR_CODES`)
 | Code | Ce que dit l'écran |
@@ -153,3 +153,4 @@ Factures, avoirs et export comptable (EQ-06), facturation des créatrices et pé
 - 2026-10-28 (fil Équipe) : fiche reprise d'après l'API d'EQ-04 (lot 3) et maquettes des écrans, sans code. Trois manques relevés à l'API : les détails du paiement (ADR 0023), l'index des quinzaines, le relevé en retard d'une heure sur les rapports validés. Le code attend la fusion de #259 et des lots 3a à 3e.
 - 2026-10-28 (fil Équipe) : Bilan tranche les trois manques (Équipe les écrit en ajout seul, il relit) ; le recalcul existait déjà dans le lot 3a. Extension relit les maquettes : la conception tient, 12 remarques corrigées dans la fiche et la galerie, puis son accord avec un dernier détail pris (le malus signé sur la ligne) (compteur et bouton absents quand c'est bloqué, « Valider » sur la ligne de sélection au téléphone, un seul état coché, une seule marque ambre, eyebrow du sous-onglet, un formateur signé, une grandeur par colonne dans Relevés, passé sur un relevé payé, aucune couleur nommée, `rp-notice` et `rp-account` dans `reports.css`).
 - 2026-10-28 (fil Équipe) : l'API est dans main : les lots 3a à 3e d'EQ-04 (#271 à #275), l'alerte des taux (#276) et les ajouts d'EQ-05 (#279, migration 0031), dont un quatrième trouvé en codant Primes et malus, la lecture des saisies d'une quinzaine. La fiche le dit, ADR 0033 et 0035 acceptées, et la table des refus couvre tous les codes de `PAYROLL_ERROR_CODES`, dont `payment_before_period_unprocessable` et le refus d'un IBAN dans la référence, ajoutés à la relecture de #279 par Bilan.
+- 2026-10-28 (fil Équipe) : écrans codés en local, sur les ajouts de l'API (lot `eq04-validation`) : Quinzaine, Relevé, Relevés, Primes et malus, Objectifs, « Ajuster » depuis un relevé, le minimum dans Réglages › Règles de paie et Commissions. 70 captures des vrais écrans sur données inventées (14 scènes, Nuit et Jour, 1 440 et 390 px, mouvement réduit). Reste : la PR, avec la relecture d'Extension (`apps/web`), qui relit aussi deux petites retouches de fichiers partagés (`SubNav`, `Dialog`).
