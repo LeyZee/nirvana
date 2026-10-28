@@ -28,6 +28,14 @@ export const KYC_SLOT_LABELS: Readonly<Record<KycSlot, string>> = {
   situation: 'Situation',
 };
 
+/**
+ * `GET /v1/fans/:id/kyc?creatorId=` (P5-01): the canvas lines she has still to learn about him, among those her persona
+ * collects (`strategies.kyc.collect`, all of them otherwise), in her order. A line is learnt once an active fact has
+ * its slot as key; the Suivi says « À apprendre : Localisation, Métier », and nothing once the list is empty.
+ */
+export const FanKycViewSchema = z.object({ fanId: FanIdSchema, toLearn: z.array(KycSlotSchema) });
+export type FanKycView = z.infer<typeof FanKycViewSchema>;
+
 /** Why sales stopped for a fan: what he said, or a human's call. */
 export const SalesFreezeReasonSchema = z.enum(['money_trouble', 'spending_limit', 'distress', 'operator']);
 export type SalesFreezeReason = z.infer<typeof SalesFreezeReasonSchema>;

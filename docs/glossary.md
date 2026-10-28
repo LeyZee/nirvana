@@ -55,6 +55,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Complétion de la persona | `persona_completion` | Ce qui est rempli de la persona, de 0 à 100 %, chaque bloc pesé (`PERSONA_BLOCK_WEIGHTS`), avec la liste de ce qui manque dans l'ordre des blocs (`personaCompletion`). Jamais une condition d'activation : jauge neutre, sans couleur. |
 | Réponse type | `sample_reply` | Une réponse inventée qu'elle écrirait, avec le moment qu'elle suit, que la voix lit comme exemple (dix au plus). Refusée à l'enregistrement si une garde dure la bloquerait. |
 | Infos à collecter | `kyc_collect`, `strategies.kyc.collect` | Les cases du canevas de notes Reveal qu'elle cherche à apprendre de chaque fan, dans son ordre ; toutes sans choix. Le cerveau ne nomme que celles-là dans `kycMissing`. |
+| À apprendre | `FanKycView.toLearn`, `kycSlotsToLearn`, `GET /v1/fans/:id/kyc` | Les infos à collecter qu'on ne sait pas encore d'un fan : celles sans fait actif de cette clé, dans son ordre. Une ligne neutre de la fiche du fan dans le Suivi, jamais dans la liste. |
 | Limites | `limits` | Ce que la créatrice ne fait, ne montre, ne dit jamais, et ses dégoûts. Chargées par les gardes. |
 | Surnom | `pet_name` | Un des surnoms que la créatrice donne aux fans, pris dans la liste fermée de sa persona. |
 | Sexualisation | `sexualization` | Le moment où la conversation devient sexy, et la stratégie qui le règle. |

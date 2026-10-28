@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { KycSlot } from '@nirvana/contracts';
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
 import type { FansModule } from '../fans';
@@ -143,6 +144,12 @@ export async function startFollowUpPlan(options: {
     today,
   ).followUps;
   return { delaysHours: () => Promise.resolve(delaysHours) };
+}
+
+/** The canvas lines her persona collects (P5-01), in her order: what the Suivi says is left to learn of a fan. */
+export async function readKycSlots(options: { readonly personaPath: string }): Promise<readonly KycSlot[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  return readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today).kycSlots;
 }
 
 /**

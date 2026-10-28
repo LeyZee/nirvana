@@ -1,5 +1,6 @@
 import {
   FanFlagsViewSchema,
+  FanKycViewSchema,
   FanIdSchema,
   newId,
   PlatformAccountIdSchema,
@@ -22,7 +23,7 @@ const OWNER = { email: 'owner@example.test', name: 'Owner', password: 'correct h
 const OPERATOR = { email: 'operator@example.test', name: 'Operator', password: 'staple battery horse' };
 const CREATOR = { email: 'creator@example.test', name: 'Creator', password: 'battery staple horse' };
 
-describe('fan flags (GET and PUT /v1/fans/:id/flags)', () => {
+describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1/fans/:id/kyc)', () => {
   let test: TestDb;
   let app: App;
   let server: Server;
@@ -156,5 +157,37 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags)', () => {
     );
     expect((await put(owner, { flag: 'fragile', set: true, reason: '   ' })).statusCode).toBe(400);
     expect((await get(owner)).json<{ flags: object }>().flags).not.toHaveProperty('fragile');
+  });
+
+  it('says what is left to learn of him, in her order, among the lines her persona collects', async () => {
+    const kyc = (cookie: string, creatorId: string = anna) =>
+      server.inject({
+        method: 'GET',
+        url: `/v1/fans/${fan}/kyc?creatorId=${creatorId}`,
+        headers: { cookie },
+      });
+    // The demo persona collects six lines of the canvas, not `desires` (personas/demo/v0.2.0.yaml).
+    const first = await kyc(operator);
+    expect(first.statusCode).toBe(200);
+    expect(FanKycViewSchema.parse(first.json())).toEqual({
+      fanId: fan,
+      toLearn: ['first_name', 'age', 'location', 'job', 'situation', 'hobbies'],
+    });
+    const observedAt = new Date();
+    const fact = { kind: 'declared', confidence: 0.9, sourceMessageId: null, observedAt } as const;
+    await app.modules.fans.proposeFacts(anna, fan, [
+      { ...fact, category: 'identity', key: 'Location', value: 'Lyon' },
+      { ...fact, category: 'life', key: 'job', value: 'Infirmier' },
+      // A chatter's note never fills a line, whatever its key.
+      { ...fact, category: 'operator_note', key: 'first_name', value: 'Prénom à demander' },
+    ]);
+    expect((await kyc(owner)).json()).toEqual({
+      fanId: fan,
+      toLearn: ['first_name', 'age', 'situation', 'hobbies'],
+    });
+    // As his limits: never the creator, never a creator out of reach, never a fan of another creator.
+    expect((await kyc(creator)).statusCode).toBe(403);
+    expect((await kyc(operator, bea)).statusCode).toBe(403);
+    expect((await kyc(owner, bea)).statusCode).toBe(404);
   });
 });

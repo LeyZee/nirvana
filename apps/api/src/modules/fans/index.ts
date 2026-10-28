@@ -1,3 +1,4 @@
+import { KycSlotSchema, type KycSlot } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
@@ -7,7 +8,7 @@ import { createDrizzleFactPurge } from './infra/fact-purge';
 import { createDrizzleFactStore } from './infra/fact-store';
 import { createDrizzleFanStore } from './infra/fan-store';
 import { createDrizzleFlagStore } from './infra/flag-store';
-import { createFlagRoutes, type RequireRole } from './infra/http/flag-routes';
+import { createFlagRoutes, createKycRoutes, type RequireRole } from './infra/http/flag-routes';
 
 export type { FactProposal } from './domain/facts';
 
@@ -18,8 +19,11 @@ export interface FansModule extends FansService {
     /** `fans.purge_facts`, daily: facts of fans not seen for a year are dropped (security.md); returns how many. */
     purgeFacts(): Promise<number>;
   };
-  /** Mounted under `/v1` by the server: `/fans/:id/flags`, read by the dashboard and set by a chatter. */
-  routes(requireRole: RequireRole): FastifyPluginAsyncZod;
+  /**
+   * Mounted under `/v1` by the server: `/fans/:id/flags`, read by the dashboard and set by a chatter, and
+   * `/fans/:id/kyc`, what is left to learn among `kycSlots` (her persona's canvas lines; all of them by default).
+   */
+  routes(requireRole: RequireRole, kycSlots?: readonly KycSlot[]): FastifyPluginAsyncZod;
 }
 
 export interface FansDeps {
@@ -39,7 +43,12 @@ export function createFansModule(deps: FansDeps): FansModule {
   return {
     name: 'fans',
     ...service,
-    routes: (requireRole) => createFlagRoutes(service, requireRole),
+    routes:
+      (requireRole, kycSlots = KycSlotSchema.options) =>
+      async (app) => {
+        await app.register(createFlagRoutes(service, requireRole));
+        await app.register(createKycRoutes(service, requireRole, kycSlots));
+      },
     jobs: { purgeFacts: () => purge.dropFactsOfFansLastSeenBefore(factRetentionCutoff(new Date())) },
   };
 }

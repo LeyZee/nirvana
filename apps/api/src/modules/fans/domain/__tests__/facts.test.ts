@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  kycSlotsToLearn,
   MAX_ACTIVE_FACTS,
   MAX_FACT_VALUE_LENGTH,
   MAX_OPERATOR_NOTE_LENGTH,
@@ -147,5 +148,25 @@ describe('selectActiveFacts', () => {
       stored({ id: `f-${String(i)}`, key: `k${String(i)}` }),
     );
     expect(selectActiveFacts(facts, now)).toHaveLength(MAX_ACTIVE_FACTS);
+  });
+});
+
+describe('kycSlotsToLearn', () => {
+  it('keeps her lines in her order, without those an active fact has as key', () => {
+    const slots = ['first_name', 'age', 'location', 'job'] as const;
+    expect(kycSlotsToLearn(slots, [])).toEqual(['first_name', 'age', 'location', 'job']);
+    expect(
+      kycSlotsToLearn(slots, [
+        stored({ key: 'location' }),
+        stored({ category: 'life', key: ' Job ' }),
+        stored({ key: 'city' }),
+      ]),
+    ).toEqual(['first_name', 'age']);
+  });
+
+  it('never counts a chatter’s note as a learnt line', () => {
+    expect(
+      kycSlotsToLearn(['first_name'], [stored({ category: 'operator_note', key: 'first_name' })]),
+    ).toEqual(['first_name']);
   });
 });
