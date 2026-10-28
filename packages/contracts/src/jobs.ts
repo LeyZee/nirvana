@@ -114,8 +114,11 @@ export const JOB_PAYLOADS = {
   'payroll.recalculate': z.object({ period: PayPeriodSchema }),
   /** Every open period up to the current one computed again, the hour's safety net; pay's periods written first. */
   'payroll.recalculate_open': z.object({}),
-  /** The ECB's last 90 days of rates, each day written once (ADR 0033); a run that finds nothing new writes nothing. */
-  'payroll.fetch_exchange_rates': z.strictObject({}),
+  /**
+   * The ECB's last 90 days of rates, each day written once (ADR 0033); a run that finds nothing new writes nothing. Not
+   * strict: the cron adds `_cron` to the payload of every run it enqueues.
+   */
+  'payroll.fetch_exchange_rates': z.object({}),
   'media.describe': z.object({
     creatorId: CreatorIdSchema,
     mediaAssetId: MediaAssetIdSchema,
