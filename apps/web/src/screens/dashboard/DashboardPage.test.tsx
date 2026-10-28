@@ -258,6 +258,28 @@ describe('DashboardPage changing the mode', () => {
     expect(checked('Arrêt')).toBe('true');
   });
 
+  it('keeps the grave lines on Arrêt and only them (choix de Charles, 28/10)', async () => {
+    const [grave] = apiDashboard().todos;
+    if (grave === undefined) throw new Error('the fixture has a todo');
+    // A line the server no longer sends on Arrêt, still held from the read before the stop.
+    serveModes('stop', undefined, {
+      todos: [grave, { ...grave, id: 'todo-2', tone: 'warn', kind: 'awaiting_approval', title: 'Marc' }],
+    });
+    renderDashboard();
+    expect(await screen.findByRole('button', { name: 'Mineur possible : Kévin' })).toBeDefined();
+    expect(screen.queryByText('Marc')).toBeNull();
+    expect(headline()).toContain('arrêté');
+    expect(screen.getByText(/Une urgence reste à traiter quand même/u)).toBeDefined();
+  });
+
+  it('says nothing waits on Arrêt when no grave line does', async () => {
+    serveModes('stop', undefined, { todos: [] });
+    renderDashboard();
+    await screen.findByRole('radio', { name: 'Arrêt' });
+    expect(screen.queryByText('Rien à traiter pour l’instant.')).toBeNull();
+    expect(screen.getByText(/Les chatteurs gardent la main dans Reveal/u)).toBeDefined();
+  });
+
   it('says so when the global switch keeps the agent stopped', async () => {
     serveModes('stop', () => ({ status: 200, body: { mode: 'stop', globalStop: true } }));
     renderDashboard();

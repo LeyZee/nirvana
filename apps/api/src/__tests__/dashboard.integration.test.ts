@@ -293,7 +293,7 @@ describe('GET /v1/dashboard', () => {
     ]);
   });
 
-  it('shows a message left with nothing under way for 30 minutes, except while she is stopped or Reveal unread (P3-11)', async () => {
+  it('shows a message left with nothing under way for 30 minutes, except while Reveal is unread (P3-11)', async () => {
     const longAgo = new Date(Date.now() - 40 * 60_000);
     const seed = async (name: string, at: Date): Promise<ConversationId> => {
       const { conversationId } = await app.modules.conversations.ingestMessage({
@@ -389,7 +389,7 @@ describe('GET /v1/dashboard', () => {
     expect(fromOpening[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
     await hoursAre(null);
 
-    // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.
+    // An expired Reveal session says it all: the net stays quiet, the rest still waits.
     const sessionIs = (state: 'valid' | 'expired') =>
       test.admin.db
         .update(schema.platformAccounts)
@@ -398,16 +398,38 @@ describe('GET /v1/dashboard', () => {
     await sessionIs('expired');
     expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
     await sessionIs('valid');
-    await test.admin.db.insert(schema.killSwitches).values({
-      id: newId(KillSwitchIdSchema),
-      scope: 'creator',
-      scopeId: creatorId,
-      creatorId,
-      active: true,
-      reason: 'test',
-      setBy: 'test',
-    });
-    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+  });
+
+  it('keeps the grave lines only while she is stopped (choix de Charles, 28/10)', async () => {
+    const read = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json());
+    const running = await read();
+    expect(running.todos.map((t) => t.kind)).toEqual(
+      expect.arrayContaining(['minor', 'unanswered', 'send_failed']),
+    );
+    const stopIs = (active: boolean) =>
+      test.admin.db.insert(schema.killSwitches).values({
+        id: newId(KillSwitchIdSchema),
+        scope: 'creator',
+        scopeId: creatorId,
+        creatorId,
+        active,
+        reason: 'test',
+        setBy: 'test',
+        // The latest row of her scope wins: one millisecond apart is enough.
+        setAt: new Date(),
+      });
+
+    // Arrêt: Leo, who may be a minor, still waits for a human; the draft, the failed send and the net leave.
+    await stopIs(true);
+    const stopped = await read();
+    expect(stopped.mode).toBe('stop');
+    expect(stopped.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
+
+    // Back on: every line comes back.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await stopIs(false);
+    expect((await read()).todos.map((t) => t.kind)).toEqual(running.todos.map((t) => t.kind));
   });
 
   it('lists a handoff until the hand is given back, never a takeover a person chose (recette 28/10)', async () => {

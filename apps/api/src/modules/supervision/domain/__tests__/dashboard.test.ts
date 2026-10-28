@@ -8,7 +8,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { assembleDashboard, revealLate, todos, unansweredSince, type VoiceHealth } from '../dashboard';
-import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
+import type { DashboardFacts, TelegramReading, WaitingConversation } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
 const CONVERSATION = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
@@ -235,6 +235,52 @@ describe('à traiter', () => {
     );
     expect(todo).toMatchObject({ kind: 'unanswered', tone: 'warn', waitingMinutes: 42 });
     expect(todo?.why).toContain('plus de 30 minutes');
+  });
+});
+
+describe('à traiter sur Arrêt (choix de Charles, 28/10)', () => {
+  const line = (
+    fanName: string,
+    kind: WaitingConversation['kind'],
+    minutes: number,
+  ): WaitingConversation => ({
+    conversationId: CONVERSATION,
+    fanId: FAN,
+    fanName,
+    kind,
+    since: minutesAgo(minutes),
+  });
+  const waiting = [
+    line('A', 'awaiting_approval', 40),
+    line('B', 'meeting', 30),
+    line('C', 'distress', 20),
+    line('D', 'send_failed', 15),
+    line('E', 'non_consent', 10),
+    line('F', 'unanswered', 45),
+    line('G', 'minor', 5),
+  ];
+
+  it('keeps a possible minor, consent and distress only, the longest waiting first', () => {
+    const list = todos(waiting, NOW, { stopped: true });
+    expect(list.map((t) => [t.title, t.kind, t.tone])).toEqual([
+      ['C', 'distress', 'bad'],
+      ['E', 'non_consent', 'bad'],
+      ['G', 'minor', 'bad'],
+    ]);
+  });
+
+  it('keeps every line while the agent runs', () => {
+    expect(todos(waiting, NOW, { stopped: false })).toHaveLength(waiting.length);
+    expect(todos(waiting, NOW)).toHaveLength(waiting.length);
+  });
+
+  it('applies on her switch and on the global one, from the facts', () => {
+    const facts = { waiting };
+    const kinds = (switches: DashboardFacts['switches']) =>
+      assemble({ ...facts, switches }).todos.map((t) => t.kind);
+    expect(kinds({ global: false, creator: true })).toEqual(['distress', 'non_consent', 'minor']);
+    expect(kinds({ global: true, creator: false })).toEqual(['distress', 'non_consent', 'minor']);
+    expect(kinds({ global: false, creator: false })).toHaveLength(waiting.length);
   });
 });
 

@@ -158,10 +158,15 @@ const modeLead = (mode: AgentMode): string =>
 
 function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): Hero {
   if (mode === 'stop') {
+    // On Arrêt the list keeps the grave lines only: said in the lead, the headline stays the stop.
+    const urgent = todos.filter((todo) => todo.tone === 'bad').length;
     return {
       tone: 'bad',
       headline: 'L’agent est **arrêté**',
-      lead: 'Plus rien ne part en son nom. Les chatteurs gardent la main dans Reveal.',
+      lead:
+        urgent === 0
+          ? 'Plus rien ne part en son nom. Les chatteurs gardent la main dans Reveal.'
+          : `Plus rien ne part en son nom. ${urgent === 1 ? 'Une urgence reste' : `${String(urgent)} urgences restent`} à traiter quand même.`,
       action: 'Repasser en copilote',
     };
   }

@@ -14,3 +14,9 @@
 - `index.ts` : **seule** porte d'entrée publique du module. Tout ce qui n'y est pas exporté est privé.
 
 Voir `docs/architecture/modules.md` pour les règles communes et `docs/playbooks/add-a-module.md` pour en créer un.
+
+## Tableau de bord
+
+`GET /v1/dashboard` (`infra/http/dashboard-routes.ts`) lit ses agrégats dans une transaction tenant (`infra/views/dashboard-reader.ts`) ; le domaine (`domain/dashboard.ts`) en fait l'écran.
+
+- **« À traiter » sur Arrêt** (choix de Charles, 28/10) : la liste garde toujours les lignes graves, les causes de passation qui touchent à la sécurité (`minor`, `non_consent`, `distress`, ensemble `GRAVE` de `todos`). Les autres lignes (brouillon à valider, envoi échoué, autres passations, « Sans réponse ») sont cachées tant que l'interrupteur de la créatrice ou l'interrupteur général est levé, et reviennent avec l'agent. Le filet « Sans réponse » se tait aussi quand Reveal n'est pas lu.
