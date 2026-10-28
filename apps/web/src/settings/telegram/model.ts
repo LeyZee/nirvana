@@ -30,7 +30,12 @@ export const TOPICS: Record<TelegramTopic, TopicMeta> = {
   custom: { label: 'Alertes personnalisées', sub: 'Les alertes que tu as écrites, quand elles sonnent' },
 };
 
-export const ALERT_TOPICS = ['urgent', 'important', 'info'] as const satisfies readonly TelegramTopic[];
+export const ALERT_TOPICS = [
+  'urgent',
+  'important',
+  'info',
+  'custom',
+] as const satisfies readonly TelegramTopic[];
 
 export interface ChatChoice {
   readonly chat: TelegramChat;

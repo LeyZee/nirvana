@@ -1,4 +1,10 @@
-import { ConversationIdSchema, CreatorIdSchema, TelegramChatIdSchema, newId } from '@nirvana/contracts';
+import {
+  ConversationIdSchema,
+  CreatorIdSchema,
+  CustomAlertIdSchema,
+  TelegramChatIdSchema,
+  newId,
+} from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { nextBatch, type Pending } from '../batch';
@@ -24,6 +30,45 @@ describe('classification (ADR 0020 §2)', () => {
     for (const cause of ['guard', 'budget', 'llm_unavailable', 'other', null] as const) {
       expect(classify({ kind: 'handoff', conversationId, cause })).toMatchObject({ topic: 'important' });
     }
+  });
+
+  it('sends a handoff one of her alerts caused to that alert’s topic, the important groups as a fallback', () => {
+    for (const [cause, topic] of [
+      ['keyword', 'keyword'],
+      ['custom_alert', 'custom'],
+      ['identity_doubt', 'important'],
+    ] as const) {
+      const notice = classify({ kind: 'handoff', conversationId, cause });
+      expect(notice).toMatchObject({ kind: 'notice', topic, threadKey: `conversation:${conversationId}` });
+      expect(notice?.kind === 'notice' ? notice.fallbackTopic : null).toBe(
+        topic === 'important' ? undefined : 'important',
+      );
+    }
+    expect(classify({ kind: 'handoff', conversationId, cause: 'identity_doubt' })).toMatchObject({
+      body: 'Le fan doute de parler vraiment à la créatrice. Il n’écrit plus à ce fan et attend un humain.',
+    });
+  });
+
+  it('says an alert that only lets a human know in its topic, with nothing to close and no fan words', () => {
+    const custom = newId(CustomAlertIdSchema);
+    expect(classify({ kind: 'alert', conversationId, alert: { kind: 'custom', id: custom } })).toEqual({
+      kind: 'notice',
+      topic: 'custom',
+      threadKey: null,
+      title: 'Alerte',
+      body: 'Une alerte personnalisée a sonné. L’agent continue de lui répondre.',
+      link: { label: 'Ouvrir la conversation', path: `/suivi?conversation=${conversationId}` },
+    });
+    expect(
+      classify({ kind: 'alert', conversationId, alert: { kind: 'system', code: 'service_request' } }),
+    ).toMatchObject({
+      topic: 'important',
+      title: 'Important',
+      body: 'Le fan demande un service (contenu sur mesure, appel, cam, vocal) : un humain peut le lui vendre. L’agent continue de lui répondre.',
+    });
+    expect(
+      classify({ kind: 'alert', conversationId, alert: { kind: 'system', code: 'keyword' } }),
+    ).toMatchObject({ topic: 'keyword', title: 'Mot surveillé', threadKey: null });
   });
 
   it('says a silent model in the alert, without the fan’s text', () => {

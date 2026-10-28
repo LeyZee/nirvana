@@ -1,4 +1,5 @@
 import type {
+  AlertRef,
   AutomaticMissing,
   ConversationId,
   CreatorId,
@@ -47,6 +48,15 @@ export type Signal =
       readonly reason: string;
     }
   | {
+      /**
+       * One of her alerts lets a human know while the agent goes on (`alert_triggered`, P4-01): which alert, never
+       * what the fan wrote. An alert that pauses the agent is a `handoff` instead.
+       */
+      readonly kind: 'alert';
+      readonly conversationId: ConversationId;
+      readonly alert: AlertRef;
+    }
+  | {
       /** A message of the agent will never leave (last attempt, or refused): the conversation is in `error`. */
       readonly kind: 'send_failed';
       readonly conversationId: ConversationId | null;
@@ -78,6 +88,11 @@ export interface Notice {
   readonly topic: TelegramTopic;
   /** Lets a later event close the message (a takeover, a recovery); null when nothing ever will. */
   readonly threadKey: string | null;
+  /**
+   * Where the message goes when no group can get `topic`: a fan paused by one of her alerts is told to the
+   * important groups rather than to nobody (P4-01).
+   */
+  readonly fallbackTopic?: TelegramTopic;
   readonly title: string;
   readonly body: string;
   readonly link: { readonly label: string; readonly path: string } | null;

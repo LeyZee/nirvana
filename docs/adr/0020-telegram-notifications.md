@@ -40,7 +40,7 @@ Faits Telegram qui contraignent le choix :
 
    | Événement (`domain_events`) | Sujet | Producteur | Existe ? |
    |---|---|---|---|
-   | `handoff_requested` { `conversationId`, `cause` } | urgent si `cause` ∈ minor, non_consent, distress, meeting, manipulation ; important pour guard, budget, keyword, llm_unavailable, other | contrat : Bilan ; `cause` remplie par l'agent (composeur, vision) | oui (#54, `keyword` par #56) |
+   | `handoff_requested` { `conversationId`, `cause` } | urgent si `cause` ∈ minor, non_consent, distress, meeting, manipulation ; important pour guard, budget, llm_unavailable, other ; `keyword`, `custom_alert`, `identity_doubt` : voir `alert_triggered` | contrat : Bilan ; `cause` remplie par l'agent (composeur, vision) | oui (#54, `keyword` par #56) |
    | `budget_threshold_crossed` { `kind` : alert \| reached, `spentMinor`, `capMinor`, `currency`, `day` }, sans créatrice | important (les deux) | contrat : Bilan ; publié dans `onBudget` (`apps/api/src/llm.ts`) | oui (#54) |
    | `backup_overdue` { `lastSucceededAt` (null si aucun export n'a jamais réussi), `day` }, sans créatrice | important, une fois par jour tant qu'aucun export n'a réussi depuis 26 h | contrat : Bilan ; publié par le job `backups.check` (module `backups`, ADR 0028 § 5, OPS-02) | oui (migration 0020 pour le déclencheur) |
    | `session_state_changed` | important, info | connecteurs | oui |
@@ -50,7 +50,7 @@ Faits Telegram qui contraignent le choix :
    | `takeover_started` avec `conversationId` | met à jour le message d'origine | Bilan (liste publiée de `journal.ts`) | oui (#54, `conversationId` par #60) |
    | `takeover_ended` avec `conversationId` | met à jour le message d'origine s'il n'est pas déjà fermé (après une remise à l'humain, la conversation est déjà aux humains : la rendre à l'agent ferme l'alerte) | Bilan (liste publiée de `journal.ts`, `conversationId` dans le payload) | lu par le module (migration 0011 pour le déclencheur) ; publié (recette R-G4) |
    | `sale_detected` avec `conversationId`, l'auteur de la vente et le nom de l'offre | sale | connecteur Reveal, après la capture (lots A/B) ; contrat : Bilan | à compléter et publier |
-   | `keyword_matched` { `conversationId`, `keywordId`, `word`, `action` } | keyword | l'agent, qui garde la liste des mots par créatrice et applique `action = stop` lui-même | à créer avec le fil agent |
+   | `alert_triggered` { `conversationId`, `trigger.alert`, `notify` ; ni `matchedBy` ni le mot déclaré ne sont lus } (remplace `keyword_matched`, qui n'a jamais eu de producteur) | une alerte qui prévient seulement (P4-01) : son sujet est celui du contrat (`CUSTOM_ALERT_TOPIC` = `custom` pour ses alertes, `SYSTEM_ALERT_TOPICS` pour celles du système), sans fil à fermer ; rien quand `notify` est faux. Une alerte qui met en pause est un `handoff_requested` de cause `keyword`, `custom_alert` ou `identity_doubt` : il part dans le sujet de l'alerte, ou dans `important` si aucun groupe ne le reçoit, et se ferme comme toute remise | contrat : Bilan (#242) ; l'agent (mots de la persona #239, alertes personnalisées et système en B2) | lu par le module (migration 0027 pour le déclencheur) ; publié avec B2 |
    | `validation_requested` / `validation_resolved` { `validationId`, `kind`, `conversationId`, `by` } | validation | vocaux (copilote), API du copilote | à créer, producteurs à venir |
 
    Le bilan du matin et le bilan du soir des ventes sont produits par le module lui-même, à heure fixe dans le fuseau de la créatrice.

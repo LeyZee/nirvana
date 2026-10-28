@@ -1,4 +1,12 @@
-import type { AutomaticMissing, HandoffCause } from '@nirvana/contracts';
+import {
+  CUSTOM_ALERT_TOPIC,
+  SYSTEM_ALERT_TOPICS,
+  type AlertRef,
+  type AutomaticMissing,
+  type HandoffCause,
+  type SystemAlertCode,
+  type TelegramTopic,
+} from '@nirvana/contracts';
 
 import type { Outcome, Signal } from './signals';
 
@@ -20,7 +28,7 @@ export const SCANNED_EVENT_TYPES = [
   'takeover_started',
   'takeover_ended',
   'sale_detected',
-  'keyword_matched',
+  'alert_triggered',
   'validation_requested',
   'validation_resolved',
   'automatic_closed',
@@ -36,8 +44,7 @@ const URGENT_CAUSES: ReadonlySet<HandoffCause> = new Set([
   'manipulation',
 ]);
 
-/** `keyword` joins the contract's causes with #56; listed already so its text is ready. */
-const CAUSE_TEXT: Readonly<Record<HandoffCause | 'keyword', string>> = {
+const CAUSE_TEXT: Readonly<Record<HandoffCause, string>> = {
   minor: 'Possible mineur dans la conversation.',
   non_consent: 'Possible contenu sans consentement.',
   distress: 'Le fan semble en détresse.',
@@ -51,6 +58,32 @@ const CAUSE_TEXT: Readonly<Record<HandoffCause | 'keyword', string>> = {
   custom_alert: 'Une alerte personnalisée a sonné.',
   identity_doubt: 'Le fan doute de parler vraiment à la créatrice.',
 };
+
+/**
+ * A handoff one of her alerts caused goes to that alert's topic (P4-01), the one Réglages › Alertes shows: the
+ * contract's table, read here and by the screen. Any other cause goes to the important groups.
+ */
+const ALERT_CAUSE_TOPIC: Readonly<Partial<Record<HandoffCause, TelegramTopic>>> = {
+  keyword: SYSTEM_ALERT_TOPICS.keyword,
+  identity_doubt: SYSTEM_ALERT_TOPICS.identity_doubt,
+  custom_alert: CUSTOM_ALERT_TOPIC,
+};
+
+/** What an alert that does not pause the agent says: the alert, never the fan's words. */
+const SYSTEM_ALERT_TEXT: Readonly<Record<SystemAlertCode, string>> = {
+  keyword: CAUSE_TEXT.keyword,
+  service_request:
+    'Le fan demande un service (contenu sur mesure, appel, cam, vocal) : un humain peut le lui vendre.',
+  identity_doubt: CAUSE_TEXT.identity_doubt,
+};
+
+const TOPIC_TITLE: Readonly<Partial<Record<TelegramTopic, string>>> = {
+  keyword: 'Mot surveillé',
+  custom: 'Alerte',
+};
+
+const alertTopic = (alert: AlertRef): TelegramTopic =>
+  alert.kind === 'custom' ? CUSTOM_ALERT_TOPIC : SYSTEM_ALERT_TOPICS[alert.code];
 
 const KILL_REASON_MAX = 200;
 
@@ -106,12 +139,27 @@ export function classify(signal: Signal): Outcome | null {
   switch (signal.kind) {
     case 'handoff': {
       const isUrgent = signal.cause !== null && URGENT_CAUSES.has(signal.cause);
+      const causeTopic = signal.cause === null || isUrgent ? undefined : ALERT_CAUSE_TOPIC[signal.cause];
       return {
         kind: 'notice',
-        topic: isUrgent ? 'urgent' : 'important',
+        topic: isUrgent ? 'urgent' : (causeTopic ?? 'important'),
+        // A fan paused by one of her alerts waits for a human: without a group for its topic, the important ones.
+        ...(causeTopic !== undefined && causeTopic !== 'important' && { fallbackTopic: 'important' }),
         threadKey: signal.conversationId === null ? null : `conversation:${signal.conversationId}`,
         title: isUrgent ? 'URGENT' : 'Important',
         body: `${signal.cause === null ? 'L’agent passe la main.' : CAUSE_TEXT[signal.cause]} Il n’écrit plus à ce fan et attend un humain.`,
+        link: conversationLink(signal.conversationId),
+      };
+    }
+    // The agent goes on: nothing to close, and no fallback, it only lets a human know.
+    case 'alert': {
+      const topic = alertTopic(signal.alert);
+      return {
+        kind: 'notice',
+        topic,
+        threadKey: null,
+        title: TOPIC_TITLE[topic] ?? 'Important',
+        body: `${signal.alert.kind === 'custom' ? CAUSE_TEXT.custom_alert : SYSTEM_ALERT_TEXT[signal.alert.code]} L’agent continue de lui répondre.`,
         link: conversationLink(signal.conversationId),
       };
     }

@@ -1,4 +1,5 @@
 import {
+  AlertRefSchema,
   AutomaticMissingSchema,
   ConversationIdSchema,
   CreatorIdSchema,
@@ -12,8 +13,8 @@ import type { ScannedEvent, Signal } from '../domain/signals';
 /**
  * Reads a `domain_events` row into a signal (ADR 0020 §3). Local, tolerant schemas: the module reads the facts it
  * needs and nothing else, accepts rows written before a field existed, and skips a row it cannot read rather than
- * blocking the scan behind it. Types without a producer yet (sales, keywords, validations) give `null` here until
- * their payload enters the contract.
+ * blocking the scan behind it. Types without a producer yet (sales, validations) give `null` here until their payload
+ * enters the contract.
  */
 
 const HandoffSchema = z.object({
@@ -44,6 +45,14 @@ const KillSwitchSchema = z.object({
   scopeId: z.string().nullable(),
   active: z.boolean(),
   reason: z.string(),
+});
+
+// Only which alert rang: how it matched and the declared word stay out (the word is what the fan wrote too). Sent only
+// when her alert asked for it at the time (`notify`, true for the system's); a row without it is not sent.
+const AlertTriggeredSchema = z.object({
+  conversationId: ConversationIdSchema,
+  trigger: z.object({ alert: AlertRefSchema }),
+  notify: z.boolean(),
 });
 
 // Only the last failure counts: the retries before it are the platform's hiccups, not news. No fallback on the
@@ -113,6 +122,11 @@ function signalOf(type: string, payload: unknown): Signal | null {
       const parsed = KillSwitchSchema.safeParse(payload);
       if (!parsed.success) return null;
       return { kind: 'kill_switch', ...parsed.data };
+    }
+    case 'alert_triggered': {
+      const parsed = AlertTriggeredSchema.safeParse(payload);
+      if (!parsed.success || !parsed.data.notify) return null;
+      return { kind: 'alert', conversationId: parsed.data.conversationId, alert: parsed.data.trigger.alert };
     }
     case 'send_failed': {
       const parsed = SendFailedSchema.safeParse(payload);
