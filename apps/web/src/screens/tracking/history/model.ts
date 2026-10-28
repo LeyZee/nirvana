@@ -43,12 +43,19 @@ export function mergeTriggers(lists: readonly CreatorTriggers[]): {
 } {
   const edges = lists.flatMap((list) => {
     const last = list.items.at(-1);
-    return list.nextCursor === null || last === undefined ? [] : [last.at];
+    return list.nextCursor === null || last === undefined ? [] : [{ creatorId: list.creatorId, at: last.at }];
   });
-  const edge = edges.toSorted().at(-1);
+  const edge = edges
+    .map((one) => one.at)
+    .toSorted()
+    .at(-1);
+  // At the edge's very millisecond, only the creators it was read for: another's could sit after one not read yet.
+  const atEdge = new Set(edges.filter((one) => one.at === edge).map((one) => one.creatorId));
   const items = lists
     .flatMap((list) => list.items)
-    .filter((item) => edge === undefined || item.at >= edge)
+    .filter(
+      (item) => edge === undefined || item.at > edge || (item.at === edge && atEdge.has(item.creatorId)),
+    )
     .toSorted(newestFirst);
   return { items, hasMore: lists.some((list) => list.nextCursor !== null) };
 }

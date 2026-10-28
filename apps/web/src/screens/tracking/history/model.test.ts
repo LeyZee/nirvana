@@ -73,6 +73,23 @@ describe('the history of several creators as one list (P4-01)', () => {
     expect(merged.hasMore).toBe(true);
   });
 
+  it('keeps another creator’s trigger of the edge’s very millisecond for « Voir plus »', () => {
+    const at = '2026-10-28T09:00:00.000Z';
+    const merged = mergeTriggers([
+      // Léa's next page could hold another trigger of 09:00 that sorts before Nora's.
+      { creatorId: LEA, items: [item(3, LEA, at)], nextCursor: 'next' },
+      {
+        creatorId: NORA,
+        items: [item(1, NORA, '2026-10-28T10:00:00.000Z'), item(2, NORA, at)],
+        nextCursor: null,
+      },
+    ]);
+    expect(merged.items.map((one) => one.id)).toEqual([
+      '0192f3a0-0000-7000-8000-000000000001',
+      '0192f3a0-0000-7000-8000-000000000003',
+    ]);
+  });
+
   it('keeps one order for two triggers of the same millisecond', () => {
     const at = '2026-10-28T10:00:00.000Z';
     const once = mergeTriggers([
