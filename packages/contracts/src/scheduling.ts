@@ -161,7 +161,8 @@ export type CreateShiftBody = z.infer<typeof CreateShiftBodySchema>;
  * way: only an earlier `endsAt`. One still after now shortens it; one at or before now stops it, at the minute of the
  * request: `stoppedAt` is set and the access window closes with the shift, without the end margin. A shift stopped in
  * the minute it started is cancelled instead, like a `DELETE`, and answers 204: a cancelled shift is never sent back.
- * Ended: 409 `shift_ended_conflict`. A template's shift changed by hand stays changed.
+ * Ended: 409 `shift_ended_conflict`. A template's shift changed by hand stays changed. A shift that has its report
+ * (EQ-03) is not cancelled: 409 `shift_report_exists_conflict` (`SHIFT_REPORT_ERROR_CODES`, `details.shiftReportId`).
  */
 export const UpdateShiftBodySchema = z
   .object({ memberId: TeamMemberIdSchema, startsAt: z.iso.datetime(), endsAt: z.iso.datetime() })
@@ -171,7 +172,8 @@ export type UpdateShiftBody = z.infer<typeof UpdateShiftBodySchema>;
 
 /*
  * `DELETE /v1/scheduling/shifts/:shiftId` (owner, active manager) → 204: the shift, not yet ended, is cancelled, kept
- * in the audit trail, and its template never makes it again. Its access window closes at the next request.
+ * in the audit trail, and its template never makes it again. Its access window closes at the next request. A shift
+ * that has its report (EQ-03) is not cancelled: 409 `shift_report_exists_conflict` (`details.shiftReportId`).
  */
 
 /** How long a template lasts in wall-clock minutes, an end at or before the start being the next day. */

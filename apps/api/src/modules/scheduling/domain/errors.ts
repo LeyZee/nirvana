@@ -247,3 +247,136 @@ export class ShiftSwapNotYours extends DomainError {
     );
   }
 }
+
+/** End-of-shift reports (EQ-03, `SHIFT_REPORT_ERROR_CODES`). */
+export class ShiftReportNotFound extends DomainError {
+  constructor() {
+    super('shift_report_not_found', 'Rapport introuvable');
+  }
+}
+
+export class ShiftReportConflict extends DomainError {
+  constructor() {
+    super('shift_report_conflict', 'Ce rapport a déjà été envoyé avec d’autres valeurs');
+  }
+}
+
+export class ShiftReportExists extends DomainError {
+  constructor(shiftReportId: string) {
+    super('shift_report_exists_conflict', 'Ce shift a déjà son rapport', { details: { shiftReportId } });
+  }
+}
+
+export class ShiftReportEarly extends DomainError {
+  constructor(opensAt: Date) {
+    super('shift_report_early_conflict', 'Le rapport se fait à la fin du shift', {
+      details: { opensAt: opensAt.toISOString() },
+    });
+  }
+}
+
+export class ShiftReportChanged extends DomainError {
+  constructor() {
+    super('shift_report_changed_conflict', 'Ce rapport a changé depuis qu’il a été lu');
+  }
+}
+
+export class ShiftReportValidated extends DomainError {
+  constructor(message = 'Un rapport validé ne change plus : il se corrige') {
+    super('shift_report_validated_conflict', message);
+  }
+}
+
+export class ShiftReportTotal extends DomainError {
+  constructor() {
+    super('shift_report_total_conflict', 'Cette correction ferait passer le total validé du shift sous zéro');
+  }
+}
+
+export class ShiftReportDetected extends DomainError {
+  constructor() {
+    super(
+      'shift_report_detected_conflict',
+      'Sur cette quinzaine, la paie de ce compte lit les ventes détectées, pas les rapports',
+    );
+  }
+}
+
+export class ShiftReportCurrency extends DomainError {
+  constructor() {
+    super(
+      'shift_report_currency_conflict',
+      'Ce compte ne se déclare pas dans cette devise sur cette quinzaine',
+    );
+  }
+}
+
+export class PayRulesMissing extends DomainError {
+  constructor() {
+    super(
+      'pay_rules_missing_conflict',
+      'Les règles de paie de ce compte ne sont pas posées pour cette quinzaine',
+    );
+  }
+}
+
+export class ShiftReportOwnReview extends DomainError {
+  constructor() {
+    super(
+      'shift_report_own_review_forbidden',
+      'Ce rapport se relit par quelqu’un d’autre : ton propre shift, ou ce que tu as envoyé',
+    );
+  }
+}
+
+export class ShiftReportForbidden extends DomainError {
+  constructor() {
+    super('shift_report_forbidden', 'Ce rapport est celui d’un autre membre');
+  }
+}
+
+/** What Zod refuses at `POST`, held again on a change (`PATCH`): the same 400. */
+export class ShiftReportInvalid extends DomainError {
+  constructor(message: string) {
+    super('request_invalid', message);
+  }
+}
+
+/** An account's pay rules (EQ-03, `PAY_RULES_ERROR_CODES`). */
+export class PayRulesConflict extends DomainError {
+  constructor() {
+    super('pay_rules_conflict', 'Ces règles ont déjà été posées avec d’autres valeurs');
+  }
+}
+
+export class PayRulesPeriodConflict extends DomainError {
+  constructor(accountPayRulesId: string) {
+    super('pay_rules_period_conflict', 'Ce compte a déjà des règles à partir de cette quinzaine', {
+      details: { accountPayRulesId },
+    });
+  }
+}
+
+export class PayRulesPeriodInvalid extends DomainError {
+  constructor() {
+    super(
+      'pay_rules_period_invalid',
+      'De nouvelles règles partent d’une quinzaine qui n’a pas commencé ; seules les premières d’un compte partent de la quinzaine en cours',
+    );
+  }
+}
+
+export class PayRulesSource extends DomainError {
+  constructor() {
+    super(
+      'pay_rules_source_conflict',
+      'Les ventes de ce compte ne sont pas encore relevées : sa paie se lit dans les rapports',
+    );
+  }
+}
+
+export class PayRulesForbidden extends DomainError {
+  constructor(message: string) {
+    super('role_forbidden', message);
+  }
+}

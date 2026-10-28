@@ -1,7 +1,11 @@
 import {
+  AccountPayRulesListSchema,
+  AccountPayRulesSchema,
   AnswerShiftSwapRequestBodySchema,
+  CreateAccountPayRulesBodySchema,
   CreateLeaveRequestBodySchema,
   CreateShiftBodySchema,
+  CreateShiftReportBodySchema,
   CreateShiftSwapRequestBodySchema,
   CreateShiftTemplateBodySchema,
   DecideLeaveRequestBodySchema,
@@ -14,8 +18,14 @@ import {
   OnDutyListSchema,
   PlanningQuerySchema,
   PlanningSchema,
+  RejectShiftReportBodySchema,
   SchedulingSettingsSchema,
   ShiftIdSchema,
+  ShiftReportContextSchema,
+  ShiftReportIdSchema,
+  ShiftReportListSchema,
+  ShiftReportQuerySchema,
+  ShiftReportSchema,
   ShiftSchema,
   ShiftSwapListSchema,
   ShiftSwapRequestIdSchema,
@@ -26,7 +36,10 @@ import {
   SwapCandidatesQuerySchema,
   SwapCandidatesSchema,
   UpdateShiftBodySchema,
+  UpdateShiftReportBodySchema,
   UserIdSchema,
+  ValidateShiftReportsBodySchema,
+  ValidateShiftReportsResultSchema,
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
@@ -35,6 +48,8 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { LeaveService } from '../application/leaves';
+import type { PayRulesService } from '../application/pay-rules';
+import type { ShiftReportService } from '../application/reports';
 import type { SchedulingService } from '../application/scheduling';
 import type { SwapService } from '../application/swaps';
 import type { Actor } from '../domain/ports';
@@ -46,6 +61,7 @@ const ShiftParamsSchema = z.object({ shiftId: ShiftIdSchema });
 const TemplateParamsSchema = z.object({ templateId: ShiftTemplateIdSchema });
 const LeaveParamsSchema = z.object({ leaveRequestId: LeaveRequestIdSchema });
 const SwapParamsSchema = z.object({ shiftSwapRequestId: ShiftSwapRequestIdSchema });
+const ReportParamsSchema = z.object({ shiftReportId: ShiftReportIdSchema });
 
 function userOf(request: FastifyRequest): UserId {
   if (request.user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
@@ -55,12 +71,25 @@ function userOf(request: FastifyRequest): UserId {
 const actorOf = (request: FastifyRequest): Actor => ({ userId: userOf(request), ip: request.ip });
 
 /**
- * `/v1/scheduling` (EQ-02, ADR 0024, ADR 0025, ADR 0031): the owner and the team's accounts reach it, a creator never.
- * Who plans is the database's call (`withMember`): the owner and an active manager; anyone else reads their own
- * shifts, asks their own leaves and proposes or answers their own swaps. The settings are written by the owner alone.
+ * `/v1/scheduling` (EQ-02, EQ-03, ADR 0024, ADR 0025, ADR 0031): the owner and the team's accounts reach it, a creator
+ * never. Who plans is the database's call (`withMember`): the owner and an active manager; anyone else reads their
+ * own shifts, asks their own leaves, proposes or answers their own swaps and makes their own reports. The settings
+ * are written by the owner alone.
  */
 export function createSchedulingRoutes(
-  { scheduling, leaves, swaps }: { scheduling: SchedulingService; leaves: LeaveService; swaps: SwapService },
+  {
+    scheduling,
+    leaves,
+    swaps,
+    reports,
+    payRules,
+  }: {
+    scheduling: SchedulingService;
+    leaves: LeaveService;
+    swaps: SwapService;
+    reports: ShiftReportService;
+    payRules: PayRulesService;
+  },
   requireRole: RequireRole,
 ): FastifyPluginAsyncZod {
   const ownerOrMember = requireRole('owner', 'operator');
@@ -257,6 +286,98 @@ export function createSchedulingRoutes(
       async (request, reply) => {
         await swaps.end(actorOf(request), request.params.shiftSwapRequestId);
         return reply.code(204).send();
+      },
+    );
+
+    app.get(
+      '/scheduling/shifts/:shiftId/report',
+      {
+        preHandler: ownerOrMember,
+        schema: { params: ShiftParamsSchema, response: { 200: ShiftReportContextSchema } },
+      },
+      (request) => reports.context(userOf(request), request.params.shiftId),
+    );
+
+    app.get(
+      '/scheduling/shift-reports',
+      {
+        preHandler: ownerOrMember,
+        schema: { querystring: ShiftReportQuerySchema, response: { 200: ShiftReportListSchema } },
+      },
+      (request) => reports.list(userOf(request), request.query),
+    );
+
+    // 200 when the same report was already recorded: a retry of the form records one.
+    app.post(
+      '/scheduling/shift-reports',
+      {
+        preHandler: ownerOrMember,
+        schema: {
+          body: CreateShiftReportBodySchema,
+          response: { 200: ShiftReportSchema, 201: ShiftReportSchema },
+        },
+      },
+      async (request, reply) => {
+        const { report, created } = await reports.create(actorOf(request), request.body);
+        return reply.code(created ? 201 : 200).send(report);
+      },
+    );
+
+    app.patch(
+      '/scheduling/shift-reports/:shiftReportId',
+      {
+        preHandler: ownerOrMember,
+        schema: {
+          params: ReportParamsSchema,
+          body: UpdateShiftReportBodySchema,
+          response: { 200: ShiftReportSchema },
+        },
+      },
+      (request) => reports.update(actorOf(request), request.params.shiftReportId, request.body),
+    );
+
+    app.post(
+      '/scheduling/shift-reports/validate',
+      {
+        preHandler: ownerOrMember,
+        schema: { body: ValidateShiftReportsBodySchema, response: { 200: ValidateShiftReportsResultSchema } },
+      },
+      (request) => reports.validate(actorOf(request), request.body),
+    );
+
+    app.post(
+      '/scheduling/shift-reports/:shiftReportId/reject',
+      {
+        preHandler: ownerOrMember,
+        schema: {
+          params: ReportParamsSchema,
+          body: RejectShiftReportBodySchema,
+          response: { 200: ShiftReportSchema },
+        },
+      },
+      (request) => reports.reject(actorOf(request), request.params.shiftReportId, request.body),
+    );
+
+    // The accounts' pay rules, which the reports read in their own transaction, at the address the contract gives.
+    app.get(
+      '/team/pay-rules',
+      { preHandler: ownerOrMember, schema: { response: { 200: AccountPayRulesListSchema } } },
+      (request) => payRules.list(userOf(request)),
+    );
+
+    // 200 when the same rules were already recorded: a retry of the panel records them once.
+    app.post(
+      '/team/pay-rules',
+      {
+        preHandler: owner,
+        schema: {
+          body: CreateAccountPayRulesBodySchema,
+          response: { 200: AccountPayRulesSchema, 201: AccountPayRulesSchema },
+        },
+      },
+      async (request, reply) => {
+        const { rules, created } = await payRules.create(actorOf(request), request.body);
+        return reply.code(created ? 201 : 200).send(rules);
       },
     );
     return Promise.resolve();
