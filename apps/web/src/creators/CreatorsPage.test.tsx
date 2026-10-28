@@ -13,6 +13,7 @@ import { parsePersonaYaml } from './persona/source';
 /* Invented creators and members: no real data. */
 const ANNA = { id: '0192f3a0-0000-7000-8000-0000000000a1', displayName: 'Anna', timezone: 'Europe/Paris' };
 const BEA = { id: '0192f3a0-0000-7000-8000-0000000000b2', displayName: 'Bea', timezone: 'Europe/Paris' };
+const CLEO = { id: '0192f3a0-0000-7000-8000-0000000000c3', displayName: 'Cleo', timezone: 'Europe/Paris' };
 const base = { id: 'u1', email: 'membre@example.test', name: 'Nora', creatorIds: [], routedCreatorIds: [] };
 const owner: Me = { ...base, role: 'owner', team: null, teamScope: 'owner' };
 /** An operator without a team row: the rail that still opens Créatrices, read-only. */
@@ -33,7 +34,9 @@ async function serve(creators: readonly (typeof ANNA)[] | null): Promise<void> {
     Promise.resolve(new Response(JSON.stringify(body), { status }));
   vi.stubGlobal(
     'fetch',
-    vi.fn((url: string) => {
+    vi.fn((url: string, init?: RequestInit) => {
+      // A creation answers the new creator, whatever was typed: the page only needs her summary.
+      if (url === '/v1/creators' && init?.method === 'POST') return json(CLEO, 201);
       if (url === '/v1/creators') return creators === null ? json({}, 500) : json({ creators });
       const index = (creators ?? []).findIndex((c) => url === `/v1/creators/${c.id}/persona`);
       const creator = creators?.[index];
@@ -117,6 +120,22 @@ describe('Créatrices, the creator in the address (recette 28/10)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Les abandonner' }));
     await screen.findByText('Bea · Persona');
     expect(router.state.location.search).toEqual({ creatrice: BEA.id });
+  });
+
+  it('asks once on « Ajouter une créatrice », never again once the new creator is created', async () => {
+    await serve([ANNA, BEA]);
+    const router = renderAt(owner, `/creatrices?creatrice=${ANNA.id}`);
+    fireEvent.change(await screen.findByLabelText('Prénom'), { target: { value: 'Elenaa' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une créatrice' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Les abandonner' }));
+
+    fireEvent.change(await screen.findByLabelText('Prénom ou pseudo'), { target: { value: 'Cleo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Prénom ou pseudo')).toBeNull();
+    });
+    expect(screen.queryByText('Tes modifications ne sont pas enregistrées.')).toBeNull();
+    expect(router.state.location.search).toEqual({ creatrice: CLEO.id });
   });
 });
 

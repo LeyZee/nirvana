@@ -41,7 +41,7 @@ export function NewCreatorForm({
   // A second click lands before the re-render that disables the button: the ref stops it, the id makes it harmless.
   const sending = useRef(false);
   const [creatorId, setCreatorId] = useState(() => newId(CreatorIdSchema));
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<keyof typeof PROBLEMS | null>(null);
 
   const submit = async (event: SyntheticEvent): Promise<void> => {
     event.preventDefault();
@@ -60,7 +60,7 @@ export function NewCreatorForm({
       await client.invalidateQueries({ queryKey: ['creators'] });
       onCreated(result.creator);
     } else {
-      setProblem(PROBLEMS[result.kind]);
+      setProblem(result.kind);
     }
   };
 
@@ -102,10 +102,10 @@ export function NewCreatorForm({
       </Field>
       {problem === null ? null : (
         <p className="ps-error" role="alert">
-          {problem}
+          {PROBLEMS[problem]}
         </p>
       )}
-      {problem === PROBLEMS.expired ? <SignInAgain /> : null}
+      {problem === 'expired' ? <SignInAgain /> : null}
       <div className="ps-head__actions">
         {onCancel === null ? null : (
           <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" onClick={onCancel}>
