@@ -229,7 +229,6 @@
 /* ── The hold island: at the foot of the screen, above the phone's tab bar ── */
 .rp-island {
   --_radius: var(--nv-radius-xl);
-  position: fixed;
   z-index: 60;
   left: 50%;
   bottom: calc(var(--nv-space-6) + env(safe-area-inset-bottom, 0px));
@@ -242,6 +241,10 @@
   padding: var(--nv-space-3) var(--nv-space-3) var(--nv-space-3) var(--nv-space-4);
   transform: translateX(-50%);
   animation: rp-island-in var(--nv-dur-slow) var(--nv-ease-spring-bouncy) both;
+}
+/* .nv-glass sets position: relative; the island floats. */
+.rp-island.nv-glass {
+  position: fixed;
 }
 @keyframes rp-island-in {
   from {
@@ -372,10 +375,12 @@
   font-size: var(--nv-text-footnote);
 }
 
-.rp-mine {
+/* The body of a panel under its eyebrow, at the head's own inset. */
+.rp-sec {
   display: flex;
   flex-direction: column;
   gap: var(--nv-space-4);
+  padding: 4px 24px 22px;
 }
 .rp-mine__empty {
   margin: 0;
@@ -466,7 +471,7 @@
 .rp-figures__row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: last baseline;
   gap: var(--nv-space-3) var(--nv-space-8);
 }
 .rp-figures__one {
@@ -535,12 +540,6 @@
   flex-direction: column;
   gap: var(--nv-space-4);
   max-width: 980px;
-}
-.rp-validate,
-.rp-period {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nv-space-4);
 }
 .rp-validate__top {
   display: flex;
@@ -620,7 +619,8 @@
   outline-offset: 2px;
 }
 .rp-check:disabled {
-  opacity: 0.35;
+  opacity: 0.5;
+  background: transparent;
   cursor: not-allowed;
 }
 
@@ -673,6 +673,16 @@
 .rp-review[data-locked='true'] {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--nv-hairline);
+}
+.rp-review[data-held='true'] {
+  opacity: 0.55;
+  background: var(--nv-glass-fill);
+  box-shadow: none;
+}
+.rp-review__held {
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
 }
 .rp-review__pick {
   display: grid;
@@ -891,7 +901,8 @@
 .rp-account__now,
 .rp-account__next {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  /* The chips share one column, so that the rules line up whatever the chip says. */
+  grid-template-columns: 92px minmax(0, 1fr);
   align-items: center;
   gap: 2px var(--nv-space-3);
 }
@@ -902,6 +913,10 @@
 .rp-account__rules {
   margin: 0;
   font-weight: 600;
+}
+.rp-account__now .rp-chip,
+.rp-account__next .rp-chip {
+  justify-self: start;
 }
 .rp-account__next .rp-account__rules {
   color: var(--nv-ink-muted);
@@ -979,6 +994,19 @@
   }
   .rp-pline .rp-chip {
     justify-self: start;
+  }
+  .rp-account__now,
+  .rp-account__next {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--nv-space-1);
+  }
+  .rp-account__now .rp-chip,
+  .rp-account__next .rp-chip {
+    justify-self: start;
+  }
+  .rp-account__now .rp-account__since,
+  .rp-account__next .rp-account__since {
+    grid-column: auto;
   }
 }
 
