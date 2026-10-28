@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   GuardCodeSchema,
+  type ConnectorErrorCode,
   type ConversationDetail,
   type ConversationEventView,
   type DashboardTodo,
@@ -56,18 +57,25 @@ function openingWords(until: string, written: string, timeZone: string): string 
   return `${WEEKDAYS[weekdayOf(day) - 1] ?? ''} ${clock}`;
 }
 
+/** The codes a send keeps: a refusal of the write guard, no connector, or the connector's own failure. */
+type SendFailureCode =
+  'connector_writes_disabled' | 'connector_unavailable' | `connector_${ConnectorErrorCode}`;
+
 /**
  * Why a send failed for good, from the code the send job keeps (`send_failed.payload.error`): what a person can act
  * on. A code this screen does not know is left out, never shown raw.
  */
-const SEND_FAILURES: Readonly<Record<string, string>> = {
+const SEND_FAILURES: Readonly<Record<SendFailureCode, string>> = {
   connector_writes_disabled: 'l’envoi est désactivé pour ce compte Reveal',
+  connector_unavailable: 'aucun connecteur n’est branché pour cette plateforme',
   connector_session_expired: 'la session Reveal a expiré',
   connector_rate_limited: 'Reveal a limité les envois',
   connector_not_found: 'Reveal ne trouve plus cette conversation',
   connector_transient: 'Reveal n’a pas répondu',
   connector_fatal: 'Reveal a refusé le message',
 };
+
+const isSendFailureCode = (code: string): code is SendFailureCode => Object.hasOwn(SEND_FAILURES, code);
 
 /** The note an event leaves in the thread, or null for the events the messages already show. */
 function noteOf(event: ConversationEventView, timeZone: string): string | null {
@@ -80,7 +88,9 @@ function noteOf(event: ConversationEventView, timeZone: string): string | null {
   if (event.type === 'send_failed' && event.payload.isFinal === true)
     return withReason(
       'L’envoi a échoué, rien n’est parti',
-      event.payload.error === undefined ? undefined : SEND_FAILURES[event.payload.error],
+      event.payload.error === undefined || !isSendFailureCode(event.payload.error)
+        ? undefined
+        : SEND_FAILURES[event.payload.error],
     );
   if (event.type === 'reply_skipped')
     return event.payload.reason === 'llm_unavailable'

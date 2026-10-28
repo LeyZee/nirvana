@@ -1,0 +1,44 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi } from 'vitest';
+
+import { bringIntoView } from './scroll';
+
+/** An element with the sizes jsdom does not lay out, and a spy on its own scrollIntoView. */
+function box(sizes: { scrollHeight?: number; clientHeight?: number; top?: number }): {
+  element: HTMLElement;
+  scrolledIntoView: ReturnType<typeof vi.fn>;
+} {
+  const element = document.createElement('div');
+  Object.defineProperty(element, 'scrollHeight', { value: sizes.scrollHeight ?? 0 });
+  Object.defineProperty(element, 'clientHeight', { value: sizes.clientHeight ?? 0 });
+  element.getBoundingClientRect = () => DOMRect.fromRect({ y: sizes.top ?? 0, height: 0 });
+  const scrolledIntoView = vi.fn();
+  element.scrollIntoView = scrolledIntoView;
+  return { element, scrolledIntoView };
+}
+
+describe('bringIntoView', () => {
+  it('scrolls the thread alone when it scrolls on its own, never the page', () => {
+    const body = box({ scrollHeight: 2000, clientHeight: 500, top: 100 });
+    const end = box({});
+    bringIntoView(body.element, null, end.element);
+    expect(body.element.scrollTop).toBe(2000);
+    expect(end.scrolledIntoView).not.toHaveBeenCalled();
+  });
+
+  it('shows a waiting draft from its top inside the thread', () => {
+    const body = box({ scrollHeight: 2000, clientHeight: 500, top: 100 });
+    body.element.scrollTop = 300;
+    const draft = box({ top: 700 });
+    bringIntoView(body.element, draft.element, box({}).element);
+    expect(body.element.scrollTop).toBe(900);
+    expect(draft.scrolledIntoView).not.toHaveBeenCalled();
+  });
+
+  it('lets the page scroll on a phone, where the thread has no scroll of its own', () => {
+    const body = box({ scrollHeight: 500, clientHeight: 500 });
+    const draft = box({});
+    bringIntoView(body.element, draft.element, box({}).element);
+    expect(draft.scrolledIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+});

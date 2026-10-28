@@ -16,6 +16,7 @@ import {
   type Decision,
 } from './api';
 import { draftsOf, threadOf, whyHuman } from './reader-model';
+import { bringIntoView, useEndInView } from './scroll';
 import { bubblesFromText, bubblesProblem, STATE_LABELS, statusClass } from './view';
 
 /** The reader follows the conversation more closely than the list: a draft or a fan's message shows up quickly. */
@@ -143,13 +144,19 @@ function Loaded({
   };
 
   // Like any messenger, the reader opens on the end of the thread: the draft waiting for a decision, else the last
-  // message. A new draft brings it into view again.
+  // message. A new draft brings it into view again only if the end of the thread was in view: a person reading higher
+  // up is not pulled down. From 900 px the thread scrolls on its own, so the list beside it never moves.
   const pendingId = detail.openDrafts.find((draft) => draft.status === 'pending')?.id ?? null;
+  const bodyRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<HTMLDivElement>(null);
+  const endInView = useEndInView(endRef);
+  const openedId = useRef<string | null>(null);
   useEffect(() => {
-    (draftRef.current ?? endRef.current)?.scrollIntoView({ block: 'nearest' });
-  }, [pendingId]);
+    const opening = openedId.current !== detail.id;
+    openedId.current = detail.id;
+    if (opening || endInView.current) bringIntoView(bodyRef.current, draftRef.current, endRef.current);
+  }, [detail.id, pendingId, endInView]);
 
   return (
     <>
@@ -213,7 +220,7 @@ function Loaded({
       {/* A creator never reads what is known of her fans (ADR 0023): the server answers her 403. */}
       {canDecide ? <FanToLearn creatorId={creatorId} fanId={detail.fanId} /> : null}
       <DesireSheet creatorId={creatorId} conversationId={detail.id} desire={detail.desire} />
-      <div className="tr-reader__body">
+      <div className="tr-reader__body" ref={bodyRef}>
         {read.isPartial ? (
           <p className="tr-more">Seuls les derniers messages sont affichés ; le reste se lit dans Reveal.</p>
         ) : null}

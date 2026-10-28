@@ -122,6 +122,11 @@ describe('threadOf', () => {
       'L’envoi a échoué, rien n’est parti : la session Reveal a expiré',
     ]);
     expect(failed('send_error')).toEqual(['L’envoi a échoué, rien n’est parti']);
+    expect(failed('connector_unavailable')).toEqual([
+      'L’envoi a échoué, rien n’est parti : aucun connecteur n’est branché pour cette plateforme',
+    ]);
+    // A key every object has is not a code.
+    expect(failed('toString')).toEqual(['L’envoi a échoué, rien n’est parti']);
     expect(failed()).toEqual(['L’envoi a échoué, rien n’est parti']);
   });
 

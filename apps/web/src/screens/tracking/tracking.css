@@ -169,6 +169,14 @@
   gap: var(--nv-space-2);
   min-width: 0;
 }
+/* From 900 px the thread scrolls on its own: opening a long conversation never moves the list beside it. */
+@media (min-width: 900px) {
+  .tr-reader__body {
+    max-height: min(40rem, 70vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
 .tr-reader__empty {
   margin: 0;
   padding: var(--nv-space-4);
