@@ -1,26 +1,40 @@
-import { PERSONA_OPTIONS, PersonaSchema, type Persona, type PersonaDetails } from '@nirvana/contracts';
+import {
+  PERSONA_BLOCK_LABELS,
+  KycSlotSchema,
+  PERSONA_OPTIONS,
+  personaCompletion,
+  PersonaSchema,
+  type Persona,
+  type PersonaCompletion,
+  type KycSlot,
+  type PersonaDetails,
+  type PersonaSampleReplyFault,
+} from '@nirvana/contracts';
 import type { z } from 'zod';
 
-/**
- * Rules of the persona screen, without React: its tabs (OnlyChat's, in OnlyChat's order, plus `limits`), the
- * validation by `PersonaSchema` with French messages, and the one-line summaries of folded blocks.
- */
+import { GUARD_LABELS } from '@/agent/guards';
 
 /**
- * The P5-01 blocks (`lifestyle`, `tastes`, `intimate`, `writing_style`, `sample_replies`) have no tab yet: a version
- * that holds them keeps them untouched until their screen comes.
+ * Rules of the persona screen, without React: its tabs (OnlyChat's, in OnlyChat's order, with the P5-01 blocks after
+ * « Détails » and `limits` last), the validation by `PersonaSchema` with French messages, the one-line summaries of
+ * folded blocks and the completion of what is written.
  */
-type BlockWithoutTab = 'lifestyle' | 'tastes' | 'intimate' | 'writing_style' | 'sample_replies';
-export type TabId = Exclude<keyof Persona, 'meta' | BlockWithoutTab>;
+
+export type TabId = Exclude<keyof Persona, 'meta'>;
 
 export const TABS: readonly { readonly id: TabId; readonly label: string }[] = [
-  { id: 'details', label: 'Détails' },
+  { id: 'details', label: PERSONA_BLOCK_LABELS.details },
+  { id: 'lifestyle', label: PERSONA_BLOCK_LABELS.lifestyle },
+  { id: 'tastes', label: PERSONA_BLOCK_LABELS.tastes },
+  { id: 'intimate', label: PERSONA_BLOCK_LABELS.intimate },
+  { id: 'writing_style', label: PERSONA_BLOCK_LABELS.writing_style },
+  { id: 'sample_replies', label: PERSONA_BLOCK_LABELS.sample_replies },
   { id: 'additional_info', label: 'Infos en plus' },
   { id: 'behavior', label: 'Comportement' },
   { id: 'strategies', label: 'Stratégies' },
   { id: 'follow_ups', label: 'Relances' },
   { id: 'notifications', label: 'Notifications' },
-  { id: 'limits', label: 'Limites' },
+  { id: 'limits', label: PERSONA_BLOCK_LABELS.limits },
 ];
 
 /** One problem with the draft: the field it belongs to (`strategies.kyc.max_messages`) and what to fix. */
@@ -50,6 +64,11 @@ export function issuesOf(issues: readonly FieldIssue[], field: string): FieldIss
 export function issueCountByTab(issues: readonly FieldIssue[]): Record<TabId, number> {
   const counts: Record<TabId, number> = {
     details: 0,
+    lifestyle: 0,
+    tastes: 0,
+    intimate: 0,
+    writing_style: 0,
+    sample_replies: 0,
     additional_info: 0,
     behavior: 0,
     strategies: 0,
@@ -154,7 +173,11 @@ const styleOf = (style: string): string =>
 /** The line each strategy shows while folded: its style, then the numbers the policy enforces. */
 export function strategySummaries(s: Persona['strategies']): Record<keyof Persona['strategies'], string> {
   return {
-    kyc: `${styleOf(s.kyc.style)} · ${String(s.kyc.max_messages)} messages, ${minutesLabel(s.kyc.max_duration_minutes)} au plus · le suit s’il chauffe après ${hoursLabel(s.kyc.min_hours_before_following)}`,
+    kyc: `${styleOf(s.kyc.style)} · ${String(s.kyc.max_messages)} messages, ${minutesLabel(s.kyc.max_duration_minutes)} au plus · le suit s’il chauffe après ${hoursLabel(s.kyc.min_hours_before_following)}${
+      s.kyc.collect === undefined
+        ? ''
+        : ` · ${String(s.kyc.collect.length)} ligne${s.kyc.collect.length > 1 ? 's' : ''} du canevas sur ${String(KycSlotSchema.options.length)}`
+    }`,
     sexualization: `${styleOf(s.sexualization.style)} · ouvre après ${hoursLabel(s.sexualization.initiate_after_hours)}`,
     script_launch: `${styleOf(s.script_launch.style)} · au moins ${hoursLabel(s.script_launch.cooldown_hours)} entre deux scripts`,
     post_offer: `${styleOf(s.post_offer.style)} · relance après ${plural(s.post_offer.delay_days, 'jour', 'jours')}`,
@@ -236,3 +259,71 @@ export function nextVersion(taken: readonly string[]): string {
     );
   return `${String(major)}.${String(minor)}.${String(patch + 1)}`;
 }
+
+const real = (list: readonly string[]): string[] => list.filter((entry) => !isPlaceholder(entry));
+
+/**
+ * How complete the draft is (`personaCompletion`), read without the placeholders of the example: « <à remplir> » in
+ * a list is not something she wrote.
+ */
+export function draftCompletion(draft: Persona): PersonaCompletion {
+  const { details, limits } = draft;
+  return personaCompletion({
+    ...draft,
+    details: { ...details, hobbies: real(details.hobbies), personality: real(details.personality) },
+    limits: {
+      never_do: real(limits.never_do),
+      never_show: real(limits.never_show),
+      never_say: real(limits.never_say),
+      disgusts: real(limits.disgusts),
+    },
+  });
+}
+
+const blank = (value: string | null): boolean => value === null || value.trim() === '';
+
+/** A block whose every field is empty is not written: the version keeps it absent, as before P5-01. */
+export function lifestyleOrNone(block: NonNullable<Persona['lifestyle']>): Persona['lifestyle'] {
+  return blank(block.occupation) && blank(block.area) && blank(block.routine) && blank(block.goals)
+    ? undefined
+    : block;
+}
+
+export function tastesOrNone(block: NonNullable<Persona['tastes']>): Persona['tastes'] {
+  return block.likes.length === 0 && block.dislikes.length === 0 ? undefined : block;
+}
+
+export function intimateOrNone(block: NonNullable<Persona['intimate']>): Persona['intimate'] {
+  return block.turn_ons.length === 0 && block.fantasies.length === 0 && blank(block.sexting_style)
+    ? undefined
+    : block;
+}
+
+export const repliesOrNone = (list: NonNullable<Persona['sample_replies']>): Persona['sample_replies'] =>
+  list.length === 0 ? undefined : list;
+
+/** An emoji as two lists compare it: without the variation selector some keyboards add (« ❤ » and « ❤️ »). */
+export const emojiKey = (entry: string): string => entry.replace(/\uFE0F/gu, '');
+
+/**
+ * What the server refused at saving (422 `persona_sample_reply_unprocessable`), on the reply it refused: one line per
+ * reply, every guard it trips named, as the agent's own refusals say them.
+ */
+export function refusedReplyIssues(faults: readonly PersonaSampleReplyFault[]): FieldIssue[] {
+  const byReply = new Map<number, string[]>();
+  for (const { index, code } of faults) {
+    const labels = byReply.get(index) ?? [];
+    if (!labels.includes(GUARD_LABELS[code])) labels.push(GUARD_LABELS[code]);
+    byReply.set(index, labels);
+  }
+  return [...byReply]
+    .sort(([a], [b]) => a - b)
+    .map(([index, labels]) => ({
+      field: `sample_replies.${String(index)}.reply`,
+      message: `L’agent ne l’enverrait pas : ${labels.join(', ')}.`,
+    }));
+}
+
+/** The canvas lines she collects: every line, in order, is « all » and leaves `collect` absent, as the schema reads it. */
+export const collectOrAll = (slots: KycSlot[]): KycSlot[] | undefined =>
+  slots.length === KycSlotSchema.options.length ? undefined : slots;

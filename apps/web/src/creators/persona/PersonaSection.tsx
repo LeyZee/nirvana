@@ -1,14 +1,22 @@
-import { PersonaSchema, type Persona, type PersonaVersionSummary } from '@nirvana/contracts';
+import {
+  PersonaSchema,
+  type Persona,
+  type PersonaCompletion,
+  type PersonaVersionSummary,
+} from '@nirvana/contracts';
 import { placeTabBarLens } from '@nirvana/design-system';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 
+import { IntimateTab, LifestyleTab, SampleRepliesTab, TastesTab, WritingStyleTab } from './blocks';
 import { FormContext } from './fields';
 import {
   changedFields,
+  draftCompletion,
   hasChange,
   issueCountByTab,
   isPlaceholder,
   nextVersion,
+  refusedReplyIssues,
   TABS,
   validate,
   withoutPlaceholders,
@@ -130,9 +138,12 @@ function Editor({
   const [direction, setDirection] = useState<'left' | 'right' | 'none'>('none');
   /** A field to bring into view once its tab is on screen (« Voir »). */
   const [focusField, setFocusField] = useState<string | null>(null);
+  /** The sample replies the server refused at the last save (422), shown on their field until the next edit. */
+  const [refused, setRefused] = useState<readonly FieldIssue[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const issues = useMemo(() => validate(draft), [draft]);
+  const issues = useMemo(() => [...validate(draft), ...refused], [draft, refused]);
+  const completion = useMemo(() => draftCompletion(draft), [draft]);
   const changed = useMemo(() => changedFields(saved, draft), [saved, draft]);
   const form = useMemo(() => ({ issues, changed }), [issues, changed]);
 
@@ -162,6 +173,7 @@ function Editor({
   const set = <K extends TabId>(key: K, value: Persona[K]): void => {
     setDraft((current) => ({ ...current, [key]: value }));
     setProblem(null);
+    setRefused([]);
     onEdit();
   };
 
@@ -189,6 +201,9 @@ function Editor({
         break;
       case 'conflict':
         setProblem({ text: CONFLICT, reload: true });
+        break;
+      case 'unprocessable':
+        setRefused(refusedReplyIssues(result.faults));
         break;
       case 'forbidden':
         setProblem({
@@ -250,6 +265,7 @@ function Editor({
           ready={ready}
           known={creatorId !== null}
           issues={issues}
+          completion={completion}
           changes={changed.length}
           saving={saving}
           blocked={blocked}
@@ -266,6 +282,10 @@ function Editor({
           onReset={() => {
             setDraft(saved);
             setProblem(null);
+            setRefused([]);
+          }}
+          onShowBlock={(block) => {
+            select(block);
           }}
           onShowIssue={(issue) => {
             const first = issue.field.split('.')[0];
@@ -293,6 +313,11 @@ function Editor({
           key={tab}
         >
           {tab === 'details' ? <DetailsTab {...props('details')} timezone={timezone} /> : null}
+          {tab === 'lifestyle' ? <LifestyleTab {...props('lifestyle')} /> : null}
+          {tab === 'tastes' ? <TastesTab {...props('tastes')} /> : null}
+          {tab === 'intimate' ? <IntimateTab {...props('intimate')} /> : null}
+          {tab === 'writing_style' ? <WritingStyleTab {...props('writing_style')} /> : null}
+          {tab === 'sample_replies' ? <SampleRepliesTab {...props('sample_replies')} /> : null}
           {tab === 'additional_info' ? <AdditionalInfoTab {...props('additional_info')} /> : null}
           {tab === 'behavior' ? <BehaviorTab {...props('behavior')} /> : null}
           {tab === 'strategies' ? <StrategiesTab {...props('strategies')} /> : null}
@@ -330,6 +355,7 @@ function Head({
   ready,
   known,
   issues,
+  completion,
   changes,
   saving,
   blocked,
@@ -341,11 +367,13 @@ function Head({
   onReload,
   onReset,
   onShowIssue,
+  onShowBlock,
 }: {
   draft: Persona;
   ready: PersonaReady;
   known: boolean;
   issues: readonly FieldIssue[];
+  completion: PersonaCompletion;
   changes: number;
   saving: boolean;
   /** Why saving is not possible now, or null when it is. */
@@ -359,6 +387,7 @@ function Head({
   onReload: () => void;
   onReset: () => void;
   onShowIssue: (issue: FieldIssue) => void;
+  onShowBlock: (block: TabId) => void;
 }): JSX.Element {
   const name = draft.details.first_name.trim();
   /** Activating changes what the agent writes: a second click confirms it. */
@@ -469,9 +498,63 @@ function Head({
           </button>
         ) : null}
       </div>
+      <Completion completion={completion} onShowBlock={onShowBlock} />
       <p className="ps-muted" id="ps-save-note">
         {noteOf(ready, known)}
       </p>
+    </div>
+  );
+}
+
+/**
+ * How much of her the agent can read (`personaCompletion`): a neutral gauge, the percent in ink, and the blocks still
+ * to write, each opening its tab. Nothing is required: it says what is missing, never that a save is blocked.
+ */
+function Completion({
+  completion: { percent, missing },
+  onShowBlock,
+}: {
+  completion: PersonaCompletion;
+  onShowBlock: (block: TabId) => void;
+}): JSX.Element {
+  return (
+    <div className="ps-completion">
+      <p className="ps-completion__line">
+        <span className="ps-completion__label">Complète à</span>{' '}
+        <span className="ps-completion__percent">{percent} %</span>
+      </p>
+      <div
+        className="nv-gauge ps-completion__gauge"
+        role="progressbar"
+        aria-label="Complétude de la persona"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        style={{ '--nv-gauge-value': `${String(percent)}%` }}
+      >
+        <span className="nv-gauge__fill" />
+      </div>
+      {missing.length === 0 ? (
+        <p className="ps-muted">Tout est décrit : l’agent a tout ce qu’il lui faut pour écrire comme elle.</p>
+      ) : (
+        <p className="ps-completion__missing">
+          <span className="ps-muted">À compléter :</span>
+          {missing.map(({ block, label }, index) => (
+            <span key={block}>
+              <button
+                type="button"
+                className="ps-completion__block"
+                onClick={() => {
+                  onShowBlock(block);
+                }}
+              >
+                {label}
+              </button>
+              {index < missing.length - 1 ? ', ' : null}
+            </span>
+          ))}
+        </p>
+      )}
     </div>
   );
 }

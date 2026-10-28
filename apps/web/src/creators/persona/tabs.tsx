@@ -2,6 +2,7 @@ import {
   ADDITIONAL_INFO_MAX,
   ageOn,
   DESIRE_BAND_FLOORS,
+  KycSlotSchema,
   PERSONA_BOUNDS,
   PERSONA_OPTIONS,
   type Persona,
@@ -23,6 +24,7 @@ import {
   TextInput,
 } from './fields';
 import {
+  collectOrAll,
   followUpsSummary,
   hoursLabel,
   issuesOf,
@@ -49,7 +51,7 @@ export interface TabProps<K extends TabId> {
 }
 
 /** Empty text is « not given » (null) for the optional fields of the schema. */
-const orNull = (text: string): string | null => (text === '' ? null : text);
+export const orNull = (text: string): string | null => (text === '' ? null : text);
 
 /** Numbers the policy enforces, side by side: one mark for the group instead of one per field. */
 function Coded({ children }: { children: ReactNode }): JSX.Element {
@@ -61,7 +63,7 @@ function Coded({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
-function Block({
+export function Block({
   title,
   lead,
   children,
@@ -475,6 +477,24 @@ export function StrategiesTab({ value: s, onChange, issues }: TabProps<'strategi
             maxLength={500}
             onChange={(v) => {
               set('kyc', { ...s.kyc, targets: orNull(v) });
+            }}
+          />
+        </Field>
+        <Field
+          label="Les lignes du canevas qu’elle cherche à remplir"
+          id={`${id}-c`}
+          hint="Toutes par défaut. Celles retirées ne sont jamais demandées au fan."
+          path="strategies.kyc.collect"
+        >
+          <Picker
+            id={`${id}-c`}
+            label="Lignes du canevas"
+            options={PERSONA_OPTIONS.kycSlots}
+            values={s.kyc.collect ?? KycSlotSchema.options}
+            placeholder="Ajouter une ligne"
+            empty="Aucune ligne de ce nom"
+            onChange={(v) => {
+              set('kyc', { ...s.kyc, collect: collectOrAll(v) });
             }}
           />
         </Field>
