@@ -2,6 +2,7 @@
 export {
   createDbClient,
   enterCreator,
+  lockMemberPeriod,
   SNAPSHOT_READ,
   withAdmin,
   withMember,

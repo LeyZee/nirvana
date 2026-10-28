@@ -1,0 +1,275 @@
+import {
+  CreatorIdSchema,
+  type CreatorId,
+  CustomAlertGroupSchema,
+  SystemAlertSettingSchema,
+  type CustomAlertGroup,
+} from '@nirvana/contracts';
+import { describe, expect, it } from 'vitest';
+
+import {
+  bodyOf,
+  canSave,
+  cleanKeywords,
+  creatorsLine,
+  draftIssues,
+  draftOf,
+  EMPTY_DRAFT,
+  hasChanges,
+  newDraft,
+  pauseLine,
+  switchedBody,
+  systemLine,
+  telegramHeadLine,
+  telegramLine,
+  testCostLine,
+  watchLine,
+} from './model';
+
+/* Invented creators: no real person. */
+const id = (n: number) => CreatorIdSchema.parse(`0192f3a0-0000-7000-8000-0000000000c${String(n)}`);
+const NORA = { id: id(1), displayName: 'Nora Vidal' };
+const LEA = { id: id(2), displayName: 'Léa' };
+const IRIS = { id: id(3), displayName: 'Iris' };
+const ZOE = { id: id(4), displayName: 'Zoé' };
+const ALL = [NORA, LEA, IRIS, ZOE];
+
+const saved = (patch: Partial<Record<string, unknown>> = {}): CustomAlertGroup =>
+  CustomAlertGroupSchema.parse({
+    groupId: '0192f3a0-0000-7000-8000-0000000000a1',
+    name: 'Vidéo perso',
+    phrase: 'Le fan demande une vidéo faite pour lui',
+    keywords: ['vidéo perso'],
+    pausesAgent: false,
+    notify: true,
+    creators: [
+      { creatorId: NORA.id, enabled: true, alertId: '0192f3a0-0000-7000-8000-0000000000b1' },
+      { creatorId: LEA.id, enabled: false, alertId: '0192f3a0-0000-7000-8000-0000000000b2' },
+    ],
+    createdAt: '2026-10-27T10:00:00Z',
+    updatedAt: '2026-10-27T10:00:00Z',
+    ...patch,
+  });
+
+describe('an alert of her own, before it is saved (P4-01)', () => {
+  it('says on each field what keeps it from being saved', () => {
+    expect(draftIssues(EMPTY_DRAFT)).toEqual({
+      name: 'Donne-lui un nom.',
+      watch: 'Une phrase, des mots-clés, ou les deux : sinon elle ne surveille rien.',
+      creators: 'Choisis au moins une créatrice.',
+    });
+    expect(
+      draftIssues({ ...EMPTY_DRAFT, name: 'x'.repeat(81), phrase: 'x'.repeat(501), creatorIds: [NORA.id] }),
+    ).toEqual({ name: '80 caractères au plus.', phrase: '500 caractères au plus.' });
+    expect(
+      draftIssues({
+        ...EMPTY_DRAFT,
+        name: 'Appel',
+        keywords: Array.from({ length: 41 }, (_, n) => `mot${String(n)}`),
+        creatorIds: [NORA.id],
+      }),
+    ).toEqual({ watch: '40 mots-clés au plus.' });
+  });
+
+  it('saves a phrase alone, keywords alone, or both, and nothing that watches nothing', () => {
+    const base = { ...EMPTY_DRAFT, name: 'Vidéo perso', creatorIds: [NORA.id] };
+    expect(canSave({ ...base, phrase: 'Le fan demande une vidéo faite pour lui' })).toBe(true);
+    expect(canSave({ ...base, keywords: ['vidéo perso'] })).toBe(true);
+    expect(canSave({ ...base, phrase: '   ' })).toBe(false);
+    // A word the agent could never match does not count.
+    expect(canSave({ ...base, keywords: ['!!!'] })).toBe(false);
+  });
+
+  it('keeps each keyword once as the agent reads it', () => {
+    expect(
+      cleanKeywords([' Vidéo ', 'video', 'appel', '', 'APPEL', 'Rendez-vous', 'rendez vous', '!!!']),
+    ).toEqual(['Vidéo', 'appel', 'Rendez-vous']);
+  });
+
+  it('starts on the only creator, or on none when she has several', () => {
+    expect(newDraft([NORA]).creatorIds).toEqual([NORA.id]);
+    expect(newDraft(ALL).creatorIds).toEqual([]);
+    expect(newDraft(ALL).notify).toBe(true);
+    expect(newDraft(ALL).pausesAgent).toBe(false);
+  });
+});
+
+describe('what goes to the server', () => {
+  it('sends an empty phrase as null and cleaned words', () => {
+    const body = bodyOf(
+      {
+        ...EMPTY_DRAFT,
+        name: ' Appel ',
+        phrase: '  ',
+        keywords: ['appel', 'Appel', 'cam'],
+        creatorIds: [NORA.id],
+      },
+      null,
+    );
+    expect(body).toEqual({
+      name: 'Appel',
+      phrase: null,
+      keywords: ['appel', 'cam'],
+      pausesAgent: false,
+      notify: true,
+      creators: [{ creatorId: NORA.id, enabled: true }],
+    });
+  });
+
+  it('keeps each creator’s switch, and gives a creator added the alert’s state', () => {
+    const alert = saved();
+    const body = bodyOf({ ...draftOf(alert), creatorIds: [NORA.id, LEA.id, IRIS.id] }, alert);
+    expect(body.creators).toEqual([
+      { creatorId: NORA.id, enabled: true },
+      { creatorId: LEA.id, enabled: false },
+      { creatorId: IRIS.id, enabled: true },
+    ]);
+    const off = saved({
+      creators: [{ creatorId: NORA.id, enabled: false, alertId: '0192f3a0-0000-7000-8000-0000000000b1' }],
+    });
+    expect(bodyOf({ ...draftOf(off), creatorIds: [NORA.id, IRIS.id] }, off).creators).toEqual([
+      { creatorId: NORA.id, enabled: false },
+      { creatorId: IRIS.id, enabled: false },
+    ]);
+  });
+
+  it('turns the alert on or off for all its creators from its line', () => {
+    expect(switchedBody(saved(), true).creators).toEqual([
+      { creatorId: NORA.id, enabled: true },
+      { creatorId: LEA.id, enabled: true },
+    ]);
+  });
+
+  it('has nothing to save until the draft differs from what is stored', () => {
+    const alert = saved();
+    expect(hasChanges(draftOf(alert), alert)).toBe(false);
+    expect(hasChanges({ ...draftOf(alert), name: 'Vidéo perso ' }, alert)).toBe(false);
+    expect(hasChanges({ ...draftOf(alert), creatorIds: [LEA.id, NORA.id] }, alert)).toBe(false);
+    expect(hasChanges({ ...draftOf(alert), notify: false }, alert)).toBe(true);
+    expect(hasChanges(EMPTY_DRAFT, null)).toBe(true);
+  });
+});
+
+describe('an alert on its line', () => {
+  it('says what it watches', () => {
+    expect(watchLine({ phrase: 'Le fan demande un appel', keywords: ['appel', 'cam', 'facetime'] })).toBe(
+      'Une phrase et 3 mots-clés',
+    );
+    expect(watchLine({ phrase: null, keywords: ['appel'] })).toBe('1 mot-clé');
+    expect(watchLine({ phrase: 'Le fan demande un appel', keywords: [] })).toBe('Une phrase');
+  });
+
+  it('names its creators, or all of them', () => {
+    expect(creatorsLine([NORA.id, LEA.id, IRIS.id, ZOE.id], ALL)).toBe('Toutes les créatrices');
+    expect(creatorsLine([NORA.id], ALL)).toBe('Nora Vidal');
+    expect(creatorsLine([NORA.id, LEA.id], ALL)).toBe('Nora Vidal et Léa');
+    expect(creatorsLine([NORA.id, LEA.id, IRIS.id], ALL)).toBe('Nora Vidal, Léa et 1 autre');
+    expect(creatorsLine([], ALL)).toBe('Aucune créatrice');
+    // A lone creator is named, never « toutes ».
+    expect(creatorsLine([NORA.id], [NORA])).toBe('Nora Vidal');
+  });
+
+  it('says whether it pauses the agent, and what its test costs', () => {
+    expect(pauseLine(true)).toBe('Met l’agent en pause sur ce fan et passe la main à un humain');
+    expect(pauseLine(false)).toBe('Prévient sans mettre l’agent en pause');
+    expect(testCostLine({ phrase: '' })).toBe('Les mots-clés se testent sans IA.');
+    expect(testCostLine({ phrase: 'Le fan demande un appel' })).toContain('un appel au modèle');
+  });
+});
+
+describe('where it goes on Telegram', () => {
+  const coverage = [
+    { creatorId: NORA.id, displayName: 'Nora Vidal', urgentReachable: true, topicsWithoutGroup: [] },
+    { creatorId: LEA.id, displayName: 'Léa', urgentReachable: true, topicsWithoutGroup: ['custom' as const] },
+    {
+      creatorId: IRIS.id,
+      displayName: 'Iris',
+      urgentReachable: false,
+      topicsWithoutGroup: ['custom' as const],
+    },
+  ];
+  const line = (creatorIds: CreatorId[], notify = true) =>
+    telegramLine({
+      notify,
+      topic: 'custom',
+      topicLabel: 'Alertes personnalisées',
+      creatorIds,
+      routing: coverage,
+    });
+
+  it('reads the routing of Réglages › Telegram, creator by creator', () => {
+    expect(line([NORA.id])).toEqual({
+      kind: 'sent',
+      text: 'Part sur Telegram, dans « Alertes personnalisées »',
+    });
+    expect(line([NORA.id, LEA.id])).toEqual({
+      kind: 'missing',
+      text: 'Aucun groupe Telegram ne reçoit « Alertes personnalisées » pour Léa',
+      topic: 'custom',
+    });
+    expect(line([LEA.id, IRIS.id])?.text).toBe(
+      'Aucun groupe Telegram ne reçoit « Alertes personnalisées » pour Léa et Iris',
+    );
+  });
+
+  it('says it stays in the history when it is not sent, and nothing while the routing is unknown', () => {
+    expect(line([LEA.id], false)).toEqual({
+      kind: 'silent',
+      text: 'Gardée dans l’historique, sans Telegram',
+    });
+    for (const routing of ['off', 'none', null] as const) {
+      expect(
+        telegramLine({ notify: true, topic: 'custom', topicLabel: 'x', creatorIds: [NORA.id], routing }),
+      ).toBeNull();
+    }
+  });
+
+  it('says once, in the head, when Telegram carries nothing', () => {
+    expect(telegramHeadLine('off')).toBe(
+      'Telegram n’est pas branché sur ce serveur : les alertes restent dans l’historique du Suivi.',
+    );
+    expect(telegramHeadLine('none')).toBe(
+      'Aucun groupe Telegram ne reçoit encore rien : les alertes restent dans l’historique du Suivi.',
+    );
+    expect(telegramHeadLine([])).toBeNull();
+    expect(telegramHeadLine(null)).toBeNull();
+  });
+});
+
+describe('a system alert', () => {
+  const setting = (
+    code: 'keyword' | 'service_request',
+    creators: { creatorId: string; enabled: boolean }[],
+  ) => SystemAlertSettingSchema.parse({ code, locked: code === 'keyword', creators });
+
+  it('says for whom it is on, a creator without a row counting as on', () => {
+    expect(systemLine(setting('service_request', []), ALL)).toBe('Active pour toutes');
+    expect(
+      systemLine(
+        setting('service_request', [
+          { creatorId: IRIS.id, enabled: false },
+          { creatorId: ZOE.id, enabled: false },
+        ]),
+        ALL,
+      ),
+    ).toBe('Active pour Nora Vidal et Léa');
+    expect(
+      systemLine(
+        setting(
+          'service_request',
+          ALL.map((c) => ({ creatorId: c.id, enabled: false })),
+        ),
+        ALL,
+      ),
+    ).toBe('Coupée pour toutes');
+    expect(systemLine(setting('service_request', [{ creatorId: NORA.id, enabled: false }]), [NORA])).toBe(
+      'Coupée',
+    );
+  });
+
+  it('says why her persona’s words cannot be switched off here', () => {
+    expect(systemLine(setting('keyword', []), ALL)).toBe(
+      'Ne se coupe pas ici : un mot se retire dans sa persona.',
+    );
+  });
+});

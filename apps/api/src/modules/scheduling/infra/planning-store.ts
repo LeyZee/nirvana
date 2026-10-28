@@ -55,6 +55,7 @@ import {
   assertAccountOf,
   assertMemberWorks,
   assertNotOnLeave,
+  assertNotReported,
   audit,
   creatorOfUnscoped,
   leaveCovering,
@@ -212,6 +213,7 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
               .where(byId);
             break;
           case 'cancel':
+            await assertNotReported(tx, id);
             await tx
               .update(shifts)
               .set({ cancelledAt: clock.now, ...signed })
@@ -399,6 +401,7 @@ export function createDrizzlePlanningStore(db: Database, adminDb: Database): Pla
           const shift = await lockShift(tx, id);
           if (shift === null) throw new ShiftNotFound();
           assertCancellable(shift, clock.now);
+          await assertNotReported(tx, id);
           await tx
             .update(shifts)
             .set({ cancelledAt: clock.now, updatedBy: actor.userId, updatedAt: clock.now })

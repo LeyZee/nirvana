@@ -388,12 +388,15 @@ export function Entries({
   onChange,
   placeholder,
   maxLength,
+  keyOf = (value) => value.toLocaleLowerCase('fr'),
 }: {
   id: string;
   values: readonly string[];
   onChange: (values: string[]) => void;
   placeholder: string;
   maxLength: number;
+  /** What two entries share when they count as the same one: their case by default. */
+  keyOf?: (value: string) => string;
 }): JSX.Element {
   const [text, setText] = useState('');
   const [refused, setRefused] = useState(false);
@@ -403,7 +406,7 @@ export function Entries({
   const add = (): void => {
     const entry = text.trim();
     if (entry === '') return;
-    if (values.some((v) => v.toLocaleLowerCase('fr') === entry.toLocaleLowerCase('fr'))) {
+    if (values.some((v) => keyOf(v) === keyOf(entry))) {
       setRefused(true);
       return;
     }

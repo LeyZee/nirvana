@@ -6,7 +6,6 @@ import {
   TeamMemberIdSchema,
   TeamMemberStatusSchema,
   type ShiftSwapRequestId,
-  type TeamMemberId,
 } from '@nirvana/contracts';
 import {
   and,
@@ -53,6 +52,7 @@ import {
   audit,
   creatorOfUnscoped,
   lockMembers,
+  ownMemberId,
   pgErrorOf,
   shiftColumns,
   StoredAccountSchema,
@@ -150,15 +150,6 @@ async function readSwap(
   const query = tx.select(swapColumns).from(shiftSwapRequests).where(eq(shiftSwapRequests.id, id));
   const [row] = lock === null ? await query : await query.for('update');
   return row === undefined ? null : toSwap(row);
-}
-
-/** The signed-in account's member id, which every scope reads; `null` outside the team. */
-async function ownMemberId(tx: Transaction, userId: string): Promise<TeamMemberId | null> {
-  const [row] = await tx
-    .select({ id: teamMembers.id })
-    .from(teamMembers)
-    .where(eq(teamMembers.userId, userId));
-  return row === undefined ? null : TeamMemberIdSchema.parse(row.id);
 }
 
 /** The signed-in member's own status and creators, to take a shift by a swap like one set by hand. */

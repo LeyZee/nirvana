@@ -1,12 +1,18 @@
 import type {
+  AccountPayRulesId,
   CreatorId,
   CreatorSummary,
+  Currency,
+  EarningsSource,
   LeaveRequestId,
   LeaveRequestStatus,
+  PayPeriod,
   Platform,
   PlatformAccountId,
   SchedulingSettings,
   ShiftId,
+  ShiftReportId,
+  ShiftReportStatus,
   ShiftSwapRequestId,
   ShiftSwapStatus,
   ShiftTemplateId,
@@ -15,6 +21,8 @@ import type {
   TeamScope,
   UserId,
 } from '@nirvana/contracts';
+
+import type { Reader, RulesRow } from './reports';
 
 /** Who writes, for the policies (`withTenantMember`) and the audit line. */
 export interface Actor {
@@ -371,6 +379,154 @@ export interface ColleagueReads {
    * since the proposal become `lapsed`; how many.
    */
   lapseSwapsUnscoped(now: Date): Promise<number>;
+}
+
+/** A report or a correction as stored (EQ-03), with who last sent it, for the four eyes of its review. */
+export interface StoredShiftReport {
+  readonly id: ShiftReportId;
+  readonly shiftId: ShiftId;
+  readonly creatorId: CreatorId;
+  readonly platformAccountId: PlatformAccountId;
+  readonly memberId: TeamMemberId;
+  readonly period: PayPeriod;
+  readonly correctsId: ShiftReportId | null;
+  readonly amountMinor: number;
+  readonly currency: Currency;
+  readonly comment: string | null;
+  readonly incident: string | null;
+  readonly status: ShiftReportStatus;
+  readonly version: number;
+  readonly byAgency: boolean;
+  readonly submittedBy: UserId;
+  readonly submittedAt: Date;
+  readonly reviewedAt: Date | null;
+  readonly reviewNote: string | null;
+  readonly createdAt: Date;
+}
+
+interface NewShiftReport {
+  readonly id: ShiftReportId;
+  readonly shiftId: ShiftId;
+  readonly correctsId: ShiftReportId | null;
+  readonly amountMinor: number;
+  readonly currency: Currency;
+  readonly comment: string | null;
+  readonly incident: string | null;
+}
+
+/** What a `PATCH` changes; a field left out keeps its value. */
+interface ShiftReportChange {
+  readonly amountMinor?: number | undefined;
+  readonly comment?: string | null | undefined;
+  readonly incident?: string | null | undefined;
+}
+
+type ShiftReportReview =
+  { readonly decision: 'validate' } | { readonly decision: 'reject'; readonly note: string };
+
+/**
+ * Storage of the end-of-shift reports (EQ-03), through `withTenantMember` in the shift's creator: the policies decide
+ * who reads, makes, changes and reviews, and the rules that need stored rows (the account's pay rules, the shift's
+ * validated total) run in the same transaction, under the lock (member, period) that pay's validation takes too
+ * (`lockMemberPeriod`), taken before any row is locked. Each result carries the `Reader` it was read for, so that
+ * `canReview` is said from the same transaction.
+ */
+export interface ShiftReportStore {
+  /** The shift's member, the owner or an active manager: the shift, its account, period, rules and reports. */
+  context(
+    actor: UserId,
+    shiftId: ShiftId,
+  ): Promise<{
+    shift: StoredShift;
+    account: StoredAccount;
+    period: PayPeriod;
+    rules: RulesRow | null;
+    reports: StoredShiftReport[];
+    reader: Reader;
+  }>;
+  /** A report by the shift's member, or a correction; `created` is false when the same one was already recorded. */
+  create(
+    actor: Actor,
+    report: NewShiftReport,
+    now: Date,
+  ): Promise<{ report: StoredShiftReport; created: boolean; reader: Reader }>;
+  /** Its maker, from the version read. */
+  update(
+    actor: Actor,
+    id: ShiftReportId,
+    version: number,
+    change: ShiftReportChange,
+    now: Date,
+  ): Promise<{ report: StoredShiftReport; reader: Reader }>;
+  /** The owner or an active manager, from the version read, in a transaction of its own. */
+  review(
+    actor: Actor,
+    id: ShiftReportId,
+    version: number,
+    review: ShiftReportReview,
+    now: Date,
+  ): Promise<{ report: StoredShiftReport; reader: Reader }>;
+  /**
+   * With `period`, its reports and the shifts not cancelled that start in it and take a report already, with those
+   * the reports name; without, the reports still open and the shifts they name. The accounts of those shifts, and the
+   * members named whom the policies show.
+   */
+  list(
+    actor: UserId,
+    creatorIds: readonly CreatorId[],
+    period: PayPeriod | null,
+    now: Date,
+  ): Promise<{
+    reports: StoredShiftReport[];
+    shifts: StoredShift[];
+    accounts: StoredAccount[];
+    members: StoredMember[];
+    reader: Reader;
+  }>;
+  /** Who the signed-in account is, for a validation sent by someone who may not review. */
+  reader(actor: UserId): Promise<Reader>;
+}
+
+/** An account's pay rules as stored (EQ-03): added only, never changed. */
+export interface StoredPayRules {
+  readonly id: AccountPayRulesId;
+  readonly platformAccountId: PlatformAccountId;
+  readonly creatorId: CreatorId;
+  readonly fromPeriod: PayPeriod;
+  readonly currency: Currency;
+  readonly vatBps: number;
+  readonly platformFeeBps: number;
+  readonly earningsSource: EarningsSource;
+  readonly createdAt: Date;
+}
+
+interface NewPayRules {
+  readonly id: AccountPayRulesId;
+  readonly platformAccountId: PlatformAccountId;
+  readonly fromPeriod: PayPeriod;
+  readonly currency: Currency;
+  readonly vatBps: number;
+  readonly platformFeeBps: number;
+  readonly earningsSource: EarningsSource;
+}
+
+/**
+ * Storage of the accounts' pay rules (EQ-03), which the reports read in their own transaction: the owner and an
+ * active manager read them, the owner alone adds them (`withTenantMember` in the account's creator). The period
+ * running now is read in the agency's zone, in the same transaction.
+ */
+export interface PayRulesStore {
+  /** Every account of the creators, with its rules newest first, and the period running at `now`. */
+  list(
+    actor: UserId,
+    creatorIds: readonly CreatorId[],
+    now: Date,
+  ): Promise<{
+    currentPeriod: PayPeriod;
+    accounts: { account: StoredAccount; rules: StoredPayRules[] }[];
+  }>;
+  /** Owner; `created` is false when the same rules were already recorded. */
+  create(actor: Actor, rules: NewPayRules, now: Date): Promise<{ rules: StoredPayRules; created: boolean }>;
 }
 
 /** What the job logs through; the composition root passes the job's own logger. */

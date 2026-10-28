@@ -142,3 +142,14 @@ export async function enterCreator(
 export function withAdmin<T>(adminDb: Database, fn: (tx: Transaction) => Promise<T>): Promise<T> {
   return adminDb.transaction(fn);
 }
+
+/**
+ * The advisory lock (member, pay period) of ADR 0023 § Paie: every write to a shift report takes it, and so does the
+ * validation of the member's pay for that period (EQ-04), so that a late report and a validation never cross. Held
+ * until the transaction ends; the policies do not hide it. `period` is the period's first day (`PayPeriod`).
+ */
+export async function lockMemberPeriod(tx: Transaction, memberId: string, period: string): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`payroll.member_period:${memberId}:${period}`}, 0))`,
+  );
+}

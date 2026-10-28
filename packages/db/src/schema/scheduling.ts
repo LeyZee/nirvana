@@ -1,5 +1,7 @@
+import { CurrencySchema, SHIFT_REPORT_MAX_MINOR, SHIFT_REPORT_STATUSES } from '@nirvana/contracts';
 import { sql, type SQL } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -211,6 +213,8 @@ export const shifts = pgTable(
     unique('shifts_template_occurrence_unique').on(t.templateId, t.templateStartsAt),
     /** For the swaps' composite keys: a swap names a shift with its creator, and the policies read that creator. */
     unique('shifts_id_creator_unique').on(t.id, t.creatorId),
+    /** For the reports' key: a report is on its shift's creator, account and member, which never change once it started. */
+    unique('shifts_report_key_unique').on(t.id, t.creatorId, t.platformAccountId, t.memberId),
     index('shifts_creator_start_idx').on(t.creatorId, t.startsAt),
     /** A member's shifts still to end: the access window of ADR 0025 reads them at every request. */
     index('shifts_member_end_idx')
@@ -224,6 +228,11 @@ export const shifts = pgTable(
       for: 'insert',
       withCheck: sql`${t.creatorId} = ${currentCreator} and ${plans} and ${t.createdBy} = ${currentUser} and ${t.updatedBy} = ${currentUser}`,
     }),
+    /**
+     * The one policy that sets `cancelled_at` (`swap_update` keeps it null). The trigger that keeps a reported shift
+     * from being cancelled reads the reports under the canceller's policies (migration 0026): a policy that lets a
+     * member set it would make that read see the member's reports alone.
+     */
     pgPolicy('team_update', {
       for: 'update',
       using: sql`${t.creatorId} = ${currentCreator} and ${plans}`,
@@ -420,6 +429,118 @@ export const shiftSwapRequests = pgTable(
       for: 'update',
       using: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and ${plans}`,
       withCheck: sql`(${t.creatorId} = ${currentCreator} or ${t.targetCreatorId} = ${currentCreator}) and ${plans} and ((${t.status} in ('withdrawn', 'lapsed') and ${t.resolvedBy} = ${currentUser}) or (${t.status} = 'reverted' and ${t.revertedBy} = ${currentUser}))`,
+    }),
+  ],
+);
+
+/**
+ * End-of-shift reports and their corrections (EQ-03, contracts `shift-reports.ts`), under the planning's rule: the
+ * creator of `withTenantMember`, and the member himself or the scope `owner` | `agency`. A report sits on its shift's
+ * creator, account and member (composite key), one per shift; a correction names a report of the same shift. The
+ * member makes their report; the agency makes a correction (`by_agency`); the owner or an active manager reviews,
+ * never a report of their own shift nor, as a manager, what they last sent (`submitted_by`). A trigger of the
+ * migration keeps what never changes, makes each change take the next `version`, and lets a row move only
+ * `submitted` → `submitted` | `validated` | `rejected` and `rejected` → `submitted`: a validated row never changes, a
+ * review never touches the amount, and nothing is deleted.
+ */
+const isMaker: SQL = sql`((not "shift_reports"."by_agency" and ${isMine(sql`"shift_reports"."member_id"`)}) or ("shift_reports"."by_agency" and ${plans}))`;
+
+export const shiftReports = pgTable(
+  'shift_reports',
+  {
+    id: id(),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id),
+    platformAccountId: uuid('platform_account_id').notNull(),
+    shiftId: uuid('shift_id').notNull(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    /** The pay period its shift starts in, in the agency's zone, as read when it was made. */
+    period: date('period').notNull(),
+    correctsId: uuid('corrects_id'),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: text('currency').notNull(),
+    comment: text('comment'),
+    incident: text('incident'),
+    status: text('status').notNull(),
+    version: integer('version').notNull().default(1),
+    byAgency: boolean('by_agency').notNull().default(false),
+    /** Who last sent it: made, changed, or sent again. */
+    submittedBy: text('submitted_by')
+      .notNull()
+      .references(() => user.id),
+    submittedAt: timestampTz('submitted_at').notNull(),
+    reviewedBy: text('reviewed_by').references(() => user.id),
+    reviewedAt: timestampTz('reviewed_at'),
+    reviewNote: text('review_note'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'shift_reports_shift_fk',
+      columns: [t.shiftId, t.creatorId, t.platformAccountId, t.memberId],
+      foreignColumns: [shifts.id, shifts.creatorId, shifts.platformAccountId, shifts.memberId],
+    }),
+    /** For the corrections' key: a correction names a report of the same shift. */
+    unique('shift_reports_id_shift_unique').on(t.id, t.shiftId),
+    foreignKey({
+      name: 'shift_reports_corrects_fk',
+      columns: [t.correctsId, t.shiftId],
+      foreignColumns: [t.id, t.shiftId],
+    }),
+    uniqueIndex('shift_reports_shift_unique')
+      .on(t.shiftId)
+      .where(sql`${t.correctsId} is null`),
+    index('shift_reports_creator_period_idx').on(t.creatorId, t.period),
+    index('shift_reports_member_period_idx').on(t.memberId, t.period),
+    index('shift_reports_open_idx')
+      .on(t.creatorId, t.submittedAt)
+      .where(sql`${t.status} in ('submitted', 'rejected')`),
+    enumCheck('shift_reports', t.status, SHIFT_REPORT_STATUSES),
+    enumCheck('shift_reports', t.currency, CurrencySchema.options),
+    check('shift_reports_period_check', sql`extract(day from ${t.period}) in (1, 16)`),
+    check(
+      'shift_reports_amount_check',
+      sql`${t.amountMinor} between ${sql.raw(String(-SHIFT_REPORT_MAX_MINOR))} and ${sql.raw(String(SHIFT_REPORT_MAX_MINOR))} and case when ${t.correctsId} is null then ${t.amountMinor} >= 0 else ${t.amountMinor} <> 0 end`,
+    ),
+    check('shift_reports_correction_check', sql`${t.correctsId} is not null or (${t.byAgency} = false)`),
+    check('shift_reports_incident_check', sql`${t.correctsId} is null or ${t.incident} is null`),
+    check(
+      'shift_reports_texts_check',
+      sql`coalesce(char_length(${t.comment}), 1) between 1 and 1000 and coalesce(char_length(${t.incident}), 1) between 1 and 1000 and coalesce(char_length(${t.reviewNote}), 1) between 1 and 500`,
+    ),
+    check('shift_reports_version_check', sql`${t.version} >= 1`),
+    check(
+      'shift_reports_state_check',
+      sql`(${t.reviewedAt} is null) = (${t.reviewedBy} is null) and (${t.status} = 'submitted') = (${t.reviewedAt} is null) and (${t.status} = 'rejected') = (${t.reviewNote} is not null)`,
+    ),
+    pgPolicy('member_read', {
+      for: 'select',
+      using: sql`${t.creatorId} = ${currentCreator} and (${plans} or ${isMine(t.memberId)})`,
+    }),
+    pgPolicy('member_insert', {
+      for: 'insert',
+      withCheck: sql`${t.creatorId} = ${currentCreator} and ${isMine(t.memberId)} and not ${t.byAgency} and ${t.status} = 'submitted' and ${t.version} = 1 and ${t.createdBy} = ${currentUser} and ${t.submittedBy} = ${currentUser}`,
+    }),
+    pgPolicy('agency_insert', {
+      for: 'insert',
+      withCheck: sql`${t.creatorId} = ${currentCreator} and ${plans} and ${t.byAgency} and ${t.correctsId} is not null and ${t.status} = 'submitted' and ${t.version} = 1 and ${t.createdBy} = ${currentUser} and ${t.submittedBy} = ${currentUser}`,
+    }),
+    pgPolicy('maker_update', {
+      for: 'update',
+      using: sql`${t.creatorId} = ${currentCreator} and ${t.status} in ('submitted', 'rejected') and ${isMaker}`,
+      withCheck: sql`${t.creatorId} = ${currentCreator} and ${t.status} = 'submitted' and ${t.submittedBy} = ${currentUser} and ${isMaker}`,
+    }),
+    pgPolicy('team_review', {
+      for: 'update',
+      using: sql`${t.creatorId} = ${currentCreator} and ${plans} and ${t.status} = 'submitted'`,
+      withCheck: sql`${t.creatorId} = ${currentCreator} and ${plans} and ${t.status} in ('validated', 'rejected') and ${t.reviewedBy} = ${currentUser} and not ${isMine(t.memberId)} and (${isOwner} or ${t.submittedBy} <> ${currentUser})`,
     }),
   ],
 );

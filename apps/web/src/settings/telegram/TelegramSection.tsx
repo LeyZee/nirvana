@@ -42,6 +42,7 @@ import {
   type ChatChoice,
   type Scope,
 } from './model';
+import type { TelegramTab } from './search';
 import './telegram.css';
 
 /** The page refreshes on its own: a bot removed from a group turns orange without a reload. */
@@ -50,7 +51,7 @@ const OFFLINE = 'Le serveur ne répond pas. Réessaie dans un instant.';
 
 type Load =
   { kind: 'loading' } | { kind: 'failed' } | { kind: 'off' } | { kind: 'ready'; overview: TelegramOverview };
-type Tab = 'alerts' | 'sales' | 'keywords' | 'validations' | 'bots';
+type Tab = TelegramTab;
 
 const TABS: readonly { key: Tab; label: string }[] = [
   { key: 'alerts', label: 'Alertes' },
@@ -64,10 +65,19 @@ const TABS: readonly { key: Tab; label: string }[] = [
  * Réglages › Telegram (fiche P3-07, ADR 0020): who gets which alert, in which group, through which bot. One tab per
  * kind of message, plus the bots. Nothing on this page ever shows a token or a fan's words.
  */
-export function TelegramSection(): JSX.Element {
+export function TelegramSection({
+  tab: shownTab,
+  onTab,
+}: {
+  /** The tab of the address (`?onglet=`); left out, the page keeps its own. */
+  tab?: Tab;
+  onTab?: (tab: Tab) => void;
+} = {}): JSX.Element {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [deliveries, setDeliveries] = useState<readonly TelegramDelivery[]>([]);
-  const [tab, setTab] = useState<Tab>('alerts');
+  const [ownTab, setOwnTab] = useState<Tab>('alerts');
+  const tab = shownTab ?? ownTab;
+  const setTab = onTab ?? setOwnTab;
   const [scope, setScope] = useState<Scope>('all');
   const [sheet, setSheet] = useState<SheetMode | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
