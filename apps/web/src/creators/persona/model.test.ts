@@ -12,8 +12,11 @@ import blocksYaml from '../../../../../personas/demo/v0.2.0.yaml?raw';
 import exampleYaml from '../../../../../personas/messalina/v0.0.0.yaml?raw';
 
 import {
+  appendPick,
   collectOrAll,
   draftCompletion,
+  NOTHING_REFUSED,
+  stillRefused,
   emojiKey,
   intimateOrNone,
   lifestyleOrNone,
@@ -261,10 +264,76 @@ describe('Persona blocks (P5-01)', () => {
     expect(issueCountByTab(refusedReplyIssues([{ index: 1, code: 'contempt' }])).sample_replies).toBe(1);
   });
 
-  it('leaves the canvas lines absent when she collects them all, in order', () => {
+  it('leaves the canvas lines absent only when she collects them all in the canvas order', () => {
     const all = [...KycSlotSchema.options];
     expect(collectOrAll(all)).toBeUndefined();
     expect(collectOrAll(['first_name', 'age'])).toEqual(['first_name', 'age']);
+    // Every line, in her own order: the brain and « À apprendre » follow it, so it is kept.
+    const hers = [...all.slice(1), all[0] ?? 'first_name'];
+    expect(collectOrAll(hers)).toEqual(hers);
     expect(collectOrAll([])).toEqual([]);
+  });
+
+  it('adds a canvas line last, without sorting her order', async () => {
+    const persona = await blocks();
+    const collect = persona.strategies.kyc.collect;
+    expect(collect).toEqual(['first_name', 'age', 'location', 'job', 'situation', 'hobbies']);
+    expect(appendPick(collect ?? [], 'desires')).toEqual([
+      'first_name',
+      'age',
+      'location',
+      'job',
+      'situation',
+      'hobbies',
+      'desires',
+    ]);
+    expect(appendPick(collect ?? [], 'job')).toEqual([
+      'first_name',
+      'age',
+      'location',
+      'situation',
+      'hobbies',
+    ]);
+  });
+
+  it('asks for one canvas line at least, in French', async () => {
+    const persona = await blocks();
+    const draft: Persona = {
+      ...persona,
+      strategies: { ...persona.strategies, kyc: { ...persona.strategies.kyc, collect: [] } },
+    };
+    expect(issuesOf(validate(draft), 'strategies.kyc.collect')).toEqual([
+      { field: 'strategies.kyc.collect', message: 'Garde au moins une ligne du canevas.' },
+    ]);
+  });
+
+  it('does not count a sample reply still empty', async () => {
+    const persona = await blocks();
+    const one = persona.sample_replies?.slice(0, 1) ?? [];
+    const before = draftCompletion({ ...persona, sample_replies: one });
+    const after = draftCompletion({ ...persona, sample_replies: [...one, { situation: null, reply: '  ' }] });
+    expect(after).toEqual(before);
+    expect(
+      draftCompletion({ ...persona, sample_replies: [{ situation: null, reply: '' }] }).missing,
+    ).toContainEqual({
+      block: 'sample_replies',
+      label: 'Réponses types',
+    });
+  });
+
+  it('keeps a refusal on its reply until the text of that reply changes', async () => {
+    const persona = await blocks();
+    const replies = persona.sample_replies ?? [];
+    const refused = {
+      issues: refusedReplyIssues([{ index: 1, code: 'ai_disclosure' }]),
+      replies: replies.map((r) => r.reply),
+    };
+    expect(stillRefused(refused, persona)).toHaveLength(1);
+    const situation = replies.map((r, i) => (i === 1 ? { ...r, situation: null } : r));
+    expect(stillRefused(refused, { ...persona, sample_replies: situation })).toHaveLength(1);
+    const rewritten = replies.map((r, i) => (i === 1 ? { ...r, reply: 'Autre chose' } : r));
+    expect(stillRefused(refused, { ...persona, sample_replies: rewritten })).toEqual([]);
+    expect(stillRefused(refused, { ...persona, sample_replies: replies.slice(1) })).toEqual([]);
+    expect(stillRefused(NOTHING_REFUSED, persona)).toEqual([]);
   });
 });

@@ -16,11 +16,14 @@ import {
   issueCountByTab,
   isPlaceholder,
   nextVersion,
+  NOTHING_REFUSED,
   refusedReplyIssues,
+  stillRefused,
   TABS,
   validate,
   withoutPlaceholders,
   type FieldIssue,
+  type RefusedReplies,
   type TabId,
 } from './model';
 import { activateVersion, saveVersion, usePersona, type PersonaReady } from './source';
@@ -138,11 +141,11 @@ function Editor({
   const [direction, setDirection] = useState<'left' | 'right' | 'none'>('none');
   /** A field to bring into view once its tab is on screen (« Voir »). */
   const [focusField, setFocusField] = useState<string | null>(null);
-  /** The sample replies the server refused at the last save (422), shown on their field until the next edit. */
-  const [refused, setRefused] = useState<readonly FieldIssue[]>([]);
+  /** The sample replies the server refused at the last save (422), shown on their field until their text changes. */
+  const [refused, setRefused] = useState<RefusedReplies>(NOTHING_REFUSED);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const issues = useMemo(() => [...validate(draft), ...refused], [draft, refused]);
+  const issues = useMemo(() => [...validate(draft), ...stillRefused(refused, draft)], [draft, refused]);
   const completion = useMemo(() => draftCompletion(draft), [draft]);
   const changed = useMemo(() => changedFields(saved, draft), [saved, draft]);
   const form = useMemo(() => ({ issues, changed }), [issues, changed]);
@@ -173,7 +176,6 @@ function Editor({
   const set = <K extends TabId>(key: K, value: Persona[K]): void => {
     setDraft((current) => ({ ...current, [key]: value }));
     setProblem(null);
-    setRefused([]);
     onEdit();
   };
 
@@ -203,7 +205,10 @@ function Editor({
         setProblem({ text: CONFLICT, reload: true });
         break;
       case 'unprocessable':
-        setRefused(refusedReplyIssues(result.faults));
+        setRefused({
+          issues: refusedReplyIssues(result.faults),
+          replies: draft.sample_replies?.map((reply) => reply.reply) ?? [],
+        });
         break;
       case 'forbidden':
         setProblem({
@@ -282,7 +287,7 @@ function Editor({
           onReset={() => {
             setDraft(saved);
             setProblem(null);
-            setRefused([]);
+            setRefused(NOTHING_REFUSED);
           }}
           onShowBlock={(block) => {
             select(block);

@@ -89,7 +89,7 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     expect(tab('Réponses types').getAttribute('aria-selected')).toBe('true');
   });
 
-  it('puts a 422 on the reply the agent would not send, until the next edit', async () => {
+  it('puts a 422 on the reply the agent would not send, until that reply changes', async () => {
     const fake = await serve(refusal([{ index: 1, code: 'ai_disclosure' }]));
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
     await screen.findByRole('progressbar', { name: 'Complétude de la persona' });
@@ -105,7 +105,16 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     expect(within(tab('Réponses types')).getByLabelText('1 à corriger')).toBeDefined();
     expect(fake.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
 
+    // Another edit, even on the same reply's situation, leaves the refusal where it is.
     fireEvent.change(screen.getByLabelText('Situation de la 2e réponse'), { target: { value: '' } });
+    fireEvent.click(tab('Mode de vie'));
+    fireEvent.change(screen.getByLabelText('Ses projets'), { target: { value: 'Ouvrir un studio' } });
+    fireEvent.click(tab('Réponses types'));
+    expect(screen.getByRole('alert').textContent).toBe('L’agent ne l’enverrait pas : un aveu d’IA.');
+
+    const refused = screen.getAllByLabelText('Sa réponse')[1];
+    if (refused === undefined) throw new Error('the second reply has its field');
+    fireEvent.change(refused, { target: { value: 'Arrête tu vas me faire rougir' } });
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

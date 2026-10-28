@@ -483,7 +483,7 @@ export function StrategiesTab({ value: s, onChange, issues }: TabProps<'strategi
         <Field
           label="Les lignes du canevas qu’elle cherche à remplir"
           id={`${id}-c`}
-          hint="Toutes par défaut. Celles retirées ne sont jamais demandées au fan."
+          hint="Toutes par défaut, dans cet ordre. Une ligne ajoutée passe en dernier ; celles retirées ne sont jamais demandées au fan."
           path="strategies.kyc.collect"
         >
           <Picker
@@ -493,6 +493,7 @@ export function StrategiesTab({ value: s, onChange, issues }: TabProps<'strategi
             values={s.kyc.collect ?? KycSlotSchema.options}
             placeholder="Ajouter une ligne"
             empty="Aucune ligne de ce nom"
+            keepOrder
             onChange={(v) => {
               set('kyc', { ...s.kyc, collect: collectOrAll(v) });
             }}

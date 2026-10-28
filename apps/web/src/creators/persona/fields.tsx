@@ -11,7 +11,15 @@ import {
   type ReactNode,
 } from 'react';
 
-import { hasChange, isPlaceholder, issuesOf, matchOptions, togglePick, type FieldIssue } from './model';
+import {
+  appendPick,
+  hasChange,
+  isPlaceholder,
+  issuesOf,
+  matchOptions,
+  togglePick,
+  type FieldIssue,
+} from './model';
 
 /** What an empty text field says, and what a placeholder of the example (`<à remplir>`) shows as. */
 const TO_FILL = 'À remplir';
@@ -469,6 +477,7 @@ export function Picker<V extends string>({
   label,
   placeholder,
   empty,
+  keepOrder = false,
 }: {
   id: string;
   options: Options<V>;
@@ -478,6 +487,8 @@ export function Picker<V extends string>({
   placeholder: string;
   /** Said when typing matches nothing. */
   empty: string;
+  /** Her order means something: a new pick goes last instead of taking its place in the options. */
+  keepOrder?: boolean;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -489,7 +500,7 @@ export function Picker<V extends string>({
   const shown = matchOptions(options, text);
   const labelOf = (v: V): string => options.find((o) => o.value === v)?.label ?? v;
   const toggle = (v: V): void => {
-    onChange(togglePick(options, values, v));
+    onChange(keepOrder ? appendPick(values, v) : togglePick(options, values, v));
     setText('');
     setActive(0);
   };

@@ -45,14 +45,19 @@ export interface FieldIssue {
 
 const isTab = (key: string): key is TabId => TABS.some((tab) => tab.id === key);
 
+/** Where the generic message would not say what to do: a field, then the kind of problem. */
+const FIELD_MESSAGES: Readonly<Record<string, Partial<Record<z.core.$ZodIssue['code'], string>>>> = {
+  'strategies.kyc.collect': { too_small: 'Garde au moins une ligne du canevas.' },
+};
+
 /** Validates a draft; an empty list means it can be saved as a new version. */
 export function validate(draft: Persona): FieldIssue[] {
   const result = PersonaSchema.safeParse(withoutPlaceholders(draft));
   if (result.success) return [];
-  return result.error.issues.map((issue) => ({
-    field: issue.path.map(String).join('.'),
-    message: frenchMessage(issue),
-  }));
+  return result.error.issues.map((issue) => {
+    const field = issue.path.map(String).join('.');
+    return { field, message: FIELD_MESSAGES[field]?.[issue.code] ?? frenchMessage(issue) };
+  });
 }
 
 /** The issues of a field, its list items included (`details.hobbies.2` belongs to `details.hobbies`). */
@@ -233,6 +238,10 @@ export const togglePick = <V>(options: Options<V>, values: readonly V[], value: 
     ? values.filter((v) => v !== value)
     : options.map((o) => o.value).filter((v) => v === value || values.includes(v));
 
+/** The same pick for a list whose order means something (`strategies.kyc.collect`): a new pick goes last. */
+export const appendPick = <V>(values: readonly V[], value: V): V[] =>
+  values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
+
 /** The time it is in a zone, « 22 h 25 », or nothing for a zone the browser does not know. */
 export const localTime = (zone: string, at: Date = new Date()): string => {
   try {
@@ -264,12 +273,15 @@ const real = (list: readonly string[]): string[] => list.filter((entry) => !isPl
 
 /**
  * How complete the draft is (`personaCompletion`), read without the placeholders of the example: « <à remplir> » in
- * a list is not something she wrote.
+ * a list is not something she wrote, nor is a sample reply still empty.
  */
 export function draftCompletion(draft: Persona): PersonaCompletion {
   const { details, limits } = draft;
+  // A reply added but not yet written is not one: the server would refuse it.
+  const written = draft.sample_replies?.filter((reply) => reply.reply.trim() !== '') ?? [];
   return personaCompletion({
     ...draft,
+    sample_replies: repliesOrNone(written),
     details: { ...details, hobbies: real(details.hobbies), personality: real(details.personality) },
     limits: {
       never_do: real(limits.never_do),
@@ -324,6 +336,28 @@ export function refusedReplyIssues(faults: readonly PersonaSampleReplyFault[]): 
     }));
 }
 
-/** The canvas lines she collects: every line, in order, is « all » and leaves `collect` absent, as the schema reads it. */
+/**
+ * The canvas lines she collects, in her order: the brain and « À apprendre » follow it. Only every line in the
+ * canvas's own order is « all » and leaves `collect` absent, as the schema reads it; any other order is kept.
+ */
 export const collectOrAll = (slots: KycSlot[]): KycSlot[] | undefined =>
-  slots.length === KycSlotSchema.options.length ? undefined : slots;
+  slots.length === KycSlotSchema.options.length && slots.every((slot, i) => slot === KycSlotSchema.options[i])
+    ? undefined
+    : slots;
+
+/** What the server refused at the last save (422), with the replies as they were then. */
+export interface RefusedReplies {
+  readonly issues: readonly FieldIssue[];
+  readonly replies: readonly string[];
+}
+
+export const NOTHING_REFUSED: RefusedReplies = { issues: [], replies: [] };
+
+/** The refusals that still hold: a refused reply keeps its line until its own text changes, whatever else is edited. */
+export function stillRefused(refused: RefusedReplies, draft: Persona): FieldIssue[] {
+  return refused.issues.filter((issue) => {
+    const index = Number(issue.field.split('.')[1]);
+    const reply = draft.sample_replies?.[index]?.reply;
+    return reply !== undefined && reply === refused.replies[index];
+  });
+}
