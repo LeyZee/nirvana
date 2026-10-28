@@ -16,6 +16,7 @@ import {
   DevicesPage,
   AgentModePage,
   AiModelsPage,
+  AlertsPage,
   BackupsPage,
   SettingsLayout,
   TelegramPage,
@@ -31,6 +32,7 @@ import { CorrectionsPage } from './screens/train/CorrectionsPage';
 import { PlaygroundPage } from './screens/train/PlaygroundPage';
 import { TestsPage } from './screens/train/TestsPage';
 import { TrainLayout } from './screens/train/TrainLayout';
+import { parseTelegramSearch, searchOfTab, tabOfSearch } from './settings/telegram/search';
 import { AppShell } from './shell/AppShell';
 import { canOpen, railOf, sectionOf } from './shell/nav';
 
@@ -200,7 +202,29 @@ const aiModels = createRoute({
 const telegram = createRoute({
   getParentRoute: () => settings,
   path: '/telegram',
-  component: TelegramPage,
+  validateSearch: parseTelegramSearch,
+  component: function Telegram() {
+    const search = telegram.useSearch();
+    const navigate = telegram.useNavigate();
+    return (
+      <TelegramPage
+        tab={tabOfSearch(search)}
+        onTab={(tab) => void navigate({ search: searchOfTab(tab), replace: true })}
+      />
+    );
+  },
+});
+const alerts = createRoute({
+  getParentRoute: () => settings,
+  path: '/alertes',
+  // The owner's alone (P4-01): anyone else is sent to Réglages, not to a page the server would refuse.
+  beforeLoad: ({ context }) => {
+    if (context.user.role !== 'owner') {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: '/reglages', replace: true });
+    }
+  },
+  component: AlertsPage,
 });
 const devices = createRoute({ getParentRoute: () => settings, path: '/appareils', component: DevicesPage });
 const appearance = createRoute({
@@ -230,7 +254,7 @@ const routeTree = rootRoute.addChildren([
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamMembers]),
-  settings.addChildren([settingsIndex, aiModels, telegram, backups, devices, appearance, agentMode]),
+  settings.addChildren([settingsIndex, aiModels, telegram, alerts, backups, devices, appearance, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext, history?: RouterHistory) =>

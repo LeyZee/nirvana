@@ -174,6 +174,7 @@ describe('Réglages › Sauvegardes', () => {
     const router = renderApp(owner, '/reglages/sauvegardes');
     expect(await subTabs()).toEqual([
       'Modèles IA',
+      'Alertes',
       'Telegram',
       'Sauvegardes',
       'Appareils',
@@ -193,6 +194,21 @@ describe('Réglages › Sauvegardes', () => {
         expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
       });
       expect(await subTabs()).not.toContain('Sauvegardes');
+      cleanup();
+    }
+  });
+
+  // The alerts are the owner's too (P4-01): same tab rule, same way back.
+  it('keeps Réglages › Alertes for the owner alone', async () => {
+    for (const user of [
+      { ...base, role: 'operator', team: null, teamScope: 'self' },
+      { ...base, role: 'creator', team: null, teamScope: 'self' },
+    ] satisfies Me[]) {
+      const router = renderApp(user, '/reglages/alertes');
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
+      });
+      expect(await subTabs()).not.toContain('Alertes');
       cleanup();
     }
   });
