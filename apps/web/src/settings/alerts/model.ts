@@ -263,6 +263,17 @@ export function testBodyOf(
   return body.success ? body.data : null;
 }
 
+/**
+ * Why « Tester » waits once a message is written: nothing to look for yet, or an alert the route would refuse (one
+ * word too many, said above under the keywords).
+ */
+export function testHint(draft: Pick<AlertDraft, 'phrase' | 'keywords'>, message: string): string | null {
+  if (message.trim() === '' || testBodyOf(draft, message) !== null) return null;
+  return draft.phrase.trim() === '' && cleanKeywords(draft.keywords).length === 0
+    ? 'Écris une phrase ou un mot-clé à tester.'
+    : 'Corrige l’alerte au-dessus pour la tester.';
+}
+
 /** Whether an answer was for this very test: the same phrase, the same words in the same order, the same message. */
 export const sameTest = (a: AlertTestBody, b: AlertTestBody): boolean =>
   a.message === b.message &&

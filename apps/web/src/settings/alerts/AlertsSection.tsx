@@ -53,6 +53,7 @@ import {
   telegramLine,
   testBodyOf,
   testCostLine,
+  testHint,
   testVerdict,
   watchLine,
   type AlertDraft,
@@ -644,6 +645,7 @@ function AlertTry({ draft }: { draft: AlertDraft }): JSX.Element {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const body = testBodyOf(draft, message);
+  const hint = testHint(draft, message);
   const current = answer !== null && body !== null && sameTest(answer.sent, body) ? answer : null;
   const verdict = current === null ? null : testVerdict(current.sent, current.result, draft.pausesAgent);
 
@@ -690,9 +692,7 @@ function AlertTry({ draft }: { draft: AlertDraft }): JSX.Element {
         >
           {busy ? 'Test…' : 'Tester'}
         </button>
-        {body === null && message.trim() !== '' ? (
-          <span className="al-try__why">Écris une phrase ou un mot-clé à tester.</span>
-        ) : null}
+        {hint === null ? null : <span className="al-try__why">{hint}</span>}
       </div>
       <div role="status" aria-live="polite">
         {verdict === null ? null : (

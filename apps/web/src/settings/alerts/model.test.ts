@@ -24,6 +24,7 @@ import {
   telegramHeadLine,
   telegramLine,
   testBodyOf,
+  testHint,
   testCostLine,
   testVerdict,
   watchLine,
@@ -300,6 +301,18 @@ describe('« Tester »', () => {
     expect(testBodyOf({ phrase: '', keywords: ['?!'] }, 'custom stp')).toBeNull();
     const many = Array.from({ length: 41 }, (_, index) => `mot${String(index)}`);
     expect(testBodyOf({ phrase: '', keywords: many }, 'custom stp')).toBeNull();
+  });
+
+  it('says why « Tester » waits once a message is written', () => {
+    expect(testHint(both, '')).toBeNull();
+    expect(testHint(both, 'custom stp')).toBeNull();
+    expect(testHint({ phrase: ' ', keywords: ['!!!'] }, 'custom stp')).toBe(
+      'Écris une phrase ou un mot-clé à tester.',
+    );
+    const many = Array.from({ length: 41 }, (_, index) => `mot${String(index)}`);
+    expect(testHint({ phrase: '', keywords: many }, 'custom stp')).toBe(
+      'Corrige l’alerte au-dessus pour la tester.',
+    );
   });
 
   it('knows an answer for another phrase, other words or another message', () => {
