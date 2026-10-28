@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
+  ApiErrorSchema,
+  PersonaSampleReplyUnprocessableDetailsSchema,
   PersonaSchema,
   type CreatorId,
   type Persona,
@@ -141,13 +143,12 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
     };
     const refused = await post(bea, owner, { persona: taught, basedOn: null });
     expect(refused.statusCode).toBe(422);
-    const { error } = refused.json<{
-      error: { code: string; details: { faults: { index: number; code: string }[] } };
-    }>();
+    const { error } = ApiErrorSchema.parse(refused.json());
     expect(error.code).toBe('persona_sample_reply_unprocessable');
-    expect(error.details.faults).toContainEqual({ index: 1, code: 'stage_direction' });
-    expect(error.details.faults).toContainEqual({ index: 1, code: 'platform_meeting_word' });
-    expect(error.details.faults.every((fault) => fault.index === 1)).toBe(true);
+    const { faults } = PersonaSampleReplyUnprocessableDetailsSchema.parse(error.details);
+    expect(faults).toContainEqual({ index: 1, code: 'stage_direction' });
+    expect(faults).toContainEqual({ index: 1, code: 'platform_meeting_word' });
+    expect(faults.every((fault) => fault.index === 1)).toBe(true);
     await expect(
       app.modules.persona.versions.load(bea, withVersion(taught, '0.9.0'), {
         sourcePath: 'a.yaml',

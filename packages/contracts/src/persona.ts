@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { KYC_SLOT_LABELS, KycSlotSchema, type KycSlot } from './fans';
-import { normalise } from './normalise';
+import { normaliseWords } from './normalise';
 
 /**
  * Creator persona (ADR 0010), mirrored on the OnlyChat creator settings: details, additional info, behaviour,
@@ -277,11 +277,22 @@ export const PersonaLimitsSchema = z.strictObject({
   disgusts: entries(120, 200),
 });
 
-/** One emoji per entry (a skin tone or a joined sequence counts as one), as she would type it. */
-const EMOJI = /^\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier}|\u200D\p{Extended_Pictographic})*$/u;
-const emoji = z.string().trim().regex(EMOJI, { message: 'Un seul emoji par entrée' });
 export const PERSONA_EMOJIS_MAX = 20;
 export const SAMPLE_REPLIES_MAX = 10;
+
+/**
+ * One emoji per entry, as she would type it: a skin tone, a joined sequence (👩‍💻), a flag (🇫🇷, or a region's) or a keycap (1️⃣)
+ * counts as one.
+ */
+const EMOJI =
+  /^(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier}|[\u{E0020}-\u{E007E}]+\u{E007F}|\u200D\p{Extended_Pictographic})*)$/u;
+const emoji = z.string().trim().regex(EMOJI, { message: 'Un seul emoji par entrée' });
+/** An emoji compares as typed, without the variation selector some keyboards add: « ❤ » and « ❤️ » are one. */
+const emojiKey = (entry: string): string => entry.replace(/\uFE0F/gu, '');
+const emojiList = z
+  .array(emoji)
+  .max(PERSONA_EMOJIS_MAX)
+  .refine((list) => new Set(list.map(emojiKey)).size === list.length, { message: 'Emoji en double' });
 
 /** Her life away from the fans (P5-01). */
 export const PersonaLifestyleSchema = z.strictObject({
@@ -309,8 +320,8 @@ export const PersonaIntimateSchema = z.strictObject({
 /** How she writes. `emojis_forbidden` is applied by a guard, never by the prompt alone (CLAUDE.md rule 3). */
 export const PersonaWritingStyleSchema = z.strictObject({
   message_length: z.enum(MESSAGE_LENGTHS),
-  emojis_preferred: uniqueList(emoji).max(PERSONA_EMOJIS_MAX),
-  emojis_forbidden: uniqueList(emoji).max(PERSONA_EMOJIS_MAX),
+  emojis_preferred: emojiList,
+  emojis_forbidden: emojiList,
   punctuation: optionalText(300),
   capitals: z.enum(CAPITALS_STYLES),
 });
@@ -386,10 +397,7 @@ export function ageOn(dateOfBirth: string, day: string): number {
 }
 
 /** An entry as two lists compare it: case, accents and look-alike letters aside, words split on the rest. */
-const entryKey = (entry: string): string =>
-  normalise(entry)
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
+const entryKey = normaliseWords;
 
 /** The entries of `list` that `other` holds too, read through `key`. */
 const shared = (
@@ -400,9 +408,6 @@ const shared = (
   const keys = new Set(other.map(key).filter((k) => k !== ''));
   return list.filter((entry) => keys.has(key(entry)));
 };
-
-/** An emoji compares as typed, without the variation selector some keyboards add. */
-const emojiKey = (entry: string): string => entry.replace(/\uFE0F/gu, '');
 
 /**
  * A persona that says one thing and its contrary is refused: an emoji both preferred and forbidden, a taste both

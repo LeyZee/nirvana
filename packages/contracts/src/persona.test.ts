@@ -175,9 +175,19 @@ describe('persona blocks (P5-01)', () => {
       withBlocks((p) => {
         if (p.writing_style !== undefined) p.writing_style.emojis_preferred = list;
       });
-    expect(emojis(['👍🏽', '❤️', '👩‍💻']).success).toBe(true);
+    const scotland = '\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}';
+    expect(emojis(['👍🏽', '❤️', '👩‍💻', '🇫🇷', scotland, '1️⃣', '#⃣']).success).toBe(true);
     expect(pathsOf(emojis(['😏😏']))).toEqual(['writing_style.emojis_preferred.0']);
     expect(pathsOf(emojis(['mdr']))).toEqual(['writing_style.emojis_preferred.0']);
+    expect(pathsOf(emojis(['🇫']))).toEqual(['writing_style.emojis_preferred.0']);
+    expect(pathsOf(emojis(['🇫🇷🇮🇹']))).toEqual(['writing_style.emojis_preferred.0']);
+  });
+
+  it('counts « ❤ » and « ❤️ » as one emoji', () => {
+    const duplicate = withBlocks((p) => {
+      if (p.writing_style !== undefined) p.writing_style.emojis_preferred = ['❤', '❤️'];
+    });
+    expect(pathsOf(duplicate)).toEqual(['writing_style.emojis_preferred']);
   });
 
   it('refuses a persona that says one thing and its contrary', () => {

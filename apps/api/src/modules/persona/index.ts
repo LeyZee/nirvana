@@ -1,5 +1,5 @@
 /** Public entry point of the `persona` module (ADR 0002). Other modules import this file only. */
-import type { Persona } from '@nirvana/contracts';
+import type { Persona, PersonaSampleReplyFault } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
@@ -32,9 +32,7 @@ export interface PersonaDeps {
    * Her sample replies a hard guard of her answers would block (`agent`, P5-01): a version with any is refused, from
    * the dashboard and from `pnpm persona:load` alike. Absent, none is read.
    */
-  readonly sampleReplyFaults?: (
-    persona: Persona,
-  ) => readonly { readonly index: number; readonly code: string }[];
+  readonly sampleReplyFaults?: (persona: Persona) => readonly PersonaSampleReplyFault[];
 }
 
 /** The store, refusing before any write a version whose sample replies teach what a guard blocks. */
