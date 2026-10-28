@@ -57,13 +57,14 @@ export interface AccountStore {
   ): Promise<void>;
   /**
    * Stores an encrypted session, sets the state to `valid` and closes the breaker. `session_updated_at` moves only for
-   * a session that `changed`, or one stored over no session or an expired one: an identical one sent again is not a
-   * new session, and must not hide a read that is late (the Dashboard counts from the latest of the two dates).
+   * a new session: none was stored, the stored one is not `isSame`, or the state was `none` or `expired`. An identical
+   * one sent again must not hide a read that is late (the Dashboard counts from the latest of the two dates).
+   * `isSame` reads the stored ciphertext under the account's row lock, so two sends at once date it once.
    */
   storeSession(
     creatorId: CreatorId,
     id: PlatformAccountId,
-    session: { readonly ciphertext: Buffer; readonly changed: boolean },
+    session: { readonly ciphertext: Buffer; readonly isSame: (stored: Buffer) => boolean },
     meta: EventMeta & { readonly userId: string | null },
   ): Promise<void>;
   publish(creatorId: CreatorId, body: EventBody, meta: EventMeta): Promise<void>;

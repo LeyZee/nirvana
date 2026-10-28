@@ -134,12 +134,19 @@ export function createDrizzleAccountStore(db: Database, adminDb: Database): Acco
     storeSession: (creatorId, id, session, meta) =>
       withTenant(db, creatorId, async (tx) => {
         const [row] = await tx
-          .select({ sessionState: schema.platformAccounts.sessionState })
+          .select({
+            sessionState: schema.platformAccounts.sessionState,
+            sessionCiphertext: schema.platformAccounts.sessionCiphertext,
+          })
           .from(schema.platformAccounts)
           .where(byId(id))
           .for('update');
         if (row === undefined) return;
-        const renewed = session.changed || row.sessionState === 'none' || row.sessionState === 'expired';
+        const renewed =
+          row.sessionCiphertext === null ||
+          !session.isSame(row.sessionCiphertext) ||
+          row.sessionState === 'none' ||
+          row.sessionState === 'expired';
         await tx
           .update(schema.platformAccounts)
           .set({
