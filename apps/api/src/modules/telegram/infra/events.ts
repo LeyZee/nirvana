@@ -73,6 +73,12 @@ const AutomaticClosedSchema = z.object({
 
 const BackupOverdueSchema = z.object({ lastSucceededAt: z.iso.datetime().nullable() });
 
+// Only the currency and the ECB's day of its last rate: no figure of the agency's pay goes to Telegram (ADR 0033).
+const ExchangeRateOverdueSchema = z.object({
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  lastRateDay: z.iso.date().nullable(),
+});
+
 function signalOf(type: string, payload: unknown): Signal | null {
   switch (type) {
     case 'handoff_requested': {
@@ -144,6 +150,11 @@ function signalOf(type: string, payload: unknown): Signal | null {
         kind: 'backup_overdue',
         lastSucceededAt: lastSucceededAt === null ? null : new Date(lastSucceededAt),
       };
+    }
+    case 'exchange_rate_overdue': {
+      const parsed = ExchangeRateOverdueSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      return { kind: 'exchange_rate_overdue', ...parsed.data };
     }
     case 'automatic_closed': {
       const parsed = AutomaticClosedSchema.safeParse(payload);

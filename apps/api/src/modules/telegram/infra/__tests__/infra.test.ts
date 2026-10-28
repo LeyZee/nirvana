@@ -253,6 +253,20 @@ describe('reading the outbox', () => {
         payload: { lastSucceededAt: null, day: '2026-10-27' },
       })?.signal,
     ).toEqual({ kind: 'backup_overdue', lastSucceededAt: null });
+    // ADR 0033: the currency and the day of its last rate, nothing of the pay; `day` stays out.
+    const rate = (payload: object) =>
+      toScannedEvent({ ...base, type: 'exchange_rate_overdue', payload })?.signal;
+    expect(rate({ currency: 'USD', lastRateDay: '2026-10-23', day: '2026-10-28' })).toEqual({
+      kind: 'exchange_rate_overdue',
+      currency: 'USD',
+      lastRateDay: '2026-10-23',
+    });
+    expect(rate({ currency: 'USD', lastRateDay: null, day: '2026-10-28' })).toEqual({
+      kind: 'exchange_rate_overdue',
+      currency: 'USD',
+      lastRateDay: null,
+    });
+    expect(rate({ currency: 'usd<b>', lastRateDay: null, day: '2026-10-28' })).toBeUndefined();
     // The voice version stays in Nirvana: the signal carries only the reasons and the count.
     const closed = toScannedEvent({
       ...base,
