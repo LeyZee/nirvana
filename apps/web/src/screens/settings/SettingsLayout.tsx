@@ -11,14 +11,18 @@ import { ComingSoon, Page, PageHeader, SubNav, type SubNavItem } from '@/shell/l
 
 import './settings.css';
 
-/** The alerts and the backups are the owner's alone (P4-01, ADR 0028): anyone else gets no tab that would answer 403. */
-const ALERTS_TAB: SubNavItem = { to: '/reglages/alertes', label: 'Alertes' };
-const BACKUPS_TAB: SubNavItem = { to: '/reglages/sauvegardes', label: 'Sauvegardes' };
-/** The accounts' pay rules too (EQ-03): the owner alone posts them. */
-const PAY_RULES_TAB: SubNavItem = { to: '/reglages/regles-de-paie', label: 'Règles de paie' };
-/** The AI keys and the bots and groups too (P3-03, P3-07): the server serves them to the owner alone. */
-const AI_MODELS_TAB: SubNavItem = { to: '/reglages/modeles-ia', label: 'Modèles IA' };
-const TELEGRAM_TAB: SubNavItem = { to: '/reglages/telegram', label: 'Telegram' };
+/**
+ * The owner's tabs alone, as the server serves these pages to her alone: anyone else gets no tab that would
+ * answer 403. The AI keys and the bots and groups (P3-03, P3-07), the alerts (P4-01), the accounts' pay rules
+ * (EQ-03) and the backups (ADR 0028).
+ */
+const OWNER_TABS: readonly SubNavItem[] = [
+  { to: '/reglages/modeles-ia', label: 'Modèles IA' },
+  { to: '/reglages/alertes', label: 'Alertes' },
+  { to: '/reglages/telegram', label: 'Telegram' },
+  { to: '/reglages/regles-de-paie', label: 'Règles de paie' },
+  { to: '/reglages/sauvegardes', label: 'Sauvegardes' },
+];
 
 export function SettingsLayout(): JSX.Element {
   const { user, onSignOut } = useRouteContext({ from: '__root__' });
@@ -31,8 +35,7 @@ export function SettingsLayout(): JSX.Element {
             <SubNav
               label="Réglages"
               items={[
-                ...(user.role === 'owner' ? [AI_MODELS_TAB, ALERTS_TAB] : []),
-                ...(user.role === 'owner' ? [TELEGRAM_TAB, PAY_RULES_TAB, BACKUPS_TAB] : []),
+                ...(user.role === 'owner' ? OWNER_TABS : []),
                 { to: '/reglages/appareils', label: 'Appareils' },
                 { to: '/reglages/apparence', label: 'Apparence' },
                 { to: '/reglages/mode', label: 'Mode de l’agent' },
