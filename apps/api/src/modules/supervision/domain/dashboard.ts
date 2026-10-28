@@ -82,14 +82,19 @@ const DISPATCH_SECONDS = 60;
 const LATE_AFTER_POLLS = 3;
 
 /**
- * Whether Reveal is read late (recette 28/10, G8): the session holds, but its last read is older than three of the
- * account's polls, each one counted at its longest. A worker stopped or polls failing then show, instead of a green
- * « Connectée ». Never read yet is not late: nothing was ever due.
+ * Whether Reveal is read late (recette 28/10, G8): the session holds, but its last read, or the session itself when
+ * nothing was ever read, is older than three of the account's polls, each one counted at its longest. A worker stopped
+ * or polls failing then show, instead of a green « Connectée », the first day included.
  */
-export function revealLate(lastReadAt: Date | null, now: Date, pollEverySeconds: number): boolean {
-  if (lastReadAt === null) return false;
+export function revealLate(
+  read: { readonly lastReadAt: Date | null; readonly sessionSince: Date | null },
+  now: Date,
+  pollEverySeconds: number,
+): boolean {
+  const from = read.lastReadAt ?? read.sessionSince;
+  if (from === null) return false;
   const allowedMs = LATE_AFTER_POLLS * (pollEverySeconds + DISPATCH_SECONDS) * 1_000;
-  return now.getTime() - lastReadAt.getTime() > allowedMs;
+  return now.getTime() - from.getTime() > allowedMs;
 }
 
 /** Safety first: a possible minor, consent or distress before everything else. */
@@ -189,9 +194,7 @@ export function assembleDashboard(input: {
     reveal: {
       connected: facts.reveal.connected,
       lastReadAt: facts.reveal.lastReadAt?.toISOString() ?? null,
-      late:
-        facts.reveal.connected &&
-        revealLate(facts.reveal.lastReadAt, window.now, facts.reveal.pollEverySeconds),
+      late: facts.reveal.connected && revealLate(facts.reveal, window.now, facts.reveal.pollEverySeconds),
       conversations: facts.reveal.conversations,
     },
     voice: {

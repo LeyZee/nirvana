@@ -478,5 +478,12 @@ describe('GET /v1/dashboard', () => {
     await account({ connectorConfig: { pollIntervalSeconds: 3_600, jitterSeconds: 300 } });
     expect(await reveal()).toMatchObject({ connected: true, late: false });
     await account({ lastPollAt: new Date(), connectorConfig: {} });
+    // The session set an hour ago and never read (worker stopped, first read failed): late from the first day.
+    await account({ lastPollAt: null, sessionUpdatedAt: new Date(Date.now() - 3_600_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: true });
+    // Set a minute ago: the first read may still come.
+    await account({ sessionUpdatedAt: new Date(Date.now() - 60_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    await account({ lastPollAt: new Date() });
   });
 });

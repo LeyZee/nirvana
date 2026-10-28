@@ -95,10 +95,11 @@ async function facts(
     z.object({
       session_state: z.string(),
       last_poll_at: timestamp.nullable(),
+      session_updated_at: timestamp.nullable(),
       paused_until: timestamp.nullable(),
       connector_config: z.unknown(),
     }),
-    sql`select session_state, last_poll_at, paused_until, connector_config from platform_accounts
+    sql`select session_state, last_poll_at, session_updated_at, paused_until, connector_config from platform_accounts
         where platform = 'reveal' order by created_at limit 1`,
   );
   const voice = await first(
@@ -248,6 +249,7 @@ async function facts(
     reveal: {
       connected,
       lastReadAt: account?.last_poll_at ?? null,
+      sessionSince: account?.session_updated_at ?? null,
       pollEverySeconds: rhythm.pollIntervalSeconds + rhythm.jitterSeconds,
       conversations: counts.total,
     },
