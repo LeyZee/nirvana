@@ -78,7 +78,7 @@ describe('phase 0 end to end', () => {
     creatorId = newId(CreatorIdSchema);
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db.execute(
-      sql`insert into creators (id, display_name, timezone) values (${creatorId}, 'Test', 'Europe/Paris')`,
+      sql`insert into creators (id, display_name, name_key, timezone) values (${creatorId}, 'Test', 'test', 'Europe/Paris')`,
     );
     await test.admin.db.execute(sql`
       insert into platform_accounts (id, creator_id, platform, handle, session_state, connector_config)

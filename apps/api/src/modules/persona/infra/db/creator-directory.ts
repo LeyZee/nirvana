@@ -3,6 +3,7 @@ import {
   AuditEntryIdSchema,
   canonicalTimezone,
   CreatorIdSchema,
+  creatorNameKey,
   DEFAULT_AGENT_HOURS,
   JOB_MAX_ATTEMPTS,
   JOB_PAYLOADS,
@@ -14,8 +15,21 @@ import {
 } from '@nirvana/contracts';
 import { eq, inArray, schema, sql, type Database } from '@nirvana/db';
 
-import { CreatorConflict } from '../../domain/errors';
+import { CreatorConflict, CreatorNameConflict } from '../../domain/errors';
 import type { CreatorDirectory } from '../../domain/ports';
+
+/** The unique index on her name (`creators_name_key_unique`) refused the row: another creator has this name. */
+const isNameTaken = (error: unknown): boolean =>
+  error instanceof Error &&
+  [error, error.cause].some(
+    (e) =>
+      typeof e === 'object' &&
+      e !== null &&
+      'code' in e &&
+      e.code === '23505' &&
+      'constraint' in e &&
+      e.constraint === 'creators_name_key_unique',
+  );
 
 const toSummary = (row: { id: string; displayName: string; timezone: string }): CreatorSummary => ({
   id: CreatorIdSchema.parse(row.id),
@@ -46,39 +60,55 @@ export function createDrizzleCreatorDirectory(
       const { id: chosen, displayName, timezone } = NewCreatorSchema.parse(input);
       const parsed = { displayName, timezone: canonicalTimezone(timezone) };
       const id = chosen ?? newId(CreatorIdSchema);
-      return db.transaction(async (tx) => {
-        const inserted = await tx
-          .insert(schema.creators)
-          .values({ id, ...parsed })
-          .onConflictDoNothing({ target: schema.creators.id })
-          .returning({ id: schema.creators.id });
-        if (inserted.length === 0) {
-          // The same form sent twice: the creator the first request made, without a second audit line. The same id with
-          // other values is not a replay.
-          const [existing] = await tx
-            .select({
-              id: schema.creators.id,
-              displayName: schema.creators.displayName,
-              timezone: schema.creators.timezone,
-            })
-            .from(schema.creators)
-            .where(eq(schema.creators.id, id));
-          if (existing === undefined) throw new Error('creator insert conflicted on an id it cannot read');
-          if (existing.displayName !== parsed.displayName || existing.timezone !== parsed.timezone) {
-            throw new CreatorConflict();
-          }
-          return toSummary(existing);
+      // The same form sent twice: the creator the first request made, without a second audit line. The same id with
+      // other values is not a replay.
+      const replayOf = (existing: { id: string; displayName: string; timezone: string }): CreatorSummary => {
+        if (existing.displayName !== parsed.displayName || existing.timezone !== parsed.timezone) {
+          throw new CreatorConflict();
         }
-        await tx.insert(schema.auditLog).values({
-          id: newId(AuditEntryIdSchema),
-          userId: userId ?? null,
-          action: 'creator.create',
-          entity: 'creator',
-          entityId: id,
-          details: { displayName: parsed.displayName, timezone: parsed.timezone },
+        return toSummary(existing);
+      };
+      const byId = async (tx: Pick<Database, 'select'>) => {
+        const [existing] = await tx
+          .select({
+            id: schema.creators.id,
+            displayName: schema.creators.displayName,
+            timezone: schema.creators.timezone,
+          })
+          .from(schema.creators)
+          .where(eq(schema.creators.id, id));
+        return existing;
+      };
+      try {
+        return await db.transaction(async (tx) => {
+          const inserted = await tx
+            .insert(schema.creators)
+            .values({ id, ...parsed, nameKey: creatorNameKey(parsed.displayName) })
+            .onConflictDoNothing({ target: schema.creators.id })
+            .returning({ id: schema.creators.id });
+          if (inserted.length === 0) {
+            const existing = await byId(tx);
+            if (existing === undefined) throw new Error('creator insert conflicted on an id it cannot read');
+            return replayOf(existing);
+          }
+          await tx.insert(schema.auditLog).values({
+            id: newId(AuditEntryIdSchema),
+            userId: userId ?? null,
+            action: 'creator.create',
+            entity: 'creator',
+            entityId: id,
+            details: { displayName: parsed.displayName, timezone: parsed.timezone },
+          });
+          return { id, ...parsed };
         });
-        return { id, ...parsed };
-      });
+      } catch (error) {
+        if (!isNameTaken(error)) throw error;
+        // Her name is taken: by the creator this very form made a moment ago (two sends at once, the second checked
+        // the name before the id), which is a replay, or by another creator.
+        const existing = await byId(db);
+        if (existing !== undefined) return replayOf(existing);
+        throw new CreatorNameConflict();
+      }
     },
 
     async agentHours(id) {

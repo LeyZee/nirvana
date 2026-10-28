@@ -1,5 +1,6 @@
 import {
   DomainError,
+  type CreatorErrorCode,
   type PersonaErrorCode,
   type PersonaSampleReplyFault,
   type PersonaSampleReplyUnprocessableDetails,
@@ -23,7 +24,20 @@ export class PersonaVersionConflict extends DomainError {
  */
 export class CreatorConflict extends DomainError {
   constructor() {
-    super('creator_conflict', 'Cette créatrice existe déjà sous un autre nom ou un autre fuseau');
+    super(
+      'creator_conflict' satisfies CreatorErrorCode,
+      'Cette créatrice existe déjà sous un autre nom ou un autre fuseau',
+    );
+  }
+}
+
+/**
+ * Another creator has this name, case, accents and spaces aside (`creatorNameKey`, 409): two creators never share a
+ * name (Charles, 28/10/2026). Nothing is created.
+ */
+export class CreatorNameConflict extends DomainError {
+  constructor() {
+    super('creator_name_conflict' satisfies CreatorErrorCode, 'Une créatrice porte déjà ce nom');
   }
 }
 

@@ -12,7 +12,8 @@ const DEFAULT_ZONE = 'Europe/Paris';
 /** What each refusal of `POST /v1/creators` says; nothing was created on any of them. */
 const PROBLEMS: Record<Exclude<CreateResult['kind'], 'created'>, string> = {
   unknown_zone: 'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
-  invalid: 'Ce nom n’est pas accepté. Vérifie-le, puis réessaie.',
+  invalid: 'Ce nom n’est pas accepté : il lui faut au moins une lettre.',
+  name_taken: 'Une créatrice porte déjà ce nom. Ajoute une initiale ou choisis un autre pseudo.',
   conflict: 'Cette créatrice vient d’être créée sous un autre nom. Recharge la page pour la voir.',
   expired: 'Ta session a expiré : reconnecte-toi, puis recommence. Rien n’a été créé.',
   failed: 'Rien n’a été créé : Nirvana ne répond pas. Réessaie dans un instant.',
@@ -43,9 +44,12 @@ export function NewCreatorForm({
   const [creatorId, setCreatorId] = useState(() => newId(CreatorIdSchema));
   const [problem, setProblem] = useState<keyof typeof PROBLEMS | null>(null);
 
+  // The server refuses a name without a letter (an invisible character or punctuation alone): said before sending.
+  const noLetter = name.trim() !== '' && !/\p{L}/u.test(name);
+
   const submit = async (event: SyntheticEvent): Promise<void> => {
     event.preventDefault();
-    if (name.trim() === '' || sending.current) return;
+    if (name.trim() === '' || noLetter || sending.current) return;
     sending.current = true;
     setBusy(true);
     setProblem(null);
@@ -79,10 +83,14 @@ export function NewCreatorForm({
           value={name}
           maxLength={80}
           autoFocus
+          aria-invalid={noLetter || problem === 'name_taken'}
           onChange={(event) => {
             setName(event.target.value);
+            // The refusal was about the name: typing another one answers it.
+            if (problem === 'name_taken' || problem === 'invalid') setProblem(null);
           }}
         />
+        {noLetter ? <p className="ps-error">Le nom doit contenir au moins une lettre.</p> : null}
       </Field>
       <Field label="Fuseau horaire" id={`${id}-zone`} hint="Sa journée et sa nuit suivent ce fuseau.">
         <input
@@ -115,7 +123,7 @@ export function NewCreatorForm({
         <button
           type="submit"
           className="nv-btn nv-btn--neon"
-          disabled={name.trim() === '' || busy}
+          disabled={name.trim() === '' || noLetter || busy}
           aria-busy={busy}
         >
           {busy ? 'Création…' : 'Créer'}

@@ -123,9 +123,12 @@ describe('end-of-shift reports and pay rules (EQ-03): the member, the agency, fo
         ['Nora', nora],
         ['Inès', ines],
       ] as const) {
-        await tx
-          .insert(s.creators)
-          .values({ id: creator.creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+        await tx.insert(s.creators).values({
+          id: creator.creatorId,
+          nameKey: creator.creatorId,
+          displayName: `Créatrice ${label}`,
+          timezone: 'Europe/Paris',
+        });
         await tx.insert(s.platformAccounts).values({
           id: creator.accountId,
           creatorId: creator.creatorId,

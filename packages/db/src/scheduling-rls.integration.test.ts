@@ -69,9 +69,12 @@ describe('planning tables (EQ-02): the creator and the member, through withTenan
         ['Nora', nora],
         ['Inès', ines],
       ] as const) {
-        await tx
-          .insert(s.creators)
-          .values({ id: creator.creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+        await tx.insert(s.creators).values({
+          id: creator.creatorId,
+          nameKey: creator.creatorId,
+          displayName: `Créatrice ${label}`,
+          timezone: 'Europe/Paris',
+        });
         await tx.insert(s.platformAccounts).values({
           id: creator.accountId,
           creatorId: creator.creatorId,

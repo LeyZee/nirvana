@@ -33,7 +33,7 @@ describe('the journal’s outbox', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test' });

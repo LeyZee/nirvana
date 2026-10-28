@@ -110,7 +110,7 @@ describe('connectors module (P0-06)', () => {
     creatorId = newId(CreatorIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
   });
 
   afterAll(async () => {

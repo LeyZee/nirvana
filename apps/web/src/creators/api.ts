@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   CreatorListSchema,
   CreatorSummarySchema,
+  type CreatorErrorCode,
   type CreatorId,
   type CreatorSummary,
 } from '@nirvana/contracts';
@@ -26,8 +27,10 @@ export type CreateResult =
   | { readonly kind: 'unknown_zone' }
   /** Any other 400: what was typed is not taken as it is. */
   | { readonly kind: 'invalid' }
-  /** 409: this form's id already made a creator under another name. */
+  /** 409 `creator_conflict`: this form's id already made a creator under another name. */
   | { readonly kind: 'conflict' }
+  /** 409 `creator_name_conflict`: another creator has this name, case, accents and spaces aside. */
+  | { readonly kind: 'name_taken' }
   /** 401: the session ended, signing in again is the way out. */
   | { readonly kind: 'expired' }
   | { readonly kind: 'failed' };
@@ -54,10 +57,14 @@ export async function createCreator(
     return { kind: 'created', creator: CreatorSummarySchema.parse(await response.json()) };
   }
   if (response.status === 401) return { kind: 'expired' };
-  if (response.status === 409) return { kind: 'conflict' };
-  if (response.status !== 400) return { kind: 'failed' };
-  // `request_invalid` names each refused field by its path (`/timezone`).
+  if (response.status !== 400 && response.status !== 409) return { kind: 'failed' };
   const error = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+  if (response.status === 409) {
+    return error.data?.error.code === ('creator_name_conflict' satisfies CreatorErrorCode)
+      ? { kind: 'name_taken' }
+      : { kind: 'conflict' };
+  }
+  // `request_invalid` names each refused field by its path (`/timezone`).
   const fields = RefusedFieldsSchema.safeParse(error.data?.error.details);
   const onZone = fields.success && fields.data.fields.some((field) => field.path === '/timezone');
   return onZone ? { kind: 'unknown_zone' } : { kind: 'invalid' };
