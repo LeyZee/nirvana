@@ -441,7 +441,7 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
     case 'role_forbidden':
       return 'Ton rôle ne permet pas ce geste.';
     case 'request_invalid':
-      return 'Ces valeurs ne conviennent pas : vérifie le montant et le motif.';
+      return 'Ces valeurs ne conviennent pas : vérifie le formulaire.';
   }
 }
 

@@ -402,6 +402,10 @@ describe('words', () => {
     expect(
       payRefusalText({ kind: 'refused', code: 'pay_period_not_computed_conflict', details: {} }, names),
     ).toBe('La paie n’a pas encore calculé cette quinzaine : réessaie dans quelques minutes.');
+    // Every form says it, the payment, the goals and the settings included, none of which has a reason.
+    expect(payRefusalText({ kind: 'refused', code: 'request_invalid', details: {} }, names)).toBe(
+      'Ces valeurs ne conviennent pas : vérifie le formulaire.',
+    );
     expect(payRefusalText({ kind: 'failed' }, names)).toBe(
       'Le serveur ne répond pas : rien n’a été enregistré.',
     );
