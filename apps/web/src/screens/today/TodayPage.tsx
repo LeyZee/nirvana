@@ -2,7 +2,6 @@ import { SHIFT_REPORT_OPENS_BEFORE_END_MINUTES, type MyShift, type ShiftReport }
 import { Link } from '@tanstack/react-router';
 import { useState, type JSX } from 'react';
 
-import { HoldIsland, useHold } from '@/reports/Hold';
 import { MyReportsCard, useMyReports, type MyReports } from '@/reports/MyReports';
 import { ReportPanel, type ReportDraft } from '@/reports/ReportPanel';
 import { MEMBER_STATUS, reportOf, STATUS_TONES } from '@/reports/model';
@@ -25,7 +24,6 @@ export function TodayPage(): JSX.Element {
   const zone = readerZone();
   const today = dayOf(now, zone);
   const reports = useMyReports(now);
-  const hold = useHold();
   const [open, setOpen] = useState<{ readonly shiftId: string; readonly draft: ReportDraft | null } | null>(
     null,
   );
@@ -75,7 +73,6 @@ export function TodayPage(): JSX.Element {
           key={open.shiftId + (open.draft?.id ?? '')}
           shiftId={open.shiftId}
           draft={open.draft}
-          hold={hold}
           onClose={() => {
             setOpen(null);
           }}
@@ -84,7 +81,6 @@ export function TodayPage(): JSX.Element {
           }}
         />
       )}
-      <HoldIsland hold={hold} />
     </Page>
   );
 }
@@ -113,7 +109,8 @@ function Day({
       ? { kind: 'none' }
       : made !== null
         ? { kind: 'made', report: made }
-        : list.shifts.some((shift) => shift.id === heroShift.id)
+        : // The list is read each minute; the shift's own opening time says it on the minute.
+          list.shifts.some((shift) => shift.id === heroShift.id) || reportOpensAt(heroShift) <= now
           ? { kind: 'due' }
           : { kind: 'later' };
   return (

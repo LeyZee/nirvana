@@ -5,11 +5,13 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { HoldProvider } from '@/reports/Hold';
 import { TodayPage } from '@/screens/today/TodayPage';
 
 vi.mock('@/scheduling/time', async (importOriginal) => ({
@@ -143,10 +145,18 @@ function serve(): void {
 }
 
 function renderPage(): void {
-  const root = createRootRoute();
+  // The app's one hold, as the shell mounts it, and Suivi to leave Aujourd'hui for.
+  const root = createRootRoute({
+    component: () => (
+      <HoldProvider>
+        <Outlet />
+      </HoldProvider>
+    ),
+  });
   const page = createRoute({ getParentRoute: () => root, path: '/aujourdhui', component: TodayPage });
+  const tracking = createRoute({ getParentRoute: () => root, path: '/suivi', component: () => <p>Suivi</p> });
   const router = createRouter({
-    routeTree: root.addChildren([page]),
+    routeTree: root.addChildren([page, tracking]),
     history: createMemoryHistory({ initialEntries: ['/aujourdhui'] }),
   });
   render(
@@ -159,6 +169,7 @@ function renderPage(): void {
 const amountField = (): HTMLElement => screen.getByLabelText('Ce que tu as généré');
 
 beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn();
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date('2026-10-28T00:00:00Z'));
   writes.length = 0;
@@ -239,6 +250,55 @@ describe('Faire mon rapport', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('takes the reader to the first field to fix', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Faire mon rapport' }));
+    await screen.findByRole('dialog');
+    fireEvent.change(amountField(), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('switch', { name: /Signaler un incident/u }));
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer mon rapport' }));
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Ce qui s’est passé'));
+  });
+
+  it('says a refusal wherever the chatter went since', async () => {
+    served.write = {
+      status: 409,
+      body: { error: { code: 'shift_report_early_conflict', message: 'x', details: {}, requestId: 'r' } },
+    };
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Faire mon rapport' }));
+    await screen.findByRole('dialog');
+    fireEvent.change(amountField(), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer mon rapport' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Ouvrir Suivi' }));
+    await screen.findByText('Suivi');
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+
+    expect(writes).toHaveLength(1);
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Rapport non envoyé');
+    expect(alert.textContent).toContain('30 minutes avant au plus tôt');
+  });
+
+  it('sends at once when the app goes to the background', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Faire mon rapport' }));
+    await screen.findByRole('dialog');
+    fireEvent.change(amountField(), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer mon rapport' }));
+    // Back to Reveal: the phone hides the app without `pagehide`, and its timers sleep.
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      expect(writes).toHaveLength(1);
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    }
+    expect((await screen.findByText(/en attente de validation/u)).textContent).toContain('30,00');
+  });
+
   it('says a refusal in the island and opens the report again from it', async () => {
     served.write = {
       status: 409,
@@ -293,10 +353,17 @@ describe('Mes rapports', () => {
     ]);
   });
 
-  it('sums the period: validated, then what waits', async () => {
+  it('sums the period: validated, what waits for the agency, what came back, counted the same way', async () => {
     served.reports = [
       report({ status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' }),
       report({ id: id(302), correctsId: id(301), amount: { amountMinor: 1_500, currency: 'EUR' } }),
+      report({
+        id: id(303),
+        shiftId: SHIFT,
+        status: 'rejected',
+        reviewNote: 'Le pourboire',
+        amount: { amountMinor: 4_000, currency: 'EUR' },
+      }),
     ];
     renderPage();
     const mine = await screen.findByText('Tous mes rapports');
@@ -304,5 +371,18 @@ describe('Mes rapports', () => {
     const text = (card?.textContent ?? '').replaceAll(/\s/gu, ' ');
     expect(text).toContain('Validé80,00 €');
     expect(text).toContain('En attente15,00 €');
+    expect(text).toContain('Renvoyé40,00 €');
+    // Report by report: the correction waiting is said on its line, not counted as a report.
+    expect(text).toContain('1 validé · 1 renvoyé');
+    expect(text).toContain('correction en attente');
+  });
+
+  it('says on which day a report was validated, unless it was today', async () => {
+    served.reports = [report({ status: 'validated', reviewedAt: '2026-10-26T08:00:00.000Z' })];
+    renderPage();
+    fireEvent.click(await screen.findByText('Tous mes rapports'));
+    fireEvent.click(await screen.findByRole('button', { name: /Validé/u }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mon rapport' });
+    expect(dialog.textContent).toMatch(/Validé le lun\. 26 oct\. à 9\sh/u);
   });
 });

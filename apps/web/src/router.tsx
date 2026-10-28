@@ -137,7 +137,14 @@ const teamPlanning = createRoute({
     return <PlanningPage userId={user.id} />;
   },
 });
-const teamReports = createRoute({ getParentRoute: () => team, path: '/rapports', component: ReportsPage });
+const teamReports = createRoute({
+  getParentRoute: () => team,
+  path: '/rapports',
+  component: function TeamReports() {
+    const { user } = rootRoute.useRouteContext();
+    return <ReportsPage owner={user.role === 'owner'} />;
+  },
+});
 const teamMembers = createRoute({
   getParentRoute: () => team,
   path: '/membres',

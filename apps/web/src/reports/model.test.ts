@@ -169,9 +169,16 @@ describe('what a period’s list says', () => {
     expect([...incidents]).toEqual([[first.id, ['Reveal a coupé', 'Puis un fan insistant']]]);
   });
 
-  it('sums what is validated and what waits, per currency', () => {
+  it('sums what is validated, what waits for the agency and what came back to its member, per currency', () => {
     expect(periodSums(reports)).toEqual([
-      { currency: 'EUR', validatedMinor: 8_000, waitingMinor: 4_500, waiting: 2 },
+      {
+        currency: 'EUR',
+        validatedMinor: 8_000,
+        waitingMinor: 500,
+        waiting: 1,
+        sentBackMinor: 4_000,
+        sentBack: 1,
+      },
     ]);
   });
 });

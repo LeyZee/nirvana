@@ -178,24 +178,38 @@ export function linesOf(list: ShiftReportList): ShiftLine[] {
     .toSorted((a, b) => b.shift.startsAt.localeCompare(a.shift.startsAt));
 }
 
-/** A period's figures per currency: what is validated, and what still waits for the agency. */
+/**
+ * A period's figures per currency: what is validated, what still waits for the agency (sent, not yet read), and what
+ * came back and waits for its member. Corrections count in each, as their amounts do.
+ */
 export interface PeriodSum {
   readonly currency: Currency;
   readonly validatedMinor: number;
   readonly waitingMinor: number;
   readonly waiting: number;
+  readonly sentBackMinor: number;
+  readonly sentBack: number;
 }
 
 export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
-  const sums = new Map<Currency, { validatedMinor: number; waitingMinor: number; waiting: number }>();
+  const sums = new Map<Currency, Omit<PeriodSum, 'currency'>>();
   for (const report of reports) {
-    const sum = sums.get(report.amount.currency) ?? { validatedMinor: 0, waitingMinor: 0, waiting: 0 };
-    if (report.status === 'validated') sum.validatedMinor += report.amount.amountMinor;
-    else {
-      sum.waitingMinor += report.amount.amountMinor;
-      sum.waiting += 1;
-    }
-    sums.set(report.amount.currency, sum);
+    const sum = sums.get(report.amount.currency) ?? {
+      validatedMinor: 0,
+      waitingMinor: 0,
+      waiting: 0,
+      sentBackMinor: 0,
+      sentBack: 0,
+    };
+    const minor = report.amount.amountMinor;
+    sums.set(
+      report.amount.currency,
+      report.status === 'validated'
+        ? { ...sum, validatedMinor: sum.validatedMinor + minor }
+        : report.status === 'submitted'
+          ? { ...sum, waitingMinor: sum.waitingMinor + minor, waiting: sum.waiting + 1 }
+          : { ...sum, sentBackMinor: sum.sentBackMinor + minor, sentBack: sum.sentBack + 1 },
+    );
   }
   return [...sums].map(([currency, sum]) => ({ currency, ...sum }));
 }
@@ -244,7 +258,7 @@ export const REPORT_ERRORS: Readonly<Record<ReportRefusalCode, string>> = {
   shift_not_found: 'Ce shift n’existe plus ou a été annulé : la liste est relue.',
   shift_report_not_found: 'Ce rapport n’existe plus : la liste est relue.',
   shift_report_conflict: 'Ce rapport a déjà été envoyé avec d’autres valeurs : la liste est relue.',
-  shift_report_exists_conflict: 'Ce shift a déjà son rapport : il est rouvert.',
+  shift_report_exists_conflict: 'Ce shift a déjà son rapport : rouvre-le pour le modifier.',
   shift_report_early_conflict: 'Le rapport se fait à la fin du shift, 30 minutes avant au plus tôt.',
   shift_report_changed_conflict:
     'Ce rapport ou son shift a changé depuis qu’il a été lu : la liste est relue.',

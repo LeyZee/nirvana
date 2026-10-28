@@ -5,9 +5,10 @@ import {
   type ShiftReportContext,
   type ShiftReportId,
 } from '@nirvana/contracts';
-import { useId, useState, type JSX, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
+import { useEffect, useId, useRef, useState, type JSX, type ReactNode } from 'react';
 
-import type { Hold, HoldResult } from './Hold';
+import { useAppHold, type HoldResult } from './Hold';
 import { changeReport, makeReport, useRefreshReports, useReportContext, type ReportOutcome } from './api';
 import {
   amountInput,
@@ -25,7 +26,7 @@ import {
 } from './model';
 
 import { accountLine, swapShiftLine } from '@/scheduling/model';
-import { clockAt, readerZone } from '@/scheduling/time';
+import { clockAt, dayMonth, dayOf, readerZone } from '@/scheduling/time';
 import { useNow } from '@/scheduling/useNow';
 import { Dialog } from '@/screens/team/Dialog';
 
@@ -51,7 +52,7 @@ export function ReportPanel({
   shiftId,
   draft,
   memberName,
-  hold,
+  canSetRules = false,
   onClose,
   onReopen,
 }: {
@@ -59,7 +60,8 @@ export function ReportPanel({
   draft: ReportDraft | null;
   /** The member whose report the agency corrects; absent when the member opens their own. */
   memberName?: string;
-  hold: Hold;
+  /** The agency's reader sets the pay rules (the owner): missing rules lead to them. */
+  canSetRules?: boolean;
   onClose: () => void;
   onReopen: (draft: ReportDraft) => void;
 }): JSX.Element {
@@ -106,7 +108,13 @@ export function ReportPanel({
           </div>
         </div>
       ) : (
-        <Body data={data} draft={draft} hold={hold} onClose={onClose} onReopen={onReopen} />
+        <Body
+          data={data}
+          draft={draft}
+          agency={memberName === undefined ? null : { canSetRules }}
+          onClose={onClose}
+          onReopen={onReopen}
+        />
       )}
     </Dialog>
   );
@@ -129,13 +137,14 @@ function titleOf(
 function Body({
   data,
   draft,
-  hold,
+  agency,
   onClose,
   onReopen,
 }: {
   data: ShiftReportContext;
   draft: ReportDraft | null;
-  hold: Hold;
+  /** The agency correcting a member's report, and whether it sets the pay rules; `null` for the member. */
+  agency: { readonly canSetRules: boolean } | null;
   onClose: () => void;
   onReopen: (draft: ReportDraft) => void;
 }): JSX.Element {
@@ -146,10 +155,31 @@ function Body({
   const corrections = data.reports.filter((one) => one.correctsId !== null);
 
   if (data.rules === null) {
+    const missing = `Les règles de paie de ${accountLine(data.account)} ne sont pas posées pour la quinzaine ${periodLine(data.period)}.`;
+    if (agency === null) {
+      return (
+        <Notice tone="warn" onClose={onClose} title="Pas encore de règles de paie">
+          {missing} Préviens l’agence : ton rapport se fera dès qu’elles le seront.
+        </Notice>
+      );
+    }
     return (
-      <Notice tone="warn" onClose={onClose} title="Pas encore de règles de paie">
-        Les règles de paie de {accountLine(data.account)} ne sont pas posées pour la quinzaine{' '}
-        {periodLine(data.period)}. Préviens l’agence : ton rapport se fera dès qu’elles le seront.
+      <Notice
+        tone="warn"
+        onClose={onClose}
+        title="Pas encore de règles de paie"
+        action={
+          agency.canSetRules ? (
+            <Link to="/reglages/regles-de-paie" className="nv-btn nv-btn--neon" onClick={onClose}>
+              Poser les règles
+            </Link>
+          ) : null
+        }
+      >
+        {missing}{' '}
+        {agency.canSetRules
+          ? 'Pose-les dans Réglages › Règles de paie : la correction se fera ensuite.'
+          : 'Le propriétaire les pose dans Réglages › Règles de paie : la correction se fera ensuite.'}
       </Notice>
     );
   }
@@ -172,6 +202,7 @@ function Body({
     return (
       <Validated
         report={report}
+        today={dayOf(now, zone)}
         corrections={corrections}
         total={validatedTotal(data.reports, data.shift.id)}
         onCorrect={() => {
@@ -187,7 +218,6 @@ function Body({
       report={correcting ? null : report}
       corrected={correcting ? report : null}
       draft={draft}
-      hold={hold}
       onClose={onClose}
       onReopen={onReopen}
     />
@@ -198,11 +228,14 @@ function Notice({
   tone,
   title,
   children,
+  action = null,
   onClose,
 }: {
   tone: 'info' | 'warn';
   title: string;
   children: ReactNode;
+  /** What to do about it, beside « Fermer ». */
+  action?: ReactNode;
   onClose: () => void;
 }): JSX.Element {
   return (
@@ -212,23 +245,40 @@ function Notice({
         <p className="rp-notice__text">{children}</p>
       </div>
       <div className="tm-dialog__foot">
-        <button type="button" className="nv-btn nv-btn--soft" data-autofocus onClick={onClose}>
+        <button
+          type="button"
+          className={action === null ? 'nv-btn nv-btn--soft' : 'nv-btn nv-btn--plain'}
+          data-autofocus
+          onClick={onClose}
+        >
           Fermer
         </button>
+        {action}
       </div>
     </div>
   );
 }
 
+/** When the agency validated it: « à 14:32 » the same day, « le mar. 25 oct. à 14:32 » another. */
+const validatedWhen = (reviewedAt: string, today: string, zone: string): string => {
+  const day = dayOf(reviewedAt, zone);
+  return day === today
+    ? `à ${clockAt(reviewedAt, zone)}`
+    : `le ${dayMonth(day)} à ${clockAt(reviewedAt, zone)}`;
+};
+
 /** A validated report: its amount first, then its corrections and their total; a correction is added from here. */
 function Validated({
   report,
+  today,
   corrections,
   total,
   onCorrect,
   onClose,
 }: {
   report: ShiftReport;
+  /** The reader's day, which a validation of today leaves unsaid. */
+  today: string;
   corrections: readonly ShiftReport[];
   total: number;
   onCorrect: () => void;
@@ -241,7 +291,7 @@ function Validated({
       <div className="rp-figure nv-enter">
         <span className={`nv-status rp-status rp-status--${STATUS_TONES[report.status]}`}>
           <span className="nv-dot nv-tone--ok" />
-          Validé{report.reviewedAt === null ? '' : ` à ${clockAt(report.reviewedAt, zone)}`}
+          Validé{report.reviewedAt === null ? '' : ` ${validatedWhen(report.reviewedAt, today, zone)}`}
         </span>
         <p className="rp-figure__value nv-num">{amountText(report.amount.amountMinor, currency)}</p>
         {report.comment === null ? null : <p className="rp-figure__note">« {report.comment} »</p>}
@@ -297,7 +347,6 @@ function Form({
   report,
   corrected,
   draft,
-  hold,
   onClose,
   onReopen,
 }: {
@@ -305,11 +354,12 @@ function Form({
   report: ShiftReport | null;
   corrected: ShiftReport | null;
   draft: ReportDraft | null;
-  hold: Hold;
   onClose: () => void;
   onReopen: (draft: ReportDraft) => void;
 }): JSX.Element {
   const id = useId();
+  const hold = useAppHold();
+  const form = useRef<HTMLFormElement>(null);
   const refresh = useRefreshReports();
   const correcting = corrected !== null;
   const currency = data.rules?.currency ?? 'EUR';
@@ -323,6 +373,17 @@ function Form({
   );
   const [incident, setIncident] = useState(() => draft?.incident ?? report?.incident ?? '');
   const [touched, setTouched] = useState(draft !== null);
+  /** How many sends found something to fix: each takes the reader to the first field to fix. */
+  const [tries, setTries] = useState(0);
+
+  useEffect(() => {
+    if (tries === 0) return;
+    const target = form.current?.querySelector<HTMLElement>(
+      '[data-invalid="true"] input, [data-invalid="true"] textarea',
+    );
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.focus({ preventScroll: true });
+  }, [tries]);
 
   const minor = parseAmount(amount, correcting);
   const total = validatedTotal(data.reports, data.shift.id);
@@ -349,7 +410,10 @@ function Form({
 
   const submit = (): void => {
     setTouched(true);
-    if (!ready) return;
+    if (!ready) {
+      setTries((count) => count + 1);
+      return;
+    }
     // A report still waiting, left as it was: nothing to send.
     if (report?.status === 'submitted' && unchanged) {
       onClose();
@@ -417,6 +481,7 @@ function Form({
 
   return (
     <form
+      ref={form}
       className="tm-dialog__body"
       noValidate
       onSubmit={(event) => {

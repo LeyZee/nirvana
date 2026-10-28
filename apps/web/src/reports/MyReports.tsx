@@ -1,4 +1,4 @@
-import type { PayPeriod, ShiftReportList } from '@nirvana/contracts';
+import type { PayPeriod, ShiftReportList, ShiftReportStatus } from '@nirvana/contracts';
 import type { JSX } from 'react';
 
 import { useReports, useSchedulingSettings } from './api';
@@ -93,8 +93,12 @@ export function MyReportsCard({
   const ofPeriod = list.reports.filter((one) => one.period === period);
   const sums = periodSums(ofPeriod);
   const lines = linesOf(list).filter((line) => line.report !== null && line.report.period === period);
-  const validated = ofPeriod.filter((one) => one.status === 'validated' && one.correctsId === null).length;
-  const waiting = ofPeriod.filter((one) => one.status !== 'validated').length;
+  // The folded list is shift by shift: its summary counts the reports, a correction waiting is said on its line.
+  const made = ofPeriod.filter((one) => one.correctsId === null);
+  const count = (status: ShiftReportStatus): number => made.filter((one) => one.status === status).length;
+  const validated = count('validated');
+  const waiting = count('submitted');
+  const sentBack = count('rejected');
 
   return (
     <Panel className="rp-mine nv-enter" eyebrow={`Mes rapports · quinzaine ${periodLine(period)}`}>
@@ -157,6 +161,14 @@ export function MyReportsCard({
                     </span>
                   </div>
                 )}
+                {sum.sentBack === 0 ? null : (
+                  <div className="rp-figures__one">
+                    <span className="rp-figures__label">Renvoyé</span>
+                    <span className="rp-figures__value rp-figures__value--warn nv-num">
+                      {amountText(sum.sentBackMinor, sum.currency)}
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -170,6 +182,7 @@ export function MyReportsCard({
                 {[
                   validated === 0 ? null : `${String(validated)} validé${validated > 1 ? 's' : ''}`,
                   waiting === 0 ? null : `${String(waiting)} en attente`,
+                  sentBack === 0 ? null : `${String(sentBack)} renvoyé${sentBack > 1 ? 's' : ''}`,
                 ]
                   .filter((part) => part !== null)
                   .join(' · ')}

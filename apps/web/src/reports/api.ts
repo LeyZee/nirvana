@@ -4,6 +4,7 @@ import {
   ApiErrorSchema,
   PAY_RULES_ERROR_CODES,
   SchedulingSettingsSchema,
+  SHIFT_REPORT_BATCH_MAX,
   SHIFT_REPORT_ERROR_CODES,
   ShiftReportContextSchema,
   ShiftReportListSchema,
@@ -86,13 +87,13 @@ export function useReports(period: PayPeriod | null, enabled = true): UseQueryRe
 
 /** The reports of some periods as one list, `null` until each is read: a planning week spans one or two. */
 export function useReportsOf(periods: readonly PayPeriod[]): ShiftReportList | null {
-  return useQueries({
-    queries: periods.map((period) => listQuery(period)),
-    combine: (results) => {
-      const lists = results.flatMap((result) => (result.data === undefined ? [] : [result.data]));
-      return lists.length === 0 || lists.length < results.length ? null : mergeLists(lists);
-    },
-  });
+  return useQueries({ queries: periods.map((period) => listQuery(period)), combine: listsAsOne });
+}
+
+/** The periods' lists as one once each is read. Out of the hook, so that TanStack keeps it while they do not change. */
+function listsAsOne(results: UseQueryResult<ShiftReportList>[]): ShiftReportList | null {
+  const lists = results.flatMap((result) => (result.data === undefined ? [] : [result.data]));
+  return lists.length === 0 || lists.length < results.length ? null : mergeLists(lists);
 }
 
 /** The owner's and the managers' read of the accounts' rules, with the period running now. */
@@ -188,6 +189,23 @@ export const validateReports = (
     body,
     (json) => ValidateShiftReportsResultSchema.parse(json).results,
   );
+
+/**
+ * A validation of any size, in the contract's batches of `SHIFT_REPORT_BATCH_MAX` sent one after the other: each
+ * report's answer, and what stopped the batches still to send (the server, or a refusal of the whole batch).
+ */
+export async function validateInBatches(reports: ValidateShiftReportsBody['reports']): Promise<{
+  readonly results: ValidateShiftReportsResult['results'];
+  readonly stopped: ReportRefusal | null;
+}> {
+  const results: ValidateShiftReportsResult['results'] = [];
+  for (let from = 0; from < reports.length; from += SHIFT_REPORT_BATCH_MAX) {
+    const outcome = await validateReports({ reports: reports.slice(from, from + SHIFT_REPORT_BATCH_MAX) });
+    if (outcome.kind !== 'ok') return { results, stopped: outcome };
+    results.push(...outcome.value);
+  }
+  return { results, stopped: null };
+}
 
 export const rejectReport = (
   shiftReportId: string,

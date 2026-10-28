@@ -11,14 +11,14 @@ import { useEffect, useId, useRef, useState, type JSX } from 'react';
 
 import { TeamNav } from './TeamNav';
 
-import { HoldIsland, useHold, type HoldResult } from '@/reports/Hold';
+import { useAppHold, type HoldResult } from '@/reports/Hold';
 import { ReportPanel, type ReportDraft } from '@/reports/ReportPanel';
 import {
   rejectReport,
   useRefreshReports,
   useReports,
   useSchedulingSettings,
-  validateReports,
+  validateInBatches,
   type ReportRefusal,
 } from '@/reports/api';
 import {
@@ -64,10 +64,10 @@ const emptyCorrection = (): ReportDraft => ({
  * or sent back with a word; then a period member by member, its shifts without a report in amber, a validated report
  * corrected from there (a refund the member did not declare). The server says who may review what (`canReview`).
  */
-export function ReportsPage(): JSX.Element {
+export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
   const now = useNow();
   const zone = readerZone();
-  const hold = useHold();
+  const hold = useAppHold();
   const settings = useSchedulingSettings();
   const open = useReports(null);
   const current = settings.data === undefined ? null : periodAt(now, settings.data.timeZone);
@@ -85,15 +85,17 @@ export function ReportsPage(): JSX.Element {
   const validate = (): void => {
     if (chosen.length === 0) return;
     const batch = chosen.map((one) => ({ id: one.id, version: one.version }));
-    const ids = new Set(batch.map((one) => one.id));
+    const ids: ReadonlySet<string> = new Set(batch.map((one) => one.id));
     const count = batch.length;
     const sums = periodSums(chosen)
       .map((sum) => amountText(sum.waitingMinor, sum.currency))
       .join(' · ');
-    setHeld(ids);
+    const whose = whoseOf(chosen, namesOf(open.data), zone);
+    // Held with any validation still held or on its way; released alone, whatever the others do.
+    setHeld((before) => new Set([...before, ...ids]));
     setSelected(new Set());
     const release = (): void => {
-      setHeld(new Set());
+      setHeld((before) => new Set([...before].filter((one) => !ids.has(one))));
     };
     hold.hold(
       {
@@ -105,27 +107,40 @@ export function ReportsPage(): JSX.Element {
         },
       },
       async (): Promise<HoldResult> => {
-        const outcome = await validateReports({ reports: batch });
+        const { results, stopped } = await validateInBatches(batch);
         await refresh();
         release();
-        if (outcome.kind !== 'ok') return refusedResult(outcome, 'Rien n’a été validé');
-        const refused = outcome.value.flatMap((one) => (one.outcome === 'refused' ? [one.code] : []));
-        const done = count - refused.length;
-        const [first] = refused;
-        if (first === undefined) {
+        const done = results.filter((one) => one.outcome === 'validated').length;
+        const [first] = results.flatMap((one) => (one.outcome === 'refused' ? [one] : []));
+        if (first === undefined && stopped === null) {
           return {
             ok: true,
             title: done === 1 ? 'Rapport validé' : `${String(done)} rapports validés`,
             text: sums,
           };
         }
+        if (first === undefined && done === 0 && stopped !== null) {
+          return refusedResult(stopped, 'Rien n’a été validé');
+        }
+        const left = count - done;
+        const plural = left > 1 ? 's' : '';
+        // The batches the server never answered were not refused: they were not sent.
+        const what = stopped === null ? `refusé${plural}` : `non validé${plural}`;
+        const more = left - 1;
         return {
           ok: false,
           title:
             done === 0
               ? 'Rien n’a été validé'
-              : `${String(done)} validé${done > 1 ? 's' : ''}, ${String(refused.length)} refusé${refused.length > 1 ? 's' : ''}`,
-          text: REPORT_ERRORS[first],
+              : `${String(done)} validé${done > 1 ? 's' : ''}, ${String(left)} ${what}`,
+          text:
+            first === undefined
+              ? stopped?.kind === 'refused'
+                ? REPORT_ERRORS[stopped.code]
+                : 'Le serveur ne répond pas : les rapports restants n’ont pas été envoyés.'
+              : `${whose(first.id)} : ${lowerFirst(REPORT_ERRORS[first.code])}${
+                  more === 0 ? '' : ` Et ${String(more)} autre${more > 1 ? 's' : ''}.`
+                }`,
         };
       },
     );
@@ -186,7 +201,7 @@ export function ReportsPage(): JSX.Element {
           shiftId={correcting.shiftId}
           draft={correcting.draft}
           memberName={correcting.memberName}
-          hold={hold}
+          canSetRules={owner}
           onClose={() => {
             setCorrecting(null);
           }}
@@ -195,7 +210,6 @@ export function ReportsPage(): JSX.Element {
           }}
         />
       )}
-      <HoldIsland hold={hold} />
     </Page>
   );
 }
@@ -208,6 +222,26 @@ const refusedResult = (refusal: ReportRefusal, title: string): HoldResult => ({
       ? 'Le serveur ne répond pas : rien n’a été envoyé.'
       : REPORT_ERRORS[refusal.code],
 });
+
+/** A refusal's words after a colon: « … : ce rapport a changé… ». */
+const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** Who a refused report is from, and on what shift: « Le rapport de Théo (lun. 26 oct. · 17 h – 23 h) ». */
+function whoseOf(
+  reports: readonly ShiftReport[],
+  names: ReturnType<typeof namesOf>,
+  zone: string,
+): (reportId: string) => string {
+  return (reportId) => {
+    const report = reports.find((one) => one.id === reportId);
+    if (report === undefined) return 'Un rapport';
+    const what = report.correctsId === null ? 'Le rapport' : 'La correction';
+    const who = names.members.get(report.memberId)?.displayName;
+    const shift = names.shifts.get(report.shiftId);
+    const when = shift === undefined ? null : swapShiftLine(shift.startsAt, shift.endsAt, undefined, zone);
+    return `${what}${who === undefined ? '' : ` de ${who}`}${when === null ? '' : ` (${when})`}`;
+  };
+}
 
 /** A member's colour on their swatch, or the swatch's own grey. */
 function swatchOf(member: PlanningMember | undefined): { '--sc-color': string } | undefined {

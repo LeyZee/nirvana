@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
+import { ValidateShiftReportsBodySchema } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
+  Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReportsPage } from './ReportsPage';
+
+import { HoldProvider } from '@/reports/Hold';
 
 vi.mock('@/scheduling/time', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/scheduling/time')>()),
@@ -78,7 +82,8 @@ const report = (n: number, shiftIndex: number, patch: Record<string, unknown> = 
 
 let open: FakeReport[];
 let period: FakeReport[];
-let answer: { status: number; body: unknown };
+/** What a `POST` answers: the same for each, or from what it was sent. */
+let answer: { status: number; body: unknown } | ((body: unknown) => { status: number; body: unknown });
 const writes: { method: string; path: string; body: unknown }[] = [];
 
 function serve(): void {
@@ -89,12 +94,10 @@ function serve(): void {
       const json = (body: unknown, status = 200) =>
         Promise.resolve(new Response(JSON.stringify(body), { status }));
       if (init?.method === 'POST') {
-        writes.push({
-          method: init.method,
-          path: url.pathname,
-          body: typeof init.body === 'string' ? JSON.parse(init.body) : null,
-        });
-        return json(answer.body, answer.status);
+        const body: unknown = typeof init.body === 'string' ? JSON.parse(init.body) : null;
+        writes.push({ method: init.method, path: url.pathname, body });
+        const answered = typeof answer === 'function' ? answer(body) : answer;
+        return json(answered.body, answered.status);
       }
       switch (url.pathname) {
         case '/v1/scheduling/settings':
@@ -112,6 +115,15 @@ function serve(): void {
                 : { reports: [], shifts: [], accounts: [], members: [] }
               : { reports: open, shifts: SHIFTS, accounts: [ACCOUNT], members: MEMBERS },
           );
+        case `/v1/scheduling/shifts/${id(101)}/report`:
+          return json({
+            shift: SHIFTS[0],
+            account: ACCOUNT,
+            period: '2026-10-16',
+            opensAt: '2026-10-26T21:30:00.000Z',
+            rules: null,
+            reports: period.filter((one) => one['shiftId'] === id(101)),
+          });
         default:
           return json(null, 404);
       }
@@ -119,9 +131,34 @@ function serve(): void {
   );
 }
 
+/** Every report of the batch validated, as the server answers it. */
+const validatesAll = (body: unknown): { status: number; body: unknown } => {
+  const sent = ValidateShiftReportsBodySchema.parse(body).reports;
+  return {
+    status: 200,
+    body: {
+      results: sent.map((one) => ({
+        outcome: 'validated',
+        report: { ...report(0, 0), id: one.id, status: 'validated', version: one.version + 1 },
+      })),
+    },
+  };
+};
+
 function renderPage(): void {
-  const root = createRootRoute();
-  const page = createRoute({ getParentRoute: () => root, path: '/equipe/rapports', component: ReportsPage });
+  // The app's one hold, as the shell mounts it.
+  const root = createRootRoute({
+    component: () => (
+      <HoldProvider>
+        <Outlet />
+      </HoldProvider>
+    ),
+  });
+  const page = createRoute({
+    getParentRoute: () => root,
+    path: '/equipe/rapports',
+    component: () => <ReportsPage owner />,
+  });
   const router = createRouter({
     routeTree: root.addChildren([page]),
     history: createMemoryHistory({ initialEntries: ['/equipe/rapports'] }),
@@ -222,7 +259,57 @@ describe('Équipe › Rapports', () => {
     ]);
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('1 validé, 1 refusé');
-    expect(alert.textContent).toContain('a changé depuis qu’il a été lu');
+    // The refused one is named, with its shift.
+    expect(alert.textContent).toContain('Le rapport de Basile (');
+    expect(alert.textContent).toContain('ce rapport ou son shift a changé depuis qu’il a été lu');
+  });
+
+  it('keeps a second validation held while the first is answered, and says the first one’s refusal', async () => {
+    answer = (body) => ({
+      status: 200,
+      body: {
+        results: ValidateShiftReportsBodySchema.parse(body).reports.map((one) => ({
+          outcome: 'refused',
+          id: one.id,
+          code: 'shift_report_changed_conflict',
+        })),
+      },
+    });
+    renderPage();
+    const [theo] = (
+      await screen.findAllByRole('checkbox', { name: /Sélectionner le rapport de Théo/u })
+    ).filter((box) => !box.matches(':disabled'));
+    if (theo === undefined) throw new Error('no box');
+    fireEvent.click(theo);
+    fireEvent.click(screen.getByRole('button', { name: 'Valider (1)' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Sélectionner le rapport de Basile/u }));
+    // The second hold sends the first at once.
+    fireEvent.click(screen.getByRole('button', { name: 'Valider (1)' }));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(writes).toHaveLength(1);
+    // Answered, the first gives back its own row and leaves the second's held.
+    expect(screen.getAllByText('En validation')).toHaveLength(1);
+    expect(
+      screen.getByRole('checkbox', { name: /Sélectionner le rapport de Basile/u }).matches(':disabled'),
+    ).toBe(true);
+    // Its refusal has its own island, above the second one counting down.
+    expect((await screen.findByRole('alert')).textContent).toContain('Le rapport de Théo (');
+    expect(screen.getByRole('status').textContent).toContain('Validation du rapport dans');
+  });
+
+  it('validates more than a batch holds in batches of 100, under one hold', async () => {
+    open = Array.from({ length: 101 }, (_, n) => report(n + 1, n % 2));
+    answer = validatesAll;
+    renderPage();
+    fireEvent.click(await screen.findByLabelText('Tout sélectionner'));
+    fireEvent.click(screen.getByRole('button', { name: 'Valider (101)' }));
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+
+    expect(writes.map((one) => ValidateShiftReportsBodySchema.parse(one.body).reports.length)).toEqual([
+      100, 1,
+    ]);
+    expect((await screen.findByText('101 rapports validés')).closest('[role="status"]')).toBeTruthy();
   });
 
   it('gives the selection back on « Annuler », with nothing sent', async () => {
@@ -274,6 +361,10 @@ describe('Équipe › Rapports', () => {
     expect(screen.getByRole('button', { name: 'Quinzaine suivante' }).matches(':disabled')).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Corriger' }));
-    expect(await screen.findByRole('dialog', { name: 'Corriger le rapport de Théo' })).toBeTruthy();
+    const dialog = await screen.findByRole('dialog', { name: 'Corriger le rapport de Théo' });
+    // No rules for the period: the owner is led to them, never told to warn the agency.
+    expect(await within(dialog).findByText('Pas encore de règles de paie')).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'Poser les règles' })).toBeTruthy();
+    expect(dialog.textContent).not.toContain('Préviens l’agence');
   });
 });

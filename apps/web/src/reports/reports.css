@@ -226,30 +226,34 @@
   color: var(--nv-ink);
 }
 
-/* ── The hold island: at the foot of the screen, above the phone's tab bar ── */
-.rp-island {
-  --_radius: var(--nv-radius-xl);
+/* ── The hold islands: at the foot of the screen, above the phone's tab bar; a refusal sent meanwhile above ── */
+.rp-islands {
+  position: fixed;
   z-index: 60;
   left: 50%;
   bottom: calc(var(--nv-space-6) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  width: min(440px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.rp-island {
+  --_radius: var(--nv-radius-xl);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--nv-space-3);
-  width: min(440px, calc(100vw - 28px));
   box-sizing: border-box;
   padding: var(--nv-space-3) var(--nv-space-3) var(--nv-space-3) var(--nv-space-4);
-  transform: translateX(-50%);
+  pointer-events: auto;
   animation: rp-island-in var(--nv-dur-slow) var(--nv-ease-spring-bouncy) both;
-}
-/* .nv-glass sets position: relative; the island floats. */
-.rp-island.nv-glass {
-  position: fixed;
 }
 @keyframes rp-island-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 16px) scale(0.94);
+    transform: translateY(16px) scale(0.94);
     filter: blur(4px);
   }
 }
@@ -494,10 +498,15 @@
   font-weight: 680;
   white-space: nowrap;
 }
-.rp-figures__value--quiet {
+.rp-figures__value--quiet,
+.rp-figures__value--warn {
   font-size: var(--nv-text-title-2);
   line-height: var(--nv-text-title-2-leading);
   color: var(--nv-ink-muted);
+}
+/* Came back: it waits for its member, amber like the line that says it. */
+.rp-figures__value--warn {
+  color: var(--nv-warning);
 }
 .rp-mine__all {
   margin: 0 calc(-1 * var(--nv-space-2));
@@ -992,7 +1001,7 @@
 }
 
 @media (max-width: 820px) {
-  .rp-island {
+  .rp-islands {
     /* Above the floating tab bar (shell.css, « Phone »). */
     bottom: calc(14px + 64px + 12px + env(safe-area-inset-bottom, 0px));
   }
