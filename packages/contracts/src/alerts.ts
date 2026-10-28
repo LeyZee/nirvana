@@ -34,7 +34,7 @@ const customAlertFields = z.object({
     .refine((list) => new Set(list.map((v) => v.toLocaleLowerCase('fr'))).size === list.length, {
       message: 'Mot-clé en double',
     }),
-  /** Hands the conversation to a human (cause `keyword` or `custom_alert`); otherwise it only lets one know. */
+  /** Hands the conversation to a human (cause `keyword`, `custom_alert` or `identity_doubt`); otherwise it only lets one know. */
   pausesAgent: z.boolean(),
   /** Sent to Telegram, in the topic of her alerts (`custom`); always kept in the history. */
   notify: z.boolean(),

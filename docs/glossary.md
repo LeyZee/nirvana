@@ -61,6 +61,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Suivi d'offre | `post_offer` | Ce que fait l'agent après un achat ou une offre refusée. |
 | Mot-clé d'alerte | `alert_keyword` | Un mot qui, écrit par un fan, met l'agent en pause pour ce fan et prévient un humain. |
 | Alerte personnalisée | `custom_alert` | Une alerte que le propriétaire écrit lui-même (P4-01) : une phrase que le cerveau évalue, des mots-clés lus en code, ou les deux ; elle prévient un humain et, si elle est cochée « met en pause », passe la main. Une ligne par créatrice, montrées comme une seule alerte. |
+| Doute sur la personne | `identity_doubt` | Alerte système (P4-01) : le fan doute de parler à la créatrice ; avec un chatteur en poste, l'agent lui passe la main (cause `identity_doubt`), sinon il prévient seulement. Jamais l'agent ne dit qu'il est une IA (ADR 0021). |
 | Déclenchement d'alerte | `alert_triggered` | L'événement d'une alerte qui prévient sans mettre l'agent en pause : il nomme l'alerte et comment elle a sonné, jamais ce que le fan a écrit. Une alerte qui met en pause est un passage à l'humain avec son `trigger`. |
 | Rester en personnage | `asks_if_bot`, `ai_disclosure` | Le bot ne dit jamais qu'il est une IA : à « t'es un bot ? » (`asks_if_bot`), il répond en personnage, et la garde `ai_disclosure` bloque tout aveu. Fixé dans le code, pas un réglage (ADR 0021). |
 | Média | `media_asset` | Une photo, vidéo ou audio de la créatrice (catalogue) ou reçue d'un fan. |

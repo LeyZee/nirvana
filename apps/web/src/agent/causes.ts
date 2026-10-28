@@ -13,4 +13,5 @@ export const CAUSE_LABELS: Readonly<Record<HandoffCause, string>> = {
   llm_unavailable: 'IA indisponible',
   other: 'À reprendre',
   custom_alert: 'Alerte personnalisée',
+  identity_doubt: 'Doute sur la personne',
 };
