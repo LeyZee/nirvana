@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   acceptanceDeadline,
   nextAcceptance,
+  stateAfterCreditNote,
   type AcceptanceState,
   type AcceptanceStep,
 } from '../invoice-acceptance';
@@ -63,6 +64,26 @@ describe('the acceptance of an invoice by its contractor (EQ-06)', () => {
       }
     }
     refusedIn('contested', () => nextAcceptance('contested', { kind: 'accept' }, before));
+  });
+
+  it('leaves the invoice where it stands under a credit note the agency issued of its own accord', () => {
+    const states: AcceptanceState[] = [
+      'pending',
+      'accepted',
+      'tacitly_accepted',
+      'contested',
+      'credited',
+      'contest_refused',
+    ];
+    for (const state of states) {
+      for (const at of [before, after]) {
+        expect(stateAfterCreditNote(state, { answersContest: false }, at)).toBe(state);
+      }
+    }
+    // Only the credit note that answers a contest moves the invoice, and only a contested one.
+    expect(stateAfterCreditNote('contested', { answersContest: true }, after)).toBe('credited');
+    refusedIn('accepted', () => stateAfterCreditNote('accepted', { answersContest: true }, before));
+    refusedIn('pending', () => stateAfterCreditNote('pending', { answersContest: true }, before));
   });
 
   it('refuses a contest or a refusal without a reason', () => {
