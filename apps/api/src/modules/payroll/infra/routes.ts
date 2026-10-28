@@ -1,16 +1,22 @@
 import {
   BonusIdSchema,
   BonusSchema,
+  BonusTierSetSchema,
+  CollectiveGoalSchema,
   CommissionStatementIdSchema,
   CommissionStatementSchema,
   CreateBonusBodySchema,
+  CreateBonusTierSetBodySchema,
+  CreateCollectiveGoalBodySchema,
   CreatePayAdjustmentBodySchema,
   CreatePenaltyBodySchema,
   DomainError,
+  ExchangeRatesSchema,
   PayAdjustmentSchema,
   PayCommissionStatementBodySchema,
   PayPeriodSchema,
   PayrollPeriodSchema,
+  PayrollSettingsSchema,
   PenaltyIdSchema,
   PenaltySchema,
   UserIdSchema,
@@ -25,7 +31,7 @@ import { z } from 'zod';
 import type { PayrollEntries } from '../application/entries';
 import type { PayrollReads } from '../application/periods';
 import type { PayrollValidation } from '../application/validation';
-import type { Actor } from '../domain/ports';
+import type { Actor, PayrollRuleStore } from '../domain/ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
 export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
@@ -46,12 +52,14 @@ const actorOf = (request: FastifyRequest): Actor => ({ userId: userOf(request), 
  * `/v1/payroll` (EQ-04): the owner and the team's accounts reach it, a creator never. What each one reads and writes
  * is the database's call (`withMember`): every statement for the owner and an active manager, one's own for anyone
  * else; a validation, a bonus, a penalty or an adjustment by the owner or an active manager, never for oneself; a
- * payment by the owner only. A create sent again with the same `id` and values gives back what was recorded (200).
+ * payment and the team's rules (tiers, goals, minimum payout) by the owner only. A create sent again with the same `id`
+ * and values gives back what was recorded (200).
  */
 export function createPayrollRoutes(
   reads: PayrollReads,
   validation: PayrollValidation,
   entries: PayrollEntries,
+  rules: PayrollRuleStore,
   requireRole: RequireRole,
 ): FastifyPluginAsyncZod {
   const ownerOrMember = requireRole('owner', 'operator');
@@ -143,6 +151,57 @@ export function createPayrollRoutes(
         const { value, created } = await entries.createAdjustment(actorOf(request), request.body);
         return reply.code(created ? 201 : 200).send(value);
       },
+    );
+
+    app.post(
+      '/payroll/bonus-tiers',
+      {
+        preHandler: ownerOrMember,
+        schema: {
+          body: CreateBonusTierSetBodySchema,
+          response: { 200: BonusTierSetSchema, 201: BonusTierSetSchema },
+        },
+      },
+      async (request, reply) => {
+        const { value, created } = await rules.createBonusTierSet(actorOf(request), request.body);
+        return reply.code(created ? 201 : 200).send(value);
+      },
+    );
+
+    app.post(
+      '/payroll/collective-goals',
+      {
+        preHandler: ownerOrMember,
+        schema: {
+          body: CreateCollectiveGoalBodySchema,
+          response: { 200: CollectiveGoalSchema, 201: CollectiveGoalSchema },
+        },
+      },
+      async (request, reply) => {
+        const { value, created } = await rules.createCollectiveGoal(actorOf(request), request.body);
+        return reply.code(created ? 201 : 200).send(value);
+      },
+    );
+
+    app.get(
+      '/payroll/settings',
+      { preHandler: ownerOrMember, schema: { response: { 200: PayrollSettingsSchema } } },
+      (request) => reads.settings(userOf(request)),
+    );
+
+    app.put(
+      '/payroll/settings',
+      {
+        preHandler: ownerOrMember,
+        schema: { body: PayrollSettingsSchema, response: { 200: PayrollSettingsSchema } },
+      },
+      (request) => rules.setSettings(actorOf(request), request.body),
+    );
+
+    app.get(
+      '/payroll/exchange-rates',
+      { preHandler: ownerOrMember, schema: { response: { 200: ExchangeRatesSchema } } },
+      (request) => reads.exchangeRates(userOf(request)),
     );
     return Promise.resolve();
   };

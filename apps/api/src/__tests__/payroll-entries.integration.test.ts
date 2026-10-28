@@ -13,11 +13,9 @@ import {
   type PayPeriod,
   type TeamMember,
 } from '@nirvana/contracts';
-import { schema, sql } from '@nirvana/db';
-import type { PoolClient } from 'pg';
+import { schema } from '@nirvana/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
-import { lockWaits } from './support/lock-waits';
 import { startPayrollTeam, type PayrollTeam } from './support/payroll-team';
 
 /** Periods of 2025: they have ended. */
@@ -49,41 +47,14 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
     ...patch,
   });
 
-  /** Advisory locks some transaction of this test's database waits for: a write held behind another. */
-  const waiting = (): Promise<number> => lockWaits(team.test.admin.db);
-
-  const until = async (check: () => Promise<boolean>): Promise<void> => {
-    for (let tries = 0; tries < 250; tries += 1) {
-      if (await check()) return;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    throw new Error('Never happened');
-  };
-
-  /** A transaction that holds pay's locks, as a validation or another write would, until `release`. */
-  const holding = async (keys: readonly string[]): Promise<{ release: () => Promise<void> }> => {
-    const client: PoolClient = await team.test.admin.pool.connect();
-    await client.query('begin');
-    for (const key of keys)
-      await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
-    return {
-      release: async () => {
-        await client.query('rollback');
-        client.release();
-      },
-    };
-  };
+  const waiting = () => team.waiting();
+  const until = (check: () => Promise<boolean>) => team.until(check);
+  const holding = (keys: readonly string[]) => team.holding(keys);
   const memberPeriod = (member: TeamMember, period: PayPeriod) =>
     `payroll.member_period:${member.id}:${period}`;
   const today = () => payPeriodAt(new Date(), 'Europe/Paris');
 
-  const audited = async (action: string): Promise<number> => {
-    const rows = await team.test.admin.db
-      .select({ id: schema.auditLog.id })
-      .from(schema.auditLog)
-      .where(sql`${schema.auditLog.action} = ${action}`);
-    return rows.length;
-  };
+  const audited = (action: string) => team.audited(action);
 
   beforeAll(async () => {
     team = await startPayrollTeam(inject('pgSuperuserUrl'));

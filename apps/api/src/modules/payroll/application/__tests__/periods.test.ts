@@ -103,6 +103,8 @@ const read = (
           collectiveGoals: [],
           settings: { minimumPayoutMinor: 1_500 },
         }),
+      settings: () => Promise.reject(new Error('not read here')),
+      exchangeRates: () => Promise.reject(new Error('not read here')),
     },
     () => new Date(at),
   ).period(newId(UserIdSchema), P1);

@@ -1,5 +1,5 @@
 # EQ-04 Moteur de paie : calcul pur, périodes, verrou
-Statut : in-progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026) : calcul pur, contrats, tables, clôture de la quinzaine (migration 0029), recalcul par job, lecture d'une quinzaine, validation qui clôture, « payé » et saisies d'un membre sous verrous faits ; paliers, objectif, minimum de versement et taux à venir
+Statut : in-progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026) : calcul pur, contrats, tables, clôture de la quinzaine (migration 0029), recalcul par job, lecture d'une quinzaine, validation qui clôture, « payé », saisies d'un membre sous verrous, paliers, objectif, minimum de versement et lecture des taux faits ; job des taux de change à venir (source proposée à Charles)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-01, EQ-03
 Branche : task/eq-04-payroll-engine
@@ -76,3 +76,11 @@ Calculer la paie de chaque membre par quinzaine avec **les règles d'Imperium, s
   - l'annulation d'un malus part de la première quinzaine ouverte du membre (`penalty_cancel_conflict` quand toutes sont validées) ;
   - un rejeu (même `id`, mêmes valeurs) rend 200 avec ce qui est écrit, sans rien réécrire.
   - Reste : paliers, objectif collectif et minimum de versement (sous `payroll.close`), et les taux de change par job.
+- 2026-10-28 (fil Équipe) : **les règles de l'équipe** (empilées sur les saisies). `POST /v1/payroll/bonus-tiers`, `POST /v1/payroll/collective-goals`, `GET` et `PUT /v1/payroll/settings`, `GET /v1/payroll/exchange-rates`. Choix :
+  - le propriétaire seul écrit, sous `payroll.close` : une règle et une validation ne se croisent jamais, et le job ne voit jamais la moitié d'une règle ;
+  - des paliers ou un objectif ne vont que sur une quinzaine après la dernière clôture de l'équipe, comme le déclencheur `pay_period_settled` le dit, même si le relevé d'un autre membre y est encore un brouillon ; le serveur le vérifie sous le verrou pour répondre `pay_period_closed_conflict` plutôt qu'une erreur de la base ;
+  - un rejeu compare les paliers champ par champ (`jsonb` rend les clés dans un autre ordre) ;
+  - le recalcul part pour les quinzaines qui ont un brouillon (une quinzaine sans brouillon en reçoit un par le job de son premier rapport, prime ou report), et pour la quinzaine d'un objectif dès qu'elle a commencé, puisqu'il paie aussi un chatteur sans vente ; le minimum de versement touche tous les brouillons, et la même valeur n'écrit rien ;
+  - précision de Bilan écrite dans l'ADR 0035 (acceptée) : les verrous (membre, quinzaine) se prennent par quinzaine croissante puis membre croissant, et la quinzaine en cours est calculée par le serveur ;
+  - le minimum se lit par toute l'équipe (il est déjà dans chaque quinzaine lue), le dernier taux par le propriétaire et un manager actif seulement, fermé par défaut : un membre lit le taux de ses propres lignes (relecture de Bilan sur #274).
+  - Reste : le job des taux de change, une fois la source choisie par Charles (BCE proposée), et la ligne « Taux de change » de la fiche à remettre d'accord avec l'ADR 0032 (taux du dernier jour de la quinzaine, pas du jour de validation).

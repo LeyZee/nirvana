@@ -114,7 +114,10 @@ export function canonicalExchangeRates<R extends { readonly currency: string }>(
   return [...rates].sort((a, b) => (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0));
 }
 
-/** `GET /v1/payroll/exchange-rates`: the latest rate of each currency, `null` before the first one is read. */
+/**
+ * `GET /v1/payroll/exchange-rates` (owner and an active manager): the latest rate of each currency, `null` before the
+ * first one is read. A member reads the rate of their own statement's lines (`rateMicros`), never this one.
+ */
 export const ExchangeRatesSchema = z.object({ usd: ExchangeRateSchema.nullable() });
 export type ExchangeRates = z.infer<typeof ExchangeRatesSchema>;
 
