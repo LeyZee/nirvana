@@ -8,6 +8,7 @@ import {
   AlertTriggerSchema,
   CUSTOM_ALERT_TOPIC,
   CustomAlertBodySchema,
+  customAlertNameKey,
   SYSTEM_ALERT_CODES,
   SYSTEM_ALERT_TOPICS,
 } from './alerts';
@@ -120,6 +121,13 @@ describe('custom alerts (P4-01)', () => {
       AlertTestResultSchema.safeParse({ keywords: ['vidéo perso'], phraseMatched: null, reason: null })
         .success,
     ).toBe(true);
+  });
+
+  it('reads two names as one alert whatever their case, accents and spaces around, never their words', () => {
+    expect(customAlertNameKey('  APPEL Vidéo ')).toBe(customAlertNameKey('appel video'));
+    expect(customAlertNameKey('Éloïse')).toBe('eloise');
+    expect(customAlertNameKey('appel vidéo')).not.toBe(customAlertNameKey('appel-vidéo'));
+    expect(customAlertNameKey('appel vidéo')).not.toBe(customAlertNameKey('appel  vidéo'));
   });
 
   it('gives every error code a suffix that sets its status (api.md)', () => {

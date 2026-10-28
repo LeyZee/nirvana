@@ -250,4 +250,96 @@ describe('alerts (P4-01, /v1/alerts)', () => {
     });
     expect(errorOf(unknownGroup)).toEqual([404, 'custom_alert_not_found']);
   });
+
+  it('refuses a second active alert of the same name on a creator, case, accents and spaces aside', async () => {
+    const lina = await app.modules.persona.creators.create({ displayName: 'Lina N.' });
+    const maya = await app.modules.persona.creators.create({ displayName: 'Maya N.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const alertOn = (name: string, creators: { creatorId: string; enabled: boolean }[]) => ({
+      groupId: newId(CustomAlertGroupIdSchema),
+      name,
+      phrase: null,
+      keywords: ['appel'],
+      pausesAgent: false,
+      notify: false,
+      creators,
+    });
+    const post = (payload: object) =>
+      server.inject({ method: 'POST', url: '/v1/alerts', headers: owner, payload });
+    const put = (groupId: string, payload: object) =>
+      server.inject({ method: 'PUT', url: `/v1/alerts/${groupId}`, headers: owner, payload });
+
+    const first = alertOn('Appel vidéo', [{ creatorId: lina.id, enabled: true }]);
+    expect((await post(first)).statusCode).toBe(201);
+    // Same name on the same creator, written otherwise: refused, nothing written.
+    const twin = alertOn('  APPEL VIDEO ', [
+      { creatorId: maya.id, enabled: true },
+      { creatorId: lina.id, enabled: true },
+    ]);
+    const refused = await post(twin);
+    expect(errorOf(refused)).toEqual([409, 'custom_alert_name_conflict']);
+    expect(refused.json()).toMatchObject({
+      error: { message: 'Une alerte active porte déjà ce nom', details: { creatorIds: [lina.id] } },
+    });
+    expect(
+      await test.admin.db
+        .select()
+        .from(schema.customAlerts)
+        .where(eq(schema.customAlerts.groupId, twin.groupId)),
+    ).toEqual([]);
+    // Another creator, or the same one with the twin switched off: the name is free.
+    expect((await post({ ...twin, creators: [{ creatorId: maya.id, enabled: true }] })).statusCode).toBe(201);
+    const off = alertOn('Appel Vidéo', [{ creatorId: lina.id, enabled: false }]);
+    expect((await post(off)).statusCode).toBe(201);
+    // Switching it on would make two: refused; the first switched off, it goes through.
+    expect(
+      errorOf(await put(off.groupId, { ...off, creators: [{ creatorId: lina.id, enabled: true }] })),
+    ).toEqual([409, 'custom_alert_name_conflict']);
+    expect(
+      (await put(first.groupId, { ...first, creators: [{ creatorId: lina.id, enabled: false }] })).statusCode,
+    ).toBe(200);
+    expect(
+      (await put(off.groupId, { ...off, creators: [{ creatorId: lina.id, enabled: true }] })).statusCode,
+    ).toBe(200);
+    // An alert keeps its own name when replaced, and an archived one frees it.
+    expect(
+      (
+        await put(off.groupId, {
+          ...off,
+          keywords: ['visio'],
+          creators: [{ creatorId: lina.id, enabled: true }],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await server.inject({ method: 'DELETE', url: `/v1/alerts/${off.groupId}`, headers: owner }))
+        .statusCode,
+    ).toBe(204);
+    expect((await post(alertOn('appel vidéo', [{ creatorId: lina.id, enabled: true }]))).statusCode).toBe(
+      201,
+    );
+  });
+
+  it('writes one of two alerts of the same name posted at once', async () => {
+    const zoe = await app.modules.persona.creators.create({ displayName: 'Zoé N.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const body = () => ({
+      groupId: newId(CustomAlertGroupIdSchema),
+      name: 'Rendez-vous',
+      phrase: null,
+      keywords: ['rdv'],
+      pausesAgent: false,
+      notify: false,
+      creators: [{ creatorId: zoe.id, enabled: true }],
+    });
+    const answers = await Promise.all(
+      [body(), body()].map((payload) =>
+        server.inject({ method: 'POST', url: '/v1/alerts', headers: owner, payload }),
+      ),
+    );
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([201, 409]);
+    expect((await app.modules.alerts.store.activeFor(zoe.id)).map((alert) => alert.name)).toEqual([
+      'Rendez-vous',
+    ]);
+  });
 });
