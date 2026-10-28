@@ -1,6 +1,6 @@
 # 0035. Paie : une saisie verrouille sa quinzaine et chacune des suivantes
 
-Statut : proposed
+Statut : accepted (Charles, 28/10/2026 17h23, « ok 0035 »)
 Date : 2026-10-28
 Complète : ADR 0032 § Verrous (les saisies d'un membre)
 
