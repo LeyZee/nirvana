@@ -16,7 +16,7 @@ import { eq, schema, withMember, type Database } from '@nirvana/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { fromNodeHeaders } from 'better-auth/node';
-import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyReply, FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -206,7 +206,7 @@ function withoutToken(json: string): string {
   return JSON.stringify(JSON.parse(json), (key, value: unknown) => (key === 'token' ? undefined : value));
 }
 
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 /** Route guard: no session → 401, a session with another role → 403 (security.md §6). */
 export function createRequireRole(auth: Auth, db: Database): RequireRole {
@@ -228,7 +228,7 @@ export function createRequireRole(auth: Auth, db: Database): RequireRole {
 export function createRequireRecentLogin(
   auth: Auth,
   now: () => Date = () => new Date(),
-): preHandlerAsyncHookHandler {
+): preValidationAsyncHookHandler {
   return async (request) => {
     const result = await auth.api.getSession({ headers: authHeaders(request) });
     if (result === null) throw new SessionUnauthenticated();
@@ -316,7 +316,7 @@ export function createAuthRoutes(
       method: 'POST',
       url: '/auth/sign-in/email',
       config: perIp,
-      preHandler: async (request, reply) => {
+      preValidation: async (request, reply) => {
         const attempt = await perAccount(request);
         if (attempt.isAllowed || !attempt.isExceeded) return;
         void reply.header('retry-after', attempt.ttlInSeconds);
@@ -331,7 +331,7 @@ export function createAuthRoutes(
     app.get(
       '/me',
       {
-        preHandler: requireRole(...UserRoleSchema.options),
+        preValidation: requireRole(...UserRoleSchema.options),
         schema: { response: { 200: MeSchema } },
       },
       async (request) => {

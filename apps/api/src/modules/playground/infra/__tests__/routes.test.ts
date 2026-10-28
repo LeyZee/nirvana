@@ -12,7 +12,7 @@ import {
   type LlmGateway,
   type VoiceOutput,
 } from '@nirvana/llm';
-import type { LightMyRequestResponse, preHandlerAsyncHookHandler } from 'fastify';
+import type { LightMyRequestResponse, preValidationAsyncHookHandler } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
 import { testConfig } from '../../../../__tests__/support/config';
@@ -88,7 +88,7 @@ const stateOf = (response: LightMyRequestResponse) => PlaygroundStateSchema.pars
 const codeOf = (response: LightMyRequestResponse) => ApiErrorSchema.parse(response.json()).error.code;
 
 /** Stands in for `requireRole('owner')`: the header says who asks, and the user is set as auth.ts does. */
-const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+const ownerOnly: preValidationAsyncHookHandler = async (request, reply) => {
   const id = request.headers['x-test-user'];
   if (typeof id !== 'string') {
     await reply.code(403).send({ error: 'forbidden' });

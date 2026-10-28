@@ -5,7 +5,7 @@ import {
   type BackupStatus,
   type RestoreTest,
 } from '@nirvana/contracts';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { z } from 'zod';
 
@@ -13,9 +13,9 @@ import type { RestoreTestActor } from '../domain/ports';
 
 export interface BackupsRoutesOptions {
   /** `requireRole('owner')`: the state of the agency's backups is the owner's alone (ADR 0028 § 5). */
-  readonly guard: preHandlerAsyncHookHandler;
+  readonly guard: preValidationAsyncHookHandler;
   /** `requireRecentLogin`: entering a restore test, which opens the pay (EQ-17), needs a sign-in under 10 minutes. */
-  readonly recentLogin: preHandlerAsyncHookHandler;
+  readonly recentLogin: preValidationAsyncHookHandler;
 }
 
 export interface BackupsRoutesApi {
@@ -40,7 +40,7 @@ export function createBackupsRoutes(
     app.post(
       '/backups/restore-tests',
       {
-        preHandler: options.recentLogin,
+        preValidation: options.recentLogin,
         schema: {
           body: RecordRestoreTestBodySchema,
           response: { 200: RestoreTestSchema, 201: RestoreTestSchema },

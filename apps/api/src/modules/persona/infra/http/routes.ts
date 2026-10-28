@@ -8,7 +8,7 @@ import {
   SetAgentHoursBodySchema,
   type UserRole,
 } from '@nirvana/contracts';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -23,7 +23,7 @@ class CreatorNotFound extends DomainError {
 }
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 /**
  * `GET /v1/creators`: the creators the signed-in user may open, an owner sees them all; `POST`: the owner adds one.
@@ -32,13 +32,13 @@ export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
 export function createCreatorRoutes(
   directory: CreatorDirectory,
   requireRole: RequireRole,
-  recentLogin: preHandlerAsyncHookHandler,
+  recentLogin: preValidationAsyncHookHandler,
 ): FastifyPluginAsyncZod {
   return (app) => {
     app.get(
       '/creators',
       {
-        preHandler: requireRole('owner', 'operator', 'creator'),
+        preValidation: requireRole('owner', 'operator', 'creator'),
         schema: { response: { 200: CreatorListSchema } },
       },
       async (request) => {
@@ -53,7 +53,7 @@ export function createCreatorRoutes(
       '/creators',
       {
         // A new creator is the agency's call: the owner only (`pnpm creator:create` does the same).
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: { body: NewCreatorSchema, response: { 201: CreatorSummarySchema } },
       },
       async (request, reply) => {
@@ -66,7 +66,7 @@ export function createCreatorRoutes(
     app.get(
       '/creators/:id/agent-hours',
       {
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: { params: CreatorParamsSchema, response: { 200: AgentHoursViewSchema } },
       },
       async (request) => {
@@ -81,7 +81,7 @@ export function createCreatorRoutes(
     app.put(
       '/creators/:id/agent-hours',
       {
-        preHandler: [requireRole('owner'), recentLogin],
+        preValidation: [requireRole('owner'), recentLogin],
         schema: {
           params: CreatorParamsSchema,
           body: SetAgentHoursBodySchema,

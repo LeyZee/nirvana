@@ -51,6 +51,11 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
 };
 
+/** A fan the platform gives no name (an empty pseudonym): the same words as Suivi, never an empty title. */
+function fanNameOf(name: string): string {
+  return name.trim() === '' ? 'Fan sans nom' : name;
+}
+
 /** « Sans réponse » after this long with nothing written (P3-11), counted while she may answer. */
 const UNANSWERED_AFTER_MINUTES = 30;
 
@@ -60,11 +65,6 @@ const UNANSWERED_AFTER_MINUTES = 30;
  * and her opening, so that the messages of her night do not all fall in at once. The wait shown stays his own, from
  * his message, so that « À traiter » keeps them in the order they wrote. Always open (no setting), nothing changes.
  */
-/** A fan the platform gives no name (an empty pseudonym): the same words as Suivi, never an empty title. */
-function fanNameOf(name: string): string {
-  return name.trim() === '' ? 'Fan sans nom' : name;
-}
-
 export function unansweredSince(
   lastInboundAt: Date,
   now: Date,

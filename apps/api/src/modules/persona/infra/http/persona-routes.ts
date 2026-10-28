@@ -44,7 +44,7 @@ export function createPersonaRoutes(
     app.get(
       '/creators/:creatorId/persona',
       {
-        preHandler: requireRole('owner', 'operator', 'creator'),
+        preValidation: requireRole('owner', 'operator', 'creator'),
         schema: { params: CreatorParamsSchema, response: { 200: PersonaOverviewSchema } },
       },
       async (request) => {
@@ -58,7 +58,7 @@ export function createPersonaRoutes(
       '/creators/:creatorId/persona/versions',
       {
         // Chatters read her persona; only the owner and the creator herself change it.
-        preHandler: requireRole('owner', 'creator'),
+        preValidation: requireRole('owner', 'creator'),
         schema: {
           params: CreatorParamsSchema,
           body: CreatePersonaVersionBodySchema,
@@ -77,7 +77,7 @@ export function createPersonaRoutes(
       '/creators/:creatorId/persona/versions/:versionId/activate',
       {
         // The one the agent writes with: the same people who change her persona choose it.
-        preHandler: requireRole('owner', 'creator'),
+        preValidation: requireRole('owner', 'creator'),
         schema: {
           params: ActivatePersonaVersionParamsSchema,
           response: { 200: PersonaVersionSummarySchema },

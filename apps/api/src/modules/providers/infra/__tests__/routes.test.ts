@@ -1,4 +1,4 @@
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
 import { createMemoryCredentialStore, createProvidersModule } from '../..';
@@ -17,12 +17,12 @@ const fakeXai: FetchLike = (_url, init) => {
 };
 
 /** Stands in for `requireRole('owner')` (auth.ts): the header says who asks. */
-const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+const ownerOnly: preValidationAsyncHookHandler = async (request, reply) => {
   if (request.headers['x-test-role'] !== 'owner') await reply.code(403).send({ error: 'forbidden' });
 };
 
 /** Stands in for `requireRecentLogin` (auth.ts): the header says the sign-in is old. */
-const freshOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+const freshOnly: preValidationAsyncHookHandler = async (request, reply) => {
   if (request.headers['x-test-stale'] === '1')
     await reply.code(403).send({ error: { code: 'reauthentication_forbidden' } });
 };

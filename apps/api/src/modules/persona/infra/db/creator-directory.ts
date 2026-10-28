@@ -13,6 +13,7 @@ import {
 } from '@nirvana/contracts';
 import { eq, inArray, schema, sql, type Database } from '@nirvana/db';
 
+import { CreatorConflict } from '../../domain/errors';
 import type { CreatorDirectory } from '../../domain/ports';
 
 const toSummary = (row: { id: string; displayName: string; timezone: string }): CreatorSummary => ({
@@ -50,7 +51,8 @@ export function createDrizzleCreatorDirectory(
           .onConflictDoNothing({ target: schema.creators.id })
           .returning({ id: schema.creators.id });
         if (inserted.length === 0) {
-          // The same form sent twice: the creator the first request made, without a second audit line.
+          // The same form sent twice: the creator the first request made, without a second audit line. The same id with
+          // other values is not a replay.
           const [existing] = await tx
             .select({
               id: schema.creators.id,
@@ -60,6 +62,9 @@ export function createDrizzleCreatorDirectory(
             .from(schema.creators)
             .where(eq(schema.creators.id, id));
           if (existing === undefined) throw new Error('creator insert conflicted on an id it cannot read');
+          if (existing.displayName !== parsed.displayName || existing.timezone !== parsed.timezone) {
+            throw new CreatorConflict();
+          }
           return toSummary(existing);
         }
         await tx.insert(schema.auditLog).values({

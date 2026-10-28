@@ -1,6 +1,6 @@
 import type { JobPayload } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createConversationCommands, type ConversationCommands } from './application/commands';
@@ -61,7 +61,7 @@ export interface ConversationsDeps {
   readonly sender: OutboundSender;
   readonly requireRole: RequireRole;
   /** `requireRecentLogin` (ADR 0016): recording a blind test needs a sign-in under 10 minutes. */
-  readonly recentLogin: preHandlerAsyncHookHandler;
+  readonly recentLogin: preValidationAsyncHookHandler;
   /** The voice version the server writes with now (prompt and model): what Automatique is proved on (ADR 0019). */
   readonly voice: DraftVoice;
   /** The agent's hard guards (`AgentBubbleGuard`), read again on every approval (revue 09, G5). */

@@ -1,7 +1,7 @@
 /** Public entry point of the `persona` module (ADR 0002). Other modules import this file only. */
 import type { Persona, PersonaSampleReplyFault } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { PersonaSampleReplyUnprocessable } from './domain/errors';
@@ -27,7 +27,7 @@ export interface PersonaDeps {
   readonly db: Database;
   readonly requireRole: RequireRole;
   /** A recent sign-in, for a change of her hours (P3-14). */
-  readonly recentLogin: preHandlerAsyncHookHandler;
+  readonly recentLogin: preValidationAsyncHookHandler;
   /**
    * Her sample replies a hard guard of her answers would block (`agent`, P5-01): a version with any is refused, from
    * the dashboard and from `pnpm persona:load` alike. Absent, none is read.

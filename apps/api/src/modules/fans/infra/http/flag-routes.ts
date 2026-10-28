@@ -11,7 +11,7 @@ import {
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -20,7 +20,7 @@ import { FanNotFound } from '../../domain/errors';
 import { requestedChange, type FlagAuthor } from '../../domain/flags';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 class CreatorForbidden extends DomainError {
   constructor() {
@@ -53,7 +53,7 @@ export function createFlagRoutes(
       '/fans/:id/flags',
       {
         // A creator never sees her fans' data (ADR 0023): the owner and the chatters only.
-        preHandler: requireRole('owner', 'operator'),
+        preValidation: requireRole('owner', 'operator'),
         schema: {
           params: FanParamsSchema,
           querystring: CreatorQuerySchema,
@@ -71,7 +71,7 @@ export function createFlagRoutes(
       '/fans/:id/flags',
       {
         // His limits are a chatter's call, like the drafts: the creator reads them.
-        preHandler: requireRole('owner', 'operator'),
+        preValidation: requireRole('owner', 'operator'),
         schema: {
           params: FanParamsSchema,
           querystring: CreatorQuerySchema,
@@ -114,7 +114,7 @@ export function createKycRoutes(
       '/fans/:id/kyc',
       {
         // A creator never sees her fans' data (ADR 0023).
-        preHandler: requireRole('owner', 'operator'),
+        preValidation: requireRole('owner', 'operator'),
         schema: {
           params: FanParamsSchema,
           querystring: CreatorQuerySchema,

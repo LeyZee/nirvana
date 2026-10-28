@@ -1,5 +1,4 @@
 import {
-  DomainError,
   SaveTelegramRoutesBodySchema,
   SaveTelegramTokenBodySchema,
   TelegramBotIdSchema,
@@ -12,25 +11,22 @@ import {
   TelegramTestResultSchema,
   TelegramTopicSchema,
 } from '@nirvana/contracts';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { TelegramApi } from '../application/api';
+import { TelegramBotNotFound, TelegramChatInvalid, TelegramChatNotFound } from '../domain/errors';
 
 export interface TelegramRoutesOptions {
   /** `requireRole('owner')`: bots and routing are agency settings. */
-  readonly guard: preHandlerAsyncHookHandler;
+  readonly guard: preValidationAsyncHookHandler;
   /** `requireRecentLogin` (ADR 0016): adding, replacing or removing a bot needs a sign-in under 10 minutes. */
-  readonly recentLogin: preHandlerAsyncHookHandler;
+  readonly recentLogin: preValidationAsyncHookHandler;
 }
 
 const BotParamsSchema = z.object({ id: TelegramBotIdSchema });
 const ChatParamsSchema = z.object({ id: TelegramChatIdSchema });
-
-/** In the common error body (api.md § Erreurs), so a refusal reads like any other and never fails its own schema. */
-const botNotFound = () => new DomainError('telegram_bot_not_found', 'Bot Telegram introuvable');
-const chatNotFound = () => new DomainError('telegram_chat_not_found', 'Groupe Telegram introuvable');
 
 /**
  * `/v1/settings/telegram` (task P3-07). No answer ever carries a token; the request body is redacted from the logs
@@ -50,7 +46,7 @@ export function createTelegramRoutes(
     app.post(
       '/settings/telegram/bots',
       {
-        preHandler: options.recentLogin,
+        preValidation: options.recentLogin,
         schema: {
           body: SaveTelegramTokenBodySchema,
           response: { 201: TelegramBotSchema, 422: TelegramRefusalSchema },
@@ -65,7 +61,7 @@ export function createTelegramRoutes(
     app.put(
       '/settings/telegram/bots/:id/token',
       {
-        preHandler: options.recentLogin,
+        preValidation: options.recentLogin,
         schema: {
           params: BotParamsSchema,
           body: SaveTelegramTokenBodySchema,
@@ -74,7 +70,7 @@ export function createTelegramRoutes(
       },
       async (request, reply) => {
         const result = await telegram.replaceToken(request.params.id, request.body.token);
-        if (result === null) throw botNotFound();
+        if (result === null) throw new TelegramBotNotFound();
         return result.ok ? reply.send(result.value) : reply.code(422).send(result.error);
       },
     );
@@ -83,7 +79,7 @@ export function createTelegramRoutes(
       '/settings/telegram/bots/:id/listen',
       { schema: { params: BotParamsSchema, response: { 202: z.null() } } },
       async (request, reply) => {
-        if (!(await telegram.listen(request.params.id))) throw botNotFound();
+        if (!(await telegram.listen(request.params.id))) throw new TelegramBotNotFound();
         return reply.code(202).send(null);
       },
     );
@@ -91,11 +87,11 @@ export function createTelegramRoutes(
     app.delete(
       '/settings/telegram/bots/:id',
       {
-        preHandler: options.recentLogin,
+        preValidation: options.recentLogin,
         schema: { params: BotParamsSchema, response: { 204: z.null() } },
       },
       async (request, reply) => {
-        if (!(await telegram.removeBot(request.params.id))) throw botNotFound();
+        if (!(await telegram.removeBot(request.params.id))) throw new TelegramBotNotFound();
         return reply.code(204).send(null);
       },
     );
@@ -110,7 +106,7 @@ export function createTelegramRoutes(
       },
       async (request, reply) => {
         const result = await telegram.sendTest(request.params.id);
-        if (result === null) throw chatNotFound();
+        if (result === null) throw new TelegramChatNotFound();
         return result.ok ? reply.send(result.value) : reply.code(422).send(result.error);
       },
     );
@@ -126,9 +122,7 @@ export function createTelegramRoutes(
       async (request, reply) => {
         const result = await telegram.saveRoutes(request.body.version, request.body.routes);
         if (result.ok) return reply.send(result.value);
-        if (result.error === 'unknown_chat') {
-          throw new DomainError('telegram_chat_invalid', 'Un groupe choisi n’existe plus : recharge la page');
-        }
+        if (result.error === 'unknown_chat') throw new TelegramChatInvalid();
         return reply.code(409).send(result.error);
       },
     );

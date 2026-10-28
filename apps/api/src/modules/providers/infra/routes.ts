@@ -6,7 +6,7 @@ import {
   ProviderStatusSchema,
   SaveProviderKeyBodySchema,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -30,9 +30,9 @@ function actorOf(request: FastifyRequest): KeyActor {
 
 export interface ProvidersRoutesOptions {
   /** `requireRole('owner')` (P0-07a): keys are an agency setting, nobody else reads or changes them. */
-  readonly guard: preHandlerAsyncHookHandler;
+  readonly guard: preValidationAsyncHookHandler;
   /** `requireRecentLogin` (ADR 0016): connecting, replacing or removing a key needs a sign-in under 10 minutes. */
-  readonly recentLogin: preHandlerAsyncHookHandler;
+  readonly recentLogin: preValidationAsyncHookHandler;
 }
 
 /**
@@ -54,7 +54,7 @@ export function createProvidersRoutes(
     app.put(
       '/settings/providers/:provider/key',
       {
-        preHandler: options.recentLogin,
+        preValidation: options.recentLogin,
         config: providerCallLimit,
         schema: {
           params: ProviderParamsSchema,
@@ -92,7 +92,7 @@ export function createProvidersRoutes(
     app.delete(
       '/settings/providers/:provider',
       {
-        preHandler: options.recentLogin,
+        preValidation: options.recentLogin,
         schema: { params: ProviderParamsSchema, response: { 200: ProviderStatusSchema } },
       },
       (request) => providers.disconnect(request.params.provider, actorOf(request)),

@@ -184,12 +184,16 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     });
   });
 
-  // A route guard (`requireRole`, the sign-in limiter) is declared as `preHandler` but runs at `preValidation`: before the
-  // schema, so an anonymous request gets 401 rather than a 400 that lists the fields the route expects.
+  // Route guards (`requireRole`, `recentLogin`, the sign-in limiter) are `preValidation` hooks: they run before the
+  // schema, so an anonymous request gets 401 rather than a 400 listing the fields the route expects. A guard reads
+  // the session, never the unvalidated input. A `preHandler` would run after validation: refused at startup so a
+  // guard cannot slip back behind the schema.
   server.addHook('onRoute', (route) => {
-    if (route.preHandler === undefined) return;
-    route.preValidation = [route.preValidation ?? [], route.preHandler].flat();
-    delete route.preHandler;
+    if (route.preHandler !== undefined) {
+      throw new Error(
+        `${route.method.toString()} ${route.url}: declare route guards as preValidation, not preHandler`,
+      );
+    }
   });
 
   await server.register(

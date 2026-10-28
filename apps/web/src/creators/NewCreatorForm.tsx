@@ -29,7 +29,7 @@ export function NewCreatorForm({
   const [busy, setBusy] = useState(false);
   // A second click lands before the re-render that disables the button: the ref stops it, the id makes it harmless.
   const sending = useRef(false);
-  const [creatorId] = useState(() => newId(CreatorIdSchema));
+  const [creatorId, setCreatorId] = useState(() => newId(CreatorIdSchema));
   const [problem, setProblem] = useState<string | null>(null);
 
   const submit = async (event: SyntheticEvent): Promise<void> => {
@@ -44,13 +44,17 @@ export function NewCreatorForm({
     sending.current = false;
     setBusy(false);
     if (result.kind === 'created') {
+      // The next creator typed in this form is another one: a new id.
+      setCreatorId(newId(CreatorIdSchema));
       await client.invalidateQueries({ queryKey: ['creators'] });
       onCreated(result.creator);
     } else {
       setProblem(
         result.kind === 'invalid'
           ? 'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.'
-          : 'Rien n’a été créé : Nirvana ne répond pas. Réessaie dans un instant.',
+          : result.kind === 'conflict'
+            ? 'Cette créatrice vient d’être créée sous un autre nom. Recharge la page pour la voir.'
+            : 'Rien n’a été créé : Nirvana ne répond pas. Réessaie dans un instant.',
       );
     }
   };

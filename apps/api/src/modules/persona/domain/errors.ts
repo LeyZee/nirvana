@@ -17,6 +17,16 @@ export class PersonaVersionConflict extends DomainError {
   }
 }
 
+/**
+ * A new creator sent again under the id of one already made, with another name or zone (409): nothing changes, the
+ * form says so rather than show the earlier creator under the name just typed.
+ */
+export class CreatorConflict extends DomainError {
+  constructor() {
+    super('creator_conflict', 'Cette créatrice existe déjà sous un autre nom ou un autre fuseau');
+  }
+}
+
 /** No version of hers has this id (404). */
 export class PersonaVersionNotFound extends DomainError {
   constructor() {

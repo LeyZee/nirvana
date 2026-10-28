@@ -7,7 +7,7 @@ import {
   type UserRole,
 } from '@nirvana/contracts';
 import { startOfLocalDay } from '@nirvana/llm';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { assembleDashboard, type BudgetReading, type VoiceHealth } from '../../domain/dashboard';
@@ -19,7 +19,7 @@ import type {
 } from '../../domain/dashboard-ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 export interface DashboardRouteDeps {
   readonly reader: DashboardReader;
@@ -53,7 +53,7 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
     app.get(
       '/dashboard',
       {
-        preHandler: deps.requireRole('owner', 'operator', 'creator'),
+        preValidation: deps.requireRole('owner', 'operator', 'creator'),
         schema: { querystring: DashboardQuerySchema, response: { 200: DashboardSchema } },
       },
       async (request) => {

@@ -9,7 +9,7 @@ import {
 } from '@nirvana/contracts';
 import { and, eq, schema, withAdmin } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { createOwner } from '../auth';
@@ -213,7 +213,7 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
 
   it('says every canvas line, in the canvas order, when no persona gives hers', async () => {
     // Stands in for `requireRole`: an owner, set as auth.ts does.
-    const asOwner: preHandlerAsyncHookHandler = (request) => {
+    const asOwner: preValidationAsyncHookHandler = (request) => {
       request.user = {
         id: operatorId,
         email: 'owner@example.test',
