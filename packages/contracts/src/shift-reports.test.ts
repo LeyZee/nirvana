@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CreateShiftReportBodySchema,
+  mayReviewShiftReport,
   RejectShiftReportBodySchema,
   SHIFT_REPORT_BATCH_MAX,
   SHIFT_REPORT_ERROR_CODES,
@@ -12,6 +13,7 @@ import {
   UpdateShiftReportBodySchema,
   ValidateShiftReportsBodySchema,
   ValidateShiftReportsResultSchema,
+  validatedTotalWith,
 } from './shift-reports';
 
 const REPORT = '0199f2a0-0000-7000-8000-0000000000b1';
@@ -50,6 +52,7 @@ const stored = {
   status: 'submitted',
   version: 1,
   byAgency: false,
+  canReview: true,
   submittedAt: '2026-10-29T04:58:00Z',
   reviewedAt: null,
   reviewNote: null,
@@ -128,7 +131,7 @@ describe('end-of-shift reports (EQ-03)', () => {
           outcome: 'validated',
           report: { ...stored, status: 'validated', reviewedAt: '2026-10-29T09:00:00Z' },
         },
-        { outcome: 'refused', id: CORRECTION, code: 'shift_report_changed_conflict' },
+        { outcome: 'refused', id: CORRECTION, code: 'shift_report_total_conflict' },
       ],
     });
     expect(result.results.map((one) => one.outcome)).toEqual(['validated', 'refused']);
@@ -137,6 +140,42 @@ describe('end-of-shift reports (EQ-03)', () => {
         results: [{ outcome: 'refused', id: CORRECTION, code: 'leave_decided_conflict' }],
       }).success,
     ).toBe(false);
+  });
+
+  it('checks the validated total again at validation: two corrections can each pass alone', () => {
+    const euros = (amountMinor: number) => ({ amountMinor, currency: 'EUR' as const });
+    const shiftReport = { id: REPORT, status: 'validated' as const, amount: euros(10_000) };
+    const first = { id: CORRECTION, status: 'submitted' as const, amount: euros(-8_000) };
+    const second = {
+      id: '0199f2a0-0000-7000-8000-0000000000b3',
+      status: 'submitted' as const,
+      amount: euros(-6_000),
+    };
+    // Each correction, made while only the report is validated, keeps the total at 0 or more.
+    expect(validatedTotalWith([shiftReport], first)).toBe(2_000);
+    expect(validatedTotalWith([shiftReport, first], second)).toBe(4_000);
+    // Once the first is validated, the second would take it below 0: its validation is refused.
+    const validated = { ...first, status: 'validated' as const };
+    expect(validatedTotalWith([shiftReport, validated, second], second)).toBe(-4_000);
+    // The report being validated counts once, even when the list already holds it.
+    expect(validatedTotalWith([shiftReport, validated], validated)).toBe(2_000);
+  });
+
+  it('never lets anyone review their own shift, nor a manager a correction they made', () => {
+    const review = {
+      status: 'submitted' as const,
+      readerIsAgency: true,
+      readerIsOwner: false,
+      readerIsShiftMember: false,
+      readerMadeIt: false,
+    };
+    expect(mayReviewShiftReport(review)).toBe(true);
+    expect(mayReviewShiftReport({ ...review, readerIsShiftMember: true })).toBe(false);
+    expect(mayReviewShiftReport({ ...review, readerMadeIt: true })).toBe(false);
+    // The owner reviews a correction they made: nobody reviews for them.
+    expect(mayReviewShiftReport({ ...review, readerIsOwner: true, readerMadeIt: true })).toBe(true);
+    expect(mayReviewShiftReport({ ...review, readerIsAgency: false })).toBe(false);
+    expect(mayReviewShiftReport({ ...review, status: 'rejected' })).toBe(false);
   });
 
   it('sends a report back with a note that says what to look at', () => {

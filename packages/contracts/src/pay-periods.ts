@@ -23,9 +23,12 @@ function periodAt(year: number, month: number, second: boolean): PayPeriod {
   return PayPeriodSchema.parse(`${String(year).padStart(4, '0')}-${pad(month)}-${second ? '16' : '01'}`);
 }
 
-/** The period a calendar day (`YYYY-MM-DD`) falls in: the 15th is in the first fortnight, the 16th in the second. */
+/**
+ * The period a calendar day falls in: the 15th is in the first fortnight, the 16th in the second. `day` is a
+ * well-formed `YYYY-MM-DD`, a day that exists: anything else throws.
+ */
 export function payPeriodOfDay(day: string): PayPeriod {
-  const { year, month, date } = dayParts(day);
+  const { year, month, date } = dayParts(z.iso.date().parse(day));
   return periodAt(year, month, date >= 16);
 }
 

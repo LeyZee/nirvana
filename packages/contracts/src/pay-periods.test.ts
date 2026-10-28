@@ -26,6 +26,12 @@ describe('pay periods (ADR 0023)', () => {
     expect(payPeriodOfDay('2026-10-31')).toBe('2026-10-16');
   });
 
+  it('throws on anything but a day that exists', () => {
+    for (const day of ['2026-10-40', '2026-02-30', '28/10/2026', '']) {
+      expect(() => payPeriodOfDay(day)).toThrow();
+    }
+  });
+
   it('ends a second fortnight on the last day of its month', () => {
     expect(payPeriodLastDay(period('2026-10-01'))).toBe('2026-10-15');
     expect(payPeriodLastDay(period('2026-10-16'))).toBe('2026-10-31');

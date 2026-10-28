@@ -30,7 +30,10 @@ import { PlanningAccountSchema, PlanningMemberSchema, ShiftSchema } from './sche
 /** The highest amount one report or correction declares, in minor units (50 000 in the currency): a slip guard. */
 export const SHIFT_REPORT_MAX_MINOR = 5_000_000;
 
-/** How long before its end a shift takes its report: the member makes it as the shift closes, not hours ahead. */
+/**
+ * How long before its end a shift takes its report, never before it starts: the member makes it as the shift closes,
+ * not hours ahead.
+ */
 export const SHIFT_REPORT_OPENS_BEFORE_END_MINUTES = 30;
 
 /** The most reports one validation sends: the screen validates what it shows, in one gesture. */
@@ -82,7 +85,8 @@ function checkAmount(
  * A report (`correctsId` `null`) or a correction of a validated one. `amount` is in the account's currency for the
  * period. `byAgency` is `true` for a correction the owner or an active manager made (a refund the member did not
  * declare), `false` for what the member made. `version` grows by one at each change, and a review names the version it
- * read, so nobody validates an amount they did not see. Who validated or sent it back is in `audit_log`.
+ * read, so nobody validates an amount they did not see. `canReview` says whether the reader may validate it or send it
+ * back now (`mayReviewShiftReport`). Who made, validated or sent it back is kept on the row and in `audit_log`.
  */
 export const ShiftReportSchema = z
   .object({
@@ -100,6 +104,7 @@ export const ShiftReportSchema = z
     status: ShiftReportStatusSchema,
     version: z.number().int().min(1),
     byAgency: z.boolean(),
+    canReview: z.boolean(),
     /** When it was last sent: made, changed, or sent again after it came back. */
     submittedAt: z.iso.datetime(),
     /** When it was validated or sent back; `null` while submitted. */
@@ -116,7 +121,7 @@ export type ShiftReport = z.infer<typeof ShiftReportSchema>;
 /**
  * `GET /v1/scheduling/shifts/:shiftId/report` (the shift's member, the owner, an active manager): what the « Faire mon
  * rapport » panel needs. `period` is the shift's, `opensAt` when a report is accepted
- * (`SHIFT_REPORT_OPENS_BEFORE_END_MINUTES` before its end), `rules` the currency and source in force for the period,
+ * (`SHIFT_REPORT_OPENS_BEFORE_END_MINUTES` before its end, or its start for a shorter shift), `rules` the currency and source in force for the period,
  * `null` while the account has none, and `reports` the shift's report and its corrections, oldest first.
  */
 export const ShiftReportContextSchema = z.object({
@@ -133,11 +138,11 @@ export type ShiftReportContext = z.infer<typeof ShiftReportContextSchema>;
  * `POST /v1/scheduling/shift-reports` → 201 `ShiftReportSchema`, or 200 when the same `id` was already recorded with
  * the same values (`shift_report_conflict` otherwise).
  *
- * A report (`correctsId` `null`) is made by the shift's member alone, from `SHIFT_REPORT_OPENS_BEFORE_END_MINUTES`
- * before its end (`shift_report_early_conflict`), on a shift that is not cancelled (`shift_not_found`); a second one
+ * A report (`correctsId` `null`) is made by the shift's member alone, from `opensAt` (`shift_report_early_conflict`), on a shift that is not cancelled (`shift_not_found`); a second one
  * for the shift answers `shift_report_exists_conflict` with `details.shiftReportId`. A correction names the shift's
  * validated report (`shift_report_validated_conflict` while it is not), made by the shift's member or by the owner or
- * an active manager, and never takes the shift's validated total below 0 (`shift_report_total_conflict`).
+ * an active manager, and never takes the shift's validated total below 0 (`shift_report_total_conflict`,
+ * `validatedTotalWith`).
  *
  * Both are refused while the account has no pay rules for the period (`pay_rules_missing_conflict`), when its source
  * is `detected` then (`shift_report_detected_conflict`: pay reads the sales, never both), and in another currency than
@@ -176,9 +181,11 @@ const ReviewedVersionSchema = z.object({ id: ShiftReportIdSchema, version: z.num
 
 /**
  * `POST /v1/scheduling/shift-reports/validate` (owner, active manager) → 200 `ValidateShiftReportsResultSchema`. Each
- * report is validated on its own, in its own transaction: one that changed since the screen read it, or is no longer
- * submitted, comes back refused with its code (`shift_report_changed_conflict`), and the others go through. Nobody
- * validates a report of their own shift (`shift_report_own_review_forbidden`).
+ * report is validated on its own, in its own transaction, under the lock (member, period): one that changed since the
+ * screen read it, or is no longer submitted, comes back refused with its code (`shift_report_changed_conflict`), and
+ * the others go through. The validation checks the shift's validated total again (`validatedTotalWith`): two negative
+ * corrections can each pass their making and together take it below 0, and the second answers
+ * `shift_report_total_conflict`. `mayReviewShiftReport` says who may review (`shift_report_own_review_forbidden`).
  */
 export const ValidateShiftReportsBodySchema = z.object({
   reports: z
@@ -194,7 +201,7 @@ export type ValidateShiftReportsBody = z.infer<typeof ValidateShiftReportsBodySc
 
 /**
  * `POST /v1/scheduling/shift-reports/:shiftReportId/reject` (owner, active manager) → 200 `ShiftReportSchema`: a
- * submitted report goes back to its member with a note that says what to look at (`shift_report_changed_conflict`,
+ * submitted report goes back to its maker with a note that says what to look at (`shift_report_changed_conflict`,
  * `shift_report_own_review_forbidden` as for a validation).
  */
 export const RejectShiftReportBodySchema = z.object({
@@ -202,6 +209,44 @@ export const RejectShiftReportBodySchema = z.object({
   note: z.string().trim().min(1).max(500),
 });
 export type RejectShiftReportBody = z.infer<typeof RejectShiftReportBodySchema>;
+
+/**
+ * Who reviews (validates or sends back) a submitted report: the owner or an active manager, never on a report of their
+ * own shift, and four eyes on a correction the agency made: a manager never reviews one they made, the owner reviews
+ * theirs, since nobody reviews for them (as for a leave, ADR 0031). The server says it to the reader in `canReview`.
+ */
+export function mayReviewShiftReport(review: {
+  readonly status: ShiftReportStatus;
+  readonly readerIsAgency: boolean;
+  readonly readerIsOwner: boolean;
+  readonly readerIsShiftMember: boolean;
+  readonly readerMadeIt: boolean;
+}): boolean {
+  return (
+    review.status === 'submitted' &&
+    review.readerIsAgency &&
+    !review.readerIsShiftMember &&
+    (review.readerIsOwner || !review.readerMadeIt)
+  );
+}
+
+/**
+ * The shift's validated total, in minor units, once `next` is validated too: the validated report and corrections of
+ * the shift, `next` counted once. Below 0, making or validating `next` answers `shift_report_total_conflict`: checked
+ * when a correction is made, and again under the lock when it is validated.
+ */
+export function validatedTotalWith(
+  reports: readonly {
+    readonly id: string;
+    readonly status: ShiftReportStatus;
+    readonly amount: { readonly amountMinor: number };
+  }[],
+  next: { readonly id: string; readonly amount: { readonly amountMinor: number } },
+): number {
+  return reports
+    .filter((one) => one.status === 'validated' && one.id !== next.id)
+    .reduce((total, one) => total + one.amount.amountMinor, next.amount.amountMinor);
+}
 
 /**
  * `GET /v1/scheduling/shift-reports?period=…`: with `period`, its reports and corrections, and the shifts that start in
@@ -232,7 +277,7 @@ export type ShiftReportList = z.infer<typeof ShiftReportListSchema>;
  * `shift_report_detected_conflict` 409, the account's source is `detected` for the period ;
  * `shift_report_currency_conflict` 409, another currency than the account's for the period ;
  * `pay_rules_missing_conflict` 409, the account has no pay rules for the period ;
- * `shift_report_own_review_forbidden` 403, a report of one's own shift ; `shift_report_forbidden` 403, a report of
+ * `shift_report_own_review_forbidden` 403, a report of one's own shift, or a correction one made as a manager ; `shift_report_forbidden` 403, a report of
  * someone else's shift, or a change to what someone else made.
  */
 export const SHIFT_REPORT_ERROR_CODES = [
