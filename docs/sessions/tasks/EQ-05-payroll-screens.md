@@ -13,13 +13,13 @@ Valider et payer les paies depuis l'onglet Paie, à la place que fixe l'ADR 0024
 ## Ce que l'API donne déjà (EQ-04)
 | Route | Qui | Ce que l'écran en fait |
 | --- | --- | --- |
-| `GET /v1/payroll/periods/:period` | tous (le sien pour un membre) | Quinzaine, relevé, objectifs : relevés avec leurs lignes, règles copiées, `team`, `canValidate`, `revision`, `computedAt`, clôture, paliers, objectif, minimum |
+| `GET /v1/payroll/periods/:period` | tous (le sien pour un membre) | Quinzaine, relevé, objectifs : relevés avec leurs lignes, règles copiées, `team`, `canValidate`, `revision`, `computedAt`, clôture (sa date seule pour un membre : `closedBy` et `exchangeRates` à `null`), paliers, objectif, minimum |
 | `POST /v1/payroll/statements/:id/validate` `{ revision }` | propriétaire, manager actif, jamais le sien | « Valider » et « Valider (n) » |
 | `POST /v1/payroll/statements/:id/pay` | propriétaire | « Marquer payé » (corps du premier ajout ci-dessous) |
 | `POST /v1/payroll/bonuses`, `/penalties`, `/adjustments`, `…/:id/cancel` | propriétaire, manager actif, jamais pour soi | Primes et malus |
 | `POST /v1/payroll/bonus-tiers`, `POST /v1/payroll/collective-goals` | propriétaire | Objectifs |
 | `GET`, `PUT /v1/payroll/settings` | lecture : tous ; écriture : propriétaire | Minimum de versement, dans Réglages › Règles de paie |
-| `GET /v1/payroll/exchange-rates` | tous | Le dernier taux de la BCE, au survol d'une ligne en dollars |
+| `GET /v1/payroll/exchange-rates` | propriétaire, manager actif | Le dernier taux lu, dans l'avis « taux de la BCE manquant ». Le survol d'une ligne en dollars montre le taux de la ligne (`rateMicros`), le seul qu'un membre lit |
 | `GET /v1/team/members`, `GET /v1/team/pay-rules`, `GET /v1/scheduling/shift-reports?period=` | agence | Noms et couleurs (`validatedBy` et `paidBy` sont des `userId`), comptes et créatrices d'une ligne, rapports derrière une ligne |
 
 ## Ce que l'API ajoute avant les écrans (Équipe l'écrit en ajout seul, Bilan relit chaque PR)
@@ -68,7 +68,7 @@ Ce qui vaut pour tous les écrans (relecture d'Extension, 28/10) :
   - Une fois la quinzaine close, un cadenas : « Close le … : un rapport validé maintenant va sur la quinzaine suivante ».
   - Il n'y a pas de route de lot. « Valider (n) » envoie relevé par relevé, dans l'ordre des membres. Chaque refus reste sur sa ligne, et les autres relevés passent.
 - [ ] **Relevé** (panneau ouvert depuis une ligne) : le parcours de l'argent.
-  - Compte par compte : brut dans la devise, en euros au taux de la BCE du jour (au survol), hors TVA, net de la plateforme, commission au taux du membre.
+  - Compte par compte : brut dans la devise, en euros au taux de la BCE de la ligne (`rateMicros`, au survol), hors TVA, net de la plateforme, commission au taux du membre.
   - Puis : palier, objectif collectif, part d'équipe d'un manager, primes, malus (demandé et retenu, avec le plafond), reports reçus, ajustements, total, report sortant, « À verser ».
   - Replié par défaut : les règles copiées, la révision, « Calculé à », la version du moteur, les rapports derrière chaque compte.
   - Actions :
