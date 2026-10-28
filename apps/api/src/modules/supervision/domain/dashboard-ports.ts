@@ -27,6 +27,7 @@ export interface WaitingConversation {
 interface TopFan {
   readonly id: string;
   readonly name: string;
+  readonly conversationId: string;
   readonly firstSeenAt: Date;
   readonly spentMinor: number;
   readonly byAgentMinor: number;

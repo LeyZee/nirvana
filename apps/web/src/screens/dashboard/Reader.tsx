@@ -10,9 +10,18 @@ import { keepTabInside } from '@/shell/focus';
 
 /**
  * The conversation of one fan, read only (revue 08): what she knows about him, the thread, and the agent's
- * notes where it stopped. Writing happens in Reveal; an answer to fix goes to Entraîner › Corrections.
+ * notes where it stopped. Writing happens in Reveal. While Corrections does not exist, the way on is his conversation
+ * in Suivi, offered only to an account whose rail holds Suivi and when the fan comes from the server's data.
  */
-export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void }): JSX.Element {
+export function Reader({
+  fan,
+  onClose,
+  opensTracking,
+}: {
+  fan: Fan | null;
+  onClose: () => void;
+  opensTracking: boolean;
+}): JSX.Element {
   const closeRef = useRef<HTMLButtonElement>(null);
   const open = fan !== null;
 
@@ -100,9 +109,15 @@ export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void 
             </div>
             <div className="db-reader__foot">
               <p>Lecture seule. Pour écrire, reprends la main dans Reveal.</p>
-              <Link to="/entrainer/corrections" className="nv-btn nv-btn--soft nv-btn--sm">
-                Noter une réponse dans Corrections
-              </Link>
+              {opensTracking && fan.conversationId !== undefined ? (
+                <Link
+                  to="/suivi"
+                  search={{ conversation: fan.conversationId }}
+                  className="nv-btn nv-btn--soft nv-btn--sm"
+                >
+                  Ouvrir dans Suivi
+                </Link>
+              ) : null}
             </div>
           </>
         )}

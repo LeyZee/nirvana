@@ -74,7 +74,13 @@ const dashboard = createRoute({
   path: '/',
   component: function Dashboard() {
     const { user } = rootRoute.useRouteContext();
-    return <DashboardPage forCreator={user.role === 'creator'} forOwner={user.role === 'owner'} />;
+    return (
+      <DashboardPage
+        forCreator={user.role === 'creator'}
+        forOwner={user.role === 'owner'}
+        opensTracking={canOpen(railOf(user), '/suivi')}
+      />
+    );
   },
 });
 const creators = createRoute({

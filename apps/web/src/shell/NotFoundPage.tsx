@@ -4,7 +4,10 @@ import type { JSX } from 'react';
 import { Page, PageHeader, Panel } from './layout';
 import { railOf, sectionLabel } from './nav';
 
-/** An address that leads nowhere (a link mistyped, a screen moved): said plainly, with the way back to the account's first tab. */
+/**
+ * An address that leads nowhere (a link mistyped, a screen moved): said plainly, with the way back to the account's
+ * first tab.
+ */
 export function NotFoundPage(): JSX.Element {
   const { user } = useRouteContext({ from: '__root__' });
   const home = railOf(user).home;

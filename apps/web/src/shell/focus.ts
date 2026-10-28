@@ -1,6 +1,15 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled])';
+/** What Tab can reach in a dialog: links, enabled fields and buttons, a <summary>, and anything given a tab stop. */
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'summary',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
 
 /**
  * The `onKeyDown` of a modal dialog: Tab and Shift+Tab go round its own controls and never leave it for the page

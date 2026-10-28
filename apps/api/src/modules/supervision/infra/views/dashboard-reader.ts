@@ -200,6 +200,7 @@ async function facts(
     z.object({
       id: z.string(),
       name: z.string(),
+      conversation_id: z.string(),
       first_seen_at: timestamp,
       spent_minor: int,
       by_agent_minor: int,
@@ -207,6 +208,7 @@ async function facts(
       alert: HandoffCauseSchema.nullable(),
     }),
     sql`select f.id, f.display_name as name, f.first_seen_at,
+               (array_agg(c.id order by m.platform_created_at desc))[1] as conversation_id,
                sum(m.price_minor) as spent_minor,
                coalesce(sum(m.price_minor) filter (where m.author = 'ai'), 0) as by_agent_minor,
                (select array_agg(n.value order by n.observed_at desc) from (
@@ -301,6 +303,7 @@ async function facts(
     fans: fans.map((f) => ({
       id: f.id,
       name: f.name,
+      conversationId: f.conversation_id,
       firstSeenAt: f.first_seen_at,
       spentMinor: f.spent_minor,
       byAgentMinor: f.by_agent_minor,

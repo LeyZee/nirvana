@@ -44,6 +44,7 @@ const dashboard = {
     {
       id: FAN,
       name: 'Julien',
+      conversationId: CONVERSATION,
       firstSeenAt: '2026-10-01T18:00:00.000Z',
       spent: 45,
       byAgent: 30,

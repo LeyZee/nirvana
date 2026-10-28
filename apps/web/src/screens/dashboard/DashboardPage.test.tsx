@@ -56,7 +56,7 @@ afterEach(() => {
 /** Where the page's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderDashboard(forCreator = false, forOwner = false): QueryClient {
+function renderDashboard(forCreator = false, forOwner = false, opensTracking = true): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   // The night banner links to Réglages: the page needs a router around it.
@@ -66,7 +66,9 @@ function renderDashboard(forCreator = false, forOwner = false): QueryClient {
       createRoute({
         getParentRoute: () => root,
         path: '/',
-        component: () => <DashboardPage forCreator={forCreator} forOwner={forOwner} />,
+        component: () => (
+          <DashboardPage forCreator={forCreator} forOwner={forOwner} opensTracking={opensTracking} />
+        ),
       }),
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
@@ -586,5 +588,27 @@ describe('DashboardPage, its fan reader', () => {
     fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
     expect(reader.contains(document.activeElement)).toBe(true);
     expect(document.activeElement).not.toBe(close);
+  });
+
+  it('opens his conversation in Suivi, never a Corrections screen that does not exist yet', async () => {
+    const [theo] = apiDashboard().fans;
+    if (theo === undefined) throw new Error('the fixture has a fan');
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    fireEvent.click(await screen.findByText('Théo'));
+    expect(screen.queryByText(/Corrections/)).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'Ouvrir dans Suivi' }));
+    await waitFor(() => {
+      expect(location()).toBe(`/suivi?conversation=${theo.conversationId}`);
+    });
+  });
+
+  it('offers no way on to an account whose rail has no Suivi', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard(false, false, false);
+    fireEvent.click(await screen.findByText('Théo'));
+    expect(screen.getByRole('dialog', { name: 'Conversation' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Ouvrir dans Suivi' })).toBeNull();
+    expect(screen.queryByText(/Corrections/)).toBeNull();
   });
 });

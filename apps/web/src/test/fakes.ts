@@ -68,6 +68,7 @@ export function apiDashboard(patch: Partial<ApiDashboard> = {}): ApiDashboard {
       {
         id: '0192f3a0-0000-7000-8000-0000000000f2',
         name: 'Théo',
+        conversationId: CONVERSATION,
         firstSeenAt: '2026-09-14T12:00:00Z',
         spent: 120,
         byAgent: 80,

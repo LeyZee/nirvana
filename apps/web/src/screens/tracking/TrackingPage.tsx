@@ -33,7 +33,6 @@ import {
 } from './view';
 import './tracking.css';
 
-import { followedOf, useFollowedCreatorId } from '@/agent/followed';
 import { useLiveDashboard } from '@/agent/live';
 import { useCreators } from '@/creators/api';
 import { Page, PageHeader, Panel } from '@/shell/layout';
@@ -81,7 +80,6 @@ export function TrackingPage({
     })),
   });
   const dashboard = useLiveDashboard();
-  const { chosen } = useFollowedCreatorId();
   const now = useNow();
   const [order, setOrder] = useState<ListOrder>(readListOrder);
   const [search, setSearch] = useState('');
@@ -106,10 +104,10 @@ export function TrackingPage({
     if (creatorsQuery.isError) void creatorsQuery.refetch();
     for (const q of failed) void q.refetch();
   };
-  // The queue is the followed creator's, as on the Dashboard and in the pill: its conversations open with her id.
-  const todos = dashboard.kind === 'live' ? dashboard.data.todos : [];
-  const followed = followedOf(creators, chosen);
-  const queueCreator = followed?.id ?? null;
+  // The queue is the Dashboard's answer, for the creator it was read for: its conversations open with her id.
+  const queue = dashboard.kind === 'live' ? dashboard.data : null;
+  const todos = queue?.todos ?? [];
+  const queueCreator = queue?.creator.id ?? null;
   const open =
     selected === null
       ? null
@@ -166,9 +164,7 @@ export function TrackingPage({
             {todos.length === 0 ? null : (
               <Panel
                 className="tr-panel"
-                eyebrow={
-                  showsCreator && followed !== undefined ? `À traiter · ${followed.displayName}` : 'À traiter'
-                }
+                eyebrow={showsCreator && queue !== null ? `À traiter · ${queue.creator.name}` : 'À traiter'}
               >
                 <ul className="nv-list tr-list" aria-label="À traiter">
                   {todos.map((todo) => (

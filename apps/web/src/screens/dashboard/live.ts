@@ -317,6 +317,7 @@ function fanOf(fan: DashboardFan, now: Date): Fan {
   return {
     id: fan.id,
     name: fan.name,
+    conversationId: fan.conversationId,
     line: `premier message il y a ${since(fan.firstSeenAt, now)}`,
     spent: fan.spent,
     byAgent: fan.byAgent,

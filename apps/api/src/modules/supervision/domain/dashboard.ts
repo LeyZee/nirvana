@@ -228,6 +228,7 @@ export function assembleDashboard(input: {
     fans: facts.fans.map((fan) => ({
       id: FanIdSchema.parse(fan.id),
       name: fanNameOf(fan.name),
+      conversationId: ConversationIdSchema.parse(fan.conversationId),
       firstSeenAt: fan.firstSeenAt.toISOString(),
       spent: euros(fan.spentMinor),
       byAgent: euros(fan.byAgentMinor),

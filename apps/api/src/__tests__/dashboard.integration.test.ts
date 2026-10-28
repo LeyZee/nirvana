@@ -255,6 +255,8 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.budget).toMatchObject({ cap: 20, alertAt: 16, costPerEuroSold: null });
     expect(dashboard.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
     expect(dashboard.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([['Julien', 25, 25]]);
+    // « Ouvrir dans Suivi » in the fan reader opens his conversation.
+    expect(dashboard.fans[0]?.conversationId).toBe(conversations.get('Julien'));
   });
 
   it('shows a creator her aggregates, never a conversation nor a fan', async () => {

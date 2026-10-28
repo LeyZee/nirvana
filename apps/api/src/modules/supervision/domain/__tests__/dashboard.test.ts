@@ -35,6 +35,7 @@ const FACTS: DashboardFacts = {
     {
       id: FAN,
       name: 'Julien',
+      conversationId: CONVERSATION,
       firstSeenAt: minutesAgo(600),
       spentMinor: 4_500,
       byAgentMinor: 3_000,

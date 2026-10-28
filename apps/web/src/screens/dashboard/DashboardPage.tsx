@@ -84,10 +84,13 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
 export function DashboardPage({
   forCreator = false,
   forOwner = false,
+  opensTracking = false,
 }: {
   forCreator?: boolean;
   /** The owner also reads the state of the daily export (OPS-02), the one figure that is the owner's alone. */
   forOwner?: boolean;
+  /** The account's rail holds Suivi: the fan reader offers to open his conversation there. */
+  opensTracking?: boolean;
 }): JSX.Element {
   const [period, setPeriod] = useState<Period>('day');
   const view = useDashboard(period, forCreator);
@@ -100,7 +103,14 @@ export function DashboardPage({
   }
   if (view.status === 'offline') return <Offline creatorName={view.creatorName} />;
   return (
-    <Loaded view={view} period={period} onPeriod={setPeriod} forCreator={forCreator} forOwner={forOwner} />
+    <Loaded
+      view={view}
+      period={period}
+      onPeriod={setPeriod}
+      forCreator={forCreator}
+      forOwner={forOwner}
+      opensTracking={opensTracking}
+    />
   );
 }
 
@@ -110,12 +120,14 @@ function Loaded({
   onPeriod,
   forCreator,
   forOwner,
+  opensTracking,
 }: {
   view: Extract<DashboardView, { status: 'live' | 'sample' }>;
   period: Period;
   onPeriod: (period: Period) => void;
   forCreator: boolean;
   forOwner: boolean;
+  opensTracking: boolean;
 }): JSX.Element {
   const [fanId, setFanId] = useState<string | null>(null);
   const tip = useFloatingTip();
@@ -239,7 +251,7 @@ function Loaded({
       )}
 
       {tip.element}
-      {forCreator ? null : <Reader fan={fan} onClose={close} />}
+      {forCreator ? null : <Reader fan={fan} onClose={close} opensTracking={opensTracking} />}
     </div>
   );
 }
