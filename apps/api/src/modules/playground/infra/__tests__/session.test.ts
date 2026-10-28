@@ -5,7 +5,7 @@ import type { Brief, ConversationInput, LlmGateway, VoiceInput, VoiceOutput } fr
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_GUARD_SETTINGS } from '../../../agent/index';
-import { readPersonaFile } from '../../../agent/index';
+import { guardSettingsOf, readPersonaFile } from '../../../agent/index';
 import { createPlaygroundSession } from '../session';
 
 const BRIEF: Brief = {
@@ -322,6 +322,22 @@ describe('persona file', () => {
     });
     const off = source.replace('follow_ups:\n  enabled: true', 'follow_ups:\n  enabled: false');
     expect(readPersonaFile(off, 'X', '2026-10-17').followUps.delaysHours).toEqual([]);
+  });
+
+  it('gives the models her blocks in their own sections, and the code her forbidden emojis (P5-01)', () => {
+    const persona = readPersonaFile(read('demo/v0.2.0.yaml'), 'X', '2026-10-28');
+    expect(persona.personaSheet).toMatch(/^lifestyle:$/m);
+    expect(persona.personaSheet).toMatch(/^writing_style:$/m);
+    expect(persona.personaSheet).toContain('Arrête tu vas me faire rougir');
+    // The canvas lines she chose, in her order, for the brain's `kycMissing`.
+    expect(persona.personaSheet).toContain('kyc_collect:\n  - Prénom\n  - Âge\n  - Localisation');
+    expect(persona.forbiddenEmojis).toEqual(['😂']);
+    expect(guardSettingsOf(persona).forbiddenEmojis).toEqual(['😂']);
+    // Without blocks, nothing new but the canvas lines, all seven.
+    const before = readPersonaFile(read('demo/v0.1.0.yaml'), 'X', '2026-10-28');
+    expect(before.personaSheet).not.toMatch(/^(lifestyle|tastes|intimate|writing_style|sample_replies):/m);
+    expect(before.personaSheet).toContain('  - Situation');
+    expect(before.forbiddenEmojis).toEqual([]);
   });
 
   it('refuses a file outside the persona schema', () => {

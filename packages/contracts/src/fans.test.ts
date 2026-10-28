@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FanFlagsSchema, KYC_SLOT_LABELS, KycSlotSchema } from './fans';
+import { FanFlagsSchema, FanKycViewSchema, KYC_SLOT_LABELS, KycSlotSchema } from './fans';
 
 describe('fans', () => {
   it('names each KYC slot as the notes canvas does', () => {
@@ -33,5 +33,12 @@ describe('fans', () => {
     expect(
       FanFlagsSchema.safeParse({ salesFrozen: { reason: 'bored', since: '2026-10-02T10:00:00Z' } }).success,
     ).toBe(false);
+  });
+
+  it('says the lines left to learn of a fan as canvas slots only', () => {
+    const fanId = '0192a0e4-7b1c-7cc0-8a4e-3f5d9b2c1a02';
+    expect(FanKycViewSchema.safeParse({ fanId, toLearn: ['location', 'job'] }).success).toBe(true);
+    expect(FanKycViewSchema.safeParse({ fanId, toLearn: [] }).success).toBe(true);
+    expect(FanKycViewSchema.safeParse({ fanId, toLearn: ['city'] }).success).toBe(false);
   });
 });

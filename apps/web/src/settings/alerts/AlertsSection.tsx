@@ -1,5 +1,6 @@
 import {
   ALERT_KEYWORD_MAX,
+  ALERT_TEST_MESSAGE_MAX,
   alertKeywordKey,
   CUSTOM_ALERT_NAME_MAX,
   CUSTOM_ALERT_PHRASE_MAX,
@@ -7,6 +8,8 @@ import {
   CustomAlertGroupIdSchema,
   SYSTEM_ALERT_CODES,
   SYSTEM_ALERT_TOPICS,
+  type AlertTestBody,
+  type AlertTestResult,
   type CreatorId,
   type CreatorSummary,
   type CustomAlertGroup,
@@ -26,6 +29,7 @@ import {
   createAlert,
   replaceAlert,
   setSystemAlert,
+  testAlert,
   useAlerts,
 } from './api';
 import {
@@ -40,12 +44,17 @@ import {
   issueList,
   newDraft,
   pauseLine,
+  sameTest,
   switchedBody,
   SYSTEM_ALERTS,
   systemEnabled,
   systemLine,
   telegramHeadLine,
   telegramLine,
+  testBodyOf,
+  testCostLine,
+  testHint,
+  testVerdict,
   watchLine,
   type AlertDraft,
   type TelegramLine,
@@ -602,6 +611,7 @@ function AlertEditor({
             </span>
           </p>
         ) : null}
+        <AlertTry draft={draft} />
         {error === null ? null : (
           <p className="ps-error" role="alert">
             {error}
@@ -617,6 +627,90 @@ function AlertEditor({
         </div>
       </FormContext.Provider>
     </form>
+  );
+}
+
+/**
+ * « Tester » (P4-01): the alert as written now, tried on a message she types, before it is saved. Words are read by
+ * the code, the phrase by one call to the brain (said before she asks). An answer for another phrase, other words or
+ * another message is not shown: it would say what the alert no longer is.
+ */
+function AlertTry({ draft }: { draft: AlertDraft }): JSX.Element {
+  const id = useId();
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [answer, setAnswer] = useState<{
+    readonly sent: AlertTestBody;
+    readonly result: AlertTestResult;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const body = testBodyOf(draft, message);
+  const hint = testHint(draft, message);
+  const current = answer !== null && body !== null && sameTest(answer.sent, body) ? answer : null;
+  const verdict = current === null ? null : testVerdict(current.sent, current.result, draft.pausesAgent);
+
+  const run = async (): Promise<void> => {
+    if (body === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setAnswer({ sent: body, result: await testAlert(body) });
+    } catch (reason) {
+      setError(ALERTS_ERRORS[alertsErrorKind(reason)]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="al-try" aria-labelledby={`${id}-title`}>
+      <p className="al-try__title" id={`${id}-title`}>
+        Tester sur un message
+      </p>
+      <Field label="Message d’un fan" id={`${id}-message`} hint={testCostLine(draft)}>
+        <TextArea
+          id={`${id}-message`}
+          value={message}
+          maxLength={ALERT_TEST_MESSAGE_MAX}
+          rows={2}
+          placeholder="Tu me ferais une vidéo rien que pour moi ?"
+          onChange={(next) => {
+            setMessage(next);
+            setError(null);
+          }}
+        />
+      </Field>
+      <div className="al-try__run">
+        <button
+          type="button"
+          className="nv-btn nv-btn--soft nv-btn--sm"
+          disabled={busy || body === null}
+          aria-busy={busy}
+          onClick={() => {
+            void run();
+          }}
+        >
+          {busy ? 'Test…' : 'Tester'}
+        </button>
+        {hint === null ? null : <span className="al-try__why">{hint}</span>}
+      </div>
+      <div role="status" aria-live="polite">
+        {verdict === null ? null : (
+          <div className="al-try__verdict" data-rings={verdict.rings ? 'true' : undefined}>
+            <p className="al-try__headline">{verdict.headline}</p>
+            {verdict.lines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            {verdict.warning === null ? null : <p className="al-try__warning">{verdict.warning}</p>}
+          </div>
+        )}
+      </div>
+      {error === null ? null : (
+        <p className="ps-error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 

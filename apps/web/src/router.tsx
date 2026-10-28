@@ -28,7 +28,9 @@ import { ReportsPage } from './screens/team/ReportsPage';
 import { parseTeamSearch } from './screens/team/model';
 import { TodayPage } from './screens/today/TodayPage';
 import { ChatterTrackingPage } from './screens/tracking/ChatterTrackingPage';
+import { SuiviNav } from './screens/tracking/SuiviNav';
 import { TrackingPage } from './screens/tracking/TrackingPage';
+import { AlertHistoryPage } from './screens/tracking/history/AlertHistoryPage';
 import { parseTrackingSearch } from './screens/tracking/view';
 import { CorrectionsPage } from './screens/train/CorrectionsPage';
 import { PlaygroundPage } from './screens/train/PlaygroundPage';
@@ -106,7 +108,40 @@ const tracking = createRoute({
       canAddCreator: canOpen(rail, '/creatrices'),
     };
     // A chatter reads Suivi within his shift (EQ-13): outside it, the page says so.
-    return rail.kind === 'chatter' ? <ChatterTrackingPage {...props} /> : <TrackingPage {...props} />;
+    return rail.kind === 'chatter' ? (
+      <ChatterTrackingPage {...props} />
+    ) : (
+      <TrackingPage {...props} nav={<SuiviNav />} />
+    );
+  },
+});
+/**
+ * Suivi › Historique des alertes (P4-01): whoever reads the whole creator, as the server serves it (owner, operator).
+ * A creator never opens Suivi (the root sends her home); a chatter is sent to his own Suivi.
+ */
+const trackingAlerts = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/suivi/alertes',
+  validateSearch: parseTrackingSearch,
+  beforeLoad: ({ context }) => {
+    if (railOf(context.user).kind === 'chatter') {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: '/suivi', replace: true });
+    }
+  },
+  component: function TrackingAlerts() {
+    const { conversation } = trackingAlerts.useSearch();
+    const navigate = trackingAlerts.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <AlertHistoryPage
+        selected={conversation ?? null}
+        onSelect={(id) => void navigate({ search: id === null ? {} : { conversation: id } })}
+        canDecide={user.role !== 'creator'}
+        isOwner={user.role === 'owner'}
+        nav={<SuiviNav />}
+      />
+    );
   },
 });
 
@@ -273,6 +308,7 @@ const routeTree = rootRoute.addChildren([
   creators,
   train.addChildren([trainIndex, playground, corrections, tests]),
   tracking,
+  trackingAlerts,
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),

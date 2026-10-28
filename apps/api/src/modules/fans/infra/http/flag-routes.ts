@@ -3,9 +3,11 @@ import {
   DomainError,
   FanFlagsViewSchema,
   FanIdSchema,
+  FanKycViewSchema,
   SetFanFlagBodySchema,
   UserIdSchema,
   type CreatorId,
+  type KycSlot,
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
@@ -14,6 +16,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { FansService } from '../../application/fans';
+import { FanNotFound } from '../../domain/errors';
 import { requestedChange, type FlagAuthor } from '../../domain/flags';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
@@ -90,6 +93,40 @@ export function createFlagRoutes(
           ? await fans.setFlag(creatorId, fanId, requestedChange(body, now()), command)
           : await fans.clearFlag(creatorId, fanId, body.flag, command);
         return { fanId, flags };
+      },
+    );
+    return Promise.resolve();
+  };
+}
+
+/**
+ * `GET /v1/fans/:id/kyc` (P5-01): what she has still to learn about him, among the canvas lines `slots` (her
+ * persona's, in her order), for the line « À apprendre » of the Suivi. Read like his limits, by the owner and the
+ * chatters only; a fan unknown to this creator is 404 `fan_not_found`.
+ */
+export function createKycRoutes(
+  fans: FansService,
+  requireRole: RequireRole,
+  slots: readonly KycSlot[],
+): FastifyPluginAsyncZod {
+  return (app) => {
+    app.get(
+      '/fans/:id/kyc',
+      {
+        // A creator never sees her fans' data (ADR 0023).
+        preHandler: requireRole('owner', 'operator'),
+        schema: {
+          params: FanParamsSchema,
+          querystring: CreatorQuerySchema,
+          response: { 200: FanKycViewSchema },
+        },
+      },
+      async (request) => {
+        const { creatorId } = request.query;
+        actorFor(request, creatorId);
+        const fanId = request.params.id;
+        if ((await fans.getFan(creatorId, fanId)) === null) throw new FanNotFound();
+        return { fanId, toLearn: await fans.kycToLearn(creatorId, fanId, slots) };
       },
     );
     return Promise.resolve();

@@ -6,6 +6,7 @@ import {
   type ConversationDetail,
   type ConversationSummary,
   type FanFlags,
+  type KycSlot,
 } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -98,6 +99,8 @@ function serve(routes: {
   flags?: { before?: FanFlags; after?: FanFlags };
   /** His desire curve (`/desire`), no point when not given. */
   desire?: Reply;
+  /** The canvas lines left to learn about him (`/kyc`), none when not given; `down` answers 500. */
+  kyc?: KycSlot[] | 'down';
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -116,6 +119,11 @@ function serve(routes: {
         reply =
           routes.command?.(action) ??
           (init.method === 'PUT' ? flagsView(routes.flags?.after ?? routes.flags?.before) : { status: 204 });
+      } else if (path.startsWith('/v1/fans/') && path.endsWith('/kyc')) {
+        reply =
+          routes.kyc === 'down'
+            ? { status: 500 }
+            : { status: 200, body: { fanId: path.split('/')[3], toLearn: routes.kyc ?? [] } };
       } else if (path.startsWith('/v1/fans/')) {
         reply = flagsView(routes.flags?.before);
       } else if (path === '/v1/creators') {
@@ -139,6 +147,10 @@ function serve(routes: {
   );
   return posted;
 }
+
+/** The calls the reader made for what is left to learn about the fan. */
+const kycCalls = (): unknown[] =>
+  vi.mocked(fetch).mock.calls.filter(([input]) => typeof input === 'string' && input.includes('/kyc?'));
 
 /** Suivi as the app mounts it: the open conversation lives in the address. */
 function renderPage(at = '/suivi', canDecide = true, canAddCreator = true): void {
@@ -432,6 +444,42 @@ describe('the reader of Suivi', () => {
     renderPage(OPEN);
     const line = await screen.findByText('Ne plus lui écrire', { selector: '.tr-limits__sum' });
     expect(line.className).toContain('tr-warn');
+  });
+
+  it('says what she has still to learn about him, in her order, next to his limits', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), kyc: ['job', 'location'] });
+    renderPage(OPEN);
+    const line = await screen.findByText('Métier, Localisation');
+    expect(line.parentElement?.textContent).toBe('À apprendreMétier, Localisation');
+    expect(line.closest('.tr-warn')).toBeNull();
+  });
+
+  it('says nothing to learn once every line is learnt, and never asks for a creator', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
+    renderPage(OPEN);
+    await screen.findByText('Limites du fan');
+    await waitFor(() => {
+      expect(kycCalls()).toHaveLength(1);
+    });
+    expect(screen.queryByText('À apprendre')).toBeNull();
+    cleanup();
+
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), kyc: ['job'] });
+    renderPage(OPEN, false);
+    await screen.findByText('Limites du fan');
+    expect(screen.queryByText('À apprendre')).toBeNull();
+    expect(kycCalls()).toHaveLength(0);
+  });
+
+  it('says nothing to learn when the server does not answer for it', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), kyc: 'down' });
+    renderPage(OPEN);
+    await screen.findByText('Limites du fan');
+    await waitFor(() => {
+      expect(kycCalls()).toHaveLength(1);
+    });
+    expect(screen.queryByText('À apprendre')).toBeNull();
+    expect(document.querySelector('.tr-learn')).toBeNull();
   });
 
   it('opens when a limit blocks, and stays open once it is lifted', async () => {

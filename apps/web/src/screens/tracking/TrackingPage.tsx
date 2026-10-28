@@ -51,6 +51,7 @@ export function TrackingPage({
   canDecide,
   canAddCreator,
   offShift,
+  nav,
 }: {
   /** The conversation open in the reader (`/suivi?conversation=<id>`), or null for the list alone. */
   selected: string | null;
@@ -64,6 +65,8 @@ export function TrackingPage({
    * listed: off shift, the server only lists the one whose handover he took, until he gives it back (ADR 0025).
    */
   offShift?: ((holdsHandover: boolean) => ReactNode) | undefined;
+  /** Suivi's sub-views, for whoever reads the history of the alerts too (P4-01); a chatter has none. */
+  nav?: ReactNode;
 }): JSX.Element {
   const creatorsQuery = useCreators();
   const creators = creatorsQuery.data ?? [];
@@ -116,6 +119,7 @@ export function TrackingPage({
             ? 'Ce qui attend un humain, puis les conversations et qui a la main.'
             : `Ce qui attend un humain, puis les conversations et qui a la main. ${MODE_MEANINGS[mode]}`
         }
+        actions={nav}
       />
       {offShift?.(lines.length > 0)}
       {creatorsQuery.isError || (failed.length > 0 && lines.length === 0) ? (

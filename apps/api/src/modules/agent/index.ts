@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { KycSlot } from '@nirvana/contracts';
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
 import type { FansModule } from '../fans';
@@ -61,6 +62,8 @@ export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra
 
 /** @public Réglages › Alertes tries an alert on an example message (`POST /v1/alerts/test`, P4-01). */
 export { createAlertTester, type AlertTester } from './infra/alert-test';
+/** @public The persona module refuses a version whose sample replies a hard guard would block (P5-01). */
+export { sampleReplyFaults } from './infra/sample-replies';
 export type { AgentDraftComposer } from './infra/draft-composer';
 /** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
 export type { MediaSight } from './infra/draft-composer';
@@ -141,6 +144,12 @@ export async function startFollowUpPlan(options: {
     today,
   ).followUps;
   return { delaysHours: () => Promise.resolve(delaysHours) };
+}
+
+/** The canvas lines her persona collects (P5-01), in her order: what the Suivi says is left to learn of a fan. */
+export async function readKycSlots(options: { readonly personaPath: string }): Promise<readonly KycSlot[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  return readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today).kycSlots;
 }
 
 /**

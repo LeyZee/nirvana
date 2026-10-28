@@ -1,5 +1,6 @@
 import {
   FanFlagsViewSchema,
+  FanKycViewSchema,
   FanIdSchema,
   newId,
   PlatformAccountIdSchema,
@@ -8,11 +9,13 @@ import {
 } from '@nirvana/contracts';
 import { and, eq, schema, withAdmin } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
+import type { preHandlerAsyncHookHandler } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
 import { createLogger } from '../logger';
+import { createFansModule } from '../modules/fans';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
@@ -22,7 +25,7 @@ const OWNER = { email: 'owner@example.test', name: 'Owner', password: 'correct h
 const OPERATOR = { email: 'operator@example.test', name: 'Operator', password: 'staple battery horse' };
 const CREATOR = { email: 'creator@example.test', name: 'Creator', password: 'battery staple horse' };
 
-describe('fan flags (GET and PUT /v1/fans/:id/flags)', () => {
+describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1/fans/:id/kyc)', () => {
   let test: TestDb;
   let app: App;
   let server: Server;
@@ -156,5 +159,118 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags)', () => {
     );
     expect((await put(owner, { flag: 'fragile', set: true, reason: '   ' })).statusCode).toBe(400);
     expect((await get(owner)).json<{ flags: object }>().flags).not.toHaveProperty('fragile');
+  });
+
+  it('says what is left to learn of him, in her order, among the lines her persona collects', async () => {
+    const kyc = (cookie: string, creatorId: string = anna) =>
+      server.inject({
+        method: 'GET',
+        url: `/v1/fans/${fan}/kyc?creatorId=${creatorId}`,
+        headers: { cookie },
+      });
+    // The demo persona collects six lines of the canvas, not `desires` (personas/demo/v0.2.0.yaml).
+    const first = await kyc(operator);
+    expect(first.statusCode).toBe(200);
+    expect(FanKycViewSchema.parse(first.json())).toEqual({
+      fanId: fan,
+      toLearn: ['first_name', 'age', 'location', 'job', 'situation', 'hobbies'],
+    });
+    const observedAt = new Date();
+    const fact = { kind: 'declared', confidence: 0.9, sourceMessageId: null, observedAt } as const;
+    await app.modules.fans.proposeFacts(anna, fan, [
+      { ...fact, category: 'identity', key: 'Location', value: 'Lyon' },
+      { ...fact, category: 'life', key: 'job', value: 'Infirmier' },
+      // A chatter's note never fills a line, whatever its key.
+      { ...fact, category: 'operator_note', key: 'first_name', value: 'Prénom à demander' },
+    ]);
+    expect((await kyc(owner)).json()).toEqual({
+      fanId: fan,
+      toLearn: ['first_name', 'age', 'situation', 'hobbies'],
+    });
+    // Past the 40 facts of the context, with a chatter's notes first, a line learnt stays learnt.
+    await app.modules.fans.proposeFacts(
+      anna,
+      fan,
+      Array.from({ length: 45 }, (_, index) => ({
+        ...fact,
+        category: 'operator_note' as const,
+        key: `note_${String(index)}`,
+        value: `Note ${String(index)}`,
+      })),
+    );
+    expect((await app.modules.fans.activeFacts(anna, fan)).some((f) => f.key === 'location')).toBe(false);
+    expect((await kyc(owner)).json<{ toLearn: string[] }>().toLearn).toEqual([
+      'first_name',
+      'age',
+      'situation',
+      'hobbies',
+    ]);
+    // As his limits: never the creator, never a creator out of reach, never a fan of another creator.
+    expect((await kyc(creator)).statusCode).toBe(403);
+    expect((await kyc(operator, bea)).statusCode).toBe(403);
+    expect((await kyc(owner, bea)).statusCode).toBe(404);
+  });
+
+  it('says every canvas line, in the canvas order, when no persona gives hers', async () => {
+    // Stands in for `requireRole`: an owner, set as auth.ts does.
+    const asOwner: preHandlerAsyncHookHandler = (request) => {
+      request.user = {
+        id: operatorId,
+        email: 'owner@example.test',
+        name: 'Owner',
+        role: 'owner',
+        creatorIds: [],
+        routedCreatorIds: [],
+      };
+      return Promise.resolve();
+    };
+    // His own fan of Bea, with one line learnt: nothing from the tests above (ADR 0010, invented).
+    const beaAccount = newId(PlatformAccountIdSchema);
+    const theo = newId(FanIdSchema);
+    await withAdmin(test.admin.db, async (tx) => {
+      await tx
+        .insert(schema.platformAccounts)
+        .values({ id: beaAccount, creatorId: bea, platform: 'reveal', handle: 'bea-demo' });
+      await tx.insert(schema.fans).values({
+        id: theo,
+        creatorId: bea,
+        platformAccountId: beaAccount,
+        platformFanId: 'fan-2',
+        displayName: 'Théo',
+      });
+    });
+    await app.modules.fans.proposeFacts(bea, theo, [
+      {
+        category: 'identity',
+        key: 'location',
+        value: 'Nantes',
+        kind: 'declared',
+        confidence: 0.9,
+        sourceMessageId: null,
+        observedAt: new Date(),
+      },
+    ]);
+    const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
+    const fans = createFansModule({ db: app.db.db, adminDb: test.admin.db });
+    const bare = await buildServer({
+      config,
+      logger: createLogger(config),
+      routes: [fans.routes(() => asOwner)],
+      readiness: app.readiness,
+    });
+    try {
+      const read = await bare.inject({ method: 'GET', url: `/v1/fans/${theo}/kyc?creatorId=${bea}` });
+      expect(read.statusCode, read.body).toBe(200);
+      expect(FanKycViewSchema.parse(read.json()).toLearn).toEqual([
+        'first_name',
+        'age',
+        'job',
+        'hobbies',
+        'desires',
+        'situation',
+      ]);
+    } finally {
+      await bare.close();
+    }
   });
 });

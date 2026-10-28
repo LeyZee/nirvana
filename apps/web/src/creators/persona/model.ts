@@ -1,21 +1,40 @@
-import { PERSONA_OPTIONS, PersonaSchema, type Persona, type PersonaDetails } from '@nirvana/contracts';
+import {
+  PERSONA_BLOCK_LABELS,
+  KycSlotSchema,
+  PERSONA_OPTIONS,
+  personaCompletion,
+  PersonaSchema,
+  type Persona,
+  type PersonaCompletion,
+  type KycSlot,
+  type PersonaDetails,
+  type PersonaSampleReplyFault,
+} from '@nirvana/contracts';
 import type { z } from 'zod';
 
+import { GUARD_LABELS } from '@/agent/guards';
+
 /**
- * Rules of the persona screen, without React: its tabs (OnlyChat's, in OnlyChat's order, plus `limits`), the
- * validation by `PersonaSchema` with French messages, and the one-line summaries of folded blocks.
+ * Rules of the persona screen, without React: its tabs (OnlyChat's, in OnlyChat's order, with the P5-01 blocks after
+ * « Détails » and `limits` last), the validation by `PersonaSchema` with French messages, the one-line summaries of
+ * folded blocks and the completion of what is written.
  */
 
 export type TabId = Exclude<keyof Persona, 'meta'>;
 
 export const TABS: readonly { readonly id: TabId; readonly label: string }[] = [
-  { id: 'details', label: 'Détails' },
+  { id: 'details', label: PERSONA_BLOCK_LABELS.details },
+  { id: 'lifestyle', label: PERSONA_BLOCK_LABELS.lifestyle },
+  { id: 'tastes', label: PERSONA_BLOCK_LABELS.tastes },
+  { id: 'intimate', label: PERSONA_BLOCK_LABELS.intimate },
+  { id: 'writing_style', label: PERSONA_BLOCK_LABELS.writing_style },
+  { id: 'sample_replies', label: PERSONA_BLOCK_LABELS.sample_replies },
   { id: 'additional_info', label: 'Infos en plus' },
   { id: 'behavior', label: 'Comportement' },
   { id: 'strategies', label: 'Stratégies' },
   { id: 'follow_ups', label: 'Relances' },
   { id: 'notifications', label: 'Notifications' },
-  { id: 'limits', label: 'Limites' },
+  { id: 'limits', label: PERSONA_BLOCK_LABELS.limits },
 ];
 
 /** One problem with the draft: the field it belongs to (`strategies.kyc.max_messages`) and what to fix. */
@@ -26,14 +45,19 @@ export interface FieldIssue {
 
 const isTab = (key: string): key is TabId => TABS.some((tab) => tab.id === key);
 
+/** Where the generic message would not say what to do: a field, then the kind of problem. */
+const FIELD_MESSAGES: Readonly<Record<string, Partial<Record<z.core.$ZodIssue['code'], string>>>> = {
+  'strategies.kyc.collect': { too_small: 'Garde au moins une ligne du canevas.' },
+};
+
 /** Validates a draft; an empty list means it can be saved as a new version. */
 export function validate(draft: Persona): FieldIssue[] {
   const result = PersonaSchema.safeParse(withoutPlaceholders(draft));
   if (result.success) return [];
-  return result.error.issues.map((issue) => ({
-    field: issue.path.map(String).join('.'),
-    message: frenchMessage(issue),
-  }));
+  return result.error.issues.map((issue) => {
+    const field = issue.path.map(String).join('.');
+    return { field, message: FIELD_MESSAGES[field]?.[issue.code] ?? frenchMessage(issue) };
+  });
 }
 
 /** The issues of a field, its list items included (`details.hobbies.2` belongs to `details.hobbies`). */
@@ -45,6 +69,11 @@ export function issuesOf(issues: readonly FieldIssue[], field: string): FieldIss
 export function issueCountByTab(issues: readonly FieldIssue[]): Record<TabId, number> {
   const counts: Record<TabId, number> = {
     details: 0,
+    lifestyle: 0,
+    tastes: 0,
+    intimate: 0,
+    writing_style: 0,
+    sample_replies: 0,
     additional_info: 0,
     behavior: 0,
     strategies: 0,
@@ -149,7 +178,11 @@ const styleOf = (style: string): string =>
 /** The line each strategy shows while folded: its style, then the numbers the policy enforces. */
 export function strategySummaries(s: Persona['strategies']): Record<keyof Persona['strategies'], string> {
   return {
-    kyc: `${styleOf(s.kyc.style)} · ${String(s.kyc.max_messages)} messages, ${minutesLabel(s.kyc.max_duration_minutes)} au plus · le suit s’il chauffe après ${hoursLabel(s.kyc.min_hours_before_following)}`,
+    kyc: `${styleOf(s.kyc.style)} · ${String(s.kyc.max_messages)} messages, ${minutesLabel(s.kyc.max_duration_minutes)} au plus · le suit s’il chauffe après ${hoursLabel(s.kyc.min_hours_before_following)}${
+      s.kyc.collect === undefined
+        ? ''
+        : ` · ${String(s.kyc.collect.length)} ligne${s.kyc.collect.length > 1 ? 's' : ''} du canevas sur ${String(KycSlotSchema.options.length)}`
+    }`,
     sexualization: `${styleOf(s.sexualization.style)} · ouvre après ${hoursLabel(s.sexualization.initiate_after_hours)}`,
     script_launch: `${styleOf(s.script_launch.style)} · au moins ${hoursLabel(s.script_launch.cooldown_hours)} entre deux scripts`,
     post_offer: `${styleOf(s.post_offer.style)} · relance après ${plural(s.post_offer.delay_days, 'jour', 'jours')}`,
@@ -205,6 +238,10 @@ export const togglePick = <V>(options: Options<V>, values: readonly V[], value: 
     ? values.filter((v) => v !== value)
     : options.map((o) => o.value).filter((v) => v === value || values.includes(v));
 
+/** The same pick for a list whose order means something (`strategies.kyc.collect`): a new pick goes last. */
+export const appendPick = <V>(values: readonly V[], value: V): V[] =>
+  values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
+
 /** The time it is in a zone, « 22 h 25 », or nothing for a zone the browser does not know. */
 export const localTime = (zone: string, at: Date = new Date()): string => {
   try {
@@ -230,4 +267,97 @@ export function nextVersion(taken: readonly string[]): string {
       [0, 0, 0],
     );
   return `${String(major)}.${String(minor)}.${String(patch + 1)}`;
+}
+
+const real = (list: readonly string[]): string[] => list.filter((entry) => !isPlaceholder(entry));
+
+/**
+ * How complete the draft is (`personaCompletion`), read without the placeholders of the example: « <à remplir> » in
+ * a list is not something she wrote, nor is a sample reply still empty.
+ */
+export function draftCompletion(draft: Persona): PersonaCompletion {
+  const { details, limits } = draft;
+  // A reply added but not yet written is not one: the server would refuse it.
+  const written = draft.sample_replies?.filter((reply) => reply.reply.trim() !== '') ?? [];
+  return personaCompletion({
+    ...draft,
+    sample_replies: repliesOrNone(written),
+    details: { ...details, hobbies: real(details.hobbies), personality: real(details.personality) },
+    limits: {
+      never_do: real(limits.never_do),
+      never_show: real(limits.never_show),
+      never_say: real(limits.never_say),
+      disgusts: real(limits.disgusts),
+    },
+  });
+}
+
+const blank = (value: string | null): boolean => value === null || value.trim() === '';
+
+/** A block whose every field is empty is not written: the version keeps it absent, as before P5-01. */
+export function lifestyleOrNone(block: NonNullable<Persona['lifestyle']>): Persona['lifestyle'] {
+  return blank(block.occupation) && blank(block.area) && blank(block.routine) && blank(block.goals)
+    ? undefined
+    : block;
+}
+
+export function tastesOrNone(block: NonNullable<Persona['tastes']>): Persona['tastes'] {
+  return block.likes.length === 0 && block.dislikes.length === 0 ? undefined : block;
+}
+
+export function intimateOrNone(block: NonNullable<Persona['intimate']>): Persona['intimate'] {
+  return block.turn_ons.length === 0 && block.fantasies.length === 0 && blank(block.sexting_style)
+    ? undefined
+    : block;
+}
+
+export const repliesOrNone = (list: NonNullable<Persona['sample_replies']>): Persona['sample_replies'] =>
+  list.length === 0 ? undefined : list;
+
+/** An emoji as two lists compare it: without the variation selector some keyboards add (« ❤ » and « ❤️ »). */
+export const emojiKey = (entry: string): string => entry.replace(/\uFE0F/gu, '');
+
+/**
+ * What the server refused at saving (422 `persona_sample_reply_unprocessable`), on the reply it refused: one line per
+ * reply, every guard it trips named, as the agent's own refusals say them.
+ */
+export function refusedReplyIssues(faults: readonly PersonaSampleReplyFault[]): FieldIssue[] {
+  const byReply = new Map<number, string[]>();
+  for (const { index, code } of faults) {
+    const labels = byReply.get(index) ?? [];
+    if (!labels.includes(GUARD_LABELS[code])) labels.push(GUARD_LABELS[code]);
+    byReply.set(index, labels);
+  }
+  return [...byReply]
+    .sort(([a], [b]) => a - b)
+    .map(([index, labels]) => ({
+      field: `sample_replies.${String(index)}.reply`,
+      message: `L’agent ne l’enverrait pas : ${labels.join(', ')}.`,
+    }));
+}
+
+/**
+ * The canvas lines she collects, in her order: the brain and « À apprendre » follow it. Only every line in the
+ * canvas's own order is « all » and leaves `collect` absent, as the schema reads it; any other order is kept.
+ */
+export const collectOrAll = (slots: KycSlot[]): KycSlot[] | undefined =>
+  slots.length === KycSlotSchema.options.length && slots.every((slot, i) => slot === KycSlotSchema.options[i])
+    ? undefined
+    : slots;
+
+/** What the server refused at the last save (422), with the replies as they were then. */
+export interface RefusedReplies {
+  readonly issues: readonly FieldIssue[];
+  readonly replies: readonly string[];
+}
+
+export const NOTHING_REFUSED: RefusedReplies = { issues: [], replies: [] };
+
+/** The refusals that still hold: a refused reply keeps its line until its own text changes, whatever else is edited. */
+export function stillRefused(refused: RefusedReplies, draft: Persona): FieldIssue[] {
+  return refused.issues.filter((issue) => {
+    const index = Number(issue.field.split('.')[1]);
+    const reply = draft.sample_replies?.[index]?.reply;
+    return reply !== undefined && reply === refused.replies[index];
+  });
 }

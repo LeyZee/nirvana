@@ -1,8 +1,10 @@
 /** Public entry point of the `persona` module (ADR 0002). Other modules import this file only. */
+import type { Persona, PersonaSampleReplyFault } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
+import { PersonaSampleReplyUnprocessable } from './domain/errors';
 import type { CreatorDirectory } from './domain/ports';
 import type { PersonaVersionStore } from './domain/versions';
 import { createDrizzleCreatorDirectory } from './infra/db/creator-directory';
@@ -26,12 +28,41 @@ export interface PersonaDeps {
   readonly requireRole: RequireRole;
   /** A recent sign-in, for a change of her hours (P3-14). */
   readonly recentLogin: preHandlerAsyncHookHandler;
+  /**
+   * Her sample replies a hard guard of her answers would block (`agent`, P5-01): a version with any is refused, from
+   * the dashboard and from `pnpm persona:load` alike. Absent, none is read.
+   */
+  readonly sampleReplyFaults?: (persona: Persona) => readonly PersonaSampleReplyFault[];
+}
+
+/** The store, refusing before any write a version whose sample replies teach what a guard blocks. */
+function withSampleReplyCheck(
+  store: PersonaVersionStore,
+  faultsOf: NonNullable<PersonaDeps['sampleReplyFaults']>,
+): PersonaVersionStore {
+  const check = (persona: Persona): void => {
+    const faults = faultsOf(persona);
+    if (faults.length > 0) throw new PersonaSampleReplyUnprocessable(faults);
+  };
+  return {
+    ...store,
+    create: async (creatorId, body, userId) => {
+      check(body.persona);
+      return store.create(creatorId, body, userId);
+    },
+    load: async (creatorId, persona, options) => {
+      check(persona);
+      return store.load(creatorId, persona, options);
+    },
+  };
 }
 
 export function createPersonaModule(deps: PersonaDeps): PersonaModule {
   const creators = createDrizzleCreatorDirectory(deps.db);
   const creatorRoutes = createCreatorRoutes(creators, deps.requireRole, deps.recentLogin);
-  const versions = createDrizzlePersonaVersionStore(deps.db);
+  const stored = createDrizzlePersonaVersionStore(deps.db);
+  const versions =
+    deps.sampleReplyFaults === undefined ? stored : withSampleReplyCheck(stored, deps.sampleReplyFaults);
   const personaRoutes = createPersonaRoutes(versions, deps.requireRole);
   return {
     name: 'persona',

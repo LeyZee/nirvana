@@ -1,4 +1,11 @@
-import { ageOn, PersonaSchema, type Persona } from '@nirvana/contracts';
+import {
+  ageOn,
+  KYC_SLOT_LABELS,
+  kycSlotsToCollect,
+  PersonaSchema,
+  type KycSlot,
+  type Persona,
+} from '@nirvana/contracts';
 import { parse, stringify } from 'yaml';
 
 import { DEFAULT_MIN_DESIRE_TO_OPEN, DEFAULT_SCRIPT_MIN_DESIRE } from '../domain/desire';
@@ -29,6 +36,10 @@ export interface PersonaForModels {
   readonly petNames: readonly string[];
   /** Her alert keywords (`notifications.alert_keywords`): one written by a fan pauses the agent for him (P4-01). */
   readonly alertKeywords: readonly string[];
+  /** Emojis she never uses (`writing_style.emojis_forbidden`, P5-01): a guard blocks them. */
+  readonly forbiddenEmojis: readonly string[];
+  /** The canvas lines she tries to learn of each fan, in her order (`strategies.kyc.collect`, P5-01). */
+  readonly kycSlots: readonly KycSlot[];
 }
 
 const isPlaceholder = (value: string): boolean => value.startsWith('<');
@@ -74,7 +85,16 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     additional_info: persona.additional_info,
     behavior,
     ...(Object.keys(strategies).length > 0 && { strategies }),
+    // The canvas lines the brain may name in `kycMissing`: hers, in her order (P5-01).
+    kyc_collect: kycSlotsToCollect(persona).map((slot) => KYC_SLOT_LABELS[slot]),
     limits: persona.limits,
+    // Her blocks (P5-01), each its own section; absent ones stay out.
+    ...(persona.lifestyle !== undefined && { lifestyle: persona.lifestyle }),
+    ...(persona.tastes !== undefined && { tastes: persona.tastes }),
+    ...(persona.intimate !== undefined && { intimate: persona.intimate }),
+    ...(persona.writing_style !== undefined && { writing_style: persona.writing_style }),
+    ...(persona.sample_replies !== undefined &&
+      persona.sample_replies.length > 0 && { sample_replies: persona.sample_replies }),
   };
   return {
     creatorName: isPlaceholder(name) ? fallbackName : name,
@@ -98,14 +118,17 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     splitMessages: persona.behavior.split_messages,
     petNames: persona.behavior.pet_names.filter((term) => !isPlaceholder(term)),
     alertKeywords: persona.notifications.alert_keywords.filter((term) => !isPlaceholder(term)),
+    forbiddenEmojis: persona.writing_style?.emojis_forbidden ?? [],
+    kycSlots: kycSlotsToCollect(persona),
   };
 }
 
-/** The guards with her disgusts, her forbidden words and her pet names. */
+/** The guards with her disgusts, her forbidden words and emojis, and her pet names. */
 export function guardSettingsOf(persona: PersonaForModels): GuardSettings {
   return {
     ...DEFAULT_GUARD_SETTINGS,
     forbiddenTerms: persona.forbiddenTerms,
+    forbiddenEmojis: persona.forbiddenEmojis,
     ...(persona.petNames.length > 0 && { petNames: persona.petNames }),
   };
 }

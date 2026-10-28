@@ -2,7 +2,9 @@ import type { PlaygroundAnswer as Answer, PlaygroundState } from '@nirvana/contr
 import { describe, expect, it } from 'vitest';
 
 import { bubblesOf, duration, euros, money, needsAttention, percent, rateTone, stepOf } from './logic';
-import { handoffReasons, suggestedDestination } from './model';
+import { handoffReasons, intentLabel, suggestedDestination } from './model';
+
+type Brief = NonNullable<Answer['brief']>;
 
 const answer = (patch: Partial<Answer> = {}): Answer => ({
   bubbles: ['Coucou toi ✨'],
@@ -74,7 +76,7 @@ describe('suggestedDestination', () => {
 
 describe('handoffReasons', () => {
   it('says in words why a human takes over, without repeats', () => {
-    const brief = {
+    const brief: Brief = {
       intent: 'distress',
       sentiment: 'negative',
       risks: ['distress', 'distress'],
@@ -90,7 +92,7 @@ describe('handoffReasons', () => {
   });
 
   it('names the newest risks of the brain in words', () => {
-    const brief = {
+    const brief: Brief = {
       intent: 'other',
       sentiment: 'negative',
       risks: ['dangerous_request', 'real_abuse'],
@@ -132,5 +134,11 @@ describe('stepOf', () => {
       'handoff',
     );
     expect(stepOf(state(answer()), 'lesson', false)).toBe('lesson');
+  });
+});
+
+describe('intentLabel', () => {
+  it('names a request for a service, as « Demande de service » is told in Réglages › Alertes', () => {
+    expect(intentLabel('asks_for_service')).toBe('Il demande un service (sur mesure, appel, cam, vocal)');
   });
 });

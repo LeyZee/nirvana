@@ -1,10 +1,13 @@
 import {
   ALERT_ERROR_CODES,
+  AlertTestResultSchema,
   AlertsViewSchema,
   ApiErrorSchema,
   CustomAlertGroupSchema,
   SystemAlertSettingSchema,
   type AlertErrorCode,
+  type AlertTestBody,
+  type AlertTestResult,
   type AlertsView,
   type CreateCustomAlertBody,
   type CustomAlertBody,
@@ -107,8 +110,11 @@ export const ALERTS_QUERY_KEY = ['alerts'] as const;
 export const fetchAlerts = (): Promise<AlertsView> =>
   call('/v1/alerts', (body) => AlertsViewSchema.safeParse(body));
 
-export function useAlerts(): UseQueryResult<AlertsView> {
-  return useQuery({ queryKey: ALERTS_QUERY_KEY, queryFn: fetchAlerts });
+/** `enabled: false` for anyone but the owner, whom the route answers alone. */
+export function useAlerts({
+  enabled = true,
+}: { readonly enabled?: boolean } = {}): UseQueryResult<AlertsView> {
+  return useQuery({ queryKey: ALERTS_QUERY_KEY, queryFn: fetchAlerts, enabled });
 }
 
 /** Writes a new alert on its creators; the same body sent again answers what is stored. */
@@ -122,6 +128,13 @@ export const replaceAlert = (id: CustomAlertGroupId, body: CustomAlertBody): Pro
 /** Archives the alert: it stops watching, and its past triggers stay in the history. */
 export const archiveAlert = (id: CustomAlertGroupId): Promise<null> =>
   call(group(id), () => ({ success: true, data: null }), { method: 'DELETE' });
+
+/** « Tester »: the alert as written, on an example message; nothing is stored, nothing is sent. */
+export const testAlert = (body: AlertTestBody): Promise<AlertTestResult> =>
+  call('/v1/alerts/test', (answer) => AlertTestResultSchema.safeParse(answer), {
+    method: 'POST',
+    ...json(body),
+  });
 
 export const setSystemAlert = (
   code: SystemAlertCode,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { CreatorIdSchema } from './ids';
-import { normalise } from './normalise';
+import { normaliseWords } from './normalise';
 import type { TelegramTopic } from './telegram';
 
 /**
@@ -27,9 +27,7 @@ export const CUSTOM_ALERT_KEYWORDS_MAX = 40;
  * anything that is not a letter or a digit. « Vidéo-perso » and « video perso » are the same keyword.
  */
 export function alertKeywordKey(keyword: string): string {
-  return normalise(keyword)
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
+  return normaliseWords(keyword);
 }
 
 /** A word she watches for, matched in code without a model: it holds a letter or a digit, or it would never match. */

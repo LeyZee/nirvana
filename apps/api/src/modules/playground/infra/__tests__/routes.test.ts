@@ -129,6 +129,8 @@ async function server(
       splitMessages: true,
       petNames: [],
       alertKeywords: [],
+      forbiddenEmojis: [],
+      kycSlots: [],
     },
     store,
     records,

@@ -274,9 +274,12 @@ describe('Équipe › Planning', () => {
   it('lays the week out by account and day, with who is on shift now', async () => {
     serve();
     renderPage();
-    const chip = await screen.findByRole('button', {
-      name: 'Théo, 23 h – 5 h, jusqu’au lendemain, en poste',
-    });
+    // The first render of the file (router, queries) can outlast the default second on a loaded CI runner.
+    const chip = await screen.findByRole(
+      'button',
+      { name: 'Théo, 23 h – 5 h, jusqu’au lendemain, en poste' },
+      { timeout: 4_000 },
+    );
     // The night shift starts on Tuesday 27, at the agency's hour.
     const row = screen.getByRole('row', { name: /Nora Vidal/u });
     expect(within(row).getByRole('rowheader').textContent).toContain('Nora Vidal@nora sur Reveal');

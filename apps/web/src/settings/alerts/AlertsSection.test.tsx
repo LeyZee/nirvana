@@ -362,4 +362,73 @@ describe('the system’s alerts', () => {
       creators: [{ creatorId: NORA, enabled: false }],
     });
   });
+
+  it('tries the alert as written on a message, and drops the answer once the alert changes', async () => {
+    const calls = serve({
+      ...BASE,
+      'POST /v1/alerts/test': () => ({
+        status: 200,
+        body: { keywords: ['custom'], phraseMatched: false, reason: null },
+      }),
+    });
+    renderSection();
+    fireEvent.click(within(await line('Vidéo perso')).getByRole('button', { name: 'Modifier' }));
+    const form = screen.getByRole('form', { name: 'Modifier « Vidéo perso »' });
+    const run = within(form).getByRole('button', { name: 'Tester' });
+    // Nothing to try on yet.
+    expect(run).toHaveProperty('disabled', true);
+    expect(within(form).getByText(/un appel au modèle, compté dans le budget du jour/)).toBeTruthy();
+    fireEvent.change(within(form).getByLabelText('Message d’un fan'), {
+      target: { value: 'une custom stp' },
+    });
+    fireEvent.click(run);
+
+    const status = within(form).getByRole('status');
+    await waitFor(() => {
+      expect(status.textContent).toContain('Elle sonnerait, et mettrait l’agent en pause pour ce fan.');
+    });
+    expect(status.textContent).toContain('Mot-clé trouvé : « custom ».');
+    expect(status.textContent).toContain('L’IA ne reconnaît pas la situation de la phrase.');
+    expect(calls.find((call) => call.url === '/v1/alerts/test')?.body).toEqual({
+      alert: { phrase: 'Le fan demande une vidéo faite pour lui', keywords: ['vidéo perso', 'custom'] },
+      message: 'une custom stp',
+    });
+    // Nothing saved by a test.
+    expect(calls.some((call) => call.method === 'PUT')).toBe(false);
+
+    fireEvent.change(within(form).getByLabelText('Ce qu’elle repère'), {
+      target: { value: 'Le fan veut un appel' },
+    });
+    expect(status.textContent).toBe('');
+  });
+
+  it('says in amber why the phrase could not be read, and when the server does not answer', async () => {
+    let answer: Reply = {
+      status: 200,
+      body: {
+        keywords: [],
+        phraseMatched: null,
+        reason: 'Le modèle n’a pas pu lire la phrase cette fois : réessaie.',
+      },
+    };
+    serve({ ...BASE, 'POST /v1/alerts/test': () => answer });
+    renderSection();
+    fireEvent.click(within(await line('Vidéo perso')).getByRole('button', { name: 'Modifier' }));
+    const form = screen.getByRole('form', { name: 'Modifier « Vidéo perso »' });
+    fireEvent.change(within(form).getByLabelText('Message d’un fan'), { target: { value: 'bonjour' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Tester' }));
+    await waitFor(() => {
+      expect(within(form).getByRole('status').textContent).toContain('La phrase n’a pas pu être lue.');
+    });
+    expect(
+      within(form).getByText('Le modèle n’a pas pu lire la phrase cette fois : réessaie.').className,
+    ).toBe('al-try__warning');
+
+    answer = { status: 500 };
+    fireEvent.change(within(form).getByLabelText('Message d’un fan'), { target: { value: 'bonsoir' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Tester' }));
+    expect((await within(form).findByRole('alert')).textContent).toBe(
+      'Le serveur ne répond pas. Réessaie dans un instant.',
+    );
+  });
 });

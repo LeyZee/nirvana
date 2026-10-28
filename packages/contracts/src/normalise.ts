@@ -91,6 +91,16 @@ export function normalise(text: string): string {
     .replace(/\ba\.\s?i\.?(?=\W|$)/g, 'ai');
 }
 
+/**
+ * `normalise`, then words split on anything that is not a letter or a digit: « Vidéo-perso » and « video perso » read
+ * the same. How a keyword or a persona's entry compares.
+ */
+export function normaliseWords(text: string): string {
+  return normalise(text)
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
 /** Stricter reading for trap detection: digits and symbols inside words turned back into letters. */
 export function unmask(text: string): string {
   return normalise(text).replace(/(?<=\p{L})[013457@$]|[013457@$](?=\p{L})/gu, (c) => LEET[c] ?? c);

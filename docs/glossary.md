@@ -50,7 +50,12 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Drapeau du fan | `fan_flag` | Une limite du fan (`fans.flags`, `FanFlagsSchema`) : âge confirmé, ventes gelées et leur raison, plafond de dépense, fragile, pas d'explicite, ne plus écrire. Lue par la politique avant toute offre, posée par la politique ou un humain, jamais par un modèle seul. |
 | Persona | `persona` | La fiche versionnée de la créatrice, calquée sur la fiche OnlyChat (détails, infos en plus, comportement, stratégies, relances, notifications), plus ses limites. |
 | Version de persona | `persona_version` | Un état enregistré de la persona d'une créatrice. Une seule est active, celle avec laquelle l'agent écrit ; le CRM enregistre des versions qui restent inactives tant qu'elles ne sont pas activées (ADR 0010). |
-| Infos en plus | `additional_info` | Le texte libre de la persona (6 000 caractères au plus). |
+| Infos en plus | `additional_info` | Le texte libre de la persona (6 000 caractères au plus). Remplacé peu à peu par les blocs (P5-01), il disparaîtra avec `schema: 2` (ADR à venir). |
+| Bloc de persona | `persona_block` | Une partie guidée de la persona (P5-01), toutes facultatives : Détails, Mode de vie (`lifestyle`), Goûts (`tastes`), Intime (`intimate`), Style d'écriture (`writing_style`), Réponses types (`sample_replies`), Limites. Liste et libellés : `PERSONA_BLOCKS`, `PERSONA_BLOCK_LABELS`. |
+| Complétion de la persona | `persona_completion` | Ce qui est rempli de la persona, de 0 à 100 %, chaque bloc pesé (`PERSONA_BLOCK_WEIGHTS`), avec la liste de ce qui manque dans l'ordre des blocs (`personaCompletion`). Jamais une condition d'activation : jauge neutre, sans couleur. |
+| Réponse type | `sample_reply` | Une réponse inventée qu'elle écrirait, avec le moment qu'elle suit, que la voix lit comme exemple (dix au plus). Refusée à l'enregistrement si une garde dure la bloquerait. |
+| Infos à collecter | `kyc_collect`, `strategies.kyc.collect` | Les cases du canevas de notes Reveal qu'elle cherche à apprendre de chaque fan, dans son ordre ; toutes sans choix. Le cerveau ne nomme que celles-là dans `kycMissing`. |
+| À apprendre | `FanKycView.toLearn`, `kycSlotsToLearn`, `GET /v1/fans/:id/kyc` | Les infos à collecter qu'on ne sait pas encore d'un fan : celles sans fait actif de cette clé, dans son ordre. Une ligne neutre de la fiche du fan dans le Suivi, jamais dans la liste. |
 | Limites | `limits` | Ce que la créatrice ne fait, ne montre, ne dit jamais, et ses dégoûts. Chargées par les gardes. |
 | Surnom | `pet_name` | Un des surnoms que la créatrice donne aux fans, pris dans la liste fermée de sa persona. |
 | Sexualisation | `sexualization` | Le moment où la conversation devient sexy, et la stratégie qui le règle. |

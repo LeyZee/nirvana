@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
+import { GuardCodeSchema } from './guards';
 import { CreatorIdSchema, PersonaVersionIdSchema } from './ids';
-import { PersonaSchema } from './persona';
+import { PersonaSchema, SAMPLE_REPLIES_MAX } from './persona';
 
 /** Hex SHA-256 of a persona's canonical JSON (keys sorted): two equal personas have the same hash. */
 export const ContentHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
@@ -49,3 +50,35 @@ export const ActivatePersonaVersionParamsSchema = z.strictObject({
   versionId: PersonaVersionIdSchema,
 });
 export type ActivatePersonaVersionParams = z.infer<typeof ActivatePersonaVersionParamsSchema>;
+
+/**
+ * The error codes of the persona's versions, for the screen to say them in French (the suffix gives the status,
+ * api.md): `persona_version_conflict` 409, another version was stored since the edit started, or its number is taken ;
+ * `persona_version_not_found` 404, no version of hers has this id ; `persona_sample_reply_unprocessable` 422, a sample
+ * reply holds what a hard guard of her answers blocks (P5-01), its `details` read by
+ * `PersonaSampleReplyUnprocessableDetailsSchema`. Nothing is stored on any of them.
+ */
+export const PERSONA_ERROR_CODES = [
+  'persona_version_conflict',
+  'persona_version_not_found',
+  'persona_sample_reply_unprocessable',
+] as const;
+export type PersonaErrorCode = (typeof PERSONA_ERROR_CODES)[number];
+
+/** A refused sample reply: its place in `sample_replies` and the guard's code, never its text. */
+export const PersonaSampleReplyFaultSchema = z.strictObject({
+  index: z
+    .int()
+    .min(0)
+    .max(SAMPLE_REPLIES_MAX - 1),
+  code: GuardCodeSchema,
+});
+export type PersonaSampleReplyFault = z.infer<typeof PersonaSampleReplyFaultSchema>;
+
+/** `details` of 422 `persona_sample_reply_unprocessable`: one line per reply and guard, in the list's order. */
+export const PersonaSampleReplyUnprocessableDetailsSchema = z.strictObject({
+  faults: z.array(PersonaSampleReplyFaultSchema).min(1),
+});
+export type PersonaSampleReplyUnprocessableDetails = z.infer<
+  typeof PersonaSampleReplyUnprocessableDetailsSchema
+>;

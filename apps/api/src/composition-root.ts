@@ -28,6 +28,8 @@ import type { Logger } from './logger';
 import {
   createAgentModule,
   guardContextOf,
+  readKycSlots,
+  sampleReplyFaults,
   startBubbleGuard,
   startSharedBubbleGuard,
   startDraftComposer,
@@ -225,12 +227,14 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     publishBudget: (crossing) => publishBudgetThreshold(adminDb.db, crossing),
     logger,
   });
-  const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
+  const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.2.0.yaml');
   const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
   const persona = createPersonaModule({
     db: db.db,
     requireRole,
     recentLogin: createRequireRecentLogin(auth),
+    // An example the voice imitates never teaches what a hard guard blocks (P5-01).
+    sampleReplyFaults,
   });
   const team = createTeamModule({
     db: db.db,
@@ -323,6 +327,13 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           logger.warn({ err: error }, 'bubble guard without her persona: shared guards only');
           return undefined;
         })) ?? startSharedBubbleGuard();
+  // The canvas lines her persona collects, for « À apprendre » in the Suivi (P5-01); every line without her persona.
+  const kycSlots = isDemoPersonaInProduction
+    ? undefined
+    : await readKycSlots({ personaPath }).catch((error: unknown) => {
+        logger.warn({ err: error }, 'lines to learn: persona unreadable, every canvas line shown');
+        return undefined;
+      });
   // Read against what she already sent him (P3-13); an approved draft never carries a media.
   const guard: BubbleGuard = {
     check: (bubbles, { history }) => agentGuard.check(bubbles, guardContextOf(history)),
@@ -589,7 +600,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.conversations.routes,
       modules.persona.routes,
       modules.alerts.routes,
-      modules.fans.routes(requireRole),
+      modules.fans.routes(requireRole, kycSlots),
       modules.team.routes(requireRole),
       modules.scheduling.routes(requireRole),
       modules.backups.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),

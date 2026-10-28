@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import demoYaml from '../../../../../personas/demo/v0.1.0.yaml?raw';
+import blocksYaml from '../../../../../personas/demo/v0.2.0.yaml?raw';
 
 import { parsePersonaYaml } from './source';
 import { StrategiesTab } from './tabs';
@@ -40,5 +41,25 @@ describe('Stratégies › the desire thresholds (P3-12)', () => {
       'À partir de 60 : bande joueur. Le Suivi dira encore « joueur » quand les scripts partent.',
     );
     expect(hint.className).toBe('ps-hint');
+  });
+});
+
+describe('Stratégies › the canvas lines (P5-01)', () => {
+  it('adds a line last, keeping the order she chose', async () => {
+    const persona: Persona = await parsePersonaYaml(blocksYaml);
+    const onChange = vi.fn<(value: Persona['strategies']) => void>();
+    render(<StrategiesTab value={persona.strategies} onChange={onChange} issues={[]} />);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Lignes du canevas' }));
+    fireEvent.click(screen.getByRole('option', { name: /Envies/u }));
+    const [changed] = onChange.mock.lastCall ?? [];
+    expect(changed?.kyc.collect).toEqual([
+      'first_name',
+      'age',
+      'location',
+      'job',
+      'situation',
+      'hobbies',
+      'desires',
+    ]);
   });
 });

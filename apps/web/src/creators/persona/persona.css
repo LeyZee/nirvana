@@ -766,9 +766,117 @@
   font-size: var(--nv-text-footnote);
 }
 
+/* ── Completion (P5-01): how much of her the agent can read. Neutral: a share, not a warning nor an action. ── */
+.ps-completion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--nv-hairline);
+}
+.ps-completion__line {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+.ps-completion__percent {
+  font-size: var(--nv-text-callout);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--nv-ink);
+}
+.ps-completion__gauge {
+  max-width: 320px;
+}
+.ps-completion__missing {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+  text-wrap: pretty;
+}
+.ps-completion__missing > .ps-muted {
+  display: inline;
+  margin-right: 4px;
+}
+/* A block still to write, as a word of the sentence: it opens its tab. */
+.ps-completion__block {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--nv-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--nv-hairline);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.ps-completion__block:hover {
+  text-decoration-color: currentColor;
+}
+.ps-completion__block:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Sample replies: the fields, then the bubble as a fan would read it. ── */
+.ps-replies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ps-reply {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  grid-template-areas:
+    'fields preview'
+    'remove preview';
+  gap: 10px 18px;
+  padding: 16px;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  animation: nv-enter var(--nv-dur-base) var(--nv-ease-out) both;
+}
+.ps-reply__fields {
+  grid-area: fields;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.ps-reply__preview {
+  grid-area: preview;
+  align-self: center;
+  min-width: 0;
+}
+.ps-reply > .nv-btn {
+  grid-area: remove;
+  justify-self: start;
+}
+@media (max-width: 640px) {
+  .ps-reply {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'fields'
+      'preview'
+      'remove';
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ps-panel,
   .ps-reveal,
+  .ps-reply,
   .ps-error,
   .ps-entry,
   .ps-picker__list,
