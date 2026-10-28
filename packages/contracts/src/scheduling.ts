@@ -91,7 +91,7 @@ export const MinuteOfDaySchema = z.number().int().min(0).max(1439);
  */
 export const SchedulingSettingsSchema = z
   .object({
-    /** The zone the slots and the templates speak in. */
+    /** The agency's zone: the slots and the templates speak in it, and the pay periods follow it (ADR 0023, EQ-03). */
     timeZone: TimezoneSchema,
     /** Where the day's first slot starts, in minutes after midnight; earlier than the end of that slot. */
     slotStartMinute: MinuteOfDaySchema,
