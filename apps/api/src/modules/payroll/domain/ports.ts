@@ -21,6 +21,7 @@ import type {
   PayPeriodClosing,
   PayPeriodSummary,
   PayPeriodWindow,
+  PayrollEntries,
   PayrollSettings,
   Penalty,
   PenaltyId,
@@ -222,6 +223,8 @@ export interface PayrollReadStore {
     userId: UserId,
     page: PageQuery,
   ): Promise<{ readonly items: readonly StoredPeriodSummary[]; readonly nextCursor: string | null }>;
+  /** The period's bonuses, penalties and adjustments, cancelled ones included, the newest first. */
+  entries(userId: UserId, period: PayPeriod): Promise<PayrollEntries>;
   settings(userId: UserId): Promise<PayrollSettings>;
   /** The latest rate of each currency the job read. */
   exchangeRates(userId: UserId): Promise<ExchangeRates>;

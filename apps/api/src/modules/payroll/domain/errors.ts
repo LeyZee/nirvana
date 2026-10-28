@@ -194,3 +194,12 @@ export class PaymentAmountMismatch extends DomainError {
     });
   }
 }
+
+/** More entries of a kind in one period than the list gives (EQ-05): it refuses rather than cut one short. */
+export class PayrollEntriesTooMany extends DomainError {
+  constructor(max: number) {
+    super('payroll_entries_too_many_unprocessable', 'Trop de saisies sur cette quinzaine pour les lister', {
+      details: { max },
+    });
+  }
+}

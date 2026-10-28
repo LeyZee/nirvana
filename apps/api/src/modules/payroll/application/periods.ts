@@ -8,11 +8,13 @@ import {
   type PayPeriod,
   type PayPeriodClosing,
   type PayPeriodPage,
+  type PayrollEntries,
   type PayrollPeriod,
   type PayrollSettings,
   type UserId,
 } from '@nirvana/contracts';
 
+import { redactAuthors } from '../domain/authors';
 import type { PayReader, PayrollReadStore, StoredStatement } from '../domain/ports';
 
 /**
@@ -31,6 +33,7 @@ const closingFor = (closing: PayPeriodClosing | null, reader: PayReader): PayPer
 
 const toStatement = (stored: StoredStatement, reader: PayReader): CommissionStatement => ({
   ...stored.statement,
+  ...redactAuthors(reader.scope, stored.statement),
   team: teamOf(stored, reader),
   canValidate: mayValidateStatement(stored.statement, reader),
 });
@@ -40,6 +43,8 @@ export interface PayrollReads {
   period(userId: UserId, period: PayPeriod): Promise<PayrollPeriod>;
   /** `GET /v1/payroll/periods` (EQ-05): the periods the reader has statements in, the most recent first. */
   periods(userId: UserId, page: PageQuery): Promise<PayPeriodPage>;
+  /** `GET /v1/payroll/entries?period=` (EQ-05): the period's bonuses, penalties and adjustments, cancelled included. */
+  entries(userId: UserId, period: PayPeriod): Promise<PayrollEntries>;
   /** `GET /v1/payroll/settings`: the minimum payout, the default before the owner sets one. */
   settings(userId: UserId): Promise<PayrollSettings>;
   /** `GET /v1/payroll/exchange-rates`: the latest rate the job read, `null` before the first one; the agency's only. */
@@ -68,6 +73,7 @@ export function createPayrollReads(store: PayrollReadStore, now: () => Date): Pa
       const { items, nextCursor } = await store.periods(userId, page);
       return { items: items.map((item) => ({ ...item, ended: hasEnded(item.window) })), nextCursor };
     },
+    entries: (userId, period) => store.entries(userId, period),
     settings: (userId) => store.settings(userId),
     exchangeRates: (userId) => store.exchangeRates(userId),
   };

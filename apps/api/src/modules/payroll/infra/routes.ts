@@ -17,6 +17,7 @@ import {
   PayCommissionStatementBodySchema,
   PayPeriodPageSchema,
   PayPeriodSchema,
+  PayrollEntriesSchema,
   PayrollPeriodSchema,
   PayrollSettingsSchema,
   PenaltyIdSchema,
@@ -82,6 +83,15 @@ export function createPayrollRoutes(
         schema: { params: PeriodParamsSchema, response: { 200: PayrollPeriodSchema } },
       },
       (request) => reads.period(userOf(request), request.params.period),
+    );
+
+    app.get(
+      '/payroll/entries',
+      {
+        preHandler: ownerOrMember,
+        schema: { querystring: PeriodParamsSchema, response: { 200: PayrollEntriesSchema } },
+      },
+      (request) => reads.entries(userOf(request), request.query.period),
     );
 
     app.post(

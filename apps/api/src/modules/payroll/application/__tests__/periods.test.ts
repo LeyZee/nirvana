@@ -105,6 +105,7 @@ const read = (
           settings: { minimumPayoutMinor: 1_500 },
         }),
       periods: () => Promise.reject(new Error('not read here')),
+      entries: () => Promise.reject(new Error('not read here')),
       settings: () => Promise.reject(new Error('not read here')),
       exchangeRates: () => Promise.reject(new Error('not read here')),
     },
@@ -165,6 +166,7 @@ describe('the periods’ list (EQ-05)', () => {
         {
           period: () => Promise.reject(new Error('not read here')),
           periods: () => Promise.resolve({ items: [summary], nextCursor: 'next' }),
+          entries: () => Promise.reject(new Error('not read here')),
           settings: () => Promise.reject(new Error('not read here')),
           exchangeRates: () => Promise.reject(new Error('not read here')),
         },

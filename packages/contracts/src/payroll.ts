@@ -293,26 +293,34 @@ const inOrder = (penalty: { readonly fromPeriod: PayPeriod; readonly toPeriod: P
  * periods), capped in each statement at the member's share plus bonuses. A cancellation stops it from `cancelledFrom`
  * on, the member's first open period: the periods already validated keep it.
  */
-export const PenaltySchema = z
-  .object({
-    id: PenaltyIdSchema,
-    memberId: TeamMemberIdSchema,
-    ...PenaltyPeriodsShape,
-    amount: PenaltyAmountSchema,
-    reason: PayReasonSchema,
-    createdBy: UserIdSchema,
-    createdAt: z.iso.datetime(),
-    cancellation: CancellationSchema.extend({ cancelledFrom: PayPeriodSchema }).nullable(),
-  })
-  .refine(inOrder, { message: 'La dernière quinzaine vient après la première', path: ['toPeriod'] });
+const PenaltyShape = {
+  id: PenaltyIdSchema,
+  memberId: TeamMemberIdSchema,
+  ...PenaltyPeriodsShape,
+  amount: PenaltyAmountSchema,
+  reason: PayReasonSchema,
+  createdBy: UserIdSchema,
+  createdAt: z.iso.datetime(),
+  cancellation: CancellationSchema.extend({ cancelledFrom: PayPeriodSchema }).nullable(),
+};
+const PENALTY_ORDER = { message: 'La dernière quinzaine vient après la première', path: ['toPeriod'] };
+export const PenaltySchema = z.object(PenaltyShape).refine(inOrder, PENALTY_ORDER);
 export type Penalty = z.infer<typeof PenaltySchema>;
 
-/** Does `penalty` count in `period`. */
+/** Does `penalty` cover `period`: one of the periods it was made for, cancelled since or not. */
+export const penaltyCovers = (
+  penalty: Pick<Penalty, 'fromPeriod' | 'toPeriod'>,
+  period: PayPeriod,
+): boolean => penalty.fromPeriod <= period && period <= penalty.toPeriod;
+
+/** Does `penalty` count in `period`: it covers it, and no cancellation stopped it there or before. */
 export function penaltyApplies(
-  penalty: Pick<Penalty, 'fromPeriod' | 'toPeriod' | 'cancellation'>,
+  penalty: Pick<Penalty, 'fromPeriod' | 'toPeriod'> & {
+    readonly cancellation: { readonly cancelledFrom: PayPeriod } | null;
+  },
   period: PayPeriod,
 ): boolean {
-  if (period < penalty.fromPeriod || period > penalty.toPeriod) return false;
+  if (!penaltyCovers(penalty, period)) return false;
   return penalty.cancellation === null || period < penalty.cancellation.cancelledFrom;
 }
 
@@ -361,6 +369,31 @@ export const CreatePayAdjustmentBodySchema = z.object({
   correctsStatementId: CommissionStatementIdSchema.nullable().default(null),
 });
 export type CreatePayAdjustmentBody = z.input<typeof CreatePayAdjustmentBodySchema>;
+
+/** Who made or cancelled an entry: the agency's to read, `null` for a member (`withMember`'s scope `self`). */
+const EntryAuthorSchema = UserIdSchema.nullable();
+const EntryCancellationSchema = z.object({ cancelledAt: z.iso.datetime(), cancelledBy: EntryAuthorSchema });
+
+/**
+ * A bonus, a penalty or an adjustment as its reader reads it, in a statement or in the period's entries: the owner and
+ * an active manager read who made and cancelled it; a member reads its reason, amount and state, its authors at
+ * `null`, never the agency's side.
+ */
+export const BonusViewSchema = BonusSchema.extend({
+  createdBy: EntryAuthorSchema,
+  cancellation: EntryCancellationSchema.nullable(),
+});
+export type BonusView = z.infer<typeof BonusViewSchema>;
+export const PenaltyViewSchema = z
+  .object({
+    ...PenaltyShape,
+    createdBy: EntryAuthorSchema,
+    cancellation: EntryCancellationSchema.extend({ cancelledFrom: PayPeriodSchema }).nullable(),
+  })
+  .refine(inOrder, PENALTY_ORDER);
+export type PenaltyView = z.infer<typeof PenaltyViewSchema>;
+export const PayAdjustmentViewSchema = PayAdjustmentSchema.extend({ createdBy: EntryAuthorSchema });
+export type PayAdjustmentView = z.infer<typeof PayAdjustmentViewSchema>;
 
 /**
  * What a validated statement carried instead of paying it (`statementId`): a total under the payout minimum, or below
@@ -470,7 +503,8 @@ export type StatementPayment = z.infer<typeof StatementPaymentSchema>;
  *
  * `team` is `null` for a member reading their own statement when the period has no collective goal. With one, the
  * member reads how far the team got (`collective`), never the team's net itself: `netMinor` is `null` for them (the
- * agency's figure; default until Charles decides otherwise).
+ * agency's figure; default until Charles decides otherwise). Its bonuses, penalties and adjustments are read as in
+ * the period's entries: a member reads none of their authors.
  *
  * `teamShare` is a manager's share of the others' net. `penaltiesRequestedMinor` is what the penalties asked for,
  * `penaltiesMinor` what the cap let through. `totalMinor` = commission + team share + bonuses − penalties +
@@ -493,10 +527,10 @@ export const CommissionStatementSchema = z.object({
     .nullable(),
   tierBonus: BonusTierSchema.nullable(),
   collectiveBonusMinor: MinorSchema,
-  bonuses: z.array(BonusSchema),
-  penalties: z.array(PenaltySchema),
+  bonuses: z.array(BonusViewSchema),
+  penalties: z.array(PenaltyViewSchema),
   carryOversIn: z.array(CarryOverSchema),
-  adjustments: z.array(PayAdjustmentSchema),
+  adjustments: z.array(PayAdjustmentViewSchema),
   bonusesMinor: MinorSchema,
   penaltiesRequestedMinor: MinorSchema,
   penaltiesMinor: MinorSchema,
@@ -591,6 +625,25 @@ export type PayPeriodSummary = z.infer<typeof PayPeriodSummarySchema>;
 export const PayPeriodPageSchema = pageOf(PayPeriodSummarySchema);
 export type PayPeriodPage = z.infer<typeof PayPeriodPageSchema>;
 
+/** The most entries of each kind `GET /v1/payroll/entries` gives for one period: beyond, it refuses rather than cut. */
+export const PAYROLL_ENTRIES_MAX = 500;
+
+/**
+ * `GET /v1/payroll/entries?period=` (EQ-05) → 200: the bonuses of `period`, the penalties that cover it
+ * (`penaltyCovers`: one counts there per `penaltyApplies`, otherwise it shows struck through) and its adjustments,
+ * cancelled ones included, the newest first. Every member's for the owner and an active manager, one's own for a
+ * member, who reads an entry's reason, amount and state but not its authors (`createdBy` and `cancelledBy` are `null`).
+ * A period nobody wrote in gives empty lists. 422 `payroll_entries_too_many_unprocessable` beyond `PAYROLL_ENTRIES_MAX`
+ * of a kind: never a list cut short.
+ */
+export const PayrollEntriesSchema = z.object({
+  period: PayPeriodSchema,
+  bonuses: z.array(BonusViewSchema).max(PAYROLL_ENTRIES_MAX),
+  penalties: z.array(PenaltyViewSchema).max(PAYROLL_ENTRIES_MAX),
+  adjustments: z.array(PayAdjustmentViewSchema).max(PAYROLL_ENTRIES_MAX),
+});
+export type PayrollEntries = z.infer<typeof PayrollEntriesSchema>;
+
 /**
  * `POST /v1/payroll/statements/:id/validate` (owner, active manager, never one's own) → 200 `CommissionStatementSchema`.
  * The period has ended, and the member's earlier statements are validated (`commission_statement_order_conflict`
@@ -651,6 +704,7 @@ export function mayValidateStatement(
  * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
  * `payment_amount_unprocessable` 422, an amount sent that is not what the statement pays ;
  * `cursor_invalid` 400, a page cursor the periods' list did not give ;
+ * `payroll_entries_too_many_unprocessable` 422, more than `PAYROLL_ENTRIES_MAX` entries of a kind in one period ;
  * `payroll_own_forbidden` 403, one's own statement, bonus, penalty or adjustment ;
  * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing or reading the latest rate, or
  * a manager doing what only the owner does.
@@ -680,6 +734,7 @@ export const PAYROLL_ERROR_CODES = [
   'payment_in_future_unprocessable',
   'payment_amount_unprocessable',
   'cursor_invalid',
+  'payroll_entries_too_many_unprocessable',
   'payroll_own_forbidden',
   'payroll_forbidden',
 ] as const;

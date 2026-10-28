@@ -18,6 +18,7 @@ import {
   bonusTiersFor,
   collectiveGoalFor,
   penaltyApplies,
+  penaltyCovers,
 } from './payroll';
 
 const MEMBER = '0199f2a0-0000-7000-8000-0000000000b1';
@@ -122,6 +123,12 @@ describe('penalties', () => {
     const cancelled = PenaltySchema.parse({ ...made, cancellation });
     expect(penaltyApplies(cancelled, period('2026-11-01'))).toBe(true);
     expect(penaltyApplies(cancelled, period('2026-11-16'))).toBe(false);
+    // Cancelled or not, it still covers its periods: a list of the period shows it, struck through where it stopped.
+    expect(
+      ['2026-10-16', '2026-11-01', '2026-11-16', '2026-12-01'].map((p) =>
+        penaltyCovers(cancelled, period(p)),
+      ),
+    ).toEqual([false, true, true, false]);
   });
 });
 

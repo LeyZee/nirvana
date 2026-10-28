@@ -19,26 +19,42 @@ import {
   ShiftReportIdSchema,
   StatementPaymentSchema,
   TeamMemberIdSchema,
+  PAYROLL_ENTRIES_MAX,
+  PayrollEntriesSchema,
+  penaltyCovers,
   UserIdSchema,
   type PayPeriod,
 } from '@nirvana/contracts';
 import { and, eq, inArray, schema, sql, withMember, type Database } from '@nirvana/db';
 import { z } from 'zod';
 
-import { PayPeriodCursorInvalid, PayrollForbidden } from '../domain/errors';
+import { redactAuthors } from '../domain/authors';
+import { PayPeriodCursorInvalid, PayrollEntriesTooMany, PayrollForbidden } from '../domain/errors';
 import type { PayrollReadStore, StoredStatement } from '../domain/ports';
 
-import { bonusTierSetOfRow, collectiveGoalOfRow, exchangeRateOfRow, settingsOf } from './snapshot';
+import {
+  adjustmentOfRow,
+  bonusOfRow,
+  bonusTierSetOfRow,
+  collectiveGoalOfRow,
+  exchangeRateOfRow,
+  penaltiesSpanning,
+  penaltyOfRow,
+  settingsOf,
+} from './snapshot';
 
 const {
+  bonuses,
   bonusTierSets,
   collectiveGoals,
   commissionStatementLines,
   commissionStatements,
   exchangeRates,
+  payAdjustments,
   payPeriodClosings,
   payPeriods,
   payrollSettings,
+  penalties,
   teamMembers,
 } = schema;
 
@@ -304,6 +320,43 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
 
     settings: (userId) =>
       withMember(db, userId, async (tx) => settingsOf((await tx.select().from(payrollSettings))[0])),
+
+    // The period's entries as the policies give them back, cancelled ones included: the team's for the owner and an
+    // active manager, one's own for anyone else, who reads no author (`redactAuthors`). Each list is read one past its
+    // cap, so that a longer one is refused, never cut short.
+    entries: (userId, period) =>
+      withMember(db, userId, async (tx, scope) => {
+        const read = PAYROLL_ENTRIES_MAX + 1;
+        const bonusRows = await tx
+          .select()
+          .from(bonuses)
+          .where(eq(bonuses.period, period))
+          .orderBy(sql`${bonuses.createdAt} desc, ${bonuses.id} desc`)
+          .limit(read);
+        const penaltyRows = await tx
+          .select()
+          .from(penalties)
+          .where(penaltiesSpanning(period))
+          .orderBy(sql`${penalties.createdAt} desc, ${penalties.id} desc`)
+          .limit(read);
+        const adjustmentRows = await tx
+          .select()
+          .from(payAdjustments)
+          .where(eq(payAdjustments.period, period))
+          .orderBy(sql`${payAdjustments.createdAt} desc, ${payAdjustments.id} desc`)
+          .limit(read);
+        if ([bonusRows, penaltyRows, adjustmentRows].some((rows) => rows.length > PAYROLL_ENTRIES_MAX))
+          throw new PayrollEntriesTooMany(PAYROLL_ENTRIES_MAX);
+
+        return PayrollEntriesSchema.parse({
+          period,
+          ...redactAuthors(scope, {
+            bonuses: bonusRows.map(bonusOfRow),
+            penalties: penaltyRows.map(penaltyOfRow).filter((penalty) => penaltyCovers(penalty, period)),
+            adjustments: adjustmentRows.map(adjustmentOfRow),
+          }),
+        });
+      }),
 
     // The agency's, closed by default: the owner and an active manager read it, anyone else is refused (a member, an
     // inactive manager, an account outside the team), who reads the rate their own lines were computed on.
