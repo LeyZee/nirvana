@@ -1,6 +1,7 @@
 import {
   AuditEntryIdSchema,
   CreatorIdSchema,
+  CustomAlertGroupIdSchema,
   CustomAlertGroupSchema,
   CustomAlertIdSchema,
   CustomAlertSchema,
@@ -303,6 +304,24 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
           .where(and(eq(schema.customAlerts.enabled, true), sql`${schema.customAlerts.archivedAt} is null`))
           .orderBy(schema.customAlerts.createdAt, schema.customAlerts.id);
         return rows.map(toAlert);
+      });
+    },
+
+    async names(creatorId) {
+      return withTenant(db, creatorId, async (tx) => {
+        const rows = await tx
+          .select({
+            id: schema.customAlerts.id,
+            groupId: schema.customAlerts.groupId,
+            name: schema.customAlerts.name,
+          })
+          .from(schema.customAlerts);
+        return new Map(
+          rows.map((row) => [
+            CustomAlertIdSchema.parse(row.id),
+            { groupId: CustomAlertGroupIdSchema.parse(row.groupId), name: row.name },
+          ]),
+        );
       });
     },
 

@@ -70,7 +70,7 @@ export const customAlerts = pgTable(
 /**
  * « Marquer comme vu » in the history of alerts (P4-01): the journal is append-only, so the seen mark lives here, one
  * per event, shared by the agency. An event is an `alert_triggered`, or a `handoff_requested` that carries a trigger.
- * Keyed by creator too: a mark written under another creator (a bug) is never read by hers, nor blocks hers.
+ * Owned by `conversations`, which owns the journal and serves the history. Keyed by creator too: a mark written under another creator (a bug) is never read by hers, nor blocks hers.
  */
 export const alertSeen = pgTable(
   'alert_seen',

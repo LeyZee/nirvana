@@ -2,6 +2,7 @@
 export const CONTRACTS_PACKAGE = '@nirvana/contracts';
 
 export * from './agent-hours';
+export * from './alert-history';
 export * from './alerts';
 export * from './auth';
 export * from './automatic';

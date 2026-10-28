@@ -10,6 +10,7 @@ import { createReopenJob } from './application/jobs/reopen';
 import { createRespondJob } from './application/jobs/respond';
 import { createSendJob } from './application/jobs/send';
 import type {
+  AlertNames,
   BubbleGuard,
   Clock,
   DraftComposer,
@@ -20,12 +21,15 @@ import type {
   OutboundSender,
   ReplyHours,
 } from './domain/ports';
+import { createDrizzleAlertHistory } from './infra/db/alert-history';
 import { createDrizzleConversationReader } from './infra/db/reader';
 import { createDrizzleUnitOfWork } from './infra/db/unit-of-work';
+import { createAlertHistoryRoutes } from './infra/http/alert-history-routes';
 import { createConversationRoutes, type RequireRole } from './infra/http/routes';
 
 export { SendRefused } from './domain/errors';
 export type {
+  AlertNames,
   BubbleGuard,
   Clock,
   DraftComposer,
@@ -69,8 +73,12 @@ export interface ConversationsDeps {
   readonly followUps?: FollowUpPlan;
   /** Her hours (P3-14, `persona`); without them she is always open and quiet from 23:00 to 9:00, as before. */
   readonly replyHours?: ReplyHours;
+  /** Her own alerts' names (P4-01, `alerts` module's adapter); without them the history says « Alerte personnalisée ». */
+  readonly alertNames?: AlertNames;
   readonly clock?: Clock;
 }
+
+const noAlertNames: AlertNames = { ofCreator: () => Promise.resolve(new Map()) };
 
 const systemClock: Clock = { now: () => new Date() };
 
@@ -87,10 +95,17 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
   return {
     name: 'conversations',
     ...commands,
-    routes: createConversationRoutes(createDrizzleConversationReader(deps.db, clock), commands, {
-      requireRole: deps.requireRole,
-      recentLogin: deps.recentLogin,
-    }),
+    routes: async (app, options) => {
+      await createConversationRoutes(createDrizzleConversationReader(deps.db, clock), commands, {
+        requireRole: deps.requireRole,
+        recentLogin: deps.recentLogin,
+      })(app, options);
+      await createAlertHistoryRoutes(
+        createDrizzleAlertHistory(deps.db),
+        deps.alertNames ?? noAlertNames,
+        deps.requireRole,
+      )(app, options);
+    },
     jobs: {
       respond: createRespondJob({
         uow,

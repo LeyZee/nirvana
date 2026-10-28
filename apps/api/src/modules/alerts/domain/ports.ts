@@ -6,6 +6,7 @@ import type {
   CustomAlertBody,
   CustomAlertGroup,
   CustomAlertGroupId,
+  CustomAlertId,
   SetSystemAlertBody,
   SystemAlertCode,
   SystemAlertSetting,
@@ -50,6 +51,10 @@ export interface AlertStore {
   ): Promise<SystemAlertSetting | 'unknown_creator' | 'locked'>;
   /** Her own alerts that are on (enabled, not archived): what the agent checks each of his messages against. */
   activeFor(creatorId: CreatorId): Promise<readonly CustomAlert[]>;
+  /** Every alert of hers by the id of her row, archived ones too: the history names an alert as it was. */
+  names(
+    creatorId: CreatorId,
+  ): Promise<ReadonlyMap<CustomAlertId, { readonly groupId: CustomAlertGroupId; readonly name: string }>>;
   /** The system's alerts that are on for her. */
   systemOn(creatorId: CreatorId): Promise<ReadonlySet<SystemAlertCode>>;
 }
