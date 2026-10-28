@@ -1,4 +1,10 @@
-import { FactCategorySchema, type FactCategory, type FactKind, type MessageId } from '@nirvana/contracts';
+import {
+  FactCategorySchema,
+  type FactCategory,
+  type FactKind,
+  type KycSlot,
+  type MessageId,
+} from '@nirvana/contracts';
 
 /** Facts she brings back in a reply: more would crowd the context (P3-02). */
 export const MAX_ACTIVE_FACTS = 40;
@@ -50,6 +56,24 @@ function normalizeKey(key: string): string {
 function normalizeValue(value: string, category: FactCategory): string {
   const max = category === 'operator_note' ? MAX_OPERATOR_NOTE_LENGTH : MAX_FACT_VALUE_LENGTH;
   return value.trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+/**
+ * The canvas lines still to learn, among `slots` and in their order (P5-01): a line is learnt once one of his facts
+ * still true at `now` has it as key (« Location » and « location » alike), however many facts he has. A chatter's note
+ * never fills a line.
+ */
+export function kycSlotsToLearn(
+  slots: readonly KycSlot[],
+  facts: readonly StoredFact[],
+  now: Date,
+): KycSlot[] {
+  const learnt = new Set(
+    facts
+      .filter((fact) => isActive(fact, now) && fact.category !== 'operator_note')
+      .map((fact) => normalizeKey(fact.key)),
+  );
+  return slots.filter((slot) => !learnt.has(slot));
 }
 
 const slot = (fact: { readonly category: FactCategory; readonly key: string }) =>

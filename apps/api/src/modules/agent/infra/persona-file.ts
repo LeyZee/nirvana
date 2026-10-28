@@ -1,4 +1,11 @@
-import { ageOn, KYC_SLOT_LABELS, kycSlotsToCollect, PersonaSchema, type Persona } from '@nirvana/contracts';
+import {
+  ageOn,
+  KYC_SLOT_LABELS,
+  kycSlotsToCollect,
+  PersonaSchema,
+  type KycSlot,
+  type Persona,
+} from '@nirvana/contracts';
 import { parse, stringify } from 'yaml';
 
 import { DEFAULT_MIN_DESIRE_TO_OPEN, DEFAULT_SCRIPT_MIN_DESIRE } from '../domain/desire';
@@ -31,6 +38,8 @@ export interface PersonaForModels {
   readonly alertKeywords: readonly string[];
   /** Emojis she never uses (`writing_style.emojis_forbidden`, P5-01): a guard blocks them. */
   readonly forbiddenEmojis: readonly string[];
+  /** The canvas lines she tries to learn of each fan, in her order (`strategies.kyc.collect`, P5-01). */
+  readonly kycSlots: readonly KycSlot[];
 }
 
 const isPlaceholder = (value: string): boolean => value.startsWith('<');
@@ -110,6 +119,7 @@ export function readPersonaFile(source: string, fallbackName: string, today: str
     petNames: persona.behavior.pet_names.filter((term) => !isPlaceholder(term)),
     alertKeywords: persona.notifications.alert_keywords.filter((term) => !isPlaceholder(term)),
     forbiddenEmojis: persona.writing_style?.emojis_forbidden ?? [],
+    kycSlots: kycSlotsToCollect(persona),
   };
 }
 

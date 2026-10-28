@@ -5,9 +5,16 @@ import {
   type FanFlagName,
   type FanFlags,
   type FanId,
+  type KycSlot,
 } from '@nirvana/contracts';
 
-import { planFacts, selectActiveFacts, type FactProposal, type StoredFact } from '../domain/facts';
+import {
+  kycSlotsToLearn,
+  planFacts,
+  selectActiveFacts,
+  type FactProposal,
+  type StoredFact,
+} from '../domain/facts';
 import type { Fan, FanSighting, FanStore, FactStore, FlagStore } from '../domain/fan';
 import {
   withAgeDisputed,
@@ -34,6 +41,8 @@ export interface FansService {
   proposeFacts(creatorId: CreatorId, fanId: FanId, proposals: readonly FactProposal[]): Promise<StoredFact[]>;
   /** What the context gets: active facts by category and confidence, 40 at most. */
   activeFacts(creatorId: CreatorId, fanId: FanId): Promise<StoredFact[]>;
+  /** The lines of `slots` none of his active facts fills, read on all of them, not the 40 of the context (P5-01). */
+  kycToLearn(creatorId: CreatorId, fanId: FanId, slots: readonly KycSlot[]): Promise<KycSlot[]>;
   /** His limits (`fans.flags`), read by the policy before any offer. */
   flags(creatorId: CreatorId, fanId: FanId): Promise<FanFlags>;
   /** Sets one limit; writes `fan_flag_set` only when it changed. Returns his limits after. */
@@ -74,6 +83,8 @@ export function createFansService(
     proposeFacts: (creatorId, fanId, proposals) =>
       facts.write(creatorId, fanId, (current) => planFacts(current, proposals, now())),
     activeFacts: async (creatorId, fanId) => selectActiveFacts(await facts.current(creatorId, fanId), now()),
+    kycToLearn: async (creatorId, fanId, slots) =>
+      kycSlotsToLearn(slots, await facts.current(creatorId, fanId), now()),
     flags: (creatorId, fanId) => flagStore.read(creatorId, fanId),
     setFlag: (creatorId, fanId, change, command) => {
       // A human confirming his age settles a dispute; the policy never does.

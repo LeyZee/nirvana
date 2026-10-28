@@ -130,6 +130,7 @@ async function server(
       petNames: [],
       alertKeywords: [],
       forbiddenEmojis: [],
+      kycSlots: [],
     },
     store,
     records,
