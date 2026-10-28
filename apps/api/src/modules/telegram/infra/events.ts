@@ -20,6 +20,8 @@ import type { ScannedEvent, Signal } from '../domain/signals';
 const HandoffSchema = z.object({
   conversationId: ConversationIdSchema.optional().catch(undefined),
   cause: HandoffCauseSchema.optional().catch(undefined),
+  // Which alert of hers paused the agent, to name it; a trigger it cannot read never holds the handoff back.
+  trigger: z.object({ alert: AlertRefSchema }).optional().catch(undefined),
 });
 
 // `conversationId` since #60 on `takeover_started`; a row without it (an older one) closes nothing.
@@ -80,6 +82,7 @@ function signalOf(type: string, payload: unknown): Signal | null {
         kind: 'handoff',
         conversationId: parsed.data.conversationId ?? null,
         cause: parsed.data.cause ?? null,
+        ...(parsed.data.trigger !== undefined && { alert: parsed.data.trigger.alert }),
       };
     }
     case 'takeover_started': {

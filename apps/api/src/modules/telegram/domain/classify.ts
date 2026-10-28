@@ -1,5 +1,6 @@
 import {
   CUSTOM_ALERT_TOPIC,
+  SYSTEM_ALERT_LABELS,
   SYSTEM_ALERT_TOPICS,
   type AlertRef,
   type AutomaticMissing,
@@ -77,10 +78,19 @@ const SYSTEM_ALERT_TEXT: Readonly<Record<SystemAlertCode, string>> = {
   identity_doubt: CAUSE_TEXT.identity_doubt,
 };
 
-const TOPIC_TITLE: Readonly<Partial<Record<TelegramTopic, string>>> = {
-  keyword: 'Mot surveillé',
-  custom: 'Alerte',
-};
+/** An alert of hers is named, as Suivi › Historique des alertes names it; the system's by their label there. */
+export type AlertNameOf = (alert: AlertRef & { kind: 'custom' }) => string | null;
+
+const noNames: AlertNameOf = () => null;
+
+const alertTitle = (alert: AlertRef, nameOf: AlertNameOf): string =>
+  alert.kind === 'system' ? SYSTEM_ALERT_LABELS[alert.code] : (nameOf(alert) ?? 'Alerte personnalisée');
+
+/** Her alert by its name, written by the agency, never the fan's words; without a name read, the generic line. */
+function customAlertText(alert: AlertRef & { kind: 'custom' }, nameOf: AlertNameOf): string {
+  const name = nameOf(alert);
+  return name === null ? CAUSE_TEXT.custom_alert : `Le message du fan correspond à l’alerte « ${name} ».`;
+}
 
 const alertTopic = (alert: AlertRef): TelegramTopic =>
   alert.kind === 'custom' ? CUSTOM_ALERT_TOPIC : SYSTEM_ALERT_TOPICS[alert.code];
@@ -135,11 +145,18 @@ function scopeLabel(scope: Signal & { kind: 'kill_switch' }): string {
   }
 }
 
-export function classify(signal: Signal): Outcome | null {
+/** `nameOf` names her alerts (P4-01); without it, a message says « une alerte personnalisée ». */
+export function classify(signal: Signal, nameOf: AlertNameOf = noNames): Outcome | null {
   switch (signal.kind) {
     case 'handoff': {
       const isUrgent = signal.cause !== null && URGENT_CAUSES.has(signal.cause);
       const causeTopic = signal.cause === null || isUrgent ? undefined : ALERT_CAUSE_TOPIC[signal.cause];
+      const cause =
+        signal.cause === null
+          ? 'L’agent passe la main.'
+          : signal.cause === 'custom_alert' && signal.alert?.kind === 'custom'
+            ? customAlertText(signal.alert, nameOf)
+            : CAUSE_TEXT[signal.cause];
       return {
         kind: 'notice',
         topic: isUrgent ? 'urgent' : (causeTopic ?? 'important'),
@@ -147,7 +164,7 @@ export function classify(signal: Signal): Outcome | null {
         ...(causeTopic !== undefined && causeTopic !== 'important' && { fallbackTopic: 'important' }),
         threadKey: signal.conversationId === null ? null : `conversation:${signal.conversationId}`,
         title: isUrgent ? 'URGENT' : 'Important',
-        body: `${signal.cause === null ? 'L’agent passe la main.' : CAUSE_TEXT[signal.cause]} Il n’écrit plus à ce fan et attend un humain.`,
+        body: `${cause} Il n’écrit plus à ce fan et attend un humain.`,
         link: conversationLink(signal.conversationId),
       };
     }
@@ -158,8 +175,8 @@ export function classify(signal: Signal): Outcome | null {
         kind: 'notice',
         topic,
         threadKey: null,
-        title: TOPIC_TITLE[topic] ?? 'Important',
-        body: `${signal.alert.kind === 'custom' ? CAUSE_TEXT.custom_alert : SYSTEM_ALERT_TEXT[signal.alert.code]} L’agent continue de lui répondre.`,
+        title: alertTitle(signal.alert, nameOf),
+        body: `${signal.alert.kind === 'custom' ? customAlertText(signal.alert, nameOf) : SYSTEM_ALERT_TEXT[signal.alert.code]} L’agent continue de lui répondre.`,
         link: conversationLink(signal.conversationId),
       };
     }
