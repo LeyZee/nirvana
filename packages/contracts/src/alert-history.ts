@@ -67,7 +67,7 @@ export type AlertTriggerItem = z.infer<typeof AlertTriggerItemSchema>;
 
 /**
  * `GET /v1/alerts/triggers?creatorId=` (owner, an operator who reads the whole creator): her triggers, newest first,
- * by cursor pages. `seen` keeps the seen ones (`true`) or the others (`false`); `alert` keeps one alert, her own by its
+ * by cursor pages (the cursor names the last trigger of its page, read again in the base: no date is rounded). `seen` keeps the seen ones (`true`) or the others (`false`); `alert` keeps one alert, her own by its
  * `groupId` or the system's by its code.
  */
 export const AlertTriggerQuerySchema = PageQuerySchema.extend({
@@ -84,13 +84,24 @@ export type AlertTriggerQuery = z.infer<typeof AlertTriggerQuerySchema>;
 export const AlertTriggerSeenParamsSchema = z.object({ id: EventIdSchema });
 
 /**
- * `POST /v1/alerts/triggers/seen` → 200: every trigger of the creator at or before `until` is seen (« Tout marquer
- * comme vu »); `until` is the date of the newest one the screen shows, so a trigger come since stays unseen.
+ * `POST /v1/alerts/triggers/seen` → 200: « Tout marquer comme vu ». Every trigger of the creator up to `untilId`, the
+ * newest one the screen shows, that one included, is seen: one come since stays unseen. The order is the list's, read
+ * in the base (`created_at` to the microsecond, then `id`), never a date sent back rounded. `alert` keeps the list's
+ * filter: what the screen does not show is not marked. 404 `alert_trigger_not_found` when `untilId` is not hers.
  */
 export const MarkAlertTriggersSeenBodySchema = z.object({
   creatorId: CreatorIdSchema,
-  until: z.iso.datetime(),
+  untilId: EventIdSchema,
+  alert: z.union([CustomAlertGroupIdSchema, SystemAlertCodeSchema]).optional(),
 });
 export type MarkAlertTriggersSeenBody = z.infer<typeof MarkAlertTriggersSeenBodySchema>;
 export const MarkAlertTriggersSeenResultSchema = z.object({ marked: z.number().int().min(0) });
 export type MarkAlertTriggersSeenResult = z.infer<typeof MarkAlertTriggersSeenResultSchema>;
+
+/**
+ * The error codes of `/v1/alerts/triggers`, for the screen to say them in French (the suffix gives the status,
+ * api.md): `alert_trigger_not_found` 404, no trigger of hers by that id ; `cursor_invalid` 400, a cursor that is not
+ * one of this list's.
+ */
+export const ALERT_HISTORY_ERROR_CODES = ['alert_trigger_not_found', 'cursor_invalid'] as const;
+export type AlertHistoryErrorCode = (typeof ALERT_HISTORY_ERROR_CODES)[number];

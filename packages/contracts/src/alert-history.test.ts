@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { alertTriggerReason, AlertTriggerQuerySchema } from './alert-history';
+import {
+  ALERT_HISTORY_ERROR_CODES,
+  alertTriggerReason,
+  AlertTriggerQuerySchema,
+  MarkAlertTriggersSeenBodySchema,
+} from './alert-history';
 import { AlertTriggerSchema } from './alerts';
 
 const CREATOR = '01900000-0000-7000-8000-000000000010';
@@ -36,5 +41,21 @@ describe('history of her alerts (P4-01)', () => {
     );
     expect(AlertTriggerQuerySchema.safeParse({ creatorId: CREATOR, alert: 'other' }).success).toBe(false);
     expect(AlertTriggerQuerySchema.safeParse({ seen: 'true' }).success).toBe(false);
+  });
+
+  it('marks up to a trigger named by its id, never by a date', () => {
+    expect(MarkAlertTriggersSeenBodySchema.safeParse({ creatorId: CREATOR, untilId: ALERT }).success).toBe(
+      true,
+    );
+    expect(
+      MarkAlertTriggersSeenBodySchema.safeParse({ creatorId: CREATOR, until: '2026-10-27T11:30:00Z' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('gives every error code a suffix that sets its status (api.md)', () => {
+    for (const code of ALERT_HISTORY_ERROR_CODES) {
+      expect(code).toMatch(/_(not_found|invalid)$/u);
+    }
   });
 });

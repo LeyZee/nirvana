@@ -519,6 +519,8 @@ export interface AlertTriggerFilter {
   readonly alert?:
     | { readonly kind: 'custom'; readonly id: CustomAlertId }
     | { readonly kind: 'system'; readonly code: SystemAlertCode }
+    /** One of her alerts that never watched her: it has no trigger. */
+    | { readonly kind: 'none' }
     | undefined;
 }
 
@@ -530,6 +532,14 @@ export interface AlertHistory {
   list(creatorId: CreatorId, filter: AlertTriggerFilter, page: PageRequest): Promise<Page<AlertTriggerRow>>;
   /** Marks one trigger seen, once; `false` when she has no trigger by that id. */
   markSeen(creatorId: CreatorId, id: EventId, userId: UserId): Promise<boolean>;
-  /** Marks seen every trigger of hers at or before `until`; gives how many were not seen yet. */
-  markSeenUntil(creatorId: CreatorId, until: Date, userId: UserId): Promise<number>;
+  /**
+   * Marks seen every trigger of hers the list shows up to `untilId`, that one included, in the list's order and under
+   * its filter; gives how many were not seen yet, or `null` when she has no trigger by that id.
+   */
+  markSeenUntil(
+    creatorId: CreatorId,
+    untilId: EventId,
+    filter: Pick<AlertTriggerFilter, 'alert'>,
+    userId: UserId,
+  ): Promise<number | null>;
 }

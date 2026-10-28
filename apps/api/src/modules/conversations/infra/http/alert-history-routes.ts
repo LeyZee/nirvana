@@ -11,8 +11,11 @@ import {
   pageOf,
   SYSTEM_ALERT_LABELS,
   SystemAlertCodeSchema,
+  type AlertHistoryErrorCode,
   type AlertTriggerItem,
   type CreatorId,
+  type CustomAlertGroupId,
+  type SystemAlertCode,
 } from '@nirvana/contracts';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -23,8 +26,23 @@ import { actorFor, type RequireRole } from './routes';
 
 class AlertTriggerNotFound extends DomainError {
   constructor() {
-    super('alert_trigger_not_found', 'Déclenchement d’alerte introuvable');
+    super('alert_trigger_not_found' satisfies AlertHistoryErrorCode, 'Déclenchement d’alerte introuvable');
   }
+}
+
+/**
+ * The list's `alert` filter as the journal has it: her alert by the id of her row, the system's by its code, and
+ * `none` for an alert that never watched her (nothing of hers to show).
+ */
+function alertFilter(
+  alert: CustomAlertGroupId | SystemAlertCode | undefined,
+  known: Awaited<ReturnType<AlertNames['ofCreator']>>,
+): AlertTriggerFilter['alert'] {
+  if (alert === undefined) return undefined;
+  const group = CustomAlertGroupIdSchema.safeParse(alert);
+  if (!group.success) return { kind: 'system', code: SystemAlertCodeSchema.parse(alert) };
+  const id = [...known].find(([, one]) => one.groupId === group.data)?.[0];
+  return id === undefined ? { kind: 'none' } : { kind: 'custom', id };
 }
 
 /** What the screen reads of a trigger: her alert named as it was, and the line written by the code. */
@@ -76,19 +94,11 @@ export function createAlertHistoryRoutes(
         const { creatorId, seen, alert, limit, cursor } = request.query;
         actorFor(request, creatorId);
         const known = await names.ofCreator(creatorId);
-        let only: AlertTriggerFilter['alert'];
-        if (alert !== undefined) {
-          const group = CustomAlertGroupIdSchema.safeParse(alert);
-          if (group.success) {
-            const id = [...known].find(([, one]) => one.groupId === group.data)?.[0];
-            // An alert that never watched her has no trigger of hers.
-            if (id === undefined) return { items: [], nextCursor: null };
-            only = { kind: 'custom', id };
-          } else {
-            only = { kind: 'system', code: SystemAlertCodeSchema.parse(alert) };
-          }
-        }
-        const page = await history.list(creatorId, { seen, alert: only }, { limit, cursor });
+        const page = await history.list(
+          creatorId,
+          { seen, alert: alertFilter(alert, known) },
+          { limit, cursor },
+        );
         return { items: page.items.map((row) => itemOf(creatorId, row, known)), nextCursor: page.nextCursor };
       },
     );
@@ -121,10 +131,16 @@ export function createAlertHistoryRoutes(
         },
       },
       async (request) => {
-        const { userId } = actorFor(request, request.body.creatorId);
-        return {
-          marked: await history.markSeenUntil(request.body.creatorId, new Date(request.body.until), userId),
-        };
+        const { creatorId, untilId, alert } = request.body;
+        const { userId } = actorFor(request, creatorId);
+        const marked = await history.markSeenUntil(
+          creatorId,
+          untilId,
+          { alert: alertFilter(alert, await names.ofCreator(creatorId)) },
+          userId,
+        );
+        if (marked === null) throw new AlertTriggerNotFound();
+        return { marked };
       },
     );
 

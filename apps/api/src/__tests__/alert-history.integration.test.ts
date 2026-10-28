@@ -87,7 +87,7 @@ describe('history of her alerts (P4-01, /v1/alerts/triggers)', () => {
     creatorId: CreatorId,
     conversationId: ConversationId,
     trigger: AlertTrigger,
-    at: string,
+    at: string | null,
     pauses = false,
   ): Promise<string> {
     const id = newId(EventIdSchema);
@@ -104,7 +104,8 @@ describe('history of her alerts (P4-01, /v1/alerts/triggers)', () => {
       payload: pauses ? { conversationId, cause: 'custom_alert', trigger } : { conversationId, trigger },
       actor: 'ai',
       correlationId: 'history',
-      createdAt: new Date(at),
+      // `null`: the base's own clock, to the microsecond, as the agent will write.
+      ...(at === null ? {} : { createdAt: new Date(at) }),
     });
     return id;
   }
@@ -224,15 +225,35 @@ describe('history of her alerts (P4-01, /v1/alerts/triggers)', () => {
       'alert_trigger_not_found',
     ]);
 
-    // « Tout marquer comme vu » up to what the screen shows: a trigger come since stays unseen.
-    const upTo = await server.inject({
-      method: 'POST',
-      url: '/v1/alerts/triggers/seen',
-      headers: owner,
-      payload: { creatorId: nora.id, until: '2026-10-27T11:30:00Z' },
-    });
+    // « Tout marquer comme vu » up to the newest trigger the screen shows: one come since stays unseen.
+    const markAll = (payload: Record<string, string>) =>
+      server.inject({
+        method: 'POST',
+        url: '/v1/alerts/triggers/seen',
+        headers: owner,
+        payload: { creatorId: nora.id, ...payload },
+      });
+    const upTo = await markAll({ untilId: service });
     expect(MarkAlertTriggersSeenResultSchema.parse(upTo.json())).toEqual({ marked: 1 });
     expect((await list(`creatorId=${nora.id}&seen=false`)).items.map((item) => item.id)).toEqual([doubt]);
+    const notHers = await markAll({ untilId: newId(EventIdSchema) });
+    expect([notHers.statusCode, ErrorBodySchema.parse(notHers.json()).error.code]).toEqual([
+      404,
+      'alert_trigger_not_found',
+    ]);
+
+    // A cursor that names no trigger of hers is refused, never read as the first page.
+    for (const cursor of ['pas-un-curseur', Buffer.from(newId(EventIdSchema)).toString('base64url')]) {
+      const refused = await server.inject({
+        method: 'GET',
+        url: `/v1/alerts/triggers?creatorId=${nora.id}&cursor=${cursor}`,
+        headers: owner,
+      });
+      expect([refused.statusCode, ErrorBodySchema.parse(refused.json()).error.code]).toEqual([
+        400,
+        'cursor_invalid',
+      ]);
+    }
 
     // An archived alert keeps its name in the history.
     await server.inject({ method: 'DELETE', url: `/v1/alerts/${groupId}`, headers: owner });
@@ -250,5 +271,34 @@ describe('history of her alerts (P4-01, /v1/alerts/triggers)', () => {
     expect(
       (await server.inject({ method: 'GET', url: `/v1/alerts/triggers?creatorId=${nora.id}` })).statusCode,
     ).toBe(401);
+
+    // Written on the base's clock, to the microsecond: the newest shown is marked too, and under the screen's filter
+    // only the filtered ones are.
+    const freshDoubt = await triggered(
+      nora.id,
+      theo,
+      { alert: { kind: 'system', code: 'identity_doubt' }, matchedBy: 'model' },
+      null,
+    );
+    const freshService = await triggered(
+      nora.id,
+      theo,
+      { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'model' },
+      null,
+    );
+    const filtered = await markAll({ untilId: freshService, alert: 'identity_doubt' });
+    expect(MarkAlertTriggersSeenResultSchema.parse(filtered.json())).toEqual({ marked: 1 });
+    expect((await list(`creatorId=${nora.id}&seen=false`)).items.map((item) => item.id)).toEqual([
+      freshService,
+    ]);
+    expect((await list(`creatorId=${nora.id}&seen=true&limit=1`)).items.map((item) => item.id)).toEqual([
+      freshDoubt,
+    ]);
+    // Her alert that never watched her marks nothing.
+    const none = await markAll({ untilId: freshService, alert: newId(CustomAlertGroupIdSchema) });
+    expect(MarkAlertTriggersSeenResultSchema.parse(none.json())).toEqual({ marked: 0 });
+    const rest = await markAll({ untilId: freshService });
+    expect(MarkAlertTriggersSeenResultSchema.parse(rest.json())).toEqual({ marked: 1 });
+    expect((await list(`creatorId=${nora.id}&seen=false`)).items).toEqual([]);
   });
 });
