@@ -246,7 +246,7 @@ function Loaded({
           index={4}
           control={sales === null ? periodControl : undefined}
         >
-          <TopFans fans={data.fans} tip={tip} onOpen={openFan} />
+          <TopFans fans={data.fans} tip={tip} onOpen={openFan} usdNote={data.usdNote} />
         </Section>
       )}
 

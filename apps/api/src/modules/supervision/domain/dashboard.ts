@@ -249,5 +249,9 @@ export function assembleDashboard(input: {
       notes: [...fan.notes],
       ...(fan.alert !== undefined && { alert: fan.alert }),
     })),
+    usdSales: {
+      seen: facts.usdSales.seen,
+      rate: facts.usdSales.rateDay === null ? null : { day: facts.usdSales.rateDay },
+    },
   };
 }

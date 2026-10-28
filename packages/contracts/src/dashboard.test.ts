@@ -52,6 +52,7 @@ const dashboard = {
       alert: 'minor',
     },
   ],
+  usdSales: { seen: true, rate: { day: '2026-10-27' } },
 };
 
 describe('dashboard contract', () => {
@@ -68,6 +69,17 @@ describe('dashboard contract', () => {
         ...dashboard,
         guards: { today: { minor: 1 }, telegramAlertsTonight: null },
       }).success,
+    ).toBe(false);
+  });
+
+  it('gives the ECB day of the dollar rate as a calendar day, or null when no rate is known', () => {
+    expect(DashboardSchema.parse(dashboard).usdSales.rate).toEqual({ day: '2026-10-27' });
+    expect(
+      DashboardSchema.parse({ ...dashboard, usdSales: { seen: true, rate: null } }).usdSales.rate,
+    ).toBeNull();
+    expect(
+      DashboardSchema.safeParse({ ...dashboard, usdSales: { seen: true, rate: { day: '27/10/2026' } } })
+        .success,
     ).toBe(false);
   });
 

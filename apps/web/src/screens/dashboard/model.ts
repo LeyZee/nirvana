@@ -122,6 +122,11 @@ export interface Dashboard {
   readonly sales: Readonly<Record<Period, Sales>> | null;
   /** Best fans first. */
   readonly fans: readonly Fan[];
+  /**
+   * One discreet sentence under the best fans on how their dollars were counted: converted at an ECB day's rate, or
+   * left out for want of one (`usdNote`). Absent when no dollar sale falls in the period, and on sample data.
+   */
+  readonly usdNote?: string;
   /** Telegram's coverage of her night (`telegramNightOf`); absent on sample data. */
   readonly telegram?: TelegramNight;
 }

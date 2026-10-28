@@ -43,6 +43,7 @@ const FACTS: DashboardFacts = {
       alert: undefined,
     },
   ],
+  usdSales: { seen: false, rateDay: null },
 };
 
 const assemble = (
@@ -79,6 +80,18 @@ describe('dashboard', () => {
     expect(dashboard.guards.today.minor).toBe(0);
     expect(dashboard.guards.telegramAlertsTonight).toBe(3);
     expect(dashboard.telegramCoverage).toEqual({ urgentReachable: false });
+  });
+
+  it('says how the dollar sales were counted: at which ECB day, or not at all (choix de Charles, 28/10)', () => {
+    expect(assemble().usdSales).toEqual({ seen: false, rate: null });
+    expect(assemble({ usdSales: { seen: true, rateDay: '2026-10-16' } }).usdSales).toEqual({
+      seen: true,
+      rate: { day: '2026-10-16' },
+    });
+    expect(DashboardSchema.parse(assemble({ usdSales: { seen: true, rateDay: null } })).usdSales).toEqual({
+      seen: true,
+      rate: null,
+    });
   });
 
   it('names a fan without a pseudonym rather than failing the whole page (recette 28/10)', () => {

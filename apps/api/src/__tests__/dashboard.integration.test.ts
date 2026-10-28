@@ -485,6 +485,66 @@ describe('GET /v1/dashboard', () => {
     expect(listed).not.toContain('Paul');
   });
 
+  it('ranks the best fans on their sales in euros, dollars at the last ECB rate known (choix de Charles, 28/10)', async () => {
+    const marc = conversations.get('Marc')!;
+    const sale = (id: string, author: 'ai' | 'human', priceMinor: number, currency: 'EUR' | 'USD') =>
+      test.admin.db.insert(schema.messages).values({
+        id: newId(MessageIdSchema),
+        creatorId,
+        platformAccountId,
+        conversationId: marc,
+        platformMessageId: id,
+        direction: 'outbound',
+        author,
+        text: 'Pour toi',
+        priceMinor,
+        currency,
+        isPaid: true,
+        platformCreatedAt: new Date(),
+      });
+    // Marc: 10 € sold by a chatter, 30 $ by the agent. Julien: 25 € by the agent.
+    await sale('paid-marc-eur', 'human', 1_000, 'EUR');
+    await sale('paid-marc-usd', 'ai', 3_000, 'USD');
+    const read = async (cookie = ownerCookie) =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, cookie)).json());
+
+    // No rate yet: his dollars do not count, and the screen is told so.
+    const without = await read();
+    expect(without.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([
+      ['Julien', 25, 25],
+      ['Marc', 10, 0],
+    ]);
+    expect(without.usdSales).toEqual({ seen: true, rate: null });
+
+    // Pay's job wrote two days; the latest counts: 30 $ × 0.9 = 27 €, 37 € in all, ahead of Julien.
+    await test.admin.db.insert(schema.exchangeRates).values([
+      {
+        currency: 'USD',
+        day: '2026-10-26',
+        rateMicros: 800_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      },
+      {
+        currency: 'USD',
+        day: '2026-10-27',
+        rateMicros: 900_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      },
+    ]);
+    const converted = await read();
+    expect(converted.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([
+      ['Marc', 37, 27],
+      ['Julien', 25, 25],
+    ]);
+    expect(converted.fans[0]?.conversationId).toBe(marc);
+    expect(converted.usdSales).toEqual({ seen: true, rate: { day: '2026-10-27' } });
+
+    // Her own Dashboard keeps no fan, and says nothing of them.
+    expect((await read(creatorCookie)).usdSales).toEqual({ seen: false, rate: null });
+  });
+
   it('says Reveal is read late once three of its polls have gone by without a read (recette 28/10, G8)', async () => {
     const account = (set: Partial<typeof schema.platformAccounts.$inferInsert>) =>
       test.admin.db

@@ -1,4 +1,4 @@
-import type { PayPeriod } from '@nirvana/contracts';
+import type { ExchangeRate, ForeignCurrency, PayPeriod, UserId } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
@@ -11,6 +11,7 @@ import type { JobLogger, RateJobSince } from './domain/ports';
 import { createEcbSource, type GetLike } from './infra/ecb';
 import { createDrizzlePayrollEntryStore } from './infra/entry-store';
 import { createDrizzlePayrollJobStore } from './infra/job-store';
+import { createLatestRateRead } from './infra/latest-rate';
 import { createPostgresRateAlerts } from './infra/rate-alerts';
 import { createDrizzlePayrollRateStore } from './infra/rate-store';
 import { createDrizzlePayrollReadStore } from './infra/read-store';
@@ -30,6 +31,12 @@ export interface PayrollModule {
   readonly name: 'payroll';
   /** Mounted under `/v1` by the server: `/payroll/…` (contracts `payroll.ts`). */
   routes(requireRole: RequireRole): FastifyPluginAsyncZod;
+  /**
+   * The newest rate of a currency (ADR 0033), `null` before the first: the last ECB rate known, the one a draft of pay
+   * keeps. Read under the reader's member context (`withMember`, policy `team_read`); the composition root gives it to
+   * the Dashboard, which ranks its best fans with it and shows only its day.
+   */
+  readonly latestRate: (userId: UserId, currency: ForeignCurrency) => Promise<ExchangeRate | null>;
   readonly jobs: {
     /**
      * `payroll.recalculate` (ADR 0032): the drafts of a period, and those of the team's first open period when it is
@@ -87,6 +94,7 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
   return {
     name: 'payroll',
     routes: (requireRole) => createPayrollRoutes(reads, validation, entries, rules, requireRole),
+    latestRate: createLatestRateRead(deps.db),
     jobs: {
       recalculate: (period, logger) => createRecalculation(jobStore, logger, now).recalculate(period),
       recalculateOpen: (logger) => createRecalculation(jobStore, logger, now).recalculateOpen(),

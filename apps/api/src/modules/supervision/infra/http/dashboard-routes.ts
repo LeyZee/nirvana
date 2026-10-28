@@ -5,6 +5,7 @@ import {
   type CreatorId,
   type DashboardPeriod,
   type UserRole,
+  UserIdSchema,
 } from '@nirvana/contracts';
 import { startOfLocalDay } from '@nirvana/llm';
 import type { preValidationAsyncHookHandler } from 'fastify';
@@ -15,6 +16,7 @@ import type {
   AutomaticView,
   DashboardReader,
   TelegramView,
+  UsdRateView,
   VoiceVersion,
 } from '../../domain/dashboard-ports';
 
@@ -32,6 +34,8 @@ export interface DashboardRouteDeps {
   readonly deadJobs: (creatorId: CreatorId) => Promise<number | null>;
   readonly voice: VoiceVersion;
   readonly automatic: AutomaticView;
+  /** The last ECB rate known for the dollar (pay's), to rank the best fans in euros. */
+  readonly usdRate: UsdRateView;
   /** Absent when Telegram is off (no encryption key): both Telegram fields are null. */
   readonly telegram?: TelegramView;
   readonly now?: () => Date;
@@ -64,11 +68,16 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           throw new DomainError('creator_forbidden', 'Créatrice hors de ton périmètre');
         }
         const now = (deps.now ?? (() => new Date()))();
-        const read = await deps.reader.read(creatorId, (timezone) => {
-          // Her day: midnight in her time zone (`creators.timezone`).
-          const dayStart = startOfLocalDay(now, timezone);
-          return { now, dayStart, periodStart: periodStart(period, now, dayStart), voice: deps.voice };
-        });
+        const usdRate = await deps.usdRate.latest(UserIdSchema.parse(user.id));
+        const read = await deps.reader.read(
+          creatorId,
+          (timezone) => {
+            // Her day: midnight in her time zone (`creators.timezone`).
+            const dayStart = startOfLocalDay(now, timezone);
+            return { now, dayStart, periodStart: periodStart(period, now, dayStart), voice: deps.voice };
+          },
+          usdRate,
+        );
         if (read === undefined) throw new DomainError('creator_not_found', 'Créatrice introuvable');
         const [telegram, automatic, deadJobs] = await Promise.all([
           deps.telegram?.read(creatorId),
@@ -93,6 +102,7 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           ...dashboard,
           todos: [],
           fans: [],
+          usdSales: { seen: false, rate: null },
           budget: { ...dashboard.budget, spentToday: null },
           jobs: { dead: null },
         };

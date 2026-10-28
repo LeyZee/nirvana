@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { unansweredSince } from '../../domain/dashboard';
 import type { DashboardFacts, DashboardReader, DashboardWindow } from '../../domain/dashboard-ports';
+import { rankFans, type UsdRate } from '../../domain/fan-ranking';
 
 /**
  * The Dashboard's SQL views (docs/architecture/modules.md: read only, aggregates, the documented exception to
@@ -68,6 +69,7 @@ async function facts(
   creatorId: string,
   window: DashboardWindow,
   her: { readonly hours: AgentHours; readonly timeZone: string },
+  usdRate: UsdRate | null,
 ) {
   const now = window.now.toISOString();
   const dayStart = window.dayStart.toISOString();
@@ -194,40 +196,71 @@ async function facts(
           and (c.last_outbound_at is null or c.last_outbound_at < c.last_inbound_at)
           and not exists (select 1 from drafts d where d.conversation_id = c.id and d.status = 'pending')`,
   );
-  // What she sold him over the period: her paid messages he unlocked, in euros (sales observed in EUR only).
-  const fans = await rows(
+  // What she sold him over the period: her paid messages he unlocked, by currency (EUR and USD, the ones Reveal pays
+  // in). The domain converts his dollars and ranks (`rankFans`); then the details of the best ones only.
+  const sales = await rows(
     tx,
     z.object({
-      id: z.string(),
-      name: z.string(),
+      fan_id: z.string(),
       conversation_id: z.string(),
-      first_seen_at: timestamp,
-      spent_minor: int,
-      by_agent_minor: int,
-      notes: z.array(z.string()).nullable(),
-      alert: HandoffCauseSchema.nullable(),
+      eur_minor: int,
+      usd_minor: int,
+      by_agent_eur_minor: int,
+      by_agent_usd_minor: int,
     }),
-    sql`select f.id, f.display_name as name, f.first_seen_at,
+    sql`select c.fan_id,
                (array_agg(c.id order by m.platform_created_at desc))[1] as conversation_id,
-               sum(m.price_minor) as spent_minor,
-               coalesce(sum(m.price_minor) filter (where m.author = 'ai'), 0) as by_agent_minor,
-               (select array_agg(n.value order by n.observed_at desc) from (
-                  select value, observed_at from fan_facts ff
-                  where ff.fan_id = f.id and ff.superseded_by is null
-                    and (ff.expires_at is null or ff.expires_at > ${now}::timestamptz)
-                  order by observed_at desc limit ${NOTES_PER_FAN}) n) as notes,
-               (select h.payload->>'cause' from conversations c
-                join conversation_events h on h.conversation_id = c.id and h.type = 'handoff_requested'
-                where c.fan_id = f.id and c.state = 'human'
-                order by h.created_at desc limit 1) as alert
+               coalesce(sum(m.price_minor) filter (where m.currency = 'EUR'), 0) as eur_minor,
+               coalesce(sum(m.price_minor) filter (where m.currency = 'USD'), 0) as usd_minor,
+               coalesce(sum(m.price_minor) filter (where m.currency = 'EUR' and m.author = 'ai'), 0)
+                 as by_agent_eur_minor,
+               coalesce(sum(m.price_minor) filter (where m.currency = 'USD' and m.author = 'ai'), 0)
+                 as by_agent_usd_minor
         from messages m
         join conversations c on c.id = m.conversation_id
-        join fans f on f.id = c.fan_id
-        where m.direction = 'outbound' and m.is_paid and m.price_minor is not null and m.currency = 'EUR'
+        where m.direction = 'outbound' and m.is_paid and m.price_minor is not null
+          and m.currency in ('EUR', 'USD')
           and m.platform_created_at >= ${periodStart}::timestamptz
-        group by f.id, f.display_name, f.first_seen_at
-        order by spent_minor desc limit ${TOP_FANS}`,
+        group by c.fan_id`,
   );
+  const ranked = rankFans(
+    sales.map((s) => ({
+      fanId: s.fan_id,
+      conversationId: s.conversation_id,
+      eurMinor: s.eur_minor,
+      usdMinor: s.usd_minor,
+      byAgentEurMinor: s.by_agent_eur_minor,
+      byAgentUsdMinor: s.by_agent_usd_minor,
+    })),
+    usdRate,
+    TOP_FANS,
+  );
+  const details =
+    ranked.length === 0
+      ? []
+      : await rows(
+          tx,
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            first_seen_at: timestamp,
+            notes: z.array(z.string()).nullable(),
+            alert: HandoffCauseSchema.nullable(),
+          }),
+          sql`select f.id, f.display_name as name, f.first_seen_at,
+                     (select array_agg(n.value order by n.observed_at desc) from (
+                        select value, observed_at from fan_facts ff
+                        where ff.fan_id = f.id and ff.superseded_by is null
+                          and (ff.expires_at is null or ff.expires_at > ${now}::timestamptz)
+                        order by observed_at desc limit ${NOTES_PER_FAN}) n) as notes,
+                     (select h.payload->>'cause' from conversations c
+                      join conversation_events h on h.conversation_id = c.id and h.type = 'handoff_requested'
+                      where c.fan_id = f.id and c.state = 'human'
+                      order by h.created_at desc limit 1) as alert
+              from fans f
+              where f.id = any(${sql.param(ranked.map((fan) => fan.fanId))}::uuid[])`,
+        );
+  const detailOf = new Map(details.map((d) => [d.id, d]));
 
   const isPaused =
     account?.paused_until !== null &&
@@ -300,22 +333,33 @@ async function facts(
             ];
       }),
     ],
-    fans: fans.map((f) => ({
-      id: f.id,
-      name: f.name,
-      conversationId: f.conversation_id,
-      firstSeenAt: f.first_seen_at,
-      spentMinor: f.spent_minor,
-      byAgentMinor: f.by_agent_minor,
-      notes: f.notes ?? [],
-      alert: f.alert ?? undefined,
-    })),
+    fans: ranked.flatMap((fan) => {
+      const detail = detailOf.get(fan.fanId);
+      return detail === undefined
+        ? []
+        : [
+            {
+              id: fan.fanId,
+              name: detail.name,
+              conversationId: fan.conversationId,
+              firstSeenAt: detail.first_seen_at,
+              spentMinor: fan.spentMinor,
+              byAgentMinor: fan.byAgentMinor,
+              notes: detail.notes ?? [],
+              alert: detail.alert ?? undefined,
+            },
+          ];
+    }),
+    usdSales: {
+      seen: sales.some((s) => s.usd_minor > 0),
+      rateDay: usdRate?.day ?? null,
+    },
   } satisfies Omit<DashboardFacts, 'creator'>;
 }
 
 export function createDashboardReader(db: Database): DashboardReader {
   return {
-    read: (creatorId, windowFor) =>
+    read: (creatorId, windowFor, usdRate) =>
       withTenant(db, creatorId, async (tx) => {
         const [creator] = await rows(
           tx,
@@ -330,7 +374,7 @@ export function createDashboardReader(db: Database): DashboardReader {
         return {
           facts: {
             creator: { name: creator.display_name, timezone: creator.timezone },
-            ...(await facts(tx, creatorId, window, her)),
+            ...(await facts(tx, creatorId, window, her, usdRate)),
           },
           window,
         };

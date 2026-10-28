@@ -115,6 +115,28 @@ describe('DashboardPage on the server’s data', () => {
     expect(screen.queryByRole('button', { name: 'Marquer comme traité' })).toBeNull();
   });
 
+  it('says under the best fans that the dollars are not counted for want of a rate, or at which one', async () => {
+    serveDashboard({ status: 200, body: apiDashboard({ usdSales: { seen: true, rate: null } }) });
+    renderDashboard();
+    expect(
+      await screen.findByText(
+        'Les ventes en dollars ne sont pas comptées : aucun taux BCE n’est encore connu.',
+      ),
+    ).toBeDefined();
+    cleanup();
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({ usdSales: { seen: true, rate: { day: '2026-10-27' } } }),
+    });
+    renderDashboard();
+    expect(await screen.findByText('Dollars convertis en euros au taux BCE du 27 octobre.')).toBeDefined();
+    cleanup();
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    await screen.findByText('Théo');
+    expect(screen.queryByText(/taux BCE/u)).toBeNull();
+  });
+
   it('opens a draft to validate in Suivi, on its conversation', async () => {
     const [draft] = apiDashboard().todos;
     if (draft === undefined) throw new Error('the fixture has a todo');
