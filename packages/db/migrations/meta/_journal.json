@@ -218,6 +218,13 @@
       "when": 1793166847794,
       "tag": "0030_exchange_rate_overdue",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793172694515,
+      "tag": "0031_payment_details",
+      "breakpoints": true
     }
   ]
 }

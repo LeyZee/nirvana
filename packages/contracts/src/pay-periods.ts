@@ -53,8 +53,8 @@ export function previousPayPeriod(period: PayPeriod): PayPeriod {
   return month === 1 ? periodAt(year - 1, 12, true) : periodAt(year, month - 1, true);
 }
 
-/** The calendar day it is at `at` in `timeZone`, `YYYY-MM-DD`. */
-function calendarDayAt(at: Date, timeZone: string): string {
+/** The calendar day it is at `at` in `timeZone`, `YYYY-MM-DD`: today in the agency's zone, for pay. */
+export function calendarDayAt(at: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',

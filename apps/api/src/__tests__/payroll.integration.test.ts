@@ -11,6 +11,7 @@ import {
   ShiftReportIdSchema,
   ShiftReportSchema,
   TeamMemberSchema,
+  ValidateShiftReportsResultSchema,
   type CreatorId,
   type PayPeriod,
   type PlatformAccountId,
@@ -430,38 +431,76 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     expect((await call('GET', '/payroll/periods/2025-03-02', owner)).statusCode).toBe(400);
   });
 
-  it('enqueues the recalculation of a report’s period when it is validated', async () => {
-    const shift = await shiftIn(lea, P2);
-    const made = await call(
-      'POST',
-      '/scheduling/shift-reports',
-      await signIn(server, 'lea@example.test', PASSWORD),
-      {
-        id: newId(ShiftReportIdSchema),
-        shiftId: shift.id,
-        amountMinor: 1_000,
-        currency: 'EUR',
-        correctsId: null,
-        comment: null,
-        incident: null,
-      },
-    );
-    expect(made.statusCode, made.body).toBe(201);
-    const report = ShiftReportSchema.parse(made.json());
-    await test.admin.db.execute(
-      sql`delete from graphile_worker._private_jobs where key = ${`payroll.recalculate:${P2}`}`,
-    );
-    const validation = await call('POST', '/scheduling/shift-reports/validate', owner, {
-      reports: [{ id: report.id, version: report.version }],
+  /** A report `member` makes on a shift of `period`, submitted. */
+  const madeReport = async (member: TeamMember, cookie: string, period: PayPeriod) => {
+    const shift = await shiftIn(member, period);
+    const made = await call('POST', '/scheduling/shift-reports', cookie, {
+      id: newId(ShiftReportIdSchema),
+      shiftId: shift.id,
+      amountMinor: 1_000,
+      currency: 'EUR',
+      correctsId: null,
+      comment: null,
+      incident: null,
     });
-    expect(validation.statusCode, validation.body).toBe(200);
-    const jobs = await test.admin.db.execute<{ payload: unknown; max_attempts: unknown }>(
-      sql`select payload, max_attempts from graphile_worker._private_jobs
-          where key = ${`payroll.recalculate:${P2}`}`,
+    expect(made.statusCode, made.body).toBe(201);
+    return ShiftReportSchema.parse(made.json());
+  };
+  const recalculationsOf = async (period: PayPeriod) =>
+    (
+      await test.admin.db.execute<{ payload: unknown; run_at: Date; max_attempts: unknown }>(
+        sql`select payload, run_at, max_attempts from graphile_worker._private_jobs
+            where key = ${`payroll.recalculate:${period}`}`,
+      )
+    ).rows.map((row) => ({
+      payload: row.payload,
+      runAt: new Date(row.run_at).getTime(),
+      maxAttempts: row.max_attempts,
+    }));
+  const forgetRecalculations = (period: PayPeriod) =>
+    test.admin.db.execute(
+      sql`delete from graphile_worker._private_jobs where key = ${`payroll.recalculate:${period}`}`,
     );
-    expect(jobs.rows).toEqual([
-      { payload: { period: P2 }, max_attempts: JOB_MAX_ATTEMPTS['payroll.recalculate'] },
+  const validateReport = async (report: { id: string; version: number }) => {
+    const validation = await call('POST', '/scheduling/shift-reports/validate', owner, { reports: [report] });
+    expect(validation.statusCode, validation.body).toBe(200);
+    return ValidateShiftReportsResultSchema.parse(validation.json()).results;
+  };
+
+  it('enqueues the recalculation of a report’s period when it is validated', async () => {
+    const report = await madeReport(lea, await signIn(server, 'lea@example.test', PASSWORD), P2);
+    await forgetRecalculations(P2);
+    expect((await validateReport(report))[0]?.outcome).toBe('validated');
+    expect(await recalculationsOf(P2)).toEqual([
+      expect.objectContaining({
+        payload: { period: P2 },
+        maxAttempts: JOB_MAX_ATTEMPTS['payroll.recalculate'],
+      }),
     ]);
+  });
+
+  it('merges a burst of validations into one recalculation, and enqueues none for a refused one', async () => {
+    const leaCookie = await signIn(server, 'lea@example.test', PASSWORD);
+    const [first, second, stale] = [
+      await madeReport(lea, leaCookie, P2),
+      await madeReport(theo, theoCookie, P2),
+      await madeReport(lea, leaCookie, P2),
+    ];
+    await forgetRecalculations(P2);
+
+    // Refused (a version the report no longer has): its transaction is undone, the job with it.
+    expect(await validateReport({ id: stale.id, version: stale.version + 1 })).toEqual([
+      { outcome: 'refused', id: stale.id, code: 'shift_report_changed_conflict' },
+    ]);
+    expect(await recalculationsOf(P2)).toEqual([]);
+
+    // Two validations one after the other: one job for the period, put back after the last one (`replace`).
+    expect((await validateReport(first))[0]?.outcome).toBe('validated');
+    const [once] = await recalculationsOf(P2);
+    expect((await validateReport(second))[0]?.outcome).toBe('validated');
+    const burst = await recalculationsOf(P2);
+    expect(burst.map((job) => job.payload)).toEqual([{ period: P2 }]);
+    expect(burst[0]?.runAt).toBeGreaterThanOrEqual(once?.runAt ?? Number.POSITIVE_INFINITY);
   });
 
   it('says a period before the team’s first closing is closed without a statement, its late report counted on the first open one', async () => {

@@ -26,7 +26,7 @@ export function createPayrollEntries(store: PayrollEntryStore, reads: PayrollRea
     cancelPenalty: (actor, id) => store.cancelPenalty(actor, id),
     createAdjustment: (actor, body) => store.createAdjustment(actor, body),
     async pay(actor, statementId, body) {
-      const { period } = await store.pay(actor, statementId, body.revision);
+      const { period } = await store.pay(actor, statementId, body);
       const view = await reads.period(actor.userId, period);
       const statement = view.statements.find((one) => one.id === statementId);
       if (statement === undefined) throw new Error(`Statement ${statementId} is not read after its payment`);

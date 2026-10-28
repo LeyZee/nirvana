@@ -1,4 +1,5 @@
 import {
+  calendarDayAt,
   CommissionStatementStatusSchema,
   payPeriodAt,
   payPeriodLastDay,
@@ -23,6 +24,7 @@ import {
 import {
   adjustmentPeriod,
   assertOpenBeforeLocks,
+  assertPayment,
   assertWritesPayOf,
   isOpenFor,
   penaltyCancelledFrom,
@@ -378,13 +380,15 @@ export function createDrizzlePayrollEntryStore(
         return { value: adjustmentOfRow(row), created: true };
       }),
 
-    pay: (actor, statementId, revision) =>
+    pay: (actor, statementId, payment) =>
       withMember(db, actor.userId, async (tx, scope) => {
+        const { revision } = payment;
         const [row] = await tx
           .select({
             period: commissionStatements.period,
             status: commissionStatements.status,
             revision: commissionStatements.revision,
+            payableMinor: commissionStatements.payableMinor,
           })
           .from(commissionStatements)
           .where(eq(commissionStatements.id, statementId));
@@ -393,9 +397,22 @@ export function createDrizzlePayrollEntryStore(
         if (scope !== 'owner') throw new PayrollForbidden({ ownerOnly: true });
         if (row.status !== 'validated') throw new CommissionStatementStatusConflict(NOT_PAYABLE);
         if (row.revision !== revision) throw new CommissionStatementChanged(period);
+        assertPayment(
+          payment,
+          { period, payableMinor: row.payableMinor },
+          calendarDayAt(now(), await reads.agencyTimeZone(tx)),
+        );
         const paid = await tx
           .update(commissionStatements)
-          .set({ status: 'paid', paidAt: now(), paidBy: actor.userId })
+          .set({
+            status: 'paid',
+            paidAt: now(),
+            paidBy: actor.userId,
+            paidOn: payment.paidOn,
+            paymentMethod: payment.method,
+            paymentReference: payment.reference ?? null,
+            sentMinor: payment.sentMinor,
+          })
           .where(
             and(
               eq(commissionStatements.id, statementId),
@@ -411,7 +428,7 @@ export function createDrizzlePayrollEntryStore(
           actor,
           'commission_statement.pay',
           { kind: 'commission_statement', id: statementId },
-          { period, revision },
+          { period, revision, paidOn: payment.paidOn, method: payment.method, sentMinor: payment.sentMinor },
         );
         return { period };
       }),

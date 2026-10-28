@@ -6,13 +6,21 @@ import {
   type TeamMemberId,
 } from '@nirvana/contracts';
 
-import { PayPeriodClosed, PayrollForbidden, PayrollOwnForbidden, PenaltyCancelConflict } from './errors';
+import {
+  PayPeriodClosed,
+  PaymentAmountMismatch,
+  PaymentBeforePeriod,
+  PaymentInFuture,
+  PayrollForbidden,
+  PayrollOwnForbidden,
+  PenaltyCancelConflict,
+} from './errors';
 import type { PayReader } from './ports';
 
 /**
- * A member's bonuses, penalties and adjustments (EQ-04, ADR 0032), their pure rules: who writes them, which periods
- * are still open for the member, which period the server chooses, and which periods a write locks. The transactions
- * that apply them live in `infra/entry-store.ts`.
+ * A member's bonuses, penalties and adjustments (EQ-04, ADR 0032), and the payment of a statement, their pure rules:
+ * who writes them, which periods are still open for the member, which period the server chooses, which periods a write
+ * locks, and what a payment may say. The transactions that apply them live in `infra/entry-store.ts`.
  */
 
 /** What decides a member's open periods, read under the locks of the write. */
@@ -118,4 +126,20 @@ export function periodsChanged(from: PayPeriod, to: PayPeriod, current: PayPerio
   const periods: PayPeriod[] = [];
   for (let one = from; one <= to && one <= current; one = nextPayPeriod(one)) periods.push(one);
   return periods;
+}
+
+/**
+ * A payment as the owner records it (ADR 0023 § Factures): a transfer made, so never dated after `today` (the agency's
+ * zone), nor before the first day of the statement's period (a slip of the year, which a paid statement would keep
+ * forever; money may leave before the validation in Nirvana, so the bound is the period, not `validated_at`), and of
+ * what the statement pays. Days compare as `YYYY-MM-DD` text, and a period is its first day.
+ */
+export function assertPayment(
+  payment: { readonly paidOn: string; readonly sentMinor: number },
+  statement: { readonly period: PayPeriod; readonly payableMinor: number },
+  today: string,
+): void {
+  if (payment.paidOn > today) throw new PaymentInFuture(today);
+  if (payment.paidOn < statement.period) throw new PaymentBeforePeriod(statement.period);
+  if (payment.sentMinor !== statement.payableMinor) throw new PaymentAmountMismatch(statement.payableMinor);
 }
