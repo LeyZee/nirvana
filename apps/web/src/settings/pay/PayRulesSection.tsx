@@ -160,11 +160,7 @@ function AccountRules({
     .toSorted((a, b) => a.fromPeriod.localeCompare(b.fromPeriod));
   const past = entry.rules.filter((one) => one.fromPeriod <= currentPeriod && one.id !== inForce?.id);
   return (
-    <li
-      className="nv-plate rp-account nv-enter"
-      style={{ '--nv-i': Math.min(index + 1, 8) }}
-      data-missing={inForce === null ? 'true' : undefined}
-    >
+    <li className="nv-plate rp-account nv-enter" style={{ '--nv-i': Math.min(index + 1, 8) }}>
       <div className="rp-account__head">
         <div className="rp-account__who">
           <p className="rp-account__name">{entry.account.creatorName}</p>

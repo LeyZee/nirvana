@@ -38,21 +38,28 @@ export function parseAmount(text: string, signed = false): number | null {
   return sign === '-' || sign === '−' ? -minor : minor;
 }
 
-const MONEY = new Map<Currency, Intl.NumberFormat>();
+const MONEY = new Map<string, Intl.NumberFormat>();
 
-/** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */
-export function amountText(minor: number, currency: Currency): string {
-  let format = MONEY.get(currency);
+/** An amount in French, the true minus sign « − » in place of the hyphen `Intl` gives. */
+function money(minor: number, currency: Currency, signDisplay: 'auto' | 'exceptZero'): string {
+  const key = `${currency} ${signDisplay}`;
+  let format = MONEY.get(key);
   if (format === undefined) {
-    format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency });
-    MONEY.set(currency, format);
+    format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency, signDisplay });
+    MONEY.set(key, format);
   }
   return format.format(minor / 100).replace('-', '−');
 }
 
-/** A correction's amount, its sign always said: « + 5,00 € », « − 30,00 € ». */
+/** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */
+export const amountText = (minor: number, currency: Currency): string => money(minor, currency, 'auto');
+
+/**
+ * An amount whose sign is always said, attached to its figure: « +5,00 € », « −30,00 € ». A correction, a bonus, a
+ * penalty, a gap: every signed amount of the team's screens reads through this one.
+ */
 export const signedAmountText = (minor: number, currency: Currency): string =>
-  `${minor < 0 ? '−' : '+'}${NBSP}${amountText(Math.abs(minor), currency)}`;
+  money(minor, currency, 'exceptZero');
 
 /** The figure an amount field shows back, without its currency: « 1234,56 ». */
 export const amountInput = (minor: number): string =>

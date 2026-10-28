@@ -99,8 +99,10 @@ describe('an amount typed in a report', () => {
     expect(amountInput(-3_005)).toBe('-30,05');
     expect(plain(amountText(123_456, 'EUR'))).toBe('1 234,56 €');
     expect(plain(amountText(8_000, 'USD'))).toBe('80,00 $US');
-    expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('− 30,00 €');
-    expect(plain(signedAmountText(500, 'EUR'))).toBe('+ 5,00 €');
+    expect(plain(amountText(-3_000, 'EUR'))).toBe('−30,00 €');
+    expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('−30,00 €');
+    expect(plain(signedAmountText(500, 'EUR'))).toBe('+5,00 €');
+    expect(plain(signedAmountText(-123_456, 'USD'))).toBe('−1 234,56 $US');
   });
 });
 
