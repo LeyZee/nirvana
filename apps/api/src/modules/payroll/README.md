@@ -64,3 +64,10 @@
 - une vente tardive (un rapport validé après la clôture de sa quinzaine, ADR 0032) entre dans le total de son compte sur la quinzaine où elle est portée, la première non clôturée de l'équipe, comme Imperium la redatait.
 
 **Ce qui diffère du code d'Imperium**, comme l'ADR et la fiche le décident : tout est entier et chaque arrondi est écrit (Imperium calculait en flottants) ; un malus est plafonné à la part plus les primes, jamais au net plus les primes ; la part d'équipe d'un manager ne compte pas son propre net une seconde fois.
+
+**Les factures, règles pures** (EQ-06, lot 1 sur 8 ; `domain/billing.ts`, `domain/invoices.ts`, `domain/invoice-acceptance.ts`, `domain/accounting.ts`), sans table ni route pour l'instant :
+
+- le régime d'un prestataire un jour donné, et un changement de régime jamais en arrière (`billing_regime_backdated_unprocessable`) ; la fin d'une pièce (un an pour la résidence fiscale, six mois pour la vigilance, sauf si elle porte sa fin) et son état à une date ;
+- la garde d'émission (`issueDecision`) : sans mandat accepté, sans régime, avec un régime que le comptable n'a pas validé, avec une identité à laquelle manque une mention, ou pour une période qui ne rapporte rien, aucune facture et un motif ; les pièces manquantes ou échues et un mandat dépassé sont des avertissements ;
+- les lignes d'une facture depuis un relevé validé et ses saisies (`invoiceLines`) : une commission par compte, la part d'équipe, les primes, chaque malus en réfaction, le plafond des réfactions, chaque régularisation avec sa période ; jamais les reports entrants. Les lignes tombent au centime sur le relevé, sinon c'est une erreur de l'appelant ;
+- les totaux sous le régime (TVA facturée, ou autoliquidée pour le seul journal), le numéro `PRÉFIXE-AAAA-NNNN`, l'échéance, les lignes d'un avoir (`credit_note_amount_unprocessable` au-delà de ce qui reste), l'acceptation pas à pas (`invoice_acceptance_conflict`), le journal des achats et la DAS2.
