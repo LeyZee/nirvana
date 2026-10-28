@@ -68,10 +68,19 @@ describe('events', () => {
       payload: { currency: 'USD', lastRateDay: '2026-10-23', day: '2026-10-29' },
     });
     expect(rate.type).toBe('exchange_rate_overdue');
-    // Pay never converts the euro, and a day is a calendar day.
+    // A currency that never got a rate says so, without a day.
+    expect(
+      EVENT_PAYLOADS.exchange_rate_overdue.safeParse({
+        currency: 'USD',
+        lastRateDay: null,
+        day: '2026-10-29',
+      }).success,
+    ).toBe(true);
+    // Pay never converts the euro, a day is a calendar day, and a missing one is said as `null`.
     for (const payload of [
       { currency: 'EUR', lastRateDay: '2026-10-23', day: '2026-10-29' },
-      { currency: 'USD', lastRateDay: null, day: '2026-10-29' },
+      { currency: 'USD', day: '2026-10-29' },
+      { currency: 'USD', lastRateDay: '2026-10-23T16:00:00.000Z', day: '2026-10-29' },
       { currency: 'USD', lastRateDay: '2026-10-23', day: '2026-10-29T08:07:00.000Z' },
     ]) {
       expect(EVENT_PAYLOADS.exchange_rate_overdue.safeParse(payload).success, JSON.stringify(payload)).toBe(

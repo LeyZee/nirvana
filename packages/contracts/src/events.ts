@@ -296,8 +296,11 @@ export const EVENT_PAYLOADS = {
   exchange_rate_overdue: z.object({
     /** A currency pay converts, never the euro (`ForeignCurrencySchema` in payroll.ts, which imports this file). */
     currency: CurrencySchema.exclude(['EUR']),
-    /** The ECB's day of the last rate written. */
-    lastRateDay: z.iso.date(),
+    /**
+     * The ECB's day of the last rate written; `null` when none ever came, which only production says, counted from the
+     * day the job was first scheduled (ADR 0033).
+     */
+    lastRateDay: z.iso.date().nullable(),
     /** The day of the check, in the ECB's zone (Frankfurt): one alert per day. */
     day: z.iso.date(),
   }),
