@@ -4,8 +4,9 @@ import { MissingExchangeRate } from './errors';
 import { mulDivRound, RATE_SCALE } from './rounding';
 
 /**
- * Pay's exchange rates (ADR 0033), their pure rules: the ECB's rate turned into pay's, and how old a rate a closing
- * may freeze. The job that reads the ECB lives in `application/exchange-rates.ts` and `infra/ecb.ts`.
+ * Pay's exchange rates (ADR 0033), their pure rules: the ECB's rate turned into pay's, how old a rate a closing may
+ * freeze, and when a missing rate rings. The job that reads the ECB lives in `application/exchange-rates.ts` and
+ * `infra/ecb.ts`.
  */
 
 /** Where every rate pay writes comes from, as a statement copies it. */
@@ -13,6 +14,22 @@ export const ECB_SOURCE = 'BCE, taux de référence';
 
 /** The longest normal gap between two ECB rates at a period's end: from the Thursday to Easter Monday. */
 const RATE_MAX_AGE_DAYS = 4;
+
+/**
+ * More weekdays than this without a rate is a stopped job or an ECB out of reach, never a weekend nor a holiday: the
+ * longest run of the ECB's closed weekdays is two (Good Friday and Easter Monday, or the 25th and 26th of December).
+ */
+const RATE_OVERDUE_AFTER_WEEKDAYS = 2;
+
+/** The ECB's days are those of Frankfurt. */
+const ECB_TIME_ZONE = 'Europe/Berlin';
+
+const ECB_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: ECB_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 const DECIMAL = /^(\d{1,6})(?:\.(\d{1,8}))?$/;
 
@@ -44,4 +61,27 @@ export function assertFreshRates(period: PayPeriod, rates: readonly ExchangeRate
   for (const rate of rates) {
     if (daysBetween(rate.day, lastDay) > RATE_MAX_AGE_DAYS) throw new MissingExchangeRate(rate.currency);
   }
+}
+
+/** The ECB's day at `at`, written as its days are (`2026-10-29`). */
+export function ecbDay(at: Date): string {
+  return ECB_DAY.format(at);
+}
+
+/**
+ * The weekdays strictly after `lastRateDay` and before `today`: the ECB days whose rate should be written by now.
+ * Today does not count yet, since its rate comes in the afternoon.
+ */
+export function weekdaysWithoutRate(lastRateDay: string, today: string): number {
+  let missing = 0;
+  for (let gap = 1; gap < daysBetween(lastRateDay, today); gap += 1) {
+    const weekday = new Date(Date.parse(`${lastRateDay}T00:00:00Z`) + gap * 86_400_000).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) missing += 1;
+  }
+  return missing;
+}
+
+/** A currency's last rate is overdue (`exchange_rate_overdue`) after more than two weekdays without one. */
+export function isRateOverdue(lastRateDay: string, today: string): boolean {
+  return weekdaysWithoutRate(lastRateDay, today) > RATE_OVERDUE_AFTER_WEEKDAYS;
 }

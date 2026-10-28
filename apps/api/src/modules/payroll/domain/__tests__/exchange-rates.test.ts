@@ -1,7 +1,13 @@
 import { DomainError, PayPeriodSchema } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assertFreshRates, eurosPerUnitMicros } from '../exchange-rates';
+import {
+  assertFreshRates,
+  ecbDay,
+  eurosPerUnitMicros,
+  isRateOverdue,
+  weekdaysWithoutRate,
+} from '../exchange-rates';
 
 import { USD } from './fixtures';
 
@@ -70,5 +76,45 @@ describe('the age of a rate a closing freezes (ADR 0033)', () => {
     expect(() => {
       assertFreshRates(PayPeriodSchema.parse('2025-03-16'), []);
     }).not.toThrow();
+  });
+});
+
+describe('a rate that does not come (ADR 0033)', () => {
+  it('counts the weekdays whose rate should be in, never the weekend nor today', () => {
+    // Friday 23 October 2026's rate, the last one.
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-23')).toBe(0);
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-24')).toBe(0);
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-26')).toBe(0);
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-27')).toBe(1);
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-28')).toBe(2);
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-29')).toBe(3);
+    expect(weekdaysWithoutRate('2026-10-23', '2026-11-02')).toBe(5);
+    // A day already past the check (a clock behind): nothing missing.
+    expect(weekdaysWithoutRate('2026-10-23', '2026-10-22')).toBe(0);
+  });
+
+  it('rings after more than two weekdays without a rate: from Friday, on Thursday', () => {
+    expect(isRateOverdue('2026-10-23', '2026-10-28')).toBe(false);
+    expect(isRateOverdue('2026-10-23', '2026-10-29')).toBe(true);
+    // A rate of three weeks ago, as a job stopped long ago leaves.
+    expect(isRateOverdue('2026-10-02', '2026-10-23')).toBe(true);
+  });
+
+  it('stays quiet over the ECB’s longest closings', () => {
+    // Easter 2026: Thursday 2 April, then Good Friday and Easter Monday closed. Tuesday 7 is quiet, and Wednesday 8
+    // rings only if Tuesday's rate did not come either.
+    expect(isRateOverdue('2026-04-02', '2026-04-07')).toBe(false);
+    expect(isRateOverdue('2026-04-02', '2026-04-08')).toBe(true);
+    // Christmas 2028 falls on a Monday: Friday 22 December, then the 25th and the 26th closed.
+    expect(isRateOverdue('2028-12-22', '2028-12-27')).toBe(false);
+    expect(isRateOverdue('2028-12-22', '2028-12-28')).toBe(true);
+  });
+
+  it('says the day in the ECB’s zone, across midnight and the change of hour', () => {
+    expect(ecbDay(new Date('2026-10-28T22:30:00.000Z'))).toBe('2026-10-28');
+    expect(ecbDay(new Date('2026-10-28T23:30:00.000Z'))).toBe('2026-10-29');
+    // Summer time: midnight in Frankfurt is 22:00 UTC.
+    expect(ecbDay(new Date('2026-07-14T21:59:00.000Z'))).toBe('2026-07-14');
+    expect(ecbDay(new Date('2026-07-14T22:00:00.000Z'))).toBe('2026-07-15');
   });
 });

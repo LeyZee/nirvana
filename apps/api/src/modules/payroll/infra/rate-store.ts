@@ -1,4 +1,6 @@
-import { inArray, schema, withAdmin, type Database } from '@nirvana/db';
+import { ForeignCurrencySchema } from '@nirvana/contracts';
+import { inArray, schema, sql, withAdmin, type Database } from '@nirvana/db';
+import { z } from 'zod';
 
 import type { PayrollRateStore } from '../domain/ports';
 
@@ -6,6 +8,8 @@ const { exchangeRates } = schema;
 
 const keyOf = (rate: { readonly currency: string; readonly day: string }): string =>
   `${rate.currency} ${rate.day}`;
+
+const LatestDaySchema = z.object({ currency: ForeignCurrencySchema, day: z.iso.date() });
 
 /**
  * `exchange_rates` (ADR 0033), on the admin connection: the table is the job's alone. `ON CONFLICT DO NOTHING` on its
@@ -42,6 +46,14 @@ export function createDrizzlePayrollRateStore(adminDb: Database): PayrollRateSto
           written: inserted.length,
           differing: known.filter((rate) => storedMicros.get(keyOf(rate)) !== rate.rateMicros),
         };
+      }),
+    latestDaysUnscoped: () =>
+      withAdmin(adminDb, async (tx) => {
+        const rows = await tx
+          .select({ currency: exchangeRates.currency, day: sql<unknown>`max(${exchangeRates.day})::text` })
+          .from(exchangeRates)
+          .groupBy(exchangeRates.currency);
+        return new Map(rows.map((row) => LatestDaySchema.parse(row)).map((row) => [row.currency, row.day]));
       }),
   };
 }

@@ -11,6 +11,7 @@ import type { JobLogger } from './domain/ports';
 import { createEcbSource, type GetLike } from './infra/ecb';
 import { createDrizzlePayrollEntryStore } from './infra/entry-store';
 import { createDrizzlePayrollJobStore } from './infra/job-store';
+import { createPostgresRateAlerts } from './infra/rate-alerts';
 import { createDrizzlePayrollRateStore } from './infra/rate-store';
 import { createDrizzlePayrollReadStore } from './infra/read-store';
 import { createPayrollRoutes, type RequireRole } from './infra/routes';
@@ -37,7 +38,10 @@ export interface PayrollModule {
     readonly recalculate: (period: PayPeriod, logger: JobLogger) => Promise<RecalculationOutcome[]>;
     /** `payroll.recalculate_open`: every open period up to the current one, each hour. */
     readonly recalculateOpen: (logger: JobLogger) => Promise<RecalculationOutcome[]>;
-    /** `payroll.fetch_exchange_rates` (ADR 0033): the ECB's last 90 days, each day written once. */
+    /**
+     * `payroll.fetch_exchange_rates` (ADR 0033): the ECB's last 90 days, each day written once; then
+     * `exchange_rate_overdue`, once a day, for a currency without a rate for more than two weekdays.
+     */
     readonly fetchExchangeRates: (logger: JobLogger) => Promise<RateFetchOutcome>;
   };
 }
@@ -67,15 +71,19 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
   );
   const entries = createPayrollEntries(createDrizzlePayrollEntryStore(deps.db, deps.reads, now), reads);
   const rules = createDrizzlePayrollRuleStore(deps.db, deps.reads, now);
-  const rateSource = createEcbSource({ fetch: deps.fetch ?? ((url, init) => fetch(url, init)) });
-  const rateStore = createDrizzlePayrollRateStore(deps.adminDb);
+  const rateJob = {
+    source: createEcbSource({ fetch: deps.fetch ?? ((url, init) => fetch(url, init)) }),
+    store: createDrizzlePayrollRateStore(deps.adminDb),
+    alerts: createPostgresRateAlerts(deps.adminDb),
+    now,
+  };
   return {
     name: 'payroll',
     routes: (requireRole) => createPayrollRoutes(reads, validation, entries, rules, requireRole),
     jobs: {
       recalculate: (period, logger) => createRecalculation(jobStore, logger, now).recalculate(period),
       recalculateOpen: (logger) => createRecalculation(jobStore, logger, now).recalculateOpen(),
-      fetchExchangeRates: (logger) => fetchExchangeRates(rateSource, rateStore, logger, now),
+      fetchExchangeRates: (logger) => fetchExchangeRates(rateJob, logger),
     },
   };
 }
