@@ -1,6 +1,6 @@
 # 0033. Paie : le taux dollar → euro vient de la BCE, lu chaque heure par un job
 
-Statut : proposed
+Statut : accepted (Charles, 28/10/2026 17h23, « et ok 0033 »)
 Date : 2026-10-28
 Complète : ADR 0023 § Paie (le taux de change) et ADR 0032 (les taux de la clôture)
 
