@@ -1,5 +1,5 @@
 # EQ-04 Moteur de paie : calcul pur, périodes, verrou
-Statut : in-progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026) : calcul pur, contrats, tables, clôture de la quinzaine (migration 0029), recalcul par job, lecture d'une quinzaine, validation qui clôture, « payé », saisies d'un membre sous verrous, paliers, objectif, minimum de versement, lecture des taux et job des taux de la BCE faits (ADR 0033 acceptée par Charles le 28/10) ; alerte quand aucun taux n'arrive à venir (migration 0030)
+Statut : in-progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026) : calcul pur, contrats, tables, clôture de la quinzaine (migration 0029), recalcul par job, lecture d'une quinzaine, validation qui clôture, « payé », saisies d'un membre sous verrous, paliers, objectif, minimum de versement, lecture des taux, job des taux de la BCE et alerte quand aucun taux n'arrive (migration 0030) faits (ADR 0033 acceptée par Charles le 28/10) ; reste la première lecture réelle de la BCE à la recette et le rendu Telegram de l'alerte (fil Telegram)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-01, EQ-03
 Branche : task/eq-04-payroll-engine
@@ -86,9 +86,15 @@ Calculer la paie de chaque membre par quinzaine avec **les règles d'Imperium, s
   - Reste : le job des taux de change, une fois la source choisie par Charles (BCE proposée), et la ligne « Taux de change » de la fiche à remettre d'accord avec l'ADR 0032 (taux du dernier jour de la quinzaine, pas du jour de validation).
 - 2026-10-28 (fil Équipe) : **le job des taux de change** (empilé sur les règles ; ADR 0033 relue par Bilan, acceptée par Charles le 28/10). `payroll.fetch_exchange_rates`, chaque heure à la 7ᵉ minute. Choix :
   - l'historique de 90 jours de la BCE, pas le fichier du jour : une panne se rattrape au passage suivant. Aucune seconde source ;
-  - un port de fetch dans `payroll/infra` (délai de 10 s, 1 Mo au plus) ; le XML est lu sans bibliothèque, chaque valeur validée par Zod, et un fichier hors format est refusé en entier ;
+  - un port de fetch dans `payroll/infra` (délai de 10 s, 1 Mo au plus) ; le XML est lu sans bibliothèque ; chaque jour, chaque code de devise et chaque taux d'une devise de la paie sont validés par Zod, et un fichier hors format est refusé en entier. Le taux d'une devise dont personne n'est payé n'est ni lu ni validé : une valeur inattendue sur une autre devise n'arrête jamais le dollar (relecture de Bilan sur #275) ;
   - l'inverse du taux de la BCE se calcule en entiers dans le domaine (`eurosPerUnitMicros`, arrondi de toute la paie) ;
   - `INSERT … ON CONFLICT DO NOTHING` : un jour écrit ne change jamais, et une autre valeur pour ce jour est signalée en erreur ;
   - la clôture refuse un taux de plus de quatre jours civils avant la fin de la quinzaine (accord de Bilan, bords testés : lundi de Pâques le 31, 31 décembre un dimanche) ;
   - le harnais de test de la paie sait écrire un rapport en dollars.
   - Reste : l'alerte `exchange_rate_overdue` (plus de deux jours ouvrés sans taux), dans un second lot quand l'ADR 0033 sera acceptée : migration 0030 et type par Bilan, rendu par Telegram, sur une même branche. Puis la première lecture réelle de la BCE à la recette, puisque le conteneur de développement ne l'atteint pas.
+- 2026-10-28 (fil Équipe) : **l'alerte quand aucun taux n'arrive** (second lot de l'ADR 0033, migration 0030 et type ajoutés avec l'accord de Bilan). Le job `payroll.fetch_exchange_rates` publie `exchange_rate_overdue` (`{ currency, lastRateDay, day }`) après chaque lecture, réussie ou non. Choix :
+  - en retard : plus de deux jours ouvrés (du lundi au vendredi, strictement entre le dernier taux et aujourd'hui, dans le fuseau de Francfort) ; Pâques et Noël restent sous le seuil ;
+  - une alerte au plus par jour de la BCE et par devise (verrou consultatif, comme `backup_overdue`) ;
+  - une devise qui n'a jamais reçu de taux sonne aussi, en production seulement, avec `lastRateDay: null`, comptée depuis la première planification du job lue chez Graphile (`cronKnownSince`) ; une lecture ratée de cette table fait échouer le job, jamais « jamais planifié » (relecture de Bilan) ;
+  - la liste du déclencheur Telegram ne bouge pas : elle change avec le rendu, côté Telegram.
+  - Reste : le rendu Telegram (avec le cas « aucun taux reçu depuis la mise en service ») et la première lecture réelle de la BCE à la recette.

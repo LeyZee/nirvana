@@ -1,5 +1,7 @@
 import { JOB_MAX_ATTEMPTS, type JobName } from '@nirvana/contracts';
+import { sql, type Database } from '@nirvana/db';
 import { parseCronItems, type CronItem, type ParsedCronItem } from 'graphile-worker';
+import { z } from 'zod';
 
 export interface CronJob extends CronItem {
   readonly task: JobName;
@@ -61,4 +63,24 @@ const CRON_JOBS: readonly CronJob[] = [
 
 export function parsedCronJobs(jobs: readonly CronJob[] = CRON_JOBS): ParsedCronItem[] {
   return parseCronItems([...jobs]);
+}
+
+/** The moment as JSON writes it: the driver hands timestamps over as Postgres text. */
+const KnownSinceSchema = z.object({ knownSince: z.iso.datetime({ offset: true }) });
+
+/**
+ * When a worker first carried a periodic job on this database: Graphile writes it in its known crontabs as that worker
+ * starts, and the first run falls due within the next period. `null` if no worker ever carried it here. Graphile keeps
+ * the table private, as it does the jobs `readiness.ts` reads; owner role.
+ */
+export async function cronKnownSince(
+  adminDb: Pick<Database, 'execute'>,
+  task: JobName,
+): Promise<Date | null> {
+  const result = await adminDb.execute(
+    sql`select to_json(known_since) #>> '{}' as "knownSince" from graphile_worker._private_known_crontabs
+        where identifier = ${task}`,
+  );
+  const [row] = result.rows;
+  return row === undefined ? null : new Date(KnownSinceSchema.parse(row).knownSince);
 }

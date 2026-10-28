@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { FastifyRateLimitStoreCtor } from '@fastify/rate-limit';
 import { CreatorIdSchema, JOB_PAYLOADS } from '@nirvana/contracts';
-import { createDbClient, parseEncryptionKeys, type DbClient } from '@nirvana/db';
+import { createDbClient, parseEncryptionKeys, type Database, type DbClient } from '@nirvana/db';
 import { createPersistentCallLog, DEFAULT_LLM_CONFIG, loadPrompt, type LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { TaskList } from 'graphile-worker';
@@ -19,6 +19,7 @@ import {
 } from './auth';
 import { publishBudgetThreshold } from './budget-events';
 import { secretOrNull, type Config } from './config';
+import { cronKnownSince } from './crontab';
 import { assertDatabaseRoles } from './database-roles';
 import { createInvitationLinkRoutes, liveInvitationLinksUnscoped } from './invitation-links';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
@@ -116,6 +117,17 @@ const fromRepoRoot = (path: string): string =>
 /** The demo persona is fictional (ADR 0010): in production, drafts for real fans need her persona to be set. */
 export const mayComposeDrafts = (config: Pick<Config, 'NODE_ENV' | 'PLAYGROUND_PERSONA_PATH'>): boolean =>
   config.NODE_ENV !== 'production' || config.PLAYGROUND_PERSONA_PATH !== undefined;
+
+/**
+ * Production only: when the rate job was first scheduled, so that a currency that never got a rate is alerted too
+ * (ADR 0033). Elsewhere a database without rates is the normal case, and pay gets `null`: no such alert, ever. A
+ * failed read throws, never reads as « never scheduled ».
+ */
+export const rateJobSince = (
+  config: Pick<Config, 'NODE_ENV'>,
+  adminDb: Pick<Database, 'execute'>,
+): (() => Promise<Date | null>) | null =>
+  config.NODE_ENV === 'production' ? () => cronKnownSince(adminDb, 'payroll.fetch_exchange_rates') : null;
 
 const POOL_OPTIONS = { connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 };
 
@@ -265,6 +277,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       members: team.pay.members,
       creatorIds: async () => (await persona.creators.list('all')).map((creator) => creator.id),
     },
+    rateJobSince: rateJobSince(config, adminDb.db),
   });
   const playground =
     options.withPlayground === false
