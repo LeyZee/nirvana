@@ -48,6 +48,8 @@ const CAUSE_TEXT: Readonly<Record<HandoffCause | 'keyword', string>> = {
   keyword: 'Un mot surveillé a été écrit.',
   llm_unavailable: 'Le modèle ne répond plus.',
   other: 'L’agent ne sait pas répondre.',
+  custom_alert: 'Une alerte personnalisée a sonné.',
+  identity_doubt: 'Le fan doute de parler vraiment à la créatrice.',
 };
 
 const KILL_REASON_MAX = 200;

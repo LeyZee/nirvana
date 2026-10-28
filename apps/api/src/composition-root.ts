@@ -34,6 +34,7 @@ import {
   startFollowUpPlan,
   type AgentModule,
 } from './modules/agent';
+import { createAlertsModule, type AlertsModule } from './modules/alerts';
 import { startBackupsModule, type BackupsModule } from './modules/backups';
 import { createConnectorsModule, type ConnectorRegistry, type ConnectorsModule } from './modules/connectors';
 import {
@@ -56,6 +57,7 @@ import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
 
 /** Every business module, wired. */
 interface Modules {
+  readonly alerts: AlertsModule;
   readonly backups: BackupsModule;
   readonly connectors: ConnectorsModule;
   readonly conversations: ConversationsModule;
@@ -332,6 +334,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     },
   });
   const modules: Modules = {
+    alerts: createAlertsModule({ db: db.db, requireRole }),
     backups: startBackupsModule({
       db: db.db,
       adminDb: adminDb.db,
@@ -566,6 +569,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       }),
       modules.conversations.routes,
       modules.persona.routes,
+      modules.alerts.routes,
       modules.fans.routes(requireRole),
       modules.team.routes(requireRole),
       modules.scheduling.routes(requireRole),
