@@ -89,3 +89,11 @@ export type LeaveRequestId = z.infer<typeof LeaveRequestIdSchema>;
 /** A chatter's offer to give or exchange a shift with a colleague, who accepts or declines it (EQ-02, ADR 0031). */
 export const ShiftSwapRequestIdSchema = uuid.brand<'ShiftSwapRequestId'>();
 export type ShiftSwapRequestId = z.infer<typeof ShiftSwapRequestIdSchema>;
+
+/** A chatter's end-of-shift report, or a correction of one once validated (EQ-03, ADR 0023). */
+export const ShiftReportIdSchema = uuid.brand<'ShiftReportId'>();
+export type ShiftReportId = z.infer<typeof ShiftReportIdSchema>;
+
+/** The pay rules of a platform account from a pay period on: currency, VAT, platform fee, earnings source (EQ-03). */
+export const AccountPayRulesIdSchema = uuid.brand<'AccountPayRulesId'>();
+export type AccountPayRulesId = z.infer<typeof AccountPayRulesIdSchema>;
