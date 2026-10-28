@@ -66,7 +66,7 @@ Branche : task/<id>-<slug>
 | EQ-02 | Planning des shifts et « qui est en poste » | équipe | todo | EQ-01 |
 | EQ-03 | Rapport de fin de shift dans Nirvana | équipe | todo | EQ-02 |
 | EQ-04 | Moteur de paie : calcul pur, périodes, verrou | équipe | todo | EQ-01, EQ-03 |
-| EQ-05 | Paie : écrans de validation, de paiement et commissions du chatteur | équipe | in_progress | EQ-04, EQ-11 |
+| EQ-05 | Paie : écrans de validation, de paiement et commissions du chatteur | équipe | done | EQ-04, EQ-11 |
 | EQ-06 | Factures des prestataires : autofacturation, avoirs, export comptable | équipe | in_progress | EQ-04, EQ-05 |
 | EQ-07 | Import de l'historique d'Imperium (optionnel) | équipe | blocked (pas de base d'Imperium) | EQ-01 à EQ-06 |
 | EQ-08 | Mode hybride : passage à l'humain pour vendre, routage et attribution | 3-4 | blocked (capture Reveal, clés) | EQ-02, P6-01 |
