@@ -357,11 +357,14 @@ function Form({
     }
     const mine = draftNow();
     const text = `${correcting ? signedAmountText(minor, currency) : amountText(minor, currency)} · ${data.account.creatorName}`;
-    const verb = correcting
-      ? 'Correction envoyée'
-      : report?.status === 'rejected'
-        ? 'Rapport renvoyé'
-        : 'Rapport envoyé';
+    // What is held (« Envoi du rapport dans 5 s »), then what was done.
+    const [holding, verb] = correcting
+      ? ['Envoi de la correction', 'Correction envoyée']
+      : report === null
+        ? ['Envoi du rapport', 'Rapport envoyé']
+        : report.status === 'rejected'
+          ? ['Nouvel envoi du rapport', 'Rapport renvoyé']
+          : ['Modification du rapport', 'Rapport modifié'];
     const send = async (): Promise<ReportOutcome<ShiftReport>> => {
       const body = {
         amountMinor: minor,
@@ -380,7 +383,7 @@ function Form({
     };
     hold.hold(
       {
-        title: verb,
+        title: holding,
         text,
         onCancel: () => {
           onReopen(mine);

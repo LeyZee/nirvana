@@ -79,8 +79,8 @@ export function ReportsPage(): JSX.Element {
   const [correcting, setCorrecting] = useState<Correcting | null>(null);
   const refresh = useRefreshReports();
 
-  const waiting = (open.data?.reports ?? []).filter((one) => one.status === 'submitted' && !held.has(one.id));
-  const chosen = waiting.filter((one) => selected.has(one.id) && one.canReview);
+  const waiting = (open.data?.reports ?? []).filter((one) => one.status === 'submitted');
+  const chosen = waiting.filter((one) => selected.has(one.id) && one.canReview && !held.has(one.id));
 
   const validate = (): void => {
     if (chosen.length === 0) return;
@@ -159,6 +159,7 @@ export function ReportsPage(): JSX.Element {
             void open.refetch();
           }}
           waiting={waiting}
+          held={held}
           selected={selected}
           zone={zone}
           onSelect={setSelected}
@@ -232,6 +233,7 @@ function ToValidate({
   isError,
   onRetry,
   waiting,
+  held,
   selected,
   zone,
   onSelect,
@@ -240,6 +242,8 @@ function ToValidate({
   isError: boolean;
   onRetry: () => void;
   waiting: readonly ShiftReport[];
+  /** Reports whose validation is held: shown dimmed, out of the selection, until it is sent or taken back. */
+  held: ReadonlySet<string>;
   selected: ReadonlySet<string>;
   zone: string;
   onSelect: (next: ReadonlySet<string>) => void;
@@ -248,11 +252,13 @@ function ToValidate({
   if (isError) {
     return (
       <Panel className="rp-validate" eyebrow="À valider">
-        <div className="sc-empty">
-          <p className="tm-warn">Le serveur ne répond pas : les rapports n’ont pas pu être lus.</p>
-          <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onRetry}>
-            Réessayer
-          </button>
+        <div className="rp-sec">
+          <div className="sc-empty">
+            <p className="tm-warn">Le serveur ne répond pas : les rapports n’ont pas pu être lus.</p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onRetry}>
+              Réessayer
+            </button>
+          </div>
         </div>
       </Panel>
     );
@@ -269,7 +275,7 @@ function ToValidate({
     );
   }
   const names = namesOf(list);
-  const reviewable = waiting.filter((one) => one.canReview);
+  const reviewable = waiting.filter((one) => one.canReview && !held.has(one.id));
   const all = reviewable.length > 0 && reviewable.every((one) => selected.has(one.id));
   const sums = periodSums(waiting);
   const sentBack = list.reports.filter((one) => one.status === 'rejected');
@@ -279,103 +285,106 @@ function ToValidate({
 
   return (
     <Panel className="rp-validate nv-enter" eyebrow="À valider">
-      <div className="rp-validate__top">
-        <p className="rp-validate__count">
-          <span className="rp-validate__num nv-num">{waiting.length}</span>
-          <span className="rp-validate__what">
-            {waiting.length === 0
-              ? 'Rien à valider'
-              : waiting.length === 1
-                ? 'rapport attend'
-                : 'rapports attendent'}
-          </span>
-        </p>
-        {sums.length === 0 ? null : (
-          <p className="rp-validate__sum nv-num">
-            {sums.map((sum) => amountText(sum.waitingMinor, sum.currency)).join(' · ')}
+      <div className="rp-sec">
+        <div className="rp-validate__top">
+          <p className="rp-validate__count">
+            <span className="rp-validate__num nv-num">{waiting.length}</span>
+            <span className="rp-validate__what">
+              {waiting.length === 0
+                ? 'Rien à valider'
+                : waiting.length === 1
+                  ? 'rapport attend'
+                  : 'rapports attendent'}
+            </span>
           </p>
+          {sums.length === 0 ? null : (
+            <p className="rp-validate__sum nv-num">
+              {sums.map((sum) => amountText(sum.waitingMinor, sum.currency)).join(' · ')}
+            </p>
+          )}
+        </div>
+
+        {waiting.length === 0 ? (
+          <p className="rp-mine__empty">
+            Tout est validé. Un rapport arrive ici dès qu’un membre le fait, à la fin de son shift.
+          </p>
+        ) : (
+          <>
+            {reviewable.length === 0 ? null : (
+              <label className="rp-all" htmlFor={`${id}-all`}>
+                <input
+                  id={`${id}-all`}
+                  type="checkbox"
+                  className="rp-check"
+                  checked={all}
+                  onChange={() => {
+                    onSelect(all ? new Set() : new Set(reviewable.map((one) => one.id)));
+                  }}
+                />
+                Tout sélectionner
+                <span className="rp-all__count nv-num">
+                  {selected.size === 0
+                    ? ''
+                    : `${String(reviewable.filter((one) => selected.has(one.id)).length)} sur ${String(reviewable.length)}`}
+                </span>
+              </label>
+            )}
+            <ul className="rp-reviews">
+              {ordered.map((report, index) => (
+                <Review
+                  key={report.id}
+                  report={report}
+                  index={index}
+                  names={names}
+                  zone={zone}
+                  held={held.has(report.id)}
+                  checked={selected.has(report.id)}
+                  onCheck={(on) => {
+                    const next = new Set(selected);
+                    if (on) next.add(report.id);
+                    else next.delete(report.id);
+                    onSelect(next);
+                  }}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+
+        {sentBack.length === 0 ? null : (
+          <details className="nv-disclosure rp-mine__all">
+            <summary>
+              <span className="nv-disclosure__title">Renvoyés aux membres</span>
+              <span className="nv-disclosure__sum">{sentBack.length} en attente d’un nouvel envoi</span>
+            </summary>
+            <ul className="nv-disclosure__body rp-lines">
+              {sentBack.map((report) => {
+                const shift = names.shifts.get(report.shiftId);
+                return (
+                  <li key={report.id} className="rp-sent">
+                    <span className="rp-sent__who">
+                      {names.members.get(report.memberId)?.displayName ?? 'Un membre'}
+                    </span>
+                    <span className="rp-sent__when nv-num">
+                      {shift === undefined
+                        ? ''
+                        : swapShiftLine(
+                            shift.startsAt,
+                            shift.endsAt,
+                            names.accounts.get(report.platformAccountId)?.creatorName,
+                            zone,
+                          )}
+                    </span>
+                    {report.reviewNote === null ? null : (
+                      <span className="rp-sent__note">« {report.reviewNote} »</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
         )}
       </div>
-
-      {waiting.length === 0 ? (
-        <p className="rp-mine__empty">
-          Tout est validé. Un rapport arrive ici dès qu’un membre le fait, à la fin de son shift.
-        </p>
-      ) : (
-        <>
-          {reviewable.length === 0 ? null : (
-            <label className="rp-all" htmlFor={`${id}-all`}>
-              <input
-                id={`${id}-all`}
-                type="checkbox"
-                className="rp-check"
-                checked={all}
-                onChange={() => {
-                  onSelect(all ? new Set() : new Set(reviewable.map((one) => one.id)));
-                }}
-              />
-              Tout sélectionner
-              <span className="rp-all__count nv-num">
-                {selected.size === 0
-                  ? ''
-                  : `${String(reviewable.filter((one) => selected.has(one.id)).length)} sur ${String(reviewable.length)}`}
-              </span>
-            </label>
-          )}
-          <ul className="rp-reviews">
-            {ordered.map((report, index) => (
-              <Review
-                key={report.id}
-                report={report}
-                index={index}
-                names={names}
-                zone={zone}
-                checked={selected.has(report.id)}
-                onCheck={(on) => {
-                  const next = new Set(selected);
-                  if (on) next.add(report.id);
-                  else next.delete(report.id);
-                  onSelect(next);
-                }}
-              />
-            ))}
-          </ul>
-        </>
-      )}
-
-      {sentBack.length === 0 ? null : (
-        <details className="nv-disclosure rp-mine__all">
-          <summary>
-            <span className="nv-disclosure__title">Renvoyés aux membres</span>
-            <span className="nv-disclosure__sum">{sentBack.length} en attente d’un nouvel envoi</span>
-          </summary>
-          <ul className="nv-disclosure__body rp-lines">
-            {sentBack.map((report) => {
-              const shift = names.shifts.get(report.shiftId);
-              return (
-                <li key={report.id} className="rp-sent">
-                  <span className="rp-sent__who">
-                    {names.members.get(report.memberId)?.displayName ?? 'Un membre'}
-                  </span>
-                  <span className="rp-sent__when nv-num">
-                    {shift === undefined
-                      ? ''
-                      : swapShiftLine(
-                          shift.startsAt,
-                          shift.endsAt,
-                          names.accounts.get(report.platformAccountId)?.creatorName,
-                          zone,
-                        )}
-                  </span>
-                  {report.reviewNote === null ? null : (
-                    <span className="rp-sent__note">« {report.reviewNote} »</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </details>
-      )}
     </Panel>
   );
 }
@@ -386,6 +395,7 @@ function Review({
   index,
   names,
   zone,
+  held,
   checked,
   onCheck,
 }: {
@@ -393,6 +403,7 @@ function Review({
   index: number;
   names: ReturnType<typeof namesOf>;
   zone: string;
+  held: boolean;
   checked: boolean;
   onCheck: (on: boolean) => void;
 }): JSX.Element {
@@ -408,6 +419,8 @@ function Review({
       className="rp-review nv-enter"
       style={{ '--nv-i': Math.min(index, 8) }}
       data-checked={checked ? 'true' : undefined}
+      data-held={held ? 'true' : undefined}
+      aria-busy={held}
       data-locked={report.canReview ? undefined : 'true'}
     >
       <label className="rp-review__pick" htmlFor={`${id}-pick`}>
@@ -415,8 +428,8 @@ function Review({
           id={`${id}-pick`}
           type="checkbox"
           className="rp-check"
-          checked={checked}
-          disabled={!report.canReview}
+          checked={checked || held}
+          disabled={!report.canReview || held}
           aria-label={`Sélectionner le rapport de ${member?.displayName ?? 'ce membre'}`}
           onChange={(event) => {
             onCheck(event.target.checked);
@@ -457,7 +470,9 @@ function Review({
             ? signedAmountText(report.amount.amountMinor, report.amount.currency)
             : amountText(report.amount.amountMinor, report.amount.currency)}
         </span>
-        {report.canReview && !refusing ? (
+        {held ? (
+          <span className="rp-review__held">En validation</span>
+        ) : report.canReview && !refusing ? (
           <button
             type="button"
             className="nv-btn nv-btn--plain nv-btn--sm"
@@ -633,11 +648,13 @@ function PeriodPanel({
   if (isError) {
     return (
       <Panel className="rp-period" eyebrow="Quinzaine" actions={nav}>
-        <div className="sc-empty">
-          <p className="tm-warn">Le serveur ne répond pas : la quinzaine n’a pas pu être lue.</p>
-          <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onRetry}>
-            Réessayer
-          </button>
+        <div className="rp-sec">
+          <div className="sc-empty">
+            <p className="tm-warn">Le serveur ne répond pas : la quinzaine n’a pas pu être lue.</p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onRetry}>
+              Réessayer
+            </button>
+          </div>
         </div>
       </Panel>
     );
@@ -645,9 +662,11 @@ function PeriodPanel({
   if (list === undefined || period === null) {
     return (
       <Panel className="rp-period" eyebrow="Quinzaine" actions={nav}>
-        <div className="sc-skeleton sc-skeleton--short" aria-hidden="true">
-          <i />
-          <i />
+        <div className="rp-sec">
+          <div className="sc-skeleton sc-skeleton--short" aria-hidden="true">
+            <i />
+            <i />
+          </div>
         </div>
       </Panel>
     );
@@ -664,24 +683,26 @@ function PeriodPanel({
 
   return (
     <Panel className="rp-period nv-enter" eyebrow="Quinzaine" actions={nav}>
-      {members.length === 0 ? (
-        <p className="rp-mine__empty">Aucun shift fini sur cette quinzaine pour l’instant.</p>
-      ) : (
-        <div className="rp-members">
-          {members.map((memberId, index) => (
-            <MemberPeriod
-              key={memberId}
-              index={index}
-              member={names.members.get(memberId)}
-              lines={byMember.get(memberId) ?? []}
-              reports={list.reports.filter((one) => one.memberId === memberId)}
-              accounts={names.accounts}
-              zone={zone}
-              onCorrect={onCorrect}
-            />
-          ))}
-        </div>
-      )}
+      <div className="rp-sec">
+        {members.length === 0 ? (
+          <p className="rp-mine__empty">Aucun shift fini sur cette quinzaine pour l’instant.</p>
+        ) : (
+          <div className="rp-members">
+            {members.map((memberId, index) => (
+              <MemberPeriod
+                key={memberId}
+                index={index}
+                member={names.members.get(memberId)}
+                lines={byMember.get(memberId) ?? []}
+                reports={list.reports.filter((one) => one.memberId === memberId)}
+                accounts={names.accounts}
+                zone={zone}
+                onCorrect={onCorrect}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }
@@ -706,11 +727,18 @@ function MemberPeriod({
   const name = member?.displayName ?? 'Un membre';
   const missing = lines.filter((line) => line.report === null).length;
   const sums = periodSums(reports);
+  const waiting = reports.filter((one) => one.status === 'submitted').length;
+  const sentBack = reports.filter((one) => one.status === 'rejected').length;
+  // What the member's period holds, said only where there is something: « 210,00 € validés · 1 à valider ».
   const summary = [
-    sums.map((sum) => `${amountText(sum.validatedMinor, sum.currency)} validés`).join(' · '),
+    ...sums
+      .filter((sum) => sum.validatedMinor !== 0)
+      .map((sum) => `${amountText(sum.validatedMinor, sum.currency)} validés`),
+    waiting === 0 ? null : `${String(waiting)} à valider`,
+    sentBack === 0 ? null : `${String(sentBack)} renvoyé${sentBack > 1 ? 's' : ''}`,
     missing === 0 ? null : `${String(missing)} sans rapport`,
   ]
-    .filter((part) => part !== null && part !== '')
+    .filter((part) => part !== null)
     .join(' · ');
   return (
     <details className="nv-disclosure rp-member nv-enter" style={{ '--nv-i': Math.min(index, 8) }}>

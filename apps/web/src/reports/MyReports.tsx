@@ -67,11 +67,13 @@ export function MyReportsCard({
   if (reports.isError) {
     return (
       <Panel className="rp-mine nv-enter" eyebrow="Mes rapports">
-        <div className="sc-empty">
-          <p className="tm-warn">Le serveur ne répond pas : tes rapports n’ont pas pu être lus.</p>
-          <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={reports.refetch}>
-            Réessayer
-          </button>
+        <div className="rp-sec">
+          <div className="sc-empty">
+            <p className="tm-warn">Le serveur ne répond pas : tes rapports n’ont pas pu être lus.</p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={reports.refetch}>
+              Réessayer
+            </button>
+          </div>
         </div>
       </Panel>
     );
@@ -96,95 +98,97 @@ export function MyReportsCard({
 
   return (
     <Panel className="rp-mine nv-enter" eyebrow={`Mes rapports · quinzaine ${periodLine(period)}`}>
-      {toDo.length === 0 ? null : (
-        <ul className="rp-todo">
-          {toDo.map(({ shift, report }, index) => {
-            const account = accounts.get(shift.platformAccountId);
-            return (
-              <li key={shift.id} className="nv-enter" style={{ '--nv-i': index }}>
-                <button
-                  type="button"
-                  className="rp-todo__one nv-tap"
-                  data-tone={report === null ? 'due' : 'warn'}
-                  onClick={() => {
-                    onOpen(shift.id);
-                  }}
-                >
-                  <span className="rp-todo__mark" aria-hidden="true" />
-                  <span className="rp-todo__text">
-                    <span className="rp-todo__title">
-                      {report === null ? 'Rapport à faire' : 'Rapport renvoyé par l’agence'}
+      <div className="rp-sec">
+        {toDo.length === 0 ? null : (
+          <ul className="rp-todo">
+            {toDo.map(({ shift, report }, index) => {
+              const account = accounts.get(shift.platformAccountId);
+              return (
+                <li key={shift.id} className="nv-enter" style={{ '--nv-i': index }}>
+                  <button
+                    type="button"
+                    className="rp-todo__one nv-tap"
+                    data-tone={report === null ? 'due' : 'warn'}
+                    onClick={() => {
+                      onOpen(shift.id);
+                    }}
+                  >
+                    <span className="rp-todo__mark" aria-hidden="true" />
+                    <span className="rp-todo__text">
+                      <span className="rp-todo__title">
+                        {report === null ? 'Rapport à faire' : 'Rapport renvoyé par l’agence'}
+                      </span>
+                      <span className="rp-todo__sub nv-num">
+                        {swapShiftLine(shift.startsAt, shift.endsAt, account?.creatorName, zone)}
+                      </span>
+                      {(report?.reviewNote ?? null) === null ? null : (
+                        <span className="rp-todo__note">« {report?.reviewNote} »</span>
+                      )}
                     </span>
-                    <span className="rp-todo__sub nv-num">
-                      {swapShiftLine(shift.startsAt, shift.endsAt, account?.creatorName, zone)}
-                    </span>
-                    {(report?.reviewNote ?? null) === null ? null : (
-                      <span className="rp-todo__note">« {report?.reviewNote} »</span>
-                    )}
-                  </span>
-                  <span className="rp-todo__go">{report === null ? 'Faire' : 'Reprendre'}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    <span className="rp-todo__go">{report === null ? 'Faire' : 'Reprendre'}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-      {sums.length === 0 ? (
-        toDo.length === 0 ? (
-          <p className="rp-mine__empty">
-            Pas encore de rapport cette quinzaine. Il se fait d’ici, à la fin de chaque shift.
-          </p>
-        ) : null
-      ) : (
-        <div className="rp-figures">
-          {sums.map((sum) => (
-            <div key={sum.currency} className="rp-figures__row">
-              <div className="rp-figures__one">
-                <span className="rp-figures__label">Validé</span>
-                <span className="rp-figures__value nv-num">
-                  {amountText(sum.validatedMinor, sum.currency)}
-                </span>
-              </div>
-              {sum.waiting === 0 ? null : (
+        {sums.length === 0 ? (
+          toDo.length === 0 ? (
+            <p className="rp-mine__empty">
+              Pas encore de rapport cette quinzaine. Il se fait d’ici, à la fin de chaque shift.
+            </p>
+          ) : null
+        ) : (
+          <div className="rp-figures">
+            {sums.map((sum) => (
+              <div key={sum.currency} className="rp-figures__row">
                 <div className="rp-figures__one">
-                  <span className="rp-figures__label">En attente</span>
-                  <span className="rp-figures__value rp-figures__value--quiet nv-num">
-                    {amountText(sum.waitingMinor, sum.currency)}
+                  <span className="rp-figures__label">Validé</span>
+                  <span className="rp-figures__value nv-num">
+                    {amountText(sum.validatedMinor, sum.currency)}
                   </span>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {lines.length === 0 ? null : (
-        <details className="nv-disclosure rp-mine__all">
-          <summary>
-            <span className="nv-disclosure__title">Tous mes rapports</span>
-            <span className="nv-disclosure__sum">
-              {[
-                validated === 0 ? null : `${String(validated)} validé${validated > 1 ? 's' : ''}`,
-                waiting === 0 ? null : `${String(waiting)} en attente`,
-              ]
-                .filter((part) => part !== null)
-                .join(' · ')}
-            </span>
-          </summary>
-          <ul className="nv-disclosure__body rp-lines">
-            {lines.map((line) => (
-              <MyLine
-                key={line.shift.id}
-                line={line}
-                creatorName={accounts.get(line.shift.platformAccountId)?.creatorName}
-                zone={zone}
-                onOpen={onOpen}
-              />
+                {sum.waiting === 0 ? null : (
+                  <div className="rp-figures__one">
+                    <span className="rp-figures__label">En attente</span>
+                    <span className="rp-figures__value rp-figures__value--quiet nv-num">
+                      {amountText(sum.waitingMinor, sum.currency)}
+                    </span>
+                  </div>
+                )}
+              </div>
             ))}
-          </ul>
-        </details>
-      )}
+          </div>
+        )}
+
+        {lines.length === 0 ? null : (
+          <details className="nv-disclosure rp-mine__all">
+            <summary>
+              <span className="nv-disclosure__title">Tous mes rapports</span>
+              <span className="nv-disclosure__sum">
+                {[
+                  validated === 0 ? null : `${String(validated)} validé${validated > 1 ? 's' : ''}`,
+                  waiting === 0 ? null : `${String(waiting)} en attente`,
+                ]
+                  .filter((part) => part !== null)
+                  .join(' · ')}
+              </span>
+            </summary>
+            <ul className="nv-disclosure__body rp-lines">
+              {lines.map((line) => (
+                <MyLine
+                  key={line.shift.id}
+                  line={line}
+                  creatorName={accounts.get(line.shift.platformAccountId)?.creatorName}
+                  zone={zone}
+                  onOpen={onOpen}
+                />
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
     </Panel>
   );
 }

@@ -202,6 +202,9 @@ describe('Équipe › Rapports', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Valider (2)' }));
 
     expect((await screen.findByRole('status')).textContent).toContain('Validation de 2 rapports dans 5 s');
+    // Held in place, out of the selection, until they are sent.
+    expect(screen.getAllByText('En validation')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Valider' }).matches(':disabled')).toBe(true);
     expect(writes).toEqual([]);
     await act(() => vi.advanceTimersByTimeAsync(5_000));
 

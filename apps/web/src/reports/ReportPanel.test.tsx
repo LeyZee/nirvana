@@ -193,7 +193,7 @@ describe('Faire mon rapport', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer mon rapport' }));
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect((await screen.findByRole('status')).textContent).toContain('Rapport envoyé dans 5 s');
+    expect((await screen.findByRole('status')).textContent).toContain('Envoi du rapport dans 5 s');
     expect(writes).toEqual([]);
 
     await act(() => vi.advanceTimersByTimeAsync(5_000));
