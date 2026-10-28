@@ -28,6 +28,7 @@ import {
   followUpsSummary,
   hoursLabel,
   issuesOf,
+  localDay,
   localTime,
   minutesLabel,
   nudgesSummary,
@@ -50,8 +51,8 @@ export interface TabProps<K extends TabId> {
   readonly issues: readonly FieldIssue[];
 }
 
-/** Empty text is « not given » (null) for the optional fields of the schema. */
-export const orNull = (text: string): string | null => (text === '' ? null : text);
+/** Empty text, or only spaces, is « not given » (null) for the optional fields of the schema. */
+export const orNull = (text: string): string | null => (text.trim() === '' ? null : text);
 
 /** Numbers the policy enforces, side by side: one mark for the group instead of one per field. */
 function Coded({ children }: { children: ReactNode }): JSX.Element {
@@ -81,11 +82,11 @@ export function Block({
   );
 }
 
-const TODAY = new Date().toISOString().slice(0, 10);
-
-function ageLine(dateOfBirth: string): string | undefined {
+/** « 26 ans aujourd’hui », on the local calendar of today; nothing for a date not yet whole or still to come. */
+export function ageLine(dateOfBirth: string, today: string = localDay()): string | undefined {
   try {
-    return `${String(ageOn(dateOfBirth, TODAY))} ans aujourd’hui`;
+    const age = ageOn(dateOfBirth, today);
+    return age >= 0 ? `${String(age)} ans aujourd’hui` : undefined;
   } catch {
     return undefined;
   }
@@ -515,7 +516,11 @@ export function StrategiesTab({ value: s, onChange, issues }: TabProps<'strategi
             <Field
               label="Au plus, en temps"
               id={`${id}-d`}
-              hint={minutesLabel(s.kyc.max_duration_minutes)}
+              hint={
+                Number.isFinite(s.kyc.max_duration_minutes)
+                  ? minutesLabel(s.kyc.max_duration_minutes)
+                  : undefined
+              }
               path="strategies.kyc.max_duration_minutes"
             >
               <NumberInput
@@ -685,7 +690,13 @@ function Delays({
   const id = useId();
   const [next, setNext] = useState<number | null>(null);
   const [min, max] = PERSONA_BOUNDS.followUpDelayHours;
-  const canAdd = next !== null && next >= min && next <= max && !values.includes(next) && values.length < 5;
+  const canAdd =
+    next !== null &&
+    Number.isInteger(next) &&
+    next >= min &&
+    next <= max &&
+    !values.includes(next) &&
+    values.length < 5;
   return (
     <div className="ps-delays">
       {values.map((h) => (
@@ -753,7 +764,9 @@ export function FollowUpsTab({ value: f, onChange, issues }: TabProps<'follow_up
           code
           checked={f.enabled}
           onChange={(v) => {
-            set('enabled', v);
+            // Switched off, the type and its text are hidden: a custom text left empty would block the save unseen.
+            const unwritten = f.type === 'custom' && (f.text ?? '').trim() === '';
+            onChange(!v && unwritten ? { ...f, enabled: v, type: 'soft', text: null } : { ...f, enabled: v });
           }}
         />
         {f.enabled ? (

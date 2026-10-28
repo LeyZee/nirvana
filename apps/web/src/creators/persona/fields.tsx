@@ -625,12 +625,18 @@ export function Fold({
   title: string;
   summary: string;
   children: ReactNode;
-  /** Forced open while it holds an error; otherwise the reader opens it. */
+  /** Opened when it comes to hold an error; never closed by it: only the reader folds it again. */
   open?: boolean | undefined;
   code?: boolean;
 }): JSX.Element {
+  // Not a controlled `open`: React would remove the attribute, and fold the block under the typing, the moment the
+  // error clears (recette 28/10, a « 40 » saved as 4).
+  const ref = useRef<HTMLDetailsElement>(null);
+  useLayoutEffect(() => {
+    if (open === true && ref.current !== null) ref.current.open = true;
+  }, [open]);
   return (
-    <details className="nv-disclosure ps-fold" open={open}>
+    <details className="nv-disclosure ps-fold" ref={ref}>
       <summary>
         <span className="nv-disclosure__title">{title}</span>
         {code ? <CodeTag /> : null}

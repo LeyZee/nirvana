@@ -52,12 +52,29 @@ const FIELD_MESSAGES: Readonly<Record<string, Partial<Record<z.core.$ZodIssue['c
 
 /** Validates a draft; an empty list means it can be saved as a new version. */
 export function validate(draft: Persona): FieldIssue[] {
-  const result = PersonaSchema.safeParse(withoutPlaceholders(draft));
+  const stored = withoutPlaceholders(draft);
+  const result = PersonaSchema.safeParse(stored);
   if (result.success) return [];
   return result.error.issues.map((issue) => {
     const field = issue.path.map(String).join('.');
-    return { field, message: FIELD_MESSAGES[field]?.[issue.code] ?? frenchMessage(issue) };
+    // An emptied field with a format (a date) is still to fill in, not wrongly written.
+    const empty = issue.code === 'invalid_format' && valueAt(stored, issue.path) === '';
+    return {
+      field,
+      message: empty ? 'À remplir' : (FIELD_MESSAGES[field]?.[issue.code] ?? frenchMessage(issue)),
+    };
   });
+}
+
+/** The value a schema issue points at, or undefined when the path leads nowhere. */
+function valueAt(value: unknown, path: readonly PropertyKey[]): unknown {
+  let current = value;
+  for (const key of path) {
+    if (Array.isArray(current) && typeof key === 'number') current = current[key];
+    else if (isRecord(current) && typeof key === 'string') current = current[key];
+    else return undefined;
+  }
+  return current;
 }
 
 /** The issues of a field, its list items included (`details.hobbies.2` belongs to `details.hobbies`). */
@@ -109,7 +126,8 @@ function frenchMessage(issue: z.core.$ZodIssue): string {
     case 'invalid_type':
       return issue.expected === 'number' || issue.expected === 'int' ? 'Nombre entier attendu' : 'À remplir';
     case 'invalid_format':
-      return 'Format invalide';
+      // Zod's own messages are English (« Invalid ISO date »); one written in the schema says what to type.
+      return /^Invalid\b/u.test(issue.message) ? 'Format invalide' : issue.message;
     case 'invalid_value':
       return 'Choix hors liste';
     case 'custom':
@@ -122,9 +140,31 @@ function frenchMessage(issue: z.core.$ZodIssue): string {
   }
 }
 
-/** A placeholder of the repository's example persona (`<à remplir>`): shown as such, never as a real value. */
+/**
+ * A placeholder of the repository's example persona (`<à remplir>`, `<à remplir : …>`): shown as such, never as a
+ * real value. Only those: a value she wrote between chevrons (« <Zoé> ») is hers.
+ */
 export function isPlaceholder(value: string): boolean {
-  return /^<[^>]*>$/.test(value.trim());
+  return /^<à remplir(?:\s*:[^>]*)?>$/u.test(value.trim());
+}
+
+/**
+ * The example as a new creator's first draft (recette 28/10): nothing in it that nobody typed. Her date of birth,
+ * a safety datum, starts empty and must be filled in; the metadata name her (`meta.creator` is her id) and drop the
+ * example's notes.
+ */
+export function firstDraft(example: Persona, creatorId: string): Persona {
+  return {
+    ...example,
+    details: { ...example.details, date_of_birth: '' },
+    meta: { ...example.meta, creator: creatorId, notes: null },
+  };
+}
+
+/** The day it is here (YYYY-MM-DD), read when asked: a version's date and an age follow the local calendar. */
+export function localDay(at: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${String(at.getFullYear())}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }
 
 /**
@@ -149,9 +189,13 @@ function labelOf<V extends string | number>(
   return options.find((option) => option.value === value)?.label ?? String(value);
 }
 
-export const hoursLabel = (h: number): string => `${String(h)} h`;
+/** What a number still being typed (emptied: NaN) reads as in a summary. */
+const UNSET = '…';
+
+export const hoursLabel = (h: number): string => (Number.isFinite(h) ? `${String(h)} h` : UNSET);
 
 export function minutesLabel(m: number): string {
+  if (!Number.isFinite(m)) return UNSET;
   if (m < 60) return `${String(m)} min`;
   const rest = m % 60;
   return rest === 0
@@ -178,7 +222,7 @@ const styleOf = (style: string): string =>
 /** The line each strategy shows while folded: its style, then the numbers the policy enforces. */
 export function strategySummaries(s: Persona['strategies']): Record<keyof Persona['strategies'], string> {
   return {
-    kyc: `${styleOf(s.kyc.style)} · ${String(s.kyc.max_messages)} messages, ${minutesLabel(s.kyc.max_duration_minutes)} au plus · le suit s’il chauffe après ${hoursLabel(s.kyc.min_hours_before_following)}${
+    kyc: `${styleOf(s.kyc.style)} · ${Number.isFinite(s.kyc.max_messages) ? String(s.kyc.max_messages) : UNSET} messages, ${minutesLabel(s.kyc.max_duration_minutes)} au plus · le suit s’il chauffe après ${hoursLabel(s.kyc.min_hours_before_following)}${
       s.kyc.collect === undefined
         ? ''
         : ` · ${String(s.kyc.collect.length)} ligne${s.kyc.collect.length > 1 ? 's' : ''} du canevas sur ${String(KycSlotSchema.options.length)}`

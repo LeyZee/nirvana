@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 
 import {
   ageOn,
+  canonicalTimezone,
   kycSlotsToCollect,
   PERSONA_BLOCK_WEIGHTS,
   PERSONA_BLOCKS,
@@ -135,6 +136,23 @@ describe('PersonaSchema', () => {
       'details.timezone',
     ]);
     expect(issuePaths(withChange((p) => (p.details.timezone = 'UTC')))).toEqual(['details.timezone']);
+  });
+
+  it('spells a zone typed in the wrong case as the runtime does (recette 28/10)', () => {
+    expect(canonicalTimezone('europe/paris')).toBe('Europe/Paris');
+    expect(canonicalTimezone('America/New_York')).toBe('America/New_York');
+    expect(canonicalTimezone('Europe/Atlantis')).toBe('Europe/Atlantis');
+  });
+
+  it('refuses a word she never says made only of punctuation: the guard would match every question', () => {
+    for (const entry of ['?', ' . ', '-', '…']) {
+      expect(issuePaths(withChange((p) => p.limits.never_say.push(entry)))[0]).toMatch(
+        /^limits\.never_say\./u,
+      );
+      expect(issuePaths(withChange((p) => p.limits.disgusts.push(entry)))[0]).toMatch(/^limits\.disgusts\./u);
+    }
+    expect(withChange((p) => p.limits.never_say.push('bébé ?')).success).toBe(true);
+    expect(withChange((p) => p.limits.never_say.push('69')).success).toBe(true);
   });
 });
 

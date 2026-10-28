@@ -209,14 +209,14 @@ export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionSt
       });
     },
 
-    activate(creatorId, versionId, userId) {
+    activate(creatorId, versionId, expectedActive, userId) {
       return withTenant(db, creatorId, async (tx) => {
         await lockCreator(tx, creatorId);
-        const [row] = await tx
-          .select(columns)
-          .from(schema.personaVersions)
-          .where(eq(schema.personaVersions.id, versionId));
+        const rows = await summaries(tx);
+        const row = rows.find((r) => r.id === versionId);
         if (row === undefined) throw new PersonaVersionNotFound();
+        // A screen left open activates only over the active version it read: never undo an activation made since.
+        if ((rows.find((r) => r.isActive)?.id ?? null) !== expectedActive) throw new PersonaVersionConflict();
         return toSummary((await activateRow(tx, creatorId, row, userId)).row);
       });
     },

@@ -18,7 +18,9 @@ import {
   NOTHING_REFUSED,
   stillRefused,
   emojiKey,
+  firstDraft,
   intimateOrNone,
+  localDay,
   lifestyleOrNone,
   refusedReplyIssues,
   repliesOrNone,
@@ -145,6 +147,7 @@ describe('Persona screen rules', () => {
     expect(minutesLabel(360)).toBe('6 h');
     expect(minutesLabel(90)).toBe('1 h 30');
     expect(minutesLabel(1445)).toBe('24 h 05');
+    expect(minutesLabel(Number.NaN)).toBe('…');
   });
 
   it('tells a placeholder of the example from a real value', () => {
@@ -152,6 +155,36 @@ describe('Persona screen rules', () => {
     expect(isPlaceholder(" <à remplir : ce qu'elle refuse de faire> ")).toBe(true);
     expect(isPlaceholder('Chaton')).toBe(false);
     expect(isPlaceholder('<3 toi')).toBe(false);
+    // A value she wrote between chevrons is hers (recette 28/10).
+    expect(isPlaceholder('<Zoé>')).toBe(false);
+  });
+
+  it('says an emptied date is to fill in, and keeps the schema’s own message for a wrong emoji (recette 28/10)', async () => {
+    const persona = await demo();
+    const emptied = validate({ ...persona, details: { ...persona.details, date_of_birth: '' } });
+    expect(emptied).toEqual([{ field: 'details.date_of_birth', message: 'À remplir' }]);
+    const blocks = await parsePersonaYaml(blocksYaml);
+    const style = blocks.writing_style;
+    if (style === undefined) throw new Error('the demo has a writing style');
+    const emojis = validate({ ...blocks, writing_style: { ...style, emojis_preferred: ['😀😀'] } });
+    expect(emojis).toEqual([
+      { field: 'writing_style.emojis_preferred.0', message: 'Un seul emoji par entrée' },
+    ]);
+  });
+
+  it('starts a new creator from the example with nothing nobody typed (recette 28/10)', async () => {
+    const draft = firstDraft(await example(), '0192f3a0-0000-7000-8000-0000000000c1');
+    expect(draft.details.date_of_birth).toBe('');
+    expect(draft.meta).toMatchObject({ creator: '0192f3a0-0000-7000-8000-0000000000c1', notes: null });
+    expect(validate({ ...draft, details: { ...draft.details, first_name: 'Léa' } })).toEqual([
+      { field: 'details.date_of_birth', message: 'À remplir' },
+    ]);
+  });
+
+  it('dates a version on the local calendar, not on UTC (recette 28/10)', () => {
+    // 0 h 30 on the 29th here is still the 28th in UTC west of Greenwich, or east of it the other way round.
+    expect(localDay(new Date(2026, 9, 29, 0, 30))).toBe('2026-10-29');
+    expect(localDay(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
   });
 
   it('never stores a placeholder: dropped from the lists, and a first name left as such is refused', async () => {

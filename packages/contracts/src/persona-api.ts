@@ -42,8 +42,8 @@ export type CreatePersonaVersionBody = z.infer<typeof CreatePersonaVersionBodySc
 
 /**
  * `POST /v1/creators/:creatorId/persona/versions/:versionId/activate` → 200 `PersonaVersionSummary`: makes that
- * version her only active one, the one the agent writes with (an audited event, ADR 0010). Activating the active
- * version changes nothing; a version that is not hers is 404 `persona_version_not_found`.
+ * version her only active one (an audited event, ADR 0010). Activating the active version changes nothing; a version
+ * that is not hers is 404 `persona_version_not_found`.
  */
 export const ActivatePersonaVersionParamsSchema = z.strictObject({
   creatorId: CreatorIdSchema,
@@ -52,8 +52,19 @@ export const ActivatePersonaVersionParamsSchema = z.strictObject({
 export type ActivatePersonaVersionParams = z.infer<typeof ActivatePersonaVersionParamsSchema>;
 
 /**
+ * Body of the activation: `expectedActive` is the id of her active version as the screen last read it (null: none).
+ * If another one became active since (a tab left open), the answer is 409 `persona_version_conflict` and nothing
+ * changes, so that a stale screen never undoes an activation made elsewhere.
+ */
+export const ActivatePersonaVersionBodySchema = z.strictObject({
+  expectedActive: PersonaVersionIdSchema.nullable(),
+});
+export type ActivatePersonaVersionBody = z.infer<typeof ActivatePersonaVersionBodySchema>;
+
+/**
  * The error codes of the persona's versions, for the screen to say them in French (the suffix gives the status,
- * api.md): `persona_version_conflict` 409, another version was stored since the edit started, or its number is taken ;
+ * api.md): `persona_version_conflict` 409, another version was stored since the edit started, or its number is taken, or
+ * another version became active since the screen read it ;
  * `persona_version_not_found` 404, no version of hers has this id ; `persona_sample_reply_unprocessable` 422, a sample
  * reply holds what a hard guard of her answers blocks (P5-01), its `details` read by
  * `PersonaSampleReplyUnprocessableDetailsSchema`. Nothing is stored on any of them.

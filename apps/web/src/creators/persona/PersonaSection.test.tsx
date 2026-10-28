@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import blocksYaml from '../../../../../personas/demo/v0.2.0.yaml?raw';
@@ -126,5 +126,106 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     fireEvent.change(screen.getByLabelText('Ses projets'), { target: { value: 'Ouvrir un studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer une version' }));
     expect(await screen.findByText(/L’enregistrement n’a pas abouti/u)).toBeDefined();
+  });
+});
+
+/** Her stored versions (newest first), the demo as the newest one's content; POSTs answer `answer`. */
+async function serveVersions(
+  versions: readonly (typeof SUMMARY)[],
+  answer: (url: string) => readonly [number, unknown],
+) {
+  const persona = await parsePersonaYaml(blocksYaml);
+  const fake = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>((url, init) => {
+    if (init?.method === 'POST') {
+      const [status, body] = answer(url);
+      return Promise.resolve(new Response(JSON.stringify(body), { status }));
+    }
+    if (url === `/v1/creators/${CREATOR}/persona`) {
+      const latest = versions[0] === undefined ? null : { summary: versions[0], persona };
+      return Promise.resolve(
+        new Response(JSON.stringify({ creatorId: CREATOR, latest, versions }), { status: 200 }),
+      );
+    }
+    return Promise.resolve(new Response('{}', { status: 404 }));
+  });
+  vi.stubGlobal('fetch', fake);
+  return fake;
+}
+
+const OLDER = {
+  ...SUMMARY,
+  id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c40',
+  version: '0.1.0',
+  contentHash: 'b'.repeat(64),
+};
+const NEWEST = { ...SUMMARY, id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c41', isActive: false };
+
+describe('Créatrices › Persona, recette 28/10', () => {
+  it('activates over the active version it read, and says so when another tab changed it', async () => {
+    const fake = await serveVersions([NEWEST, OLDER], () => [
+      409,
+      { error: { code: 'persona_version_conflict', message: 'x', details: {}, requestId: 'r' } },
+    ]);
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Activer la version 0.2.0' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’activation' }));
+
+    expect(
+      await screen.findByText(/Sa version active a changé depuis l’ouverture de cette page/u),
+    ).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Recharger' })).toBeDefined();
+    const [url, init] = fake.mock.calls.find(([, i]) => i?.method === 'POST') ?? [];
+    expect(url).toBe(`/v1/creators/${CREATOR}/persona/versions/${NEWEST.id}/activate`);
+    expect(init?.body).toBe(JSON.stringify({ expectedActive: OLDER.id }));
+  });
+
+  it('never claims the agent writes with the active version: it still reads the persona set on the server', async () => {
+    await serveVersions([SUMMARY], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    const note = await screen.findByText(/L’agent n’écrit pas encore avec ces versions/u);
+    expect(note.textContent).not.toMatch(/l’agent écrit avec la version active/u);
+  });
+
+  it('shows a chatter her persona read-only, never « prête à enregistrer »', async () => {
+    await serveVersions([SUMMARY], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} canSave={false} timezone="Europe/Paris" />);
+    const name = await screen.findByLabelText('Prénom');
+    // Disabled by the fieldset around the panel: every field reads, none takes a change.
+    expect(name.matches(':disabled')).toBe(true);
+    expect(
+      screen.getByText('Lecture seule : seuls le propriétaire et la créatrice modifient sa persona.'),
+    ).toBeDefined();
+  });
+
+  it('stays on the tab it saved from', async () => {
+    let saved = false;
+    const fake = await serveVersions([SUMMARY], () => {
+      saved = true;
+      return [201, { ...NEWEST, isActive: false }];
+    });
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    await screen.findByLabelText('Prénom');
+    fireEvent.click(tab('Mode de vie'));
+    fireEvent.change(screen.getByLabelText('Ses projets'), { target: { value: 'Ouvrir un studio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer une version' }));
+    await waitFor(() => {
+      expect(saved).toBe(true);
+    });
+    await waitFor(() => {
+      expect(fake.mock.calls.filter(([url]) => url === `/v1/creators/${CREATOR}/persona`)).toHaveLength(2);
+    });
+    expect((await screen.findByRole('tab', { name: /^Mode de vie/u })).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('starts a new creator from the example without its date of birth, its number or its date', async () => {
+    await serveVersions([], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    const birth = await screen.findByLabelText('Date de naissance');
+    expect(birth).toHaveProperty('value', '');
+    expect(screen.queryByText(/ans aujourd’hui/u)).toBeNull();
+    expect(screen.queryByText(/^Version /u)).toBeNull();
+    expect(screen.getAllByText('À remplir').length).toBeGreaterThan(0);
   });
 });
