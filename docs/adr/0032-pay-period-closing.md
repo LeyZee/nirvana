@@ -27,13 +27,19 @@ Enfin, les relectures de #257 (Bilan, Telegram) demandent qu'aucune écriture co
 
 Ce que la clôture fige :
 
-- **Les rapports comptés dans p.** Chacun est inscrit au registre `pay_period_reports`, une ligne par rapport, avec le rapport pour clé primaire : un rapport n'est compté qu'une fois, dans une seule quinzaine.
+- **Les rapports comptés dans p** : tous les rapports validés qu'aucune clôture n'a encore inscrits et dont la quinzaine d'origine est p ou une quinzaine antérieure. Les tardifs sont donc compris, et un tardif ancien ne glisse pas de quinzaine en quinzaine. Chacun est inscrit au registre `pay_period_reports`, une ligne par rapport, avec le rapport pour clé primaire : un rapport n'est compté qu'une fois, dans une seule quinzaine.
 - **Les taux de change de p.** C'est le dernier taux lu le dernier jour de la quinzaine ou avant, dans le fuseau de l'agence, pour chaque devise qu'un compte compté utilise. Ce n'est jamais le taux du jour de la validation. La clôture est refusée tant qu'une de ces devises n'a pas de taux (`exchange_rate_missing_conflict`) : un taux n'est jamais deviné.
 - **Le net de l'équipe et l'objectif collectif tel qu'atteint.** Les paliers individuels et l'objectif collectif de p sont déjà figés par la migration 0028 dès qu'un relevé de p est validé.
 
 Ce qui reste propre à chaque membre jusqu'à la validation de son relevé : ses primes, ses malus et leurs annulations, ses ajustements, ses reports entrants, son taux de commission, sa part d'équipe, son rôle et le minimum de versement. Ces entrées ne touchent personne d'autre ; elles gardent la fermeture par membre de la migration 0028.
 
-**Un relevé d'une quinzaine clôturée se calcule sur la clôture.** Il prend les rapports que le registre a comptés pour son membre dans p, les taux de la clôture, et le net de l'équipe qui en découle. Le déclencheur de validation vérifie que le relevé validé porte bien la clôture de sa quinzaine : même net d'équipe, mêmes taux. Sinon le relevé doit d'abord être recalculé.
+**Un relevé d'une quinzaine clôturée se calcule sur la clôture.** Il prend les rapports que le registre a comptés pour son membre dans p, les taux de la clôture, et le net de l'équipe qui en découle. Son `inputs_hash` couvre la clôture : les rapports du registre, les taux et le net de l'équipe. Le déclencheur de validation vérifie que le relevé validé porte bien la clôture de sa quinzaine. Il demande trois choses :
+
+- le même net d'équipe ;
+- les mêmes taux ;
+- **exactement les mêmes rapports** : les rapports des lignes de la révision validée sont ceux que le registre a comptés pour ce membre dans p, ni plus ni moins.
+
+Un relevé calculé avant la clôture, qui compterait un rapport parti en p+1, ne se valide donc pas : il doit d'abord être recalculé. Sinon ce rapport serait payé deux fois.
 
 **Un rapport tardif se décide par le registre, jamais par une date.** Un rapport validé qu'aucune clôture n'a inscrit au registre est compté :
 
@@ -51,7 +57,7 @@ Un rapport compté ne change plus. Un rapport validé ne change déjà jamais (m
 **Ce que la validation fait, dans une seule transaction** (sous `withMember`, pour que la RLS garde les quatre yeux) :
 
 1. prendre le verrou `payroll.close`, puis le verrou (membre, quinzaine) d'EQ-03 ;
-2. si p n'est pas clôturée, la clôturer : lire les rapports de chaque créatrice par une boucle `enterCreator`, les inscrire au registre, figer les taux et le net de l'équipe ;
+2. si p n'est pas clôturée, la clôturer. Elle lit les rapports de **chaque** créatrice par une boucle `enterCreator`, les inscrit au registre, puis fige les taux et le net de l'équipe. Elle compare ensuite ce qu'elle a lu au nombre de rapports validés et non inscrits que la base connaît, par une lecture `withAdmin` bornée à ce compte. Si un rapport lui a échappé (une créatrice que celui qui valide ne peut pas lire), elle refuse avec un 409 plutôt que de le laisser partir en retard sans bruit ;
 3. recalculer le relevé du membre sur la clôture, et répondre 409 (`commission_statement_changed_conflict`) s'il diffère de la révision affichée ;
 4. passer le relevé à « validé » ;
 5. écrire le report sortant s'il y en a un. Il n'est accepté que tant que le relevé est validé et pas encore payé.
@@ -68,7 +74,7 @@ Un rapport ne prend que le second, et aucune écriture d'entrée ne prend `payro
 - `pay_period_closings` : une ligne par quinzaine clôturée, avec son net d'équipe en entier, l'objectif tel qu'atteint, les taux figés, qui l'a clôturée et quand ;
 - `pay_period_reports` : le registre, avec un rapport, sa quinzaine de comptage et son membre.
 
-Les deux tables sont en ajout seul pour tous les rôles, sous `FORCE ROW LEVEL SECURITY`. Seuls le propriétaire et un manager actif y insèrent, dans la transaction de la clôture. Le déclencheur du registre vérifie quatre choses : le rapport est validé, il est bien celui du membre, sa quinzaine d'origine n'est pas après sa quinzaine de comptage, et cette quinzaine vient d'être clôturée dans la même transaction.
+Les deux tables sont en ajout seul pour tous les rôles, sous `FORCE ROW LEVEL SECURITY`. Seuls le propriétaire et un manager actif y insèrent, dans la transaction de la clôture. Le déclencheur du registre vérifie quatre choses : le rapport est validé, il est bien celui du membre, sa quinzaine d'origine n'est pas après sa quinzaine de comptage, et cette quinzaine vient d'être clôturée dans la même transaction. Ce dernier point se vérifie par `xmin` : la ligne de clôture a été écrite par la transaction courante (`xmin = pg_current_xact_id()::xid`), hors de tout point de sauvegarde. Aucune transaction plus tardive ne peut donc ajouter un rapport à une clôture passée.
 
 **Point produit, en attente de Charles** : la validation peut se heurter à des rapports de p encore en attente de relecture. Défaut posé tant qu'il n'a pas répondu : la première validation de p refuse de clôturer tant qu'un rapport de p est envoyé mais ni validé ni renvoyé, et dit combien attendent. Une clôture implicite enverrait sinon ces rapports en p+1 sans que personne l'ait vu.
 
@@ -82,6 +88,13 @@ Positives :
 Négatives :
 - un rapport validé après la clôture de sa quinzaine va en p+1, même si le relevé de son membre pour p est encore un brouillon. La règle sur les rapports en attente (point produit) limite ce cas aux rapports qui arrivent vraiment après ;
 - deux tables et deux verrous de plus. Le verrou `payroll.close` sérialise les validations et les recalculs. C'est voulu : la paie se valide deux fois par mois.
+
+Tests du lot de l'application, qui prouvent ces règles contre une base réelle :
+- une validation de rapport engagée pendant une clôture : le rapport part sur la quinzaine non clôturée suivante, compté une fois ;
+- une prime contre une validation du même membre : la prime attend le verrou, puis est refusée ;
+- deux recalculs concurrents ne font qu'un brouillon par membre, et un rejeu n'écrit rien ;
+- l'ordre des verrous ne s'inverse jamais : pas d'interblocage entre une validation, un recalcul et une prime ;
+- un relevé calculé avant la clôture qui compte un rapport parti en p+1 est refusé à la validation.
 
 À surveiller :
 - le contrat `payroll.ts` (lot 2) dit qu'un rapport tardif va sur la première quinzaine ouverte du membre. Le lot 3 le corrige en « de l'équipe », et `PayrollPeriod` y gagne sa clôture ;
