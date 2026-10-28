@@ -499,6 +499,9 @@ export const carryOvers = pgTable(
     check('carry_overs_amount_check', sql`${t.amountMinor} <> 0`),
     index('carry_overs_member_to_idx').on(t.memberId, t.toPeriod),
     memberRead(t.memberId),
-    pgPolicy('agency_insert', { for: 'insert', withCheck: readsTeam }),
+    pgPolicy('agency_insert', {
+      for: 'insert',
+      withCheck: sql`${readsTeam} and not ${isMine(t.memberId)}`,
+    }),
   ],
 );

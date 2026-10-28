@@ -230,7 +230,7 @@ CREATE POLICY "member_read" ON "bonuses" AS PERMISSIVE FOR SELECT TO public USIN
 CREATE POLICY "agency_insert" ON "bonuses" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and "bonuses"."created_by" = nullif(current_setting('app.user_id', true), '') and not exists (select 1 from team_members m where m.id = "bonuses"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "bonuses"."cancelled_at" is null);--> statement-breakpoint
 CREATE POLICY "agency_cancel" ON "bonuses" AS PERMISSIVE FOR UPDATE TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "bonuses"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "bonuses"."cancelled_at" is null) WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and "bonuses"."cancelled_by" = nullif(current_setting('app.user_id', true), '') and not exists (select 1 from team_members m where m.id = "bonuses"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
 CREATE POLICY "member_read" ON "carry_overs" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = "carry_overs"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
-CREATE POLICY "agency_insert" ON "carry_overs" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency'));--> statement-breakpoint
+CREATE POLICY "agency_insert" ON "carry_overs" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "carry_overs"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
 CREATE POLICY "team_read" ON "collective_goals" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') is not null);--> statement-breakpoint
 CREATE POLICY "owner_insert" ON "collective_goals" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "collective_goals"."created_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
 CREATE POLICY "member_read" ON "commission_statement_lines" AS PERMISSIVE FOR SELECT TO public USING (exists (select 1 from commission_statements s where s.id = "commission_statement_lines"."statement_id" and (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = s.member_id and m.user_id = nullif(current_setting('app.user_id', true), '')))));--> statement-breakpoint
@@ -366,7 +366,11 @@ CREATE TRIGGER "penalties_kept" BEFORE INSERT OR UPDATE ON "penalties"
 CREATE FUNCTION "keep_commission_statement"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF NEW."status" = 'draft' AND "pay_period_closed"(NEW."member_id", NEW."period") THEN
+    IF NEW."status" <> 'draft' THEN
+      RAISE EXCEPTION 'a statement is made a draft, and only a validation validates it (EQ-04)'
+        USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF "pay_period_closed"(NEW."member_id", NEW."period") THEN
       RAISE EXCEPTION 'a draft for a period already validated: pay keeps its past (EQ-04)'
         USING ERRCODE = 'restrict_violation';
     END IF;
@@ -422,15 +426,16 @@ END;
 $$;--> statement-breakpoint
 CREATE TRIGGER "commission_statement_lines_current" BEFORE INSERT ON "commission_statement_lines"
   FOR EACH ROW EXECUTE FUNCTION "keep_statement_line"();--> statement-breakpoint
--- A carry-over comes from its member's validated statement of `from_period`, to the period right after.
+-- A carry-over comes from its member's validated statement of `from_period`, to the period right after, and carries
+-- exactly what that statement did not pay.
 CREATE FUNCTION "keep_carry_over"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW."to_period" <> "next_pay_period"(NEW."from_period") OR NOT EXISTS (
     SELECT 1 FROM "commission_statements" s
     WHERE s."id" = NEW."statement_id" AND s."member_id" = NEW."member_id" AND s."period" = NEW."from_period"
-      AND s."status" = 'validated'
+      AND s."status" = 'validated' AND s."carry_over_out_minor" = NEW."amount_minor"
   ) THEN
-    RAISE EXCEPTION 'a carry-over comes from its member''s validated statement, to the next period (EQ-04)'
+    RAISE EXCEPTION 'a carry-over is what its member''s validated statement carried, to the next period (EQ-04)'
       USING ERRCODE = 'restrict_violation';
   END IF;
   RETURN NEW;

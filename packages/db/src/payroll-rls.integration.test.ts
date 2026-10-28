@@ -31,7 +31,7 @@ async function failure(promise: Promise<unknown>): Promise<string> {
 }
 
 const KEPT =
-  /pay keeps its past|changes nothing else|takes its next revision|periods close in order|current revision|carry-over comes/u;
+  /pay keeps its past|changes nothing else|takes its next revision|periods close in order|current revision|carry-over is what|made a draft/u;
 const RLS = /row-level security/u;
 const HASH = 'a'.repeat(64);
 
@@ -249,6 +249,9 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       await recalc({ revision: 2, totalMinor: 14_000, payableMinor: 14_000 });
       expect(await failure(recalc({ revision: 2, totalMinor: 15_000, payableMinor: 15_000 }))).toMatch(KEPT);
       expect(await failure(recalc({ revision: 3, period: '2026-09-16' }))).toMatch(KEPT);
+      // The job makes drafts: only a validation validates.
+      const validated = { status: 'validated', validatedAt: new Date(), validatedBy: owner };
+      expect(await failure(draft(lou, '2026-09-16', validated))).toMatch(KEPT);
     });
 
     it('the agency validates a draft, never its own, and changes nothing else then', async () => {
@@ -446,32 +449,39 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
   });
 
   describe('carry-overs, tiers, goals, rates', () => {
-    it('a carry-over comes from the member’s validated statement, to the next period, once', async () => {
-      const [statement] = await admin((tx) =>
-        tx
-          .select({ id: s.commissionStatements.id })
-          .from(s.commissionStatements)
-          .where(
-            sql`${s.commissionStatements.memberId} = ${member(lea)} and ${s.commissionStatements.period} = '2026-11-01'`,
-          ),
-      );
-      if (statement === undefined) throw new Error('no statement');
-      const carry = (toPeriod: string) => ({
+    it('a carry-over is what the member’s validated statement carried, to the next period, once', async () => {
+      // Iris's total of October 1st is under the minimum: carried over, nothing paid.
+      const under = { totalMinor: 900, carryOverOutMinor: 900, payableMinor: 0 };
+      const statementId = await draft(iris, '2026-10-01', under);
+      await validate(manager, statementId);
+      const carry = (values: Partial<typeof s.carryOvers.$inferInsert> = {}) => ({
         id: newId(CarryOverIdSchema),
-        memberId: member(lea),
-        fromPeriod: '2026-11-01',
-        toPeriod,
-        amountMinor: 1_000,
-        statementId: statement.id,
+        memberId: member(iris),
+        fromPeriod: '2026-10-01',
+        toPeriod: '2026-10-16',
+        amountMinor: 900,
+        statementId,
+        ...values,
       });
-      expect(await failure(as(owner, (tx) => tx.insert(s.carryOvers).values(carry('2026-12-01'))))).toMatch(
-        KEPT,
-      );
-      await as(owner, (tx) => tx.insert(s.carryOvers).values(carry('2026-11-16')));
-      expect(await failure(as(owner, (tx) => tx.insert(s.carryOvers).values(carry('2026-11-16'))))).toMatch(
-        /unique/u,
-      );
+      const insert = (by: string, row: ReturnType<typeof carry>) =>
+        as(by, (tx) => tx.insert(s.carryOvers).values(row));
+      expect(await failure(insert(owner, carry({ toPeriod: '2026-11-01' })))).toMatch(KEPT);
+      // Exactly what the statement carried, never another amount.
+      expect(await failure(insert(owner, carry({ amountMinor: 1_000 })))).toMatch(KEPT);
+      await insert(manager, carry());
+      expect(await failure(insert(owner, carry()))).toMatch(/unique/u);
       expect(await failure(admin((tx) => tx.update(s.carryOvers).set({ amountMinor: 2 })))).toMatch(KEPT);
+      // A manager never writes his own, even what his statement carried.
+      const own = await draft(manager, '2026-08-16', under);
+      await validate(owner, own);
+      const mine = carry({
+        memberId: member(manager),
+        fromPeriod: '2026-08-16',
+        toPeriod: '2026-09-01',
+        statementId: own,
+      });
+      expect(await failure(insert(manager, mine))).toMatch(RLS);
+      await insert(owner, mine);
     });
 
     it('the owner alone sets tiers and goals, never for a period already validated', async () => {
