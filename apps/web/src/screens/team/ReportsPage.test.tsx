@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReportsPage } from './ReportsPage';
 
 import { HoldProvider } from '@/reports/Hold';
+import { ReopenProvider } from '@/reports/reopen';
 
 vi.mock('@/scheduling/time', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/scheduling/time')>()),
@@ -82,6 +83,8 @@ const report = (n: number, shiftIndex: number, patch: Record<string, unknown> = 
 
 let open: FakeReport[];
 let period: FakeReport[];
+/** The pay rules of the period for the shift corrected. */
+let rules: unknown;
 /** What a `POST` answers: the same for each, or from what it was sent. */
 let answer: { status: number; body: unknown } | ((body: unknown) => { status: number; body: unknown });
 const writes: { method: string; path: string; body: unknown }[] = [];
@@ -121,7 +124,7 @@ function serve(): void {
             account: ACCOUNT,
             period: '2026-10-16',
             opensAt: '2026-10-26T21:30:00.000Z',
-            rules: null,
+            rules,
             reports: period.filter((one) => one['shiftId'] === id(101)),
           });
         default:
@@ -145,12 +148,15 @@ const validatesAll = (body: unknown): { status: number; body: unknown } => {
   };
 };
 
-function renderPage(): void {
-  // The app's one hold, as the shell mounts it.
+/** Renders the page, and gives the way to Suivi, as the rail would take it. */
+function renderPage(): () => Promise<void> {
+  // The app's one hold, as the shell mounts it, and Suivi to leave Équipe › Rapports for.
   const root = createRootRoute({
     component: () => (
       <HoldProvider>
-        <Outlet />
+        <ReopenProvider>
+          <Outlet />
+        </ReopenProvider>
       </HoldProvider>
     ),
   });
@@ -159,8 +165,9 @@ function renderPage(): void {
     path: '/equipe/rapports',
     component: () => <ReportsPage owner />,
   });
+  const tracking = createRoute({ getParentRoute: () => root, path: '/suivi', component: () => <p>Suivi</p> });
   const router = createRouter({
-    routeTree: root.addChildren([page]),
+    routeTree: root.addChildren([page, tracking]),
     history: createMemoryHistory({ initialEntries: ['/equipe/rapports'] }),
   });
   render(
@@ -168,9 +175,16 @@ function renderPage(): void {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return () => router.navigate({ to: '/suivi' });
 }
 
 beforeEach(() => {
+  // Équipe's tabs move their lens when the page comes back, under the reader's motion setting.
+  vi.stubGlobal('matchMedia', () => ({
+    matches: true,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
   // Équipe's tabs watch their own width.
   vi.stubGlobal(
     'ResizeObserver',
@@ -189,6 +203,7 @@ beforeEach(() => {
     report(3, 2, { canReview: false }),
   ];
   period = [];
+  rules = null;
   answer = { status: 200, body: { results: [] } };
   serve();
 });
@@ -302,8 +317,9 @@ describe('Équipe › Rapports', () => {
     open = Array.from({ length: 101 }, (_, n) => report(n + 1, n % 2));
     answer = validatesAll;
     renderPage();
-    fireEvent.click(await screen.findByLabelText('Tout sélectionner'));
-    fireEvent.click(screen.getByRole('button', { name: 'Valider (101)' }));
+    // By their text: over 101 rows, a label or role query has jsdom pair every label with its control (seconds on CI).
+    fireEvent.click(await screen.findByText('Tout sélectionner'));
+    fireEvent.click(screen.getByText('Valider (101)'));
     await act(() => vi.advanceTimersByTimeAsync(5_000));
 
     expect(writes.map((one) => ValidateShiftReportsBodySchema.parse(one.body).reports.length)).toEqual([
@@ -366,5 +382,31 @@ describe('Équipe › Rapports', () => {
     expect(await within(dialog).findByText('Pas encore de règles de paie')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: 'Poser les règles' })).toBeTruthy();
     expect(dialog.textContent).not.toContain('Préviens l’agence');
+  });
+
+  it('opens a refused correction again here, its member named, wherever the reader went since', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    rules = { currency: 'EUR', earningsSource: 'declared' };
+    answer = {
+      status: 409,
+      body: { error: { code: 'shift_report_changed_conflict', message: 'x', details: {}, requestId: 'r' } },
+    };
+    const leave = renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Corriger' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Corriger le rapport de Théo' });
+    fireEvent.change(await within(dialog).findByLabelText('À ajouter ou retirer'), {
+      target: { value: '-20' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer la correction' }));
+    await act(leave);
+    await screen.findByText('Suivi');
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+
+    expect(writes).toHaveLength(1);
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Correction non envoyée');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Rouvrir' }));
+    const again = await screen.findByRole('dialog', { name: 'Corriger le rapport de Théo' });
+    expect(within(again).getByDisplayValue('-20')).toBeTruthy();
   });
 });

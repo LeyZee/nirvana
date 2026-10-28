@@ -12,7 +12,7 @@ import { useEffect, useId, useRef, useState, type JSX } from 'react';
 import { TeamNav } from './TeamNav';
 
 import { useAppHold, type HoldResult } from '@/reports/Hold';
-import { ReportPanel, type ReportDraft } from '@/reports/ReportPanel';
+import { ReportPanel } from '@/reports/ReportPanel';
 import {
   rejectReport,
   useRefreshReports,
@@ -36,6 +36,7 @@ import {
   followingPeriod,
   type ShiftLine,
 } from '@/reports/model';
+import { useReopening, type ReportDraft } from '@/reports/reopen';
 import '@/reports/reports.css';
 import { accountLine, swapShiftLine } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
@@ -77,6 +78,12 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [held, setHeld] = useState<ReadonlySet<string>>(new Set());
   const [correcting, setCorrecting] = useState<Correcting | null>(null);
+  useReopening('/equipe/rapports', (what) => {
+    // A correction always names its member: the panel opens here for nothing else.
+    if (what.memberName !== null) {
+      setCorrecting({ shiftId: what.shiftId, memberName: what.memberName, draft: what.draft });
+    }
+  });
   const refresh = useRefreshReports();
 
   const waiting = (open.data?.reports ?? []).filter((one) => one.status === 'submitted');
@@ -202,11 +209,9 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
           draft={correcting.draft}
           memberName={correcting.memberName}
           canSetRules={owner}
+          from="/equipe/rapports"
           onClose={() => {
             setCorrecting(null);
-          }}
-          onReopen={(draft) => {
-            setCorrecting({ ...correcting, draft });
           }}
         />
       )}

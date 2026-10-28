@@ -24,21 +24,12 @@ import {
   STATUS_TONES,
   validatedTotal,
 } from './model';
+import { useReopen, type ReportDraft, type ReportScreen } from './reopen';
 
 import { accountLine, swapShiftLine } from '@/scheduling/model';
 import { clockAt, dayMonth, dayOf, readerZone } from '@/scheduling/time';
 import { useNow } from '@/scheduling/useNow';
 import { Dialog } from '@/screens/team/Dialog';
-
-/** What the panel was holding when it closed, to open it again as it was: after « Annuler », or a refusal. */
-export interface ReportDraft {
-  readonly id: ShiftReportId;
-  readonly correcting: boolean;
-  readonly amount: string;
-  readonly comment: string;
-  readonly incidentOn: boolean;
-  readonly incident: string;
-}
 
 const COMMENT_MAX = 1000;
 
@@ -53,8 +44,8 @@ export function ReportPanel({
   draft,
   memberName,
   canSetRules = false,
+  from,
   onClose,
-  onReopen,
 }: {
   shiftId: string;
   draft: ReportDraft | null;
@@ -62,10 +53,15 @@ export function ReportPanel({
   memberName?: string;
   /** The agency's reader sets the pay rules (the owner): missing rules lead to them. */
   canSetRules?: boolean;
+  /** The screen it opens on, and opens again on after « Annuler » or a refusal, wherever the reader went since. */
+  from: ReportScreen;
   onClose: () => void;
-  onReopen: (draft: ReportDraft) => void;
 }): JSX.Element {
   const context = useReportContext(shiftId);
+  const reopen = useReopen();
+  const onReopen = (again: ReportDraft): void => {
+    reopen({ screen: from, shiftId, memberName: memberName ?? null, draft: again });
+  };
   const zone = readerZone();
   const data = context.data;
   const when =

@@ -3,8 +3,9 @@ import { Link } from '@tanstack/react-router';
 import { useState, type JSX } from 'react';
 
 import { MyReportsCard, useMyReports, type MyReports } from '@/reports/MyReports';
-import { ReportPanel, type ReportDraft } from '@/reports/ReportPanel';
+import { ReportPanel } from '@/reports/ReportPanel';
 import { MEMBER_STATUS, reportOf, STATUS_TONES } from '@/reports/model';
+import { useReopening, type ReportDraft } from '@/reports/reopen';
 import '@/reports/reports.css';
 import { useMyShifts } from '@/scheduling/api';
 import { accountLine, dayStateOf, platformName, progressOf, type DayState } from '@/scheduling/model';
@@ -30,6 +31,9 @@ export function TodayPage(): JSX.Element {
   const openReport = (shiftId: string): void => {
     setOpen({ shiftId, draft: null });
   };
+  useReopening('/aujourdhui', (what) => {
+    setOpen({ shiftId: what.shiftId, draft: what.draft });
+  });
 
   return (
     <Page>
@@ -73,11 +77,9 @@ export function TodayPage(): JSX.Element {
           key={open.shiftId + (open.draft?.id ?? '')}
           shiftId={open.shiftId}
           draft={open.draft}
+          from="/aujourdhui"
           onClose={() => {
             setOpen(null);
-          }}
-          onReopen={(draft) => {
-            setOpen({ shiftId: open.shiftId, draft });
           }}
         />
       )}

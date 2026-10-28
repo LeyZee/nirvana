@@ -12,6 +12,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HoldProvider } from '@/reports/Hold';
+import { ReopenProvider } from '@/reports/reopen';
 import { TodayPage } from '@/screens/today/TodayPage';
 
 vi.mock('@/scheduling/time', async (importOriginal) => ({
@@ -149,7 +150,9 @@ function renderPage(): void {
   const root = createRootRoute({
     component: () => (
       <HoldProvider>
-        <Outlet />
+        <ReopenProvider>
+          <Outlet />
+        </ReopenProvider>
       </HoldProvider>
     ),
   });
@@ -261,7 +264,7 @@ describe('Faire mon rapport', () => {
     expect(document.activeElement).toBe(screen.getByLabelText('Ce qui s’est passé'));
   });
 
-  it('says a refusal wherever the chatter went since', async () => {
+  it('says a refusal wherever the chatter went since, and « Rouvrir » takes them back to it as it was', async () => {
     served.write = {
       status: 409,
       body: { error: { code: 'shift_report_early_conflict', message: 'x', details: {}, requestId: 'r' } },
@@ -279,6 +282,28 @@ describe('Faire mon rapport', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Rapport non envoyé');
     expect(alert.textContent).toContain('30 minutes avant au plus tôt');
+
+    // Aujourd'hui is gone with its panel: « Rouvrir » goes back to it and opens the report there.
+    fireEvent.click(within(alert).getByRole('button', { name: 'Rouvrir' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Faire mon rapport' });
+    expect(screen.queryByText('Suivi')).toBeNull();
+    expect(within(dialog).getByDisplayValue('30')).toBe(amountField());
+  });
+
+  it('takes the report back on « Annuler » from Suivi, on Aujourd’hui as it was', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Faire mon rapport' }));
+    await screen.findByRole('dialog');
+    fireEvent.change(amountField(), { target: { value: '45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer mon rapport' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Ouvrir Suivi' }));
+    await screen.findByText('Suivi');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Faire mon rapport' });
+    expect(within(dialog).getByDisplayValue('45')).toBe(amountField());
+    await act(() => vi.advanceTimersByTimeAsync(6_000));
+    expect(writes).toEqual([]);
   });
 
   it('sends at once when the app goes to the background', async () => {
