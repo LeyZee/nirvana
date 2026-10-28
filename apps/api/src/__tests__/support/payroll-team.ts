@@ -61,7 +61,11 @@ export interface PayrollTeam {
     member: TeamMember,
     period: PayPeriod,
     amountMinor: number,
-    options?: { readonly account?: PlatformAccountId; readonly status?: 'validated' | 'submitted' },
+    options?: {
+      readonly account?: PlatformAccountId;
+      readonly status?: 'validated' | 'submitted';
+      readonly currency?: 'EUR' | 'USD';
+    },
   ): Promise<ShiftReportId>;
   recalculate(period: PayPeriod): ReturnType<App['modules']['payroll']['jobs']['recalculate']>;
   statementOf(
@@ -192,7 +196,12 @@ export async function startPayrollTeam(superuserUrl: string): Promise<PayrollTea
       return { member, cookie: await signIn(server, email, PASSWORD) };
     },
 
-    async report(member, period, amountMinor, { account = annas, status = 'validated' } = {}) {
+    async report(
+      member,
+      period,
+      amountMinor,
+      { account = annas, status = 'validated', currency = 'EUR' } = {},
+    ) {
       const shiftId = newId(ShiftIdSchema);
       hour += 3;
       const startsAt = new Date(`${period}T06:00:00Z`);
@@ -216,7 +225,7 @@ export async function startPayrollTeam(superuserUrl: string): Promise<PayrollTea
         memberId: member.id,
         period,
         amountMinor,
-        currency: 'EUR',
+        currency,
         status,
         submittedBy: member.userId,
         submittedAt: startsAt,

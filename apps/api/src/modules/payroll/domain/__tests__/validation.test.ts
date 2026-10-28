@@ -99,6 +99,16 @@ describe('the closing of a period (ADR 0032)', () => {
     expect(codeOf(() => closePeriod({ ...open, latestRates: [] }))).toBe('exchange_rate_missing_conflict');
   });
 
+  it('closes on a rate four days old, never five: Easter Monday on the 31st takes Thursday’s (ADR 0033)', () => {
+    const thursday = { ...USD, day: '2025-03-27' };
+    expect(closePeriod({ ...open, latestRates: [thursday] }).closing.exchangeRates).toEqual([thursday]);
+    expect(codeOf(() => closePeriod({ ...open, latestRates: [{ ...USD, day: '2025-03-26' }] }))).toBe(
+      'exchange_rate_missing_conflict',
+    );
+    // Only a closing freezes a rate: a draft of the period still computes on the latest one.
+    expect(planPeriod({ ...open, latestRates: [{ ...USD, day: '2025-03-03' }] }).kind).toBe('write');
+  });
+
   it('refuses to be the team’s first closing while an earlier report waits', () => {
     const first: PeriodSnapshot = { ...open, firstClosed: null, lastClosed: null };
     expect(() => closePeriod(first)).toThrow('An earlier period');

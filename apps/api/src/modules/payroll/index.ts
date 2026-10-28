@@ -3,12 +3,15 @@ import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createPayrollEntries } from './application/entries';
+import { fetchExchangeRates, type RateFetchOutcome } from './application/exchange-rates';
 import { createPayrollReads } from './application/periods';
 import { createRecalculation, type RecalculationOutcome } from './application/recalculation';
 import { createPayrollValidation } from './application/validation';
 import type { JobLogger } from './domain/ports';
+import { createEcbSource, type GetLike } from './infra/ecb';
 import { createDrizzlePayrollEntryStore } from './infra/entry-store';
 import { createDrizzlePayrollJobStore } from './infra/job-store';
+import { createDrizzlePayrollRateStore } from './infra/rate-store';
 import { createDrizzlePayrollReadStore } from './infra/read-store';
 import { createPayrollRoutes, type RequireRole } from './infra/routes';
 import { createDrizzlePayrollRuleStore } from './infra/rule-store';
@@ -34,6 +37,8 @@ export interface PayrollModule {
     readonly recalculate: (period: PayPeriod, logger: JobLogger) => Promise<RecalculationOutcome[]>;
     /** `payroll.recalculate_open`: every open period up to the current one, each hour. */
     readonly recalculateOpen: (logger: JobLogger) => Promise<RecalculationOutcome[]>;
+    /** `payroll.fetch_exchange_rates` (ADR 0033): the ECB's last 90 days, each day written once. */
+    readonly fetchExchangeRates: (logger: JobLogger) => Promise<RateFetchOutcome>;
   };
 }
 
@@ -48,6 +53,8 @@ export interface PayrollDeps {
   /** What pay reads of the planning, the team and the creators, from their `index.ts`. */
   readonly reads: PayInputReads;
   readonly now?: () => Date;
+  /** The ECB is reached through it (ADR 0033); the global `fetch` unless a test gives a fake one. */
+  readonly fetch?: GetLike;
 }
 
 export function createPayrollModule(deps: PayrollDeps): PayrollModule {
@@ -60,12 +67,15 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
   );
   const entries = createPayrollEntries(createDrizzlePayrollEntryStore(deps.db, deps.reads, now), reads);
   const rules = createDrizzlePayrollRuleStore(deps.db, deps.reads, now);
+  const rateSource = createEcbSource({ fetch: deps.fetch ?? ((url, init) => fetch(url, init)) });
+  const rateStore = createDrizzlePayrollRateStore(deps.adminDb);
   return {
     name: 'payroll',
     routes: (requireRole) => createPayrollRoutes(reads, validation, entries, rules, requireRole),
     jobs: {
       recalculate: (period, logger) => createRecalculation(jobStore, logger, now).recalculate(period),
       recalculateOpen: (logger) => createRecalculation(jobStore, logger, now).recalculateOpen(),
+      fetchExchangeRates: (logger) => fetchExchangeRates(rateSource, rateStore, logger, now),
     },
   };
 }

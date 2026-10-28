@@ -35,6 +35,7 @@ import {
   type PeriodStatements,
 } from './commission-statements';
 import { CommissionRateMissing } from './errors';
+import { assertFreshRates } from './exchange-rates';
 
 /**
  * The recalculation of a period's drafts (EQ-04, ADR 0032), pure: from what the job read in one transaction, the
@@ -472,7 +473,8 @@ export interface ClosingPlan {
  * The closing of `snapshot.period`, the team's first open period (ADR 0032): the reports it counts now go to its
  * registry; its team net, goal as reached and rates are frozen. With it, the snapshot as it reads once the closing is
  * written, on which every statement of the period is computed from then on. A rate or a commission rate missing is
- * refused here as in the recalculation: a period never closes on a guess.
+ * refused here as in the recalculation, and so is a rate too old for the period's end (ADR 0033): a period never
+ * closes on a guess.
  */
 export function closePeriod(snapshot: PeriodSnapshot): {
   readonly closing: ClosingPlan;
@@ -497,6 +499,7 @@ export function closePeriod(snapshot: PeriodSnapshot): {
     collective: computed.collective,
     exchangeRates: periodRates(snapshot, counted),
   };
+  assertFreshRates(period, frozen.exchangeRates);
   const registered = new Map(snapshot.registered);
   for (const report of counted) registered.set(report.id, period);
   return {

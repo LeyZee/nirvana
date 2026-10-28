@@ -600,6 +600,17 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         );
       },
     ),
+    'payroll.fetch_exchange_rates': defineTask(
+      'payroll.fetch_exchange_rates',
+      JOB_PAYLOADS['payroll.fetch_exchange_rates'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { outcome: await modules.payroll.jobs.fetchExchangeRates(context.logger) },
+          'payroll: exchange rates read',
+        );
+      },
+    ),
     'rate_limit.purge': defineTask(
       'rate_limit.purge',
       JOB_PAYLOADS['rate_limit.purge'],

@@ -10,6 +10,7 @@ import type {
   CreateCollectiveGoalBody,
   CreatePenaltyBody,
   DomainError,
+  ExchangeRate,
   ExchangeRates,
   PayAdjustment,
   PayAdjustmentId,
@@ -134,6 +135,26 @@ export interface PayrollRuleStore {
   createCollectiveGoal(actor: Actor, body: CreateCollectiveGoalBody): Promise<Recorded<CollectiveGoal>>;
   /** The minimum as it stands once set; the same value again writes nothing. */
   setSettings(actor: Actor, settings: PayrollSettings): Promise<PayrollSettings>;
+}
+
+/** A rate as the ECB writes it (ADR 0033): units of `currency` for one euro, in decimal text, on `day`. */
+export interface EcbRate {
+  readonly day: string;
+  readonly currency: string;
+  readonly perEuro: string;
+}
+
+/** The ECB's last 90 days, read and validated; throws when it cannot be reached, answers too much or out of format. */
+export interface RateSource {
+  history(): Promise<readonly EcbRate[]>;
+}
+
+/** `exchange_rates`, written by the job only (admin connection), added only: a day once written never changes. */
+export interface PayrollRateStore {
+  /** Writes each rate whose (currency, day) is not written yet; gives how many, and those written with another value. */
+  addUnscoped(
+    rates: readonly ExchangeRate[],
+  ): Promise<{ readonly written: number; readonly differing: readonly ExchangeRate[] }>;
 }
 
 /** Who reads pay: their scope (`withMember`) and their own member, `null` for the owner. */
