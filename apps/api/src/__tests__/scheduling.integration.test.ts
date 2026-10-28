@@ -28,6 +28,7 @@ import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { lockWaits } from './support/lock-waits';
 import { iso, PARIS, parisDay, parisInstant, weekdayOf } from './support/paris';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
@@ -664,13 +665,7 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
     expect(await toFill()).toEqual([]);
 
     // A leave approved while a shift is being placed: the shift waits for the member's lock, then sees the leave.
-    const someoneWaitsOnTheMember = async () =>
-      (
-        await test.admin.db.execute<{ waiting: number }>(
-          // `pg_locks` shows every role's locks; `pg_stat_activity` hides another role's waits.
-          sql`select count(*)::int as waiting from pg_locks where locktype = 'advisory' and not granted`,
-        )
-      ).rows[0]?.waiting !== 0;
+    const someoneWaitsOnTheMember = async () => (await lockWaits(test.admin.db)) !== 0;
     const { placing, approved } = await test.admin.db.transaction(async (tx) => {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`scheduling.member:${lou.id}`}, 0))`,
