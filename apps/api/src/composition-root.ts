@@ -47,6 +47,7 @@ import {
 } from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, missingMediaBinaries, type MediaModule } from './modules/media';
+import { createPayrollModule, type PayrollModule } from './modules/payroll';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
@@ -71,6 +72,7 @@ interface Modules {
   readonly providers: ProvidersModule;
   readonly team: TeamModule;
   readonly scheduling: SchedulingModule;
+  readonly payroll: PayrollModule;
   /** Null in the worker, or when its persona cannot be read: the API starts without the playground and says why. */
   readonly playground: PlaygroundModule | null;
   /** Null without CREDENTIALS_ENCRYPTION_KEYS: a bot token is never kept unsealed (ADR 0020 §5). */
@@ -249,6 +251,16 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     adminDb: adminDb.db,
     creators: { list: () => persona.creators.list('all') },
   });
+  // Pay reads the planning's reports and the team's rates in its own transaction, through their `index.ts` (EQ-04).
+  const payroll = createPayrollModule({
+    db: db.db,
+    adminDb: adminDb.db,
+    reads: {
+      validatedReportsUnscoped: scheduling.pay.validatedReportsUnscoped,
+      agencyTimeZone: scheduling.pay.agencyTimeZone,
+      membersUnscoped: team.pay.membersUnscoped,
+    },
+  });
   const playground =
     options.withPlayground === false
       ? null
@@ -375,6 +387,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     persona,
     team,
     scheduling,
+    payroll,
     agent: createAgentModule(),
     media: createMediaModule(),
     supervision: createSupervisionModule({
@@ -560,6 +573,28 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         );
       },
     ),
+    'payroll.recalculate': defineTask(
+      'payroll.recalculate',
+      JOB_PAYLOADS['payroll.recalculate'],
+      logger,
+      async (payload, context) => {
+        context.logger.info(
+          { outcomes: await modules.payroll.jobs.recalculate(payload.period, context.logger) },
+          'payroll: drafts computed',
+        );
+      },
+    ),
+    'payroll.recalculate_open': defineTask(
+      'payroll.recalculate_open',
+      JOB_PAYLOADS['payroll.recalculate_open'],
+      logger,
+      async (_payload, context) => {
+        context.logger.info(
+          { outcomes: await modules.payroll.jobs.recalculateOpen(context.logger) },
+          'payroll: open periods computed',
+        );
+      },
+    ),
     'rate_limit.purge': defineTask(
       'rate_limit.purge',
       JOB_PAYLOADS['rate_limit.purge'],
@@ -603,6 +638,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.fans.routes(requireRole, kycSlots),
       modules.team.routes(requireRole),
       modules.scheduling.routes(requireRole),
+      modules.payroll.routes(requireRole),
       modules.backups.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.providers.routes({ guard: requireRole('owner'), recentLogin: createRequireRecentLogin(auth) }),
       modules.connectors.routes,

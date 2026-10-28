@@ -1,9 +1,10 @@
-import type { Database } from '@nirvana/db';
+import type { Database, Transaction } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createTeamService } from './application/team';
 import type { CreatorRoster, InvitationLinkDirectory } from './domain/ports';
 import { createTeamRoutes, type RequireRole } from './infra/http/routes';
+import { membersForPayUnscoped, type MemberForPay } from './infra/pay-reads';
 import { createDrizzleTeamStore } from './infra/team-store';
 
 /** Until the agency has a setting of its own (ADR 0023 § Paie): where « today » is read for rates and presets. */
@@ -14,6 +15,11 @@ export interface TeamModule {
   readonly name: 'team';
   /** Mounted under `/v1` by the server: `/team/members` and `/team/commission-presets` (EQ-01). */
   routes(requireRole: RequireRole): FastifyPluginAsyncZod;
+  /**
+   * What pay reads of the team (EQ-04), in pay's own transaction, given by the composition root: every member with
+   * the rate in force on a day (pay's job, admin connection).
+   */
+  readonly pay: { readonly membersUnscoped: (tx: Transaction, day: string) => Promise<MemberForPay[]> };
 }
 
 export interface TeamDeps {
@@ -34,5 +40,9 @@ export function createTeamModule(deps: TeamDeps): TeamModule {
     deps.invitationLinks,
     { agencyTimeZone: DEFAULT_AGENCY_TIME_ZONE, now },
   );
-  return { name: 'team', routes: (requireRole) => createTeamRoutes(service, requireRole) };
+  return {
+    name: 'team',
+    routes: (requireRole) => createTeamRoutes(service, requireRole),
+    pay: { membersUnscoped: membersForPayUnscoped },
+  };
 }

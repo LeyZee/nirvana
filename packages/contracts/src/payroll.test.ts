@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { PayPeriodSchema } from './pay-periods';
 import {
   BonusTierSetSchema,
+  canonicalExchangeRates,
   CollectiveGoalSchema,
   CreateBonusBodySchema,
   CreateBonusTierSetBodySchema,
@@ -193,5 +194,15 @@ describe('statements', () => {
     for (const code of PAYROLL_ERROR_CODES) {
       expect(code).toMatch(/_(not_found|invalid|conflict|forbidden)$/u);
     }
+  });
+});
+
+describe('exchange rates', () => {
+  it('are copied in one order, by currency, whatever order they were read in', () => {
+    // The database compares a statement's rates with its closing's as written (ADR 0032): one order for every writer.
+    const rates = [{ currency: 'USD' }, { currency: 'CHF' }, { currency: 'GBP' }];
+    expect(canonicalExchangeRates(rates).map((rate) => rate.currency)).toEqual(['CHF', 'GBP', 'USD']);
+    expect(canonicalExchangeRates([...rates].reverse())).toEqual(canonicalExchangeRates(rates));
+    expect(rates.map((rate) => rate.currency)).toEqual(['USD', 'CHF', 'GBP']);
   });
 });

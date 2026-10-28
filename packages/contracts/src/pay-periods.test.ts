@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   nextPayPeriod,
+  payPeriodAt,
   PayPeriodSchema,
   payPeriodLastDay,
   payPeriodOfDay,
@@ -52,5 +53,12 @@ describe('pay periods (ADR 0023)', () => {
   it('sorts like the periods', () => {
     const periods = ['2026-10-16', '2025-12-16', '2026-01-01', '2026-10-01'].map(period);
     expect([...periods].sort()).toEqual(['2025-12-16', '2026-01-01', '2026-10-01', '2026-10-16']);
+  });
+
+  it('reads the period of an instant in the agency’s zone, not in UTC', () => {
+    // 15 March, 23:30 in UTC is 16 March, 00:30 in Paris: the second fortnight there.
+    expect(payPeriodAt(new Date('2026-03-15T23:30:00Z'), 'Europe/Paris')).toBe('2026-03-16');
+    expect(payPeriodAt(new Date('2026-03-15T23:30:00Z'), 'UTC')).toBe('2026-03-01');
+    expect(payPeriodAt(new Date('2026-12-31T23:30:00Z'), 'Europe/Paris')).toBe('2027-01-01');
   });
 });

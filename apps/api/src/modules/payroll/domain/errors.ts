@@ -10,3 +10,12 @@ export class MissingExchangeRate extends DomainError {
     });
   }
 }
+
+/** A member to pay without a commission rate in force on the period's last day: pay never guesses a rate (EQ-01). */
+export class CommissionRateMissing extends DomainError {
+  constructor(memberId: string) {
+    super('commission_rate_missing_conflict', 'Aucun taux de commission en vigueur pour ce membre', {
+      details: { memberId },
+    });
+  }
+}

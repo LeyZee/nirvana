@@ -46,6 +46,9 @@ const CRON_JOBS: readonly CronJob[] = [
   // A swap proposal lapses once one of its shifts started, was cancelled or changed hands or hours (ADR 0031). Each
   // acceptance and revert enqueues it too; the quarter hour catches a shift that started or was changed by hand.
   { task: 'scheduling.lapse_swaps', match: '*/15 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
+  // Pay's drafts of every open period, computed again each hour (EQ-04): what a report, a rate or a change of period
+  // brought, should its own job have been missed. A run that finds nothing new writes nothing.
+  { task: 'payroll.recalculate_open', match: '23 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
 ];
 
 export function parsedCronJobs(jobs: readonly CronJob[] = CRON_JOBS): ParsedCronItem[] {

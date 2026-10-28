@@ -32,9 +32,11 @@ import { CalendarDaySchema } from './team-members';
  * sets the bonus tiers, the collective goals and the payout minimum. A member (scope `self`) reads their own statements,
  * bonuses, penalties and adjustments, and the tiers and goals every member works towards.
  *
- * Periods close in order, member by member: a member's period is closed once its statement is validated, and so is
- * every period before it. Whatever comes for a closed period (a late report, a correction of a paid statement) lands on
- * the member's first open period, the one after the last validated, with the period it came from.
+ * A period closes for the whole team at the first validation of one of its statements (ADR 0032): the reports it
+ * counts, its exchange rates and the team's net are frozen then, for every statement of the period. Periods close in
+ * order. A report validated after its period's closing counts on the team's first open period, with the period it
+ * came from. A member's period is closed once the member's statement of it, or of a later period, is validated:
+ * bonuses, penalties and adjustments for a closed period land on the member's first open period.
  */
 
 /** The engine that computes statements, copied into each one (`nirvana-1` for the first). */
@@ -103,6 +105,14 @@ export const ExchangeRateSchema = z.object({
   fetchedAt: z.iso.datetime(),
 });
 export type ExchangeRate = z.infer<typeof ExchangeRateSchema>;
+
+/**
+ * The rates a statement copies, in their one order: by currency. The database compares a statement's rates with its
+ * period's closing as written (ADR 0032), so that every writer goes through this function.
+ */
+export function canonicalExchangeRates<R extends { readonly currency: string }>(rates: readonly R[]): R[] {
+  return [...rates].sort((a, b) => (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0));
+}
 
 /** `GET /v1/payroll/exchange-rates`: the latest rate of each currency, `null` before the first one is read. */
 export const ExchangeRatesSchema = z.object({ usd: ExchangeRateSchema.nullable() });
@@ -363,7 +373,7 @@ export const CarryOverSchema = z.object({
 });
 export type CarryOver = z.infer<typeof CarryOverSchema>;
 
-/** A report a statement counts although it was made for an earlier period, closed for the member when it came. */
+/** A report a statement counts although it was made for an earlier period, closed for the team when it came. */
 export const LateReportSchema = z.object({
   shiftReportId: ShiftReportIdSchema,
   period: PayPeriodSchema,
@@ -395,8 +405,9 @@ export type CommissionStatementLine = z.infer<typeof CommissionStatementLineSche
 
 /**
  * The rules a statement used, copied into it: the member's rate and team share in force on the period's last day,
- * the tiers, the goal, the minimum, the rates read, and whether it is the member's final statement (EQ-14: no
- * minimum, everything paid).
+ * the tiers, the goal, the minimum, the rates (for each currency, the latest read on the period's last day or before;
+ * once the period is closed, its closing's), and whether it is the member's final statement (EQ-14: no minimum,
+ * everything paid).
  */
 export const CommissionStatementRulesSchema = z.object({
   commissionRateBps: BasisPointsSchema,
@@ -413,9 +424,12 @@ export type CommissionStatementRules = z.infer<typeof CommissionStatementRulesSc
 
 /**
  * A member's statement for a period. `revision` grows by one each time a recalculation changes it; a validation names
- * the revision it shows, and the server computes it again under the lock (member, period) shared with the reports:
- * another revision, or other inputs (`inputsHash`, which covers the period's team net, collective tier and a
- * manager's base too), answer `commission_statement_changed_conflict`, never a statement the reader did not see.
+ * the revision it shows, and the server computes it again under its locks, on the period's closing: another revision,
+ * or other inputs (`inputsHash`, which covers the reports counted, the rates, the period's team net, collective tier
+ * and a manager's base too), answer `commission_statement_changed_conflict`, never a statement the reader did not see.
+ *
+ * `team` is `null` for a member reading their own statement when the period has no collective goal: the team's net is
+ * the agency's figure, shown to a chatter only to follow a goal.
  *
  * `teamShare` is a manager's share of the others' net. `penaltiesRequestedMinor` is what the penalties asked for,
  * `penaltiesMinor` what the cap let through. `totalMinor` = commission + team share + bonuses − penalties +
@@ -451,12 +465,14 @@ export const CommissionStatementSchema = z.object({
   carryOverOutMinor: MinorSchema,
   payableMinor: z.number().int().min(0),
   /** The period's team, as the engine saw it: its net, and the collective goal as reached. */
-  team: z.object({
-    netMinor: MinorSchema,
-    collective: z
-      .object({ reachedBps: z.number().int().min(0), tier: CollectiveTierSchema.nullable() })
-      .nullable(),
-  }),
+  team: z
+    .object({
+      netMinor: MinorSchema,
+      collective: z
+        .object({ reachedBps: z.number().int().min(0), tier: CollectiveTierSchema.nullable() })
+        .nullable(),
+    })
+    .nullable(),
   rules: CommissionStatementRulesSchema,
   /** Whether the reader may validate it now (`mayValidateStatement`): never one's own. */
   canValidate: z.boolean(),
@@ -469,14 +485,28 @@ export const CommissionStatementSchema = z.object({
 export type CommissionStatement = z.infer<typeof CommissionStatementSchema>;
 
 /**
+ * A period closed for the team (ADR 0032): by whom and when, and the rates frozen for it. Its team net and collective
+ * goal as reached are those of each of its statements (`CommissionStatement.team`).
+ */
+export const PayPeriodClosingSchema = z.object({
+  period: PayPeriodSchema,
+  exchangeRates: z.array(ExchangeRateSchema),
+  closedBy: UserIdSchema,
+  closedAt: z.iso.datetime(),
+});
+export type PayPeriodClosing = z.infer<typeof PayPeriodClosingSchema>;
+
+/**
  * `GET /v1/payroll/periods/:period`: the period's statements (every member's for the agency, one's own for a member),
  * with what made them. `window` is `null` while pay has not written the period; `ended` says whether it can be
- * validated (a period validates once it has ended in the agency's zone).
+ * validated (a period validates once it has ended in the agency's zone); `closing` is `null` until its first
+ * validation closes it for the team.
  */
 export const PayrollPeriodSchema = z.object({
   period: PayPeriodSchema,
   window: PayPeriodWindowSchema.nullable(),
   ended: z.boolean(),
+  closing: PayPeriodClosingSchema.nullable(),
   statements: z.array(CommissionStatementSchema),
   bonusTiers: BonusTierSetSchema.nullable(),
   collectiveGoal: CollectiveGoalSchema.nullable(),
@@ -487,8 +517,9 @@ export type PayrollPeriod = z.infer<typeof PayrollPeriodSchema>;
 /**
  * `POST /v1/payroll/statements/:id/validate` (owner, active manager, never one's own) → 200 `CommissionStatementSchema`.
  * The period has ended, and the member's earlier statements are validated (`commission_statement_order_conflict`
- * otherwise, with `details.statementId`). The validation copies the rules and the rates of the day, writes the
- * carry-over, and freezes the statement: the database refuses any later change but `validated` → `paid`.
+ * otherwise, with `details.statementId`). The first validation of a period closes it for the team (ADR 0032); the
+ * statement is computed on the closing, the carry-over is written, and the statement is frozen: the database refuses
+ * any later change but `validated` → `paid`.
  */
 export const ValidateCommissionStatementBodySchema = z.object({ revision: z.number().int().min(1) });
 export type ValidateCommissionStatementBody = z.infer<typeof ValidateCommissionStatementBodySchema>;
@@ -517,6 +548,7 @@ export function mayValidateStatement(
  * `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`,
  * `collective_goal_conflict` 409, the same `id` with other values ;
  * `exchange_rate_missing_conflict` 409, a currency without a rate read ;
+ * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
  * `payroll_own_forbidden` 403, one's own statement, bonus, penalty or adjustment ;
  * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing, or a manager doing what only
  * the owner does.
@@ -538,6 +570,7 @@ export const PAYROLL_ERROR_CODES = [
   'bonus_tier_set_conflict',
   'collective_goal_conflict',
   'exchange_rate_missing_conflict',
+  'commission_rate_missing_conflict',
   'payroll_own_forbidden',
   'payroll_forbidden',
 ] as const;
