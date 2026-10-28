@@ -486,6 +486,12 @@ describe('GET /v1/dashboard', () => {
     // Set a minute ago: the first read may still come.
     await account({ sessionUpdatedAt: new Date(Date.now() - 60_000) });
     expect(await reveal()).toMatchObject({ connected: true, late: false });
+    // Captured again a minute ago, last read three hours ago: the new session waits for its first poll.
+    await account({
+      lastPollAt: new Date(Date.now() - 3 * 3_600_000),
+      sessionUpdatedAt: new Date(Date.now() - 60_000),
+    });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
     await account({ lastPollAt: new Date() });
   });
 });

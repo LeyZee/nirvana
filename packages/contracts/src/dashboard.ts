@@ -73,7 +73,7 @@ export type DashboardTodo = z.infer<typeof DashboardTodoSchema>;
 export const DashboardFanSchema = z.object({
   id: FanIdSchema,
   name: z.string().min(1),
-  /** His latest conversation with her: « Ouvrir dans Suivi » opens it. */
+  /** The conversation of his latest sale of the period: « Ouvrir dans Suivi » opens it. */
   conversationId: ConversationIdSchema,
   firstSeenAt: at,
   /** Paid over the period, and the part sold by the agent. */

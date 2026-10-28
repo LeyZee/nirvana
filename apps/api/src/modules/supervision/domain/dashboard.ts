@@ -82,19 +82,21 @@ const DISPATCH_SECONDS = 60;
 const LATE_AFTER_POLLS = 3;
 
 /**
- * Whether Reveal is read late (recette 28/10, G8): the session holds, but its last read, or the session itself when
- * nothing was ever read, is older than three of the account's polls, each one counted at its longest. A worker stopped
- * or polls failing then show, instead of a green « Connectée », the first day included.
+ * Whether Reveal is read late (recette 28/10, G8): the session holds, but the latest of its last read and of the
+ * session being set is older than three of the account's polls, each one counted at its longest. A worker stopped or
+ * polls failing then show, instead of a green « Connectée », the first day included; a session captured again waits
+ * for its first poll before it can be late.
  */
 export function revealLate(
   read: { readonly lastReadAt: Date | null; readonly sessionSince: Date | null },
   now: Date,
   pollEverySeconds: number,
 ): boolean {
-  const from = read.lastReadAt ?? read.sessionSince;
-  if (from === null) return false;
+  const dates = [read.lastReadAt, read.sessionSince].filter((d): d is Date => d !== null);
+  if (dates.length === 0) return false;
+  const from = Math.max(...dates.map((d) => d.getTime()));
   const allowedMs = LATE_AFTER_POLLS * (pollEverySeconds + DISPATCH_SECONDS) * 1_000;
-  return now.getTime() - from.getTime() > allowedMs;
+  return now.getTime() - from > allowedMs;
 }
 
 /** Safety first: a possible minor, consent or distress before everything else. */

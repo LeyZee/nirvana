@@ -169,6 +169,13 @@ describe('revealLate (recette 28/10, G8)', () => {
     expect(revealLate({ lastReadAt: minutesAgo(1), sessionSince: minutesAgo(60) }, NOW, 80)).toBe(false);
   });
 
+  it('waits for the first poll after a session captured again, whatever the old read says', () => {
+    // Read last three hours ago, session set again a minute ago: not late yet.
+    expect(revealLate({ lastReadAt: minutesAgo(180), sessionSince: minutesAgo(1) }, NOW, 80)).toBe(false);
+    // Still no read an hour after the new session: late.
+    expect(revealLate({ lastReadAt: minutesAgo(240), sessionSince: minutesAgo(60) }, NOW, 80)).toBe(true);
+  });
+
   it('is never late with no session date and no read', () => {
     expect(revealLate({ lastReadAt: null, sessionSince: null }, NOW, 80)).toBe(false);
   });
