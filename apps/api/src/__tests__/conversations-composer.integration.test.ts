@@ -208,6 +208,89 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     });
   });
 
+  it('journals her alerts: the one that paused on the handoff, each other as its own notice (P4-01)', async () => {
+    const id = await fanWrites('c-alerts', 'Tu me fais une vidéo perso ?');
+    const word = {
+      alert: { kind: 'system', code: 'keyword' },
+      matchedBy: 'keyword',
+      keyword: 'Vidéo perso',
+    } as const;
+    const service = { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'model' } as const;
+    composer.next = {
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'keyword',
+      trigger: word,
+      detail: ['alert_keyword'],
+      costUsd: 0,
+      alerts: [{ trigger: service, notify: true }],
+    };
+    await respond(id);
+    expect(await state(id)).toBe('human');
+    expect((await events(id)).slice(-2)).toEqual([
+      { type: 'alert_triggered', payload: { conversationId: id, trigger: service, notify: true } },
+      {
+        type: 'handoff_requested',
+        payload: {
+          conversationId: id,
+          cause: 'keyword',
+          detail: ['handoff', 'alert_keyword'],
+          trigger: word,
+        },
+      },
+    ]);
+  });
+
+  it('journals an alert that only lets a human know beside her draft', async () => {
+    const id = await fanWrites('c-notice', 'Tu fais des appels ?');
+    const service = { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'model' } as const;
+    composer.next = {
+      kind: 'draft',
+      bubbles: ['On en reparle 😏'],
+      softViolations: [],
+      costUsd: 0,
+      alerts: [{ trigger: service, notify: false }],
+    };
+    await respond(id);
+    expect(await drafts(id)).toHaveLength(1);
+    expect((await events(id)).map((event) => event.type).slice(-2)).toEqual([
+      'alert_triggered',
+      'draft_created',
+    ]);
+  });
+
+  it('sounds each alert once until she answers, even when he writes again (P4-01)', async () => {
+    const id = await fanWrites('c-twice', 'Tu fais des appels ?');
+    const service = { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'model' } as const;
+    const doubt = { alert: { kind: 'system', code: 'identity_doubt' }, matchedBy: 'model' } as const;
+    composer.next = {
+      kind: 'held',
+      reason: 'no_reply',
+      detail: [],
+      costUsd: 0,
+      alerts: [{ trigger: service, notify: true }],
+    };
+    await respond(id);
+
+    await fanWrites('c-twice', 'T’es une vraie au moins ?');
+    composer.next = {
+      kind: 'draft',
+      bubbles: ['Bien sûr 😏'],
+      softViolations: [],
+      costUsd: 0,
+      alerts: [
+        { trigger: service, notify: true },
+        { trigger: doubt, notify: true },
+      ],
+    };
+    await respond(id);
+    const sounded = (await events(id)).filter((event) => event.type === 'alert_triggered');
+    expect(sounded.map((event) => event.payload)).toEqual([
+      { conversationId: id, trigger: service, notify: true },
+      { conversationId: id, trigger: doubt, notify: true },
+    ]);
+  });
+
   it('writes nothing more to the fan while a human is awaited, whatever the fan sends', async () => {
     const id = await fanWrites('c-awaited', 'Je vais pas bien');
     composer.next = { kind: 'held', reason: 'handoff', cause: 'distress', detail: ['distress'], costUsd: 0 };

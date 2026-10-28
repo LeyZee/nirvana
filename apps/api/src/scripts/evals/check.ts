@@ -6,7 +6,10 @@ import type { Scenario } from './scenario';
 /** What the agent did with a scenario, on the same path as a real fan. */
 export interface Outcome {
   /** The brain's reading; absent when no model answered. */
-  readonly brief?: Pick<Brief, 'intent' | 'risks' | 'action' | 'desireSignals'>;
+  readonly brief?: Pick<Brief, 'intent' | 'risks' | 'action' | 'desireSignals'> & {
+    /** Her alerts the brain saw, by the scenario's names (P4-01). */
+    readonly alertsSeen?: readonly string[];
+  };
   /** A human takes over (the brain's risks, a media flag): nothing is written. */
   readonly handoff: boolean;
   /** The brain suggested an offer and `offerDecision` allowed it. */
@@ -39,6 +42,13 @@ export function checkScenario(scenario: Scenario, outcome: Outcome): string[] {
   const read = outcome.brief.desireSignals ?? [];
   for (const signal of brief?.desire_signals_contain ?? []) {
     if (!read.includes(signal)) failures.push(`signal de désir ${signal} attendu, lu : [${read.join(', ')}]`);
+  }
+  if (brief?.alerts_seen !== undefined) {
+    const seen = [...(outcome.brief.alertsSeen ?? [])].sort();
+    const expected = [...brief.alerts_seen].sort();
+    if (seen.join(',') !== expected.join(',')) {
+      failures.push(`alertes vues [${seen.join(', ')}], attendues [${expected.join(', ')}]`);
+    }
   }
   if (decision?.handoff !== undefined && decision.handoff !== outcome.handoff) {
     failures.push(decision.handoff ? 'passage à un humain attendu' : 'passage à un humain à tort');

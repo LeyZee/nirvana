@@ -8,7 +8,7 @@ import type { LlmCallLog } from './call-log';
 import { classify, createCallRunner } from './call-runner';
 import { MODELS, TRANSCRIPTION_MODEL } from './catalog';
 import type { ProviderId } from './config';
-import { describeBrief, notesBlock, toMessages } from './conversation-messages';
+import { alertsBlock, describeBrief, notesBlock, toMessages } from './conversation-messages';
 import type { LlmGateway, LlmGatewayDeps, VideoKeyframes } from './gateway-types';
 import { computeHealth } from './health';
 import { loadPrompt, renderPrompt } from './prompts';
@@ -117,6 +117,7 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
       const system = renderPrompt(prompts.brain, {
         creator_name: input.creatorName,
         persona_sheet: input.personaSheet,
+        alerts: alertsBlock(input.alerts ?? []),
         fan_notes: notesBlock(input.fanNotes),
         situation: input.situation ?? 'Pas d’information sur le moment.',
         canary,

@@ -11,6 +11,7 @@ import { parseArgs } from 'node:util';
 
 import { desireBandOf } from '@nirvana/contracts';
 import {
+  brainAlertId,
   createInMemoryCallLog,
   createLlmGateway,
   createModelResolver,
@@ -97,6 +98,12 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
     ...scenario.history,
     ...inbound.map((text): ConversationTurn => ({ from: 'fan', text })),
   ];
+  // Her alerts as the composer gives them: short ids, in her order (P4-01).
+  const alerts = scenario.alerts.map(({ name, phrase }, index) => ({
+    name,
+    id: brainAlertId(index),
+    phrase,
+  }));
   const composed = await composeTurn(
     gateway,
     {
@@ -150,6 +157,7 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
         counted: false,
       },
       skipVoice: (brief) => brief === undefined || holdDecision(brief).kind !== 'answer',
+      ...(alerts.length > 0 && { alerts: alerts.map(({ id, phrase }) => ({ id, phrase })) }),
     },
   );
   const { brief } = composed;
@@ -165,6 +173,7 @@ async function run(scenario: Scenario): Promise<{ outcome: Outcome; scores: Reco
         risks: brief.risks,
         action: brief.action,
         ...(brief.desireSignals !== undefined && { desireSignals: brief.desireSignals }),
+        alertsSeen: alerts.filter((a) => brief.alertsSeen?.includes(a.id) === true).map((a) => a.name),
       },
     }),
     handoff,

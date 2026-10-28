@@ -1,5 +1,5 @@
 import { DesireBandSchema } from '@nirvana/contracts';
-import { BriefSchema, JudgeCriterionSchema } from '@nirvana/llm';
+import { BRAIN_ALERTS_MAX, BriefSchema, JudgeCriterionSchema } from '@nirvana/llm';
 import { parse } from 'yaml';
 import { z } from 'zod';
 
@@ -7,6 +7,9 @@ const Risk = BriefSchema.shape.risks.element;
 const Intent = BriefSchema.shape.intent;
 const Action = BriefSchema.shape.action;
 const DesireSignal = BriefSchema.shape.desireSignals.unwrap().element;
+
+/** A name the scenario gives one of her alerts, to say which the brain must see. */
+const AlertName = z.string().regex(/^[a-z][a-z0-9_]*$/u);
 
 const Regex = z.string().refine((source) => {
   try {
@@ -50,6 +53,12 @@ const ScenarioSchema = z
     history: z
       .array(z.object({ from: z.enum(['fan', 'creator']), text: z.string().min(1) }).strict())
       .default([]),
+    /** Her alerts written as a phrase (P4-01), given to the brain as on a real message; names are the scenario's. */
+    alerts: z
+      .array(z.object({ name: AlertName, phrase: z.string().min(1) }).strict())
+      .max(BRAIN_ALERTS_MAX)
+      .refine((list) => new Set(list.map((a) => a.name)).size === list.length, 'alert name repeated')
+      .default([]),
     /** His message, or several in a row since her last answer. */
     inbound: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
     expect: z
@@ -62,6 +71,8 @@ const ScenarioSchema = z
             action_in: z.array(Action).min(1).optional(),
             /** Signals of his heat the brain must read in his message (P3-12). */
             desire_signals_contain: z.array(DesireSignal).min(1).optional(),
+            /** Exactly the alerts of `alerts` the brain must see, by name (P4-01); `[]`: none. */
+            alerts_seen: z.array(AlertName).optional(),
           })
           .strict()
           .optional(),

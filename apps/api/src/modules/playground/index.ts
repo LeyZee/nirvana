@@ -7,6 +7,7 @@ import { DEFAULT_LLM_CONFIG, loadPrompt, type LlmGateway } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import {
+  createAlertTester,
   createJsonlCalibrationStore,
   readPersonaFile,
   type CalibrationRecord,
@@ -27,7 +28,7 @@ export { createPlaygroundSession, type PlaygroundFollowUp, type PlaygroundTurn }
 
 export interface PlaygroundModule {
   readonly name: 'playground';
-  /** `/v1/playground`, behind the guard given here. */
+  /** `/v1/playground`, and `POST /v1/alerts/test` read with the same persona (P4-01), behind the guard given here. */
   readonly routes: (options: PlaygroundRoutesOptions) => FastifyPluginAsyncZod;
 }
 
@@ -67,7 +68,11 @@ export function createPlaygroundModule(deps: PlaygroundDeps): PlaygroundModule {
       ...(deps.now !== undefined && { now: deps.now }),
     }),
   );
-  return { name: 'playground', routes: (options) => createPlaygroundRoutes(service, options) };
+  const alertTester = createAlertTester({ gateway, persona: deps.persona });
+  return {
+    name: 'playground',
+    routes: (options) => createPlaygroundRoutes(service, alertTester, options),
+  };
 }
 
 export interface PlaygroundStartOptions extends PlaygroundGatewayDeps {

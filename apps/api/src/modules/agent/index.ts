@@ -59,6 +59,8 @@ export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 export { asSent, composeTurn, guardContextOf, withExamples, type OfferInput } from './infra/compose';
 export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
+/** @public Réglages › Alertes tries an alert on an example message (`POST /v1/alerts/test`, P4-01). */
+export { createAlertTester, type AlertTester } from './infra/alert-test';
 export type { AgentDraftComposer } from './infra/draft-composer';
 /** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
 export type { MediaSight } from './infra/draft-composer';
@@ -86,6 +88,10 @@ export interface DraftComposerStartOptions {
   readonly onDroppedNotes?: DraftComposerDeps['onDroppedNotes'];
   /** His declared age could not be saved: he stays unconfirmed (the safe side), the log says so. */
   readonly onLimitsNotSaved?: DraftComposerDeps['onLimitsNotSaved'];
+  /** Her alerts that are on (`alerts` module, P4-01); without it, only her persona's words are watched. */
+  readonly alertsOf?: DraftComposerDeps['alertsOf'];
+  /** Whether a chatter is on shift on her accounts (`scheduling`): a doubt on who she is goes to them (P4-01). */
+  readonly chatterOnShift?: DraftComposerDeps['chatterOnShift'];
 }
 
 /** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
@@ -111,6 +117,8 @@ export async function startDraftComposer(options: DraftComposerStartOptions): Pr
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),
     ...(options.onLimitsNotSaved !== undefined && { onLimitsNotSaved: options.onLimitsNotSaved }),
+    ...(options.alertsOf !== undefined && { alertsOf: options.alertsOf }),
+    ...(options.chatterOnShift !== undefined && { chatterOnShift: options.chatterOnShift }),
   });
 }
 
