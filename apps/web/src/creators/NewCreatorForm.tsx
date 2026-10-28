@@ -1,6 +1,6 @@
-import type { CreatorSummary } from '@nirvana/contracts';
+import { CreatorIdSchema, newId, type CreatorSummary } from '@nirvana/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useState, type SyntheticEvent, type JSX } from 'react';
+import { useId, useRef, useState, type SyntheticEvent, type JSX } from 'react';
 
 import { createCreator } from './api';
 import { Field } from './persona/fields';
@@ -27,14 +27,21 @@ export function NewCreatorForm({
   const [name, setName] = useState('');
   const [zone, setZone] = useState(DEFAULT_ZONE);
   const [busy, setBusy] = useState(false);
+  // A second click lands before the re-render that disables the button: the ref stops it, the id makes it harmless.
+  const sending = useRef(false);
+  const [creatorId] = useState(() => newId(CreatorIdSchema));
   const [problem, setProblem] = useState<string | null>(null);
 
   const submit = async (event: SyntheticEvent): Promise<void> => {
     event.preventDefault();
-    if (name.trim() === '' || busy) return;
+    if (name.trim() === '' || sending.current) return;
+    sending.current = true;
     setBusy(true);
     setProblem(null);
-    const result = await createCreator(name.trim(), zone.trim()).catch(() => ({ kind: 'failed' as const }));
+    const result = await createCreator(creatorId, name.trim(), zone.trim()).catch(() => ({
+      kind: 'failed' as const,
+    }));
+    sending.current = false;
     setBusy(false);
     if (result.kind === 'created') {
       await client.invalidateQueries({ queryKey: ['creators'] });

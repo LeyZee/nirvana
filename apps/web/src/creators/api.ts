@@ -1,4 +1,9 @@
-import { CreatorListSchema, CreatorSummarySchema, type CreatorSummary } from '@nirvana/contracts';
+import {
+  CreatorListSchema,
+  CreatorSummarySchema,
+  type CreatorId,
+  type CreatorSummary,
+} from '@nirvana/contracts';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 /** `GET /v1/creators`: the creators the signed-in user may open, parsed with the contract. */
@@ -19,12 +24,17 @@ export type CreateResult =
   | { readonly kind: 'failed' };
 
 /** `POST /v1/creators` (owner only): a new creator, her persona still to write. */
-export async function createCreator(displayName: string, timezone: string): Promise<CreateResult> {
+/** `id` is chosen once per form: sent twice (double click, retry), the server answers the creator it already made. */
+export async function createCreator(
+  id: CreatorId,
+  displayName: string,
+  timezone: string,
+): Promise<CreateResult> {
   const response = await fetch('/v1/creators', {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ displayName, timezone }),
+    body: JSON.stringify({ id, displayName, timezone }),
   });
   if (response.status === 201) {
     return { kind: 'created', creator: CreatorSummarySchema.parse(await response.json()) };

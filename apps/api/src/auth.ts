@@ -196,16 +196,14 @@ async function userOf(
   return { user: { ...user, creatorIds: [], routedCreatorIds: user.creatorIds }, membership: member };
 }
 
-const TokenCarrierSchema = z.looseObject({ token: z.unknown() });
-
 /**
- * Better Auth also returns the session token in the JSON body of sign-in (every `token` key is dropped); the cookie is all the
- * dashboard needs, and a token readable by the page's JavaScript is what that cookie flag exists to prevent.
+ * Better Auth also returns the session token in the JSON body of sign-in (every `token` key is dropped, at any depth);
+ * the cookie is all the dashboard needs, and a token readable by the page's JavaScript is what that cookie flag exists to
+ * prevent.
  */
 function withoutToken(json: string): string {
-  const parsed = TokenCarrierSchema.safeParse(JSON.parse(json));
-  if (!parsed.success) return json;
-  return JSON.stringify(parsed.data, (key, value: unknown) => (key === 'token' ? undefined : value));
+  if (json.trim() === '') return json;
+  return JSON.stringify(JSON.parse(json), (key, value: unknown) => (key === 'token' ? undefined : value));
 }
 
 export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
@@ -326,7 +324,9 @@ export function createAuthRoutes(
       },
       handler: forward,
     });
-    app.route({ method: ['GET', 'POST'], url: '/auth/*', config: perIp, handler: forward });
+    // Only what the dashboard calls: the rest of Better Auth (get-session and list-sessions with their tokens,
+    // update-user renaming an account) stays unreachable and answers 404 like any unknown route.
+    app.post('/auth/sign-out', { config: perIp }, forward);
 
     app.get(
       '/me',

@@ -184,6 +184,14 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     });
   });
 
+  // A route guard (`requireRole`, the sign-in limiter) is declared as `preHandler` but runs at `preValidation`: before the
+  // schema, so an anonymous request gets 401 rather than a 400 that lists the fields the route expects.
+  server.addHook('onRoute', (route) => {
+    if (route.preHandler === undefined) return;
+    route.preValidation = [route.preValidation ?? [], route.preHandler].flat();
+    delete route.preHandler;
+  });
+
   await server.register(
     async (v1) => {
       for (const routes of deps.routes) await v1.register(routes);

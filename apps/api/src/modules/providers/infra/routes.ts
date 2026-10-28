@@ -44,7 +44,7 @@ export function createProvidersRoutes(
   options: ProvidersRoutesOptions,
 ): FastifyPluginAsyncZod {
   return (app) => {
-    app.addHook('preHandler', options.guard);
+    app.addHook('preValidation', options.guard);
 
     app.get('/settings/providers', { schema: { response: { 200: ProviderOverviewSchema } } }, async () => {
       const services = await providers.list();

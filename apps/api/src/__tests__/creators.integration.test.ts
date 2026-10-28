@@ -1,5 +1,7 @@
 import {
   AgentHoursViewSchema,
+  CreatorIdSchema,
+  newId,
   DEFAULT_AGENT_HOURS,
   nextReplyOpening,
   reopenJobKey,
@@ -94,6 +96,20 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     expect(operator.json()).toEqual({
       creators: [{ id: anna.id, displayName: 'Anna', timezone: 'Europe/Paris' }],
     });
+  });
+
+  it('creates her once when the same form is sent twice at the same time (recette 28/10)', async () => {
+    const id = newId(CreatorIdSchema);
+    const [first, second] = await Promise.all([
+      app.modules.persona.creators.create({ id, displayName: 'Inès' }),
+      app.modules.persona.creators.create({ id, displayName: 'Inès' }),
+    ]);
+    expect(first).toEqual(second);
+    expect(first.id).toBe(id);
+    const rows = await test.admin.db.select().from(schema.creators).where(eq(schema.creators.id, id));
+    expect(rows).toHaveLength(1);
+    const audit = await test.admin.db.select().from(schema.auditLog).where(eq(schema.auditLog.entityId, id));
+    expect(audit).toHaveLength(1);
   });
 
   it('lets the owner alone read and set her hours (P3-14), with a recent sign-in, back to the defaults on null', async () => {

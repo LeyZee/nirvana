@@ -52,6 +52,40 @@ describe('dashboard authentication (P0-07a)', () => {
     expect(response.json<{ error: { code: string } }>().error.code).toBe('session_unauthenticated');
   });
 
+  it('answers 401 before reading the body: an anonymous request never learns the fields a route expects', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v1/creators',
+      payload: { nope: true },
+      headers: { origin: DASHBOARD_ORIGIN },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('session_unauthenticated');
+    const query = await server.inject({ method: 'GET', url: '/v1/conversations' });
+    expect(query.statusCode).toBe(401);
+  });
+
+  it('serves only sign-in and sign-out of Better Auth: no session token to read, no account to rename', async () => {
+    const cookie = await signIn(server, OWNER.email, OWNER.password);
+    const headers = { cookie, origin: DASHBOARD_ORIGIN };
+    for (const [method, url] of [
+      ['GET', '/v1/auth/get-session'],
+      ['GET', '/v1/auth/list-sessions'],
+      ['POST', '/v1/auth/update-user'],
+    ] as const) {
+      const response = await server.inject({
+        method,
+        url,
+        headers,
+        ...(method === 'POST' && { payload: { name: 'X' } }),
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.body).not.toContain('token');
+    }
+    const [row] = await test.admin.db.select().from(schema.user).where(eq(schema.user.email, OWNER.email));
+    expect(row?.name).toBe(OWNER.name);
+  });
+
   it('signs in, tells who is signed in, and records the login', async () => {
     const cookie = await signIn(server, OWNER.email, OWNER.password);
     const me = await server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } });

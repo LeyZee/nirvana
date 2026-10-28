@@ -466,10 +466,17 @@ export const PersonaSchema = z
     sample_replies: z.array(SampleReplySchema).max(SAMPLE_REPLIES_MAX).optional(),
   })
   .superRefine(noContradiction)
-  .refine((p) => ageOn(p.details.date_of_birth, p.meta.created_at) >= MIN_CREATOR_AGE, {
-    message: `La créatrice doit avoir au moins ${String(MIN_CREATOR_AGE)} ans à la date de la version`,
-    path: ['details', 'date_of_birth'],
-  });
+  // Runs even when a date failed its own check (an emptied field): that field already says so, `ageOn` would throw.
+  .refine(
+    (p) =>
+      !ISO_DATE.test(p.details.date_of_birth) ||
+      !ISO_DATE.test(p.meta.created_at) ||
+      ageOn(p.details.date_of_birth, p.meta.created_at) >= MIN_CREATOR_AGE,
+    {
+      message: `La créatrice doit avoir au moins ${String(MIN_CREATOR_AGE)} ans à la date de la version`,
+      path: ['details', 'date_of_birth'],
+    },
+  );
 
 export type Persona = z.infer<typeof PersonaSchema>;
 export type PersonaDetails = z.infer<typeof PersonaDetailsSchema>;

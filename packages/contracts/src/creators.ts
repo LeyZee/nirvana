@@ -17,6 +17,8 @@ export type CreatorList = z.infer<typeof CreatorListSchema>;
 
 /** `pnpm creator:create`: the creator's name as fans see it, and the zone her day and night follow. */
 export const NewCreatorSchema = z.object({
+  /** Chosen by the page once per form: a second click, or a replay, finds the creator the first one made. */
+  id: CreatorIdSchema.optional(),
   displayName: z.string().trim().min(1).max(80),
   timezone: TimezoneSchema.default('Europe/Paris'),
 });

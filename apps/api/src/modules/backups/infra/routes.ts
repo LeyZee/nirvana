@@ -35,7 +35,7 @@ export function createBackupsRoutes(
   options: BackupsRoutesOptions,
 ): FastifyPluginAsyncZod {
   return (app) => {
-    app.addHook('preHandler', options.guard);
+    app.addHook('preValidation', options.guard);
     app.get('/backups/status', { schema: { response: { 200: BackupStatusSchema } } }, () => api.status());
     app.post(
       '/backups/restore-tests',

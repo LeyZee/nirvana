@@ -634,6 +634,22 @@ describe('telegram module on Postgres', () => {
         payload: { version: 999, routes: [] },
       });
       expect(conflict.statusCode).toBe(409);
+      // Refusals in the common error body (recette 28/10): an invalid body was a 500 against the route's own schema.
+      const invalid = await server.inject({
+        method: 'PUT',
+        url: '/v1/settings/telegram/routes',
+        headers,
+        payload: { version: 1, routes: [{ creatorId: null, topic: 'x', chatId: 'y' }] },
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json()).toMatchObject({ error: { code: 'request_invalid' } });
+      const missing = await server.inject({
+        method: 'POST',
+        url: `/v1/settings/telegram/bots/${newId(z.uuid().brand<'TelegramBotId'>())}/listen`,
+        headers,
+      });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json()).toMatchObject({ error: { code: 'telegram_bot_not_found' } });
       const journal = await server.inject({
         method: 'GET',
         url: '/v1/settings/telegram/deliveries?topic=urgent',

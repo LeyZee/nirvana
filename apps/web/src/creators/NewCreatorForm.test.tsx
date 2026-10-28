@@ -33,12 +33,10 @@ describe('NewCreatorForm', () => {
     await waitFor(() => {
       expect(onCreated).toHaveBeenCalledWith(LEA);
     });
-    expect(fetch).toHaveBeenCalledWith(
-      '/v1/creators',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ displayName: 'Léa', timezone: 'Europe/Paris' }),
-      }),
+    expect(fetch).toHaveBeenCalledWith('/v1/creators', expect.objectContaining({ method: 'POST' }));
+    // The id the page chose for this form: a second send finds the same creator instead of a twin.
+    expect(JSON.stringify(fetch.mock.calls)).toMatch(
+      /\\"id\\":\\"[0-9a-f-]{36}\\",\\"displayName\\":\\"Léa\\",\\"timezone\\":\\"Europe\/Paris\\"/,
     );
   });
 

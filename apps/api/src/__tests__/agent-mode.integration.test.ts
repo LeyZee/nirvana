@@ -125,6 +125,12 @@ describe('PUT /v1/agent/mode', () => {
     expect(await creatorSwitches()).toEqual([]);
   });
 
+  it('answers 404 for a creator that does not exist, not a 500 from the foreign key', async () => {
+    const response = await send('PUT', '/v1/agent/mode', { creatorId: newId(CreatorIdSchema), mode: 'stop' });
+    expect(response.statusCode).toBe(404);
+    expect(ApiErrorSchema.parse(response.json()).error.code).toBe('creator_not_found');
+  });
+
   it('Arrêt sets her kill switch at once, with its event and its audit line', async () => {
     const response = await setMode('stop');
     expect(response.statusCode).toBe(200);

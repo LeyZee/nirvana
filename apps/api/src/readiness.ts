@@ -33,6 +33,12 @@ async function within<T>(promise: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+/**
+ * A given-up job of no creator (cron tick, scan) counts this long, then no more: the next tick has redone its work, and
+ * nothing ever deletes the row (recette 28/10). A creator's own given-up job counts until it is dealt with.
+ */
+const SYSTEM_DEAD_JOB_HOURS = 24;
+
 /** A job no worker task takes is stuck once it has waited this long: it never spends an attempt. */
 const ORPHAN_AFTER_MINUTES = 15;
 
@@ -62,7 +68,9 @@ export function countDeadJobs(
         sql`select count(*)::int as dead
             from graphile_worker._private_jobs job
             join graphile_worker._private_tasks task on task.id = job.task_id
-            where (job.attempts >= job.max_attempts
+            where ((job.attempts >= job.max_attempts
+                    and (job.payload->>'creatorId' is not null
+                         or job.updated_at > now() - make_interval(hours => ${SYSTEM_DEAD_JOB_HOURS})))
                 or (task.identifier not in (${handled}) and job.locked_at is null
                     and job.run_at < now() - make_interval(mins => ${ORPHAN_AFTER_MINUTES})))
               and (job.payload->>'creatorId' is null or job.payload->>'creatorId' = ${creatorId})`,
@@ -98,7 +106,10 @@ export async function checkReadiness(db: Database, adminDb: Database): Promise<R
     within(
       adminDb
         .execute<{ dead: number }>(
-          sql`select count(*)::int as dead from graphile_worker.jobs where attempts >= max_attempts`,
+          sql`select count(*)::int as dead from graphile_worker._private_jobs
+              where attempts >= max_attempts
+                and (payload->>'creatorId' is not null
+                     or updated_at > now() - make_interval(hours => ${SYSTEM_DEAD_JOB_HOURS}))`,
         )
         .then((result) => result.rows[0]?.dead ?? null),
       null,

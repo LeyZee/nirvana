@@ -74,6 +74,25 @@ describe('dashboard', () => {
     expect(dashboard.telegramCoverage).toEqual({ urgentReachable: false });
   });
 
+  it('names a fan without a pseudonym rather than failing the whole page (recette 28/10)', () => {
+    const dashboard = DashboardSchema.parse(
+      assemble({
+        fans: [{ ...FACTS.fans[0]!, name: '  ' }],
+        waiting: [
+          {
+            conversationId: CONVERSATION,
+            fanId: FAN,
+            fanName: '',
+            kind: 'awaiting_approval',
+            since: minutesAgo(5),
+          },
+        ],
+      }),
+    );
+    expect(dashboard.fans[0]?.name).toBe('Fan sans nom');
+    expect(dashboard.todos[0]?.title).toBe('Fan sans nom');
+  });
+
   it('passes a missing key and the stuck jobs through as read, unknown included', () => {
     const missing = DashboardSchema.parse(
       assemble({}, 'off', undefined, undefined, { voice: { ok: false, keyMissing: true }, deadJobs: 2 }),

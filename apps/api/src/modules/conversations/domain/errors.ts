@@ -23,6 +23,12 @@ export class ConversationNotFound extends DomainError {
   }
 }
 
+export class CreatorNotFound extends DomainError {
+  constructor() {
+    super('creator_not_found', 'Créatrice introuvable');
+  }
+}
+
 export class DraftNotFound extends DomainError {
   constructor() {
     super('draft_not_found', 'Brouillon introuvable');

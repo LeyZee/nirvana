@@ -40,7 +40,7 @@ export function createPlaygroundRoutes(
   options: PlaygroundRoutesOptions,
 ): FastifyPluginAsyncZod {
   return (app) => {
-    app.addHook('preHandler', options.guard);
+    app.addHook('preValidation', options.guard);
 
     const engineOf = (request: FastifyRequest): PlaygroundEngine => {
       // The guard has set the user; a route reached without one is a wiring error, not a user error.

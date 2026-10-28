@@ -60,6 +60,11 @@ const UNANSWERED_AFTER_MINUTES = 30;
  * and her opening, so that the messages of her night do not all fall in at once. The wait shown stays his own, from
  * his message, so that « À traiter » keeps them in the order they wrote. Always open (no setting), nothing changes.
  */
+/** A fan the platform gives no name (an empty pseudonym): the same words as Suivi, never an empty title. */
+function fanNameOf(name: string): string {
+  return name.trim() === '' ? 'Fan sans nom' : name;
+}
+
 export function unansweredSince(
   lastInboundAt: Date,
   now: Date,
@@ -85,7 +90,7 @@ export function todos(waiting: readonly WaitingConversation[], now: Date): Dashb
       id: `${w.kind}-${w.conversationId}`,
       tone: GRAVE.has(w.kind) ? 'bad' : 'warn',
       kind: w.kind,
-      title: w.fanName,
+      title: fanNameOf(w.fanName),
       why: WHY[w.kind],
       at: w.since.toISOString(),
       waitingMinutes: Math.max(0, Math.floor((now.getTime() - w.since.getTime()) / MINUTE_MS)),
@@ -200,7 +205,7 @@ export function assembleDashboard(input: {
     todos: todos(facts.waiting, window.now),
     fans: facts.fans.map((fan) => ({
       id: FanIdSchema.parse(fan.id),
-      name: fan.name,
+      name: fanNameOf(fan.name),
       firstSeenAt: fan.firstSeenAt.toISOString(),
       spent: euros(fan.spentMinor),
       byAgent: euros(fan.byAgentMinor),
