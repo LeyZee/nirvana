@@ -1,5 +1,5 @@
 # EQ-04 Moteur de paie : calcul pur, périodes, verrou
-Statut : in-progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026) : calcul pur, contrats, tables, clôture de la quinzaine (migration 0029), recalcul par job, lecture d'une quinzaine et validation qui clôture faits ; « payé », entrées sous verrous et taux à venir
+Statut : in-progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026) : calcul pur, contrats, tables, clôture de la quinzaine (migration 0029), recalcul par job, lecture d'une quinzaine, validation qui clôture, « payé » et saisies d'un membre sous verrous faits ; paliers, objectif, minimum de versement et taux à venir
 Phase : équipe (ADR 0023)
 Dépend de : EQ-01, EQ-03
 Branche : task/eq-04-payroll-engine
@@ -68,3 +68,10 @@ Calculer la paie de chaque membre par quinzaine avec **les règles d'Imperium, s
   - la paie possède le job `payroll.recalculate` : sa seule mise en file (`enqueuePayRecalculation`) est donnée au planning par le composition root, une clé et un nombre d'essais pour toutes les écritures (remarque de Bilan sur #272) ;
   - `team.pay.members` (renommé depuis `membersUnscoped`) se lit dans la transaction de l'appelant : le job sur la connexion admin, une validation sous `withMember`.
   - Reste : « payé » (propriétaire seul), les entrées sous les verrous avec le test « une prime contre une validation du même membre attend puis est refusée », et les taux de change par job. Le point d'accroche de la facture (EQ-06) viendra avec EQ-06, là où la validation passe le relevé à « validé ».
+- 2026-10-28 (fil Équipe) : **« payé » et les saisies d'un membre** (empilés sur la validation). `POST /v1/payroll/statements/:id/pay` (propriétaire seul), `POST /v1/payroll/bonuses`, `/penalties`, `/adjustments`, `/bonuses/:id/cancel`, `/penalties/:id/cancel`, chacune dans une transaction sous `withMember`. Choix :
+  - une saisie prend le verrou (membre, quinzaine) de sa quinzaine **et de chacune des suivantes jusqu'à la quinzaine en cours**, dans l'ordre : sinon la validation d'une quinzaine plus récente du membre, qui ne prend que son propre verrou, fermerait la quinzaine de la saisie pendant qu'elle s'écrit, et la prime serait perdue sans bruit. Tant qu'aucune quinzaine n'est clôturée, elle prend `payroll.close` d'abord, pour la même raison face à la première clôture. Précision écrite dans l'ADR 0035 (proposée), qui complète l'ADR 0032 acceptée ;
+  - une saisie pour un membre sans taux de commission en vigueur sur la quinzaine est refusée (`commission_rate_missing_conflict`) : son relevé ne se calculerait pas, et la quinzaine entière avec lui ;
+  - l'ajustement va là où le membre a son prochain relevé à valider (son plus ancien brouillon ouvert, sinon la première quinzaine non clôturée de l'équipe), jamais dans une vieille quinzaine où il n'avait rien, et corrige un relevé validé ou payé, jamais un brouillon ;
+  - l'annulation d'un malus part de la première quinzaine ouverte du membre (`penalty_cancel_conflict` quand toutes sont validées) ;
+  - un rejeu (même `id`, mêmes valeurs) rend 200 avec ce qui est écrit, sans rien réécrire.
+  - Reste : paliers, objectif collectif et minimum de versement (sous `payroll.close`), et les taux de change par job.

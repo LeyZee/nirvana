@@ -14,7 +14,10 @@ import {
   PenaltySchema,
   ShiftReportIdSchema,
   TeamMemberIdSchema,
+  type Bonus,
+  type PayAdjustment,
   type PayPeriod,
+  type Penalty,
   type ShiftReportId,
 } from '@nirvana/contracts';
 import { eq, schema, sql, type Transaction } from '@nirvana/db';
@@ -65,6 +68,30 @@ const iso = (at: Date): string => at.toISOString();
 
 const cancellationOf = (row: { cancelledAt: Date | null; cancelledBy: string | null }) =>
   row.cancelledAt === null ? null : { cancelledAt: iso(row.cancelledAt), cancelledBy: row.cancelledBy };
+
+export const bonusOfRow = (row: typeof bonuses.$inferSelect): Bonus =>
+  BonusSchema.parse({ ...row, createdAt: iso(row.createdAt), cancellation: cancellationOf(row) });
+
+export const penaltyOfRow = (row: typeof penalties.$inferSelect): Penalty =>
+  PenaltySchema.parse({
+    ...row,
+    amount:
+      row.kind === 'fixed'
+        ? { kind: 'fixed', amountMinor: row.amountMinor }
+        : { kind: 'percent', bps: row.bps },
+    createdAt: iso(row.createdAt),
+    cancellation:
+      row.cancelledAt === null
+        ? null
+        : {
+            cancelledAt: iso(row.cancelledAt),
+            cancelledBy: row.cancelledBy,
+            cancelledFrom: row.cancelledFrom,
+          },
+  });
+
+export const adjustmentOfRow = (row: typeof payAdjustments.$inferSelect): PayAdjustment =>
+  PayAdjustmentSchema.parse({ ...row, createdAt: iso(row.createdAt) });
 
 /** The registry's period of each report among `ids` a closing counted. */
 export async function registeredAmong(
@@ -156,31 +183,10 @@ export async function readSnapshot(
     reports,
     registered,
     members: await reads.members(tx, lastDay),
-    bonuses: bonusRows.map((row) =>
-      BonusSchema.parse({ ...row, createdAt: iso(row.createdAt), cancellation: cancellationOf(row) }),
-    ),
-    penalties: penaltyRows.map((row) =>
-      PenaltySchema.parse({
-        ...row,
-        amount:
-          row.kind === 'fixed'
-            ? { kind: 'fixed', amountMinor: row.amountMinor }
-            : { kind: 'percent', bps: row.bps },
-        createdAt: iso(row.createdAt),
-        cancellation:
-          row.cancelledAt === null
-            ? null
-            : {
-                cancelledAt: iso(row.cancelledAt),
-                cancelledBy: row.cancelledBy,
-                cancelledFrom: row.cancelledFrom,
-              },
-      }),
-    ),
+    bonuses: bonusRows.map(bonusOfRow),
+    penalties: penaltyRows.map(penaltyOfRow),
     carryOvers: carryRows.map((row) => CarryOverSchema.parse({ ...row, createdAt: iso(row.createdAt) })),
-    adjustments: adjustmentRows.map((row) =>
-      PayAdjustmentSchema.parse({ ...row, createdAt: iso(row.createdAt) }),
-    ),
+    adjustments: adjustmentRows.map(adjustmentOfRow),
     bonusTierSets: tierRows.map((row) => BonusTierSetSchema.parse({ ...row, createdAt: iso(row.createdAt) })),
     collectiveGoals: goalRows.map((row) =>
       CollectiveGoalSchema.parse({ ...row, createdAt: iso(row.createdAt) }),

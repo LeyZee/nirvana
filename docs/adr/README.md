@@ -58,3 +58,4 @@ Date : AAAA-MM-JJ
 | 0031 | Congés et échanges de shift : le congé appartient au membre, l'échange se fait entre chatteurs | accepted (remplace en partie 0023 : congés) |
 | 0032 | Paie : la quinzaine se clôture pour toute l'équipe à sa première validation | accepted (complète 0023 § Paie) |
 | 0034 | Le test à l'aveugle est une séance : le serveur calcule le taux, à partir de 40 situations | proposed (complète 0019 ; exception à 0023 à valider) |
+| 0035 | Paie : une saisie verrouille sa quinzaine et chacune des suivantes | proposed (complète 0032 § Verrous) |

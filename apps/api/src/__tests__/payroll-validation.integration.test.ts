@@ -1,38 +1,27 @@
 import {
-  AccountPayRulesIdSchema,
   BonusIdSchema,
   CommissionStatementSchema,
   newId,
   payPeriodAt,
   PayPeriodSchema,
-  PlatformAccountIdSchema,
-  ShiftIdSchema,
-  ShiftReportIdSchema,
-  TeamMemberSchema,
   type CreatorId,
   type PayPeriod,
-  type PlatformAccountId,
   type ShiftReportId,
   type TeamMember,
-  type TeamRole,
 } from '@nirvana/contracts';
-import { and, eq, schema, sql } from '@nirvana/db';
-import { createTestDb, type TestDb } from '@nirvana/db/testing';
+import { eq, schema, sql } from '@nirvana/db';
+import type { TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { z } from 'zod';
 
-import { createOwner } from '../auth';
-import { createApp, type App } from '../composition-root';
+import type { App } from '../composition-root';
 import { createLogger } from '../logger';
 import { createPayrollModule } from '../modules/payroll';
-import { buildServer, type Server } from '../server';
+import { buildServer } from '../server';
 
 import { testConfig } from './support/config';
-import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
+import { startPayrollTeam, type PayrollTeam } from './support/payroll-team';
 
-/** Invented people, creators and accounts only (ADR 0010). Periods of 2025: they have ended. */
-const OWNER = { email: 'owner@example.test', name: 'Owner', password: 'correct horse battery' };
-const PASSWORD = 'staple battery horse';
+/** Periods of 2025: they have ended. */
 const Q0 = PayPeriodSchema.parse('2025-04-16');
 const Q1 = PayPeriodSchema.parse('2025-05-01');
 const Q2 = PayPeriodSchema.parse('2025-05-16');
@@ -48,141 +37,29 @@ const Q11 = PayPeriodSchema.parse('2025-10-01');
 const Q12 = PayPeriodSchema.parse('2025-10-16');
 const Q13 = PayPeriodSchema.parse('2025-11-01');
 
-const quiet = { warn: () => undefined, error: () => undefined };
-
 describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR 0032)', () => {
+  let team: PayrollTeam;
   let test: TestDb;
   let app: App;
-  let server: Server;
   let ownerId: string;
   let owner: string;
   let anna: CreatorId;
-  let bea: CreatorId;
-  let annas: PlatformAccountId;
-  let beas: PlatformAccountId;
   let theo: TeamMember;
   let lea: TeamMember;
   let mona: TeamMember;
   let theoCookie: string;
   let monaCookie: string;
   let theoQ1: ShiftReportId;
-  let hour = 0;
 
-  const creatorOf = (account: PlatformAccountId): CreatorId => (account === annas ? anna : bea);
-
-  const call = (method: 'GET' | 'POST', url: string, cookie: string, payload?: object, via?: Server) =>
-    (via ?? server).inject({
-      method,
-      url: `/v1${url}`,
-      headers: { cookie, origin: DASHBOARD_ORIGIN },
-      ...(payload !== undefined && { payload }),
-    });
-
-  const addMember = async (
-    email: string,
-    displayName: string,
-    teamRole: TeamRole = 'chatter',
-  ): Promise<{ member: TeamMember; cookie: string }> => {
-    const response = await call('POST', '/team/members', owner, {
-      email,
-      displayName,
-      teamRole,
-      creatorIds: [anna, bea],
-      firstName: displayName,
-      lastName: 'Inventé',
-      country: 'FR',
-      timeZone: 'Europe/Paris',
-      joinedOn: '2025-01-01',
-      commission: { rateBps: 2_000 },
-      teamShareBps: null,
-    });
-    expect(response.statusCode, response.body).toBe(201);
-    const member = TeamMemberSchema.parse(response.json());
-    const context = await app.auth.$context;
-    await context.internalAdapter.linkAccount({
-      userId: member.userId,
-      providerId: 'credential',
-      accountId: member.userId,
-      password: await context.password.hash(PASSWORD),
-    });
-    return { member, cookie: await signIn(server, email, PASSWORD) };
-  };
-
-  /** A report of `member` for `period`, as the planning leaves it: validated unless said otherwise. */
-  const report = async (
-    member: TeamMember,
-    period: PayPeriod,
-    amountMinor: number,
-    {
-      account = annas,
-      status = 'validated',
-    }: { account?: PlatformAccountId; status?: 'validated' | 'submitted' } = {},
-  ): Promise<ShiftReportId> => {
-    const shiftId = newId(ShiftIdSchema);
-    hour += 3;
-    const startsAt = new Date(`${period}T06:00:00Z`);
-    startsAt.setUTCHours(startsAt.getUTCHours() + (hour % 200));
-    await test.admin.db.insert(schema.shifts).values({
-      id: shiftId,
-      creatorId: creatorOf(account),
-      platformAccountId: account,
-      memberId: member.id,
-      startsAt,
-      endsAt: new Date(startsAt.getTime() + 2 * 3_600_000),
-      createdBy: ownerId,
-      updatedBy: ownerId,
-    });
-    const id = newId(ShiftReportIdSchema);
-    await test.admin.db.insert(schema.shiftReports).values({
-      id,
-      creatorId: creatorOf(account),
-      platformAccountId: account,
-      shiftId,
-      memberId: member.id,
-      period,
-      amountMinor,
-      currency: 'EUR',
-      status,
-      submittedBy: member.userId,
-      submittedAt: startsAt,
-      reviewedBy: status === 'validated' ? ownerId : null,
-      reviewedAt: status === 'validated' ? startsAt : null,
-      createdBy: member.userId,
-    });
-    return id;
-  };
-
-  const recalculate = (period: PayPeriod) => app.modules.payroll.jobs.recalculate(period, quiet);
-
-  const statementOf = async (member: TeamMember, period: PayPeriod) => {
-    const [found] = await test.admin.db
-      .select()
-      .from(schema.commissionStatements)
-      .where(
-        and(
-          eq(schema.commissionStatements.memberId, member.id),
-          eq(schema.commissionStatements.period, period),
-        ),
-      );
-    if (found === undefined) throw new Error('no statement');
-    return found;
-  };
-
-  const validate = async (cookie: string, member: TeamMember, period: PayPeriod, via?: Server) => {
-    const { id, revision } = await statementOf(member, period);
-    return call('POST', `/payroll/statements/${id}/validate`, cookie, { revision }, via);
-  };
-
-  const RefusalSchema = z.object({ error: z.object({ code: z.string(), details: z.unknown() }) });
-  const refusal = (response: { json: () => unknown }) => RefusalSchema.parse(response.json()).error;
-
-  const closingOf = async (period: PayPeriod) => {
-    const [closing] = await test.admin.db
-      .select()
-      .from(schema.payPeriodClosings)
-      .where(eq(schema.payPeriodClosings.period, period));
-    return closing;
-  };
+  const addMember: PayrollTeam['addMember'] = (...args) => team.addMember(...args);
+  const report: PayrollTeam['report'] = (...args) => team.report(...args);
+  const recalculate: PayrollTeam['recalculate'] = (period) => team.recalculate(period);
+  const statementOf: PayrollTeam['statementOf'] = (...args) => team.statementOf(...args);
+  const validate: PayrollTeam['validate'] = (...args) => team.validate(...args);
+  const refusal: PayrollTeam['refusal'] = (response) => team.refusal(response);
+  const closingOf: PayrollTeam['closingOf'] = (period) => team.closingOf(period);
+  const jobsFor: PayrollTeam['jobsFor'] = (period) => team.jobsFor(period);
+  const forgetJobs: PayrollTeam['forgetJobs'] = (period) => team.forgetJobs(period);
 
   const registryOf = async (period: PayPeriod) =>
     (
@@ -194,61 +71,15 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
       .map((row) => row.id)
       .sort();
 
-  const jobsFor = async (period: PayPeriod) =>
-    (
-      await test.admin.db.execute<{ payload: unknown }>(
-        sql`select payload from graphile_worker._private_jobs where key = ${`payroll.recalculate:${period}`}`,
-      )
-    ).rows.map((row) => row.payload);
-
-  const forgetJobs = (period: PayPeriod) =>
-    test.admin.db.execute(
-      sql`delete from graphile_worker._private_jobs where key = ${`payroll.recalculate:${period}`}`,
-    );
-
   beforeAll(async () => {
-    test = await createTestDb(inject('pgSuperuserUrl'));
-    const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
-    app = await createApp(config, createLogger(config));
-    server = await buildServer({
-      config,
-      logger: createLogger(config),
-      routes: app.routes,
-      readiness: app.readiness,
-    });
-    ({ userId: ownerId } = await createOwner(app.auth, app.db.db, OWNER));
-    anna = (await app.modules.persona.creators.create({ displayName: 'Anna' })).id;
-    bea = (await app.modules.persona.creators.create({ displayName: 'Béa' })).id;
-    annas = newId(PlatformAccountIdSchema);
-    beas = newId(PlatformAccountIdSchema);
-    await test.admin.db.insert(schema.platformAccounts).values([
-      { id: annas, creatorId: anna, platform: 'reveal', handle: 'anna-invente' },
-      { id: beas, creatorId: bea, platform: 'reveal', handle: 'bea-inventee' },
-    ]);
-    await test.admin.db.insert(schema.accountPayRules).values(
-      [annas, beas].map((account) => ({
-        id: newId(AccountPayRulesIdSchema),
-        creatorId: creatorOf(account),
-        platformAccountId: account,
-        fromPeriod: '2020-01-01',
-        currency: 'EUR',
-        vatBps: 0,
-        platformFeeBps: 2_000,
-        earningsSource: 'declared',
-        createdBy: ownerId,
-      })),
-    );
-    owner = await signIn(server, OWNER.email, OWNER.password);
+    team = await startPayrollTeam(inject('pgSuperuserUrl'));
+    ({ test, app, ownerId, owner, anna } = team);
     ({ member: theo, cookie: theoCookie } = await addMember('theo@example.test', 'Théo'));
     ({ member: lea } = await addMember('lea@example.test', 'Léa'));
     ({ member: mona, cookie: monaCookie } = await addMember('mona@example.test', 'Mona', 'manager'));
   });
 
-  afterAll(async () => {
-    await server.close();
-    await app.shutdown();
-    await test.close();
-  });
+  afterAll(() => team.close());
 
   it('starts the team’s closings at the earliest period that pays, never leaving one behind', async () => {
     await test.admin.db.insert(schema.bonuses).values({
@@ -272,7 +103,7 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
   });
 
   it('closes the period at its first validation, for the team, with every creator’s reports', async () => {
-    const leas = await report(lea, Q1, 5_000, { account: beas });
+    const leas = await report(lea, Q1, 5_000, { account: team.beas });
     await recalculate(Q1);
     await forgetJobs(Q1);
 
@@ -313,7 +144,7 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
 
   it('waits for the reports of the period still under review, then lets a manager close it', async () => {
     await report(theo, Q2, 10_000);
-    const waiting = await report(lea, Q2, 3_000, { account: beas, status: 'submitted' });
+    const waiting = await report(lea, Q2, 3_000, { account: team.beas, status: 'submitted' });
     await recalculate(Q2);
 
     const refused = await validate(owner, theo, Q2);
@@ -416,7 +247,7 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
   it('validates two statements of an open period at once, beside a recalculation: one closing, no deadlock', async () => {
     const { member: nina } = await addMember('nina@example.test', 'Nina');
     await report(theo, Q9, 10_000);
-    await report(nina, Q9, 10_000, { account: beas });
+    await report(nina, Q9, 10_000, { account: team.beas });
     await recalculate(Q9);
     const [one, other] = await Promise.all([
       validate(owner, theo, Q9),
@@ -430,7 +261,7 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
 
   it('refuses to close when the member who validates cannot read every report it counts', async () => {
     await report(theo, Q10, 10_000);
-    await report(lea, Q10, 1_000, { account: beas });
+    await report(lea, Q10, 1_000, { account: team.beas });
     await recalculate(Q10);
     // A pay module that reads Anna only, as a validator who could not read Béa would.
     const blind = createPayrollModule({

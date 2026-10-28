@@ -1,13 +1,21 @@
 import type {
+  Bonus,
+  BonusId,
   BonusTierSet,
   CollectiveGoal,
   CommissionStatement,
   CommissionStatementId,
+  CreateBonusBody,
+  CreatePenaltyBody,
   DomainError,
+  PayAdjustment,
+  PayAdjustmentId,
   PayPeriod,
   PayPeriodClosing,
   PayPeriodWindow,
   PayrollSettings,
+  Penalty,
+  PenaltyId,
   TeamMemberId,
   TeamScope,
   UserId,
@@ -75,6 +83,42 @@ export interface PayrollValidationStore {
   ): Promise<{ readonly period: PayPeriod }>;
   /** `payroll.recalculate` for `period`, in its own transaction: after a validation refused on a changed statement. */
   enqueueRecalculation(actor: Actor, period: PayPeriod): Promise<void>;
+}
+
+/** `CreatePayAdjustmentBodySchema` once parsed: the statement it corrects, `null` for none. */
+interface AdjustmentToCreate {
+  readonly id: PayAdjustmentId;
+  readonly memberId: TeamMemberId;
+  readonly amountMinor: number;
+  readonly reason: string;
+  readonly correctsStatementId: CommissionStatementId | null;
+}
+
+/** An entry as a create gives it back: `created` is `false` when the same one was recorded already (a retry). */
+interface Recorded<T> {
+  readonly value: T;
+  readonly created: boolean;
+}
+
+/**
+ * A member's bonuses, penalties and adjustments, and the payment of a validated statement (EQ-04, ADR 0032), each in
+ * one transaction as the member who writes (`withMember`, the policies keep the four eyes). An entry takes the lock
+ * (member, period) of its period and of every later one up to today's, and `payroll.close` first while no period is
+ * closed yet. Throws the module's errors, nothing is written then.
+ */
+export interface PayrollEntryStore {
+  createBonus(actor: Actor, body: CreateBonusBody): Promise<Recorded<Bonus>>;
+  cancelBonus(actor: Actor, id: BonusId): Promise<Bonus>;
+  createPenalty(actor: Actor, body: CreatePenaltyBody): Promise<Recorded<Penalty>>;
+  cancelPenalty(actor: Actor, id: PenaltyId): Promise<Penalty>;
+  /** The server chooses the period, the member's first open one (`adjustmentPeriod`). */
+  createAdjustment(actor: Actor, body: AdjustmentToCreate): Promise<Recorded<PayAdjustment>>;
+  /** `validated` → `paid`, by the owner only, at the revision shown. */
+  pay(
+    actor: Actor,
+    statementId: CommissionStatementId,
+    revision: number,
+  ): Promise<{ readonly period: PayPeriod }>;
 }
 
 /** Who reads pay: their scope (`withMember`) and their own member, `null` for the owner. */
