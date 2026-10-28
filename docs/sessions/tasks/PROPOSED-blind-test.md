@@ -36,7 +36,8 @@ Ce qui manque : le jeu de cartes, le masquage, l'écran de jugement, le calcul d
     - celles qui demandent l'envoi d'un média ou d'une étape de script (l'agent n'en envoie pas pendant le test) ;
     - celles dont la réponse humaine contient un média, un PPV ou une étape de script, même si la situation ne les demandait pas : la forme trahirait l'auteur ;
     - celles dont la réponse humaine vient, même en partie, d'un brouillon ;
-    - celles qu'on ne peut pas reconstruire à leur date (voir ci-dessous).
+    - celles qu'on ne peut pas reconstruire à leur date (voir ci-dessous) ;
+    - celles déjà jugées par la créatrice dans une séance des 30 derniers jours, quel que soit l'état de cette séance (`done` ou `abandoned`) : elle reconnaîtrait les réponses.
 - **Seuil de taille** : le test n'est valide qu'avec au moins 40 situations jugées. Si le tirage en trouve moins de 40, la séance ne s'ouvre pas, et l'écran dit combien il en manque.
 
 ### Le rejeu à la date de la situation
@@ -82,11 +83,12 @@ Elle peut revenir sur la carte précédente, jamais plus loin. Une séance peut 
 
 ### Où le résultat est rangé et lu
 - **Nouvelles tables** (migration attribuée par Bilan), toutes en RLS par créatrice :
-  - `blind_test_sessions` : créatrice, voix et persona figées à l'ouverture, graine, état (`open` / `done` / `abandoned`), dates ;
+  - `blind_test_sessions` : créatrice, voix et persona figées à l'ouverture, graine, état, raison d'abandon, dates. États : `preparing` (l'agent rejoue les situations), `open` (cartes prêtes, de 0 à 100 jugées), `done` (toutes jugées), `abandoned` avec sa raison (`version_changed` ou `cancelled`). « Prête à juger » est une séance `open` sans verdict, pas un état de plus ;
   - `blind_test_cards` : situation, auteur réel, référence du message humain ou de l'appel `llm_calls`, ordre, verdict, devinette.
 - **À la fin de la séance**, le serveur calcule le taux et écrit la ligne `blind_tests` comme aujourd'hui. Le `POST` existant prend alors `sessionId` au lieu de `rate`, et le taux n'est plus saisi à la main. Le propriétaire valide sous une connexion de moins de 10 minutes.
-- **Le Dashboard et le verrou** lisent `blind_tests` sans changement. Le détail (cartes, taux humain, devinettes) se lit dans Entraîner › Test à l'aveugle, avec les cartes « jamais » listées. Chaque carte « jamais » de l'agent peut devenir un cas de test d'éval, comme une note du playground.
-- **Une séance périme** si la voix ou la persona change avant la fin : elle passe `abandoned`, puisque son résultat ne vaudrait plus pour la version active (ADR 0022).
+- **Le Dashboard et le verrou** lisent `blind_tests` sans changement. Le détail (cartes, taux humain, devinettes) se lit dans Entraîner › Test à l'aveugle, avec les cartes « jamais » listées. Une carte contient du vrai texte de fan : elle ne devient jamais un cas de test dans `evals/`, qui est dans le dépôt (ADR 0010).
+- **Une séance périme** si la voix ou la persona change avant la fin : elle passe `abandoned` (`version_changed`), puisque son résultat ne vaudrait plus pour la version active (ADR 0022).
+- **Le propriétaire peut l'abandonner** pendant la préparation ou en cours : elle passe `abandoned` (`cancelled`). Une séance abandonnée ne s'enregistre jamais ; ses verdicts restent lisibles par le propriétaire seul.
 - **Rétention** : quand la purge d'un fan efface ses messages ou ses faits (`docs/conventions/security.md`), les références de ses cartes (message, appel `llm_calls`) passent à NULL et leur texte est effacé. Le taux enregistré dans `blind_tests` reste.
 - **Rien dans l'outbox** : aucun événement de séance ne porte le texte d'une carte. Un éventuel avis Telegram « test enregistré » ne porte que le taux et la version.
 - Le minimum de 40, le taux calculé par le serveur et le `POST { sessionId }` sont décidés par l'**ADR 0034** (proposée).
@@ -117,7 +119,8 @@ Elle peut revenir sur la carte précédente, jamais plus loin. Une séance peut 
 - Aucun taux ne peut être enregistré sans une séance terminée d'au moins 40 situations, pour la version active de la voix et de la persona.
 - Pendant la séance, aucun champ de l'API ni de l'écran ne permet de savoir l'auteur d'une carte (test de contrat sur le DTO de carte : ni `author`, ni identifiant de message, ni d'appel).
 - Le même tirage, rejoué avec la même graine, donne les mêmes situations dans le même ordre.
-- Un changement de voix ou de persona en cours de séance la rend `abandoned`.
+- Un changement de voix ou de persona en cours de séance la rend `abandoned` (`version_changed`) ; un abandon du propriétaire la rend `abandoned` (`cancelled`).
+- Une situation jugée dans une séance des 30 derniers jours n'entre pas dans un nouveau tirage.
 - Une réponse humaine dont une bulle porte un `draft_id`, retouchée ou non, n'entre jamais dans un tirage (test d'intégration avec un brouillon `edited` envoyé).
 - Une réponse humaine avec un média, un PPV ou une étape de script n'entre jamais dans un tirage.
 - Le rejeu d'une situation à la date t ne voit aucun fait observé, aucune limite, aucune note de désir ni aucun message postérieurs à t (test avec un fait appris après t).
@@ -132,6 +135,6 @@ Elle peut revenir sur la carte précédente, jamais plus loin. Une séance peut 
 3. 50 situations (100 cartes) et un minimum de 40. Défaut : 50 et 40.
 
 ## Hors périmètre
-L'ouverture de l'Automatique elle-même (déjà dans le verrou), les vocaux, les médias et les étapes de script dans le test, une autre créatrice que Messa.
+L'ouverture de l'Automatique elle-même (déjà dans le verrou), la transformation d'une carte en cas d'éval (vrai texte de fan), les vocaux, les médias et les étapes de script dans le test, une autre créatrice que Messa.
 
 ## Notes de session
