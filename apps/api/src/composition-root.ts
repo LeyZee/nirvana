@@ -28,6 +28,7 @@ import type { Logger } from './logger';
 import {
   createAgentModule,
   guardContextOf,
+  sampleReplyFaults,
   startBubbleGuard,
   startSharedBubbleGuard,
   startDraftComposer,
@@ -225,12 +226,14 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     publishBudget: (crossing) => publishBudgetThreshold(adminDb.db, crossing),
     logger,
   });
-  const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.1.0.yaml');
+  const personaPath = fromRepoRoot(config.PLAYGROUND_PERSONA_PATH ?? 'personas/demo/v0.2.0.yaml');
   const trainingDir = fromRepoRoot(config.NIRVANA_TRAINING_DIR ?? '.scratch/training');
   const persona = createPersonaModule({
     db: db.db,
     requireRole,
     recentLogin: createRequireRecentLogin(auth),
+    // An example the voice imitates never teaches what a hard guard blocks (P5-01).
+    sampleReplyFaults,
   });
   const team = createTeamModule({
     db: db.db,

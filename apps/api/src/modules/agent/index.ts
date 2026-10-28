@@ -61,6 +61,8 @@ export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra
 
 /** @public Réglages › Alertes tries an alert on an example message (`POST /v1/alerts/test`, P4-01). */
 export { createAlertTester, type AlertTester } from './infra/alert-test';
+/** @public The persona module refuses a version whose sample replies a hard guard would block (P5-01). */
+export { sampleReplyFaults, type SampleReplyFault } from './infra/sample-replies';
 export type { AgentDraftComposer } from './infra/draft-composer';
 /** @public Wired by the composition root with the connector's `FetchMedia` (P3-04). */
 export type { MediaSight } from './infra/draft-composer';

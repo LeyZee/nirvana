@@ -4,7 +4,7 @@ Schéma Zod : `packages/contracts/src/persona.ts` (`PersonaSchema`, types `Perso
 
 La structure reprend la fiche créatrice d'OnlyChat, onglet par onglet (décision de Charles, 17/10/2026 : « OnlyChat sont les boss »), ajustée par la méthode de chatting de l'agence (`/mnt/project-files/chatting/methode-chatting.md`, §6, hors dépôt) : curseurs en heures, pas de réglage de négociation, surnoms en liste fermée. Le formulaire du dashboard et l'agent lisent le même schéma et les mêmes listes de valeurs, avec leurs libellés français : le dashboard n'a pas sa propre copie.
 
-Exemples : `personas/messalina/v0.0.0.yaml` (placeholders, la vraie persona est hors dépôt) et `personas/demo/v0.1.0.yaml` (créatrice fictive, pour les tests, les évals et la démonstration).
+Exemples : `personas/messalina/v0.0.0.yaml` (placeholders, la vraie persona est hors dépôt) et `personas/demo/v0.1.0.yaml` (créatrice fictive, pour les tests, les évals et la démonstration ; `v0.2.0.yaml` est la même rangée en blocs, P5-01, lue par défaut par le playground et les évals).
 
 | Section | Onglet OnlyChat | Champs | Rôle |
 |---|---|---|---|
@@ -16,6 +16,11 @@ Exemples : `personas/messalina/v0.0.0.yaml` (placeholders, la vraie persona est 
 | `follow_ups` | Relances | `enabled`, `delays_hours[]` (strictement croissants), `type` (`soft` / `custom`, `text` si `custom`), `nudges` (`enabled`, `delay_minutes`, `max_per_day`, `min_hours_after_conversation`, `delete_previous`) | relances et petits rappels |
 | `notifications` | Notifications | `sales`, `agent_disabled`, `no_script_left`, `rate_limited`, `alert_keywords[]` | qui prévenir, quand |
 | `limits` | (aucun, écart admis) | `never_do[]`, `never_show[]`, `never_say[]`, `disgusts[]` | ce qu'elle ne fait, ne montre, ne dit jamais |
+| `lifestyle` | (bloc P5-01, facultatif) | `occupation`, `area` (60 caractères : une région, jamais une adresse ni un lieu qui la retrouve), `routine`, `goals` | sa vie loin des fans |
+| `tastes` | (bloc P5-01, facultatif) | `likes[]`, `dislikes[]` (aucune entrée dans les deux) | ses goûts |
+| `intimate` | (bloc P5-01, facultatif) | `turn_ons[]`, `fantasies[]` (aucune que `limits.never_do` ou `limits.disgusts` refuse), `sexting_style` | l'intime ; ce qu'elle refuse reste dans `limits` |
+| `writing_style` | (bloc P5-01, facultatif) | `message_length` (`short` / `medium` / `long`), `emojis_preferred[]` et `emojis_forbidden[]` (un emoji par entrée, 20 au plus, aucun dans les deux), `punctuation`, `capitals` (`normal` / `lowercase` / `expressive`) | comment elle écrit |
+| `sample_replies` | (bloc P5-01, facultatif) | dix au plus, chacune `situation` (nullable) et `reply` (500 caractères) | ses réponses types, inventées |
 
 Règles :
 - Tout champ texte est en français. Les valeurs des listes sont en anglais (code), leurs libellés en français (`PERSONA_OPTIONS`).
@@ -23,6 +28,7 @@ Règles :
 - La créatrice a au moins 18 ans à la date `meta.created_at`.
 - **Appliqué par le code, pas par le prompt** (CLAUDE.md, règle 3) : `response_delay_minutes`, les délais de KYC et de sexualisation, les seuils de la note de désir, les cooldowns, `delays_hours` et les petits rappels sont lus par la politique ; `limits` et `pet_names` sont chargés par `guards.ts` ; `split_messages` à faux réunit les bulles en un seul message. L'horloge d'une créatrice est `creators.timezone`, pas `details.timezone`. Suivre un fan qui sexualise demande aussi son âge confirmé majeur. Ce sont des données de sécurité, pas seulement du style.
 - **Donné aux modèles** : tout le reste de la fiche (détails sauf la date de naissance, remplacée par l'âge, le genre et le fuseau ; infos en plus ; comportement sauf le délai de réponse ; limites) et les consignes écrites des stratégies (`instructions`, `targets`), sans leurs chiffres. Les prompts disent d'écrire dans la langue du fan quand elle est dans `languages`, sinon dans la première.
+- **Blocs (P5-01)** : tous facultatifs, sans valeur par défaut, donc une version publiée avant eux se lit et garde son `contentHash` ; `meta.schema` reste 1 et `additional_info` reste requis (vide permis) le temps de la transition. Une persona qui se contredit (emoji préféré et interdit, goût aimé et détesté, envie que ses limites refusent) est refusée. `strategies.kyc.collect` (facultatif, au moins une case, sans doublon) choisit les cases du canevas Reveal à apprendre, toutes sinon. `emojis_forbidden` est appliqué par une garde (`forbidden_term`), les réponses types passent les gardes dures à l'enregistrement (422 `persona_sample_reply_unprocessable`). La complétion (`personaCompletion`) pèse chaque bloc, ne bloque rien. Les modèles reçoivent chaque bloc en section, et `kyc_collect` (les libellés des cases à apprendre).
 - **Mots-clés d'alerte** : toujours actifs, pas d'interrupteur. Un fan qui en écrit un met l'agent en pause pour ce fan et prévient un humain.
 - **Écarts admis avec OnlyChat**, tous venus d'une décision : `limits` (règle 3) ; pas de `negotiation` (on ne négocie jamais le prix, règle fixe en code, méthode §3) ; `sexualization.initiate_after_hours` en heures au lieu de `minSexualizationCooldown` (0 à 5, unité non documentée) ; `kyc.min_hours_before_following` et `behavior.pet_names` demandés par Charles ; rester en personnage est fixé dans le code (ADR 0021), ni dans la persona ni dans un réglage ; les versions passent par les tests et la validation de Messa (ADR 0010).
 - **Ce qui n'est plus dans la persona** : les horaires de vie (réglages de la créatrice, phase 5), les exemples de voix (corpus validé par Messa, nourri par les corrections du playground), les kinks (dans `additional_info`, et ce qui doit être garanti, dans `limits`).

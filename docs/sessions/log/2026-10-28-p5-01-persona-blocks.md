@@ -1,0 +1,4 @@
+# 2026-10-28 — P5-01 persona par blocs, PR 1 : contrat, complétion, lecture par l'agent (Agent) — done
+Fait : blocs facultatifs de la persona (`lifestyle`, `tastes`, `intimate`, `writing_style`, `sample_replies`) sans valeur par défaut, refus des contradictions, `strategies.kyc.collect`, `personaCompletion` et libellés dans contracts ; fiche des modèles par blocs et `kyc_collect` (prompt du cerveau 1.9.0) ; garde des emojis interdits ; réponses types passées aux gardes dures à l'enregistrement (422) ; `personas/demo/v0.2.0.yaml` ; docs (référence, glossaire, playbook, ai-engine, README du module persona). Tests : contrat, hash épinglé des personas publiées, fiche des modèles, garde, `sampleReplyFaults`, intégration des versions (422 depuis l'écran et le fichier).
+Pas fait : écran des blocs et jauge (Extension), « À apprendre » dans le Suivi (API et écran), évals sans clé xAI.
+Découvertes : aucune.
