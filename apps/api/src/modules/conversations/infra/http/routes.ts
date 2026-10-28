@@ -64,7 +64,10 @@ function readsWholeCreator(user: CurrentUser, creatorId: CreatorId): boolean {
 }
 
 /** The signed-in user, allowed on the whole creator (her mode, her blind tests): never through routing. */
-function actorFor(request: FastifyRequest, creatorId: CreatorId): { user: CurrentUser; userId: UserId } {
+export function actorFor(
+  request: FastifyRequest,
+  creatorId: CreatorId,
+): { user: CurrentUser; userId: UserId } {
   const user = signedIn(request);
   if (!readsWholeCreator(user, creatorId)) throw new CreatorForbidden();
   return { user, userId: UserIdSchema.parse(user.id) };

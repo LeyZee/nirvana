@@ -314,6 +314,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     voicePrompt: loadPrompt('voice').header.version,
     voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
   };
+  const alerts = createAlertsModule({ db: db.db, requireRole });
   const conversations = createConversationsModule({
     db: db.db,
     fans,
@@ -332,9 +333,10 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         return view === null ? null : { hours: view.hours, timeZone: view.timeZone };
       },
     },
+    alertNames: { ofCreator: (creatorId) => alerts.store.names(creatorId) },
   });
   const modules: Modules = {
-    alerts: createAlertsModule({ db: db.db, requireRole }),
+    alerts,
     backups: startBackupsModule({
       db: db.db,
       adminDb: adminDb.db,

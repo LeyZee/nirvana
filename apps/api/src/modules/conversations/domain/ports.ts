@@ -1,5 +1,10 @@
 import type {
   Actor,
+  AlertTrigger,
+  CustomAlertGroupId,
+  CustomAlertId,
+  EventId,
+  SystemAlertCode,
   AgentHours,
   ConversationDetail,
   ConversationEventView,
@@ -487,4 +492,54 @@ export interface ConversationReader {
   events(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<ConversationEventView>>;
   /** Its `desire_scored` events as the reader's curve: the most recent `DESIRE_POINTS_MAX`, oldest first. */
   desireCurve(creatorId: CreatorId, id: ConversationId): Promise<DesireCurve>;
+}
+
+/** Her own alerts' names, archived ones too (`alerts` module's adapter): the history names an alert as it was. */
+export interface AlertNames {
+  ofCreator(
+    creatorId: CreatorId,
+  ): Promise<ReadonlyMap<CustomAlertId, { readonly groupId: CustomAlertGroupId; readonly name: string }>>;
+}
+
+/** One trigger of the history as the journal has it (P4-01): the alert's name is added by the route. */
+export interface AlertTriggerRow {
+  readonly id: EventId;
+  readonly conversationId: ConversationId;
+  readonly fanId: FanId;
+  readonly fanDisplayName: string;
+  readonly trigger: AlertTrigger;
+  readonly pausedAgent: boolean;
+  readonly at: Date;
+  readonly seenAt: Date | null;
+}
+
+/** Which triggers to list: seen or not, one alert of hers (by the id of her row) or of the system's. */
+export interface AlertTriggerFilter {
+  readonly seen?: boolean | undefined;
+  readonly alert?:
+    | { readonly kind: 'custom'; readonly id: CustomAlertId }
+    | { readonly kind: 'system'; readonly code: SystemAlertCode }
+    /** One of her alerts that never watched her: it has no trigger. */
+    | { readonly kind: 'none' }
+    | undefined;
+}
+
+/**
+ * The history of her alerts (P4-01): her `alert_triggered` events and the `handoff_requested` that carry a trigger,
+ * newest first, with the agency's « vu » (`alert_seen`, owned here: a mark on an event of the journal).
+ */
+export interface AlertHistory {
+  list(creatorId: CreatorId, filter: AlertTriggerFilter, page: PageRequest): Promise<Page<AlertTriggerRow>>;
+  /** Marks one trigger seen, once; `false` when she has no trigger by that id. */
+  markSeen(creatorId: CreatorId, id: EventId, userId: UserId): Promise<boolean>;
+  /**
+   * Marks seen every trigger of hers the list shows up to `untilId`, that one included, in the list's order and under
+   * its filter; gives how many were not seen yet, or `null` when she has no trigger by that id.
+   */
+  markSeenUntil(
+    creatorId: CreatorId,
+    untilId: EventId,
+    filter: Pick<AlertTriggerFilter, 'alert'>,
+    userId: UserId,
+  ): Promise<number | null>;
 }
