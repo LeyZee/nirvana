@@ -1,5 +1,5 @@
 # EQ-05 Paie : écrans de validation, de paiement et commissions du chatteur
-Statut : todo, conçue (fiche et maquettes du 28/10/2026, accord d'Extension le 28/10 après ses 12 remarques) ; le code commence quand #259 et les lots 3a à 3e d'EQ-04 sont dans main (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
+Statut : todo, conçue (fiche et maquettes du 28/10/2026, accord d'Extension le 28/10 après ses 12 remarques) ; l'API qu'elle attend est dans main (lots 3a à 3e d'EQ-04, #271 à #275, et ses ajouts, #279) : les écrans viennent dans la PR suivante (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-04 (lot 3 : validation, saisies, paiement, règles, taux) ; EQ-11 (fait)
 Branche : task/eq-05-payroll-screens
@@ -8,7 +8,7 @@ Branche : task/eq-05-payroll-screens
 Valider et payer les paies depuis l'onglet Paie, à la place que fixe l'ADR 0024, et laisser chaque chatteur suivre ses commissions, période par période, ligne par ligne.
 
 ## Contexte à lire
-`docs/adr/0023-team-management.md` (§ Paie, § Factures pour « payée »), `docs/adr/0024-roles-and-navigation.md`, `docs/adr/0032-pay-period-closing.md`, l'ADR 0033 (source des taux, proposée ; elle arrive avec le lot 3e), `apps/api/src/modules/payroll/README.md`, `packages/contracts/src/payroll.ts`, `docs/design/README.md`, `packages/design-system/README.md`, `docs/conventions/api.md`. Maquettes : https://claude.ai/artifact/XYE7FJob2hX9fkssZ8Yz5T (Nuit et Jour, 1 440 et 390 px, mouvement réduit).
+`docs/adr/0023-team-management.md` (§ Paie, § Factures pour « payée »), `docs/adr/0024-roles-and-navigation.md`, `docs/adr/0032-pay-period-closing.md`, `docs/adr/0033-exchange-rate-source.md` (source des taux), `docs/adr/0035-pay-entry-locks.md` (verrous des saisies), `apps/api/src/modules/payroll/README.md`, `packages/contracts/src/payroll.ts`, `docs/design/README.md`, `packages/design-system/README.md`, `docs/conventions/api.md`. Maquettes : https://claude.ai/artifact/XYE7FJob2hX9fkssZ8Yz5T (Nuit et Jour, 1 440 et 390 px, mouvement réduit).
 
 ## Ce que l'API donne déjà (EQ-04)
 | Route | Qui | Ce que l'écran en fait |
@@ -22,15 +22,15 @@ Valider et payer les paies depuis l'onglet Paie, à la place que fixe l'ADR 0024
 | `GET /v1/payroll/exchange-rates` | propriétaire, manager actif | Le dernier taux lu, dans l'avis « taux de la BCE manquant ». Le survol d'une ligne en dollars montre le taux de la ligne (`rateMicros`), le seul qu'un membre lit |
 | `GET /v1/team/members`, `GET /v1/team/pay-rules`, `GET /v1/scheduling/shift-reports?period=` | agence | Noms et couleurs (`validatedBy` et `paidBy` sont des `userId`), comptes et créatrices d'une ligne, rapports derrière une ligne |
 
-## Ce que l'API ajoute avant les écrans (Équipe l'écrit en ajout seul, Bilan relit chaque PR)
+## Ce que l'API a ajouté pour les écrans (#279 : Équipe en ajout seul, Bilan relit)
 1. **Les détails du paiement.** L'ADR 0023 (§ Factures) veut que « payée » porte la date, le moyen, la référence du transfert et le montant envoyé, et EQ-06 rattache ce transfert aux factures qu'il solde.
    - Migration 0031 : `paid_on`, `payment_method`, `payment_reference` et `sent_minor` sur `commission_statements`, vides jusqu'au paiement. Une contrainte veut la date, le moyen et le montant si et seulement si le relevé est payé ; la référence reste facultative.
    - La garde `keep_commission_statement` est réécrite par `CREATE OR REPLACE` dans 0031, sans toucher 0028 ni 0029. Le passage de validé à payé n'écrit que ces quatre colonnes, le statut, `paid_at` et `paid_by`, et le droit `UPDATE` de l'application s'étend à ces quatre colonnes seulement.
    - Corps `{ revision, paidOn, method, reference?, sentMinor }`, en Zod. Une autre révision donne `commission_statement_changed_conflict`.
-   - `paidOn` n'est jamais dans le futur, dans le fuseau de l'agence (`payment_in_future_unprocessable`).
+   - `paidOn` n'est jamais dans le futur, dans le fuseau de l'agence (`payment_in_future_unprocessable`), ni avant le premier jour de la quinzaine du relevé (`payment_before_period_unprocessable`) : une faute d'année resterait figée sur un relevé payé (relecture de Bilan sur #279).
    - `sentMinor` est le montant à verser, sinon `payment_amount_unprocessable`. C'est le défaut ; l'autre choix (l'écart devient un ajustement de la quinzaine suivante) est une question à Charles.
    - `method` vient de `PAYMENT_METHODS`, une liste fermée dans les contrats : `bank_transfer`, `wise`, `paypal`, `other` (Virement, Wise, PayPal, Autre), défaut posé en attendant Charles. Un moyen de plus demande une migration de la contrainte, jamais un texte libre.
-   - `payment_reference` est la référence du transfert (1 à 100 caractères), jamais un IBAN ni un numéro de compte : l'écran et la doc le disent.
+   - `payment_reference` est la référence du transfert (1 à 100 caractères), jamais un IBAN ni un numéro de compte : l'écran et la doc le disent, et le contrat refuse une référence qui contient un IBAN (`containsIban` : code pays, longueur du pays et clé mod 97 sur un passage du texte ; registre ISO 13616 plus les zones UEMOA et CEMAC). L'écran applique la même règle avant l'envoi.
    - Un relevé à verser nul (report, quinzaine sans vente) reste validé : il n'y a rien à payer.
 2. **L'index des quinzaines.** `GET /v1/payroll/periods?limit=&cursor=`, de la plus récente à la plus ancienne, par curseur (`cursor_invalid` sinon). Une route du module payroll, son DTO dans les contrats, aucune migration. Une ligne par quinzaine où le lecteur lit au moins un relevé :
    - `window` (la quinzaine, ses bornes, son fuseau), `ended`, `closing` (`closedAt`, `closedBy`, ou `null`) ;
@@ -39,6 +39,11 @@ Valider et payer les paies depuis l'onglet Paie, à la place que fixe l'ADR 0024
 
    Le propriétaire et le manager lisent l'équipe, le chatteur son seul relevé (RLS) : la même route sert Relevés et Mes relevés.
 3. **Le relevé après une validation de rapports.** Le lot 3a le fait déjà : valider un rapport met `payroll.recalculate` en file dans la même transaction, avec la clé `payroll.recalculate:<quinzaine>` en remplacement (une rafale de validations donne un seul calcul, 5 s après la dernière). La clé est par quinzaine et non par membre, parce que l'objectif collectif et la part d'équipe d'un manager dépendent des autres relevés. Sur une quinzaine close, le travail recalcule la première quinzaine ouverte, où va le rapport (ADR 0032). Le passage horaire reste en filet. Un test montre la rafale et le refus. L'écran dit « Calculé à 10 h 07 » sous la liste et dans le relevé. Après un refus `commission_statement_changed_conflict`, il relit le relevé jusqu'à la révision suivante, et ne revalide jamais tout seul.
+
+4. **Les saisies d'une quinzaine**, trouvé en codant Primes et malus. `GET /v1/payroll/entries?period=` (`PayrollEntriesSchema`) : ses primes, les malus qui la couvrent et ses ajustements, annulés compris, en une lecture sous `withMember`.
+   - Un malus couvre une quinzaine selon `penaltyCovers`, la règle même du moteur : la route et le moteur lisent les mêmes malus, sans recopie en SQL.
+   - Un membre ne lit pas les auteurs (`createdBy` et `cancelledBy` à `null`), ni ici ni dans les relevés : une seule fonction, `redactAuthors`, sert les deux routes.
+   - Au plus 500 saisies de chaque sorte : au-delà, `payroll_entries_too_many_unprocessable`, jamais une liste coupée.
 
 L'export CSV d'une quinzaine se fait dans le navigateur, depuis la lecture de la quinzaine : mêmes données, aucune route ni aucun droit nouveau. L'export comptable reste à EQ-06, côté serveur.
 
@@ -120,8 +125,14 @@ Ce qui vaut pour tous les écrans (relecture d'Extension, 28/10) :
 | `payroll_forbidden` | « Seul le propriétaire peut le faire. » |
 | `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`, `collective_goal_conflict` | « Cette saisie existe déjà avec d'autres valeurs : recharge la page. » |
 | `payment_in_future_unprocessable` | « Le paiement ne peut pas être daté après aujourd'hui. » |
+| `payment_before_period_unprocessable` | « Le paiement ne peut pas être daté avant le début de la quinzaine ({jour}). » |
 | `payment_amount_unprocessable` | « Le montant envoyé doit être celui à verser : {montant}. » |
 | `cursor_invalid` | Rien à dire : Relevés recharge la liste depuis le début. |
+| `pay_period_not_computed_conflict` | « La paie n'a pas encore calculé cette quinzaine : réessaie dans quelques minutes. » |
+| `payroll_entries_too_many_unprocessable` | « Trop de saisies sur cette quinzaine pour les lister ici. » |
+| `team_member_not_found` | « Ce membre n'est plus dans l'équipe : la page est relue. » |
+| `commission_statement_not_found` | « Ce relevé n'existe plus : la page est relue. » |
+| `bonus_not_found`, `penalty_not_found` | « Cette saisie n'existe plus : la page est relue. » |
 
 ## Critères d'acceptation
 - Un chatteur ne voit que ses relevés. Une erreur affiche « Le serveur ne répond pas », jamais un faux état vide.
@@ -141,3 +152,4 @@ Factures, avoirs et export comptable (EQ-06), facturation des créatrices et pé
 ## Notes de session
 - 2026-10-28 (fil Équipe) : fiche reprise d'après l'API d'EQ-04 (lot 3) et maquettes des écrans, sans code. Trois manques relevés à l'API : les détails du paiement (ADR 0023), l'index des quinzaines, le relevé en retard d'une heure sur les rapports validés. Le code attend la fusion de #259 et des lots 3a à 3e.
 - 2026-10-28 (fil Équipe) : Bilan tranche les trois manques (Équipe les écrit en ajout seul, il relit) ; le recalcul existait déjà dans le lot 3a. Extension relit les maquettes : la conception tient, 12 remarques corrigées dans la fiche et la galerie, puis son accord avec un dernier détail pris (le malus signé sur la ligne) (compteur et bouton absents quand c'est bloqué, « Valider » sur la ligne de sélection au téléphone, un seul état coché, une seule marque ambre, eyebrow du sous-onglet, un formateur signé, une grandeur par colonne dans Relevés, passé sur un relevé payé, aucune couleur nommée, `rp-notice` et `rp-account` dans `reports.css`).
+- 2026-10-28 (fil Équipe) : l'API est dans main : les lots 3a à 3e d'EQ-04 (#271 à #275), l'alerte des taux (#276) et les ajouts d'EQ-05 (#279, migration 0031), dont un quatrième trouvé en codant Primes et malus, la lecture des saisies d'une quinzaine. La fiche le dit, ADR 0033 et 0035 acceptées, et la table des refus couvre tous les codes de `PAYROLL_ERROR_CODES`, dont `payment_before_period_unprocessable` et le refus d'un IBAN dans la référence, ajoutés à la relecture de #279 par Bilan.
