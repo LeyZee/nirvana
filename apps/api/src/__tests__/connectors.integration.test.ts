@@ -314,4 +314,42 @@ describe('connectors module (P0-06)', () => {
     expect(JSON.stringify(sink.lines)).not.toContain(secret);
     expect(JSON.stringify(sink.lines)).not.toContain(DEVICE_TOKEN);
   });
+
+  it('dates the session only when it is new: the same one sent again does not hide a late read (recette 28/10)', async () => {
+    const id = await account('resent', 'none');
+    const send = async (session: string) => {
+      const sent = await server.inject({
+        method: 'POST',
+        url: '/v1/connector/sessions',
+        headers: { 'x-extension-token': DEVICE_TOKEN, origin: 'chrome-extension://abcdef' },
+        payload: { platformAccountId: id, session },
+      });
+      expect(sent.statusCode, sent.body).toBe(204);
+    };
+    const longAgo = new Date('2026-01-01T00:00:00.000Z');
+    const age = async () => {
+      await test.admin.db
+        .update(schema.platformAccounts)
+        .set({ sessionUpdatedAt: longAgo })
+        .where(eq(schema.platformAccounts.id, id));
+    };
+    const datedAt = async () => (await accountRow(id)).sessionUpdatedAt?.getTime();
+
+    await send('reveal-session-a');
+    expect(await datedAt()).not.toBe(longAgo.getTime());
+    await age();
+    // The same session sent again: stored, still valid, but not a new one.
+    await send('reveal-session-a');
+    expect(await datedAt()).toBe(longAgo.getTime());
+    expect((await accountRow(id)).sessionState).toBe('valid');
+    // Another session: a new one.
+    await send('reveal-session-b');
+    expect(await datedAt()).not.toBe(longAgo.getTime());
+    // The same session again, over an expired state: stored again by a person, so a new start.
+    await age();
+    await app.modules.connectors.sessions.markExpired(creatorId, id, 'test');
+    await send('reveal-session-b');
+    expect(await datedAt()).not.toBe(longAgo.getTime());
+    expect((await accountRow(id)).sessionState).toBe('valid');
+  });
 });
