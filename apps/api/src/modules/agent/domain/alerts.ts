@@ -1,4 +1,4 @@
-import { normalise, unmask } from './normalise';
+import { alertKeywordKey, normalise, unmask } from '@nirvana/contracts';
 
 /**
  * Her alert keywords (`notifications.alert_keywords`, P4-01): read in code, never by a model, on what he wrote since
@@ -9,7 +9,7 @@ import { normalise, unmask } from './normalise';
 export function alertKeywordsIn(text: string, keywords: readonly string[]): string[] {
   const readings = [normalise(text), unmask(text)].map(spaced);
   return keywords.filter((keyword) => {
-    const term = spaced(normalise(keyword)).trim();
+    const term = alertKeywordKey(keyword);
     return term !== '' && readings.some((reading) => reading.includes(` ${term} `));
   });
 }

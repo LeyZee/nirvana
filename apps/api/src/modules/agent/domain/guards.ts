@@ -1,6 +1,4 @@
-import type { GuardCode } from '@nirvana/contracts';
-
-import { normalise, unmask } from './normalise';
+import { normalise, unmask, type GuardCode } from '@nirvana/contracts';
 
 /**
  * Guards on the voice output, before anything can be sent (docs/architecture/ai-engine.md, « Les gardes »).

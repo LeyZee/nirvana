@@ -44,6 +44,8 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   keyword: 'Il a écrit un mot-clé d’alerte. L’agent attend un humain.',
   llm_unavailable: 'Aucun modèle IA n’a répondu. Un chatteur prend le relais.',
   other: 'L’agent a passé la main. Un humain doit lui répondre.',
+  custom_alert: 'Une de ses alertes personnalisées a sonné. L’agent attend un humain.',
+  identity_doubt: 'Le fan doute que ce soit vraiment elle. Un chatteur en poste lui répond.',
   awaiting_approval: 'Un brouillon attend d’être validé depuis plus de 10 minutes.',
   send_failed: 'Un message n’a pas pu partir. L’agent ne réessaie plus, un humain doit le renvoyer.',
   unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
@@ -113,6 +115,8 @@ function guardsToday(handoffs: DashboardFacts['handoffsToday']): Record<HandoffC
     keyword: 0,
     llm_unavailable: 0,
     other: 0,
+    custom_alert: 0,
+    identity_doubt: 0,
   };
   for (const { cause, count } of handoffs) counts[cause] += count;
   return counts;

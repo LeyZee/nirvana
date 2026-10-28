@@ -1,9 +1,352 @@
 {
   "id": "1e2c1fc6-9efa-410c-9940-ff12b02a0276",
-  "prevId": "852c6b0f-c192-424e-9370-18cd2733f16d",
+  "prevId": "ec526390-7e6b-460b-944c-8b1c6e5b6407",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.alert_seen": {
+      "name": "alert_seen",
+      "schema": "",
+      "columns": {
+        "event_id": {
+          "name": "event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creator_id": {
+          "name": "creator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seen_by": {
+          "name": "seen_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "alert_seen_event_id_conversation_events_id_fk": {
+          "name": "alert_seen_event_id_conversation_events_id_fk",
+          "tableFrom": "alert_seen",
+          "tableTo": "conversation_events",
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "alert_seen_creator_id_creators_id_fk": {
+          "name": "alert_seen_creator_id_creators_id_fk",
+          "tableFrom": "alert_seen",
+          "tableTo": "creators",
+          "columnsFrom": ["creator_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "alert_seen_seen_by_user_id_fk": {
+          "name": "alert_seen_seen_by_user_id_fk",
+          "tableFrom": "alert_seen",
+          "tableTo": "user",
+          "columnsFrom": ["seen_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "alert_seen_pkey": {
+          "name": "alert_seen_pkey",
+          "columns": ["creator_id", "event_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "tenant_isolation": {
+          "name": "tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"alert_seen\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid",
+          "withCheck": "\"alert_seen\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.custom_alerts": {
+      "name": "custom_alerts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creator_id": {
+          "name": "creator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phrase": {
+          "name": "phrase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "keywords": {
+          "name": "keywords",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "pauses_agent": {
+          "name": "pauses_agent",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notify": {
+          "name": "notify",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "custom_alerts_creator_idx": {
+          "name": "custom_alerts_creator_idx",
+          "columns": [
+            {
+              "expression": "creator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"custom_alerts\".\"archived_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "custom_alerts_creator_id_creators_id_fk": {
+          "name": "custom_alerts_creator_id_creators_id_fk",
+          "tableFrom": "custom_alerts",
+          "tableTo": "creators",
+          "columnsFrom": ["creator_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "custom_alerts_created_by_user_id_fk": {
+          "name": "custom_alerts_created_by_user_id_fk",
+          "tableFrom": "custom_alerts",
+          "tableTo": "user",
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "custom_alerts_updated_by_user_id_fk": {
+          "name": "custom_alerts_updated_by_user_id_fk",
+          "tableFrom": "custom_alerts",
+          "tableTo": "user",
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "custom_alerts_group_creator_unique": {
+          "name": "custom_alerts_group_creator_unique",
+          "nullsNotDistinct": false,
+          "columns": ["group_id", "creator_id"]
+        }
+      },
+      "policies": {
+        "tenant_isolation": {
+          "name": "tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"custom_alerts\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid",
+          "withCheck": "\"custom_alerts\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {
+        "custom_alerts_name_check": {
+          "name": "custom_alerts_name_check",
+          "value": "char_length(\"custom_alerts\".\"name\") between 1 and 80"
+        },
+        "custom_alerts_phrase_check": {
+          "name": "custom_alerts_phrase_check",
+          "value": "\"custom_alerts\".\"phrase\" is null or char_length(\"custom_alerts\".\"phrase\") between 1 and 500"
+        },
+        "custom_alerts_keywords_check": {
+          "name": "custom_alerts_keywords_check",
+          "value": "cardinality(\"custom_alerts\".\"keywords\") <= 40 and array_position(\"custom_alerts\".\"keywords\", null) is null and char_length(array_to_string(\"custom_alerts\".\"keywords\", '')) <= 4000"
+        },
+        "custom_alerts_matcher_check": {
+          "name": "custom_alerts_matcher_check",
+          "value": "\"custom_alerts\".\"phrase\" is not null or cardinality(\"custom_alerts\".\"keywords\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.system_alert_settings": {
+      "name": "system_alert_settings",
+      "schema": "",
+      "columns": {
+        "creator_id": {
+          "name": "creator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "system_alert_settings_creator_id_creators_id_fk": {
+          "name": "system_alert_settings_creator_id_creators_id_fk",
+          "tableFrom": "system_alert_settings",
+          "tableTo": "creators",
+          "columnsFrom": ["creator_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "system_alert_settings_updated_by_user_id_fk": {
+          "name": "system_alert_settings_updated_by_user_id_fk",
+          "tableFrom": "system_alert_settings",
+          "tableTo": "user",
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "system_alert_settings_pkey": {
+          "name": "system_alert_settings_pkey",
+          "columns": ["creator_id", "code"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "tenant_isolation": {
+          "name": "tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": ["public"],
+          "using": "\"system_alert_settings\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid",
+          "withCheck": "\"system_alert_settings\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {
+        "system_alert_settings_code_check": {
+          "name": "system_alert_settings_code_check",
+          "value": "\"system_alert_settings\".\"code\" in ('keyword', 'service_request', 'identity_doubt')"
+        },
+        "system_alert_settings_keyword_check": {
+          "name": "system_alert_settings_keyword_check",
+          "value": "\"system_alert_settings\".\"code\" <> 'keyword' or \"system_alert_settings\".\"enabled\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.account": {
       "name": "account",
       "schema": "",
@@ -764,7 +1107,7 @@
       "checkConstraints": {
         "conversation_events_type_check": {
           "name": "conversation_events_type_check",
-          "value": "\"conversation_events\".\"type\" in ('message_received', 'message_sent', 'send_attempted', 'send_failed', 'send_verified', 'media_described', 'draft_created', 'draft_approved', 'draft_edited', 'draft_rejected', 'draft_expired', 'fact_proposed', 'fact_confirmed', 'fact_rejected', 'summary_refreshed', 'handoff_requested', 'reply_skipped', 'reply_deferred', 'desire_scored', 'takeover_started', 'takeover_ended', 'mode_changed', 'kill_switch_toggled', 'follow_up_scheduled', 'follow_up_cancelled', 'offer_made', 'sale_detected', 'script_started', 'script_step_sent', 'script_ended', 'session_state_changed', 'budget_threshold_crossed', 'backup_overdue', 'automatic_closed', 'fan_flag_set', 'fan_flag_cleared', 'error')"
+          "value": "\"conversation_events\".\"type\" in ('message_received', 'message_sent', 'send_attempted', 'send_failed', 'send_verified', 'media_described', 'draft_created', 'draft_approved', 'draft_edited', 'draft_rejected', 'draft_expired', 'fact_proposed', 'fact_confirmed', 'fact_rejected', 'summary_refreshed', 'handoff_requested', 'alert_triggered', 'reply_skipped', 'reply_deferred', 'desire_scored', 'takeover_started', 'takeover_ended', 'mode_changed', 'kill_switch_toggled', 'follow_up_scheduled', 'follow_up_cancelled', 'offer_made', 'sale_detected', 'script_started', 'script_step_sent', 'script_ended', 'session_state_changed', 'budget_threshold_crossed', 'backup_overdue', 'automatic_closed', 'fan_flag_set', 'fan_flag_cleared', 'error')"
         }
       },
       "isRLSEnabled": false
@@ -1613,7 +1956,7 @@
       "checkConstraints": {
         "domain_events_type_check": {
           "name": "domain_events_type_check",
-          "value": "\"domain_events\".\"type\" in ('message_received', 'message_sent', 'send_attempted', 'send_failed', 'send_verified', 'media_described', 'draft_created', 'draft_approved', 'draft_edited', 'draft_rejected', 'draft_expired', 'fact_proposed', 'fact_confirmed', 'fact_rejected', 'summary_refreshed', 'handoff_requested', 'reply_skipped', 'reply_deferred', 'desire_scored', 'takeover_started', 'takeover_ended', 'mode_changed', 'kill_switch_toggled', 'follow_up_scheduled', 'follow_up_cancelled', 'offer_made', 'sale_detected', 'script_started', 'script_step_sent', 'script_ended', 'session_state_changed', 'budget_threshold_crossed', 'backup_overdue', 'automatic_closed', 'fan_flag_set', 'fan_flag_cleared', 'error')"
+          "value": "\"domain_events\".\"type\" in ('message_received', 'message_sent', 'send_attempted', 'send_failed', 'send_verified', 'media_described', 'draft_created', 'draft_approved', 'draft_edited', 'draft_rejected', 'draft_expired', 'fact_proposed', 'fact_confirmed', 'fact_rejected', 'summary_refreshed', 'handoff_requested', 'alert_triggered', 'reply_skipped', 'reply_deferred', 'desire_scored', 'takeover_started', 'takeover_ended', 'mode_changed', 'kill_switch_toggled', 'follow_up_scheduled', 'follow_up_cancelled', 'offer_made', 'sale_detected', 'script_started', 'script_step_sent', 'script_ended', 'session_state_changed', 'budget_threshold_crossed', 'backup_overdue', 'automatic_closed', 'fan_flag_set', 'fan_flag_cleared', 'error')"
         }
       },
       "isRLSEnabled": false
@@ -2603,146 +2946,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.account_pay_rules": {
-      "name": "account_pay_rules",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "creator_id": {
-          "name": "creator_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "platform_account_id": {
-          "name": "platform_account_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_period": {
-          "name": "from_period",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "vat_bps": {
-          "name": "vat_bps",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "platform_fee_bps": {
-          "name": "platform_fee_bps",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "earnings_source": {
-          "name": "earnings_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "account_pay_rules_creator_id_creators_id_fk": {
-          "name": "account_pay_rules_creator_id_creators_id_fk",
-          "tableFrom": "account_pay_rules",
-          "tableTo": "creators",
-          "columnsFrom": ["creator_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "account_pay_rules_created_by_user_id_fk": {
-          "name": "account_pay_rules_created_by_user_id_fk",
-          "tableFrom": "account_pay_rules",
-          "tableTo": "user",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "account_pay_rules_account_creator_fk": {
-          "name": "account_pay_rules_account_creator_fk",
-          "tableFrom": "account_pay_rules",
-          "tableTo": "platform_accounts",
-          "columnsFrom": ["platform_account_id", "creator_id"],
-          "columnsTo": ["id", "creator_id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "account_pay_rules_account_period_unique": {
-          "name": "account_pay_rules_account_period_unique",
-          "nullsNotDistinct": false,
-          "columns": ["platform_account_id", "from_period"]
-        }
-      },
-      "policies": {
-        "team_read": {
-          "name": "team_read",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": ["public"],
-          "using": "\"account_pay_rules\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from shifts s join team_members m on m.id = s.member_id where s.platform_account_id = \"account_pay_rules\".\"platform_account_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')))"
-        },
-        "owner_insert": {
-          "name": "owner_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": ["public"],
-          "withCheck": "\"account_pay_rules\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') = 'owner' and \"account_pay_rules\".\"created_by\" = nullif(current_setting('app.user_id', true), '')"
-        }
-      },
-      "checkConstraints": {
-        "account_pay_rules_period_check": {
-          "name": "account_pay_rules_period_check",
-          "value": "extract(day from \"account_pay_rules\".\"from_period\") in (1, 16)"
-        },
-        "account_pay_rules_bps_check": {
-          "name": "account_pay_rules_bps_check",
-          "value": "\"account_pay_rules\".\"vat_bps\" between 0 and 10000 and \"account_pay_rules\".\"platform_fee_bps\" between 0 and 10000"
-        },
-        "account_pay_rules_currency_check": {
-          "name": "account_pay_rules_currency_check",
-          "value": "\"account_pay_rules\".\"currency\" in ('EUR', 'USD')"
-        },
-        "account_pay_rules_earnings_source_check": {
-          "name": "account_pay_rules_earnings_source_check",
-          "value": "\"account_pay_rules\".\"earnings_source\" in ('declared', 'detected')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.persona_versions": {
       "name": "persona_versions",
       "schema": "",
@@ -3201,381 +3404,6 @@
         "scheduling_settings_margin_check": {
           "name": "scheduling_settings_margin_check",
           "value": "\"scheduling_settings\".\"access_margin_minutes\" between 0 and 120"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.shift_reports": {
-      "name": "shift_reports",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "creator_id": {
-          "name": "creator_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "platform_account_id": {
-          "name": "platform_account_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "shift_id": {
-          "name": "shift_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "period": {
-          "name": "period",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "corrects_id": {
-          "name": "corrects_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "amount_minor": {
-          "name": "amount_minor",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "comment": {
-          "name": "comment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "incident": {
-          "name": "incident",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "by_agency": {
-          "name": "by_agency",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "submitted_by": {
-          "name": "submitted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "submitted_at": {
-          "name": "submitted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reviewed_by": {
-          "name": "reviewed_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review_note": {
-          "name": "review_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "shift_reports_shift_unique": {
-          "name": "shift_reports_shift_unique",
-          "columns": [
-            {
-              "expression": "shift_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"shift_reports\".\"corrects_id\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "shift_reports_creator_period_idx": {
-          "name": "shift_reports_creator_period_idx",
-          "columns": [
-            {
-              "expression": "creator_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "period",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "shift_reports_member_period_idx": {
-          "name": "shift_reports_member_period_idx",
-          "columns": [
-            {
-              "expression": "member_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "period",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "shift_reports_open_idx": {
-          "name": "shift_reports_open_idx",
-          "columns": [
-            {
-              "expression": "creator_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "submitted_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"shift_reports\".\"status\" in ('submitted', 'rejected')",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "shift_reports_creator_id_creators_id_fk": {
-          "name": "shift_reports_creator_id_creators_id_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "creators",
-          "columnsFrom": ["creator_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "shift_reports_member_id_team_members_id_fk": {
-          "name": "shift_reports_member_id_team_members_id_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "team_members",
-          "columnsFrom": ["member_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "shift_reports_submitted_by_user_id_fk": {
-          "name": "shift_reports_submitted_by_user_id_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "user",
-          "columnsFrom": ["submitted_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "shift_reports_reviewed_by_user_id_fk": {
-          "name": "shift_reports_reviewed_by_user_id_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "user",
-          "columnsFrom": ["reviewed_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "shift_reports_created_by_user_id_fk": {
-          "name": "shift_reports_created_by_user_id_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "user",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "shift_reports_shift_fk": {
-          "name": "shift_reports_shift_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "shifts",
-          "columnsFrom": ["shift_id", "creator_id", "platform_account_id", "member_id"],
-          "columnsTo": ["id", "creator_id", "platform_account_id", "member_id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "shift_reports_corrects_fk": {
-          "name": "shift_reports_corrects_fk",
-          "tableFrom": "shift_reports",
-          "tableTo": "shift_reports",
-          "columnsFrom": ["corrects_id", "shift_id"],
-          "columnsTo": ["id", "shift_id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "shift_reports_id_shift_unique": {
-          "name": "shift_reports_id_shift_unique",
-          "nullsNotDistinct": false,
-          "columns": ["id", "shift_id"]
-        }
-      },
-      "policies": {
-        "member_read": {
-          "name": "member_read",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": ["public"],
-          "using": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')))"
-        },
-        "member_insert": {
-          "name": "member_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": ["public"],
-          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and not \"shift_reports\".\"by_agency\" and \"shift_reports\".\"status\" = 'submitted' and \"shift_reports\".\"version\" = 1 and \"shift_reports\".\"created_by\" = nullif(current_setting('app.user_id', true), '') and \"shift_reports\".\"submitted_by\" = nullif(current_setting('app.user_id', true), '')"
-        },
-        "agency_insert": {
-          "name": "agency_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": ["public"],
-          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and \"shift_reports\".\"by_agency\" and \"shift_reports\".\"corrects_id\" is not null and \"shift_reports\".\"status\" = 'submitted' and \"shift_reports\".\"version\" = 1 and \"shift_reports\".\"created_by\" = nullif(current_setting('app.user_id', true), '') and \"shift_reports\".\"submitted_by\" = nullif(current_setting('app.user_id', true), '')"
-        },
-        "maker_update": {
-          "name": "maker_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": ["public"],
-          "using": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and \"shift_reports\".\"status\" in ('submitted', 'rejected') and ((not \"shift_reports\".\"by_agency\" and exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))) or (\"shift_reports\".\"by_agency\" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency')))",
-          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and \"shift_reports\".\"status\" = 'submitted' and \"shift_reports\".\"submitted_by\" = nullif(current_setting('app.user_id', true), '') and ((not \"shift_reports\".\"by_agency\" and exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))) or (\"shift_reports\".\"by_agency\" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency')))"
-        },
-        "team_review": {
-          "name": "team_review",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": ["public"],
-          "using": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and \"shift_reports\".\"status\" = 'submitted'",
-          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and \"shift_reports\".\"status\" in ('validated', 'rejected') and \"shift_reports\".\"reviewed_by\" = nullif(current_setting('app.user_id', true), '') and not exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and (nullif(current_setting('app.team_scope', true), '') = 'owner' or \"shift_reports\".\"submitted_by\" <> nullif(current_setting('app.user_id', true), ''))"
-        }
-      },
-      "checkConstraints": {
-        "shift_reports_status_check": {
-          "name": "shift_reports_status_check",
-          "value": "\"shift_reports\".\"status\" in ('submitted', 'validated', 'rejected')"
-        },
-        "shift_reports_currency_check": {
-          "name": "shift_reports_currency_check",
-          "value": "\"shift_reports\".\"currency\" in ('EUR', 'USD')"
-        },
-        "shift_reports_period_check": {
-          "name": "shift_reports_period_check",
-          "value": "extract(day from \"shift_reports\".\"period\") in (1, 16)"
-        },
-        "shift_reports_amount_check": {
-          "name": "shift_reports_amount_check",
-          "value": "\"shift_reports\".\"amount_minor\" between -5000000 and 5000000 and case when \"shift_reports\".\"corrects_id\" is null then \"shift_reports\".\"amount_minor\" >= 0 else \"shift_reports\".\"amount_minor\" <> 0 end"
-        },
-        "shift_reports_correction_check": {
-          "name": "shift_reports_correction_check",
-          "value": "\"shift_reports\".\"corrects_id\" is not null or (\"shift_reports\".\"by_agency\" = false)"
-        },
-        "shift_reports_incident_check": {
-          "name": "shift_reports_incident_check",
-          "value": "\"shift_reports\".\"corrects_id\" is null or \"shift_reports\".\"incident\" is null"
-        },
-        "shift_reports_texts_check": {
-          "name": "shift_reports_texts_check",
-          "value": "coalesce(char_length(\"shift_reports\".\"comment\"), 1) between 1 and 1000 and coalesce(char_length(\"shift_reports\".\"incident\"), 1) between 1 and 1000 and coalesce(char_length(\"shift_reports\".\"review_note\"), 1) between 1 and 500"
-        },
-        "shift_reports_version_check": {
-          "name": "shift_reports_version_check",
-          "value": "\"shift_reports\".\"version\" >= 1"
-        },
-        "shift_reports_state_check": {
-          "name": "shift_reports_state_check",
-          "value": "(\"shift_reports\".\"reviewed_at\" is null) = (\"shift_reports\".\"reviewed_by\" is null) and (\"shift_reports\".\"status\" = 'submitted') = (\"shift_reports\".\"reviewed_at\" is null) and (\"shift_reports\".\"status\" = 'rejected') = (\"shift_reports\".\"review_note\" is not null)"
         }
       },
       "isRLSEnabled": false
@@ -6216,7 +6044,7 @@
       "checkConstraints": {
         "telegram_deliveries_topic_check": {
           "name": "telegram_deliveries_topic_check",
-          "value": "\"telegram_deliveries\".\"topic\" in ('urgent', 'important', 'info', 'sale', 'keyword', 'validation')"
+          "value": "\"telegram_deliveries\".\"topic\" in ('urgent', 'important', 'info', 'sale', 'keyword', 'validation', 'custom')"
         },
         "telegram_deliveries_action_check": {
           "name": "telegram_deliveries_action_check",
@@ -6302,7 +6130,7 @@
       "checkConstraints": {
         "telegram_routes_topic_check": {
           "name": "telegram_routes_topic_check",
-          "value": "\"telegram_routes\".\"topic\" in ('urgent', 'important', 'info', 'sale', 'keyword', 'validation')"
+          "value": "\"telegram_routes\".\"topic\" in ('urgent', 'important', 'info', 'sale', 'keyword', 'validation', 'custom')"
         }
       },
       "isRLSEnabled": false
@@ -6337,6 +6165,521 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.account_pay_rules": {
+      "name": "account_pay_rules",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "creator_id": {
+          "name": "creator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_account_id": {
+          "name": "platform_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_period": {
+          "name": "from_period",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vat_bps": {
+          "name": "vat_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_fee_bps": {
+          "name": "platform_fee_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "earnings_source": {
+          "name": "earnings_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "account_pay_rules_creator_id_creators_id_fk": {
+          "name": "account_pay_rules_creator_id_creators_id_fk",
+          "tableFrom": "account_pay_rules",
+          "tableTo": "creators",
+          "columnsFrom": ["creator_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "account_pay_rules_created_by_user_id_fk": {
+          "name": "account_pay_rules_created_by_user_id_fk",
+          "tableFrom": "account_pay_rules",
+          "tableTo": "user",
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "account_pay_rules_account_creator_fk": {
+          "name": "account_pay_rules_account_creator_fk",
+          "tableFrom": "account_pay_rules",
+          "tableTo": "platform_accounts",
+          "columnsFrom": ["platform_account_id", "creator_id"],
+          "columnsTo": ["id", "creator_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "account_pay_rules_account_period_unique": {
+          "name": "account_pay_rules_account_period_unique",
+          "nullsNotDistinct": false,
+          "columns": ["platform_account_id", "from_period"]
+        }
+      },
+      "policies": {
+        "team_read": {
+          "name": "team_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": ["public"],
+          "using": "\"account_pay_rules\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from shifts s join team_members m on m.id = s.member_id where s.platform_account_id = \"account_pay_rules\".\"platform_account_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')))"
+        },
+        "owner_insert": {
+          "name": "owner_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": ["public"],
+          "withCheck": "\"account_pay_rules\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') = 'owner' and \"account_pay_rules\".\"created_by\" = nullif(current_setting('app.user_id', true), '')"
+        }
+      },
+      "checkConstraints": {
+        "account_pay_rules_period_check": {
+          "name": "account_pay_rules_period_check",
+          "value": "extract(day from \"account_pay_rules\".\"from_period\") in (1, 16)"
+        },
+        "account_pay_rules_bps_check": {
+          "name": "account_pay_rules_bps_check",
+          "value": "\"account_pay_rules\".\"vat_bps\" between 0 and 10000 and \"account_pay_rules\".\"platform_fee_bps\" between 0 and 10000"
+        },
+        "account_pay_rules_currency_check": {
+          "name": "account_pay_rules_currency_check",
+          "value": "\"account_pay_rules\".\"currency\" in ('EUR', 'USD')"
+        },
+        "account_pay_rules_earnings_source_check": {
+          "name": "account_pay_rules_earnings_source_check",
+          "value": "\"account_pay_rules\".\"earnings_source\" in ('declared', 'detected')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.shift_reports": {
+      "name": "shift_reports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "creator_id": {
+          "name": "creator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_account_id": {
+          "name": "platform_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shift_id": {
+          "name": "shift_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period": {
+          "name": "period",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "corrects_id": {
+          "name": "corrects_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "incident": {
+          "name": "incident",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "by_agency": {
+          "name": "by_agency",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "submitted_by": {
+          "name": "submitted_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_note": {
+          "name": "review_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "shift_reports_shift_unique": {
+          "name": "shift_reports_shift_unique",
+          "columns": [
+            {
+              "expression": "shift_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"shift_reports\".\"corrects_id\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "shift_reports_creator_period_idx": {
+          "name": "shift_reports_creator_period_idx",
+          "columns": [
+            {
+              "expression": "creator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "shift_reports_member_period_idx": {
+          "name": "shift_reports_member_period_idx",
+          "columns": [
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "shift_reports_open_idx": {
+          "name": "shift_reports_open_idx",
+          "columns": [
+            {
+              "expression": "creator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "submitted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"shift_reports\".\"status\" in ('submitted', 'rejected')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "shift_reports_creator_id_creators_id_fk": {
+          "name": "shift_reports_creator_id_creators_id_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "creators",
+          "columnsFrom": ["creator_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shift_reports_member_id_team_members_id_fk": {
+          "name": "shift_reports_member_id_team_members_id_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "team_members",
+          "columnsFrom": ["member_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shift_reports_submitted_by_user_id_fk": {
+          "name": "shift_reports_submitted_by_user_id_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "user",
+          "columnsFrom": ["submitted_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shift_reports_reviewed_by_user_id_fk": {
+          "name": "shift_reports_reviewed_by_user_id_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "user",
+          "columnsFrom": ["reviewed_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shift_reports_created_by_user_id_fk": {
+          "name": "shift_reports_created_by_user_id_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "user",
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shift_reports_shift_fk": {
+          "name": "shift_reports_shift_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "shifts",
+          "columnsFrom": ["shift_id", "creator_id", "platform_account_id", "member_id"],
+          "columnsTo": ["id", "creator_id", "platform_account_id", "member_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shift_reports_corrects_fk": {
+          "name": "shift_reports_corrects_fk",
+          "tableFrom": "shift_reports",
+          "tableTo": "shift_reports",
+          "columnsFrom": ["corrects_id", "shift_id"],
+          "columnsTo": ["id", "shift_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "shift_reports_id_shift_unique": {
+          "name": "shift_reports_id_shift_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id", "shift_id"]
+        }
+      },
+      "policies": {
+        "member_read": {
+          "name": "member_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": ["public"],
+          "using": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')))"
+        },
+        "member_insert": {
+          "name": "member_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": ["public"],
+          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and not \"shift_reports\".\"by_agency\" and \"shift_reports\".\"status\" = 'submitted' and \"shift_reports\".\"version\" = 1 and \"shift_reports\".\"created_by\" = nullif(current_setting('app.user_id', true), '') and \"shift_reports\".\"submitted_by\" = nullif(current_setting('app.user_id', true), '')"
+        },
+        "agency_insert": {
+          "name": "agency_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": ["public"],
+          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and \"shift_reports\".\"by_agency\" and \"shift_reports\".\"corrects_id\" is not null and \"shift_reports\".\"status\" = 'submitted' and \"shift_reports\".\"version\" = 1 and \"shift_reports\".\"created_by\" = nullif(current_setting('app.user_id', true), '') and \"shift_reports\".\"submitted_by\" = nullif(current_setting('app.user_id', true), '')"
+        },
+        "maker_update": {
+          "name": "maker_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": ["public"],
+          "using": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and \"shift_reports\".\"status\" in ('submitted', 'rejected') and ((not \"shift_reports\".\"by_agency\" and exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))) or (\"shift_reports\".\"by_agency\" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency')))",
+          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and \"shift_reports\".\"status\" = 'submitted' and \"shift_reports\".\"submitted_by\" = nullif(current_setting('app.user_id', true), '') and ((not \"shift_reports\".\"by_agency\" and exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))) or (\"shift_reports\".\"by_agency\" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency')))"
+        },
+        "team_review": {
+          "name": "team_review",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": ["public"],
+          "using": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and \"shift_reports\".\"status\" = 'submitted'",
+          "withCheck": "\"shift_reports\".\"creator_id\" = nullif(current_setting('app.creator_id', true), '')::uuid and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and \"shift_reports\".\"status\" in ('validated', 'rejected') and \"shift_reports\".\"reviewed_by\" = nullif(current_setting('app.user_id', true), '') and not exists (select 1 from team_members m where m.id = \"shift_reports\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and (nullif(current_setting('app.team_scope', true), '') = 'owner' or \"shift_reports\".\"submitted_by\" <> nullif(current_setting('app.user_id', true), ''))"
+        }
+      },
+      "checkConstraints": {
+        "shift_reports_status_check": {
+          "name": "shift_reports_status_check",
+          "value": "\"shift_reports\".\"status\" in ('submitted', 'validated', 'rejected')"
+        },
+        "shift_reports_currency_check": {
+          "name": "shift_reports_currency_check",
+          "value": "\"shift_reports\".\"currency\" in ('EUR', 'USD')"
+        },
+        "shift_reports_period_check": {
+          "name": "shift_reports_period_check",
+          "value": "extract(day from \"shift_reports\".\"period\") in (1, 16)"
+        },
+        "shift_reports_amount_check": {
+          "name": "shift_reports_amount_check",
+          "value": "\"shift_reports\".\"amount_minor\" between -5000000 and 5000000 and case when \"shift_reports\".\"corrects_id\" is null then \"shift_reports\".\"amount_minor\" >= 0 else \"shift_reports\".\"amount_minor\" <> 0 end"
+        },
+        "shift_reports_correction_check": {
+          "name": "shift_reports_correction_check",
+          "value": "\"shift_reports\".\"corrects_id\" is not null or (\"shift_reports\".\"by_agency\" = false)"
+        },
+        "shift_reports_incident_check": {
+          "name": "shift_reports_incident_check",
+          "value": "\"shift_reports\".\"corrects_id\" is null or \"shift_reports\".\"incident\" is null"
+        },
+        "shift_reports_texts_check": {
+          "name": "shift_reports_texts_check",
+          "value": "coalesce(char_length(\"shift_reports\".\"comment\"), 1) between 1 and 1000 and coalesce(char_length(\"shift_reports\".\"incident\"), 1) between 1 and 1000 and coalesce(char_length(\"shift_reports\".\"review_note\"), 1) between 1 and 500"
+        },
+        "shift_reports_version_check": {
+          "name": "shift_reports_version_check",
+          "value": "\"shift_reports\".\"version\" >= 1"
+        },
+        "shift_reports_state_check": {
+          "name": "shift_reports_state_check",
+          "value": "(\"shift_reports\".\"reviewed_at\" is null) = (\"shift_reports\".\"reviewed_by\" is null) and (\"shift_reports\".\"status\" = 'submitted') = (\"shift_reports\".\"reviewed_at\" is null) and (\"shift_reports\".\"status\" = 'rejected') = (\"shift_reports\".\"review_note\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     }
   },
