@@ -12,6 +12,7 @@ import type {
   DomainError,
   ExchangeRate,
   ExchangeRates,
+  ForeignCurrency,
   PayAdjustment,
   PayAdjustmentId,
   PayPeriod,
@@ -140,11 +141,14 @@ export interface PayrollRuleStore {
 /** A rate as the ECB writes it (ADR 0033): units of `currency` for one euro, in decimal text, on `day`. */
 export interface EcbRate {
   readonly day: string;
-  readonly currency: string;
+  readonly currency: ForeignCurrency;
   readonly perEuro: string;
 }
 
-/** The ECB's last 90 days, read and validated; throws when it cannot be reached, answers too much or out of format. */
+/**
+ * The ECB's last 90 days of the currencies pay uses, read and validated; throws when it cannot be reached, answers too
+ * much or out of format.
+ */
 export interface RateSource {
   history(): Promise<readonly EcbRate[]>;
 }

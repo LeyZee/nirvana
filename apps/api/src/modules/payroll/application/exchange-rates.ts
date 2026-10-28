@@ -1,4 +1,4 @@
-import { ExchangeRateSchema, ForeignCurrencySchema } from '@nirvana/contracts';
+import { ExchangeRateSchema } from '@nirvana/contracts';
 
 import { ECB_SOURCE, eurosPerUnitMicros } from '../domain/exchange-rates';
 import type { JobLogger, PayrollRateStore, RateSource } from '../domain/ports';
@@ -22,23 +22,21 @@ export async function fetchExchangeRates(
   now: () => Date,
 ): Promise<RateFetchOutcome> {
   const fetchedAt = now().toISOString();
-  const rates = (await source.history())
-    .filter((rate) => ForeignCurrencySchema.safeParse(rate.currency).success)
-    .map((rate) =>
-      ExchangeRateSchema.parse({
-        currency: rate.currency,
-        day: rate.day,
-        rateMicros: eurosPerUnitMicros(rate.perEuro),
-        source: ECB_SOURCE,
-        fetchedAt,
-      }),
-    );
+  const rates = (await source.history()).map((rate) =>
+    ExchangeRateSchema.parse({
+      currency: rate.currency,
+      day: rate.day,
+      rateMicros: eurosPerUnitMicros(rate.perEuro),
+      source: ECB_SOURCE,
+      fetchedAt,
+    }),
+  );
   if (rates.length === 0) throw new Error('The ECB file has no rate of a currency pay uses');
   const { written, differing } = await store.addUnscoped(rates);
   if (differing.length > 0) {
     logger.error(
       { days: differing.map((rate) => `${rate.currency} ${rate.day}`) },
-      'payroll: the ECB gives another rate for a day already written, which stays as it is',
+      'payroll: the ECB gives another rate for a day already written, which stays as it is; this repeats each hour until the day leaves the ECB’s 90 days',
     );
   }
   return { read: rates.length, written };

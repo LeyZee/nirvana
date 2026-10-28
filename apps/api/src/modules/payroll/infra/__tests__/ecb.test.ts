@@ -29,14 +29,28 @@ const answer = (body: string, init: ResponseInit = {}): Response =>
   new Response(body, { status: 200, ...init });
 
 describe('the ECB’s file (ADR 0033)', () => {
-  it('reads each day and each of its rates, as written', () => {
-    const rates = readEcbHistory(HISTORY);
-    expect(rates).toHaveLength(6);
-    expect(rates.filter((rate) => rate.currency === 'USD')).toEqual([
+  it('reads each day and the rates of the currencies pay uses, as written', () => {
+    expect(readEcbHistory(HISTORY)).toEqual([
       { day: '2025-10-03', currency: 'USD', perEuro: '1.1734' },
       { day: '2025-10-02', currency: 'USD', perEuro: '1.1708' },
       { day: '2025-10-01', currency: 'USD', perEuro: '1.1741' },
     ]);
+  });
+
+  it('never lets an odd rate of a currency nobody is paid in stop the dollar', () => {
+    const odd = HISTORY.replace("rate='172.65'", "rate='N/A'").replace("rate='0.87210'", "rate='16789012.5'");
+    expect(readEcbHistory(odd)).toEqual(readEcbHistory(HISTORY));
+    // The same value on the dollar refuses the whole file.
+    expect(() => readEcbHistory(HISTORY.replace("rate='1.1708'", "rate='N/A'"))).toThrow();
+    // A day and a currency code are checked everywhere, even on a day holding no rate pay uses.
+    const yen = `<Cube><Cube time='2025-10-03'><Cube currency='USD' rate='1.1734'/></Cube>`;
+    expect(() =>
+      readEcbHistory(`${yen}<Cube time='03/10/2025'><Cube currency='JPY' rate='172'/></Cube></Cube>`),
+    ).toThrow();
+    expect(() =>
+      readEcbHistory(`${yen}<Cube time='2025-10-02'><Cube currency='yen' rate='172'/></Cube></Cube>`),
+    ).toThrow();
+    expect(() => readEcbHistory(`${yen}<Cube time='2025-10-02'><Cube rate='172'/></Cube></Cube>`)).toThrow();
   });
 
   it('reads double quotes and attributes in any order', () => {
@@ -56,6 +70,9 @@ describe('the ECB’s file (ADR 0033)', () => {
     }
     expect(() => readEcbHistory('<html><body>Maintenance</body></html>')).toThrow('no rate');
     expect(() => readEcbHistory("<Cube><Cube time='2025-10-03'></Cube></Cube>")).toThrow('no rate');
+    expect(() =>
+      readEcbHistory("<Cube><Cube time='2025-10-03'><Cube currency='JPY' rate='172'/></Cube></Cube>"),
+    ).toThrow('no rate of a currency pay uses');
   });
 
   it('asks the ECB’s 90 days, with a deadline, and reads its answer', async () => {
@@ -65,7 +82,7 @@ describe('the ECB’s file (ADR 0033)', () => {
       expect(init.signal).toBeInstanceOf(AbortSignal);
       return Promise.resolve(answer(HISTORY));
     };
-    expect(await createEcbSource({ fetch }).history()).toHaveLength(6);
+    expect(await createEcbSource({ fetch }).history()).toHaveLength(3);
     expect(asked).toEqual(['https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml']);
   });
 

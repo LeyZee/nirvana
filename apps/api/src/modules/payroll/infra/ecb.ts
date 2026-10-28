@@ -1,11 +1,11 @@
-import { CalendarDaySchema } from '@nirvana/contracts';
+import { CalendarDaySchema, ForeignCurrencySchema } from '@nirvana/contracts';
 import { z } from 'zod';
 
 import type { EcbRate, RateSource } from '../domain/ports';
 
 /**
  * The ECB adapter (ADR 0033): its last 90 days of reference rates, one public file, no key, nothing sent but the
- * request. Every value is checked before pay sees it; a file out of format is refused whole, never half read.
+ * request. Every value pay keeps is checked before pay sees it; a file out of format is refused whole, never half read.
  */
 
 /** The part of `fetch` the adapter uses, so that a test gives a fake ECB. */
@@ -27,9 +27,11 @@ const TIMEOUT_MS = 10_000;
 // The file is about 30 kB; a megabyte is room for every currency and a change of layout, not for anything else.
 const MAX_BYTES = 1_000_000;
 
+const CurrencyCodeSchema = z.string().regex(/^[A-Z]{3}$/);
+
 const EcbRateSchema = z.strictObject({
   day: CalendarDaySchema,
-  currency: z.string().regex(/^[A-Z]{3}$/),
+  currency: ForeignCurrencySchema,
   perEuro: z.string().regex(/^\d{1,6}(\.\d{1,8})?$/),
 });
 
@@ -39,25 +41,28 @@ const RATE_ELEMENT = /<Cube\s+([^>]*?)\/>/g;
 const ATTRIBUTE = /([A-Za-z]+)\s*=\s*(['"])(.*?)\2/g;
 
 /**
- * The rates of the ECB's file: each `<Cube time='…'>` and the `<Cube currency='…' rate='…'/>` inside it, quotes
- * single or double, attributes in any order. Throws on a day or a rate out of format, and on a file without any.
+ * The rates pay uses in the ECB's file: each `<Cube time='…'>` and, inside it, the `<Cube currency='…' rate='…'/>` of
+ * a currency pay converts (`ForeignCurrencySchema`), quotes single or double, attributes in any order. Every day and
+ * every currency code is checked, but only the rates pay keeps: an odd value for a currency nobody is paid in (one
+ * suspended, one past six digits) never stops the dollar. Throws on a day, a code or a kept rate out of format, and on
+ * a file without any rate pay uses.
  */
 export function readEcbHistory(xml: string): EcbRate[] {
   const rates: EcbRate[] = [];
   for (const chunk of xml.split(DAY_OPENING).slice(1)) {
     const opening = DAY_VALUE.exec(chunk);
     if (opening === null) throw new Error('ECB file: a day without its date');
-    const day = opening[2];
+    const day = CalendarDaySchema.parse(opening[2]);
     for (const element of chunk.matchAll(RATE_ELEMENT)) {
       const attributes = new Map(
         [...(element[1] ?? '').matchAll(ATTRIBUTE)].map((match) => [match[1], match[3]] as const),
       );
-      rates.push(
-        EcbRateSchema.parse({ day, currency: attributes.get('currency'), perEuro: attributes.get('rate') }),
-      );
+      const currency = CurrencyCodeSchema.parse(attributes.get('currency'));
+      if (!ForeignCurrencySchema.safeParse(currency).success) continue;
+      rates.push(EcbRateSchema.parse({ day, currency, perEuro: attributes.get('rate') }));
     }
   }
-  if (rates.length === 0) throw new Error('ECB file: no rate in it');
+  if (rates.length === 0) throw new Error('ECB file: no rate of a currency pay uses');
   return rates;
 }
 
