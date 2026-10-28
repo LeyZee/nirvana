@@ -12,7 +12,7 @@ import { ComingSoon, Page, PageHeader, SubNav, type SubNavItem } from '@/shell/l
 import './settings.css';
 
 /**
- * The owner's tabs alone, as the server serves these pages to her alone: anyone else gets no tab that would
+ * The pages the server serves to the owner alone: anyone else gets no tab that would
  * answer 403. The AI keys and the bots and groups (P3-03, P3-07), the alerts (P4-01), the accounts' pay rules
  * (EQ-03) and the backups (ADR 0028).
  */
