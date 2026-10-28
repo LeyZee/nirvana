@@ -67,7 +67,7 @@ const files =
 
 const today = '2026-10-20';
 const persona = readPersonaFile(
-  readFileSync(resolve(ROOT, 'personas/demo/v0.1.0.yaml'), 'utf8'),
+  readFileSync(resolve(ROOT, 'personas/demo/v0.2.0.yaml'), 'utf8'),
   'Elena',
   today,
 );

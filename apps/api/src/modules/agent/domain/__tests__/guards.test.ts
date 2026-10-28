@@ -107,6 +107,14 @@ describe('voice guards', () => {
     expect(codes(['Pas d’anal, désolée'], ['anal'])).toEqual(['forbidden_term']);
   });
 
+  it('blocks an emoji she never uses, however the keyboard typed it (P5-01)', () => {
+    const settings = { ...DEFAULT_GUARD_SETTINGS, forbiddenEmojis: ['😂', '❤️'] };
+    const found = (bubbles: string[]) => checkVoiceOutput(bubbles, settings).map((v) => [v.code, v.match]);
+    expect(found(['Trop drôle 😂'])).toEqual([['forbidden_term', '😂']]);
+    expect(found(['Bisous ❤'])).toEqual([['forbidden_term', '❤️']]);
+    expect(found(['Coucou 😏'])).toEqual([]);
+  });
+
   it('never asks him for intimate pictures, despises him or lies about paid content', () => {
     for (const ask of [
       'Envoie-moi une photo de toi tout nu 😏',

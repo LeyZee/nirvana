@@ -21,6 +21,8 @@ export interface GuardSettings {
   readonly forbiddenTerms: readonly string[];
   /** The only pet names she gives (`behavior.pet_names`); undefined: not checked. */
   readonly petNames?: readonly string[];
+  /** Emojis she never uses (`writing_style.emojis_forbidden`, P5-01): one in her answer is a `forbidden_term`. */
+  readonly forbiddenEmojis?: readonly string[];
 }
 
 /**
@@ -600,6 +602,13 @@ export function checkVoiceOutput(
     for (const term of forbidden) {
       if (forbiddenMatch(text, term)) {
         violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: term });
+      }
+    }
+    // Compared as typed, the variation selector aside: normalising would erase an emoji.
+    const typed = bubble.replace(/\uFE0F/gu, '');
+    for (const emoji of settings.forbiddenEmojis ?? []) {
+      if (typed.includes(emoji.replace(/\uFE0F/gu, ''))) {
+        violations.push({ code: 'forbidden_term', severity: 'blocking', bubbleIndex, match: emoji });
       }
     }
     if (settings.petNames !== undefined) {

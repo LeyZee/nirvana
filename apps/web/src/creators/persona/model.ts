@@ -6,7 +6,12 @@ import type { z } from 'zod';
  * validation by `PersonaSchema` with French messages, and the one-line summaries of folded blocks.
  */
 
-export type TabId = Exclude<keyof Persona, 'meta'>;
+/**
+ * The P5-01 blocks (`lifestyle`, `tastes`, `intimate`, `writing_style`, `sample_replies`) have no tab yet: a version
+ * that holds them keeps them untouched until their screen comes.
+ */
+type BlockWithoutTab = 'lifestyle' | 'tastes' | 'intimate' | 'writing_style' | 'sample_replies';
+export type TabId = Exclude<keyof Persona, 'meta' | BlockWithoutTab>;
 
 export const TABS: readonly { readonly id: TabId; readonly label: string }[] = [
   { id: 'details', label: 'Détails' },

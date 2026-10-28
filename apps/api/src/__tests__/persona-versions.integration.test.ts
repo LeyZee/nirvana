@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
+  ApiErrorSchema,
+  PersonaSampleReplyUnprocessableDetailsSchema,
   PersonaSchema,
   type CreatorId,
   type Persona,
@@ -129,6 +131,31 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
   it('refuses a persona that fails the schema with 400', async () => {
     const minor = { ...demo(), details: { ...demo().details, date_of_birth: '2015-01-01' } };
     expect((await post(bea, owner, { persona: minor, basedOn: null })).statusCode).toBe(400);
+  });
+
+  it('refuses with 422 a version whose sample replies a hard guard would block, from the screen and the file (P5-01)', async () => {
+    const taught = {
+      ...demo(),
+      sample_replies: [
+        { situation: null, reply: 'Coucou toi' },
+        { situation: 'Il propose de se voir', reply: 'On se fait un rdv samedi ? *sourit*' },
+      ],
+    };
+    const refused = await post(bea, owner, { persona: taught, basedOn: null });
+    expect(refused.statusCode).toBe(422);
+    const { error } = ApiErrorSchema.parse(refused.json());
+    expect(error.code).toBe('persona_sample_reply_unprocessable');
+    const { faults } = PersonaSampleReplyUnprocessableDetailsSchema.parse(error.details);
+    expect(faults).toContainEqual({ index: 1, code: 'stage_direction' });
+    expect(faults).toContainEqual({ index: 1, code: 'platform_meeting_word' });
+    expect(faults.every((fault) => fault.index === 1)).toBe(true);
+    await expect(
+      app.modules.persona.versions.load(bea, withVersion(taught, '0.9.0'), {
+        sourcePath: 'a.yaml',
+        activate: false,
+      }),
+    ).rejects.toThrow('réponse type');
+    expect((await get(bea, owner)).json<PersonaOverview>().versions).toHaveLength(0);
   });
 
   it('lets a chatter read the persona of her creators only, and never change it', async () => {
