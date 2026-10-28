@@ -17,6 +17,7 @@ import {
 import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { z } from 'zod';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
@@ -460,5 +461,71 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations?creatorId=${creatorId}`, ownerCookie)).json(),
     );
     expect(list.items.find((item) => item.id === conversationId)?.lastInboundAt).toBe(wrote);
+  });
+
+  it('pages through rows of the same millisecond without skipping one, microseconds kept in the cursor', async () => {
+    // Postgres keeps microseconds; a cursor cut to the millisecond skipped what sorted after it within that millisecond.
+    const id = conversationIds[1]!;
+    const [account] = await test.admin.db
+      .select({ id: schema.platformAccounts.id })
+      .from(schema.platformAccounts)
+      .where(eq(schema.platformAccounts.creatorId, creatorId));
+    if (account === undefined) throw new Error('no account');
+    for (const n of [2, 3]) {
+      await app.modules.conversations.ingestMessage({
+        creatorId,
+        platformAccountId: PlatformAccountIdSchema.parse(account.id),
+        platformConversationId: 'c-Marc',
+        platformFanId: 'f-Marc',
+        fanDisplayName: 'Marc',
+        message: {
+          ref: { platform: 'reveal', id: `m-Marc-${String(n)}` },
+          conversationRef: { platform: 'reveal', id: 'c-Marc' },
+          direction: 'inbound',
+          text: `Message ${String(n)}`,
+          media: [],
+          priceMinor: null,
+          currency: null,
+          isPaid: false,
+          createdAt: new Date().toISOString(),
+        },
+        correlationId: 'same-ms',
+      });
+    }
+    await test.admin.db
+      .execute(sql`update messages set platform_created_at = '2026-10-01T10:00:00.000Z'::timestamptz
+      + (row_number_us * interval '1 microsecond')
+      from (select id as mid, (row_number() over (order by id)) * 100 as row_number_us from messages
+        where conversation_id = ${id}) ranked
+      where messages.id = ranked.mid`);
+    await test.admin.db
+      .execute(sql`update conversations set updated_at = '2026-10-01T10:00:00.000Z'::timestamptz
+      + (row_number_us * interval '1 microsecond')
+      from (select id as cid, (row_number() over (order by id)) * 100 as row_number_us from conversations
+        where creator_id = ${creatorId}) ranked
+      where conversations.id = ranked.cid`);
+
+    async function walk(path: string): Promise<string[]> {
+      const seen: string[] = [];
+      let cursor: string | null = '';
+      while (cursor !== null) {
+        const url = `${path}${path.includes('?') ? '&' : '?'}creatorId=${creatorId}&limit=1${cursor === '' ? '' : `&cursor=${cursor}`}`;
+        const response = await call('GET', url, ownerCookie);
+        expect(response.statusCode, response.body).toBe(200);
+        const body = z
+          .object({ items: z.array(z.object({ id: z.string() })), nextCursor: z.string().nullable() })
+          .parse(response.json());
+        seen.push(...body.items.map((item) => item.id));
+        cursor = body.nextCursor;
+      }
+      return seen;
+    }
+
+    const messages = await walk(`/v1/conversations/${id}/messages`);
+    expect(messages).toHaveLength(3);
+    expect(new Set(messages).size).toBe(3);
+    const conversations = await walk('/v1/conversations');
+    expect(conversations).toHaveLength(3);
+    expect(new Set(conversations).size).toBe(3);
   });
 });
