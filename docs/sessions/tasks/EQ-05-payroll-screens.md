@@ -33,7 +33,7 @@ Valider et payer les paies depuis l'onglet Paie, à la place que fixe l'ADR 0024
    - `payment_reference` est la référence du transfert (1 à 100 caractères), jamais un IBAN ni un numéro de compte : l'écran et la doc le disent, et le contrat refuse une référence qui contient un IBAN (`containsIban` : code pays, longueur du pays et clé mod 97 sur un passage du texte ; registre ISO 13616 plus les zones UEMOA et CEMAC). L'écran applique la même règle avant l'envoi.
    - Un relevé à verser nul (report, quinzaine sans vente) reste validé : il n'y a rien à payer.
 2. **L'index des quinzaines.** `GET /v1/payroll/periods?limit=&cursor=`, de la plus récente à la plus ancienne, par curseur (`cursor_invalid` sinon). Une route du module payroll, son DTO dans les contrats, aucune migration. Une ligne par quinzaine où le lecteur lit au moins un relevé :
-   - `window` (la quinzaine, ses bornes, son fuseau), `ended`, `closing` (`closedAt`, `closedBy`, ou `null`) ;
+   - `window` (la quinzaine, ses bornes, son fuseau), `ended`, puis `closedAt` et `closedBy` à plat, sans objet de clôture : `null` tant que la quinzaine n'est pas close, et `closedBy` toujours `null` pour un membre, qui ne lit que la date ;
    - `statements`, le nombre de relevés par statut (`draft`, `validated`, `paid`) et `carried`, ceux qui reportent leur total ;
    - `netMinor`, `payableMinor` et `paidMinor`, sommes des relevés lus.
 
