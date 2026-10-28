@@ -11,7 +11,7 @@ import {
   type AlertErrorCode,
   type UserRole,
 } from '@nirvana/contracts';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -48,7 +48,7 @@ class SystemAlertLocked extends DomainError {
 }
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 function signedIn(user: { readonly id: string } | null): string {
   if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
@@ -64,14 +64,14 @@ export function createAlertRoutes(store: AlertStore, requireRole: RequireRole): 
   return (app) => {
     app.get(
       '/alerts',
-      { preHandler: requireRole('owner'), schema: { response: { 200: AlertsViewSchema } } },
+      { preValidation: requireRole('owner'), schema: { response: { 200: AlertsViewSchema } } },
       () => store.view(),
     );
 
     app.post(
       '/alerts',
       {
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: {
           body: CreateCustomAlertBodySchema,
           response: { 200: CustomAlertGroupSchema, 201: CustomAlertGroupSchema },
@@ -88,7 +88,7 @@ export function createAlertRoutes(store: AlertStore, requireRole: RequireRole): 
     app.put(
       '/alerts/:groupId',
       {
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: {
           params: GroupParamsSchema,
           body: CustomAlertBodySchema,
@@ -105,7 +105,7 @@ export function createAlertRoutes(store: AlertStore, requireRole: RequireRole): 
 
     app.delete(
       '/alerts/:groupId',
-      { preHandler: requireRole('owner'), schema: { params: GroupParamsSchema } },
+      { preValidation: requireRole('owner'), schema: { params: GroupParamsSchema } },
       async (request, reply) => {
         if (!(await store.archive(request.params.groupId, signedIn(request.user))))
           throw new CustomAlertNotFound();
@@ -116,7 +116,7 @@ export function createAlertRoutes(store: AlertStore, requireRole: RequireRole): 
     app.put(
       '/alerts/system/:code',
       {
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: {
           params: SystemParamsSchema,
           body: SetSystemAlertBodySchema,

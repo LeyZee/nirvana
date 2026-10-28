@@ -13,7 +13,7 @@ import {
 } from '@nirvana/contracts';
 import { eq, parseEncryptionKeys, schema, sql, withTenant } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { z } from 'zod';
 
@@ -583,10 +583,10 @@ describe('telegram module on Postgres', () => {
   });
 
   it('serves the settings to the owner only, a bot change after a fresh sign-in only', async () => {
-    const ownerOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+    const ownerOnly: preValidationAsyncHookHandler = async (request, reply) => {
       if (request.headers['x-test-role'] !== 'owner') await reply.code(403).send({ error: 'forbidden' });
     };
-    const freshOnly: preHandlerAsyncHookHandler = async (request, reply) => {
+    const freshOnly: preValidationAsyncHookHandler = async (request, reply) => {
       if (request.headers['x-test-stale'] === '1')
         await reply.code(403).send({ error: { code: 'reauthentication_forbidden' } });
     };
@@ -634,6 +634,54 @@ describe('telegram module on Postgres', () => {
         payload: { version: 999, routes: [] },
       });
       expect(conflict.statusCode).toBe(409);
+      // Refusals in the common error body (recette 28/10): an invalid body was a 500 against the route's own schema.
+      const invalid = await server.inject({
+        method: 'PUT',
+        url: '/v1/settings/telegram/routes',
+        headers,
+        payload: { version: 1, routes: [{ creatorId: null, topic: 'x', chatId: 'y' }] },
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json()).toMatchObject({ error: { code: 'request_invalid' } });
+      const missing = await server.inject({
+        method: 'POST',
+        url: `/v1/settings/telegram/bots/${newId(z.uuid().brand<'TelegramBotId'>())}/listen`,
+        headers,
+      });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json()).toMatchObject({ error: { code: 'telegram_bot_not_found' } });
+      const gone = await server.inject({
+        method: 'DELETE',
+        url: `/v1/settings/telegram/bots/${newId(z.uuid().brand<'TelegramBotId'>())}`,
+        headers,
+      });
+      expect(gone.statusCode).toBe(404);
+      expect(gone.json()).toMatchObject({ error: { code: 'telegram_bot_not_found' } });
+      const noChat = await server.inject({
+        method: 'POST',
+        url: `/v1/settings/telegram/chats/${newId(z.uuid().brand<'TelegramChatId'>())}/test`,
+        headers,
+      });
+      expect(noChat.statusCode).toBe(404);
+      expect(noChat.json()).toMatchObject({ error: { code: 'telegram_chat_not_found' } });
+      const { version } = overview.json<{ version: number }>();
+      const unknownChat = await server.inject({
+        method: 'PUT',
+        url: '/v1/settings/telegram/routes',
+        headers,
+        payload: {
+          version,
+          routes: [
+            {
+              creatorId: newId(CreatorIdSchema),
+              topic: 'urgent',
+              chatId: newId(z.uuid().brand<'TelegramChatId'>()),
+            },
+          ],
+        },
+      });
+      expect(unknownChat.statusCode).toBe(400);
+      expect(unknownChat.json()).toMatchObject({ error: { code: 'telegram_chat_invalid' } });
       const journal = await server.inject({
         method: 'GET',
         url: '/v1/settings/telegram/deliveries?topic=urgent',

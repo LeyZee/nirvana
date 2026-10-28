@@ -43,7 +43,7 @@ import {
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -55,7 +55,7 @@ import type { SwapService } from '../application/swaps';
 import type { Actor } from '../domain/ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 const ShiftParamsSchema = z.object({ shiftId: ShiftIdSchema });
 const TemplateParamsSchema = z.object({ templateId: ShiftTemplateIdSchema });
@@ -97,14 +97,14 @@ export function createSchedulingRoutes(
   return (app) => {
     app.get(
       '/scheduling/settings',
-      { preHandler: ownerOrMember, schema: { response: { 200: SchedulingSettingsSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: SchedulingSettingsSchema } } },
       (request) => scheduling.settings(userOf(request)),
     );
 
     app.put(
       '/scheduling/settings',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: { body: SchedulingSettingsSchema, response: { 200: SchedulingSettingsSchema } },
       },
       (request) => scheduling.saveSettings(actorOf(request), request.body),
@@ -113,7 +113,7 @@ export function createSchedulingRoutes(
     app.get(
       '/scheduling/planning',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { querystring: PlanningQuerySchema, response: { 200: PlanningSchema } },
       },
       (request) => scheduling.planning(userOf(request), request.query),
@@ -121,19 +121,22 @@ export function createSchedulingRoutes(
 
     app.get(
       '/scheduling/on-duty',
-      { preHandler: ownerOrMember, schema: { response: { 200: OnDutyListSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: OnDutyListSchema } } },
       async (request) => ({ onDuty: await scheduling.onDuty(userOf(request)) }),
     );
 
     app.get(
       '/scheduling/my-shifts',
-      { preHandler: ownerOrMember, schema: { response: { 200: MyShiftsSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: MyShiftsSchema } } },
       (request) => scheduling.myShifts(userOf(request)),
     );
 
     app.post(
       '/scheduling/shifts',
-      { preHandler: ownerOrMember, schema: { body: CreateShiftBodySchema, response: { 201: ShiftSchema } } },
+      {
+        preValidation: ownerOrMember,
+        schema: { body: CreateShiftBodySchema, response: { 201: ShiftSchema } },
+      },
       async (request, reply) =>
         reply.code(201).send(await scheduling.createShift(actorOf(request), request.body)),
     );
@@ -142,7 +145,7 @@ export function createSchedulingRoutes(
     app.patch(
       '/scheduling/shifts/:shiftId',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: ShiftParamsSchema,
           body: UpdateShiftBodySchema,
@@ -157,7 +160,7 @@ export function createSchedulingRoutes(
 
     app.delete(
       '/scheduling/shifts/:shiftId',
-      { preHandler: ownerOrMember, schema: { params: ShiftParamsSchema } },
+      { preValidation: ownerOrMember, schema: { params: ShiftParamsSchema } },
       async (request, reply) => {
         await scheduling.cancelShift(actorOf(request), request.params.shiftId);
         return reply.code(204).send();
@@ -166,14 +169,14 @@ export function createSchedulingRoutes(
 
     app.get(
       '/scheduling/shift-templates',
-      { preHandler: ownerOrMember, schema: { response: { 200: ShiftTemplateListSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: ShiftTemplateListSchema } } },
       async (request) => ({ templates: await scheduling.templates(userOf(request)) }),
     );
 
     app.post(
       '/scheduling/shift-templates',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { body: CreateShiftTemplateBodySchema, response: { 201: ShiftTemplateSchema } },
       },
       async (request, reply) =>
@@ -182,7 +185,7 @@ export function createSchedulingRoutes(
 
     app.delete(
       '/scheduling/shift-templates/:templateId',
-      { preHandler: ownerOrMember, schema: { params: TemplateParamsSchema } },
+      { preValidation: ownerOrMember, schema: { params: TemplateParamsSchema } },
       async (request, reply) => {
         await scheduling.endTemplate(actorOf(request), request.params.templateId);
         return reply.code(204).send();
@@ -192,7 +195,7 @@ export function createSchedulingRoutes(
     app.get(
       '/scheduling/leave-requests',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { querystring: LeaveRequestQuerySchema, response: { 200: LeaveRequestListSchema } },
       },
       (request) => leaves.list(userOf(request), request.query),
@@ -202,7 +205,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/leave-requests',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           body: CreateLeaveRequestBodySchema,
           response: { 200: LeaveRequestSchema, 201: LeaveRequestSchema },
@@ -217,7 +220,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/leave-requests/:leaveRequestId/decision',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: LeaveParamsSchema,
           body: DecideLeaveRequestBodySchema,
@@ -229,7 +232,7 @@ export function createSchedulingRoutes(
 
     app.delete(
       '/scheduling/leave-requests/:leaveRequestId',
-      { preHandler: ownerOrMember, schema: { params: LeaveParamsSchema } },
+      { preValidation: ownerOrMember, schema: { params: LeaveParamsSchema } },
       async (request, reply) => {
         await leaves.end(actorOf(request), request.params.leaveRequestId);
         return reply.code(204).send();
@@ -238,14 +241,14 @@ export function createSchedulingRoutes(
 
     app.get(
       '/scheduling/swap-requests',
-      { preHandler: ownerOrMember, schema: { response: { 200: ShiftSwapListSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: ShiftSwapListSchema } } },
       (request) => swaps.list(userOf(request)),
     );
 
     app.get(
       '/scheduling/swap-candidates',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { querystring: SwapCandidatesQuerySchema, response: { 200: SwapCandidatesSchema } },
       },
       (request) => swaps.candidates(userOf(request), request.query.shiftId),
@@ -255,7 +258,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/swap-requests',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           body: CreateShiftSwapRequestBodySchema,
           response: { 200: ShiftSwapRequestSchema, 201: ShiftSwapRequestSchema },
@@ -270,7 +273,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/swap-requests/:shiftSwapRequestId/answer',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: SwapParamsSchema,
           body: AnswerShiftSwapRequestBodySchema,
@@ -282,7 +285,7 @@ export function createSchedulingRoutes(
 
     app.delete(
       '/scheduling/swap-requests/:shiftSwapRequestId',
-      { preHandler: ownerOrMember, schema: { params: SwapParamsSchema } },
+      { preValidation: ownerOrMember, schema: { params: SwapParamsSchema } },
       async (request, reply) => {
         await swaps.end(actorOf(request), request.params.shiftSwapRequestId);
         return reply.code(204).send();
@@ -292,7 +295,7 @@ export function createSchedulingRoutes(
     app.get(
       '/scheduling/shifts/:shiftId/report',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { params: ShiftParamsSchema, response: { 200: ShiftReportContextSchema } },
       },
       (request) => reports.context(userOf(request), request.params.shiftId),
@@ -301,7 +304,7 @@ export function createSchedulingRoutes(
     app.get(
       '/scheduling/shift-reports',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { querystring: ShiftReportQuerySchema, response: { 200: ShiftReportListSchema } },
       },
       (request) => reports.list(userOf(request), request.query),
@@ -311,7 +314,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/shift-reports',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           body: CreateShiftReportBodySchema,
           response: { 200: ShiftReportSchema, 201: ShiftReportSchema },
@@ -326,7 +329,7 @@ export function createSchedulingRoutes(
     app.patch(
       '/scheduling/shift-reports/:shiftReportId',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: ReportParamsSchema,
           body: UpdateShiftReportBodySchema,
@@ -339,7 +342,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/shift-reports/validate',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { body: ValidateShiftReportsBodySchema, response: { 200: ValidateShiftReportsResultSchema } },
       },
       (request) => reports.validate(actorOf(request), request.body),
@@ -348,7 +351,7 @@ export function createSchedulingRoutes(
     app.post(
       '/scheduling/shift-reports/:shiftReportId/reject',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: ReportParamsSchema,
           body: RejectShiftReportBodySchema,
@@ -361,7 +364,7 @@ export function createSchedulingRoutes(
     // The accounts' pay rules, which the reports read in their own transaction, at the address the contract gives.
     app.get(
       '/team/pay-rules',
-      { preHandler: ownerOrMember, schema: { response: { 200: AccountPayRulesListSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: AccountPayRulesListSchema } } },
       (request) => payRules.list(userOf(request)),
     );
 
@@ -369,7 +372,7 @@ export function createSchedulingRoutes(
     app.post(
       '/team/pay-rules',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: {
           body: CreateAccountPayRulesBodySchema,
           response: { 200: AccountPayRulesSchema, 201: AccountPayRulesSchema },

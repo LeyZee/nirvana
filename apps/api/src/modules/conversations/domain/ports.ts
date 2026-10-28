@@ -206,8 +206,11 @@ interface RespondGate {
 
 /** The creator's kill switch and the global one (message-flow.md §6): the latest row of each scope decides. */
 interface KillSwitches {
-  /** Holds every other mode change of this creator until the transaction ends, so they apply in turn. */
-  lockCreator(): Promise<void>;
+  /**
+   * Holds every other mode change of this creator until the transaction ends, so they apply in turn. `false` when the
+   * creator does not exist (nothing to change).
+   */
+  lockCreator(): Promise<boolean>;
   isOn(): Promise<{ readonly global: boolean; readonly creator: boolean }>;
   /** Stamped by the database clock once the lock is held, so the later change is always the latest row. */
   setCreator(entry: { active: boolean; reason: string; setBy: string }): Promise<void>;

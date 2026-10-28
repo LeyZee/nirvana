@@ -27,7 +27,7 @@ import {
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -37,7 +37,7 @@ import type { PayrollValidation } from '../application/validation';
 import type { Actor, PayrollRuleStore } from '../domain/ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 const PeriodParamsSchema = z.object({ period: PayPeriodSchema });
 const StatementParamsSchema = z.object({ statementId: CommissionStatementIdSchema });
@@ -70,7 +70,7 @@ export function createPayrollRoutes(
     app.get(
       '/payroll/periods',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { querystring: PageQuerySchema, response: { 200: PayPeriodPageSchema } },
       },
       (request) => reads.periods(userOf(request), request.query),
@@ -79,7 +79,7 @@ export function createPayrollRoutes(
     app.get(
       '/payroll/periods/:period',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { params: PeriodParamsSchema, response: { 200: PayrollPeriodSchema } },
       },
       (request) => reads.period(userOf(request), request.params.period),
@@ -88,7 +88,7 @@ export function createPayrollRoutes(
     app.get(
       '/payroll/entries',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { querystring: PeriodParamsSchema, response: { 200: PayrollEntriesSchema } },
       },
       (request) => reads.entries(userOf(request), request.query.period),
@@ -97,7 +97,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/statements/:statementId/validate',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: StatementParamsSchema,
           body: ValidateCommissionStatementBodySchema,
@@ -110,7 +110,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/statements/:statementId/pay',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: StatementParamsSchema,
           body: PayCommissionStatementBodySchema,
@@ -123,7 +123,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/bonuses',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { body: CreateBonusBodySchema, response: { 200: BonusSchema, 201: BonusSchema } },
       },
       async (request, reply) => {
@@ -134,14 +134,14 @@ export function createPayrollRoutes(
 
     app.post(
       '/payroll/bonuses/:bonusId/cancel',
-      { preHandler: ownerOrMember, schema: { params: BonusParamsSchema, response: { 200: BonusSchema } } },
+      { preValidation: ownerOrMember, schema: { params: BonusParamsSchema, response: { 200: BonusSchema } } },
       (request) => entries.cancelBonus(actorOf(request), request.params.bonusId),
     );
 
     app.post(
       '/payroll/penalties',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { body: CreatePenaltyBodySchema, response: { 200: PenaltySchema, 201: PenaltySchema } },
       },
       async (request, reply) => {
@@ -153,7 +153,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/penalties/:penaltyId/cancel',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { params: PenaltyParamsSchema, response: { 200: PenaltySchema } },
       },
       (request) => entries.cancelPenalty(actorOf(request), request.params.penaltyId),
@@ -162,7 +162,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/adjustments',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           body: CreatePayAdjustmentBodySchema,
           response: { 200: PayAdjustmentSchema, 201: PayAdjustmentSchema },
@@ -177,7 +177,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/bonus-tiers',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           body: CreateBonusTierSetBodySchema,
           response: { 200: BonusTierSetSchema, 201: BonusTierSetSchema },
@@ -192,7 +192,7 @@ export function createPayrollRoutes(
     app.post(
       '/payroll/collective-goals',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           body: CreateCollectiveGoalBodySchema,
           response: { 200: CollectiveGoalSchema, 201: CollectiveGoalSchema },
@@ -206,14 +206,14 @@ export function createPayrollRoutes(
 
     app.get(
       '/payroll/settings',
-      { preHandler: ownerOrMember, schema: { response: { 200: PayrollSettingsSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: PayrollSettingsSchema } } },
       (request) => reads.settings(userOf(request)),
     );
 
     app.put(
       '/payroll/settings',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { body: PayrollSettingsSchema, response: { 200: PayrollSettingsSchema } },
       },
       (request) => rules.setSettings(actorOf(request), request.body),
@@ -221,7 +221,7 @@ export function createPayrollRoutes(
 
     app.get(
       '/payroll/exchange-rates',
-      { preHandler: ownerOrMember, schema: { response: { 200: ExchangeRatesSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: ExchangeRatesSchema } } },
       (request) => reads.exchangeRates(userOf(request)),
     );
     return Promise.resolve();

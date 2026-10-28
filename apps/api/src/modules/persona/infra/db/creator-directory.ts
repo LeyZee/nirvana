@@ -13,6 +13,7 @@ import {
 } from '@nirvana/contracts';
 import { eq, inArray, schema, sql, type Database } from '@nirvana/db';
 
+import { CreatorConflict } from '../../domain/errors';
 import type { CreatorDirectory } from '../../domain/ports';
 
 const toSummary = (row: { id: string; displayName: string; timezone: string }): CreatorSummary => ({
@@ -41,10 +42,31 @@ export function createDrizzleCreatorDirectory(
     },
 
     async create(input, userId) {
-      const parsed = NewCreatorSchema.parse(input);
-      const id = newId(CreatorIdSchema);
-      await db.transaction(async (tx) => {
-        await tx.insert(schema.creators).values({ id, ...parsed });
+      const { id: chosen, ...parsed } = NewCreatorSchema.parse(input);
+      const id = chosen ?? newId(CreatorIdSchema);
+      return db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(schema.creators)
+          .values({ id, ...parsed })
+          .onConflictDoNothing({ target: schema.creators.id })
+          .returning({ id: schema.creators.id });
+        if (inserted.length === 0) {
+          // The same form sent twice: the creator the first request made, without a second audit line. The same id with
+          // other values is not a replay.
+          const [existing] = await tx
+            .select({
+              id: schema.creators.id,
+              displayName: schema.creators.displayName,
+              timezone: schema.creators.timezone,
+            })
+            .from(schema.creators)
+            .where(eq(schema.creators.id, id));
+          if (existing === undefined) throw new Error('creator insert conflicted on an id it cannot read');
+          if (existing.displayName !== parsed.displayName || existing.timezone !== parsed.timezone) {
+            throw new CreatorConflict();
+          }
+          return toSummary(existing);
+        }
         await tx.insert(schema.auditLog).values({
           id: newId(AuditEntryIdSchema),
           userId: userId ?? null,
@@ -53,8 +75,8 @@ export function createDrizzleCreatorDirectory(
           entityId: id,
           details: { displayName: parsed.displayName, timezone: parsed.timezone },
         });
+        return { id, ...parsed };
       });
-      return { id, ...parsed };
     },
 
     async agentHours(id) {

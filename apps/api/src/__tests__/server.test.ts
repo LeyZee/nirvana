@@ -294,3 +294,22 @@ describe('loadConfig', () => {
     expect(config.NIRVANA_TRAINING_DIR).toBeUndefined();
   });
 });
+
+describe('route guards', () => {
+  it('refuses at startup a route that guards in preHandler, after the schema', async () => {
+    // Async so the refusal rejects the start; a plain plugin throws it out of `register` and stops the process.
+    const late: FastifyPluginAsyncZod = async (app) => {
+      await Promise.resolve();
+      app.get('/late', { preHandler: () => Promise.resolve() }, () => ({ ok: true }));
+    };
+    const config = testConfig();
+    await expect(
+      buildServer({
+        config,
+        logger: createLogger(config),
+        routes: [late],
+        readiness: () => Promise.resolve(READY),
+      }),
+    ).rejects.toThrow(/declare route guards as preValidation/);
+  });
+});

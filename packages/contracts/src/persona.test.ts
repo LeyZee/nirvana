@@ -36,6 +36,14 @@ describe('PersonaSchema', () => {
     expect(demo().details.first_name).toBe('Elena');
   });
 
+  it('says an emptied date of birth is invalid instead of throwing (recette 28/10)', () => {
+    const result = withChange((p) => {
+      p.details.date_of_birth = '';
+    });
+    expect(result.success).toBe(false);
+    expect(issuePaths(result)).toContain('details.date_of_birth');
+  });
+
   it('reads a persona with or without the deprecated gender', () => {
     const { gender, ...details } = demo().details;
     expect(gender).toBe('female');

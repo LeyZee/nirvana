@@ -82,7 +82,7 @@ export function createAlertHistoryRoutes(
   requireRole: RequireRole,
 ): FastifyPluginAsyncZod {
   return (app) => {
-    const read = { preHandler: requireRole('owner', 'operator') };
+    const read = { preValidation: requireRole('owner', 'operator') };
 
     app.get(
       '/alerts/triggers',

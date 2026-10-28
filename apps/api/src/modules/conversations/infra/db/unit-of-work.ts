@@ -280,6 +280,10 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${`agent_mode:${creatorId}`}, 0))`,
         );
+        const rows = await tx.execute<{ found: boolean }>(
+          sql`select exists (select 1 from creators where id = ${creatorId}) as found`,
+        );
+        return rows.rows[0]?.found === true;
       },
       async isOn() {
         const rows = await tx.execute<{ scope: string; active: boolean }>(sql`

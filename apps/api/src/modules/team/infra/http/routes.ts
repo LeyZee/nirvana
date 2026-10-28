@@ -19,7 +19,7 @@ import {
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -27,7 +27,7 @@ import type { TeamService } from '../../application/team';
 import type { Actor } from '../../domain/ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 const MemberParamsSchema = z.object({ memberId: TeamMemberIdSchema });
 
@@ -49,14 +49,14 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
   return (app) => {
     app.get(
       '/team/members',
-      { preHandler: ownerOrMember, schema: { response: { 200: TeamMemberListSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: TeamMemberListSchema } } },
       async (request) => ({ members: await team.members(userOf(request)) }),
     );
 
     app.post(
       '/team/members',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: { body: CreateTeamMemberBodySchema, response: { 201: TeamMemberSchema } },
       },
       async (request, reply) => reply.code(201).send(await team.addMember(actorOf(request), request.body)),
@@ -65,7 +65,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.get(
       '/team/members/:memberId',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { params: MemberParamsSchema, response: { 200: TeamMemberSchema } },
       },
       (request) => team.member(userOf(request), request.params.memberId),
@@ -74,7 +74,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.patch(
       '/team/members/:memberId',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: {
           params: MemberParamsSchema,
           body: UpdateTeamMemberBodySchema,
@@ -87,7 +87,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.put(
       '/team/members/:memberId/status',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: {
           params: MemberParamsSchema,
           body: ChangeTeamMemberStatusBodySchema,
@@ -100,7 +100,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.get(
       '/team/members/:memberId/commission',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { params: MemberParamsSchema, response: { 200: CommissionRateHistorySchema } },
       },
       async (request) => ({ rates: await team.commissionHistory(userOf(request), request.params.memberId) }),
@@ -109,7 +109,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.post(
       '/team/members/:memberId/commission',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: {
           params: MemberParamsSchema,
           body: SetCommissionRateBodySchema,
@@ -125,7 +125,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.get(
       '/team/members/:memberId/notes',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: { params: MemberParamsSchema, response: { 200: TeamMemberNoteListSchema } },
       },
       async (request) => ({ notes: await team.notes(userOf(request), request.params.memberId) }),
@@ -134,7 +134,7 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
     app.post(
       '/team/members/:memberId/notes',
       {
-        preHandler: ownerOrMember,
+        preValidation: ownerOrMember,
         schema: {
           params: MemberParamsSchema,
           body: AddTeamMemberNoteBodySchema,
@@ -149,14 +149,14 @@ export function createTeamRoutes(team: TeamService, requireRole: RequireRole): F
 
     app.get(
       '/team/commission-presets',
-      { preHandler: ownerOrMember, schema: { response: { 200: CommissionPresetListSchema } } },
+      { preValidation: ownerOrMember, schema: { response: { 200: CommissionPresetListSchema } } },
       async (request) => ({ presets: await team.presets(userOf(request)) }),
     );
 
     app.post(
       '/team/commission-presets',
       {
-        preHandler: owner,
+        preValidation: owner,
         schema: { body: CreateCommissionPresetBodySchema, response: { 201: CommissionPresetSchema } },
       },
       async (request, reply) => reply.code(201).send(await team.addPreset(actorOf(request), request.body)),

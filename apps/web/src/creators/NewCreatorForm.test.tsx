@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { NewCreatorForm } from './NewCreatorForm';
 
@@ -9,7 +10,9 @@ import { NewCreatorForm } from './NewCreatorForm';
 const LEA = { id: '0192f3a0-0000-7000-8000-0000000000c1', displayName: 'Léa', timezone: 'Europe/Paris' };
 
 function show(status: number, body?: unknown) {
-  const fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body ?? {}), { status })));
+  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(() =>
+    Promise.resolve(new Response(JSON.stringify(body ?? {}), { status })),
+  );
   vi.stubGlobal('fetch', fetch);
   const onCreated = vi.fn();
   render(
@@ -22,6 +25,14 @@ function show(status: number, body?: unknown) {
   return { fetch, onCreated };
 }
 
+/** The JSON body of the n-th request the form sent. */
+function sentBody(fetch: ReturnType<typeof show>['fetch'], call = 0): unknown {
+  const body = fetch.mock.calls[call]?.[1].body;
+  return typeof body === 'string' ? JSON.parse(body) : undefined;
+}
+
+const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 describe('NewCreatorForm', () => {
   afterEach(() => {
     cleanup();
@@ -33,13 +44,36 @@ describe('NewCreatorForm', () => {
     await waitFor(() => {
       expect(onCreated).toHaveBeenCalledWith(LEA);
     });
-    expect(fetch).toHaveBeenCalledWith(
-      '/v1/creators',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ displayName: 'Léa', timezone: 'Europe/Paris' }),
-      }),
-    );
+    expect(fetch).toHaveBeenCalledWith('/v1/creators', expect.objectContaining({ method: 'POST' }));
+    const sent = z.object({ id: z.string(), displayName: z.string(), timezone: z.string() }).strict();
+    const body = sent.parse(sentBody(fetch));
+    expect(body.id).toMatch(ID);
+    expect(body).toMatchObject({ displayName: 'Léa', timezone: 'Europe/Paris' });
+  });
+
+  it('sends once when the form is submitted again before the answer', async () => {
+    const { fetch, onCreated } = show(201, LEA);
+    // Submitting the form itself skips the disabled button: only the guard stops a second request.
+    const form = screen.getByRole('button', { name: /Créer|Création/ }).closest('form');
+    if (form === null) throw new Error('no form');
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => {
+      expect(onCreated).toHaveBeenCalled();
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the same id again after a failure, so a retry cannot make a twin', async () => {
+    const { fetch } = show(503);
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+    const first = z.object({ id: z.string() }).parse(sentBody(fetch, 0)).id;
+    expect(first).toMatch(ID);
+    expect(z.object({ id: z.string() }).parse(sentBody(fetch, 1)).id).toBe(first);
   });
 
   it('says what went wrong and creates nothing', async () => {
@@ -47,6 +81,15 @@ describe('NewCreatorForm', () => {
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
       'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
+    );
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('says when the same form already made her under another name', async () => {
+    const { onCreated } = show(409);
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Cette créatrice vient d’être créée sous un autre nom. Recharge la page pour la voir.',
     );
     expect(onCreated).not.toHaveBeenCalled();
   });

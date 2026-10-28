@@ -20,7 +20,7 @@ import {
   type UserId,
 } from '@nirvana/contracts';
 
-import { AutomaticLocked, DraftGuarded, SendBlocked } from '../domain/errors';
+import { AutomaticLocked, CreatorNotFound, DraftGuarded, SendBlocked } from '../domain/errors';
 import type {
   BubbleGuard,
   Clock,
@@ -434,7 +434,7 @@ export function createConversationCommands({
       const target = input.mode === 'auto' ? 'auto' : 'copilot';
       return uow.inTenant(input.creatorId, async (tx) => {
         // Two clicks in a row apply in the order they took the lock, and the later one stays the latest row.
-        await tx.switches.lockCreator();
+        if (!(await tx.switches.lockCreator())) throw new CreatorNotFound();
         // Automatique opens behind the server lock of ADR 0019, read under the creator's lock.
         if (input.mode === 'auto') await requireAutomaticOpen(tx, voice);
         const meta = humanMeta(input);

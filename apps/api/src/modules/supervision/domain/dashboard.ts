@@ -51,6 +51,11 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
 };
 
+/** A fan the platform gives no name (an empty pseudonym): the same words as Suivi, never an empty title. */
+function fanNameOf(name: string): string {
+  return name.trim() === '' ? 'Fan sans nom' : name;
+}
+
 /** « Sans réponse » after this long with nothing written (P3-11), counted while she may answer. */
 const UNANSWERED_AFTER_MINUTES = 30;
 
@@ -85,7 +90,7 @@ export function todos(waiting: readonly WaitingConversation[], now: Date): Dashb
       id: `${w.kind}-${w.conversationId}`,
       tone: GRAVE.has(w.kind) ? 'bad' : 'warn',
       kind: w.kind,
-      title: w.fanName,
+      title: fanNameOf(w.fanName),
       why: WHY[w.kind],
       at: w.since.toISOString(),
       waitingMinutes: Math.max(0, Math.floor((now.getTime() - w.since.getTime()) / MINUTE_MS)),
@@ -200,7 +205,7 @@ export function assembleDashboard(input: {
     todos: todos(facts.waiting, window.now),
     fans: facts.fans.map((fan) => ({
       id: FanIdSchema.parse(fan.id),
-      name: fan.name,
+      name: fanNameOf(fan.name),
       firstSeenAt: fan.firstSeenAt.toISOString(),
       spent: euros(fan.spentMinor),
       byAgent: euros(fan.byAgentMinor),
