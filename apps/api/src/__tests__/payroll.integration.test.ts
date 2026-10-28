@@ -2,6 +2,7 @@ import {
   AccountPayRulesIdSchema,
   BonusIdSchema,
   CollectiveGoalIdSchema,
+  JOB_MAX_ATTEMPTS,
   newId,
   PayPeriodSchema,
   PayrollPeriodSchema,
@@ -381,10 +382,20 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     ]);
   });
 
-  it('shows a period to the agency whole, and to a member their own, the team’s net only with a goal', async () => {
+  it('shows a period to the agency whole, and to a member their own, with the goal reached but never the team’s net', async () => {
     const all = await periodAs(owner, P1);
     expect(all.statements.map((one) => one.memberId).sort()).toEqual([theo.id, lea.id].sort());
-    expect(all).toMatchObject({ ended: true, closing: { period: P1, closedBy: ownerId, exchangeRates: [] } });
+    expect(all).toMatchObject({
+      ended: true,
+      beforeFirstClosing: false,
+      closing: { period: P1, closedBy: ownerId, exchangeRates: [] },
+    });
+    // A member reads of a closing its date only.
+    expect((await periodAs(theoCookie, P1)).closing).toEqual({
+      ...all.closing,
+      closedBy: null,
+      exchangeRates: null,
+    });
     expect(all.statements.find((one) => one.memberId === lea.id)).toMatchObject({
       canValidate: true,
       team: { netMinor: 14_000, collective: null },
@@ -405,11 +416,14 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     });
     await recalculate(P2);
     const followed = await periodAs(theoCookie, P2);
-    // 40 € + 48 € of 200 €: 44 %, under the tier of 50 %.
+    // 40 € + 48 € of 200 €: 44 %, under the tier of 50 %; the agency reads the net, the member the percentage only.
     expect(followed.statements[0]?.team).toEqual({
-      netMinor: 8_800,
+      netMinor: null,
       collective: { reachedBps: 4_400, tier: null },
     });
+    expect(
+      (await periodAs(owner, P2)).statements.find((one) => one.memberId === theo.id)?.team?.netMinor,
+    ).toBe(8_800);
     expect(followed.collectiveGoal?.targetMinor).toBe(20_000);
 
     expect((await call('GET', `/payroll/periods/${P1}`, creator)).statusCode).toBe(403);
@@ -441,9 +455,33 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
       reports: [{ id: report.id, version: report.version }],
     });
     expect(validation.statusCode, validation.body).toBe(200);
-    const jobs = await test.admin.db.execute<{ payload: unknown }>(
-      sql`select payload from graphile_worker._private_jobs where key = ${`payroll.recalculate:${P2}`}`,
+    const jobs = await test.admin.db.execute<{ payload: unknown; max_attempts: unknown }>(
+      sql`select payload, max_attempts from graphile_worker._private_jobs
+          where key = ${`payroll.recalculate:${P2}`}`,
     );
-    expect(jobs.rows.map((row) => row.payload)).toEqual([{ period: P2 }]);
+    expect(jobs.rows).toEqual([
+      { payload: { period: P2 }, max_attempts: JOB_MAX_ATTEMPTS['payroll.recalculate'] },
+    ]);
+  });
+
+  it('says a period before the team’s first closing is closed without a statement, its late report counted on the first open one', async () => {
+    const late = await validated(lea, P0, 2_000);
+
+    // Léa's draft of March 16th takes the late report, and Théo's the team's net it raises toward their goal.
+    expect(await recalculate(P0)).toEqual([
+      { period: P0, outcome: 'never', written: 0 },
+      { period: P2, outcome: 'written', written: 2 },
+    ]);
+    const leas = await statementOf(lea, P2);
+    expect((await linesOf(leas.id, leas.revision)).flatMap((line) => line.lateReports)).toEqual([
+      { shiftReportId: late, period: P0, grossMinor: 2_000 },
+    ]);
+    expect(await periodAs(owner, P0)).toMatchObject({
+      beforeFirstClosing: true,
+      closing: null,
+      statements: [],
+    });
+    expect(await periodAs(theoCookie, P0)).toMatchObject({ beforeFirstClosing: true, statements: [] });
+    expect((await periodAs(owner, P2)).beforeFirstClosing).toBe(false);
   });
 });

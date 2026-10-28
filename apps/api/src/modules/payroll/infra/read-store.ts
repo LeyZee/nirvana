@@ -4,6 +4,7 @@ import {
   BonusTierSetSchema,
   CarryOverSchema,
   CollectiveGoalSchema,
+  CollectiveReachedSchema,
   CommissionStatementIdSchema,
   CommissionStatementRulesSchema,
   CommissionStatementStatusSchema,
@@ -14,6 +15,7 @@ import {
   PayAdjustmentSchema,
   PayEngineVersionSchema,
   PayPeriodClosingSchema,
+  PayPeriodSchema,
   PayPeriodWindowSchema,
   PenaltySchema,
   PlatformAccountIdSchema,
@@ -26,8 +28,6 @@ import { and, eq, inArray, schema, sql, withMember, type Database } from '@nirva
 import { z } from 'zod';
 
 import type { PayrollReadStore, StoredStatement } from '../domain/ports';
-
-import { CollectiveReachedSchema } from './job-store';
 
 const {
   bonusTierSets,
@@ -75,6 +75,9 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
           .select()
           .from(payPeriodClosings)
           .where(eq(payPeriodClosings.period, period));
+        const [first] = await tx
+          .select({ period: sql`min(${payPeriodClosings.period})::text` })
+          .from(payPeriodClosings);
         const statementRows = await tx
           .select()
           .from(commissionStatements)
@@ -172,13 +175,17 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               paidAt: iso(row.paidAt),
               paidBy: row.paidBy === null ? null : UserIdSchema.parse(row.paidBy),
             },
-            team: { netMinor: row.teamNetMinor, collective: CollectiveReachedSchema.parse(row.collective) },
+            team: {
+              netMinor: row.teamNetMinor,
+              collective: CollectiveReachedSchema.nullable().parse(row.collective),
+            },
           };
         });
 
         return {
           reader: { scope, memberId: own === undefined ? null : TeamMemberIdSchema.parse(own.id) },
           window,
+          firstClosed: PayPeriodSchema.nullable().parse(first?.period ?? null),
           closing:
             closingRow === undefined
               ? null

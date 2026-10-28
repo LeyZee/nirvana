@@ -1,6 +1,7 @@
 import {
   CommissionStatementIdSchema,
   newId,
+  PayPeriodClosingSchema,
   PayPeriodSchema,
   TeamMemberIdSchema,
   UserIdSchema,
@@ -67,14 +68,36 @@ const stored = (goal: boolean): StoredStatement => ({
   team: { netMinor: 50_000, collective: goal ? { reachedBps: 5_000, tier: null } : null },
 });
 
-const read = (reader: PayReader, goal: boolean, at = '2025-03-20T00:00:00Z') =>
+const closing = PayPeriodClosingSchema.parse({
+  period: P1,
+  exchangeRates: [
+    {
+      currency: 'USD',
+      day: '2025-03-14',
+      rateMicros: 920_000,
+      source: 'ecb',
+      fetchedAt: '2025-03-14T15:07:00.000Z',
+    },
+  ],
+  closedBy: newId(UserIdSchema),
+  closedAt: '2025-03-17T09:00:00.000Z',
+});
+
+const read = (
+  reader: PayReader,
+  goal: boolean,
+  at = '2025-03-20T00:00:00Z',
+  view: Partial<Pick<PeriodView, 'closing' | 'firstClosed'>> = {},
+) =>
   createPayrollReads(
     {
       period: (): Promise<PeriodView> =>
         Promise.resolve({
           reader,
           window,
+          firstClosed: null,
           closing: null,
+          ...view,
           statements: [stored(goal)],
           bonusTierSets: [],
           collectiveGoals: [],
@@ -85,12 +108,31 @@ const read = (reader: PayReader, goal: boolean, at = '2025-03-20T00:00:00Z') =>
   ).period(newId(UserIdSchema), P1);
 
 describe('a period as its reader sees it (EQ-04)', () => {
-  it('shows the team’s net to the agency, and to a member only to follow the period’s collective goal', async () => {
+  it('shows the team’s net to the agency, and to a member only how far the team got toward its goal', async () => {
     const agency = { scope: 'agency' as const, memberId: newId(TeamMemberIdSchema) };
     const own = { scope: 'self' as const, memberId: THEO };
     expect((await read(agency, false)).statements[0]?.team).toEqual({ netMinor: 50_000, collective: null });
+    expect((await read(agency, true)).statements[0]?.team?.netMinor).toBe(50_000);
     expect((await read(own, false)).statements[0]?.team).toBeNull();
-    expect((await read(own, true)).statements[0]?.team?.netMinor).toBe(50_000);
+    expect((await read(own, true)).statements[0]?.team).toEqual({
+      netMinor: null,
+      collective: { reachedBps: 5_000, tier: null },
+    });
+  });
+
+  it('shows a member a closing’s date only, never who closed it nor its rates', async () => {
+    const agency = await read({ scope: 'owner', memberId: null }, false, undefined, { closing });
+    const own = await read({ scope: 'self', memberId: THEO }, false, undefined, { closing });
+    expect(agency.closing).toEqual(closing);
+    expect(own.closing).toEqual({ ...closing, closedBy: null, exchangeRates: null });
+  });
+
+  it('says whether the period comes before the team’s first closing', async () => {
+    const owner = { scope: 'owner' as const, memberId: null };
+    const P2 = PayPeriodSchema.parse('2025-03-16');
+    expect((await read(owner, false)).beforeFirstClosing).toBe(false);
+    expect((await read(owner, false, undefined, { firstClosed: P2 })).beforeFirstClosing).toBe(true);
+    expect((await read(owner, false, undefined, { firstClosed: P1 })).beforeFirstClosing).toBe(false);
   });
 
   it('lets the agency validate a draft, never its own member, and says whether the period has ended', async () => {

@@ -65,6 +65,8 @@ export interface StoredStatement {
 export interface PeriodView {
   readonly reader: PayReader;
   readonly window: PayPeriodWindow | null;
+  /** The team's first closed period, `null` before any closing. */
+  readonly firstClosed: PayPeriod | null;
   readonly closing: PayPeriodClosing | null;
   readonly statements: readonly StoredStatement[];
   readonly bonusTierSets: readonly BonusTierSet[];

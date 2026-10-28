@@ -87,11 +87,20 @@ export function createRecalculation(
       if (open === null || open === period) return [first.outcome];
       return [first.outcome, (await one(open)).outcome];
     },
+    // A period that breaks does not stop the next ones: each is computed, the break is logged with its period, and the
+    // first one fails the run at the end, so that the job stays failed and seen.
     async recalculateOpen(): Promise<RecalculationOutcome[]> {
       const outcomes: RecalculationOutcome[] = [];
+      const broken: unknown[] = [];
       for (const period of periodsToRecompute(await store.openPeriodFactsUnscoped(now()))) {
-        outcomes.push((await one(period)).outcome);
+        try {
+          outcomes.push((await one(period)).outcome);
+        } catch (error) {
+          logger.error({ period, err: error }, 'payroll: period not computed, the next ones go on');
+          broken.push(error);
+        }
       }
+      if (broken.length > 0) throw broken[0];
       return outcomes;
     },
   };

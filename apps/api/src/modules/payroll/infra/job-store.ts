@@ -4,7 +4,7 @@ import {
   BonusTierSetSchema,
   CarryOverSchema,
   CollectiveGoalSchema,
-  CollectiveTierSchema,
+  CollectiveReachedSchema,
   CommissionStatementIdSchema,
   CommissionStatementStatusSchema,
   DEFAULT_MINIMUM_PAYOUT_MINOR,
@@ -68,10 +68,6 @@ export interface PayInputReads {
   readonly agencyTimeZone: (tx: Transaction) => Promise<string>;
   readonly membersUnscoped: (tx: Transaction, day: string) => Promise<readonly MemberForPay[]>;
 }
-
-export const CollectiveReachedSchema = z
-  .object({ reachedBps: z.number().int().min(0), tier: CollectiveTierSchema.nullable() })
-  .nullable();
 
 const iso = (at: Date): string => at.toISOString();
 
@@ -173,7 +169,7 @@ async function readSnapshot(
         ? null
         : {
             teamNetMinor: closing.teamNetMinor,
-            collective: CollectiveReachedSchema.parse(closing.collective),
+            collective: CollectiveReachedSchema.nullable().parse(closing.collective),
             exchangeRates: z.array(ExchangeRateSchema).parse(closing.exchangeRates),
           },
     firstClosed: span.first,

@@ -1,5 +1,6 @@
 import {
   CurrencySchema,
+  JOB_MAX_ATTEMPTS,
   PayPeriodSchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
@@ -82,7 +83,8 @@ export async function validatedReportsUnscoped(
 
 /**
  * The recalculation of `period`'s pay, once this transaction commits (EQ-04): one waiting job per period, replaced by
- * the next write, a few seconds later so that a batch of reports gives one run.
+ * the next write, a few seconds later so that a batch of reports gives one run. Each write pushes the run back: a
+ * series that never stopped would never run, and `payroll.recalculate_open` computes the period every hour anyway.
  */
 export async function enqueuePayRecalculation(tx: Transaction, period: PayPeriod): Promise<void> {
   await tx.execute(
@@ -90,7 +92,7 @@ export async function enqueuePayRecalculation(tx: Transaction, period: PayPeriod
       task => 'payroll.recalculate',
       payload => ${JSON.stringify({ period })}::jsonb,
       run_at => now() + interval '5 seconds',
-      max_attempts => 5,
+      max_attempts => ${JOB_MAX_ATTEMPTS['payroll.recalculate']}::int,
       job_key => ${`payroll.recalculate:${period}`},
       job_key_mode => 'replace'
     )`,

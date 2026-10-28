@@ -423,13 +423,23 @@ export const CommissionStatementRulesSchema = z.object({
 export type CommissionStatementRules = z.infer<typeof CommissionStatementRulesSchema>;
 
 /**
+ * How far the team got toward the period's collective goal, in basis points, and the tier it reached (`null` below
+ * the first).
+ */
+export const CollectiveReachedSchema = z.object({
+  reachedBps: z.number().int().min(0),
+  tier: CollectiveTierSchema.nullable(),
+});
+
+/**
  * A member's statement for a period. `revision` grows by one each time a recalculation changes it; a validation names
  * the revision it shows, and the server computes it again under its locks, on the period's closing: another revision,
  * or other inputs (`inputsHash`, which covers the reports counted, the rates, the period's team net, collective tier
  * and a manager's base too), answer `commission_statement_changed_conflict`, never a statement the reader did not see.
  *
- * `team` is `null` for a member reading their own statement when the period has no collective goal: the team's net is
- * the agency's figure, shown to a chatter only to follow a goal.
+ * `team` is `null` for a member reading their own statement when the period has no collective goal. With one, the
+ * member reads how far the team got (`collective`), never the team's net itself: `netMinor` is `null` for them (the
+ * agency's figure; default until Charles decides otherwise).
  *
  * `teamShare` is a manager's share of the others' net. `penaltiesRequestedMinor` is what the penalties asked for,
  * `penaltiesMinor` what the cap let through. `totalMinor` = commission + team share + bonuses − penalties +
@@ -464,14 +474,9 @@ export const CommissionStatementSchema = z.object({
   totalMinor: MinorSchema,
   carryOverOutMinor: MinorSchema,
   payableMinor: z.number().int().min(0),
-  /** The period's team, as the engine saw it: its net, and the collective goal as reached. */
+  /** The period's team, as the engine saw it: its net (`null` for a member), and the collective goal as reached. */
   team: z
-    .object({
-      netMinor: MinorSchema,
-      collective: z
-        .object({ reachedBps: z.number().int().min(0), tier: CollectiveTierSchema.nullable() })
-        .nullable(),
-    })
+    .object({ netMinor: MinorSchema.nullable(), collective: CollectiveReachedSchema.nullable() })
     .nullable(),
   rules: CommissionStatementRulesSchema,
   /** Whether the reader may validate it now (`mayValidateStatement`): never one's own. */
@@ -485,13 +490,14 @@ export const CommissionStatementSchema = z.object({
 export type CommissionStatement = z.infer<typeof CommissionStatementSchema>;
 
 /**
- * A period closed for the team (ADR 0032): by whom and when, and the rates frozen for it. Its team net and collective
- * goal as reached are those of each of its statements (`CommissionStatement.team`).
+ * A period closed for the team (ADR 0032): when, and for the owner and an active manager by whom and on which rates.
+ * A member reads of a closing only its date: `closedBy` and `exchangeRates` are `null` for them. Its team net and
+ * collective goal as reached are those of each of its statements (`CommissionStatement.team`).
  */
 export const PayPeriodClosingSchema = z.object({
   period: PayPeriodSchema,
-  exchangeRates: z.array(ExchangeRateSchema),
-  closedBy: UserIdSchema,
+  exchangeRates: z.array(ExchangeRateSchema).nullable(),
+  closedBy: UserIdSchema.nullable(),
   closedAt: z.iso.datetime(),
 });
 export type PayPeriodClosing = z.infer<typeof PayPeriodClosingSchema>;
@@ -500,13 +506,16 @@ export type PayPeriodClosing = z.infer<typeof PayPeriodClosingSchema>;
  * `GET /v1/payroll/periods/:period`: the period's statements (every member's for the agency, one's own for a member),
  * with what made them. `window` is `null` while pay has not written the period; `ended` says whether it can be
  * validated (a period validates once it has ended in the agency's zone); `closing` is `null` until its first
- * validation closes it for the team.
+ * validation closes it for the team. `beforeFirstClosing` says the period comes before the team's first closing: it is
+ * closed for good without a closing of its own and has no statement, and a report of it counts late on the team's
+ * first open period (ADR 0032).
  */
 export const PayrollPeriodSchema = z.object({
   period: PayPeriodSchema,
   window: PayPeriodWindowSchema.nullable(),
   ended: z.boolean(),
   closing: PayPeriodClosingSchema.nullable(),
+  beforeFirstClosing: z.boolean(),
   statements: z.array(CommissionStatementSchema),
   bonusTiers: BonusTierSetSchema.nullable(),
   collectiveGoal: CollectiveGoalSchema.nullable(),
