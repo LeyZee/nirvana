@@ -25,6 +25,8 @@ Les deux transactions se voient donc toujours :
 
 **Tant qu'aucune quinzaine n'est clôturée, ces écritures prennent aussi `payroll.close`, avant leurs verrous (membre, quinzaine).** La première clôture voit l'écriture, ou l'écriture voit la clôture. Dès qu'une quinzaine est clôturée, elles ne le prennent plus.
 
+**Une saisie refuse sans verrou une quinzaine déjà fermée pour le membre ou antérieure à son arrivée** (`pay_period_closed_conflict`). La fermeture ne recule jamais : un relevé validé ne redevient pas brouillon, et une clôture ne s'efface pas. Une quinzaine lue fermée avant les verrous l'est donc encore sous eux, et rien n'est dû à un membre avant son arrivée. Le nombre de verrous reste ainsi celui des quinzaines ouvertes du membre jusqu'à la quinzaine en cours : une date ancienne envoyée par le client ne fait jamais prendre des centaines de verrous, qui rempliraient la table partagée de Postgres pour toute la base. Ce qui passe ce contrôle est revérifié sous les verrous.
+
 L'ordre de l'ADR 0032 ne change pas : `payroll.close` passe toujours avant (membre, quinzaine), jamais après. Il n'y a donc pas d'interblocage.
 
 ## Conséquences
@@ -34,13 +36,14 @@ Positives :
 - la règle tient dans une fonction pure (`periodsToLock`), que la saisie applique avant toute lecture.
 
 Négatives :
-- une saisie sur une quinzaine ancienne prend un verrou par quinzaine jusqu'à aujourd'hui : 24 pour une saisie vieille d'un an ;
+- une saisie prend un verrou par quinzaine ouverte du membre, de la sienne jusqu'à aujourd'hui, jamais plus : une ou deux d'ordinaire, davantage avant la première clôture, où toutes les quinzaines depuis l'arrivée du membre sont ouvertes ;
 - avant la première clôture, les saisies passent l'une après l'autre avec les validations, les recalculs et les règles. Cela ne dure que jusqu'à la première paie, ou jusqu'à l'import d'Imperium (EQ-07).
 
 Tests du lot de l'application, contre une base réelle :
 - une prime sur une quinzaine où le membre n'avait rien, contre la validation d'une quinzaine plus récente du même membre : la validation attend, puis demande le relevé de la quinzaine de la prime ;
 - une prime contre une validation du même membre : la prime attend le verrou, puis elle est refusée ;
-- tant qu'aucune quinzaine n'est clôturée, une saisie attend le verrou de la clôture, et un rejeu rend la même prime.
+- tant qu'aucune quinzaine n'est clôturée, une saisie attend le verrou de la clôture, et un rejeu rend la même prime ;
+- une prime ou un malus sur une quinzaine déjà fermée pour le membre est refusé sans attendre le verrou qu'une autre transaction tient sur cette quinzaine.
 
 ## Alternatives rejetées
 

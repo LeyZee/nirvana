@@ -53,7 +53,7 @@ export class PayrollOwnForbidden extends DomainError {
 
 /** A member who is not the owner nor an active manager, or a manager doing what only the owner does. */
 export class PayrollForbidden extends DomainError {
-  constructor(ownerOnly = false) {
+  constructor({ ownerOnly = false }: { readonly ownerOnly?: boolean } = {}) {
     super(
       'payroll_forbidden',
       ownerOnly ? 'Réservé au propriétaire' : 'Réservé au propriétaire et aux managers actifs',

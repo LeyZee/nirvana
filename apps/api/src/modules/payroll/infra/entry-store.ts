@@ -22,6 +22,7 @@ import {
 
 import {
   adjustmentPeriod,
+  assertOpenBeforeLocks,
   assertWritesPayOf,
   isOpenFor,
   penaltyCancelledFrom,
@@ -87,7 +88,10 @@ async function paidMemberOn(
   return member;
 }
 
-/** What decides the member's open periods, read once the write holds its locks. */
+/**
+ * What decides the member's open periods: read once the write holds its locks, and before them to refuse a period
+ * closed already (a closing never moves back, ADR 0035).
+ */
 async function factsOf(tx: Transaction, member: MemberForPay, current: PayPeriod): Promise<MemberPayFacts> {
   const rows = await tx
     .select({ period: commissionStatements.period, status: commissionStatements.status })
@@ -192,6 +196,7 @@ export function createDrizzlePayrollEntryStore(
 
         const member = await paidMemberOn(tx, reads, body.memberId, body.period);
         const current = await currentIn(tx);
+        assertOpenBeforeLocks(await factsOf(tx, member, current), body.period);
         await lockFrom(tx, member.id, body.period, current);
         if (!isOpenFor(await factsOf(tx, member, current), body.period))
           throw new PayPeriodClosed(body.period);
@@ -217,6 +222,7 @@ export function createDrizzlePayrollEntryStore(
         const period = PayPeriodSchema.parse(found.period);
         const member = await memberOn(tx, reads, memberId, period);
         const current = await currentIn(tx);
+        assertOpenBeforeLocks(await factsOf(tx, member, current), period);
         await lockFrom(tx, memberId, period, current);
         if (!isOpenFor(await factsOf(tx, member, current), period)) throw new PayPeriodClosed(period);
         const [row] = await tx
@@ -259,6 +265,7 @@ export function createDrizzlePayrollEntryStore(
 
         const member = await paidMemberOn(tx, reads, body.memberId, body.fromPeriod);
         const current = await currentIn(tx);
+        assertOpenBeforeLocks(await factsOf(tx, member, current), body.fromPeriod);
         await lockFrom(tx, member.id, body.fromPeriod, current);
         if (!isOpenFor(await factsOf(tx, member, current), body.fromPeriod)) {
           throw new PayPeriodClosed(body.fromPeriod);
@@ -383,7 +390,7 @@ export function createDrizzlePayrollEntryStore(
           .where(eq(commissionStatements.id, statementId));
         if (row === undefined) throw new CommissionStatementNotFound();
         const period = PayPeriodSchema.parse(row.period);
-        if (scope !== 'owner') throw new PayrollForbidden(true);
+        if (scope !== 'owner') throw new PayrollForbidden({ ownerOnly: true });
         if (row.status !== 'validated') throw new CommissionStatementStatusConflict(NOT_PAYABLE);
         if (row.revision !== revision) throw new CommissionStatementChanged(period);
         const paid = await tx

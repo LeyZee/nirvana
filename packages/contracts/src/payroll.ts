@@ -562,8 +562,8 @@ export function mayValidateStatement(
  * `pay_period_reports_pending_conflict` 409, reports of the period still wait for review (`details.count`) ;
  * `pay_period_reports_unread_conflict` 409, reports the validator may not read would be left out (`details.count`) ;
  * `pay_period_not_computed_conflict` 409, a period to close that pay has not written yet (`details.period`) ;
- * `pay_period_closed_conflict` 409, a bonus, a penalty, tiers or a goal for a period already validated
- * (`details.period`) ;
+ * `pay_period_closed_conflict` 409, a bonus, a penalty, tiers or a goal for a period already validated, or for a
+ * member before they joined (`details.period`) ;
  * `penalty_cancel_conflict` 409, every period of the penalty is closed ;
  * `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`,
  * `collective_goal_conflict` 409, the same `id` with other values ;

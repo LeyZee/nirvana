@@ -195,6 +195,41 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
     expect(team.refusal(await post('/payroll/penalties', monaCookie, other)).code).toBe('penalty_conflict');
   });
 
+  it('refuses a period closed for the member before taking any lock (ADR 0035)', async () => {
+    // Another transaction holds Théo's lock on Q2, which his validation closed: a write that took it would wait.
+    const held = await holding([memberPeriod(theo, Q2)]);
+    const answered = async (url: string, payload: object) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const waited = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error('The write waited for a lock'));
+        }, 2_000);
+      });
+      try {
+        return team.refusal(await Promise.race([post(url, monaCookie, payload), waited]));
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    try {
+      expect(await answered('/payroll/bonuses', bonus(theo, Q2))).toEqual(
+        expect.objectContaining({ code: 'pay_period_closed_conflict', details: { period: Q2 } }),
+      );
+      const penalty = {
+        id: newId(PenaltyIdSchema),
+        memberId: theo.id,
+        fromPeriod: Q2,
+        toPeriod: Q2,
+        amount: { kind: 'fixed', amountMinor: 500 },
+        reason: 'Retard au shift',
+      };
+      expect((await answered('/payroll/penalties', penalty)).code).toBe('pay_period_closed_conflict');
+      expect(await waiting()).toBe(0);
+    } finally {
+      await held.release();
+    }
+  });
+
   it('cancels a penalty from the member’s first open period, and not when every period is closed', async () => {
     await team.report(theo, Q3, 10_000);
     await team.recalculate(Q3);

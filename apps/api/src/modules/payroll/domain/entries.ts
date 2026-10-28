@@ -6,7 +6,7 @@ import {
   type TeamMemberId,
 } from '@nirvana/contracts';
 
-import { PayrollForbidden, PayrollOwnForbidden, PenaltyCancelConflict } from './errors';
+import { PayPeriodClosed, PayrollForbidden, PayrollOwnForbidden, PenaltyCancelConflict } from './errors';
 import type { PayReader } from './ports';
 
 /**
@@ -46,6 +46,19 @@ export function isOpenFor(
 ): boolean {
   const closed = closedUpTo(facts);
   return closed === null || period > closed;
+}
+
+/**
+ * Refuses, before any lock (ADR 0035), a period closed for the member or before they joined: a validated statement
+ * never goes back to a draft and a closing is never erased, so a period closed now stays closed, and nothing is owed
+ * before the member's arrival. A write then locks only the member's open periods up to today's; what passes here is
+ * checked again under the locks.
+ */
+export function assertOpenBeforeLocks(
+  facts: Pick<MemberPayFacts, 'lastValidated' | 'firstClosed' | 'joinedOn'>,
+  period: PayPeriod,
+): void {
+  if (!isOpenFor(facts, period) || period < payPeriodOfDay(facts.joinedOn)) throw new PayPeriodClosed(period);
 }
 
 /** Only the owner or an active manager writes a member's pay, never their own (the policies say the same). */

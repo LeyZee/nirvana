@@ -1,8 +1,9 @@
-import { DomainError, newId, PayPeriodSchema, TeamMemberIdSchema } from '@nirvana/contracts';
+import { DomainError, newId, PayPeriodSchema, TeamMemberIdSchema, type PayPeriod } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
   adjustmentPeriod,
+  assertOpenBeforeLocks,
   assertWritesPayOf,
   closedUpTo,
   isOpenFor,
@@ -107,6 +108,22 @@ describe('where a penalty’s cancellation starts', () => {
 });
 
 describe('what a write locks and computes again (ADR 0035)', () => {
+  it('refuses before any lock a period closed for the member or before they joined, never one still open', () => {
+    const joined = facts({ joinedOn: '2025-03-20', lastValidated: P3, firstClosed: P2 });
+    // Closed for the member: up to their last validated statement.
+    const opens = (one: MemberPayFacts, period: PayPeriod) =>
+      codeOf(() => {
+        assertOpenBeforeLocks(one, period);
+      });
+    expect(opens(joined, P3)).toBe('pay_period_closed_conflict');
+    expect(opens(joined, P4)).toBe('no error');
+    // Before they joined: nothing is owed there, even while nothing is closed (a write would lock every period since).
+    const anew = facts({ joinedOn: '2025-03-20' });
+    expect(opens(anew, P1)).toBe('pay_period_closed_conflict');
+    expect(opens(anew, PayPeriodSchema.parse('2001-01-01'))).toBe('pay_period_closed_conflict');
+    expect(opens(anew, P2)).toBe('no error');
+  });
+
   it('locks its period and every later one up to today’s, in order', () => {
     expect(periodsToLock(P2, P5)).toEqual([P2, P3, P4, P5]);
     expect(periodsToLock(P5, P5)).toEqual([P5]);
