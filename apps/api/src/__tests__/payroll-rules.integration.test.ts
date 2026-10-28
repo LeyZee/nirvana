@@ -13,7 +13,7 @@ import {
   type PayPeriod,
   type TeamMember,
 } from '@nirvana/contracts';
-import { schema } from '@nirvana/db';
+import { eq, schema } from '@nirvana/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { startPayrollTeam, type PayrollTeam } from './support/payroll-team';
@@ -62,9 +62,9 @@ describe('Équipe › Paie : paliers, objectif collectif, minimum de versement e
 
   afterAll(() => team.close());
 
-  it('lets the owner alone set the team’s rules, and anyone in the team read the minimum and the rate', async () => {
+  it('lets the owner alone set the team’s rules, anyone in the team read the minimum, the agency the rate', async () => {
     expect(await minimum(theoCookie)).toBe(1_500);
-    const none = await team.call('GET', '/payroll/exchange-rates', theoCookie);
+    const none = await team.call('GET', '/payroll/exchange-rates', team.owner);
     expect([none.statusCode, none.json()]).toEqual([200, { usd: null }]);
     await team.test.admin.db.insert(schema.exchangeRates).values(
       ['2025-09-30', '2025-10-01'].map((day, index) => ({
@@ -79,6 +79,16 @@ describe('Équipe › Paie : paliers, objectif collectif, minimum de versement e
       (await team.call('GET', '/payroll/exchange-rates', monaCookie)).json(),
     );
     expect(latest.usd).toMatchObject({ currency: 'USD', day: '2025-10-01', rateMicros: 920_001 });
+    // A chatter reads the rate of their own statement's lines, never the latest one; nor does a manager on leave.
+    const { member: nina, cookie: ninaCookie } = await team.addMember('nina@example.test', 'Nina', 'manager');
+    await team.test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'on_leave' })
+      .where(eq(schema.teamMembers.id, nina.id));
+    for (const cookie of [theoCookie, ninaCookie]) {
+      const refusal = await team.call('GET', '/payroll/exchange-rates', cookie);
+      expect([refusal.statusCode, team.refusal(refusal).code]).toEqual([403, 'payroll_forbidden']);
+    }
 
     for (const cookie of [monaCookie, theoCookie]) {
       expect(await refused(post('/payroll/bonus-tiers', cookie, tiers(R1)))).toMatchObject({

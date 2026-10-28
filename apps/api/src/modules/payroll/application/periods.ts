@@ -38,7 +38,7 @@ export interface PayrollReads {
   period(userId: UserId, period: PayPeriod): Promise<PayrollPeriod>;
   /** `GET /v1/payroll/settings`: the minimum payout, the default before the owner sets one. */
   settings(userId: UserId): Promise<PayrollSettings>;
-  /** `GET /v1/payroll/exchange-rates`: the latest rate the job read, `null` before the first one. */
+  /** `GET /v1/payroll/exchange-rates`: the latest rate the job read, `null` before the first one; the agency's only. */
   exchangeRates(userId: UserId): Promise<ExchangeRates>;
 }
 

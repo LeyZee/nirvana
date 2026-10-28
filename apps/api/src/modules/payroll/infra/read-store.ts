@@ -24,6 +24,7 @@ import {
 import { and, eq, inArray, schema, sql, withMember, type Database } from '@nirvana/db';
 import { z } from 'zod';
 
+import { PayrollForbidden } from '../domain/errors';
 import type { PayrollReadStore, StoredStatement } from '../domain/ports';
 
 import { bonusTierSetOfRow, collectiveGoalOfRow, exchangeRateOfRow, settingsOf } from './snapshot';
@@ -205,8 +206,11 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
     settings: (userId) =>
       withMember(db, userId, async (tx) => settingsOf((await tx.select().from(payrollSettings))[0])),
 
+    // The agency's, closed by default: the owner and an active manager read it, anyone else is refused (a member, an
+    // inactive manager, an account outside the team), who reads the rate their own lines were computed on.
     exchangeRates: (userId) =>
-      withMember(db, userId, async (tx) => {
+      withMember(db, userId, async (tx, scope) => {
+        if (scope !== 'owner' && scope !== 'agency') throw new PayrollForbidden();
         const [usd] = await tx
           .select()
           .from(exchangeRates)
