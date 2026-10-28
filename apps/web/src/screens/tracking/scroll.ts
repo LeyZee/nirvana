@@ -21,8 +21,9 @@ export function useEndInView(endRef: RefObject<HTMLDivElement | null>): RefObjec
 }
 
 /**
- * Shows the waiting draft, else the end of the thread. When the thread scrolls on its own (from 900 px), only the thread moves, never
- * the page; on a phone, where the reader is the whole screen, the page scrolls as before.
+ * Shows the waiting draft, else the end of the thread. From 900 px the thread has its own scroll (`tracking.css`): only
+ * the thread moves, never the page, even when the thread is shorter than its box. On a phone, where the reader is the
+ * whole screen, the page scrolls as before. The choice follows the thread's computed overflow, so it follows the CSS.
  */
 export function bringIntoView(
   body: HTMLElement | null,
@@ -31,7 +32,7 @@ export function bringIntoView(
 ): void {
   const target = draft ?? end;
   if (body === null || target === null) return;
-  if (body.scrollHeight <= body.clientHeight) {
+  if (getComputedStyle(body).overflowY !== 'auto') {
     target.scrollIntoView({ block: 'nearest' });
     return;
   }
