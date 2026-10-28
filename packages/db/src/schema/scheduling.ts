@@ -228,6 +228,11 @@ export const shifts = pgTable(
       for: 'insert',
       withCheck: sql`${t.creatorId} = ${currentCreator} and ${plans} and ${t.createdBy} = ${currentUser} and ${t.updatedBy} = ${currentUser}`,
     }),
+    /**
+     * The one policy that sets `cancelled_at` (`swap_update` keeps it null). The trigger that keeps a reported shift
+     * from being cancelled reads the reports under the canceller's policies (migration 0026): a policy that lets a
+     * member set it would make that read see the member's reports alone.
+     */
     pgPolicy('team_update', {
       for: 'update',
       using: sql`${t.creatorId} = ${currentCreator} and ${plans}`,

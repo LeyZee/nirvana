@@ -115,6 +115,8 @@ CREATE TRIGGER "shift_reports_not_deleted" BEFORE DELETE ON "shift_reports" FOR 
   EXECUTE FUNCTION "refuse_pay_change"();--> statement-breakpoint
 -- A shift that has its report is no longer cancelled: the report would name a shift that never happened. Read under
 -- the policies of whoever cancels, the owner or an active manager, who read every report of the creator.
+-- Complete only while `team_update` is the one policy on "shifts" that sets "cancelled_at" (`swap_update` keeps it
+-- null): a policy that lets anyone else set it, a member say, makes this read see that member's reports alone.
 CREATE FUNCTION "refuse_reported_shift_cancel"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF EXISTS (SELECT 1 FROM "shift_reports" WHERE "shift_id" = NEW."id") THEN
