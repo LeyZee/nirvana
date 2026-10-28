@@ -47,7 +47,7 @@ import {
 } from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
 import { createMediaModule, missingMediaBinaries, type MediaModule } from './modules/media';
-import { createPayrollModule, type PayrollModule } from './modules/payroll';
+import { createPayrollModule, enqueuePayRecalculation, type PayrollModule } from './modules/payroll';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
 import { startProvidersModule, type ProvidersModule } from './modules/providers';
@@ -250,6 +250,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     db: db.db,
     adminDb: adminDb.db,
     creators: { list: () => persona.creators.list('all') },
+    // Pay owns `payroll.recalculate`: a validated report enqueues it through pay's own function (EQ-04).
+    enqueuePayRecalculation,
   });
   // Pay reads the planning's reports and the team's rates in its own transaction, through their `index.ts` (EQ-04).
   const payroll = createPayrollModule({
@@ -257,8 +259,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     adminDb: adminDb.db,
     reads: {
       validatedReportsUnscoped: scheduling.pay.validatedReportsUnscoped,
+      validatedReportsScoped: scheduling.pay.validatedReportsScoped,
+      reportsAwaitingReviewScoped: scheduling.pay.reportsAwaitingReviewScoped,
       agencyTimeZone: scheduling.pay.agencyTimeZone,
-      membersUnscoped: team.pay.membersUnscoped,
+      members: team.pay.members,
+      creatorIds: async () => (await persona.creators.list('all')).map((creator) => creator.id),
     },
   });
   const playground =

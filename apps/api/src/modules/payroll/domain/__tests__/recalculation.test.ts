@@ -4,14 +4,8 @@ import {
   CommissionStatementIdSchema,
   DomainError,
   newId,
-  PayPeriodSchema,
   PenaltyIdSchema,
-  PlatformAccountIdSchema,
-  ShiftReportIdSchema,
-  TeamMemberIdSchema,
-  UserIdSchema,
   type Bonus,
-  type ExchangeRate,
   type Penalty,
   type ShiftReportId,
 } from '@nirvana/contracts';
@@ -24,70 +18,10 @@ import {
   reportsCounted,
   type MemberForPay,
   type PeriodPlan,
-  type PeriodSnapshot,
-  type ReportForPay,
   type StatementDraft,
 } from '../recalculation';
 
-/** Invented members and amounts only (ADR 0010). */
-const P1 = PayPeriodSchema.parse('2025-03-01');
-const P2 = PayPeriodSchema.parse('2025-03-16');
-const P3 = PayPeriodSchema.parse('2025-04-01');
-const OWNER = newId(UserIdSchema);
-const MAIN = newId(PlatformAccountIdSchema);
-const USD: ExchangeRate = {
-  currency: 'USD',
-  day: '2025-03-31',
-  rateMicros: 920_000,
-  source: 'test',
-  fetchedAt: '2025-03-31T16:00:00.000Z',
-};
-
-const member = (patch: Partial<MemberForPay> = {}): MemberForPay => ({
-  id: newId(TeamMemberIdSchema),
-  teamRole: 'chatter',
-  status: 'active',
-  joinedOn: '2025-01-01',
-  rate: { rateBps: 2_000, teamShareBps: null },
-  ...patch,
-});
-
-const report = (
-  who: MemberForPay,
-  period: typeof P1,
-  amountMinor: number,
-  patch: Partial<ReportForPay> = {},
-) => ({
-  id: newId(ShiftReportIdSchema),
-  memberId: who.id,
-  platformAccountId: MAIN,
-  period,
-  amountMinor,
-  currency: 'EUR' as const,
-  vatBps: 0,
-  platformFeeBps: 2_000,
-  ...patch,
-});
-
-const snapshot = (patch: Partial<PeriodSnapshot>): PeriodSnapshot => ({
-  period: P2,
-  closing: null,
-  firstClosed: null,
-  lastClosed: null,
-  reports: [],
-  registered: new Map(),
-  members: [],
-  bonuses: [],
-  penalties: [],
-  carryOvers: [],
-  adjustments: [],
-  bonusTierSets: [],
-  collectiveGoals: [],
-  minimumPayoutMinor: 1_500,
-  latestRates: [],
-  statements: [],
-  ...patch,
-});
+import { member, OWNER, P1, P2, P3, report, snapshot, USD } from './fixtures';
 
 const written = (plan: PeriodPlan) => {
   if (plan.kind !== 'write') throw new Error('nothing written');

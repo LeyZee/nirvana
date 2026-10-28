@@ -2,6 +2,7 @@ import type {
   BonusTierSet,
   CollectiveGoal,
   CommissionStatement,
+  CommissionStatementId,
   DomainError,
   PayPeriod,
   PayPeriodClosing,
@@ -12,7 +13,19 @@ import type {
   UserId,
 } from '@nirvana/contracts';
 
-import type { PeriodPlan, PeriodSnapshot } from './recalculation';
+import type { PeriodPlan, PeriodSnapshot, ReportForPay } from './recalculation';
+
+/** Who validates, for the policies (`withMember`) and the audit line. */
+export interface Actor {
+  readonly userId: UserId;
+  readonly ip: string | null;
+}
+
+/** One creator's validated reports, as the member who validates reads them in her (ADR 0032). */
+export interface CreatorReports {
+  readonly creatorId: string;
+  readonly reports: readonly ReportForPay[];
+}
 
 /** What the module's jobs say when something needs a look: a period they could not compute, a statement that drifted. */
 export interface JobLogger {
@@ -47,6 +60,21 @@ export interface PayrollJobStore {
     decide: (snapshot: PeriodSnapshot) => PeriodDecision,
   ): Promise<RecomputedPeriod>;
   openPeriodFactsUnscoped(now: Date): Promise<OpenPeriodFacts>;
+}
+
+/** The validation of a statement (ADR 0032): one transaction as the member who validates, under both locks. */
+export interface PayrollValidationStore {
+  /**
+   * Closes the statement's period for the team first when it is open, then validates the statement on the closing
+   * and writes its carry-over. Throws the module's errors, nothing is written then.
+   */
+  validate(
+    actor: Actor,
+    statementId: CommissionStatementId,
+    revision: number,
+  ): Promise<{ readonly period: PayPeriod }>;
+  /** `payroll.recalculate` for `period`, in its own transaction: after a validation refused on a changed statement. */
+  enqueueRecalculation(actor: Actor, period: PayPeriod): Promise<void>;
 }
 
 /** Who reads pay: their scope (`withMember`) and their own member, `null` for the owner. */

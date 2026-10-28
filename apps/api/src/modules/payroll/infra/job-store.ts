@@ -1,26 +1,11 @@
 import {
-  BonusSchema,
   BonusTierSchema,
-  BonusTierSetSchema,
-  CarryOverSchema,
-  CollectiveGoalSchema,
-  CollectiveReachedSchema,
   CommissionStatementIdSchema,
-  CommissionStatementStatusSchema,
-  DEFAULT_MINIMUM_PAYOUT_MINOR,
-  ExchangeRateSchema,
   newId,
   nextPayPeriod,
-  PayAdjustmentSchema,
   payPeriodAt,
-  payPeriodLastDay,
-  PayPeriodSchema,
-  PenaltySchema,
   previousPayPeriod,
-  ShiftReportIdSchema,
-  TeamMemberIdSchema,
   type PayPeriod,
-  type ShiftReportId,
 } from '@nirvana/contracts';
 import {
   and,
@@ -35,44 +20,11 @@ import {
 import { z } from 'zod';
 
 import type { OpenPeriodFacts, PayrollJobStore } from '../domain/ports';
-import type {
-  CollectiveReached,
-  MemberForPay,
-  PeriodSnapshot,
-  ReportForPay,
-  StatementContent,
-  StatementDraft,
-} from '../domain/recalculation';
+import type { CollectiveReached, StatementContent, StatementDraft } from '../domain/recalculation';
 
-const {
-  bonusTierSets,
-  bonuses,
-  carryOvers,
-  collectiveGoals,
-  commissionStatementLines,
-  commissionStatements,
-  exchangeRates,
-  payAdjustments,
-  payPeriodClosings,
-  payPeriodReports,
-  payrollSettings,
-  penalties,
-} = schema;
+import { closingsSpan, readSnapshot, registeredAmong, type PayInputReads } from './snapshot';
 
-/**
- * What pay reads of the other modules, in its own transaction (given by the composition root from their `index.ts`):
- * the planning's validated reports and agency zone, the team's members and rates.
- */
-export interface PayInputReads {
-  readonly validatedReportsUnscoped: (tx: Transaction, upTo: PayPeriod) => Promise<readonly ReportForPay[]>;
-  readonly agencyTimeZone: (tx: Transaction) => Promise<string>;
-  readonly membersUnscoped: (tx: Transaction, day: string) => Promise<readonly MemberForPay[]>;
-}
-
-const iso = (at: Date): string => at.toISOString();
-
-const cancellationOf = (row: { cancelledAt: Date | null; cancelledBy: string | null }) =>
-  row.cancelledAt === null ? null : { cancelledAt: iso(row.cancelledAt), cancelledBy: row.cancelledBy };
+const { commissionStatementLines, commissionStatements } = schema;
 
 /**
  * Pay's period `period` as it is first needed: from the end of the period before when it is written, else midnight in
@@ -91,131 +43,6 @@ async function writeWindow(tx: Transaction, period: PayPeriod, timeZone: string)
         ${after}::date::timestamp at time zone ${timeZone}),
       ${timeZone}
     on conflict (period) do nothing`);
-}
-
-/** The registry's period of each report among `ids` a closing counted. */
-async function registeredAmong(
-  tx: Transaction,
-  ids: readonly ShiftReportId[],
-): Promise<Map<ShiftReportId, PayPeriod>> {
-  if (ids.length === 0) return new Map();
-  const rows = await tx
-    .select({ id: payPeriodReports.shiftReportId, period: payPeriodReports.period })
-    .from(payPeriodReports)
-    .where(sql`${payPeriodReports.shiftReportId} = any(${sql.param([...ids])}::uuid[])`);
-  return new Map(rows.map((row) => [ShiftReportIdSchema.parse(row.id), PayPeriodSchema.parse(row.period)]));
-}
-
-async function closingsSpan(tx: Transaction): Promise<{ first: PayPeriod | null; last: PayPeriod | null }> {
-  const [span] = await tx
-    .select({
-      first: sql<string | null>`min(${payPeriodClosings.period})::text`,
-      last: sql<string | null>`max(${payPeriodClosings.period})::text`,
-    })
-    .from(payPeriodClosings);
-  return {
-    first: span?.first == null ? null : PayPeriodSchema.parse(span.first),
-    last: span?.last == null ? null : PayPeriodSchema.parse(span.last),
-  };
-}
-
-async function readSnapshot(
-  tx: Transaction,
-  reads: PayInputReads,
-  period: PayPeriod,
-): Promise<PeriodSnapshot> {
-  const lastDay = payPeriodLastDay(period);
-  const [closing] = await tx.select().from(payPeriodClosings).where(eq(payPeriodClosings.period, period));
-  const span = await closingsSpan(tx);
-  const reports = await reads.validatedReportsUnscoped(tx, period);
-  const registered = await registeredAmong(
-    tx,
-    reports.map((report) => report.id),
-  );
-
-  const bonusRows = await tx.select().from(bonuses).where(eq(bonuses.period, period));
-  const penaltyRows = await tx
-    .select()
-    .from(penalties)
-    .where(sql`${penalties.fromPeriod} <= ${period} and ${penalties.toPeriod} >= ${period}`);
-  const carryRows = await tx.select().from(carryOvers).where(eq(carryOvers.toPeriod, period));
-  const adjustmentRows = await tx.select().from(payAdjustments).where(eq(payAdjustments.period, period));
-  const tierRows = await tx
-    .select()
-    .from(bonusTierSets)
-    .where(sql`${bonusTierSets.fromPeriod} <= ${period}`);
-  const goalRows = await tx.select().from(collectiveGoals).where(eq(collectiveGoals.period, period));
-  const [settings] = await tx.select().from(payrollSettings);
-  const rateRows = await tx
-    .selectDistinctOn([exchangeRates.currency])
-    .from(exchangeRates)
-    .where(sql`${exchangeRates.day} <= ${lastDay}::date`)
-    .orderBy(exchangeRates.currency, sql`${exchangeRates.day} desc`);
-  const statementRows = await tx
-    .select({
-      id: commissionStatements.id,
-      memberId: commissionStatements.memberId,
-      status: commissionStatements.status,
-      revision: commissionStatements.revision,
-      inputsHash: commissionStatements.inputsHash,
-    })
-    .from(commissionStatements)
-    .where(eq(commissionStatements.period, period));
-
-  return {
-    period,
-    closing:
-      closing === undefined
-        ? null
-        : {
-            teamNetMinor: closing.teamNetMinor,
-            collective: CollectiveReachedSchema.nullable().parse(closing.collective),
-            exchangeRates: z.array(ExchangeRateSchema).parse(closing.exchangeRates),
-          },
-    firstClosed: span.first,
-    lastClosed: span.last,
-    reports,
-    registered,
-    members: await reads.membersUnscoped(tx, lastDay),
-    bonuses: bonusRows.map((row) =>
-      BonusSchema.parse({ ...row, createdAt: iso(row.createdAt), cancellation: cancellationOf(row) }),
-    ),
-    penalties: penaltyRows.map((row) =>
-      PenaltySchema.parse({
-        ...row,
-        amount:
-          row.kind === 'fixed'
-            ? { kind: 'fixed', amountMinor: row.amountMinor }
-            : { kind: 'percent', bps: row.bps },
-        createdAt: iso(row.createdAt),
-        cancellation:
-          row.cancelledAt === null
-            ? null
-            : {
-                cancelledAt: iso(row.cancelledAt),
-                cancelledBy: row.cancelledBy,
-                cancelledFrom: row.cancelledFrom,
-              },
-      }),
-    ),
-    carryOvers: carryRows.map((row) => CarryOverSchema.parse({ ...row, createdAt: iso(row.createdAt) })),
-    adjustments: adjustmentRows.map((row) =>
-      PayAdjustmentSchema.parse({ ...row, createdAt: iso(row.createdAt) }),
-    ),
-    bonusTierSets: tierRows.map((row) => BonusTierSetSchema.parse({ ...row, createdAt: iso(row.createdAt) })),
-    collectiveGoals: goalRows.map((row) =>
-      CollectiveGoalSchema.parse({ ...row, createdAt: iso(row.createdAt) }),
-    ),
-    minimumPayoutMinor: settings?.minimumPayoutMinor ?? DEFAULT_MINIMUM_PAYOUT_MINOR,
-    latestRates: rateRows.map((row) => ExchangeRateSchema.parse({ ...row, fetchedAt: iso(row.fetchedAt) })),
-    statements: statementRows.map((row) => ({
-      id: CommissionStatementIdSchema.parse(row.id),
-      memberId: TeamMemberIdSchema.parse(row.memberId),
-      status: CommissionStatementStatusSchema.parse(row.status),
-      revision: row.revision,
-      inputsHash: row.inputsHash,
-    })),
-  };
 }
 
 /** A statement's columns from its content, as the engine and the recalculation gave it. */
@@ -289,7 +116,12 @@ export function createDrizzlePayrollJobStore(
       withAdmin(adminDb, async (tx) => {
         await lockPayrollClose(tx);
         await writeWindow(tx, period, await reads.agencyTimeZone(tx));
-        const snapshot = await readSnapshot(tx, reads, period);
+        const snapshot = await readSnapshot(
+          tx,
+          reads,
+          period,
+          await reads.validatedReportsUnscoped(tx, period),
+        );
         const decision = decide(snapshot);
         if (decision.kind === 'write') {
           const computedAt = now();
