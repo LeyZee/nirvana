@@ -1,0 +1,5 @@
+# 2026-10-28 — Le cache de turbo suit les paquets dont on dépend — done
+Fait : `typecheck`, `lint` et `test` dépendent d’une tâche vide `transit`, à son tour dépendante du `transit` des paquets importés (le modèle « transit node » de turbo). Avant, le hash de `apps/web` ne bougeait pas quand `packages/contracts` changeait. `pnpm check` rejouait alors en local un typecheck vert depuis le cache, et la CI, sans cache, le voyait rouge (découverte du journal P5-01 « persona-blocks »). Vérifié avec `turbo run --dry=json` : sans le correctif, le hash de `@nirvana/web#typecheck` reste le même quand on modifie `packages/contracts/src/brief.ts` ; avec le correctif, les hashes de `typecheck`, `lint` et `test` changent tous les trois. Les tâches ne s’attendent pas entre paquets : `transit` n’a pas de script, il ne sert qu’au hash.
+Pas fait : rien.
+Découvertes : aucune.
+Candidats à suppression : aucun.

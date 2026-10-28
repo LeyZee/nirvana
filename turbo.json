@@ -8,13 +8,19 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".output/**"]
     },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "typecheck": {
+      "dependsOn": ["^transit"],
       "outputs": []
     },
     "lint": {
+      "dependsOn": ["^transit"],
       "outputs": []
     },
     "test": {
+      "dependsOn": ["^transit"],
       "outputs": []
     },
     "test:integration": {
