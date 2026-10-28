@@ -346,7 +346,8 @@ export type PayAdjustment = z.infer<typeof PayAdjustmentSchema>;
 
 /**
  * `POST /v1/payroll/adjustments` (owner, active manager, never for themselves) → 201 `PayAdjustmentSchema`, 200 for
- * the same `id` and values. The server chooses the period: the member's first open one.
+ * the same `id` and values. The server chooses the period: the member's first open one, where their next statement
+ * to validate is (their earliest open draft, or else the team's first period not closed).
  */
 export const CreatePayAdjustmentBodySchema = z.object({
   id: PayAdjustmentIdSchema,
@@ -553,14 +554,16 @@ export function mayValidateStatement(
  * The error codes of `/v1/payroll`, for the screen to say them in French (the suffix gives the status, api.md):
  * `team_member_not_found`, `commission_statement_not_found`, `bonus_not_found`, `penalty_not_found` 404 ;
  * `commission_statement_changed_conflict` 409, another revision or other inputs than the reader saw ;
- * `commission_statement_status_conflict` 409, validating what is not a draft, paying what is not validated ;
+ * `commission_statement_status_conflict` 409, validating what is not a draft, paying what is not validated, correcting
+ * a draft ;
  * `commission_statement_open_conflict` 409, a period that has not ended ;
  * `commission_statement_order_conflict` 409, an earlier statement of the member is still a draft or not written yet ;
  * `pay_period_order_conflict` 409, an earlier period of the team must be validated first (`details.period`) ;
  * `pay_period_reports_pending_conflict` 409, reports of the period still wait for review (`details.count`) ;
  * `pay_period_reports_unread_conflict` 409, reports the validator may not read would be left out (`details.count`) ;
  * `pay_period_not_computed_conflict` 409, a period to close that pay has not written yet (`details.period`) ;
- * `pay_period_closed_conflict` 409, a bonus, a penalty, tiers or a goal for a period already validated ;
+ * `pay_period_closed_conflict` 409, a bonus, a penalty, tiers or a goal for a period already validated, or for a
+ * member before they joined (`details.period`) ;
  * `penalty_cancel_conflict` 409, every period of the penalty is closed ;
  * `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`,
  * `collective_goal_conflict` 409, the same `id` with other values ;

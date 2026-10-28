@@ -1,5 +1,4 @@
 import {
-  AuditEntryIdSchema,
   canonicalExchangeRates,
   CarryOverIdSchema,
   CommissionStatementStatusSchema,
@@ -55,35 +54,10 @@ import {
 
 import { enqueuePayRecalculation } from './recalculation-queue';
 import { closingsSpan, readSnapshot, registeredAmong, type PayInputReads } from './snapshot';
+import { audit } from './writes';
 
-const {
-  auditLog,
-  carryOvers,
-  commissionStatements,
-  payPeriodClosings,
-  payPeriodReports,
-  payPeriods,
-  teamMembers,
-} = schema;
-
-/** Who did what (append-only, `audit_log`): never a name. */
-async function audit(
-  tx: Transaction,
-  actor: Actor,
-  action: 'commission_statement.validate' | 'pay_period.close',
-  entity: { readonly kind: 'commission_statement' | 'pay_period'; readonly id: string },
-  details: Record<string, unknown>,
-): Promise<void> {
-  await tx.insert(auditLog).values({
-    id: newId(AuditEntryIdSchema),
-    userId: actor.userId,
-    action,
-    entity: entity.kind,
-    entityId: entity.id,
-    details,
-    ip: actor.ip,
-  });
-}
+const { carryOvers, commissionStatements, payPeriodClosings, payPeriodReports, payPeriods, teamMembers } =
+  schema;
 
 /** The validated reports no closing counted yet, on every creator: a read bounded to the closing's check. */
 function waitingReportsUnscoped(

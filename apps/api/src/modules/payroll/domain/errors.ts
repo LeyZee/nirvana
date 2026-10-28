@@ -26,24 +26,45 @@ export class CommissionStatementNotFound extends DomainError {
   }
 }
 
-/** One's own statement: four eyes, a member never validates it (ADR 0023 § Paie). */
+export class TeamMemberNotFound extends DomainError {
+  constructor() {
+    super('team_member_not_found', 'Membre introuvable');
+  }
+}
+
+export class BonusNotFound extends DomainError {
+  constructor() {
+    super('bonus_not_found', 'Prime introuvable');
+  }
+}
+
+export class PenaltyNotFound extends DomainError {
+  constructor() {
+    super('penalty_not_found', 'Malus introuvable');
+  }
+}
+
+/** One's own statement, bonus, penalty or adjustment: four eyes, a member never decides their own pay (ADR 0023 § Paie). */
 export class PayrollOwnForbidden extends DomainError {
   constructor() {
-    super('payroll_own_forbidden', 'Un membre ne valide jamais son propre relevé');
+    super('payroll_own_forbidden', 'Un membre ne décide jamais de sa propre paie');
   }
 }
 
-/** A member who is not the owner nor an active manager. */
+/** A member who is not the owner nor an active manager, or a manager doing what only the owner does. */
 export class PayrollForbidden extends DomainError {
-  constructor() {
-    super('payroll_forbidden', 'Réservé au propriétaire et aux managers actifs');
+  constructor({ ownerOnly = false }: { readonly ownerOnly?: boolean } = {}) {
+    super(
+      'payroll_forbidden',
+      ownerOnly ? 'Réservé au propriétaire' : 'Réservé au propriétaire et aux managers actifs',
+    );
   }
 }
 
-/** Validating what is not a draft. */
+/** Validating what is not a draft, paying what is not validated (once), correcting a draft. */
 export class CommissionStatementStatusConflict extends DomainError {
-  constructor() {
-    super('commission_statement_status_conflict', 'Ce relevé n’est plus un brouillon');
+  constructor(message = 'Ce relevé n’est plus un brouillon') {
+    super('commission_statement_status_conflict', message);
   }
 }
 
@@ -109,5 +130,28 @@ export class PayPeriodReportsUnread extends DomainError {
     super('pay_period_reports_unread_conflict', 'Des rapports de la quinzaine échappent à cette validation', {
       details: { count },
     });
+  }
+}
+
+/** A bonus, a penalty or an adjustment for a period the member's validated statements have closed (EQ-04). */
+export class PayPeriodClosed extends DomainError {
+  constructor(period: PayPeriod) {
+    super('pay_period_closed_conflict', 'Cette quinzaine est déjà validée pour ce membre', {
+      details: { period },
+    });
+  }
+}
+
+/** Every period of the penalty is closed for the member: a cancellation would change nothing. */
+export class PenaltyCancelConflict extends DomainError {
+  constructor() {
+    super('penalty_cancel_conflict', 'Toutes les quinzaines de ce malus sont déjà validées');
+  }
+}
+
+/** The same `id` sent again with other values: a retry gives back what was recorded, never something else. */
+export class PayEntryConflict extends DomainError {
+  constructor(code: 'bonus_conflict' | 'penalty_conflict' | 'pay_adjustment_conflict') {
+    super(code, 'Cet identifiant est déjà pris par une autre saisie');
   }
 }

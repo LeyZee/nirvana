@@ -2,10 +2,12 @@ import type { PayPeriod } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
+import { createPayrollEntries } from './application/entries';
 import { createPayrollReads } from './application/periods';
 import { createRecalculation, type RecalculationOutcome } from './application/recalculation';
 import { createPayrollValidation } from './application/validation';
 import type { JobLogger } from './domain/ports';
+import { createDrizzlePayrollEntryStore } from './infra/entry-store';
 import { createDrizzlePayrollJobStore } from './infra/job-store';
 import { createDrizzlePayrollReadStore } from './infra/read-store';
 import { createPayrollRoutes, type RequireRole } from './infra/routes';
@@ -55,9 +57,10 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
     createDrizzlePayrollValidationStore(deps.db, deps.adminDb, deps.reads, now),
     reads,
   );
+  const entries = createPayrollEntries(createDrizzlePayrollEntryStore(deps.db, deps.reads, now), reads);
   return {
     name: 'payroll',
-    routes: (requireRole) => createPayrollRoutes(reads, validation, requireRole),
+    routes: (requireRole) => createPayrollRoutes(reads, validation, entries, requireRole),
     jobs: {
       recalculate: (period, logger) => createRecalculation(jobStore, logger, now).recalculate(period),
       recalculateOpen: (logger) => createRecalculation(jobStore, logger, now).recalculateOpen(),
