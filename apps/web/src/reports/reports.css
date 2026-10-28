@@ -1,0 +1,568 @@
+/* End-of-shift reports (EQ-03): the report panel, the hold island, Aujourd'hui's « Mes rapports », Équipe › Rapports
+   and Réglages › Paie. Tokens only; one neon per screen (the panel's send, the page's validate). */
+
+/* ── Statuses: quiet while waiting, green once validated, amber when sent back. Red stays for urgencies. ── */
+.rp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: var(--nv-radius-full);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 650;
+  white-space: nowrap;
+  background: var(--nv-glass-fill);
+  color: var(--nv-ink-muted);
+}
+.rp-chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--nv-radius-full);
+  background: currentColor;
+  opacity: 0.85;
+}
+.rp-chip--ok {
+  color: var(--nv-success);
+  background: color-mix(in srgb, var(--nv-success) 12%, transparent);
+}
+.rp-chip--warn {
+  color: var(--nv-warning);
+  background: color-mix(in srgb, var(--nv-warning) 12%, transparent);
+}
+.rp-chip--neutral::before {
+  display: none;
+}
+.rp-status {
+  align-self: flex-start;
+  font-weight: 650;
+}
+
+/* ── The panel ── */
+.rp-lead__who {
+  color: var(--nv-ink);
+  font-weight: 600;
+}
+.rp-lead__when {
+  display: block;
+  margin-top: 2px;
+}
+.rp-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  box-shadow: inset 3px 0 0 var(--nv-ink-faint);
+}
+.rp-notice[data-tone='warn'] {
+  background: color-mix(in srgb, var(--nv-warning) 9%, var(--nv-glass-fill));
+  box-shadow: inset 3px 0 0 var(--nv-warning);
+}
+.rp-notice__title {
+  margin: 0;
+  font-weight: 650;
+}
+.rp-notice[data-tone='warn'] .rp-notice__title {
+  color: var(--nv-warning);
+}
+.rp-notice__text {
+  margin: 0;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  text-wrap: pretty;
+}
+
+/* The amount dominates the form: large, its currency beside it. */
+.rp-amount__box {
+  position: relative;
+}
+.rp-amount__input.nv-field__control {
+  height: 72px;
+  padding-right: 56px;
+  font-size: var(--nv-text-large-title);
+  line-height: 1;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+.rp-amount__input::placeholder {
+  color: var(--nv-ink-faint);
+  font-weight: 600;
+}
+.rp-amount__sign {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-title-2);
+  font-weight: 600;
+  pointer-events: none;
+  transition: color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.rp-amount__box:focus-within .rp-amount__sign {
+  color: var(--nv-ink);
+}
+.rp-amount[data-invalid='true'] .rp-amount__input {
+  box-shadow: inset 0 0 0 1.5px var(--nv-warning);
+}
+
+.rp-incident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-3);
+  padding: var(--nv-space-3) var(--nv-space-4);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  transition: background-color var(--nv-dur-base) var(--nv-ease-out);
+}
+.rp-incident:hover {
+  background: var(--nv-plate-hover);
+}
+.rp-incident[data-on='true'] {
+  background: color-mix(in srgb, var(--nv-warning) 8%, var(--nv-glass-fill));
+}
+.rp-incident__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-3);
+  min-height: var(--nv-target-min);
+  cursor: pointer;
+}
+.rp-incident__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rp-incident__title {
+  font-weight: 650;
+}
+.rp-incident__sub {
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+
+/* A validated report: its amount, then its corrections. */
+.rp-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  padding: var(--nv-space-5);
+  border-radius: var(--nv-radius-lg);
+  background: var(--nv-plate);
+  box-shadow: inset 0 0 0 1px var(--nv-plate-edge);
+}
+.rp-figure__value {
+  margin: 0;
+  font-size: var(--nv-text-hero);
+  line-height: var(--nv-text-hero-leading);
+  letter-spacing: var(--nv-text-hero-tracking);
+  font-weight: 680;
+}
+.rp-figure__note {
+  margin: 0;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+.rp-corrections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+}
+.rp-corrections__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rp-correction {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nv-space-3);
+  min-height: var(--nv-target-min);
+  padding: 0 var(--nv-space-2);
+  border-top: 1px solid var(--nv-hairline);
+  border-radius: var(--nv-radius-sm);
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.rp-correction:hover {
+  background: var(--nv-plate-hover);
+}
+.rp-correction:first-child {
+  border-top: 0;
+}
+.rp-correction__amount {
+  font-weight: 680;
+}
+.rp-correction__why {
+  overflow: hidden;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-corrections__total {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: var(--nv-space-2) var(--nv-space-2) 0;
+  border-top: 1px solid var(--nv-hairline);
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+}
+.rp-corrections__total .nv-num {
+  color: var(--nv-ink);
+}
+
+/* ── The hold island: at the foot of the screen, above the phone's tab bar ── */
+.rp-island {
+  --_radius: var(--nv-radius-xl);
+  position: fixed;
+  z-index: 60;
+  left: 50%;
+  bottom: calc(var(--nv-space-6) + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nv-space-3);
+  width: min(440px, calc(100vw - 28px));
+  box-sizing: border-box;
+  padding: var(--nv-space-3) var(--nv-space-3) var(--nv-space-3) var(--nv-space-4);
+  transform: translateX(-50%);
+  animation: rp-island-in var(--nv-dur-slow) var(--nv-ease-spring-bouncy) both;
+}
+@keyframes rp-island-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px) scale(0.94);
+    filter: blur(4px);
+  }
+}
+.rp-island__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--nv-ink);
+}
+.rp-island__ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.rp-island__ring circle {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.rp-island__track {
+  stroke: var(--nv-fill-track);
+}
+.rp-island__left {
+  stroke: var(--nv-neon);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: rp-countdown linear both;
+}
+@keyframes rp-countdown {
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+.rp-island__count {
+  position: relative;
+  font-size: var(--nv-text-footnote);
+  font-weight: 700;
+}
+.rp-island__spin {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--nv-fill-track);
+  border-top-color: var(--nv-ink);
+  border-radius: var(--nv-radius-full);
+  animation: rp-spin 0.8s linear infinite;
+}
+@keyframes rp-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.rp-island__glyph {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rp-island[data-phase='done'] .rp-island__mark {
+  border-radius: var(--nv-radius-full);
+  color: var(--nv-success);
+  background: color-mix(in srgb, var(--nv-success) 14%, transparent);
+}
+.rp-island[data-phase='failed'] .rp-island__mark {
+  border-radius: var(--nv-radius-full);
+  color: var(--nv-warning);
+  background: color-mix(in srgb, var(--nv-warning) 14%, transparent);
+}
+.rp-island__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rp-island__title {
+  font-weight: 650;
+}
+.rp-island__text {
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  text-wrap: pretty;
+}
+.rp-island__acts {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-1);
+}
+.rp-island__close svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+/* ── Aujourd'hui ── */
+.rp-hero__made {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  min-height: var(--nv-target-min);
+  margin: 0;
+  padding: 0 var(--nv-space-3) 0 var(--nv-space-2);
+  border: 0;
+  border-radius: var(--nv-radius-full);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.rp-hero__see {
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+}
+.rp-hero__later {
+  align-self: center;
+  padding: 0 var(--nv-space-2);
+  color: var(--nv-ink-faint);
+  font-size: var(--nv-text-footnote);
+}
+
+.rp-mine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+}
+.rp-mine__empty {
+  margin: 0;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+.rp-todo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rp-todo__one {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nv-space-3);
+  width: 100%;
+  min-height: 60px;
+  margin: 0;
+  padding: var(--nv-space-3) var(--nv-space-4);
+  border: 0;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.rp-todo__one[data-tone='warn'] {
+  background: color-mix(in srgb, var(--nv-warning) 8%, var(--nv-glass-fill));
+}
+.rp-todo__mark {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-neon);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nv-neon) 18%, transparent);
+}
+.rp-todo__one[data-tone='warn'] .rp-todo__mark {
+  background: var(--nv-warning);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nv-warning) 18%, transparent);
+}
+.rp-todo__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rp-todo__title {
+  font-weight: 650;
+}
+.rp-todo__sub,
+.rp-todo__note {
+  overflow: hidden;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-todo__note {
+  color: var(--nv-warning);
+  white-space: normal;
+}
+.rp-todo__go {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--nv-space-3);
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-glass-fill-strong);
+  font-size: var(--nv-text-footnote);
+  font-weight: 650;
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.rp-todo__one:hover .rp-todo__go {
+  background: var(--nv-select-strong);
+}
+
+.rp-figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-3);
+}
+.rp-figures__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nv-space-3) var(--nv-space-8);
+}
+.rp-figures__one {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rp-figures__label {
+  color: var(--nv-ink-faint);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  letter-spacing: var(--nv-text-caption-tracking);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.rp-figures__value {
+  font-size: var(--nv-text-title-1);
+  line-height: var(--nv-text-title-1-leading);
+  letter-spacing: var(--nv-text-title-1-tracking);
+  font-weight: 680;
+  white-space: nowrap;
+}
+.rp-figures__value--quiet {
+  font-size: var(--nv-text-title-2);
+  line-height: var(--nv-text-title-2-leading);
+  color: var(--nv-ink-muted);
+}
+.rp-mine__all {
+  margin: 0 calc(-1 * var(--nv-space-2));
+}
+.rp-lines {
+  margin: 0;
+  list-style: none;
+}
+.rp-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nv-space-3);
+  width: 100%;
+  min-height: var(--nv-target-min);
+  margin: 0;
+  padding: var(--nv-space-2) var(--nv-space-3);
+  border: 0;
+  border-radius: var(--nv-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.rp-line__when {
+  overflow: hidden;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-line__amount {
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  .rp-island {
+    /* Above the floating tab bar (shell.css, « Phone »). */
+    bottom: calc(14px + 64px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (max-width: 520px) {
+  .rp-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .rp-line .rp-chip {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .rp-amount__input.nv-field__control {
+    height: 64px;
+    font-size: var(--nv-text-title-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-island {
+    animation: none;
+  }
+  /* The ring stays full and the number counts down: the time left is still said. */
+  .rp-island__left {
+    animation: none;
+  }
+  .rp-island__spin {
+    animation-duration: 2.4s;
+  }
+  .rp-incident,
+  .rp-correction,
+  .rp-todo__go {
+    transition: none;
+  }
+}
