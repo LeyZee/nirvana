@@ -8,7 +8,7 @@ import {
   type MarkAlertTriggersSeenBody,
 } from '@nirvana/contracts';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { AlertChoice, CreatorTriggers } from './model';
 
@@ -142,12 +142,12 @@ export function useHistory(creatorIds: readonly string[], filter: HistoryFilter,
     })),
     combine: combineHistory,
   });
-  const shown = useRef<readonly CreatorTriggers[] | null>(null);
-  if (!read.pending) {
-    shown.current = read.lists;
-    return read;
-  }
-  return shown.current === null ? read : { ...read, lists: shown.current, pending: false, stale: true };
+  const [shown, setShown] = useState<readonly CreatorTriggers[] | null>(null);
+  useEffect(() => {
+    if (!read.pending) setShown(read.lists);
+  }, [read.pending, read.lists]);
+  if (!read.pending || shown === null) return read;
+  return { ...read, lists: shown, pending: false, stale: true };
 }
 
 function combineHistory(
