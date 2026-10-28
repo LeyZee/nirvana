@@ -180,7 +180,7 @@
 .py-keys li:nth-child(2)::before {
   background: var(--nv-data-2);
 }
-.py-keys li:nth-child(3)::before {
+.py-keys li:nth-child(n + 3)::before {
   background: var(--nv-ink-faint);
 }
 
@@ -611,10 +611,12 @@
   cursor: pointer;
 }
 .py-period__name {
+  display: block;
   margin: 0;
   font-weight: 650;
 }
 .py-period__sub {
+  display: block;
   margin: 0;
   color: var(--nv-ink-muted);
   font-size: var(--nv-text-footnote);
@@ -970,4 +972,26 @@
   .py-validate--row {
     display: inline-flex;
   }
+}
+
+/* A row's name opens its statement from the keyboard too; the row's own click is the pointer's shortcut. */
+.py-member__open {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.py-member__open:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--nv-ink-faint);
+}
+.py-member__open:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+  border-radius: var(--nv-radius-xs);
 }

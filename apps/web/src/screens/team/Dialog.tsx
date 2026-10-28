@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, type JSX, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+import { cn } from '@/lib/utils';
+
 /**
  * The floating panel of the planning (a new shift, one shift): the one glass of the screen, modal, its focus kept
  * inside, closed by Échap, by a tap outside or by its ×, and the focus given back to what opened it.
@@ -9,6 +11,7 @@ export function Dialog({
   title,
   lead,
   busy = false,
+  className,
   onClose,
   children,
 }: {
@@ -16,6 +19,8 @@ export function Dialog({
   lead?: ReactNode;
   /** While a write is under way, nothing closes it. */
   busy?: boolean;
+  /** A screen's own width or layout for its panel (Paie's statement). */
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }): JSX.Element {
@@ -68,7 +73,7 @@ export function Dialog({
     >
       <div
         ref={dialog}
-        className="nv-glass nv-glass--float tm-dialog"
+        className={cn('nv-glass nv-glass--float tm-dialog', className)}
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${id}-title`}

@@ -1,9 +1,14 @@
 import {
+  payPeriodLastDay,
   PayPeriodSchema,
+  type CollectiveGoal,
+  type CollectiveTier,
   type CommissionStatement,
   type CommissionStatementLine,
   type Currency,
+  type ExchangeRate,
   type PaymentMethod,
+  type PayPeriod,
   type PayPeriodSummary,
   type PayPeriodWindow,
   type PayrollPeriod,
@@ -11,7 +16,7 @@ import {
   type TeamMember,
 } from '@nirvana/contracts';
 
-import type { PayRefusal } from './api';
+import type { PayRefusal, PayRefusalCode } from './api';
 
 import { amountText, percentText, periodLine, signedAmountText } from '@/reports/model';
 import { platformName } from '@/scheduling/model';
@@ -22,7 +27,7 @@ import { clockAt, dayMonth, dayOf, daysFrom, longDay } from '@/scheduling/time';
  * the forecast of a period, and what each refusal of the server means. The server computes; this only says it.
  */
 
-const NBSP = ' ';
+const NBSP = '\u00a0';
 const DAY_MS = 86_400_000;
 
 /** How a statement was paid, in the screens' words (a closed list, `PAYMENT_METHODS`). */
@@ -79,7 +84,7 @@ export function summaryOf(period: PayrollPeriod): Omit<PayPeriodSummary, 'window
       draft: count((one) => one.status === 'draft'),
       validated: count((one) => one.status === 'validated'),
       paid: count((one) => one.status === 'paid'),
-      carried: count((one) => one.carryOverOutMinor > 0),
+      carried: count((one) => one.carryOverOutMinor !== 0),
     },
     netMinor: sum((one) => one.netMinor),
     payableMinor: sum((one) => one.payableMinor),
@@ -139,7 +144,7 @@ export function countsLine(statements: PayPeriodSummary['statements']): string {
 /** The day a period's validation opens: its end, the first day of the next one, in the agency's zone. */
 export const opensOn = (window: PayPeriodWindow): string => dayOf(window.endsAt, window.timeZone);
 
-/** « le 2 nov. », the day of an instant in the agency's zone, short. */
+/** « lun. 2 nov. », the day of an instant in the agency's zone, short. */
 export const dayAt = (instant: string, timeZone: string): string => dayMonth(dayOf(instant, timeZone));
 
 /** « lundi 2 novembre à 10 h 41 ». */
@@ -341,9 +346,10 @@ export function totalsOf(statement: CommissionStatement, you: boolean): TotalRow
   return rows;
 }
 
-/** The names a refusal may need: a member's, by their id. */
+/** What a refusal may need: a member's name by their id, and the statement the gesture was on, when there is one. */
 export interface RefusalNames {
   readonly memberName: (memberId: string) => string | null;
+  readonly statement?: Pick<CommissionStatement, 'memberId' | 'window'>;
 }
 
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
@@ -354,18 +360,21 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
   const { details } = refusal;
   const named = PayPeriodSchema.safeParse(details.period);
   const period = named.success ? periodLine(named.data) : null;
-  const member = details.memberId === undefined ? null : names.memberName(details.memberId);
+  const memberId = details.memberId ?? names.statement?.memberId;
+  const member = memberId === undefined ? null : names.memberName(memberId);
   switch (refusal.code) {
     case 'commission_statement_changed_conflict':
       return 'Ce relevé a changé depuis que tu l’as ouvert. Relis la nouvelle version avant de valider.';
     case 'commission_statement_status_conflict':
       return 'Ce relevé n’est pas encore validé.';
     case 'commission_statement_open_conflict':
-      return 'La quinzaine n’est pas finie : elle se valide le lendemain de son dernier jour.';
+      return names.statement === undefined
+        ? 'La quinzaine n’est pas finie : elle se valide le lendemain de son dernier jour.'
+        : `La quinzaine n’est pas finie : elle se valide à partir du ${longDay(opensOn(names.statement.window))}.`;
     case 'commission_statement_order_conflict':
       return period === null
-        ? 'Un relevé plus ancien de ce membre attend sa validation.'
-        : `Valide d’abord le relevé de la quinzaine ${period}.`;
+        ? `Un relevé plus ancien ${member === null ? 'de ce membre' : `de ${member}`} attend sa validation.`
+        : `Valide d’abord le relevé ${member === null ? '' : `de ${member} `}${period}.`;
     case 'pay_period_order_conflict':
       return period === null
         ? 'Une quinzaine plus ancienne attend sa validation.'
@@ -492,3 +501,150 @@ export function statementsCsv(
   }
   return `${rows.map((row) => row.map(cell).join(';')).join('\r\n')}\r\n`;
 }
+
+/** Paie's address: the period Quinzaine shows when one was chosen, from Relevés or its arrows. */
+export interface PaySearch {
+  readonly quinzaine?: PayPeriod;
+}
+
+/** Anything else in the address is ignored: a broken link opens the period to validate, or the one under way. */
+export function parsePaySearch(search: Record<string, unknown>): PaySearch {
+  const { quinzaine } = search;
+  const parsed = PayPeriodSchema.safeParse(quinzaine);
+  return parsed.success ? { quinzaine: parsed.data } : {};
+}
+
+/**
+ * The period Quinzaine opens on: the oldest of the first page that has ended with something left to do — a statement
+ * to validate, or for the owner money still to send — since periods close in order (ADR 0032); otherwise the one
+ * under way.
+ */
+export function periodToOpen(
+  summaries: readonly Pick<
+    PayPeriodSummary,
+    'window' | 'ended' | 'statements' | 'payableMinor' | 'paidMinor'
+  >[],
+  current: PayPeriod,
+  paying: boolean,
+): PayPeriod {
+  const waiting = summaries.filter(
+    (summary) =>
+      summary.ended && (summary.statements.draft > 0 || (paying && summary.payableMinor > summary.paidMinor)),
+  );
+  return waiting.at(-1)?.window.period ?? current;
+}
+
+/**
+ * How old a rate may be on a period's last day for its closing to freeze it, as the server checks it
+ * (`assertFreshRates`): a hint for the notice, the server's refusal stays the rule.
+ */
+const RATE_MAX_AGE_DAYS = 4;
+
+/**
+ * Whether the dollar's rate is missing to close `period`: it has ended, is not closed yet, counts sales in dollars,
+ * and no rate read on its last day or the four before is known, from its drafts or from the latest the job read.
+ */
+export function rateMissing(period: PayrollPeriod, latest: ExchangeRate | null): boolean {
+  if (!period.ended || period.closing !== null) return false;
+  if (!period.statements.some((statement) => statement.lines.some((line) => line.currency !== 'EUR')))
+    return false;
+  const lastDay = payPeriodLastDay(period.period);
+  const known = [
+    ...period.statements.flatMap((statement) => statement.rules.exchangeRates),
+    ...(latest === null ? [] : [latest]),
+  ].filter((rate) => rate.day <= lastDay);
+  const freshest = known.reduce<string | null>(
+    (day, rate) => (day === null || rate.day > day ? rate.day : day),
+    null,
+  );
+  return freshest === null || daysFrom(freshest, lastDay) > RATE_MAX_AGE_DAYS;
+}
+
+/** The refusals that concern the whole period: the validation of the others stops there, the notice says it. */
+const PERIOD_REFUSALS: ReadonlySet<PayRefusalCode> = new Set<PayRefusalCode>([
+  'pay_period_reports_pending_conflict',
+  'pay_period_reports_unread_conflict',
+  'pay_period_order_conflict',
+  'pay_period_closed_conflict',
+  'exchange_rate_missing_conflict',
+  'commission_statement_open_conflict',
+  'payroll_forbidden',
+  'role_forbidden',
+]);
+
+/** Whether a refusal stops a batch of validations: one of the period's, or a server that does not answer. */
+export const stopsThePeriod = (refusal: PayRefusal): boolean =>
+  refusal.kind === 'failed' || PERIOD_REFUSALS.has(refusal.code);
+
+/** The statements a reader may validate now, in the order given: drafts of an ended period, never their own. */
+export const validatable = (period: Pick<PayrollPeriod, 'ended' | 'statements'>): CommissionStatement[] =>
+  period.ended
+    ? period.statements.filter((statement) => statement.status === 'draft' && statement.canValidate)
+    : [];
+
+/** What a member's row says after their net: their rate or team share, their tier, their penalty. */
+export function memberFacts(statement: CommissionStatement): string[] {
+  const facts = [
+    statement.teamShare === null
+      ? `commission ${percentText(statement.rules.commissionRateBps)}`
+      : `part d’équipe ${percentText(statement.teamShare.bps)}`,
+  ];
+  if (statement.tierBonus !== null) facts.push(`palier ${statement.tierBonus.label}`);
+  if (statement.penaltiesMinor > 0) facts.push(`malus ${signedAmountText(-statement.penaltiesMinor, 'EUR')}`);
+  return facts;
+}
+
+/** The sentence of a statement that carries its total over, or `null`. */
+export function carryLine(statement: CommissionStatement): string | null {
+  if (statement.carryOverOutMinor === 0) return null;
+  if (statement.totalMinor < 0)
+    return `Total sous zéro : ${signedAmountText(statement.carryOverOutMinor, 'EUR')} reportés sur la quinzaine suivante.`;
+  return `Sous le minimum de ${amountText(statement.rules.minimumPayoutMinor, 'EUR')} : ${amountText(statement.carryOverOutMinor, 'EUR')} reportés sur la quinzaine suivante.`;
+}
+
+/** One part of a split: a name, its net, and its share of the whole in basis points. */
+export interface Share {
+  readonly name: string;
+  readonly minor: number;
+  readonly bps: number;
+}
+
+/** A period's net split by `keyOf` (a creator, a platform), the largest first; nothing when there is no net. */
+export function salesSplit(
+  statements: readonly CommissionStatement[],
+  keyOf: (line: CommissionStatementLine) => string,
+): Share[] {
+  const sums = new Map<string, number>();
+  for (const line of statements.flatMap((statement) => statement.lines))
+    sums.set(keyOf(line), (sums.get(keyOf(line)) ?? 0) + line.netMinor);
+  const total = [...sums.values()].reduce((sum, minor) => sum + Math.max(minor, 0), 0);
+  if (total <= 0) return [];
+  return [...sums]
+    .filter(([, minor]) => minor > 0)
+    .map(([name, minor]) => ({ name, minor, bps: Math.round((minor * 10_000) / total) }))
+    .toSorted((a, b) => b.minor - a.minor || a.name.localeCompare(b.name, 'fr'));
+}
+
+/** How far the team's net is towards its target, in basis points, floored as the engine floors it. */
+export const reachedBpsOf = (netMinor: number, targetMinor: number): number =>
+  Math.max(0, Math.floor((netMinor * 10_000) / targetMinor));
+
+/** The highest tier a reached share gives, or `null`. */
+export function tierAt(tiers: readonly CollectiveTier[], reachedBps: number): CollectiveTier | null {
+  return tiers.reduce<CollectiveTier | null>(
+    (best, tier) =>
+      tier.reachedBps <= reachedBps && (best === null || tier.reachedBps > best.reachedBps) ? tier : best,
+    null,
+  );
+}
+
+/** The span of a goal's gauge: past its highest tier, so the last tier is never at the very end. */
+export const goalSpanBps = (goal: Pick<CollectiveGoal, 'tiers'>): number =>
+  Math.max(13_000, ...goal.tiers.map((tier) => tier.reachedBps + 2_000));
+
+/** A share of the gauge's span, in percent for CSS, capped at its end. */
+export const gaugePercent = (bps: number, spanBps: number): number =>
+  Math.round(Math.min(Math.max(bps / spanBps, 0), 1) * 1_000) / 10;
+
+/** « 3f9c…a41e »: a statement's fingerprint, short. */
+export const shortHash = (hash: string): string => `${hash.slice(0, 4)}…${hash.slice(-4)}`;

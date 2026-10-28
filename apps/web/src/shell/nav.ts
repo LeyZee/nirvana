@@ -32,6 +32,7 @@ export const READY_SECTIONS = [
   '/entrainer',
   '/planning',
   '/equipe',
+  '/paie',
   '/creatrices',
   '/reglages',
 ] as const;

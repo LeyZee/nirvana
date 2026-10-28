@@ -1,0 +1,491 @@
+import {
+  PAYMENT_METHODS,
+  PAYMENT_REFERENCE_MAX,
+  type CommissionStatement,
+  type ExchangeRate,
+  type PaymentMethod,
+  type PayrollPeriod,
+} from '@nirvana/contracts';
+import { useId, useState, type JSX } from 'react';
+
+import type { PayNames } from './data';
+import { Chip, Delta, MoneyPath, Swatch } from './parts';
+
+import { payStatement, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
+import {
+  changeBps,
+  momentAt,
+  PAYMENT_METHOD_LABELS,
+  payRefusalText,
+  rateText,
+  shortHash,
+  statementChips,
+  whoName,
+} from '@/payroll/model';
+import {
+  amountInput,
+  amountText,
+  parseAmount,
+  percentText,
+  periodLine,
+  periodTitle,
+  signedAmountText,
+} from '@/reports/model';
+import { clockAt, dayMonth, dayOf, longDay } from '@/scheduling/time';
+import { Dialog } from '@/screens/team/Dialog';
+
+type Mode = 'read' | 'pay' | 'check';
+
+/**
+ * A statement opened from its row (EQ-05): the path of the money account by account, then what adds up to what is
+ * paid; folded, the rules it copied and its revision. Its one gesture: « Valider la révision n », or for the owner
+ * « Marquer payé » in two steps (fill, read again).
+ */
+export function StatementDialog({
+  statement,
+  period,
+  names,
+  previousNet,
+  me,
+  owner,
+  canValidateNow,
+  paying,
+  onValidate,
+  onClose,
+}: {
+  statement: CommissionStatement;
+  period: PayrollPeriod;
+  names: PayNames;
+  /** The member's net the period before, for the change; `null` without a statement then. */
+  previousNet: number | null;
+  me: { readonly id: string; readonly name: string };
+  owner: boolean;
+  /** The period has ended and nothing blocks it: a draft the reader may validate can be. */
+  canValidateNow: boolean;
+  /** Opened on « Marquer payé » from the row. */
+  paying: boolean;
+  onValidate: (statement: CommissionStatement) => void;
+  onClose: () => void;
+}): JSX.Element {
+  const member = names.member(statement.memberId);
+  const [mode, setMode] = useState<Mode>(paying ? 'pay' : 'read');
+  const [busy, setBusy] = useState(false);
+  const zone = statement.window.timeZone;
+  const status = statementChips(statement, period.ended).map((chip) => chip.label);
+  const who = (userId: string | null): string =>
+    userId === null ? 'le propriétaire' : whoName(userId, me, names.members);
+
+  return (
+    <Dialog
+      className="py-dialog"
+      title={
+        <>
+          <Swatch color={member.color} />
+          {member.name}
+        </>
+      }
+      lead={
+        <>
+          Relevé de commissions · {periodTitle(statement.window.period)}
+          <Chip
+            chip={{
+              label: `${status.join(' · ')} · révision ${String(statement.revision)}`,
+              tone: 'neutral',
+            }}
+          />
+        </>
+      }
+      busy={busy}
+      onClose={onClose}
+    >
+      {mode === 'read' ? (
+        <div className="tm-dialog__body">
+          <div className="py-dialog__hero">
+            <div className="py-hero">
+              <p className="py-hero__label">{statement.status === 'paid' ? 'Versé' : 'À verser'}</p>
+              <p className="py-hero__value nv-num">{amountText(statement.payableMinor, 'EUR')}</p>
+            </div>
+            <p className="py-hero__note nv-num">
+              net {amountText(statement.netMinor, 'EUR')}{' '}
+              <Delta
+                bps={changeBps(statement.netMinor, previousNet)}
+                title={
+                  previousNet === null
+                    ? 'Pas de relevé la quinzaine d’avant'
+                    : `Net comparé à la quinzaine d’avant (${amountText(previousNet, 'EUR')})`
+                }
+              />
+            </p>
+          </div>
+          <MoneyPath statement={statement} names={names} you={false} />
+          <details className="nv-disclosure py-fold">
+            <summary>
+              <span className="nv-disclosure__title">Règles et calcul</span>
+              <span className="nv-disclosure__sum nv-num">
+                révision {statement.revision} · calculé à {clockAt(statement.computedAt, zone)}
+              </span>
+            </summary>
+            <dl className="nv-disclosure__body py-rules nv-num">
+              <dt>Taux de {member.name}</dt>
+              <dd>
+                {percentText(statement.rules.commissionRateBps)}
+                {statement.rules.teamShareBps === null
+                  ? ''
+                  : `, part d’équipe ${percentText(statement.rules.teamShareBps)}`}
+              </dd>
+              <dt>Paliers</dt>
+              <dd>
+                {statement.rules.bonusTiers.length === 0
+                  ? 'aucun'
+                  : statement.rules.bonusTiers
+                      .map(
+                        (tier) =>
+                          `${tier.label} ${amountText(tier.thresholdMinor, 'EUR')} → ${signedAmountText(tier.bonusMinor, 'EUR')}`,
+                      )
+                      .join(' · ')}
+              </dd>
+              <dt>Objectif</dt>
+              <dd>
+                {statement.rules.collectiveGoal === null
+                  ? 'aucun'
+                  : `${amountText(statement.rules.collectiveGoal.targetMinor, 'EUR')} : ${statement.rules.collectiveGoal.tiers
+                      .map(
+                        (tier) =>
+                          `${percentText(tier.reachedBps)} → ${signedAmountText(tier.bonusMinor, 'EUR')}`,
+                      )
+                      .join(' · ')} par chatteur`}
+              </dd>
+              {statement.rules.exchangeRates.map((rate) => (
+                <RateRule key={rate.currency} rate={rate} />
+              ))}
+              <dt>Minimum</dt>
+              <dd>
+                {statement.rules.final
+                  ? 'aucun : dernier relevé, tout est versé'
+                  : amountText(statement.rules.minimumPayoutMinor, 'EUR')}
+              </dd>
+              <dt>Moteur</dt>
+              <dd>
+                {statement.engineVersion} · empreinte {shortHash(statement.inputsHash)}
+              </dd>
+            </dl>
+          </details>
+          <Foot
+            statement={statement}
+            own={member.userId === me.id}
+            owner={owner}
+            canValidateNow={canValidateNow}
+            who={who}
+            onClose={onClose}
+            onValidate={() => {
+              onValidate(statement);
+            }}
+            onPay={() => {
+              setMode('pay');
+            }}
+          />
+        </div>
+      ) : (
+        <PayForm
+          statement={statement}
+          memberName={member.name}
+          mode={mode}
+          busy={busy}
+          onBusy={setBusy}
+          onMode={setMode}
+          onCancel={
+            paying
+              ? onClose
+              : () => {
+                  setMode('read');
+                }
+          }
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function RateRule({ rate }: { rate: ExchangeRate }): JSX.Element {
+  return (
+    <>
+      <dt>Taux du dollar</dt>
+      <dd>
+        {rateText(rate.rateMicros, rate.currency)}, BCE, {dayMonth(rate.day)}
+      </dd>
+    </>
+  );
+}
+
+/** What the statement says about its state, and the one gesture it allows the reader. */
+function Foot({
+  statement,
+  own,
+  owner,
+  canValidateNow,
+  who,
+  onClose,
+  onValidate,
+  onPay,
+}: {
+  statement: CommissionStatement;
+  own: boolean;
+  owner: boolean;
+  canValidateNow: boolean;
+  who: (userId: string | null) => string;
+  onClose: () => void;
+  onValidate: () => void;
+  onPay: () => void;
+}): JSX.Element {
+  const zone = statement.window.timeZone;
+  const validate = statement.status === 'draft' && statement.canValidate && canValidateNow;
+  const pay = statement.status === 'validated' && owner && statement.payableMinor > 0;
+  const said =
+    statement.status === 'paid' && statement.payment !== null
+      ? `Payé le ${longDay(statement.payment.paidOn)} par ${PAYMENT_METHOD_LABELS[statement.payment.method].toLowerCase()}${
+          statement.payment.reference === null ? '' : `, référence ${statement.payment.reference}`
+        }${statement.paidBy === null ? '' : `, marqué par ${who(statement.paidBy)}`}.`
+      : statement.status === 'validated' && statement.validatedAt !== null
+        ? `Validé le ${momentAt(statement.validatedAt, zone)}${
+            statement.validatedBy === null ? '' : ` par ${who(statement.validatedBy)}`
+          }.${statement.payableMinor === 0 ? ' Rien à verser : le total part en report.' : owner ? '' : ' Le propriétaire le marque payé une fois le transfert fait.'}`
+        : own
+          ? 'Ton relevé : un autre membre de l’agence le valide.'
+          : 'Validé, il ne change plus : une erreur se corrige par un ajustement.';
+  return (
+    <div className="py-dialog__foot">
+      <p className="py-quiet">{said}</p>
+      <button type="button" className="nv-btn nv-btn--plain" onClick={onClose}>
+        Fermer
+      </button>
+      {validate ? (
+        <button type="button" className="nv-btn nv-btn--neon" data-autofocus onClick={onValidate}>
+          Valider la révision {statement.revision}
+        </button>
+      ) : pay ? (
+        <button type="button" className="nv-btn nv-btn--neon" data-autofocus onClick={onPay}>
+          Marquer payé
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+const STEPS = ['Remplir', 'Relire'] as const;
+
+/**
+ * « Marquer payé » (owner): the day (today by default, never after), the amount sent (what is to pay, another one is
+ * refused), the method and the transfer's reference, optional. Then read again, then sent.
+ */
+function PayForm({
+  statement,
+  memberName,
+  mode,
+  busy,
+  onBusy,
+  onMode,
+  onCancel,
+}: {
+  statement: CommissionStatement;
+  memberName: string;
+  mode: 'pay' | 'check';
+  busy: boolean;
+  onBusy: (busy: boolean) => void;
+  onMode: (mode: Mode) => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const id = useId();
+  const refresh = useRefreshPayroll();
+  const today = dayOf(new Date(), statement.window.timeZone);
+  const [day, setDay] = useState(today);
+  const [amount, setAmount] = useState(amountInput(statement.payableMinor));
+  const [method, setMethod] = useState<PaymentMethod>('bank_transfer');
+  const [reference, setReference] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [refusal, setRefusal] = useState<PayRefusal | null>(null);
+
+  const sentMinor = parseAmount(amount);
+  const dayValid = /^\d{4}-\d{2}-\d{2}$/u.test(day) && day <= today;
+  const amountValid = sentMinor === statement.payableMinor;
+  const ready = dayValid && amountValid;
+  const step = mode === 'pay' ? 0 : 1;
+
+  const send = async (): Promise<void> => {
+    if (!ready || busy) return;
+    onBusy(true);
+    setRefusal(null);
+    const trimmed = reference.trim();
+    const outcome = await payStatement(statement.id, {
+      revision: statement.revision,
+      paidOn: day,
+      method,
+      sentMinor: statement.payableMinor,
+      ...(trimmed === '' ? {} : { reference: trimmed }),
+    });
+    onBusy(false);
+    await refresh();
+    if (outcome.kind === 'ok') {
+      onMode('read');
+      return;
+    }
+    setRefusal(outcome);
+    onMode('pay');
+  };
+
+  return (
+    <div className="tm-dialog__body">
+      <ol className="tm-steps" aria-label="Étapes">
+        {STEPS.map((title, index) => (
+          <li
+            key={title}
+            data-state={index < step ? 'done' : index === step ? 'now' : 'later'}
+            aria-current={index === step ? 'step' : undefined}
+          >
+            <span className="tm-steps__num">{String(index + 1)}</span>
+            {title}
+          </li>
+        ))}
+      </ol>
+      {mode === 'check' ? (
+        <>
+          <p className="py-recap nv-enter">
+            <b className="nv-num">{amountText(statement.payableMinor, 'EUR')}</b> versés à <b>{memberName}</b>{' '}
+            le {longDay(day)} par {PAYMENT_METHOD_LABELS[method].toLowerCase()}
+            {reference.trim() === '' ? '' : `, référence ${reference.trim()}`}, pour la quinzaine{' '}
+            {periodLine(statement.window.period)}.
+          </p>
+          <p className="tm-hint">Payé, le relevé ne change plus. Une erreur se corrige par un ajustement.</p>
+          <div className="tm-dialog__foot">
+            <button
+              type="button"
+              className="nv-btn nv-btn--plain"
+              disabled={busy}
+              onClick={() => {
+                onMode('pay');
+              }}
+            >
+              Modifier
+            </button>
+            <button
+              type="button"
+              className="nv-btn nv-btn--neon"
+              data-autofocus
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() => {
+                void send();
+              }}
+            >
+              {busy ? 'Enregistrement…' : 'Marquer payé'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <form
+          className="tm-dialog__body"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            setTouched(true);
+            if (ready) onMode('check');
+          }}
+        >
+          <div className="tm-pair">
+            <div className="nv-field tm-field" data-invalid={touched && !dayValid ? 'true' : undefined}>
+              <label className="nv-field__label" htmlFor={`${id}-day`}>
+                Payé le
+              </label>
+              <input
+                id={`${id}-day`}
+                type="date"
+                className="nv-field__control nv-glass nv-num"
+                value={day}
+                max={today}
+                data-autofocus
+                aria-invalid={touched && !dayValid}
+                onChange={(event) => {
+                  setDay(event.target.value);
+                }}
+              />
+              {touched && !dayValid ? (
+                <p className="tm-hint tm-hint--error">Un jour d’aujourd’hui ou d’avant.</p>
+              ) : null}
+            </div>
+            <div className="nv-field tm-field" data-invalid={touched && !amountValid ? 'true' : undefined}>
+              <label className="nv-field__label" htmlFor={`${id}-amount`}>
+                Montant envoyé
+              </label>
+              <input
+                id={`${id}-amount`}
+                className="nv-field__control nv-glass nv-num"
+                inputMode="decimal"
+                autoComplete="off"
+                value={amount}
+                aria-invalid={touched && !amountValid}
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                }}
+              />
+              <p className={touched && !amountValid ? 'tm-hint tm-hint--error' : 'tm-hint'}>
+                Celui à verser : {amountText(statement.payableMinor, 'EUR')}. Un autre montant est refusé.
+              </p>
+            </div>
+          </div>
+          <div className="nv-field tm-field">
+            <span className="nv-field__label" id={`${id}-method`}>
+              Moyen
+            </span>
+            <div className="tm-choices" role="radiogroup" aria-labelledby={`${id}-method`}>
+              {PAYMENT_METHODS.map((one) => (
+                <button
+                  key={one}
+                  type="button"
+                  role="radio"
+                  className="nv-chip"
+                  aria-checked={method === one}
+                  onClick={() => {
+                    setMethod(one);
+                  }}
+                >
+                  {PAYMENT_METHOD_LABELS[one]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="nv-field tm-field">
+            <label className="nv-field__label" htmlFor={`${id}-reference`}>
+              Référence du transfert, facultative
+            </label>
+            <input
+              id={`${id}-reference`}
+              className="nv-field__control nv-glass nv-num"
+              autoComplete="off"
+              maxLength={PAYMENT_REFERENCE_MAX}
+              value={reference}
+              placeholder="VIR-2611-0412"
+              onChange={(event) => {
+                setReference(event.target.value);
+              }}
+            />
+            <p className="tm-hint">
+              Celle que montre la banque ou le service. Jamais un IBAN ni un numéro de compte.
+            </p>
+          </div>
+          {refusal === null ? null : (
+            <p className="tm-warn sc-refusal nv-swap" role="alert">
+              {payRefusalText(refusal, { memberName: () => memberName, statement })}
+            </p>
+          )}
+          <div className="tm-dialog__foot">
+            <button type="button" className="nv-btn nv-btn--plain" onClick={onCancel}>
+              Annuler
+            </button>
+            <button type="submit" className="nv-btn nv-btn--neon">
+              Vérifier
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}

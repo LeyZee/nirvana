@@ -15,25 +15,37 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  carryLine,
   changeBps,
   countsLine,
   flowOf,
   forecastNet,
+  gaugePercent,
+  goalSpanBps,
   lateNetOf,
+  memberFacts,
+  parsePaySearch,
   payRefusalText,
   periodAmount,
+  periodToOpen,
   phaseChip,
+  rateMissing,
   rateText,
+  reachedBpsOf,
+  salesSplit,
   signedPercentText,
   statementChips,
   statementsCsv,
+  stopsThePeriod,
   summaryOf,
+  tierAt,
   totalsOf,
+  validatable,
   whoName,
 } from './model';
 
-const NBSP = ' ';
-const NNBSP = ' ';
+const NBSP = '\u00a0';
+const NNBSP = '\u202f';
 const plain = (text: string): string => text.replaceAll(NBSP, ' ').replaceAll(NNBSP, ' ');
 
 const PERIOD = PayPeriodSchema.parse('2026-11-01');
@@ -330,6 +342,16 @@ describe('words', () => {
         names,
       ),
     ).toBe('Valide d’abord la quinzaine du 16 au 31 octobre.');
+    const theirs = { ...names, statement: { memberId: newId(TeamMemberIdSchema), window: WINDOW } };
+    expect(
+      payRefusalText(
+        { kind: 'refused', code: 'commission_statement_order_conflict', details: { period: '2026-10-16' } },
+        theirs,
+      ),
+    ).toBe('Valide d’abord le relevé de Basile du 16 au 31 octobre.');
+    expect(
+      payRefusalText({ kind: 'refused', code: 'commission_statement_open_conflict', details: {} }, theirs),
+    ).toBe('La quinzaine n’est pas finie : elle se valide à partir du lundi 16 novembre.');
     expect(
       plain(
         payRefusalText(
@@ -379,5 +401,168 @@ describe('the export of a period', () => {
     expect(total).toBe(
       'Théo;Total du relevé;EUR;;;;85,00;21,25;0,00;0,00;0,00;0,00;21,25;0,00;21,25;Brouillon',
     );
+  });
+});
+
+describe('what Quinzaine opens on, and what it lets validate', () => {
+  const at = (period: string, ended: boolean, draft: number, payableMinor = 0) => ({
+    window: { ...WINDOW, period: PayPeriodSchema.parse(period) },
+    ended,
+    statements: { draft, validated: 0, paid: 0, carried: 0 },
+    payableMinor,
+    paidMinor: 0,
+  });
+
+  it('opens the oldest ended period with something left to do, else the one under way', () => {
+    const current = PayPeriodSchema.parse('2026-11-16');
+    const list = [at('2026-11-16', false, 3), at('2026-11-01', true, 2), at('2026-10-16', true, 1)];
+    expect(periodToOpen(list, current, false)).toBe('2026-10-16');
+    expect(periodToOpen([at('2026-11-16', false, 3), at('2026-11-01', true, 0)], current, true)).toBe(
+      current,
+    );
+    // Validated, money still to send: the owner's to do, not a manager's.
+    const unpaid = [at('2026-11-16', false, 3), at('2026-11-01', true, 0, 30_000)];
+    expect(periodToOpen(unpaid, current, true)).toBe('2026-11-01');
+    expect(periodToOpen(unpaid, current, false)).toBe(current);
+    expect(parsePaySearch({ quinzaine: '2026-10-16', autre: 1 })).toEqual({ quinzaine: '2026-10-16' });
+    expect(parsePaySearch({ quinzaine: '2026-10-17' })).toEqual({});
+  });
+
+  it('lets the reader validate the drafts of an ended period that are not theirs', () => {
+    const mine = statement({ canValidate: false });
+    const theirs = statement();
+    const done = statement({ status: 'validated', canValidate: false });
+    expect(validatable({ ended: true, statements: [mine, theirs, done] })).toEqual([theirs]);
+    expect(validatable({ ended: false, statements: [theirs] })).toEqual([]);
+  });
+
+  it('stops a batch on a refusal of the whole period, or a server that does not answer', () => {
+    expect(stopsThePeriod({ kind: 'failed' })).toBe(true);
+    expect(
+      stopsThePeriod({ kind: 'refused', code: 'pay_period_reports_pending_conflict', details: {} }),
+    ).toBe(true);
+    expect(
+      stopsThePeriod({ kind: 'refused', code: 'commission_statement_changed_conflict', details: {} }),
+    ).toBe(false);
+    expect(stopsThePeriod({ kind: 'refused', code: 'commission_rate_missing_conflict', details: {} })).toBe(
+      false,
+    );
+  });
+});
+
+describe('the dollar’s rate before a closing', () => {
+  const OCT2 = PayPeriodSchema.parse('2026-10-16');
+  const rate = (day: string) => ({
+    currency: 'USD' as const,
+    day,
+    rateMicros: 920_000,
+    source: 'BCE, taux de référence',
+    fetchedAt: `${day}T15:05:00.000Z`,
+  });
+  const period = (
+    rates: readonly ReturnType<typeof rate>[],
+    patch: Partial<PayrollPeriod> = {},
+  ): PayrollPeriod => ({
+    period: OCT2,
+    window: { ...WINDOW, period: OCT2 },
+    ended: true,
+    closing: null,
+    statements: [
+      statement({
+        lines: [line({ currency: 'USD' })],
+        rules: { ...statement().rules, exchangeRates: [...rates] },
+      }),
+    ],
+    bonusTiers: null,
+    collectiveGoal: null,
+    settings: { minimumPayoutMinor: 1_500 },
+    ...patch,
+  });
+
+  it('is missing when no rate of the last day or the four before is known', () => {
+    expect(rateMissing(period([rate('2026-10-30')]), null)).toBe(false);
+    expect(rateMissing(period([rate('2026-10-27')]), null)).toBe(false);
+    expect(rateMissing(period([rate('2026-10-26')]), null)).toBe(true);
+    expect(rateMissing(period([]), null)).toBe(true);
+    // The latest the job read counts when it is of the period; one read after its end tells nothing of it.
+    expect(rateMissing(period([rate('2026-10-20')]), rate('2026-10-30'))).toBe(false);
+    expect(rateMissing(period([rate('2026-10-20')]), rate('2026-11-02'))).toBe(true);
+  });
+
+  it('is never missing for a period in euros, one under way, or one already closed', () => {
+    const euros = period([]);
+    expect(rateMissing({ ...euros, statements: [statement()] }, null)).toBe(false);
+    expect(rateMissing(period([], { ended: false }), null)).toBe(false);
+    expect(
+      rateMissing(
+        period([], {
+          closing: {
+            period: OCT2,
+            exchangeRates: null,
+            closedBy: null,
+            closedAt: '2026-11-02T09:41:00.000Z',
+          },
+        }),
+        null,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('a member’s row', () => {
+  it('says the rate or the team share, the tier and the penalty, signed', () => {
+    expect(
+      memberFacts(
+        statement({
+          tierBonus: { thresholdMinor: 100_000, bonusMinor: 5_000, label: 'Or' },
+          penaltiesMinor: 1_500,
+        }),
+      ).map(plain),
+    ).toEqual(['commission 25 %', 'palier Or', 'malus −15,00 €']);
+    expect(
+      memberFacts(statement({ teamShare: { baseNetMinor: 100_000, bps: 1_000, amountMinor: 10_000 } })).map(
+        plain,
+      ),
+    ).toEqual(['part d’équipe 10 %']);
+  });
+
+  it('says a carry-over in one sentence, under the minimum or under zero', () => {
+    expect(carryLine(statement())).toBeNull();
+    expect(
+      plain(carryLine(statement({ totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 })) ?? ''),
+    ).toBe('Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.');
+    expect(
+      plain(carryLine(statement({ totalMinor: -800, carryOverOutMinor: -800, payableMinor: 0 })) ?? ''),
+    ).toBe('Total sous zéro : −8,00 € reportés sur la quinzaine suivante.');
+  });
+});
+
+describe('the figures of a period', () => {
+  it('splits the net by creator, the largest first, in shares that add up', () => {
+    const other = newId(PlatformAccountIdSchema);
+    const split = salesSplit(
+      [statement({ lines: [line(), line({ platformAccountId: other, netMinor: 25_500 })] })],
+      (one) => (one.platformAccountId === other ? 'Léa' : 'Nora'),
+    );
+    expect(split).toEqual([
+      { name: 'Léa', minor: 25_500, bps: 7_500 },
+      { name: 'Nora', minor: 8_500, bps: 2_500 },
+    ]);
+    expect(salesSplit([], () => 'Nora')).toEqual([]);
+  });
+
+  it('places the goal: reached share floored, the tier reached, a gauge past the last tier', () => {
+    const tiers = [
+      { reachedBps: 8_000, bonusMinor: 1_000 },
+      { reachedBps: 10_000, bonusMinor: 2_500 },
+    ];
+    expect(reachedBpsOf(99_999, 100_000)).toBe(9_999);
+    expect(tierAt(tiers, 9_999)).toEqual(tiers[0]);
+    expect(tierAt(tiers, 7_999)).toBeNull();
+    expect(goalSpanBps({ tiers })).toBe(13_000);
+    expect(goalSpanBps({ tiers: [{ reachedBps: 15_000, bonusMinor: 1 }] })).toBe(17_000);
+    expect([gaugePercent(6_500, 13_000), gaugePercent(20_000, 13_000), gaugePercent(-5, 13_000)]).toEqual([
+      50, 100, 0,
+    ]);
   });
 });

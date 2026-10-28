@@ -9,7 +9,10 @@ import {
 
 import { CreatorsPage } from './creators/CreatorsPage';
 import { parseCreatorsSearch } from './creators/search';
+import { parsePaySearch } from './payroll/model';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { PeriodPage } from './screens/pay/PeriodPage';
+import { PeriodsPage } from './screens/pay/PeriodsPage';
 import { MyPlanningPage } from './screens/planning/MyPlanningPage';
 import { AppearancePage } from './screens/settings/AppearancePage';
 import {
@@ -205,6 +208,47 @@ const teamMembers = createRoute({
   },
 });
 
+const pay = createRoute({ getParentRoute: () => rootRoute, path: '/paie' });
+const payIndex = createRoute({
+  getParentRoute: () => pay,
+  path: '/',
+  beforeLoad: () => {
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+    throw redirect({ to: '/paie/quinzaine', replace: true });
+  },
+});
+const payPeriod = createRoute({
+  getParentRoute: () => pay,
+  path: '/quinzaine',
+  validateSearch: parsePaySearch,
+  component: function PayPeriod() {
+    const { quinzaine } = payPeriod.useSearch();
+    const navigate = payPeriod.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <PeriodPage
+        user={user}
+        chosen={quinzaine ?? null}
+        onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
+      />
+    );
+  },
+});
+const payPeriods = createRoute({
+  getParentRoute: () => pay,
+  path: '/releves',
+  component: function PayPeriods() {
+    const navigate = payPeriods.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <PeriodsPage
+        user={user}
+        onOpen={(period) => void navigate({ to: '/paie/quinzaine', search: { quinzaine: period } })}
+      />
+    );
+  },
+});
+
 const train = createRoute({ getParentRoute: () => rootRoute, path: '/entrainer', component: TrainLayout });
 const trainIndex = createRoute({
   getParentRoute: () => train,
@@ -312,6 +356,7 @@ const routeTree = rootRoute.addChildren([
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
+  pay.addChildren([payIndex, payPeriod, payPeriods]),
   settings.addChildren([
     settingsIndex,
     aiModels,
