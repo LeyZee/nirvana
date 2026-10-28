@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 
 import { AlertsSection } from '@/settings/alerts/AlertsSection';
 import { BackupsSection } from '@/settings/backups/BackupsSection';
+import { PayRulesSection } from '@/settings/pay/PayRulesSection';
 import { ServicesSection } from '@/settings/services/ServicesSection';
 import { TelegramSection } from '@/settings/telegram/TelegramSection';
 import type { TelegramTab } from '@/settings/telegram/search';
@@ -11,6 +12,8 @@ import { ComingSoon, Page, PageHeader, SubNav, type SubNavItem } from '@/shell/l
 /** The alerts and the backups are the owner's alone (P4-01, ADR 0028): anyone else gets no tab that would answer 403. */
 const ALERTS_TAB: SubNavItem = { to: '/reglages/alertes', label: 'Alertes' };
 const BACKUPS_TAB: SubNavItem = { to: '/reglages/sauvegardes', label: 'Sauvegardes' };
+/** The accounts' pay rules too (EQ-03): the owner alone posts them. */
+const PAY_RULES_TAB: SubNavItem = { to: '/reglages/regles-de-paie', label: 'Règles de paie' };
 
 export function SettingsLayout(): JSX.Element {
   const { user, onSignOut } = useRouteContext({ from: '__root__' });
@@ -26,7 +29,7 @@ export function SettingsLayout(): JSX.Element {
                 { to: '/reglages/modeles-ia', label: 'Modèles IA' },
                 ...(user.role === 'owner' ? [ALERTS_TAB] : []),
                 { to: '/reglages/telegram', label: 'Telegram' },
-                ...(user.role === 'owner' ? [BACKUPS_TAB] : []),
+                ...(user.role === 'owner' ? [PAY_RULES_TAB, BACKUPS_TAB] : []),
                 { to: '/reglages/appareils', label: 'Appareils' },
                 { to: '/reglages/apparence', label: 'Apparence' },
                 { to: '/reglages/mode', label: 'Mode de l’agent' },
@@ -62,6 +65,11 @@ export function TelegramPage({
   onTab: (tab: TelegramTab) => void;
 }): JSX.Element {
   return <TelegramSection tab={tab} onTab={onTab} />;
+}
+
+/** Réglages › Règles de paie: each account's currency, VAT, platform commission and source of sales (EQ-03). */
+export function PayRulesPage(): JSX.Element {
+  return <PayRulesSection />;
 }
 
 /** Réglages › Sauvegardes: the nightly export and the restore test (EQ-17, ADR 0028). */

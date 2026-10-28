@@ -18,11 +18,13 @@ import {
   AiModelsPage,
   AlertsPage,
   BackupsPage,
+  PayRulesPage,
   SettingsLayout,
   TelegramPage,
 } from './screens/settings/SettingsLayout';
 import { MembersPage } from './screens/team/MembersPage';
 import { PlanningPage } from './screens/team/PlanningPage';
+import { ReportsPage } from './screens/team/ReportsPage';
 import { parseTeamSearch } from './screens/team/model';
 import { TodayPage } from './screens/today/TodayPage';
 import { ChatterTrackingPage } from './screens/tracking/ChatterTrackingPage';
@@ -135,6 +137,14 @@ const teamPlanning = createRoute({
     return <PlanningPage userId={user.id} />;
   },
 });
+const teamReports = createRoute({
+  getParentRoute: () => team,
+  path: '/rapports',
+  component: function TeamReports() {
+    const { user } = rootRoute.useRouteContext();
+    return <ReportsPage owner={user.role === 'owner'} />;
+  },
+});
 const teamMembers = createRoute({
   getParentRoute: () => team,
   path: '/membres',
@@ -244,6 +254,18 @@ const backups = createRoute({
   },
   component: BackupsPage,
 });
+const payRules = createRoute({
+  getParentRoute: () => settings,
+  path: '/regles-de-paie',
+  // The owner's alone, like the backups: anyone else is sent to Réglages.
+  beforeLoad: ({ context }) => {
+    if (context.user.role !== 'owner') {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: '/reglages', replace: true });
+    }
+  },
+  component: PayRulesPage,
+});
 const agentMode = createRoute({ getParentRoute: () => settings, path: '/mode', component: AgentModePage });
 
 const routeTree = rootRoute.addChildren([
@@ -253,8 +275,18 @@ const routeTree = rootRoute.addChildren([
   tracking,
   today,
   myPlanning,
-  team.addChildren([teamIndex, teamPlanning, teamMembers]),
-  settings.addChildren([settingsIndex, aiModels, telegram, alerts, backups, devices, appearance, agentMode]),
+  team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
+  settings.addChildren([
+    settingsIndex,
+    aiModels,
+    alerts,
+    telegram,
+    payRules,
+    backups,
+    devices,
+    appearance,
+    agentMode,
+  ]),
 ]);
 
 const buildRouter = (context: RouterContext, history?: RouterHistory) =>
