@@ -1,8 +1,10 @@
 import {
+  ALERT_ERROR_CODES,
   AlertsViewSchema,
   ApiErrorSchema,
   CustomAlertGroupSchema,
   SystemAlertSettingSchema,
+  type AlertErrorCode,
   type AlertsView,
   type CreateCustomAlertBody,
   type CustomAlertBody,
@@ -56,7 +58,8 @@ export class AlertsError extends Error {
 export const alertsErrorKind = (error: unknown): AlertsErrorKind =>
   error instanceof AlertsError ? error.kind : 'unavailable';
 
-const KIND_OF_CODE: Readonly<Record<string, AlertsErrorKind>> = {
+/** Every code of the contract has its sentence: a code added on the server breaks the typecheck here. */
+const KIND_OF_CODE: Readonly<Record<AlertErrorCode, AlertsErrorKind>> = {
   custom_alert_not_found: 'not_found',
   custom_alert_conflict: 'conflict',
   alert_creator_invalid: 'creator_invalid',
@@ -88,8 +91,9 @@ async function call<T>(
   if (response.status === 401) throw new AlertsError('session_expired', detail);
   if (response.status === 403) throw new AlertsError('forbidden', detail);
   const body = ApiErrorSchema.safeParse(await response.json().catch(() => null));
-  const known = body.success ? KIND_OF_CODE[body.data.error.code] : undefined;
-  if (known !== undefined) throw new AlertsError(known, detail);
+  const code = body.success ? body.data.error.code : null;
+  const known = ALERT_ERROR_CODES.find((one) => one === code);
+  if (known !== undefined) throw new AlertsError(KIND_OF_CODE[known], detail);
   if (response.status === 404) throw new AlertsError('not_found', detail);
   if (response.status === 400 || response.status === 422) throw new AlertsError('refused', detail);
   throw new AlertsError('unavailable', detail);
