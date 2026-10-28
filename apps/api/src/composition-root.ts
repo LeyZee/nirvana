@@ -182,6 +182,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger.warn({ err: error }, 'AI service keys not loaded');
     },
   });
+  // Before Telegram and the composer: Telegram names her alerts, the agent checks his messages against them (P4-01).
   const alerts = createAlertsModule({ db: db.db, requireRole });
   const credentialKeys = secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS);
   const telegram =
@@ -244,7 +245,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     adminDb: adminDb.db,
     creators: { list: () => persona.creators.list('all') },
   });
-  // Before the composer: the agent checks each of his messages against her alerts (P4-01).
   const playground =
     options.withPlayground === false
       ? null
