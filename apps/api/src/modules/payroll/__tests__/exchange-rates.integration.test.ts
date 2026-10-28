@@ -3,7 +3,7 @@ import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { fetchExchangeRates } from '../application/exchange-rates';
-import type { JobLogger } from '../domain/ports';
+import type { JobLogger, RateJobSince } from '../domain/ports';
 import { createEcbSource, type GetLike } from '../infra/ecb';
 import { createPostgresRateAlerts } from '../infra/rate-alerts';
 import { createDrizzlePayrollRateStore } from '../infra/rate-store';
@@ -37,12 +37,13 @@ describe('payroll.fetch_exchange_rates', () => {
   };
   const fetch: GetLike = () =>
     down ? Promise.reject(new Error('network down')) : Promise.resolve(new Response(file, { status: 200 }));
-  const run = (at = '2025-10-03T15:07:00.000Z') =>
+  const run = (at = '2025-10-03T15:07:00.000Z', since: RateJobSince | null = null) =>
     fetchExchangeRates(
       {
         source: createEcbSource({ fetch }),
         store: createDrizzlePayrollRateStore(test.admin.db),
         alerts: createPostgresRateAlerts(test.admin.db),
+        since,
         now: () => new Date(at),
       },
       logger,
@@ -64,6 +65,28 @@ describe('payroll.fetch_exchange_rates', () => {
   });
 
   afterAll(() => test.close());
+
+  it('tells the owner in production only when no rate ever came, counted from the job’s first schedule', async () => {
+    // The job was first scheduled on Monday 29 September 2025 at 10:00 in Frankfurt, and the ECB was never reached.
+    const production: RateJobSince = () => Promise.resolve(new Date('2025-09-29T08:00:00.000Z'));
+    down = true;
+    // Wednesday 1 October: one weekday without a rate.
+    await expect(run('2025-10-01T09:07:00.000Z', production)).rejects.toThrow('network down');
+    // Friday 3 October: a third, but outside production a database without rates is the normal case.
+    await expect(run('2025-10-03T09:07:00.000Z')).rejects.toThrow('network down');
+    expect(await alerts()).toEqual([]);
+    await expect(run('2025-10-03T09:07:00.000Z', production)).rejects.toThrow('network down');
+    await expect(run('2025-10-03T10:07:00.000Z', production)).rejects.toThrow('network down');
+    expect(await alerts()).toEqual([
+      expect.objectContaining({
+        creatorId: null,
+        actor: 'system',
+        correlationId: 'exchange_rate:USD:2025-10-03',
+        payload: { currency: 'USD', lastRateDay: null, day: '2025-10-03' },
+      }),
+    ]);
+    down = false;
+  });
 
   it('writes each day of the dollar once, in euros for one dollar, and nothing of a currency pay does not use', async () => {
     file = fileOf([
@@ -126,9 +149,9 @@ describe('payroll.fetch_exchange_rates', () => {
   it('tells the owner once a day, per currency, when no rate came for more than two weekdays', async () => {
     // The last rate is Wednesday 8 October 2025's; the ECB stays out of reach.
     down = true;
-    // Monday 13: Thursday and Friday are missing, which a long weekend can be.
+    // Monday 13: Thursday and Friday are missing, which a long weekend can be. Only the first test's alert is there.
     await expect(run('2025-10-13T09:07:00.000Z')).rejects.toThrow('network down');
-    expect(await alerts()).toEqual([]);
+    expect(await alerts()).toHaveLength(1);
     // Tuesday 14: a third weekday, and two workers at the same hour.
     const tuesday = await Promise.allSettled([
       run('2025-10-14T09:07:00.000Z'),
@@ -138,7 +161,7 @@ describe('payroll.fetch_exchange_rates', () => {
     await expect(run('2025-10-14T10:07:00.000Z')).rejects.toThrow('network down');
     // Wednesday 15, just after midnight in Frankfurt: the alert comes back.
     await expect(run('2025-10-14T22:07:00.000Z')).rejects.toThrow('network down');
-    expect(await alerts()).toEqual([
+    expect((await alerts()).slice(1)).toEqual([
       expect.objectContaining({
         creatorId: null,
         actor: 'system',
@@ -157,6 +180,6 @@ describe('payroll.fetch_exchange_rates', () => {
       ['2025-10-08', '1.1650'],
     ]);
     expect(await run('2025-10-15T15:07:00.000Z')).toEqual({ read: 2, written: 1, alerted: [] });
-    expect(await alerts()).toHaveLength(2);
+    expect(await alerts()).toHaveLength(3);
   });
 });

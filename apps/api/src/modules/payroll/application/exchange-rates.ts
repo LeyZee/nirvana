@@ -1,7 +1,13 @@
 import { ExchangeRateSchema, ForeignCurrencySchema, type ForeignCurrency } from '@nirvana/contracts';
 
 import { ECB_SOURCE, ecbDay, eurosPerUnitMicros, isRateOverdue } from '../domain/exchange-rates';
-import type { JobLogger, PayrollRateAlerts, PayrollRateStore, RateSource } from '../domain/ports';
+import type {
+  JobLogger,
+  PayrollRateAlerts,
+  PayrollRateStore,
+  RateJobSince,
+  RateSource,
+} from '../domain/ports';
 
 /** What one run of the rate job did, for its log line. */
 export interface RateFetchOutcome {
@@ -17,6 +23,11 @@ export interface RateJobDeps {
   readonly source: RateSource;
   readonly store: PayrollRateStore;
   readonly alerts: PayrollRateAlerts;
+  /**
+   * Given in production only: a currency that never got a rate is alerted too, counted from the job's first schedule.
+   * `null` elsewhere (development, tests), where a database without rates is the normal case and says nothing.
+   */
+  readonly since: RateJobSince | null;
   readonly now: () => Date;
 }
 
@@ -58,15 +69,26 @@ async function writeRates(
   return { read: rates.length, written };
 }
 
-/** A currency with no rate at all is not measured: there is no last day to tell, and the failed read is the job's. */
-async function alertOverdueRates({ store, alerts, now }: RateJobDeps): Promise<ForeignCurrency[]> {
+/**
+ * A currency rings once its last rate is more than two weekdays old. One that never got a rate (the host cut, a file
+ * always refused: the job never succeeded) rings in production only, with `lastRateDay: null`, once the job has been
+ * scheduled for more than two weekdays: the day of its first schedule counts as a last rate's day would, since the
+ * first read that succeeds writes the ECB's 90 days, that one included. Never scheduled here: nothing.
+ */
+async function alertOverdueRates({ store, alerts, since, now }: RateJobDeps): Promise<ForeignCurrency[]> {
   const day = ecbDay(now());
   const latest = await store.latestDaysUnscoped();
   const alerted: ForeignCurrency[] = [];
   for (const currency of ForeignCurrencySchema.options) {
-    const lastRateDay = latest.get(currency);
-    if (lastRateDay === undefined || !isRateOverdue(lastRateDay, day)) continue;
+    const lastRateDay = latest.get(currency) ?? null;
+    const from = lastRateDay ?? (since === null ? null : await firstScheduledDay(since));
+    if (from === null || !isRateOverdue(from, day)) continue;
     if (await alerts.publishOverdue({ currency, lastRateDay, day })) alerted.push(currency);
   }
   return alerted;
+}
+
+async function firstScheduledDay(since: RateJobSince): Promise<string | null> {
+  const at = await since();
+  return at === null ? null : ecbDay(at);
 }

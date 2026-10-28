@@ -6,8 +6,16 @@ import { fetchExchangeRates, type RateJobDeps } from '../exchange-rates';
 
 const logger: JobLogger = { warn: () => undefined, error: () => undefined };
 
-/** The job against fakes: an ECB that answers or not, the last day written, the alerts already out today. */
-function job(options: { ecb: readonly EcbRate[] | Error; lastDay: string | null; at: string }) {
+/**
+ * The job against fakes: an ECB that answers or not, the last day written, the alerts already out today, and in
+ * production when the job was first scheduled (`production` absent: development or tests).
+ */
+function job(options: {
+  ecb: readonly EcbRate[] | Error;
+  lastDay: string | null;
+  at: string;
+  production?: { scheduledAt: string | null };
+}) {
   const published: OverdueRate[] = [];
   const deps: RateJobDeps = {
     source: {
@@ -29,6 +37,13 @@ function job(options: { ecb: readonly EcbRate[] | Error; lastDay: string | null;
         return Promise.resolve(!already);
       },
     },
+    since:
+      options.production === undefined
+        ? null
+        : () => {
+            const at = options.production?.scheduledAt ?? null;
+            return Promise.resolve(at === null ? null : new Date(at));
+          },
     now: () => new Date(options.at),
   };
   return { run: () => fetchExchangeRates(deps, logger), published };
@@ -71,13 +86,52 @@ describe('payroll.fetch_exchange_rates, when rates stop coming (ADR 0033)', () =
     expect(published).toHaveLength(1);
   });
 
-  it('measures nothing before a first rate: the failed read is the job’s error', async () => {
-    const { run, published } = job({
-      ecb: new Error('network down'),
+  it('rings in production for a currency that never got a rate, counted from the job’s first schedule', async () => {
+    // First scheduled on Monday 26 October at 10:00 in Frankfurt; the read never succeeded since.
+    const production = { scheduledAt: '2026-10-26T09:00:00Z' };
+    const quiet = job({
+      ecb: new Error('host blocked'),
       lastDay: null,
       at: '2026-10-29T08:07:00Z',
+      production,
+    });
+    await expect(quiet.run()).rejects.toThrow('host blocked');
+    expect(quiet.published).toEqual([]);
+
+    const { run, published } = job({
+      ecb: new Error('host blocked'),
+      lastDay: null,
+      at: '2026-10-30T08:07:00Z',
+      production,
+    });
+    await expect(run()).rejects.toThrow('host blocked');
+    await expect(run()).rejects.toThrow('host blocked');
+    expect(published).toEqual([{ currency: 'USD', lastRateDay: null, day: '2026-10-30' }]);
+  });
+
+  it('says nothing of a currency that never got a rate outside production, nor where the job was never scheduled', async () => {
+    const development = job({ ecb: new Error('network down'), lastDay: null, at: '2026-12-01T08:07:00Z' });
+    await expect(development.run()).rejects.toThrow('network down');
+    expect(development.published).toEqual([]);
+
+    const unscheduled = job({
+      ecb: new Error('network down'),
+      lastDay: null,
+      at: '2026-12-01T08:07:00Z',
+      production: { scheduledAt: null },
+    });
+    await expect(unscheduled.run()).rejects.toThrow('network down');
+    expect(unscheduled.published).toEqual([]);
+  });
+
+  it('measures a currency from its last rate in production too, not from the first schedule', async () => {
+    const { run, published } = job({
+      ecb: new Error('network down'),
+      lastDay: '2026-10-23',
+      at: '2026-10-29T07:07:00Z',
+      production: { scheduledAt: '2026-10-28T09:00:00Z' },
     });
     await expect(run()).rejects.toThrow('network down');
-    expect(published).toEqual([]);
+    expect(published).toEqual([{ currency: 'USD', lastRateDay: '2026-10-23', day: '2026-10-29' }]);
   });
 });

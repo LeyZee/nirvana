@@ -7,7 +7,7 @@ import { fetchExchangeRates, type RateFetchOutcome } from './application/exchang
 import { createPayrollReads } from './application/periods';
 import { createRecalculation, type RecalculationOutcome } from './application/recalculation';
 import { createPayrollValidation } from './application/validation';
-import type { JobLogger } from './domain/ports';
+import type { JobLogger, RateJobSince } from './domain/ports';
 import { createEcbSource, type GetLike } from './infra/ecb';
 import { createDrizzlePayrollEntryStore } from './infra/entry-store';
 import { createDrizzlePayrollJobStore } from './infra/job-store';
@@ -40,7 +40,8 @@ export interface PayrollModule {
     readonly recalculateOpen: (logger: JobLogger) => Promise<RecalculationOutcome[]>;
     /**
      * `payroll.fetch_exchange_rates` (ADR 0033): the ECB's last 90 days, each day written once; then
-     * `exchange_rate_overdue`, once a day, for a currency without a rate for more than two weekdays.
+     * `exchange_rate_overdue`, once a day, for a currency without a rate for more than two weekdays (in production,
+     * also one that never got a rate).
      */
     readonly fetchExchangeRates: (logger: JobLogger) => Promise<RateFetchOutcome>;
   };
@@ -59,6 +60,11 @@ export interface PayrollDeps {
   readonly now?: () => Date;
   /** The ECB is reached through it (ADR 0033); the global `fetch` unless a test gives a fake one. */
   readonly fetch?: GetLike;
+  /**
+   * Production only (composition root): when the rate job was first scheduled, so that a currency that never got a
+   * rate is alerted too (ADR 0033). `null` elsewhere.
+   */
+  readonly rateJobSince: RateJobSince | null;
 }
 
 export function createPayrollModule(deps: PayrollDeps): PayrollModule {
@@ -75,6 +81,7 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
     source: createEcbSource({ fetch: deps.fetch ?? ((url, init) => fetch(url, init)) }),
     store: createDrizzlePayrollRateStore(deps.adminDb),
     alerts: createPostgresRateAlerts(deps.adminDb),
+    since: deps.rateJobSince,
     now,
   };
   return {

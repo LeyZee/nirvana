@@ -275,6 +275,7 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
         members: app.modules.team.pay.members,
         creatorIds: () => Promise.resolve([anna]),
       },
+      rateJobSince: null,
     });
     const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
     const blindServer = await buildServer({

@@ -166,12 +166,19 @@ export interface PayrollRateStore {
 /** A currency without a rate for too long (`exchange_rate_overdue`, ADR 0033). */
 export interface OverdueRate {
   readonly currency: ForeignCurrency;
-  readonly lastRateDay: string;
+  /** `null`: no rate ever came since the job was first scheduled. */
+  readonly lastRateDay: string | null;
   /** The ECB day of the check: one alert per day and currency. */
   readonly day: string;
 }
 
 /** The `domain_events` outbox, for the system alerts of pay (admin connection, no creator). */
+/**
+ * When the rate job was first scheduled on this database, `null` if never: where a currency that never got a rate
+ * starts to count (ADR 0033).
+ */
+export type RateJobSince = () => Promise<Date | null>;
+
 export interface PayrollRateAlerts {
   /** Publishes `exchange_rate_overdue`, unless that currency already has one that day. True when it published. */
   publishOverdue(alert: OverdueRate): Promise<boolean>;

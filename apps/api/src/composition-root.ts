@@ -19,6 +19,7 @@ import {
 } from './auth';
 import { publishBudgetThreshold } from './budget-events';
 import { secretOrNull, type Config } from './config';
+import { cronKnownSince } from './crontab';
 import { assertDatabaseRoles } from './database-roles';
 import { createInvitationLinkRoutes, liveInvitationLinksUnscoped } from './invitation-links';
 import { createJobQueue, defineTask, type JobQueue } from './jobs';
@@ -265,6 +266,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       members: team.pay.members,
       creatorIds: async () => (await persona.creators.list('all')).map((creator) => creator.id),
     },
+    // A currency that never got a rate is alerted in production only, counted from the job's first schedule (ADR 0033).
+    rateJobSince:
+      config.NODE_ENV === 'production'
+        ? () => cronKnownSince(adminDb.db, 'payroll.fetch_exchange_rates')
+        : null,
   });
   const playground =
     options.withPlayground === false
