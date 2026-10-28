@@ -393,6 +393,8 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
         : `Valide d’abord la quinzaine ${period}.`;
     case 'pay_period_reports_pending_conflict':
       return `${countOf(details.count, 'rapport de la quinzaine attend', 'rapports de la quinzaine attendent')} leur relecture.`;
+    case 'pay_period_not_computed_conflict':
+      return 'La paie n’a pas encore calculé cette quinzaine : réessaie dans quelques minutes.';
     case 'pay_period_reports_unread_conflict':
       return `${countOf(details.count, 'rapport est', 'rapports sont')} sur des créatrices que tu ne suis pas : le propriétaire valide cette quinzaine.`;
     case 'pay_period_closed_conflict':
@@ -417,6 +419,10 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
       return 'Cette saisie existe déjà avec d’autres valeurs : recharge la page.';
     case 'payment_in_future_unprocessable':
       return 'Le paiement ne peut pas être daté après aujourd’hui.';
+    case 'payment_before_period_unprocessable':
+      return named.success
+        ? `Le paiement ne peut pas être daté avant le début de la quinzaine (${longDay(named.data)}).`
+        : 'Le paiement ne peut pas être daté avant le début de la quinzaine.';
     case 'payment_amount_unprocessable':
       return details.payableMinor === undefined
         ? 'Le montant envoyé doit être celui à verser.'

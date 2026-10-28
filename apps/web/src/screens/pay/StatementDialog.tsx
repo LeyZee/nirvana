@@ -1,5 +1,6 @@
 import {
   PAYMENT_METHODS,
+  containsIban,
   PAYMENT_REFERENCE_MAX,
   type CommissionStatement,
   type ExchangeRate,
@@ -315,8 +316,9 @@ function Foot({
 const STEPS = ['Remplir', 'Relire'] as const;
 
 /**
- * « Marquer payé » (owner): the day (today by default, never after), the amount sent (what is to pay, another one is
- * refused), the method and the transfer's reference, optional. Then read again, then sent.
+ * « Marquer payé » (owner): the day (today by default, never after, never before the period's first day), the amount
+ * sent (what is to pay, another one is refused), the method and the transfer's reference, optional and never an IBAN.
+ * Then read again, then sent.
  */
 function PayForm({
   statement,
@@ -338,6 +340,7 @@ function PayForm({
   const id = useId();
   const refresh = useRefreshPayroll();
   const today = dayOf(new Date(), statement.window.timeZone);
+  const firstDay = statement.window.period;
   const [day, setDay] = useState(today);
   const [amount, setAmount] = useState(amountInput(statement.payableMinor));
   const [method, setMethod] = useState<PaymentMethod>('bank_transfer');
@@ -346,9 +349,10 @@ function PayForm({
   const [refusal, setRefusal] = useState<PayRefusal | null>(null);
 
   const sentMinor = parseAmount(amount);
-  const dayValid = /^\d{4}-\d{2}-\d{2}$/u.test(day) && day <= today;
+  const dayValid = /^\d{4}-\d{2}-\d{2}$/u.test(day) && day >= firstDay && day <= today;
   const amountValid = sentMinor === statement.payableMinor;
-  const ready = dayValid && amountValid;
+  const referenceValid = !containsIban(reference);
+  const ready = dayValid && amountValid && referenceValid;
   const step = mode === 'pay' ? 0 : 1;
 
   const send = async (): Promise<void> => {
@@ -441,6 +445,7 @@ function PayForm({
                 type="date"
                 className="nv-field__control nv-glass nv-num"
                 value={day}
+                min={firstDay}
                 max={today}
                 data-autofocus
                 aria-invalid={touched && !dayValid}
@@ -449,7 +454,7 @@ function PayForm({
                 }}
               />
               {touched && !dayValid ? (
-                <p className="tm-hint tm-hint--error">Un jour d’aujourd’hui ou d’avant.</p>
+                <p className="tm-hint tm-hint--error">Un jour du {longDay(firstDay)} à aujourd’hui.</p>
               ) : null}
             </div>
             <div className="nv-field tm-field" data-invalid={touched && !amountValid ? 'true' : undefined}>
@@ -493,7 +498,7 @@ function PayForm({
               ))}
             </div>
           </div>
-          <div className="nv-field tm-field">
+          <div className="nv-field tm-field" data-invalid={touched && !referenceValid ? 'true' : undefined}>
             <label className="nv-field__label" htmlFor={`${id}-reference`}>
               Référence du transfert, facultative
             </label>
@@ -504,12 +509,15 @@ function PayForm({
               maxLength={PAYMENT_REFERENCE_MAX}
               value={reference}
               placeholder="VIR-2611-0412"
+              aria-invalid={touched && !referenceValid}
               onChange={(event) => {
                 setReference(event.target.value);
               }}
             />
-            <p className="tm-hint">
-              Celle que montre la banque ou le service. Jamais un IBAN ni un numéro de compte.
+            <p className={touched && !referenceValid ? 'tm-hint tm-hint--error' : 'tm-hint'}>
+              {touched && !referenceValid
+                ? 'Ceci contient un IBAN : garde seulement la référence du transfert.'
+                : 'Celle que montre la banque ou le service. Jamais un IBAN ni un numéro de compte.'}
             </p>
           </div>
           {refusal === null ? null : (

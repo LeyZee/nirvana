@@ -303,9 +303,25 @@ describe('Paie › Quinzaine', () => {
     expect(within(dialog).queryByText(/versés à/u)).toBeNull();
 
     fireEvent.change(amount, { target: { value: '288,40' } });
+    // Never before the period's first day, never an IBAN in the reference (an invented one, its check digits right).
+    const day = within(dialog).getByLabelText('Payé le');
+    expect(day.getAttribute('min')).toBe(OCT2);
+    fireEvent.change(day, { target: { value: '2026-10-15' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).getByText('Un jour du vendredi 16 octobre à aujourd’hui.')).toBeTruthy();
+    expect(within(dialog).queryByText(/versés à/u)).toBeNull();
+
+    fireEvent.change(day, { target: { value: '2026-11-02' } });
+    const reference = within(dialog).getByLabelText('Référence du transfert, facultative');
+    fireEvent.change(reference, { target: { value: 'FR62 1234 5678 9000 00AB C123 456' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).getByText(/Ceci contient un IBAN/u)).toBeTruthy();
+    expect(within(dialog).queryByText(/versés à/u)).toBeNull();
+
+    fireEvent.change(reference, { target: { value: 'VIR-2611-0412' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
     expect(text(await within(dialog).findByText(/versés à/u))).toBe(
-      '288,40 € versés à Théo le lundi 2 novembre par virement, pour la quinzaine du 16 au 31 octobre.',
+      '288,40 € versés à Théo le lundi 2 novembre par virement, référence VIR-2611-0412, pour la quinzaine du 16 au 31 octobre.',
     );
     answer = () => ({ status: 200, body: statementOf(THEO, OCT2, { status: 'paid' }) });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Marquer payé' }));
@@ -313,7 +329,13 @@ describe('Paie › Quinzaine', () => {
       expect(writes).toEqual([
         {
           path: `/v1/payroll/statements/${statementOf(THEO, OCT2).id}/pay`,
-          body: { revision: 3, paidOn: '2026-11-02', method: 'bank_transfer', sentMinor: 28_840 },
+          body: {
+            revision: 3,
+            paidOn: '2026-11-02',
+            method: 'bank_transfer',
+            sentMinor: 28_840,
+            reference: 'VIR-2611-0412',
+          },
         },
       ]);
     });
@@ -412,6 +434,19 @@ describe('Paie › Quinzaine', () => {
     expect(
       await screen.findByText('Le serveur ne répond pas : la quinzaine n’a pas pu être lue.'),
     ).toBeTruthy();
+  });
+
+  it('says a period before the team’s first closing is closed without a statement, never paid', async () => {
+    // Pay never wrote it: no window, so it never reads as ended either.
+    periods[OCT1] = periodOf(OCT1, [], { window: null, beforeFirstClosing: true });
+    renderPage(OWNER, `/paie/quinzaine?quinzaine=${OCT1}`);
+    expect(await screen.findByText('Close avant la première clôture')).toBeTruthy();
+    expect(
+      screen.getByText('Avant la première clôture de l’équipe : la quinzaine est close sans relevé.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Aucun relevé avant la première clôture.')).toBeTruthy();
+    expect(screen.queryByText('Payée')).toBeNull();
+    expect(screen.queryByText(/pour la quinzaine/u)).toBeNull();
   });
 
   it('shows a running period’s net and where its pace leads, with nothing to validate', async () => {

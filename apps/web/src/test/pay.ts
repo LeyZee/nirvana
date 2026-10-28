@@ -212,6 +212,7 @@ export function periodOf(
     period,
     window: windowOf(period),
     ended: period < NOV1,
+    beforeFirstClosing: false,
     closing: null,
     statements,
     bonusTiers: null,

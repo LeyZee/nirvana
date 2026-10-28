@@ -376,10 +376,17 @@ function PeriodView({
               />
             )}
             {rows.length === 0 ? (
-              <Empty
-                whisper="Pas encore de relevé sur cette quinzaine."
-                text="Un relevé se calcule dès qu’un rapport de fin de shift d’un membre est validé."
-              />
+              data.beforeFirstClosing ? (
+                <Empty
+                  whisper="Aucun relevé avant la première clôture."
+                  text="Un rapport de cette quinzaine compte en retard sur la première quinzaine ouverte de l’équipe."
+                />
+              ) : (
+                <Empty
+                  whisper="Pas encore de relevé sur cette quinzaine."
+                  text="Un relevé se calcule dès qu’un rapport de fin de shift d’un membre est validé."
+                />
+              )
             ) : (
               <ul className="py-rows">
                 {rows.map((statement, index) => {
@@ -473,6 +480,8 @@ function PeriodView({
 /** The header's one sentence: what the period asks of the reader now. */
 function leadOf(data: PayrollPeriod | undefined, blocked: boolean, owner: boolean): string | undefined {
   if (data === undefined) return undefined;
+  if (data.beforeFirstClosing)
+    return 'Avant la première clôture de l’équipe : la quinzaine est close sans relevé.';
   if (!data.ended)
     return data.window === null
       ? 'Les relevés se calculent dès qu’un rapport est validé.'
@@ -536,31 +545,33 @@ function Summary({
   const amount = periodAmount(summary);
   const zone = window?.timeZone ?? null;
 
-  const state: ReactNode =
-    data.closing !== null ? (
-      <>
-        <span className="py-lock">
-          <LockIcon />
-          <span>
-            Close le {zone === null ? '' : momentAt(data.closing.closedAt, zone)}
-            {data.closing.closedBy === null
-              ? ''
-              : ` par ${whoName(data.closing.closedBy, me, names.members)}`}
-          </span>
+  const state: ReactNode = data.beforeFirstClosing ? (
+    <span className="py-lock">
+      <LockIcon />
+      <span>Close avant la première clôture</span>
+    </span>
+  ) : data.closing !== null ? (
+    <>
+      <span className="py-lock">
+        <LockIcon />
+        <span>
+          Close le {zone === null ? '' : momentAt(data.closing.closedAt, zone)}
+          {data.closing.closedBy === null ? '' : ` par ${whoName(data.closing.closedBy, me, names.members)}`}
         </span>
-        {phase === 'paid' || phase === 'to_pay' ? <Chip chip={phaseChip(summary)} /> : null}
-      </>
-    ) : !data.ended ? (
-      <>
-        <Chip chip={phaseChip(summary)} />
-        {window === null ? null : <span>{daysLeftText(daysLeft(window, now))}</span>}
-      </>
-    ) : (
-      <>
-        <Chip chip={phaseChip(summary)} />
-        <span>depuis le {longDay(lastDay)} à minuit</span>
-      </>
-    );
+      </span>
+      {phase === 'paid' || phase === 'to_pay' ? <Chip chip={phaseChip(summary)} /> : null}
+    </>
+  ) : !data.ended ? (
+    <>
+      <Chip chip={phaseChip(summary)} />
+      {window === null ? null : <span>{daysLeftText(daysLeft(window, now))}</span>}
+    </>
+  ) : (
+    <>
+      <Chip chip={phaseChip(summary)} />
+      <span>depuis le {longDay(lastDay)} à minuit</span>
+    </>
+  );
 
   const figures: JSX.Element[] = [];
   if (data.ended)
@@ -635,32 +646,36 @@ function Summary({
         <p className="py-sum__state">{state}</p>
         <PeriodArrows period={data.period} current={current} onPeriod={onPeriod} />
       </div>
-      <div className="py-sum__body">
-        {data.ended ? (
-          <div className="py-hero">
-            <p className="py-hero__label">
-              {phase === 'paid' ? 'Versé pour la quinzaine' : 'À verser pour la quinzaine'}
-            </p>
-            <p className="py-hero__value nv-num">{amountText(amount.minor, 'EUR')}</p>
-            <p className="py-hero__note">{countsNote(summary.statements)}</p>
-          </div>
-        ) : (
-          <div className="py-hero">
-            <p className="py-hero__label">Net de l’équipe à ce jour</p>
-            <p className="py-hero__value nv-num">{amountText(net, 'EUR')}</p>
-            <p className="py-hero__note">
-              {forecast === null ? (
-                'La prévision vient après un premier jour entier.'
-              ) : (
-                <>
-                  À ce rythme, <b className="nv-num">{amountText(forecast, 'EUR')}</b> le {longDay(lastDay)}.
-                </>
-              )}
-            </p>
-          </div>
-        )}
-        {figures.length === 0 ? null : <div className="py-figs">{figures}</div>}
-      </div>
+      {/* Before the team's first closing there is nothing to sum: no statement, ever. */}
+      {data.beforeFirstClosing ? null : (
+        <div className="py-sum__body">
+          {data.ended ? (
+            <div className="py-hero">
+              <p className="py-hero__label">
+                {phase === 'paid' ? 'Versé pour la quinzaine' : 'À verser pour la quinzaine'}
+              </p>
+              <p className="py-hero__value nv-num">{amountText(amount.minor, 'EUR')}</p>
+              <p className="py-hero__note">{countsNote(summary.statements)}</p>
+            </div>
+          ) : (
+            <div className="py-hero">
+              <p className="py-hero__label">Net de l’équipe à ce jour</p>
+              <p className="py-hero__value nv-num">{amountText(net, 'EUR')}</p>
+              <p className="py-hero__note">
+                {forecast === null ? (
+                  'La prévision vient après un premier jour entier.'
+                ) : (
+                  <>
+                    À ce rythme, <b className="nv-num">{amountText(forecast, 'EUR')}</b> le {longDay(lastDay)}
+                    .
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+          {figures.length === 0 ? null : <div className="py-figs">{figures}</div>}
+        </div>
+      )}
       {creators.length === 0 ? null : (
         <details className="nv-disclosure py-fold">
           <summary>

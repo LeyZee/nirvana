@@ -239,6 +239,7 @@ describe('a period in the list', () => {
       period: PERIOD,
       window: WINDOW,
       ended: true,
+      beforeFirstClosing: false,
       closing: null,
       statements: [
         statement({
@@ -392,6 +393,15 @@ describe('words', () => {
         names,
       ),
     ).toBe('2 rapports de la quinzaine attendent leur relecture.');
+    expect(
+      payRefusalText(
+        { kind: 'refused', code: 'payment_before_period_unprocessable', details: { period: '2026-10-16' } },
+        names,
+      ),
+    ).toBe('Le paiement ne peut pas être daté avant le début de la quinzaine (vendredi 16 octobre).');
+    expect(
+      payRefusalText({ kind: 'refused', code: 'pay_period_not_computed_conflict', details: {} }, names),
+    ).toBe('La paie n’a pas encore calculé cette quinzaine : réessaie dans quelques minutes.');
     expect(payRefusalText({ kind: 'failed' }, names)).toBe(
       'Le serveur ne répond pas : rien n’a été enregistré.',
     );
@@ -404,6 +414,7 @@ describe('the export of a period', () => {
       period: PERIOD,
       window: WINDOW,
       ended: true,
+      beforeFirstClosing: false,
       closing: null,
       statements: [statement()],
       bonusTiers: null,
@@ -486,6 +497,7 @@ describe('the dollar’s rate before a closing', () => {
     period: OCT2,
     window: { ...WINDOW, period: OCT2 },
     ended: true,
+    beforeFirstClosing: false,
     closing: null,
     statements: [
       statement({

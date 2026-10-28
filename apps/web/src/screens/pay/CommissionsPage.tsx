@@ -27,7 +27,6 @@ import {
   memberPhaseChip,
   momentAt,
   myStatementWords,
-  reachedBpsOf,
   roundAmountText,
   salesFor,
   summaryOf,
@@ -417,15 +416,14 @@ function GoalShare({
   period: PayrollPeriod;
   now: Date;
 }): JSX.Element {
-  const team = statement?.team ?? null;
-  const reached = team?.collective?.reachedBps ?? null;
+  const reached = statement?.team?.collective?.reachedBps ?? null;
   const span = goalSpanBps(goal);
-  // The team's late reports are not the member's to read: the pace counts the whole net.
-  const forecast =
-    team === null || period.ended || period.window === null
+  // A member never reads the team's net (`netMinor` is null for them), only the percent reached, which grows with the
+  // net: the pace extrapolates the percent. The team's late reports are not theirs to read either, so none is set apart.
+  const forecastBps =
+    reached === null || period.ended || period.window === null
       ? null
-      : forecastNet(team.netMinor, 0, period.window, now);
-  const forecastBps = forecast === null ? null : reachedBpsOf(forecast, goal.targetMinor);
+      : forecastNet(reached, 0, period.window, now);
   const tiers = goal.tiers.toSorted((a, b) => a.reachedBps - b.reachedBps);
   return (
     <div className="py-left">
