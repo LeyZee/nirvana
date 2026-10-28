@@ -7,7 +7,8 @@ import type { PayrollRateAlerts } from '../domain/ports';
  * `exchange_rate_overdue` in the outbox (ADR 0033), as `backup_overdue`: it belongs to no creator, so the row has
  * `creator_id` null and is written with the admin role (RLS). Two workers can run the job at once: the first writes
  * the day's row for the currency, the other finds it (advisory lock). The payload is parsed by its contract before it
- * is written (docs/architecture/jsonb.md).
+ * is written (docs/architecture/jsonb.md). The search looks back two days only: the day's row is younger than that, and
+ * `domain_events_created_idx` then serves it instead of a scan of every conversation's events, each hour.
  */
 export function createPostgresRateAlerts(adminDb: Database): PayrollRateAlerts {
   return {
@@ -17,7 +18,7 @@ export function createPostgresRateAlerts(adminDb: Database): PayrollRateAlerts {
       return withAdmin(adminDb, async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
         const seen = await tx.execute(sql`
-          select 1 from domain_events where type = 'exchange_rate_overdue'
+          select 1 from domain_events where created_at >= now() - interval '2 days' and type = 'exchange_rate_overdue'
             and payload->>'currency' = ${payload.currency} and payload->>'day' = ${payload.day} limit 1`);
         if (seen.rows.length > 0) return false;
         await tx.insert(schema.domainEvents).values({
