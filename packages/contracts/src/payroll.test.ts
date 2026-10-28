@@ -1,0 +1,197 @@
+import { describe, expect, it } from 'vitest';
+
+import { PayPeriodSchema } from './pay-periods';
+import {
+  BonusTierSetSchema,
+  CollectiveGoalSchema,
+  CreateBonusBodySchema,
+  CreateBonusTierSetBodySchema,
+  CreateCollectiveGoalBodySchema,
+  CreatePayAdjustmentBodySchema,
+  CreatePenaltyBodySchema,
+  ExchangeRateSchema,
+  mayValidateStatement,
+  PAY_AMOUNT_MAX_MINOR,
+  PAYROLL_ERROR_CODES,
+  PenaltySchema,
+  bonusTiersFor,
+  collectiveGoalFor,
+  penaltyApplies,
+} from './payroll';
+
+const MEMBER = '0199f2a0-0000-7000-8000-0000000000b1';
+const USER = '0199f2a0-0000-7000-8000-0000000000d1';
+const period = (day: string) => PayPeriodSchema.parse(day);
+
+const bonus = {
+  id: '0199f2a0-0000-7000-8000-0000000000e1',
+  memberId: MEMBER,
+  period: '2026-11-01',
+  amountMinor: 5_000,
+  reason: 'Week-end tenu seule',
+};
+
+const penalty = {
+  id: '0199f2a0-0000-7000-8000-0000000000f1',
+  memberId: MEMBER,
+  fromPeriod: '2026-11-01',
+  toPeriod: '2026-11-16',
+  amount: { kind: 'fixed', amountMinor: 2_000 },
+  reason: 'Shift manqué sans prévenir',
+};
+
+const tierSet = (id: string, fromPeriod: string, createdAt: string) =>
+  BonusTierSetSchema.parse({
+    id,
+    fromPeriod,
+    tiers: [{ thresholdMinor: 100_000, bonusMinor: 5_000, label: 'Bronze' }],
+    createdBy: USER,
+    createdAt,
+  });
+
+describe('pay amounts', () => {
+  it('takes integers only, within the slip guard: no float in pay (ADR 0011)', () => {
+    expect(CreateBonusBodySchema.safeParse(bonus).success).toBe(true);
+    expect(CreateBonusBodySchema.safeParse({ ...bonus, amountMinor: 50.5 }).success).toBe(false);
+    expect(CreateBonusBodySchema.safeParse({ ...bonus, amountMinor: 0 }).success).toBe(false);
+    expect(CreateBonusBodySchema.safeParse({ ...bonus, amountMinor: PAY_AMOUNT_MAX_MINOR + 1 }).success).toBe(
+      false,
+    );
+    expect(CreateBonusBodySchema.safeParse({ ...bonus, reason: '  ' }).success).toBe(false);
+  });
+
+  it('takes an adjustment in either direction, never 0, and leaves its period to the server', () => {
+    const adjustment = {
+      id: '0199f2a0-0000-7000-8000-0000000000a2',
+      memberId: MEMBER,
+      reason: 'Remboursement',
+    };
+    expect(
+      CreatePayAdjustmentBodySchema.parse({ ...adjustment, amountMinor: -4_000 }).correctsStatementId,
+    ).toBeNull();
+    expect(CreatePayAdjustmentBodySchema.safeParse({ ...adjustment, amountMinor: 0 }).success).toBe(false);
+    expect(
+      'period' in
+        CreatePayAdjustmentBodySchema.parse({ ...adjustment, amountMinor: 1, period: '2026-11-01' }),
+    ).toBe(false);
+  });
+
+  it('reads an exchange rate in whole millionths, for a currency other than the euro', () => {
+    const rate = {
+      currency: 'USD',
+      day: '2026-10-31',
+      rateMicros: 920_000,
+      source: 'test',
+      fetchedAt: '2026-10-31T16:00:00Z',
+    };
+    expect(ExchangeRateSchema.safeParse(rate).success).toBe(true);
+    expect(ExchangeRateSchema.safeParse({ ...rate, rateMicros: 0.92 }).success).toBe(false);
+    expect(ExchangeRateSchema.safeParse({ ...rate, currency: 'EUR' }).success).toBe(false);
+  });
+});
+
+describe('penalties', () => {
+  it('take a fixed amount or a percent, over periods in order', () => {
+    expect(CreatePenaltyBodySchema.safeParse(penalty).success).toBe(true);
+    expect(
+      CreatePenaltyBodySchema.safeParse({ ...penalty, amount: { kind: 'percent', bps: 1_000 } }).success,
+    ).toBe(true);
+    expect(
+      CreatePenaltyBodySchema.safeParse({ ...penalty, amount: { kind: 'percent', bps: 0 } }).success,
+    ).toBe(false);
+    expect(
+      CreatePenaltyBodySchema.safeParse({ ...penalty, amount: { kind: 'percent', amountMinor: 10 } }).success,
+    ).toBe(false);
+    expect(CreatePenaltyBodySchema.safeParse({ ...penalty, toPeriod: '2026-10-16' }).success).toBe(false);
+  });
+
+  it('count in each period they cover, until the period a cancellation starts from', () => {
+    const made = { ...penalty, createdBy: USER, createdAt: '2026-11-02T10:00:00Z' };
+    const running = PenaltySchema.parse({ ...made, cancellation: null });
+    expect(penaltyApplies(running, period('2026-10-16'))).toBe(false);
+    expect(penaltyApplies(running, period('2026-11-01'))).toBe(true);
+    expect(penaltyApplies(running, period('2026-11-16'))).toBe(true);
+    expect(penaltyApplies(running, period('2026-12-01'))).toBe(false);
+
+    const cancellation = {
+      cancelledAt: '2026-11-20T10:00:00Z',
+      cancelledBy: USER,
+      cancelledFrom: '2026-11-16',
+    };
+    const cancelled = PenaltySchema.parse({ ...made, cancellation });
+    expect(penaltyApplies(cancelled, period('2026-11-01'))).toBe(true);
+    expect(penaltyApplies(cancelled, period('2026-11-16'))).toBe(false);
+  });
+});
+
+describe('tiers and goals', () => {
+  it('refuse two tiers on the same step, so that their order never matters, and a tier at 0', () => {
+    const tiers = [
+      { thresholdMinor: 100_000, bonusMinor: 5_000, label: 'Bronze' },
+      { thresholdMinor: 100_000, bonusMinor: 8_000, label: 'Argent' },
+    ];
+    expect(
+      CreateBonusTierSetBodySchema.safeParse({ id: USER, fromPeriod: '2026-11-01', tiers }).success,
+    ).toBe(false);
+    const atZero = [{ thresholdMinor: 0, bonusMinor: 5_000, label: 'Départ' }];
+    expect(
+      CreateBonusTierSetBodySchema.safeParse({ id: USER, fromPeriod: '2026-11-01', tiers: atZero }).success,
+    ).toBe(false);
+    const goal = { id: USER, period: '2026-11-01', targetMinor: 1_000_000 };
+    const twice = [
+      { reachedBps: 10_000, bonusMinor: 3_000 },
+      { reachedBps: 10_000, bonusMinor: 5_000 },
+    ];
+    expect(CreateCollectiveGoalBodySchema.safeParse({ ...goal, tiers: twice }).success).toBe(false);
+    expect(CreateCollectiveGoalBodySchema.safeParse({ ...goal, tiers: [] }).success).toBe(true);
+  });
+
+  it('apply the newest tier set of the latest period at or before, whatever their order', () => {
+    const october = tierSet('0199f2a0-0000-7000-8000-000000000101', '2026-10-01', '2026-09-30T10:00:00Z');
+    const november = tierSet('0199f2a0-0000-7000-8000-000000000102', '2026-11-01', '2026-10-20T10:00:00Z');
+    const fixed = tierSet('0199f2a0-0000-7000-8000-000000000103', '2026-11-01', '2026-10-21T10:00:00Z');
+    const at = (day: string) => bonusTiersFor([fixed, october, november], period(day))?.id ?? null;
+    expect(at('2026-09-16')).toBeNull();
+    expect(at('2026-10-16')).toBe(october.id);
+    expect(at('2026-11-01')).toBe(fixed.id);
+    expect(at('2027-01-01')).toBe(fixed.id);
+  });
+
+  it('apply the period’s newest goal, none when it has no tier', () => {
+    const goal = (id: string, createdAt: string, tiers: { reachedBps: number; bonusMinor: number }[]) =>
+      CollectiveGoalSchema.parse({
+        id,
+        period: '2026-11-01',
+        targetMinor: 1_000_000,
+        tiers,
+        createdBy: USER,
+        createdAt,
+      });
+    const first = goal('0199f2a0-0000-7000-8000-000000000201', '2026-11-01T10:00:00Z', [
+      { reachedBps: 10_000, bonusMinor: 3_000 },
+    ]);
+    const withdrawn = goal('0199f2a0-0000-7000-8000-000000000202', '2026-11-03T10:00:00Z', []);
+    expect(collectiveGoalFor([first], period('2026-11-01'))?.id).toBe(first.id);
+    expect(collectiveGoalFor([first], period('2026-11-16'))).toBeNull();
+    expect(collectiveGoalFor([withdrawn, first], period('2026-11-01'))).toBeNull();
+  });
+});
+
+describe('statements', () => {
+  it('are validated by the agency, never by their own member, and only as drafts', () => {
+    const own = { memberId: MEMBER, status: 'draft' } as const;
+    expect(mayValidateStatement(own, { scope: 'owner', memberId: null })).toBe(true);
+    expect(mayValidateStatement(own, { scope: 'agency', memberId: USER })).toBe(true);
+    expect(mayValidateStatement(own, { scope: 'agency', memberId: MEMBER })).toBe(false);
+    expect(mayValidateStatement(own, { scope: 'self', memberId: USER })).toBe(false);
+    expect(mayValidateStatement({ ...own, status: 'validated' }, { scope: 'owner', memberId: null })).toBe(
+      false,
+    );
+  });
+
+  it('give every error code a suffix that sets its status (api.md)', () => {
+    for (const code of PAYROLL_ERROR_CODES) {
+      expect(code).toMatch(/_(not_found|invalid|conflict|forbidden)$/u);
+    }
+  });
+});

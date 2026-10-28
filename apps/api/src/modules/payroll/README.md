@@ -4,9 +4,9 @@
 
 **Peut dépendre de.** aucun module métier (feuille).
 
-**État.** Le calcul pur seul (`domain/commission-statements.ts`). Viennent ensuite, dans cet ordre : les tables et leurs déclencheurs (avec le propriétaire de `packages/db`), puis le recalcul d'un brouillon par job, la validation sous le verrou (membre, quinzaine) partagé avec les rapports, « payé » par le propriétaire seul, et les taux de change.
+**État.** Le calcul pur (`domain/commission-statements.ts`), les contrats (`packages/contracts/src/payroll.ts`) et les tables (migration 0028). Viennent ensuite le recalcul d'un brouillon par job, la validation sous le verrou (membre, quinzaine) partagé avec les rapports, « payé » par le propriétaire seul, les routes `/v1/payroll` et les taux de change.
 
-**Tables possédées.** aucune pour l'instant.
+**Tables possédées** (migration 0028, `data-model.md` § Paie). `pay_periods`, `exchange_rates`, `payroll_settings`, `bonus_tier_sets`, `collective_goals`, `bonuses`, `penalties`, `commission_statements`, `commission_statement_lines`, `pay_adjustments`, `carry_overs`. Hors RLS des créatrices : un membre lit ses lignes, la portée `owner` | `agency` lit tout. Les relevés, leurs lignes, les quinzaines et les taux sont écrits par les jobs (`withAdmin`). Des déclencheurs gardent le passé pour tous les rôles : un relevé validé ne change plus que vers « payé », les quinzaines se ferment dans l'ordre, et rien n'arrive sur une quinzaine fermée.
 
 **Le calcul** (`computeCommissionStatements`, testé par des cas de référence écrits à la main et par des propriétés) : une fonction pure de toute la quinzaine, sans horloge ni base, qui rend un relevé par membre qui a quelque chose dedans, et la version du moteur (`ENGINE_VERSION`) qui l'a fait. Toute la quinzaine, parce que l'objectif collectif et la part d'équipe d'un manager dépendent des autres membres : un relevé ne se recalcule jamais seul.
 
