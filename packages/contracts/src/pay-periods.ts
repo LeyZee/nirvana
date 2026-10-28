@@ -52,3 +52,20 @@ export function previousPayPeriod(period: PayPeriod): PayPeriod {
   if (date === 16) return periodAt(year, month, false);
   return month === 1 ? periodAt(year - 1, 12, true) : periodAt(year, month - 1, true);
 }
+
+/** The calendar day it is at `at` in `timeZone`, `YYYY-MM-DD`. */
+function calendarDayAt(at: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/** The period the instant `at` falls in, in the agency's zone `timeZone`: today's period, for pay's jobs. */
+export function payPeriodAt(at: Date, timeZone: string): PayPeriod {
+  return payPeriodOfDay(calendarDayAt(at, timeZone));
+}

@@ -59,6 +59,7 @@ import {
 } from '../domain/reports';
 import { addMinutes, wallClockToInstant } from '../domain/time';
 
+import { enqueuePayRecalculation } from './pay-reads';
 import {
   agencyTimeZone,
   audit,
@@ -457,6 +458,8 @@ export function createDrizzleShiftReportStore(db: Database, adminDb: Database): 
             updatedAt: now,
           })
           .where(eq(shiftReports.id, id));
+        // Pay counts it from now on: its period's drafts, or the team's first open period's (EQ-04, ADR 0032).
+        if (validating) await enqueuePayRecalculation(tx, report.period);
         await audit(
           tx,
           actor,
