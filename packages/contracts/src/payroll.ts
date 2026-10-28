@@ -528,7 +528,8 @@ export type PayrollPeriod = z.infer<typeof PayrollPeriodSchema>;
  * The period has ended, and the member's earlier statements are validated (`commission_statement_order_conflict`
  * otherwise, with `details.statementId`, or `details.period` when pay has not written that statement yet). The first
  * validation of a period closes it for the team (ADR 0032): the team's earlier periods are closed (an empty one is
- * closed on the way, `pay_period_order_conflict` otherwise), no report of the period waits for review
+ * closed on the way, `pay_period_order_conflict` otherwise), each period to close has been written by pay
+ * (`pay_period_not_computed_conflict`), no report of the period waits for review
  * (`pay_period_reports_pending_conflict`), and the closing reads every report it counts
  * (`pay_period_reports_unread_conflict`). The statement is computed on the closing, the carry-over is written, and the
  * statement is frozen: the database refuses any later change but `validated` → `paid`.
@@ -558,6 +559,7 @@ export function mayValidateStatement(
  * `pay_period_order_conflict` 409, an earlier period of the team must be validated first (`details.period`) ;
  * `pay_period_reports_pending_conflict` 409, reports of the period still wait for review (`details.count`) ;
  * `pay_period_reports_unread_conflict` 409, reports the validator may not read would be left out (`details.count`) ;
+ * `pay_period_not_computed_conflict` 409, a period to close that pay has not written yet (`details.period`) ;
  * `pay_period_closed_conflict` 409, a bonus, a penalty, tiers or a goal for a period already validated ;
  * `penalty_cancel_conflict` 409, every period of the penalty is closed ;
  * `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`,
@@ -580,6 +582,7 @@ export const PAYROLL_ERROR_CODES = [
   'pay_period_order_conflict',
   'pay_period_reports_pending_conflict',
   'pay_period_reports_unread_conflict',
+  'pay_period_not_computed_conflict',
   'pay_period_closed_conflict',
   'penalty_cancel_conflict',
   'bonus_conflict',

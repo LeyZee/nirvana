@@ -377,9 +377,15 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
 
   // Théo makes enough each period to be paid (16 € of commission, over the 15 € minimum): nothing of his is carried.
   it('closes an empty period on the way, and never skips one that pays', async () => {
-    await recalculate(Q5);
     await report(theo, Q6, 10_000);
     await recalculate(Q6);
+    // Pay never wrote Q5 (its hourly job did not run): nothing to close it on, and the validation says which one.
+    expect(refusal(await validate(owner, theo, Q6))).toEqual(
+      expect.objectContaining({ code: 'pay_period_not_computed_conflict', details: { period: Q5 } }),
+    );
+    expect(await closingOf(Q6)).toBeUndefined();
+
+    await recalculate(Q5);
     const validated = await validate(owner, theo, Q6);
     expect(validated.statusCode, validated.body).toBe(200);
     expect(await closingOf(Q5)).toMatchObject({ teamNetMinor: 0 });

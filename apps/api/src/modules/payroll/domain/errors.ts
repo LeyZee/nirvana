@@ -91,6 +91,18 @@ export class PayPeriodReportsPending extends DomainError {
   }
 }
 
+/**
+ * Pay has not written a period the closing goes through (its hourly job has not run since the period began): there is
+ * nothing to close it on. The next run writes it; one that never comes means the worker is down.
+ */
+export class PayPeriodNotComputed extends DomainError {
+  constructor(period: PayPeriod) {
+    super('pay_period_not_computed_conflict', 'La paie n’a pas encore calculé cette quinzaine', {
+      details: { period },
+    });
+  }
+}
+
 /** The closing could not read reports it counts (a creator the validator does not see): it never leaves one out. */
 export class PayPeriodReportsUnread extends DomainError {
   constructor(count: number) {

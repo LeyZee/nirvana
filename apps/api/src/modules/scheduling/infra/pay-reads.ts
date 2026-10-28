@@ -1,6 +1,5 @@
 import {
   CurrencySchema,
-  JOB_MAX_ATTEMPTS,
   PayPeriodSchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
@@ -130,19 +129,8 @@ export async function reportsAwaitingReviewScoped(
 }
 
 /**
- * The recalculation of `period`'s pay, once this transaction commits (EQ-04): one waiting job per period, replaced by
- * the next write, a few seconds later so that a batch of reports gives one run. Each write pushes the run back: a
- * series that never stopped would never run, and `payroll.recalculate_open` computes the period every hour anyway.
+ * Pay's `payroll.recalculate` for a period, in the transaction that validates a report: the `payroll` module's own
+ * function, which the composition root gives the planning (EQ-04), so that the job keeps one key and one number of
+ * attempts.
  */
-export async function enqueuePayRecalculation(tx: Transaction, period: PayPeriod): Promise<void> {
-  await tx.execute(
-    sql`select public.enqueue_job(
-      task => 'payroll.recalculate',
-      payload => ${JSON.stringify({ period })}::jsonb,
-      run_at => now() + interval '5 seconds',
-      max_attempts => ${JOB_MAX_ATTEMPTS['payroll.recalculate']}::int,
-      job_key => ${`payroll.recalculate:${period}`},
-      job_key_mode => 'replace'
-    )`,
-  );
-}
+export type EnqueuePayRecalculation = (tx: Transaction, period: PayPeriod) => Promise<void>;

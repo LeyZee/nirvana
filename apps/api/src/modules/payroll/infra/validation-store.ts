@@ -31,6 +31,7 @@ import {
   CommissionStatementChanged,
   CommissionStatementNotFound,
   CommissionStatementOrder,
+  PayPeriodNotComputed,
   PayPeriodOrder,
   PayPeriodReportsPending,
   PayPeriodReportsUnread,
@@ -52,6 +53,7 @@ import {
   type StatementHead,
 } from '../domain/validation';
 
+import { enqueuePayRecalculation } from './recalculation-queue';
 import { closingsSpan, readSnapshot, registeredAmong, type PayInputReads } from './snapshot';
 
 const {
@@ -81,23 +83,6 @@ async function audit(
     details,
     ip: actor.ip,
   });
-}
-
-/**
- * `payroll.recalculate` for `period` once the transaction commits: one waiting job per period, replaced by the next
- * write, a few seconds later (the same key as the planning's, which enqueues it when a report is validated).
- */
-async function enqueueRecalculation(tx: Transaction, period: PayPeriod): Promise<void> {
-  await tx.execute(
-    sql`select public.enqueue_job(
-      task => 'payroll.recalculate',
-      payload => ${JSON.stringify({ period })}::jsonb,
-      run_at => now() + interval '5 seconds',
-      max_attempts => 5,
-      job_key => ${`payroll.recalculate:${period}`},
-      job_key_mode => 'replace'
-    )`,
-  );
 }
 
 /** The validated reports no closing counted yet, on every creator: a read bounded to the closing's check. */
@@ -146,9 +131,8 @@ async function writeClosing(
     .select({ period: payPeriods.period })
     .from(payPeriods)
     .where(eq(payPeriods.period, period));
-  // The hourly job writes every open period's window: one missing means it has not run for weeks.
-  if (window === undefined)
-    throw new Error(`Pay has not written period ${period}: is the hourly job running?`);
+  // The hourly job writes every open period's window: one missing means it has not run since the period began.
+  if (window === undefined) throw new PayPeriodNotComputed(period);
   await tx.insert(payPeriodClosings).values({
     period,
     teamNetMinor: closing.teamNetMinor,
@@ -394,11 +378,11 @@ export function createDrizzlePayrollValidationStore(
         );
         // The period's other drafts on its closing, then the team's first open period, where the carry-over and the
         // reports that came late go.
-        await enqueueRecalculation(tx, head.period);
+        await enqueuePayRecalculation(tx, head.period);
         return { period: head.period };
       }),
 
     enqueueRecalculation: (actor, period) =>
-      withMember(db, actor.userId, (tx) => enqueueRecalculation(tx, period)),
+      withMember(db, actor.userId, (tx) => enqueuePayRecalculation(tx, period)),
   };
 }

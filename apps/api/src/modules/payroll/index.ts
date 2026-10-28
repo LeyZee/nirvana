@@ -12,6 +12,12 @@ import { createPayrollRoutes, type RequireRole } from './infra/routes';
 import type { PayInputReads } from './infra/snapshot';
 import { createDrizzlePayrollValidationStore } from './infra/validation-store';
 
+/**
+ * Pay's `payroll.recalculate` for a period, in the caller's transaction: the planning enqueues it when it validates a
+ * report, through the composition root (EQ-04). One key and one number of attempts for every writer.
+ */
+export { enqueuePayRecalculation } from './infra/recalculation-queue';
+
 /** Public entry point of the `payroll` module (EQ-04, ADR 0002). Other modules import this file only. */
 export interface PayrollModule {
   readonly name: 'payroll';

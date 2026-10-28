@@ -16,6 +16,7 @@ import {
   validatedReportsScoped,
   validatedReportsUnscoped,
   type CreatorReportsForPay,
+  type EnqueuePayRecalculation,
   type ValidatedReportForPay,
 } from './infra/pay-reads';
 import { createDrizzlePayRulesStore } from './infra/pay-rules-store';
@@ -85,6 +86,8 @@ export interface SchedulingDeps {
   readonly adminDb: Database;
   /** The creators that exist, with their names (the `persona` module's directory). */
   readonly creators: CreatorDirectory;
+  /** Pay's `payroll.recalculate` for a period, which a validated report enqueues (the `payroll` module's, EQ-04). */
+  readonly enqueuePayRecalculation: EnqueuePayRecalculation;
   readonly now?: () => Date;
 }
 
@@ -111,7 +114,7 @@ export function createSchedulingModule(deps: SchedulingDeps): SchedulingModule {
       now,
     ),
     reports: createShiftReportService(
-      createDrizzleShiftReportStore(deps.db, deps.adminDb),
+      createDrizzleShiftReportStore(deps.db, deps.adminDb, deps.enqueuePayRecalculation),
       deps.creators,
       now,
     ),

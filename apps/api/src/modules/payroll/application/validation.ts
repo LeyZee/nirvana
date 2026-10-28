@@ -36,6 +36,8 @@ export function createPayrollValidation(
           await store.enqueueRecalculation(actor, error.period);
         throw error;
       }
+      // Read after the commit: if this read fails, the client gets a 500 though the statement is validated, and a
+      // replay answers `commission_statement_status_conflict`, which is true. The next read of the period shows it.
       const view = await reads.period(actor.userId, validated.period);
       const statement = view.statements.find((one) => one.id === statementId);
       if (statement === undefined)
