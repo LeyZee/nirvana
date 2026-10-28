@@ -182,6 +182,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       logger.warn({ err: error }, 'AI service keys not loaded');
     },
   });
+  // Before Telegram and the composer: Telegram names her alerts, the agent checks his messages against them (P4-01).
+  const alerts = createAlertsModule({ db: db.db, requireRole });
   const credentialKeys = secretOrNull(config.CREDENTIALS_ENCRYPTION_KEYS);
   const telegram =
     credentialKeys === null
@@ -195,6 +197,10 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           },
           onUnreadableTokens: (bots) => {
             logger.error({ bots }, 'Telegram bot tokens unreadable with CREDENTIALS_ENCRYPTION_KEYS');
+          },
+          alertNames: {
+            ofCreator: async (creatorId) =>
+              new Map([...(await alerts.store.names(creatorId))].map(([id, alert]) => [id, alert.name])),
           },
         });
   if (telegram === null) logger.warn('Telegram notifications off: CREDENTIALS_ENCRYPTION_KEYS is not set');
@@ -239,8 +245,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     adminDb: adminDb.db,
     creators: { list: () => persona.creators.list('all') },
   });
-  // Before the composer: the agent checks each of his messages against her alerts (P4-01).
-  const alerts = createAlertsModule({ db: db.db, requireRole });
   const playground =
     options.withPlayground === false
       ? null
