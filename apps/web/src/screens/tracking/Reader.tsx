@@ -4,6 +4,7 @@ import { useState, type JSX } from 'react';
 
 import { DesireSheet } from './Desire';
 import { FanLimits } from './FanLimits';
+import { FanToLearn } from './FanToLearn';
 import {
   approveDraft,
   ConversationGone,
@@ -180,6 +181,8 @@ function Loaded({
         </label>
       ) : null}
       <FanLimits creatorId={creatorId} fanId={detail.fanId} canDecide={canDecide} />
+      {/* A creator never reads what is known of her fans (ADR 0023): the server answers her 403. */}
+      {canDecide ? <FanToLearn creatorId={creatorId} fanId={detail.fanId} /> : null}
       <DesireSheet creatorId={creatorId} conversationId={detail.id} desire={detail.desire} />
       <div className="tr-reader__body">
         {read.isPartial ? (
