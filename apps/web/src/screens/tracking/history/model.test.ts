@@ -1,4 +1,9 @@
-import { AlertTriggerItemSchema, CustomAlertGroupIdSchema, type AlertTriggerItem } from '@nirvana/contracts';
+import {
+  AlertTriggerItemSchema,
+  CustomAlertGroupIdSchema,
+  CustomAlertIdSchema,
+  type AlertTriggerItem,
+} from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -143,7 +148,7 @@ describe('the alert filter', () => {
       alertsOf([
         item(1, NORA, '2026-10-28T10:00:00.000Z', {
           trigger: {
-            alert: { kind: 'custom', id: '0192f3a0-0000-7000-8000-0000000000b1' },
+            alert: { kind: 'custom', id: CustomAlertIdSchema.parse('0192f3a0-0000-7000-8000-0000000000b1') },
             matchedBy: 'model',
           },
           alertGroupId: GROUP,
