@@ -51,11 +51,15 @@ describe('NewCreatorForm', () => {
     expect(body).toMatchObject({ displayName: 'Léa', timezone: 'Europe/Paris' });
   });
 
-  it('sends once on a double click', async () => {
+  it('sends once when the form is submitted again before the answer', async () => {
     const { fetch, onCreated } = show(201, LEA);
-    fireEvent.click(screen.getByRole('button', { name: /Créer|Création/ }));
+    // Submitting the form itself skips the disabled button: only the guard stops a second request.
+    const form = screen.getByRole('button', { name: /Créer|Création/ }).closest('form');
+    if (form === null) throw new Error('no form');
+    fireEvent.submit(form);
+    fireEvent.submit(form);
     await waitFor(() => {
-      expect(onCreated).toHaveBeenCalledTimes(1);
+      expect(onCreated).toHaveBeenCalled();
     });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
