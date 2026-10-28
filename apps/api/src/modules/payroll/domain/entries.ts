@@ -6,13 +6,20 @@ import {
   type TeamMemberId,
 } from '@nirvana/contracts';
 
-import { PayPeriodClosed, PayrollForbidden, PayrollOwnForbidden, PenaltyCancelConflict } from './errors';
+import {
+  PayPeriodClosed,
+  PaymentAmountMismatch,
+  PaymentInFuture,
+  PayrollForbidden,
+  PayrollOwnForbidden,
+  PenaltyCancelConflict,
+} from './errors';
 import type { PayReader } from './ports';
 
 /**
- * A member's bonuses, penalties and adjustments (EQ-04, ADR 0032), their pure rules: who writes them, which periods
- * are still open for the member, which period the server chooses, and which periods a write locks. The transactions
- * that apply them live in `infra/entry-store.ts`.
+ * A member's bonuses, penalties and adjustments (EQ-04, ADR 0032), and the payment of a statement, their pure rules:
+ * who writes them, which periods are still open for the member, which period the server chooses, which periods a write
+ * locks, and what a payment may say. The transactions that apply them live in `infra/entry-store.ts`.
  */
 
 /** What decides a member's open periods, read under the locks of the write. */
@@ -118,4 +125,17 @@ export function periodsChanged(from: PayPeriod, to: PayPeriod, current: PayPerio
   const periods: PayPeriod[] = [];
   for (let one = from; one <= to && one <= current; one = nextPayPeriod(one)) periods.push(one);
   return periods;
+}
+
+/**
+ * A payment as the owner records it (ADR 0023 § Factures): a transfer made, so never dated after `today` (the agency's
+ * zone), and of what the statement pays. Days compare as `YYYY-MM-DD` text.
+ */
+export function assertPayment(
+  payment: { readonly paidOn: string; readonly sentMinor: number },
+  payableMinor: number,
+  today: string,
+): void {
+  if (payment.paidOn > today) throw new PaymentInFuture(today);
+  if (payment.sentMinor !== payableMinor) throw new PaymentAmountMismatch(payableMinor);
 }

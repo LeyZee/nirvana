@@ -174,6 +174,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Prime | `bonus` | Montant ajouté à un relevé : palier, objectif collectif ou prime manuelle avec motif. |
 | Malus | `penalty` | Retenue fixe ou en pourcentage avec motif, plafonnée à la part du membre plus ses primes. Sur la facture, une ligne négative (réfaction prévue au contrat). |
 | Report | `carry_over` | Montant sous le minimum de versement, ou total sous zéro après un ajustement, reporté sur la période suivante ; rien n'est versé (EQ-04). |
+| Paiement d'un relevé | `commission_statement.payment` | Ce que le propriétaire note en marquant payé un relevé validé : le jour du transfert (jamais après aujourd'hui), le moyen (virement, Wise, PayPal ou autre, une liste fermée), la référence du transfert, facultative et jamais un IBAN ni un numéro de compte, et le montant envoyé, celui à verser (EQ-04, EQ-05). |
 | Ajustement | `pay_adjustment` | Correction d'un relevé déjà validé, portée sur la prochaine période ouverte. |
 | Objectif collectif | `collective_goal` | Le net de toute l'équipe sur une quinzaine, ventes des managers comprises, comparé à une cible ; le palier collectif le plus haut atteint donne une prime à chaque chatteur, ventes ou pas, jamais à un manager (EQ-04). |
 | Part d'équipe | `team_share` | La part d'un manager sur le net des autres membres de l'équipe pour une quinzaine, en plus de la commission sur ses propres ventes (EQ-04). |

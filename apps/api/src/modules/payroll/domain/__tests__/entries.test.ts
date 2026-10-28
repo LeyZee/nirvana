@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   adjustmentPeriod,
   assertOpenBeforeLocks,
+  assertPayment,
   assertWritesPayOf,
   closedUpTo,
   isOpenFor,
@@ -135,5 +136,31 @@ describe('what a write locks and computes again (ADR 0035)', () => {
     expect(periodsChanged(P1, P3, P5)).toEqual([P1, P2, P3]);
     expect(periodsChanged(P3, P5, P4)).toEqual([P3, P4]);
     expect(periodsChanged(P5, P5, P4)).toEqual([]);
+  });
+});
+
+describe('a payment (ADR 0023 § Factures)', () => {
+  // Today is 2 May in the agency's zone; the statement pays 133,33 €.
+  const paying = (patch: { paidOn?: string; sentMinor?: number }, payableMinor = 13_333): string =>
+    codeOf(() => {
+      assertPayment({ paidOn: '2025-05-02', sentMinor: 13_333, ...patch }, payableMinor, '2025-05-02');
+    });
+
+  it('records a transfer made today or before, of what the statement pays', () => {
+    expect(paying({})).toBe('no error');
+    expect(paying({ paidOn: '2025-04-30' })).toBe('no error');
+  });
+
+  it('refuses a transfer dated after today in the agency’s zone', () => {
+    expect(paying({ paidOn: '2025-05-03' })).toBe('payment_in_future_unprocessable');
+  });
+
+  it('refuses an amount that is not what the statement pays, a cent off included', () => {
+    expect(paying({ sentMinor: 13_332 })).toBe('payment_amount_unprocessable');
+    expect(paying({ sentMinor: 13_334 })).toBe('payment_amount_unprocessable');
+  });
+
+  it('pays nothing for a statement that pays nothing: it stays validated', () => {
+    expect(paying({ sentMinor: 1 }, 0)).toBe('payment_amount_unprocessable');
   });
 });

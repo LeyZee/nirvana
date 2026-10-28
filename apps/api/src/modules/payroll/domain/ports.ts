@@ -15,6 +15,7 @@ import type {
   ForeignCurrency,
   PayAdjustment,
   PayAdjustmentId,
+  PayCommissionStatementBody,
   PayPeriod,
   PayPeriodClosing,
   PayPeriodWindow,
@@ -118,11 +119,11 @@ export interface PayrollEntryStore {
   cancelPenalty(actor: Actor, id: PenaltyId): Promise<Penalty>;
   /** The server chooses the period, the member's first open one (`adjustmentPeriod`). */
   createAdjustment(actor: Actor, body: AdjustmentToCreate): Promise<Recorded<PayAdjustment>>;
-  /** `validated` → `paid`, by the owner only, at the revision shown. */
+  /** `validated` → `paid`, by the owner only, at the revision shown, with how it was paid (`assertPayment`). */
   pay(
     actor: Actor,
     statementId: CommissionStatementId,
-    revision: number,
+    payment: PayCommissionStatementBody,
   ): Promise<{ readonly period: PayPeriod }>;
 }
 

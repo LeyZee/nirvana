@@ -64,6 +64,7 @@ const stored = (goal: boolean): StoredStatement => ({
     validatedBy: null,
     paidAt: null,
     paidBy: null,
+    payment: null,
   },
   team: { netMinor: 50_000, collective: goal ? { reachedBps: 5_000, tier: null } : null },
 });

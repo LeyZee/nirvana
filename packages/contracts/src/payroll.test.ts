@@ -192,7 +192,7 @@ describe('statements', () => {
 
   it('give every error code a suffix that sets its status (api.md)', () => {
     for (const code of PAYROLL_ERROR_CODES) {
-      expect(code).toMatch(/_(not_found|invalid|conflict|forbidden)$/u);
+      expect(code).toMatch(/_(not_found|invalid|conflict|unprocessable|forbidden)$/u);
     }
   });
 });

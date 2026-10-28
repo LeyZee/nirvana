@@ -169,3 +169,21 @@ export class PayEntryConflict extends DomainError {
     super(code, 'Cet identifiant est déjà pris par une autre saisie');
   }
 }
+
+/** A payment dated after today in the agency's zone: pay records a transfer made, never one to come. */
+export class PaymentInFuture extends DomainError {
+  constructor(today: string) {
+    super('payment_in_future_unprocessable', 'Un paiement ne se date pas après aujourd’hui', {
+      details: { today },
+    });
+  }
+}
+
+/** An amount sent that is not what the statement pays (EQ-05: the default while another amount has no rule). */
+export class PaymentAmountMismatch extends DomainError {
+  constructor(payableMinor: number) {
+    super('payment_amount_unprocessable', 'Le montant envoyé n’est pas celui à verser', {
+      details: { payableMinor },
+    });
+  }
+}

@@ -1,6 +1,7 @@
 import {
   BonusIdSchema,
   BonusSchema,
+  calendarDayAt,
   CommissionStatementSchema,
   newId,
   PayAdjustmentIdSchema,
@@ -279,26 +280,47 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
     expect(team.refusal(await correcting(corrected.id)).code).toBe('commission_statement_not_found');
   });
 
-  it('lets the owner alone pay a validated statement, once', async () => {
-    const { id, revision } = await team.statementOf(theo, Q2);
-    const pay = (cookie: string, at = revision) =>
-      post(`/payroll/statements/${id}/pay`, cookie, { revision: at });
+  it('lets the owner alone pay a validated statement, once, saying how', async () => {
+    const { id, revision, payableMinor } = await team.statementOf(theo, Q2);
+    const payment = { revision, paidOn: '2025-06-02', method: 'bank_transfer', sentMinor: payableMinor };
+    const pay = (cookie: string, patch: Record<string, unknown> = {}) =>
+      post(`/payroll/statements/${id}/pay`, cookie, { ...payment, ...patch });
     expect(team.refusal(await pay(monaCookie)).code).toBe('payroll_forbidden');
     expect(team.refusal(await pay(theoCookie)).code).toBe('payroll_forbidden');
-    expect(team.refusal(await pay(team.owner, revision + 1)).code).toBe(
+    expect(team.refusal(await pay(team.owner, { revision: revision + 1 })).code).toBe(
       'commission_statement_changed_conflict',
     );
-    const paid = await pay(team.owner);
+    // A transfer to come, another amount, a method off the list, no amount: nothing is written.
+    const later = calendarDayAt(new Date(Date.now() + 2 * 86_400_000), 'Europe/Paris');
+    expect(team.refusal(await pay(team.owner, { paidOn: later })).code).toBe(
+      'payment_in_future_unprocessable',
+    );
+    expect(team.refusal(await pay(team.owner, { sentMinor: payableMinor + 1 }))).toEqual({
+      code: 'payment_amount_unprocessable',
+      details: { payableMinor },
+    });
+    expect((await pay(team.owner, { method: 'cash' })).statusCode).toBe(400);
+    expect((await pay(team.owner, { sentMinor: undefined })).statusCode).toBe(400);
+    expect((await team.statementOf(theo, Q2)).status).toBe('validated');
+
+    const paid = await pay(team.owner, { reference: '  VIR-0412 ' });
     expect(paid.statusCode, paid.body).toBe(200);
     expect(CommissionStatementSchema.parse(paid.json())).toMatchObject({
       status: 'paid',
       paidBy: team.ownerId,
+      payment: {
+        paidOn: '2025-06-02',
+        method: 'bank_transfer',
+        reference: 'VIR-0412',
+        sentMinor: payableMinor,
+      },
     });
     expect(team.refusal(await pay(team.owner)).code).toBe('commission_statement_status_conflict');
     expect(await audited('commission_statement.pay')).toBe(1);
 
     const draft = await team.statementOf(lea, Q4);
     const refused = await post(`/payroll/statements/${draft.id}/pay`, team.owner, {
+      ...payment,
       revision: draft.revision,
     });
     expect(team.refusal(refused).code).toBe('commission_statement_status_conflict');

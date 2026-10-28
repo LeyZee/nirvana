@@ -156,11 +156,23 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     );
   };
 
-  const pay = (by: string, id: string) =>
+  /** How the owner paid, as the application writes it (ADR 0023 § Factures). */
+  const payment = {
+    paidOn: '2025-10-02',
+    paymentMethod: 'bank_transfer',
+    paymentReference: 'VIR-0412',
+    sentMinor: 13_333,
+  };
+
+  const pay = (
+    by: string,
+    id: string,
+    values: Partial<typeof s.commissionStatements.$inferInsert> = payment,
+  ) =>
     as(by, (tx) =>
       tx
         .update(s.commissionStatements)
-        .set({ status: 'paid', paidAt: new Date(), paidBy: by })
+        .set({ status: 'paid', paidAt: new Date(), paidBy: by, ...values })
         .where(eq(s.commissionStatements.id, id))
         .returning({ id: s.commissionStatements.id }),
     );
@@ -348,8 +360,35 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       expect(
         await failure(change({ status: 'draft', validatedAt: null, validatedBy: null, revision: 2 })),
       ).toMatch(KEPT);
-      expect(await pay(owner, id)).toEqual([{ id }]);
+      // Paid says how: the day, the method of the list and what was sent; the reference when there is one.
+      const PAYMENT = /commission_statements_payment_check/u;
+      expect(await failure(pay(owner, id, {}))).toMatch(PAYMENT);
+      expect(await failure(pay(owner, id, { ...payment, paymentMethod: 'cash' }))).toMatch(
+        /commission_statements_payment_method_check/u,
+      );
+      expect(await failure(pay(owner, id, { ...payment, paymentReference: 'V'.repeat(101) }))).toMatch(
+        PAYMENT,
+      );
+      expect(await failure(pay(owner, id, { ...payment, sentMinor: 0 }))).toMatch(PAYMENT);
+      // And nothing else with it: the grants, then the guard for the job too.
+      expect(await failure(pay(owner, id, { ...payment, totalMinor: 1, payableMinor: 1 }))).toMatch(
+        /permission denied/u,
+      );
+      expect(
+        await failure(
+          change({
+            status: 'paid',
+            paidAt: new Date(),
+            paidBy: owner,
+            ...payment,
+            totalMinor: 1,
+            payableMinor: 1,
+          }),
+        ),
+      ).toMatch(KEPT);
+      expect(await pay(owner, id, { ...payment, paymentReference: null })).toEqual([{ id }]);
       expect(await failure(change({ paidAt: new Date() }))).toMatch(KEPT);
+      expect(await failure(change({ paymentReference: 'VIR-0413' }))).toMatch(KEPT);
       expect(
         await failure(
           admin((tx) => tx.delete(s.commissionStatements).where(eq(s.commissionStatements.id, id))),
@@ -357,6 +396,23 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       ).toMatch(KEPT);
       // No draft comes back for an earlier period of the member: it is closed too.
       expect(await failure(draft(basile, '2025-08-16'))).toMatch(KEPT);
+    });
+
+    it('only a paid statement says how it was paid', async () => {
+      expect(await failure(draft(theo, '2025-11-16', payment))).toMatch(
+        /commission_statements_payment_check/u,
+      );
+      const id = await draft(theo, '2025-11-16');
+      expect(
+        await failure(
+          admin((tx) =>
+            tx
+              .update(s.commissionStatements)
+              .set({ ...payment, revision: 2 })
+              .where(eq(s.commissionStatements.id, id)),
+          ),
+        ),
+      ).toMatch(/commission_statements_payment_check/u);
     });
 
     it('lines belong to the current revision of a draft, and are added only', async () => {

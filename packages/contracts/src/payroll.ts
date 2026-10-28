@@ -436,6 +436,32 @@ export const CollectiveReachedSchema = z.object({
 });
 
 /**
+ * How the owner paid a statement (ADR 0023 § Factures): a closed list the screen says in French. A new method is a
+ * migration of the check on `commission_statements.payment_method`, never free text.
+ */
+export const PAYMENT_METHODS = ['bank_transfer', 'wise', 'paypal', 'other'] as const;
+export const PaymentMethodSchema = z.enum(PAYMENT_METHODS);
+export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
+
+/** The longest transfer reference pay keeps. */
+export const PAYMENT_REFERENCE_MAX = 100;
+
+/** The transfer's reference as the bank or the service shows it, to find it again; never an IBAN nor an account number. */
+const PaymentReferenceSchema = z.string().trim().min(1).max(PAYMENT_REFERENCE_MAX);
+
+/** What was sent, in euro cents: never nothing. */
+const SentMinorSchema = z.number().int().min(1).max(PAY_AMOUNT_MAX_MINOR);
+
+/** A statement's payment: the day of the transfer, how, its reference when there is one, and what was sent. */
+export const StatementPaymentSchema = z.object({
+  paidOn: CalendarDaySchema,
+  method: PaymentMethodSchema,
+  reference: PaymentReferenceSchema.nullable(),
+  sentMinor: SentMinorSchema,
+});
+export type StatementPayment = z.infer<typeof StatementPaymentSchema>;
+
+/**
  * A member's statement for a period. `revision` grows by one each time a recalculation changes it; a validation names
  * the revision it shows, and the server computes it again under its locks, on the period's closing: another revision,
  * or other inputs (`inputsHash`, which covers the reports counted, the rates, the period's team net, collective tier
@@ -490,6 +516,8 @@ export const CommissionStatementSchema = z.object({
   validatedBy: UserIdSchema.nullable(),
   paidAt: z.iso.datetime().nullable(),
   paidBy: UserIdSchema.nullable(),
+  /** How the owner paid it, `null` until it is paid. */
+  payment: StatementPaymentSchema.nullable(),
 });
 export type CommissionStatement = z.infer<typeof CommissionStatementSchema>;
 
@@ -541,8 +569,20 @@ export type PayrollPeriod = z.infer<typeof PayrollPeriodSchema>;
 export const ValidateCommissionStatementBodySchema = z.object({ revision: z.number().int().min(1) });
 export type ValidateCommissionStatementBody = z.infer<typeof ValidateCommissionStatementBodySchema>;
 
-/** `POST /v1/payroll/statements/:id/pay` (owner only) → 200 `CommissionStatementSchema`: `validated` → `paid`, once. */
-export const PayCommissionStatementBodySchema = z.object({ revision: z.number().int().min(1) });
+/**
+ * `POST /v1/payroll/statements/:id/pay` (owner only) → 200 `CommissionStatementSchema`: `validated` → `paid`, once,
+ * with how it was paid (ADR 0023 § Factures). `paidOn` is the day of the transfer, never after today in the agency's
+ * zone (`payment_in_future_unprocessable`). `sentMinor` is what was sent, and it must be what the statement pays
+ * (`payment_amount_unprocessable`; whether another amount may be recorded is a question the EQ-05 card keeps open): a
+ * statement that pays nothing, its total carried over, stays validated.
+ */
+export const PayCommissionStatementBodySchema = z.object({
+  revision: z.number().int().min(1),
+  paidOn: CalendarDaySchema,
+  method: PaymentMethodSchema,
+  reference: PaymentReferenceSchema.optional(),
+  sentMinor: SentMinorSchema,
+});
 export type PayCommissionStatementBody = z.infer<typeof PayCommissionStatementBodySchema>;
 
 /** May `reader` validate this statement: a draft that is not their own, and a scope that validates. */
@@ -572,6 +612,8 @@ export function mayValidateStatement(
  * `collective_goal_conflict` 409, the same `id` with other values ;
  * `exchange_rate_missing_conflict` 409, a currency without a rate read ;
  * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
+ * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
+ * `payment_amount_unprocessable` 422, an amount sent that is not what the statement pays ;
  * `payroll_own_forbidden` 403, one's own statement, bonus, penalty or adjustment ;
  * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing, or a manager doing what only
  * the owner does.
@@ -598,6 +640,8 @@ export const PAYROLL_ERROR_CODES = [
   'collective_goal_conflict',
   'exchange_rate_missing_conflict',
   'commission_rate_missing_conflict',
+  'payment_in_future_unprocessable',
+  'payment_amount_unprocessable',
   'payroll_own_forbidden',
   'payroll_forbidden',
 ] as const;

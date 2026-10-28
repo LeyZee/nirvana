@@ -17,6 +17,7 @@ import {
   PenaltySchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
+  StatementPaymentSchema,
   TeamMemberIdSchema,
   UserIdSchema,
   type PayPeriod,
@@ -175,6 +176,15 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               validatedBy: row.validatedBy === null ? null : UserIdSchema.parse(row.validatedBy),
               paidAt: iso(row.paidAt),
               paidBy: row.paidBy === null ? null : UserIdSchema.parse(row.paidBy),
+              payment:
+                row.paidOn === null
+                  ? null
+                  : StatementPaymentSchema.parse({
+                      paidOn: row.paidOn,
+                      method: row.paymentMethod,
+                      reference: row.paymentReference,
+                      sentMinor: row.sentMinor,
+                    }),
             },
             team: {
               netMinor: row.teamNetMinor,
