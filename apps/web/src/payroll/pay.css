@@ -139,53 +139,17 @@
   margin: 4px 0 2px;
 }
 
-/* The split of the sales: one bar, the creators side by side, data colours only. */
-.py-split {
-  display: flex;
-  height: 6px;
+/* The split of the sales: the design system's bar and legend (`nv-split`, `nv-legend`), the legend on one line. */
+.py-salesplit {
   margin: 4px 0 2px;
-  border-radius: var(--nv-radius-full);
-  overflow: hidden;
-  background: var(--nv-glass-fill);
 }
-.py-split > i {
-  flex: var(--py-share) 0 0;
-  background: var(--nv-data-1);
-}
-.py-split > i + i {
-  background: var(--nv-data-2);
-}
-.py-split > i + i + i {
-  background: var(--nv-ink-faint);
-}
-.py-keys {
-  display: flex;
+.py-legend {
+  flex-direction: row;
   flex-wrap: wrap;
   gap: 2px var(--nv-space-3);
   margin: 0;
   padding: 0;
   list-style: none;
-  color: var(--nv-ink-muted);
-  font-size: var(--nv-text-caption);
-  line-height: var(--nv-text-caption-leading);
-}
-.py-keys li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.py-keys li::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--nv-data-1);
-}
-.py-keys li:nth-child(2)::before {
-  background: var(--nv-data-2);
-}
-.py-keys li:nth-child(n + 3)::before {
-  background: var(--nv-ink-faint);
 }
 
 /* On a phone the summary of a fold goes under its title, whole, rather than cut (as in Planning). */

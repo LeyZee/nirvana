@@ -92,12 +92,12 @@ export function PayRulesSection(): JSX.Element {
 
   return (
     <section className="rp-rules">
-      <MinimumPayout />
       <p className="rp-rules__lede nv-enter">
-        Ce que la paie lit pour chaque compte : la devise, la TVA, la commission de la plateforme et la source
-        des ventes. Des règles ne changent jamais : de nouvelles prennent la suite à une quinzaine qui n’a pas
-        commencé.
+        Ce que la paie lit : le minimum de versement de toute l’équipe, puis pour chaque compte la devise, la
+        TVA, la commission de la plateforme et la source des ventes. Les règles d’un compte ne changent jamais
+        : de nouvelles prennent la suite à une quinzaine qui n’a pas commencé.
       </p>
+      <MinimumPayout />
       {missing.length === 0 ? null : (
         <div className="rp-notice nv-enter" data-tone="warn" style={{ '--nv-i': 1 }}>
           <p className="rp-notice__title">

@@ -1,5 +1,4 @@
 import {
-  PAYMENT_METHODS,
   containsIban,
   PAYMENT_REFERENCE_MAX,
   type CommissionStatement,
@@ -13,12 +12,11 @@ import { EntryForm, type EntryAdded } from './EntryForm';
 import type { PayNames } from './data';
 import { Chip, Delta, MoneyPath, Swatch } from './parts';
 
-import { payStatement, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
+import { payStatement, useLatestPayPeriod, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
 import {
   changeBps,
   momentAt,
   PAID_BY,
-  PAYMENT_METHOD_LABELS,
   payRefusalText,
   rateText,
   shortHash,
@@ -318,6 +316,9 @@ function Foot({
 
 const STEPS = ['Remplir', 'Relire'] as const;
 
+/** How the owner pays: WorldRemit, the one method of `PAYMENT_METHODS`, so the form asks nothing about it. */
+const PAY_BY: PaymentMethod = 'worldremit';
+
 /**
  * « Marquer payé » (owner): the day (today by default, never after, never before the period's first day), the amount
  * sent (what is to pay, another one is refused), the method and the transfer's reference, optional and never an IBAN.
@@ -342,11 +343,11 @@ function PayForm({
 }): JSX.Element {
   const id = useId();
   const refresh = useRefreshPayroll();
+  const latest = useLatestPayPeriod();
   const today = dayOf(new Date(), statement.window.timeZone);
   const firstDay = statement.window.period;
   const [day, setDay] = useState(today);
   const [amount, setAmount] = useState(amountInput(statement.payableMinor));
-  const [method, setMethod] = useState<PaymentMethod>('bank_transfer');
   const [reference, setReference] = useState('');
   const [touched, setTouched] = useState(false);
   const [refusal, setRefusal] = useState<PayRefusal | null>(null);
@@ -366,13 +367,20 @@ function PayForm({
     const outcome = await payStatement(statement.id, {
       revision: statement.revision,
       paidOn: day,
-      method,
+      method: PAY_BY,
       sentMinor: statement.payableMinor,
       ...(trimmed === '' ? {} : { reference: trimmed }),
     });
-    onBusy(false);
+    // Read again before « Marquer payé » is free: a second click would pay what is already paid.
     await refresh();
-    if (outcome.kind === 'ok') {
+    // Paid meanwhile, from another tab or by a second click that went first: it reads as paid, without a word.
+    const paidMeanwhile =
+      outcome.kind === 'refused' &&
+      outcome.code === 'commission_statement_status_conflict' &&
+      (await latest(statement.window.period))?.statements.find((one) => one.id === statement.id)?.status ===
+        'paid';
+    onBusy(false);
+    if (outcome.kind === 'ok' || paidMeanwhile) {
       onMode('read');
       return;
     }
@@ -399,7 +407,7 @@ function PayForm({
           <p className="py-recap nv-enter">
             <b className="nv-num">{amountText(statement.payableMinor, 'EUR')}</b> versés à <b>{memberName}</b>{' '}
             le {longDay(day)}
-            {PAID_BY[method]}
+            {PAID_BY[PAY_BY]}
             {reference.trim() === '' ? '' : `, référence ${reference.trim()}`}, pour la quinzaine{' '}
             {periodLine(statement.window.period)}.
           </p>
@@ -481,30 +489,9 @@ function PayForm({
               </p>
             </div>
           </div>
-          <div className="nv-field tm-field">
-            <span className="nv-field__label" id={`${id}-method`}>
-              Moyen
-            </span>
-            <div className="tm-choices" role="radiogroup" aria-labelledby={`${id}-method`}>
-              {PAYMENT_METHODS.map((one) => (
-                <button
-                  key={one}
-                  type="button"
-                  role="radio"
-                  className="nv-chip"
-                  aria-checked={method === one}
-                  onClick={() => {
-                    setMethod(one);
-                  }}
-                >
-                  {PAYMENT_METHOD_LABELS[one]}
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="nv-field tm-field" data-invalid={touched && !referenceValid ? 'true' : undefined}>
             <label className="nv-field__label" htmlFor={`${id}-reference`}>
-              Référence du transfert, facultative
+              Référence WorldRemit, facultative
             </label>
             <input
               id={`${id}-reference`}
@@ -512,7 +499,6 @@ function PayForm({
               autoComplete="off"
               maxLength={PAYMENT_REFERENCE_MAX}
               value={reference}
-              placeholder="VIR-2611-0412"
               aria-invalid={touched && !referenceValid}
               onChange={(event) => {
                 setReference(event.target.value);
@@ -521,7 +507,7 @@ function PayForm({
             <p className={touched && !referenceValid ? 'tm-hint tm-hint--error' : 'tm-hint'}>
               {touched && !referenceValid
                 ? 'Ceci contient un IBAN : garde seulement la référence du transfert.'
-                : 'Celle que montre la banque ou le service. Jamais un IBAN ni un numéro de compte.'}
+                : 'Celle que WorldRemit donne au transfert. Jamais un IBAN, un numéro de compte ni de téléphone.'}
             </p>
           </div>
           {refusal === null ? null : (

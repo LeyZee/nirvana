@@ -229,8 +229,9 @@ export function EntryForm({
       reason: trimmed,
       corrects: corrects?.id ?? null,
     });
-    onBusy(false);
+    // Read again before the form is free: a second send would go on what is already written.
     await refresh();
+    onBusy(false);
     if (outcome.kind === 'ok') {
       onDone({
         period: outcome.value,

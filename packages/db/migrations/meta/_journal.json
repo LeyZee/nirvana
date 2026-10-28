@@ -232,6 +232,13 @@
       "when": 1793214544292,
       "tag": "0032_telegram_exchange_rate_overdue",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793217338151,
+      "tag": "0033_worldremit_only",
+      "breakpoints": true
     }
   ]
 }

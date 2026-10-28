@@ -166,8 +166,8 @@ export function GoalDialog({
       targetMinor: targetSent,
       tiers: withdraw ? [] : goalTiersInOrder(typed),
     });
-    setBusy(false);
     await refresh();
+    setBusy(false);
     if (outcome.kind === 'ok') {
       onClose();
       return;
@@ -419,8 +419,8 @@ export function TiersDialog({
     setBusy(true);
     setRefusal(null);
     const outcome = await addBonusTiers({ id: setId, fromPeriod: from, tiers: bonusTiersInOrder(typed) });
-    setBusy(false);
     await refresh();
+    setBusy(false);
     if (outcome.kind === 'ok') {
       onClose();
       return;

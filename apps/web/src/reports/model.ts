@@ -48,7 +48,8 @@ function money(minor: number, currency: Currency, signDisplay: 'auto' | 'exceptZ
     format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency, signDisplay });
     MONEY.set(key, format);
   }
-  return format.format(minor / 100).replace('-', '−');
+  // A sum that cancels out can be -0 (« −5 + 5 » in a reduce): written « 0,00 € », never « −0,00 € ».
+  return format.format(minor === 0 ? 0 : minor / 100).replace('-', '−');
 }
 
 /** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */

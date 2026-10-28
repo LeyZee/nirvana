@@ -256,7 +256,7 @@ commission_statements      id, member_id, period → pay_periods, status (draft|
                            collective_bonus, bonuses, penalties_requested, penalties, carry_overs_in, adjustments, total,
                            carry_over_out, payable (≥ 0, = total − report), team_net_minor bigint, collective, rules
                            (jsonb, règles et taux copiés), counted (jsonb, entrées comptées), computed_at, validated_at,
-                           validated_by, paid_at, paid_by, paid_on, payment_method (bank_transfer|wise|paypal|other),
+                           validated_by, paid_at, paid_by, paid_on, payment_method (worldremit, 0033),
                            payment_reference (référence du transfert, jamais un IBAN), sent_minor (= payable ; les quatre
                            remplis si et seulement si payé, migration 0031), created_at (un par membre et quinzaine ;
                            jamais supprimé)

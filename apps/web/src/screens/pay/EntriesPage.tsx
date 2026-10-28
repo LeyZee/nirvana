@@ -1,5 +1,5 @@
 import type { Me, PayPeriod, PayrollPeriod, TeamMember } from '@nirvana/contracts';
-import { useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { EntryForm, type EntryAdded } from './EntryForm';
 import { PayNav } from './PayNav';
@@ -80,6 +80,8 @@ export function EntriesPage({
   const cancel = async (row: EntryRow): Promise<void> => {
     setCancelling(row.id);
     const outcome = row.kind === 'bonus' ? await cancelBonus(row.id) : await cancelPenalty(row.id);
+    // The row stays busy until the list is read again: « Annuler » never comes back on what is already cancelled.
+    await refresh();
     setCancelling(null);
     setArming(null);
     setRefusals((was) => {
@@ -88,7 +90,6 @@ export function EntriesPage({
       else next.set(row.id, outcome);
       return next;
     });
-    await refresh();
   };
 
   const head = (
@@ -294,6 +295,15 @@ function EntryItem({
 }): JSX.Element {
   const bonus = row.kind === 'bonus';
   const what = `${bonus ? 'la prime' : 'le malus'} de ${row.amount}`;
+  const keep = useRef<HTMLButtonElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const kept = useRef(false);
+  // Armed, the focus goes to « Garder », the answer that changes nothing; kept, it comes back to « Annuler ».
+  useEffect(() => {
+    if (armed) keep.current?.focus();
+    else if (kept.current) trigger.current?.focus();
+    kept.current = false;
+  }, [armed]);
   const notes = [
     row.span === null ? null : spanText(row.span),
     corrects,
@@ -321,6 +331,7 @@ function EntryItem({
         <span className="py-entry__amount nv-num">{row.amount}</span>
         {row.cancellable && !own && !isFrozen && !armed ? (
           <button
+            ref={trigger}
             type="button"
             className="nv-btn nv-btn--plain nv-btn--sm"
             aria-label={`Annuler ${what} de ${member.name}`}
@@ -342,10 +353,12 @@ function EntryItem({
           </p>
           <div className="nv-confirm__actions">
             <button
+              ref={keep}
               type="button"
               className="nv-btn nv-btn--plain nv-btn--sm"
               disabled={busy}
               onClick={() => {
+                kept.current = true;
                 onArm(false);
               }}
             >

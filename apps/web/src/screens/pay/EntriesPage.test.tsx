@@ -8,7 +8,7 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EntriesPage } from './EntriesPage';
@@ -51,6 +51,8 @@ let periods: Record<string, PayrollPeriod>;
 let entries: Record<string, PayrollEntries | 'down'>;
 let answer: (path: string) => { status: number; body: unknown };
 const writes: { path: string; body: unknown }[] = [];
+/** When set, the entries are answered only once it resolves: a read the screen waits on. */
+let gate: Promise<void> | null = null;
 
 const CLOSED = {
   period: OCT2,
@@ -76,9 +78,12 @@ function serve(): void {
       if (period !== undefined) return json(periods[period] ?? periodOf(period, [], { window: null }));
       switch (url.pathname) {
         case '/v1/payroll/entries': {
-          const asked = url.searchParams.get('period') ?? '';
-          const found = entries[asked] ?? entriesOf(asked);
-          return found === 'down' ? json(refusal('internal'), 500) : json(found);
+          const reply = () => {
+            const asked = url.searchParams.get('period') ?? '';
+            const found = entries[asked] ?? entriesOf(asked);
+            return found === 'down' ? json(refusal('internal'), 500) : json(found);
+          };
+          return gate === null ? reply() : gate.then(reply);
         }
         case '/v1/payroll/periods':
           return json({
@@ -146,6 +151,7 @@ const AN_ID: unknown = expect.any(String);
 const THEO_BONUS = bonusOf(1, THEO, NOV1, { reason: 'A formé Lou aux relances, deux soirs.' });
 
 beforeEach(() => {
+  gate = null;
   vi.stubGlobal('matchMedia', () => ({
     matches: true,
     addEventListener: () => undefined,
@@ -238,8 +244,11 @@ describe('Paie › Primes et malus', () => {
     expect(text(confirm)).toContain(
       'Annuler la prime de +30,00 € de Théo ? Son relevé de la quinzaine est recalculé ; la saisie reste, barrée.',
     );
+    // The focus goes to the answer that changes nothing, then back to « Annuler » once kept.
+    expect(document.activeElement).toBe(within(confirm).getByRole('button', { name: 'Garder' }));
     fireEvent.click(within(confirm).getByRole('button', { name: 'Garder' }));
     expect(within(theo).queryByRole('alertdialog')).toBeNull();
+    expect(document.activeElement).toBe(within(theo).getByRole('button', { name: /^Annuler la prime/u }));
     expect(writes).toEqual([]);
 
     fireEvent.click(within(theo).getByRole('button', { name: /^Annuler la prime/u }));
@@ -248,7 +257,22 @@ describe('Paie › Primes et malus', () => {
         { ...THEO_BONUS, cancellation: { cancelledAt: '2026-11-12T13:00:00.000Z', cancelledBy: OWNER_USER } },
       ],
     });
+    // Cancelled, but the list is not read again yet: the row stays busy, « Annuler » never comes back on it.
+    let release = (): void => undefined;
+    gate = new Promise((resolve) => {
+      release = resolve;
+    });
     fireEvent.click(within(theo).getByRole('button', { name: 'Annuler la prime' }));
+    expect(await within(theo).findByRole('button', { name: 'Annulation…' })).toBeTruthy();
+    await waitFor(() => {
+      expect(writes).toHaveLength(1);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(within(theo).getByRole('button', { name: 'Annulation…' }).hasAttribute('disabled')).toBe(true);
+    gate = null;
+    release();
     await waitFor(() => {
       expect(entry('Théo', 'Prime').dataset['cancelled']).toBe('true');
     });

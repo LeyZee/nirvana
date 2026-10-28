@@ -95,8 +95,8 @@ function MinimumDialog({ minimum, onClose }: { minimum: number; onClose: () => v
     setBusy(true);
     setRefusal(null);
     const outcome = await setPayrollSettings({ minimumPayoutMinor: minor });
-    setBusy(false);
     await refresh();
+    setBusy(false);
     if (outcome.kind === 'ok') {
       onClose();
       return;

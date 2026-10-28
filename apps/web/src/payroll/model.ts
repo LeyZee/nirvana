@@ -42,14 +42,6 @@ import { clockAt, dayMonth, dayOf, daysFrom, longDay } from '@/scheduling/time';
 const NBSP = '\u00a0';
 const DAY_MS = 86_400_000;
 
-/** How a statement was paid, in the screens' words (a closed list, `PAYMENT_METHODS`). */
-export const PAYMENT_METHOD_LABELS: Readonly<Record<PaymentMethod, string>> = {
-  bank_transfer: 'Virement',
-  wise: 'Wise',
-  paypal: 'PayPal',
-  other: 'Autre',
-};
-
 /** A rate in basis points with its sign always said, attached: « +12 % », « −10 % ». */
 export const signedPercentText = (bps: number): string =>
   `${bps > 0 ? '+' : bps < 0 ? '−' : ''}${percentText(Math.abs(bps))}`;
@@ -361,7 +353,8 @@ export function totalsOf(statement: CommissionStatement, you: boolean): TotalRow
 /** What a refusal may need: a member's name by their id, and the statement the gesture was on, when there is one. */
 export interface RefusalNames {
   readonly memberName: (memberId: string) => string | null;
-  readonly statement?: Pick<CommissionStatement, 'memberId' | 'window'>;
+  readonly statement?: Pick<CommissionStatement, 'memberId' | 'window'> &
+    Partial<Pick<CommissionStatement, 'status'>>;
 }
 
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
@@ -378,7 +371,10 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
     case 'commission_statement_changed_conflict':
       return 'Ce relevé a changé depuis que tu l’as ouvert. Relis la nouvelle version avant de valider.';
     case 'commission_statement_status_conflict':
-      return 'Ce relevé n’est pas encore validé.';
+      // Paying a statement shown validated: only a payment moves it on (the screen reads it again, silent once paid).
+      return names.statement?.status === 'validated'
+        ? 'Ce relevé n’est plus à payer : il a déjà été marqué payé.'
+        : 'Ce relevé n’est pas encore validé.';
     case 'commission_statement_open_conflict':
       return names.statement === undefined
         ? 'La quinzaine n’est pas finie : elle se valide le lendemain de son dernier jour.'
@@ -455,7 +451,10 @@ export function statementsCsv(
   accountName: (platformAccountId: string) => string,
 ): string {
   const euros = (minor: number): string => (minor / 100).toFixed(2).replace('.', ',');
-  const cell = (text: string): string => (/[";\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
+  // A name typed in Nirvana is never read as a formula by the spreadsheet that opens the file: a leading `=`, `+`, `-`,
+  // `@`, tab or carriage return gets a `'` (OWASP, CSV injection). Amounts are written here, their minus sign kept.
+  const words = (text: string): string => (/^[=+\-@\t\r]/u.test(text) ? `'${text}` : text);
+  const cell = (text: string): string => (/[";\r\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
   const rows: string[][] = [
     [
       'Membre',
@@ -478,11 +477,11 @@ export function statementsCsv(
   ];
   const STATUS = { draft: 'Brouillon', validated: 'Validé', paid: 'Payé' } as const;
   for (const statement of period.statements) {
-    const name = memberName(statement.memberId);
+    const name = words(memberName(statement.memberId));
     for (const line of statement.lines)
       rows.push([
         name,
-        accountName(line.platformAccountId),
+        words(accountName(line.platformAccountId)),
         line.currency,
         euros(line.grossMinor),
         euros(line.grossEurMinor),
@@ -627,7 +626,13 @@ export interface Share {
   readonly bps: number;
 }
 
-/** A period's net split by `keyOf` (a creator, a platform), the largest first; nothing when there is no net. */
+/** The parts a split shows at most, as many as it has colours (docs/design, « Couleur »): past them, « Autres ». */
+export const SPLIT_PARTS = 4;
+
+/**
+ * A period's net split by `keyOf` (a creator, a platform), the largest first, at most `SPLIT_PARTS` parts, the
+ * smallest gathered in « Autres »; nothing when there is no net.
+ */
 export function salesSplit(
   statements: readonly CommissionStatement[],
   keyOf: (line: CommissionStatementLine) => string,
@@ -637,10 +642,17 @@ export function salesSplit(
     sums.set(keyOf(line), (sums.get(keyOf(line)) ?? 0) + line.netMinor);
   const total = [...sums.values()].reduce((sum, minor) => sum + Math.max(minor, 0), 0);
   if (total <= 0) return [];
-  return [...sums]
+  const shares = [...sums]
     .filter(([, minor]) => minor > 0)
     .map(([name, minor]) => ({ name, minor, bps: Math.round((minor * 10_000) / total) }))
     .toSorted((a, b) => b.minor - a.minor || a.name.localeCompare(b.name, 'fr'));
+  if (shares.length <= SPLIT_PARTS) return shares;
+  const rest = shares.slice(SPLIT_PARTS - 1);
+  const minor = rest.reduce((sum, share) => sum + share.minor, 0);
+  return [
+    ...shares.slice(0, SPLIT_PARTS - 1),
+    { name: 'Autres', minor, bps: Math.round((minor * 10_000) / total) },
+  ];
 }
 
 /** How far the team's net is towards its target, in basis points, floored as the engine floors it. */
@@ -945,12 +957,12 @@ export interface MyStatementWords {
   readonly notes: readonly string[];
 }
 
-/** How a statement was paid, as a sentence goes on: « Payé le 17 novembre par PayPal », nothing for « Autre ». */
+/**
+ * How a statement was paid, as a sentence goes on: « Payé le 17 novembre par WorldRemit » (a closed list,
+ * `PAYMENT_METHODS`: the chatters are paid by WorldRemit only).
+ */
 export const PAID_BY: Readonly<Record<PaymentMethod, string>> = {
-  bank_transfer: ' par virement',
-  wise: ' par Wise',
-  paypal: ' par PayPal',
-  other: '',
+  worldremit: ' par WorldRemit',
 };
 
 /**

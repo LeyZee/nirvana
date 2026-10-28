@@ -49,7 +49,7 @@ const PAID_OCT1 = statementOf(THEO, OCT1, {
   validatedBy: OWNER_USER,
   paidAt: '2026-10-16T15:00:00.000Z',
   paidBy: OWNER_USER,
-  payment: { paidOn: '2026-10-16', method: 'bank_transfer', reference: 'VIR-2610-0388', sentMinor: 2_125 },
+  payment: { paidOn: '2026-10-16', method: 'worldremit', reference: 'WR-2610-0388', sentMinor: 2_125 },
 });
 const CLOSED = (period: string, closedAt: string) => ({
   period,
@@ -231,7 +231,7 @@ describe('CommissionsPage', () => {
     await waitFor(() => {
       expect(text(dialog)).toContain('Ce que tu as touché');
     });
-    expect(text(dialog)).toContain('Payé le vendredi 16 octobre par virement, référence VIR-2610-0388.');
+    expect(text(dialog)).toContain('Payé le vendredi 16 octobre par WorldRemit, référence WR-2610-0388.');
     expect(text(dialog)).toContain('Ta commission');
     expect(text(dialog)).toContain('Validé le vendredi 16 octobre à 10 h 41.');
     expect(text(dialog)).not.toMatch(/fiche de paie|salaire/iu);
@@ -250,7 +250,7 @@ describe('CommissionsPage', () => {
         ...one,
         status: 'paid',
         validatedAt: '2026-11-02T09:41:00.000Z',
-        payment: { paidOn: '2026-11-02', method: 'wise', reference: null, sentMinor: one.payableMinor },
+        payment: { paidOn: '2026-11-02', method: 'worldremit', reference: null, sentMinor: one.payableMinor },
       })),
       { closing: CLOSED(OCT2, '2026-11-02T09:41:00.000Z') },
     );

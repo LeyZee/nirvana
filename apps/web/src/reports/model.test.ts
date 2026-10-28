@@ -104,6 +104,9 @@ describe('an amount typed in a report', () => {
     expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('−30,00 €');
     expect(plain(signedAmountText(500, 'EUR'))).toBe('+5,00 €');
     expect(plain(signedAmountText(-123_456, 'USD'))).toBe('−1 234,56 $US');
+    // A zero is a zero, whatever its sign: never « −0,00 € ».
+    expect(plain(amountText(-0, 'EUR'))).toBe('0,00 €');
+    expect(plain(signedAmountText(-0, 'EUR'))).toBe('0,00 €');
   });
 });
 

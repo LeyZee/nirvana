@@ -255,3 +255,18 @@ export function useRefreshPayPeriod(): (period: PayPeriod) => Promise<void> {
   const client = useQueryClient();
   return useCallback((period) => client.invalidateQueries({ queryKey: periodKey(period) }), [client]);
 }
+
+/**
+ * A period as the server has it now, to judge a refusal by: from the cache when `useRefreshPayroll` just read it again,
+ * read otherwise (an invalidated or missing period always is); `null` when the server does not answer.
+ */
+export function useLatestPayPeriod(): (period: PayPeriod) => Promise<PayrollPeriod | null> {
+  const client = useQueryClient();
+  return useCallback(
+    (period) =>
+      client
+        .query({ queryKey: periodKey(period), queryFn: () => readPeriod(period), staleTime: Infinity })
+        .catch(() => null),
+    [client],
+  );
+}

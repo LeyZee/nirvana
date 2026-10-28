@@ -13,18 +13,17 @@ import { Dialog } from '@/screens/team/Dialog';
 
 /**
  * The first validation of a period closes it for the whole team (ADR 0032): said before, with what it freezes — the
- * reports counted, the dollar's rate, the team's net and goal — and where a report validated after it goes.
+ * reports counted, the dollar's rate, the team's net and goal — and where a report validated after it goes. « Clore et
+ * valider » hands the batch to the app's hold, like any validation: five seconds to take it back, then what passed.
  */
 export function CloseDialog({
   period,
   batch,
-  busy,
   onConfirm,
   onClose,
 }: {
   period: PayrollPeriod;
   batch: readonly CommissionStatement[];
-  busy: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }): JSX.Element {
@@ -51,7 +50,6 @@ export function CloseDialog({
           ? 'Tu valides un relevé : il clôt la quinzaine pour toute l’équipe.'
           : `Tu valides ${String(count)} relevés. Le premier clôt la quinzaine pour toute l’équipe.`
       }
-      busy={busy}
       onClose={onClose}
     >
       <div className="tm-dialog__body">
@@ -101,22 +99,11 @@ export function CloseDialog({
           </p>
         </div>
         <div className="py-dialog__foot">
-          <button type="button" className="nv-btn nv-btn--plain" disabled={busy} onClick={onClose}>
+          <button type="button" className="nv-btn nv-btn--plain" onClick={onClose}>
             Annuler
           </button>
-          <button
-            type="button"
-            className="nv-btn nv-btn--neon"
-            data-autofocus
-            disabled={busy}
-            aria-busy={busy}
-            onClick={onConfirm}
-          >
-            {busy
-              ? 'Validation…'
-              : count === 1
-                ? 'Clore et valider le relevé'
-                : `Clore et valider ${String(count)} relevés`}
+          <button type="button" className="nv-btn nv-btn--neon" data-autofocus onClick={onConfirm}>
+            {count === 1 ? 'Clore et valider le relevé' : `Clore et valider ${String(count)} relevés`}
           </button>
         </div>
       </div>

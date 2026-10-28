@@ -14,6 +14,7 @@ import {
   ExchangeRateSchema,
   mayValidateStatement,
   PAY_AMOUNT_MAX_MINOR,
+  PAYMENT_METHODS,
   PAYROLL_ERROR_CODES,
   PayCommissionStatementBodySchema,
   PenaltySchema,
@@ -214,19 +215,19 @@ describe('payments', () => {
     PayCommissionStatementBodySchema.safeParse({
       revision: 1,
       paidOn: '2026-11-02',
-      method: 'bank_transfer',
+      method: 'worldremit',
       reference,
       sentMinor: 13_333,
     });
 
   it('refuse a reference that holds an IBAN, alone or in a sentence, with or without spaces', () => {
     for (const iban of IBANS)
-      for (const reference of [iban, spaced(iban), iban.toLowerCase(), `Virement ${spaced(iban)} reçu`]) {
+      for (const reference of [iban, spaced(iban), iban.toLowerCase(), `Transfert ${spaced(iban)} reçu`]) {
         expect(containsIban(reference), reference).toBe(true);
         const refused = pay(reference);
         expect(refused.success, reference).toBe(false);
         expect(refused.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
-          [['reference'], 'Une référence de virement, jamais un IBAN'],
+          [['reference'], 'Une référence de transfert, jamais un IBAN'],
         ]);
       }
   });
@@ -244,6 +245,24 @@ describe('payments', () => {
     ]) {
       expect(containsIban(reference), reference).toBe(false);
       expect(pay(reference).success, reference).toBe(true);
+    }
+  });
+
+  it('take WorldRemit only: the chatters are paid by it, an old or unknown method is refused', () => {
+    const by = (method: string) =>
+      PayCommissionStatementBodySchema.safeParse({
+        revision: 1,
+        paidOn: '2026-11-02',
+        method,
+        sentMinor: 13_333,
+      });
+    expect(PAYMENT_METHODS).toEqual(['worldremit']);
+    expect(by('worldremit').success).toBe(true);
+    for (const method of ['bank_transfer', 'wise', 'paypal', 'other', 'WorldRemit', '']) {
+      expect(
+        by(method).error?.issues.map((issue) => issue.path),
+        method,
+      ).toEqual([['method']]);
     }
   });
 });

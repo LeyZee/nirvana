@@ -106,7 +106,7 @@ beforeEach(() => {
         canValidate: false,
         paidAt: '2026-11-02T10:00:00.000Z',
         paidBy: OWNER_USER,
-        payment: { paidOn: '2026-11-02', method: 'bank_transfer', reference: null, sentMinor: 2_125 },
+        payment: { paidOn: '2026-11-02', method: 'worldremit', reference: null, sentMinor: 2_125 },
       }),
       statementOf(LOU, OCT2, {
         status: 'validated',

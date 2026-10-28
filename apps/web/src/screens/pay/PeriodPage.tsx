@@ -24,7 +24,13 @@ import {
 } from './data';
 import { Chip, Delta, Empty, Gauge, Loading, LockIcon, PeriodArrows, Swatch, Unreachable } from './parts';
 
-import { usePayPeriod, useRefreshPayroll, validateStatement, type PayRefusal } from '@/payroll/api';
+import {
+  useLatestPayPeriod,
+  usePayPeriod,
+  useRefreshPayroll,
+  validateStatement,
+  type PayRefusal,
+} from '@/payroll/api';
 import {
   carryLine,
   changeBps,
@@ -90,7 +96,11 @@ export function PeriodPage({
   onPeriod: (period: PayPeriod | null) => void;
 }): JSX.Element {
   const toOpen = usePeriodToOpen(user.role === 'owner');
-  const period = chosen ?? toOpen;
+  // The period opened stays the one shown: validating or paying its last statement changes which one would open, and
+  // the screen never jumps to it under an open dialog or before the result is said.
+  const [first, setFirst] = useState<PayPeriod | null>(null);
+  if (first === null && toOpen !== null) setFirst(toOpen);
+  const period = chosen ?? first ?? toOpen;
   return <PeriodView key={period ?? 'none'} user={user} period={period} onPeriod={onPeriod} />;
 }
 
@@ -124,14 +134,14 @@ function PeriodView({
   const previous =
     before.data?.period === (period === null ? null : previousPeriod(period)) ? before.data : undefined;
   const block = usePeriodBlock(data);
-  const hold = useAppHold();
+  const appHold = useAppHold();
   const refresh = useRefreshPayroll();
+  const latest = useLatestPayPeriod();
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set());
   const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
   const [refusals, setRefusals] = useState<ReadonlyMap<string, PayRefusal>>(new Map());
   const [stopped, setStopped] = useState<Stopped | null>(null);
   const [closing, setClosing] = useState<readonly CommissionStatement[] | null>(null);
-  const [closingBusy, setClosingBusy] = useState(false);
   const [opened, setOpened] = useState<{ readonly id: string; readonly paying: boolean } | null>(null);
 
   const rows =
@@ -177,7 +187,12 @@ function PeriodView({
     setRefusals(
       (was) => new Map([...was, ...refused.map(([one, refusal]): [string, PayRefusal] => [one.id, refusal])]),
     );
-    if (halted !== null && data !== undefined) setStopped({ refusal: halted, seen: stateOf(data) });
+    if (halted !== null && data !== undefined) {
+      // The stop holds until the period changes from what it is now, after the validations that passed: never from
+      // what it was before they were sent, which would hide it at once.
+      const now = await latest(data.period);
+      setStopped({ refusal: halted, seen: stateOf(now ?? data) });
+    }
     setSending(new Set());
     return { done, refused, halted };
   };
@@ -188,6 +203,11 @@ function PeriodView({
       setClosing(batch);
       return;
     }
+    hold(batch);
+  };
+
+  /** Validates `batch` after the app's hold, then says what passed and what did not, the first closing included. */
+  const hold = (batch: readonly CommissionStatement[]): void => {
     const count = batch.length;
     const sum = amountText(
       batch.reduce((total, one) => total + one.payableMinor, 0),
@@ -195,7 +215,7 @@ function PeriodView({
     );
     const [only] = batch;
     setSending(new Set(batch.map((one) => one.id)));
-    hold.hold(
+    appHold.hold(
       {
         title:
           count === 1 && only !== undefined
@@ -461,14 +481,9 @@ function PeriodView({
         <CloseDialog
           period={data}
           batch={closing}
-          busy={closingBusy}
           onConfirm={() => {
-            setClosingBusy(true);
-            setSending(new Set(closing.map((one) => one.id)));
-            void run(closing).then(() => {
-              setClosingBusy(false);
-              setClosing(null);
-            });
+            setClosing(null);
+            hold(closing);
           }}
           onClose={() => {
             setClosing(null);
@@ -741,18 +756,37 @@ function Figure({
   );
 }
 
+/**
+ * The colours of a split's parts, in order (docs/design, « Couleur »): from `data-1`, then `data-2`, then the ink at
+ * 60 % and 25 %; `salesSplit` gives as many parts as there are colours.
+ */
+const SPLIT_COLORS = [
+  'var(--nv-data-1)',
+  'var(--nv-data-2)',
+  'color-mix(in oklab, var(--nv-ink) 60%, transparent)',
+  'color-mix(in oklab, var(--nv-ink) 25%, transparent)',
+] as const;
+
+/** A split of the sales: the design system's bar (`nv-split`), its parts and its legend in the same colours. */
 function Split({ label, shares }: { label: string; shares: readonly Share[] }): JSX.Element {
+  const colorOf = (index: number): string => SPLIT_COLORS[index] ?? SPLIT_COLORS[3];
   return (
     <div>
       <p className="py-fig__label">{label}</p>
-      <div className="py-split" aria-hidden="true">
-        {shares.map((share) => (
-          <i key={share.name} style={{ '--py-share': share.bps / 10_000 }} title={share.name} />
+      <span className="nv-split py-salesplit" aria-hidden="true">
+        {shares.map((share, index) => (
+          <i
+            key={share.name}
+            className="nv-split__part"
+            style={{ '--nv-w': `${String(share.bps / 100)}%`, '--_c': colorOf(index) }}
+            title={share.name}
+          />
         ))}
-      </div>
-      <ul className="py-keys">
-        {shares.map((share) => (
-          <li key={share.name} title={amountText(share.minor, 'EUR')}>
+      </span>
+      <ul className="nv-legend py-legend">
+        {shares.map((share, index) => (
+          <li key={share.name} className="nv-legend__item" title={amountText(share.minor, 'EUR')}>
+            <i className="nv-legend__key" style={{ '--_c': colorOf(index) }} aria-hidden="true" />
             {share.name} {percentText(roundedPercent(share))}
           </li>
         ))}
@@ -1061,6 +1095,9 @@ function StopNotice({
   );
 }
 
+/** How long the export's file stays readable after its download starts. */
+const CSV_KEPT_MS = 60_000;
+
 /** The period's statements as a spreadsheet, made in the browser from what is read: no route, no right of its own. */
 function downloadCsv(data: PayrollPeriod, names: PayNames): void {
   const csv = statementsCsv(
@@ -1077,5 +1114,8 @@ function downloadCsv(data: PayrollPeriod, names: PayNames): void {
   link.href = url;
   link.download = `releves-${data.period}.csv`;
   link.click();
-  URL.revokeObjectURL(url);
+  // Freed once the browser has read it: revoked at once, Safari and Firefox may save nothing.
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, CSV_KEPT_MS);
 }

@@ -244,7 +244,7 @@ describe('a period in the list', () => {
       statements: [
         statement({
           status: 'paid',
-          payment: { paidOn: '2026-11-02', method: 'wise', reference: null, sentMinor: 2_125 },
+          payment: { paidOn: '2026-11-02', method: 'worldremit', reference: null, sentMinor: 2_125 },
         }),
         statement({ carryOverOutMinor: 900, payableMinor: 0 }),
       ],
@@ -373,6 +373,11 @@ describe('words', () => {
     expect(
       payRefusalText({ kind: 'refused', code: 'commission_statement_open_conflict', details: {} }, theirs),
     ).toBe('La quinzaine n’est pas finie : elle se valide à partir du lundi 16 novembre.');
+    const status = { kind: 'refused', code: 'commission_statement_status_conflict', details: {} } as const;
+    expect(payRefusalText(status, names)).toBe('Ce relevé n’est pas encore validé.');
+    expect(
+      payRefusalText(status, { ...names, statement: { ...theirs.statement, status: 'validated' } }),
+    ).toBe('Ce relevé n’est plus à payer : il a déjà été marqué payé.');
     expect(
       plain(
         payRefusalText(
@@ -436,6 +441,42 @@ describe('the export of a period', () => {
     expect(total).toBe(
       'Théo;Total du relevé;EUR;;;;85,00;21,25;0,00;0,00;0,00;0,00;21,25;0,00;21,25;Brouillon',
     );
+  });
+
+  it('never lets a name start a formula, and keeps the minus sign of an amount', () => {
+    const period: PayrollPeriod = {
+      period: PERIOD,
+      window: WINDOW,
+      ended: true,
+      beforeFirstClosing: false,
+      closing: null,
+      statements: [statement({ penaltiesMinor: 500 })],
+      bonusTiers: null,
+      collectiveGoal: null,
+      settings: { minimumPayoutMinor: 1_500 },
+    };
+    const lines = (name: string) =>
+      statementsCsv(
+        period,
+        () => name,
+        () => name,
+      ).split('\r\n');
+    for (const [typed, written] of [
+      ['=HYPERLINK("https://exemple.test")', '"\'=HYPERLINK(""https://exemple.test"")"'],
+      ['+33 6 00', "'+33 6 00"],
+      ['-Théo', "'-Théo"],
+      ['@nora', "'@nora"],
+      ['\tTab', "'\tTab"],
+      ['Théo = Lou', 'Théo = Lou'],
+    ] as const) {
+      const [, account, total] = lines(typed);
+      expect(account?.startsWith(`${written};${written};EUR;`), typed).toBe(true);
+      expect(total?.split(';').slice(0, 2), typed).toEqual([written, 'Total du relevé']);
+      // The penalties' column, an amount: its minus sign is the amount's, never a formula to neutralize.
+      expect(total?.split(';')[9], typed).toBe('-5,00');
+    }
+    // A carriage return is neutralized, and quoted with the name, so the line stays one.
+    expect(lines('\rRetour')[1]?.startsWith(`"'\rRetour";"'\rRetour";EUR;`)).toBe(true);
   });
 });
 
@@ -585,6 +626,28 @@ describe('the figures of a period', () => {
       { name: 'Nora', minor: 8_500, bps: 2_500 },
     ]);
     expect(salesSplit([], () => 'Nora')).toEqual([]);
+  });
+
+  it('keeps four parts at most, as many as a split has colours, the smallest gathered in « Autres »', () => {
+    const accounts = ['Nora', 'Léa', 'Iris', 'Mia', 'Zoé'].map((name, index) => ({
+      name,
+      id: newId(PlatformAccountIdSchema),
+      netMinor: (5 - index) * 1_000,
+    }));
+    const byId = new Map(accounts.map((account) => [account.id, account.name]));
+    const lines = accounts.map((account) =>
+      line({ platformAccountId: account.id, netMinor: account.netMinor }),
+    );
+    const split = salesSplit([statement({ lines })], (one) => byId.get(one.platformAccountId) ?? '');
+    expect(split).toEqual([
+      { name: 'Nora', minor: 5_000, bps: 3_333 },
+      { name: 'Léa', minor: 4_000, bps: 2_667 },
+      { name: 'Iris', minor: 3_000, bps: 2_000 },
+      { name: 'Autres', minor: 3_000, bps: 2_000 },
+    ]);
+    expect(
+      salesSplit([statement({ lines: lines.slice(0, 4) })], (one) => byId.get(one.platformAccountId) ?? ''),
+    ).toHaveLength(4);
   });
 
   it('places the goal: reached share floored, the tier reached, a gauge past the last tier', () => {
@@ -849,22 +912,18 @@ describe('Commissions, as the member reads them', () => {
     });
     const payment = {
       paidOn: '2026-11-17',
-      method: 'bank_transfer',
-      reference: 'VIR-2611-0412',
+      method: 'worldremit',
+      reference: 'WR-2611-0412',
       sentMinor: 2_125,
-    };
-    const paid = statement({
-      ...validated,
-      status: 'paid',
-      payment: { ...payment, method: 'bank_transfer' },
-    });
+    } as const;
+    const paid = statement({ ...validated, status: 'paid', payment });
     expect(words(paid, true)).toEqual({
       since: 'le mar. 17 nov.',
       label: 'Ce que tu as touché',
-      notes: ['Payé le mardi 17 novembre par virement, référence VIR-2611-0412.'],
+      notes: ['Payé le mardi 17 novembre par WorldRemit, référence WR-2611-0412.'],
     });
-    const other = statement({ ...paid, payment: { ...payment, method: 'other', reference: null } });
-    expect(words(other, true).notes).toEqual(['Payé le mardi 17 novembre.']);
+    const bare = statement({ ...paid, payment: { ...payment, reference: null } });
+    expect(words(bare, true).notes).toEqual(['Payé le mardi 17 novembre par WorldRemit.']);
   });
 
   it('finds the tier reached, its threshold included, and the next one', () => {

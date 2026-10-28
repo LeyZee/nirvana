@@ -159,8 +159,8 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
   /** How the owner paid, as the application writes it (ADR 0023 § Factures). */
   const payment = {
     paidOn: '2025-10-02',
-    paymentMethod: 'bank_transfer',
-    paymentReference: 'VIR-0412',
+    paymentMethod: 'worldremit',
+    paymentReference: 'WR-0412',
     sentMinor: 13_333,
   };
 
@@ -363,9 +363,12 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       // Paid says how: the day, the method of the list and what was sent; the reference when there is one.
       const PAYMENT = /commission_statements_payment_check/u;
       expect(await failure(pay(owner, id, {}))).toMatch(PAYMENT);
-      expect(await failure(pay(owner, id, { ...payment, paymentMethod: 'cash' }))).toMatch(
-        /commission_statements_payment_method_check/u,
-      );
+      // WorldRemit only (0033): the methods of 0031's default list are refused like any other.
+      for (const paymentMethod of ['cash', 'bank_transfer', 'wise', 'paypal', 'other']) {
+        expect(await failure(pay(owner, id, { ...payment, paymentMethod }))).toMatch(
+          /commission_statements_payment_method_check/u,
+        );
+      }
       expect(await failure(pay(owner, id, { ...payment, paymentReference: 'V'.repeat(101) }))).toMatch(
         PAYMENT,
       );
