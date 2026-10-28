@@ -18,4 +18,4 @@ Découvertes :
 - La prévision de l'objectif chez le chatteur prolonge tout le pourcentage atteint au rythme, rapports tardifs des autres compris, puisqu'il ne les lit pas : l'API pourrait donner la part tardive en pourcentage.
 - Le résumé d'une quinzaine (`GET /v1/payroll/periods`) ne porte pas la date de paiement, que « Mes relevés » aimerait dire.
 Candidats à suppression : aucun.
-Vérifié : `pnpm check` ✓ ; tests web ✓ (dont 5 d'écran pour Commissions, 6 du modèle et un pour `SubNav`) ; 70 captures des vrais écrans relues (données inventées, ADR 0010), galerie https://claude.ai/artifact/2GBd9MF6gJQnPJ1jgqZfY6.
+Vérifié : `pnpm check` ✓ ; tests web ✓ (622, dont 5 d'écran pour Commissions, le modèle de la paie et un pour `SubNav`) ; 8 mutations des derniers ajouts (jour minimum, IBAN, quinzaine d'avant la première clôture), chacune fait tomber un test ; 80 captures des vrais écrans relues sur l'API finale (16 scènes, données inventées, ADR 0010), galerie https://claude.ai/artifact/2GBd9MF6gJQnPJ1jgqZfY6.
