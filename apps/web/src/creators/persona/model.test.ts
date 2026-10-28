@@ -1,10 +1,28 @@
-import { PERSONA_OPTIONS, PersonaSchema, type Persona } from '@nirvana/contracts';
+import {
+  KycSlotSchema,
+  PERSONA_OPTIONS,
+  personaCompletion,
+  PersonaSchema,
+  type Persona,
+} from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import demoYaml from '../../../../../personas/demo/v0.1.0.yaml?raw';
+import blocksYaml from '../../../../../personas/demo/v0.2.0.yaml?raw';
 import exampleYaml from '../../../../../personas/messalina/v0.0.0.yaml?raw';
 
 import {
+  appendPick,
+  collectOrAll,
+  draftCompletion,
+  NOTHING_REFUSED,
+  stillRefused,
+  emojiKey,
+  intimateOrNone,
+  lifestyleOrNone,
+  refusedReplyIssues,
+  repliesOrNone,
+  tastesOrNone,
   withoutPlaceholders,
   followUpsSummary,
   issueCountByTab,
@@ -29,9 +47,14 @@ const example = (): Promise<Persona> => parsePersonaYaml(exampleYaml);
 const demo = (): Promise<Persona> => parsePersonaYaml(demoYaml);
 
 describe('Persona screen rules', () => {
-  it('follows the tabs of OnlyChat, plus the limits, and never a negotiation', () => {
+  it('follows the tabs of OnlyChat, with the P5-01 blocks after the details, the limits last, never a negotiation', () => {
     expect(TABS.map((tab) => tab.label)).toEqual([
       'Détails',
+      'Mode de vie',
+      'Goûts',
+      'Intime',
+      'Style d’écriture',
+      'Réponses types',
       'Infos en plus',
       'Comportement',
       'Stratégies',
@@ -174,5 +197,143 @@ describe('Persona screen rules', () => {
     expect(nextVersion(['0.0.0'])).toBe('0.0.1');
     expect(nextVersion(['0.1.2', '0.0.9', '0.1.10'])).toBe('0.1.11');
     expect(nextVersion(['1.0.0', '0.9.9'])).toBe('1.0.1');
+  });
+});
+
+describe('Persona blocks (P5-01)', () => {
+  const blocks = (): Promise<Persona> => parsePersonaYaml(blocksYaml);
+
+  it('reads the completion without the placeholders of the example', async () => {
+    const persona = await example();
+    const raw = personaCompletion(persona);
+    const read = draftCompletion(persona);
+    expect(read.percent).toBeLessThan(raw.percent);
+    expect(read.missing.map((m) => m.label)).toContain('Détails');
+    expect(read.missing.map((m) => m.label)).toContain('Limites');
+  });
+
+  it('counts a persona whose every block is written as complete', async () => {
+    const persona = await blocks();
+    expect(validate(persona)).toEqual([]);
+    expect(draftCompletion(persona)).toEqual({ percent: 100, missing: [] });
+  });
+
+  it('keeps an empty block absent, as a version before the blocks', () => {
+    expect(lifestyleOrNone({ occupation: null, area: '  ', routine: null, goals: null })).toBeUndefined();
+    expect(lifestyleOrNone({ occupation: 'Étudiante', area: null, routine: null, goals: null })).toEqual({
+      occupation: 'Étudiante',
+      area: null,
+      routine: null,
+      goals: null,
+    });
+    expect(tastesOrNone({ likes: [], dislikes: [] })).toBeUndefined();
+    expect(tastesOrNone({ likes: ['Salsa'], dislikes: [] })).toEqual({ likes: ['Salsa'], dislikes: [] });
+    expect(intimateOrNone({ turn_ons: [], fantasies: [], sexting_style: null })).toBeUndefined();
+    expect(intimateOrNone({ turn_ons: [], fantasies: [], sexting_style: 'Lente' })).toBeDefined();
+    expect(repliesOrNone([])).toBeUndefined();
+  });
+
+  it('compares emojis without the variation selector', () => {
+    expect(emojiKey('❤️')).toBe(emojiKey('❤'));
+    expect(emojiKey('🙈')).toBe('🙈');
+  });
+
+  it('names a field for each contradiction between two blocks', async () => {
+    const persona = await blocks();
+    const style = persona.writing_style;
+    if (style === undefined) throw new Error('the demo has a writing style');
+    const draft: Persona = { ...persona, writing_style: { ...style, emojis_forbidden: ['😏'] } };
+    expect(issuesOf(validate(draft), 'writing_style.emojis_forbidden')).toHaveLength(1);
+  });
+
+  it('puts what the server refused on the reply it refused, one line per reply', () => {
+    expect(
+      refusedReplyIssues([
+        { index: 2, code: 'contact_info' },
+        { index: 0, code: 'ai_disclosure' },
+        { index: 2, code: 'meeting_promise' },
+        { index: 2, code: 'contact_info' },
+      ]),
+    ).toEqual([
+      { field: 'sample_replies.0.reply', message: 'L’agent ne l’enverrait pas : un aveu d’IA.' },
+      {
+        field: 'sample_replies.2.reply',
+        message: 'L’agent ne l’enverrait pas : des coordonnées, une promesse de rencontre.',
+      },
+    ]);
+    expect(issueCountByTab(refusedReplyIssues([{ index: 1, code: 'contempt' }])).sample_replies).toBe(1);
+  });
+
+  it('leaves the canvas lines absent only when she collects them all in the canvas order', () => {
+    const all = [...KycSlotSchema.options];
+    expect(collectOrAll(all)).toBeUndefined();
+    expect(collectOrAll(['first_name', 'age'])).toEqual(['first_name', 'age']);
+    // Every line, in her own order: the brain and « À apprendre » follow it, so it is kept.
+    const hers = [...all.slice(1), all[0] ?? 'first_name'];
+    expect(collectOrAll(hers)).toEqual(hers);
+    expect(collectOrAll([])).toEqual([]);
+  });
+
+  it('adds a canvas line last, without sorting her order', async () => {
+    const persona = await blocks();
+    const collect = persona.strategies.kyc.collect;
+    expect(collect).toEqual(['first_name', 'age', 'location', 'job', 'situation', 'hobbies']);
+    expect(appendPick(collect ?? [], 'desires')).toEqual([
+      'first_name',
+      'age',
+      'location',
+      'job',
+      'situation',
+      'hobbies',
+      'desires',
+    ]);
+    expect(appendPick(collect ?? [], 'job')).toEqual([
+      'first_name',
+      'age',
+      'location',
+      'situation',
+      'hobbies',
+    ]);
+  });
+
+  it('asks for one canvas line at least, in French', async () => {
+    const persona = await blocks();
+    const draft: Persona = {
+      ...persona,
+      strategies: { ...persona.strategies, kyc: { ...persona.strategies.kyc, collect: [] } },
+    };
+    expect(issuesOf(validate(draft), 'strategies.kyc.collect')).toEqual([
+      { field: 'strategies.kyc.collect', message: 'Garde au moins une ligne du canevas.' },
+    ]);
+  });
+
+  it('does not count a sample reply still empty', async () => {
+    const persona = await blocks();
+    const one = persona.sample_replies?.slice(0, 1) ?? [];
+    const before = draftCompletion({ ...persona, sample_replies: one });
+    const after = draftCompletion({ ...persona, sample_replies: [...one, { situation: null, reply: '  ' }] });
+    expect(after).toEqual(before);
+    expect(
+      draftCompletion({ ...persona, sample_replies: [{ situation: null, reply: '' }] }).missing,
+    ).toContainEqual({
+      block: 'sample_replies',
+      label: 'Réponses types',
+    });
+  });
+
+  it('keeps a refusal on its reply until the text of that reply changes', async () => {
+    const persona = await blocks();
+    const replies = persona.sample_replies ?? [];
+    const refused = {
+      issues: refusedReplyIssues([{ index: 1, code: 'ai_disclosure' }]),
+      replies: replies.map((r) => r.reply),
+    };
+    expect(stillRefused(refused, persona)).toHaveLength(1);
+    const situation = replies.map((r, i) => (i === 1 ? { ...r, situation: null } : r));
+    expect(stillRefused(refused, { ...persona, sample_replies: situation })).toHaveLength(1);
+    const rewritten = replies.map((r, i) => (i === 1 ? { ...r, reply: 'Autre chose' } : r));
+    expect(stillRefused(refused, { ...persona, sample_replies: rewritten })).toEqual([]);
+    expect(stillRefused(refused, { ...persona, sample_replies: replies.slice(1) })).toEqual([]);
+    expect(stillRefused(NOTHING_REFUSED, persona)).toEqual([]);
   });
 });

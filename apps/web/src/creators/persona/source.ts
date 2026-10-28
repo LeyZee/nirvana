@@ -2,8 +2,10 @@ import {
   ApiErrorSchema,
   PersonaOverviewSchema,
   PersonaSchema,
+  PersonaSampleReplyUnprocessableDetailsSchema,
   PersonaVersionSummarySchema,
   type Persona,
+  type PersonaSampleReplyFault,
   type PersonaVersionSummary,
 } from '@nirvana/contracts';
 import { useCallback, useEffect, useState } from 'react';
@@ -94,6 +96,8 @@ export type SaveResult =
   | { readonly kind: 'saved'; readonly version: PersonaVersionSummary }
   | { readonly kind: 'conflict' }
   | { readonly kind: 'forbidden' }
+  /** A sample reply holds what a hard guard blocks: which ones, and why. */
+  | { readonly kind: 'unprocessable'; readonly faults: readonly PersonaSampleReplyFault[] }
   | { readonly kind: 'failed' };
 
 /** `POST /v1/creators/:id/persona/versions`: stores a new version, never active. */
@@ -114,6 +118,10 @@ export async function saveVersion(
   const error = ApiErrorSchema.safeParse(await response.json().catch(() => null));
   const code = error.success ? error.data.error.code : null;
   if (code === 'persona_version_conflict') return { kind: 'conflict' };
+  if (code === 'persona_sample_reply_unprocessable') {
+    const details = PersonaSampleReplyUnprocessableDetailsSchema.safeParse(error.data?.error.details);
+    if (details.success) return { kind: 'unprocessable', faults: details.data.faults };
+  }
   if (response.status === 403) return { kind: 'forbidden' };
   return { kind: 'failed' };
 }
