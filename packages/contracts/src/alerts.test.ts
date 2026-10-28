@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { AlertTriggerSchema, CustomAlertBodySchema } from './alerts';
+import {
+  ALERT_ERROR_CODES,
+  alertKeywordKey,
+  AlertTriggerSchema,
+  CUSTOM_ALERT_TOPIC,
+  CustomAlertBodySchema,
+  SYSTEM_ALERT_CODES,
+  SYSTEM_ALERT_TOPICS,
+} from './alerts';
 import { EventBodySchema } from './events';
+import { TelegramTopicSchema } from './telegram';
 
 const CREATOR = '01900000-0000-7000-8000-000000000010';
 const CONVERSATION = '01900000-0000-7000-8000-000000000020';
@@ -26,8 +35,12 @@ describe('custom alerts (P4-01)', () => {
     expect(neither.error?.issues.map((i) => i.path.join('.'))).toEqual(['phrase']);
   });
 
-  it('refuses a word twice whatever its case, a creator twice, and no creator', () => {
+  it('refuses a word twice as the engine reads it, a creator twice, and no creator', () => {
     expect(CustomAlertBodySchema.safeParse({ ...body, keywords: ['Appel', 'appel'] }).success).toBe(false);
+    expect(CustomAlertBodySchema.safeParse({ ...body, keywords: ['vidéo', 'video'] }).success).toBe(false);
+    expect(
+      CustomAlertBodySchema.safeParse({ ...body, keywords: ['Vidéo-perso', 'video perso'] }).success,
+    ).toBe(false);
     expect(
       CustomAlertBodySchema.safeParse({ ...body, creators: [...body.creators, ...body.creators] }).success,
     ).toBe(false);
@@ -79,5 +92,24 @@ describe('custom alerts (P4-01)', () => {
         payload: { conversationId: CONVERSATION, trigger, excerpt: 'his words' },
       }).data,
     ).not.toHaveProperty('payload.excerpt');
+  });
+
+  it('reads a keyword as the engine does, and refuses one it would never match', () => {
+    expect(alertKeywordKey('  Vidéo-PERSO ! ')).toBe('video perso');
+    expect(alertKeywordKey('Rendez’vous')).toBe('rendez vous');
+    expect(CustomAlertBodySchema.safeParse({ ...body, keywords: ['!!!'] }).success).toBe(false);
+  });
+
+  it('sends each alert to a Telegram topic that exists', () => {
+    for (const code of SYSTEM_ALERT_CODES) {
+      expect(TelegramTopicSchema.safeParse(SYSTEM_ALERT_TOPICS[code]).success).toBe(true);
+    }
+    expect(CUSTOM_ALERT_TOPIC).toBe('custom');
+  });
+
+  it('gives every error code a suffix that sets its status (api.md)', () => {
+    for (const code of ALERT_ERROR_CODES) {
+      expect(code).toMatch(/_(not_found|invalid|conflict|unprocessable)$/u);
+    }
   });
 });

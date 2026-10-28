@@ -21,6 +21,7 @@ export * from './invitation-links';
 export * from './jobs';
 export * from './media';
 export * from './money';
+export * from './normalise';
 export * from './persona';
 export * from './persona-api';
 export * from './playground';

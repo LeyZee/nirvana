@@ -8,6 +8,7 @@ import {
   SetSystemAlertBodySchema,
   SystemAlertCodeSchema,
   SystemAlertSettingSchema,
+  type AlertErrorCode,
   type UserRole,
 } from '@nirvana/contracts';
 import type { preHandlerAsyncHookHandler } from 'fastify';
@@ -21,26 +22,26 @@ const SystemParamsSchema = z.object({ code: SystemAlertCodeSchema });
 
 class CustomAlertNotFound extends DomainError {
   constructor() {
-    super('custom_alert_not_found', 'Alerte introuvable');
+    super('custom_alert_not_found' satisfies AlertErrorCode, 'Alerte introuvable');
   }
 }
 
 class CustomAlertConflict extends DomainError {
   constructor() {
-    super('custom_alert_conflict', 'Une autre alerte porte déjà cet identifiant');
+    super('custom_alert_conflict' satisfies AlertErrorCode, 'Une autre alerte porte déjà cet identifiant');
   }
 }
 
 class AlertCreatorInvalid extends DomainError {
   constructor() {
-    super('alert_creator_invalid', 'Une des créatrices de l’alerte n’existe pas');
+    super('alert_creator_invalid' satisfies AlertErrorCode, 'Une des créatrices de l’alerte n’existe pas');
   }
 }
 
 class SystemAlertLocked extends DomainError {
   constructor() {
     super(
-      'system_alert_locked_unprocessable',
+      'system_alert_locked_unprocessable' satisfies AlertErrorCode,
       'Les mots-clés d’alerte restent toujours actifs : retire le mot dans la persona',
     );
   }

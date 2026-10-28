@@ -14,7 +14,7 @@
 - `DELETE /alerts/:groupId` : archive toutes les lignes (204) ;
 - `PUT /alerts/system/:code` : active ou désactive une alerte système pour les créatrices nommées, sans toucher les autres. Pour `keyword`, la réponse est 422 `system_alert_locked_unprocessable`.
 
-Une créatrice qui n'existe pas donne 400 `alert_creator_invalid`, sans rien écrire. Un groupe sans ligne active donne 404 `custom_alert_not_found`. Chaque écriture ajoute une ligne `custom_alert.create`, `.update`, `.archive` ou `system_alert.update` dans `audit_log`.
+Les codes d'erreur sont dans `ALERT_ERROR_CODES`, le sujet Telegram de chaque alerte dans `CUSTOM_ALERT_TOPIC` et `SYSTEM_ALERT_TOPICS`, et deux mots-clés sont « le même » selon `alertKeywordKey`, la lecture du moteur (`normalise`, partagé dans le contrat). Une créatrice qui n'existe pas donne 400 `alert_creator_invalid`, sans rien écrire. Un groupe sans ligne active donne 404 `custom_alert_not_found`. Chaque écriture ajoute une ligne `custom_alert.create`, `.update`, `.archive` ou `system_alert.update` dans `audit_log`.
 
 **Pour l'agent.** `store.activeFor(creatorId)` rend ses alertes personnalisées allumées et non archivées ; `store.systemOn(creatorId)` rend ses alertes système actives. Les mots-clés se lisent en code, la phrase par le cerveau, qui rend des identifiants (fiche P4-01). Un déclenchement s'écrit `alert_triggered` quand l'alerte prévient seulement, ou `handoff_requested` avec son `trigger` quand elle met en pause, jamais les deux. Aucun des deux ne porte le texte du fan (ADR 0020).
 

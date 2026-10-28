@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { CreatorIdSchema } from './ids';
+import { normalise } from './normalise';
+import type { TelegramTopic } from './telegram';
 
 /**
  * Alerts (P4-01): her own alerts, written by the owner, and the system's. A custom alert is stored as one row per
@@ -20,8 +22,23 @@ export const CUSTOM_ALERT_PHRASE_MAX = 500;
 export const ALERT_KEYWORD_MAX = 100;
 export const CUSTOM_ALERT_KEYWORDS_MAX = 40;
 
-/** A word she watches for, matched in code without a model; unique in its list whatever its case. */
-export const AlertKeywordSchema = z.string().trim().min(1).max(ALERT_KEYWORD_MAX);
+/**
+ * A keyword as the engine compares it: normalised (case, accents, look-alike letters, `normalise`), then words split on
+ * anything that is not a letter or a digit. « Vidéo-perso » and « video perso » are the same keyword.
+ */
+export function alertKeywordKey(keyword: string): string {
+  return normalise(keyword)
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** A word she watches for, matched in code without a model: it holds a letter or a digit, or it would never match. */
+export const AlertKeywordSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(ALERT_KEYWORD_MAX)
+  .refine((keyword) => alertKeywordKey(keyword) !== '', 'Un mot-clé contient une lettre ou un chiffre');
 
 /** What the owner writes: a phrase the brain reads each message against, words matched in code, or both. */
 const customAlertFields = z.object({
@@ -31,7 +48,7 @@ const customAlertFields = z.object({
   keywords: z
     .array(AlertKeywordSchema)
     .max(CUSTOM_ALERT_KEYWORDS_MAX)
-    .refine((list) => new Set(list.map((v) => v.toLocaleLowerCase('fr'))).size === list.length, {
+    .refine((list) => new Set(list.map(alertKeywordKey)).size === list.length, {
       message: 'Mot-clé en double',
     }),
   /** Hands the conversation to a human (cause `keyword`, `custom_alert` or `identity_doubt`); otherwise it only lets one know. */
@@ -109,6 +126,19 @@ export type SystemAlertCode = z.infer<typeof SystemAlertCodeSchema>;
 /** Always on: her words are her persona's, removed there, never switched off here. */
 export const LOCKED_SYSTEM_ALERTS: readonly SystemAlertCode[] = ['keyword'];
 
+/** The Telegram topic her own alerts go to, all of them (one `notify` per alert decides whether it is sent). */
+export const CUSTOM_ALERT_TOPIC = 'custom' satisfies TelegramTopic;
+
+/**
+ * The Telegram topic each system alert goes to, read by the classifier and shown by Réglages › Alertes: her words in
+ * their own topic, a service asked for with the sales (a human may sell it), a doubt on who she is as important.
+ */
+export const SYSTEM_ALERT_TOPICS: Readonly<Record<SystemAlertCode, TelegramTopic>> = {
+  keyword: 'keyword',
+  service_request: 'sale',
+  identity_doubt: 'important',
+};
+
 /** A system alert on each creator; on unless switched off. */
 export const SystemAlertSettingSchema = z.object({
   code: SystemAlertCodeSchema,
@@ -154,3 +184,17 @@ export const AlertTriggerSchema = z
     path: ['keyword'],
   });
 export type AlertTrigger = z.infer<typeof AlertTriggerSchema>;
+
+/**
+ * The error codes of `/v1/alerts`, for the screen to say them in French (the suffix gives the status, api.md):
+ * `custom_alert_not_found` 404, the alert has no row left that is not archived ; `custom_alert_conflict` 409, the same
+ * `groupId` with other values, or archived ; `alert_creator_invalid` 400, a creator that does not exist ;
+ * `system_alert_locked_unprocessable` 422, `keyword` cannot be switched off.
+ */
+export const ALERT_ERROR_CODES = [
+  'custom_alert_not_found',
+  'custom_alert_conflict',
+  'alert_creator_invalid',
+  'system_alert_locked_unprocessable',
+] as const;
+export type AlertErrorCode = (typeof ALERT_ERROR_CODES)[number];
