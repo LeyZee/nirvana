@@ -1,12 +1,15 @@
 import { Outlet, useRouteContext } from '@tanstack/react-router';
 import type { JSX } from 'react';
 
+import { AlertsSection } from '@/settings/alerts/AlertsSection';
 import { BackupsSection } from '@/settings/backups/BackupsSection';
 import { ServicesSection } from '@/settings/services/ServicesSection';
 import { TelegramSection } from '@/settings/telegram/TelegramSection';
+import type { TelegramTab } from '@/settings/telegram/search';
 import { ComingSoon, Page, PageHeader, SubNav, type SubNavItem } from '@/shell/layout';
 
-/** The backups are the owner's alone (ADR 0028): anyone else gets no tab that would only answer 403. */
+/** The alerts and the backups are the owner's alone (P4-01, ADR 0028): anyone else gets no tab that would answer 403. */
+const ALERTS_TAB: SubNavItem = { to: '/reglages/alertes', label: 'Alertes' };
 const BACKUPS_TAB: SubNavItem = { to: '/reglages/sauvegardes', label: 'Sauvegardes' };
 
 export function SettingsLayout(): JSX.Element {
@@ -21,6 +24,7 @@ export function SettingsLayout(): JSX.Element {
               label="Réglages"
               items={[
                 { to: '/reglages/modeles-ia', label: 'Modèles IA' },
+                ...(user.role === 'owner' ? [ALERTS_TAB] : []),
                 { to: '/reglages/telegram', label: 'Telegram' },
                 ...(user.role === 'owner' ? [BACKUPS_TAB] : []),
                 { to: '/reglages/appareils', label: 'Appareils' },
@@ -44,9 +48,20 @@ export function AiModelsPage(): JSX.Element {
   return <ServicesSection />;
 }
 
-/** Réglages › Telegram: bots, groups and who gets which alert (fiche P3-07). */
-export function TelegramPage(): JSX.Element {
-  return <TelegramSection />;
+/** Réglages › Alertes: her own alerts and the system's, on each creator (P4-01). */
+export function AlertsPage(): JSX.Element {
+  return <AlertsSection />;
+}
+
+/** Réglages › Telegram: bots, groups and who gets which alert (fiche P3-07), the tab in the address. */
+export function TelegramPage({
+  tab,
+  onTab,
+}: {
+  tab: TelegramTab;
+  onTab: (tab: TelegramTab) => void;
+}): JSX.Element {
+  return <TelegramSection tab={tab} onTab={onTab} />;
 }
 
 /** Réglages › Sauvegardes: the nightly export and the restore test (EQ-17, ADR 0028). */
