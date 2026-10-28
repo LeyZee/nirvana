@@ -1,9 +1,11 @@
 import type {
+  AccountPayRules,
   CreatorSummary,
   LeaveRequest,
   PlanningAccount,
   PlanningMember,
   Shift,
+  ShiftReport,
   ShiftSwapRequest,
 } from '@nirvana/contracts';
 
@@ -11,9 +13,12 @@ import type {
   NamedMember,
   StoredAccount,
   StoredLeaveRequest,
+  StoredPayRules,
   StoredShift,
+  StoredShiftReport,
   StoredSwap,
 } from '../domain/ports';
+import { canReview, type Reader } from '../domain/reports';
 
 /** From what the stores read to what the contract sends: instants as ISO strings, members by name and colour only. */
 
@@ -75,4 +80,31 @@ export const toSwapDto = (swap: StoredSwap): ShiftSwapRequest => ({
   revertedAt: isoOrNull(swap.revertedAt),
   withdrawnByAgency: swap.withdrawnByAgency,
   createdAt: swap.createdAt.toISOString(),
+});
+
+/** A report as its reader sees it: `canReview` is said for them, from the transaction that read it. */
+export const toShiftReportDto = (report: StoredShiftReport, reader: Reader): ShiftReport => ({
+  id: report.id,
+  shiftId: report.shiftId,
+  creatorId: report.creatorId,
+  platformAccountId: report.platformAccountId,
+  memberId: report.memberId,
+  period: report.period,
+  correctsId: report.correctsId,
+  amount: { amountMinor: report.amountMinor, currency: report.currency },
+  comment: report.comment,
+  incident: report.incident,
+  status: report.status,
+  version: report.version,
+  byAgency: report.byAgency,
+  canReview: canReview(report, reader),
+  submittedAt: report.submittedAt.toISOString(),
+  reviewedAt: isoOrNull(report.reviewedAt),
+  reviewNote: report.reviewNote,
+  createdAt: report.createdAt.toISOString(),
+});
+
+export const toPayRulesDto = (rules: StoredPayRules): AccountPayRules => ({
+  ...rules,
+  createdAt: rules.createdAt.toISOString(),
 });

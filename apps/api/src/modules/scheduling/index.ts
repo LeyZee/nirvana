@@ -4,19 +4,26 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createLeaveService } from './application/leaves';
 import { makeShifts } from './application/make-shifts';
+import { createPayRulesService } from './application/pay-rules';
+import { createShiftReportService } from './application/reports';
 import { createSchedulingService } from './application/scheduling';
 import { createSwapService } from './application/swaps';
 import type { CreatorDirectory, JobLogger, OnShift } from './domain/ports';
 import { createDrizzleColleagueReads } from './infra/colleague-reads';
 import { createDrizzleLeaveStore } from './infra/leave-store';
+import { createDrizzlePayRulesStore } from './infra/pay-rules-store';
 import { createDrizzlePlanningAdmin, createDrizzlePlanningStore } from './infra/planning-store';
+import { createDrizzleShiftReportStore } from './infra/report-store';
 import { createSchedulingRoutes, type RequireRole } from './infra/routes';
 import { createDrizzleSwapStore } from './infra/swap-store';
 
 /** Public entry point of the `scheduling` module (EQ-02, ADR 0002). Other modules import this file only. */
 export interface SchedulingModule {
   readonly name: 'scheduling';
-  /** Mounted under `/v1` by the server: `/scheduling/…` (contract `scheduling.ts`). */
+  /**
+   * Mounted under `/v1` by the server: `/scheduling/…` (contracts `scheduling.ts` and `shift-reports.ts`), and
+   * `/team/pay-rules` (contract `pay-rules.ts`): the reports read an account's rules in their own transaction.
+   */
   routes(requireRole: RequireRole): FastifyPluginAsyncZod;
   /**
    * `onShift` (contract `scheduling.ts`): who is on shift on the creator's accounts at `at`, without the margin, read
@@ -43,7 +50,7 @@ export interface SchedulingDeps {
   readonly db: Database;
   /**
    * Admin role, for what crosses creators only: a member's own shifts on every creator (Aujourd'hui), the creator of
-   * a shift or template before entering her, the shift in the way of a conflict, a colleague's name, colour and
+   * a shift, template, swap, report or account before entering her, the shift in the way of a conflict, a colleague's name, colour and
    * shifts once the policies let the reader see them (ADR 0031), and the jobs.
    */
   readonly adminDb: Database;
@@ -74,6 +81,12 @@ export function createSchedulingModule(deps: SchedulingDeps): SchedulingModule {
       deps.creators,
       now,
     ),
+    reports: createShiftReportService(
+      createDrizzleShiftReportStore(deps.db, deps.adminDb),
+      deps.creators,
+      now,
+    ),
+    payRules: createPayRulesService(createDrizzlePayRulesStore(deps.db, deps.adminDb), deps.creators, now),
   };
   return {
     name: 'scheduling',

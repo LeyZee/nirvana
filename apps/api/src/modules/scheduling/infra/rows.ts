@@ -22,14 +22,25 @@ import {
   PlatformAccountNotFound,
   ShiftAccountConflict,
   ShiftMemberConflict,
+  ShiftReportExists,
 } from '../domain/errors';
 import { leaveCover } from '../domain/leaves';
 import type { Actor, StoredLeave, StoredMember, StoredShift, StoredTemplate } from '../domain/ports';
-import { assertCanWork } from '../domain/shifts';
+import { assertCanWork, DEFAULT_SCHEDULING_SETTINGS } from '../domain/shifts';
 
 /** What the planning's stores share: the columns read, their parsing, the audit line, the member lock, the leaves. */
 
-const { auditLog, leaveRequests, platformAccounts, shiftTemplates, shifts, teamMembers, user } = schema;
+const {
+  auditLog,
+  leaveRequests,
+  platformAccounts,
+  schedulingSettings,
+  shiftReports,
+  shiftTemplates,
+  shifts,
+  teamMembers,
+  user,
+} = schema;
 
 export const shiftColumns = {
   id: shifts.id,
@@ -102,6 +113,15 @@ export const toShift = (row: unknown): StoredShift => StoredShiftSchema.parse(ro
 export const toTemplate = (row: unknown): StoredTemplate => StoredTemplateSchema.parse(row);
 export const toMember = (row: unknown): StoredMember => StoredMemberSchema.parse(row);
 
+/** The signed-in account's member id, which every scope reads; `null` outside the team. */
+export async function ownMemberId(tx: Transaction, userId: string): Promise<TeamMemberId | null> {
+  const [row] = await tx
+    .select({ id: teamMembers.id })
+    .from(teamMembers)
+    .where(eq(teamMembers.userId, userId));
+  return row === undefined ? null : TeamMemberIdSchema.parse(row.id);
+}
+
 /** The Postgres code and constraint behind a failed query (Drizzle wraps the driver's error as `cause`). */
 export function pgErrorOf(error: unknown): { code: string; constraint: string | null } | null {
   for (let current = error; typeof current === 'object' && current !== null;) {
@@ -121,7 +141,14 @@ export async function audit(
   actor: Actor,
   action: string,
   entity: {
-    readonly kind: 'shift' | 'shift_template' | 'scheduling_settings' | 'leave_request' | 'shift_swap';
+    readonly kind:
+      | 'shift'
+      | 'shift_template'
+      | 'scheduling_settings'
+      | 'leave_request'
+      | 'shift_swap'
+      | 'shift_report'
+      | 'account_pay_rules';
     readonly id: string;
   },
   details: Record<string, unknown> = {},
@@ -297,14 +324,45 @@ async function shiftInTheWayUnscoped(
   return row?.id ?? null;
 }
 
-/** The creator of a shift, a template or a swap, to enter her with `withTenantMember`; the policies then decide. */
+/**
+ * The creator of a shift, a template, a swap, a report or an account, to enter her with `withTenantMember`; the
+ * policies then decide.
+ */
 export async function creatorOfUnscoped(
   adminDb: Database,
-  table: typeof shifts | typeof shiftTemplates | typeof schema.shiftSwapRequests,
+  table:
+    | typeof shifts
+    | typeof shiftTemplates
+    | typeof schema.shiftSwapRequests
+    | typeof schema.shiftReports
+    | typeof platformAccounts,
   id: string,
 ): Promise<string | null> {
   const [row] = await withAdmin(adminDb, (tx) =>
     tx.select({ creatorId: table.creatorId }).from(table).where(eq(table.id, id)),
   );
   return row?.creatorId ?? null;
+}
+
+/**
+ * A shift that has its report is no longer cancelled (EQ-03): read by the owner or an active manager, who read every
+ * report of the creator, after the shift's row is locked `for update`. A report made at the same moment waits on that
+ * lock (its foreign key takes `for key share`) and reads the shift again once it is written; the trigger of migration
+ * 0026 holds the rest.
+ */
+export async function assertNotReported(tx: Transaction, shiftId: string): Promise<void> {
+  const [report] = await tx
+    .select({ id: shiftReports.id })
+    .from(shiftReports)
+    .where(and(eq(shiftReports.shiftId, shiftId), sql`${shiftReports.correctsId} is null`));
+  if (report !== undefined) throw new ShiftReportExists(report.id);
+}
+
+/**
+ * The agency's zone, which the pay periods follow (ADR 0023): the planning's, or its default until the owner sets it.
+ * Every team scope reads the settings.
+ */
+export async function agencyTimeZone(tx: Transaction): Promise<string> {
+  const [row] = await tx.select({ timeZone: schedulingSettings.timeZone }).from(schedulingSettings);
+  return row?.timeZone ?? DEFAULT_SCHEDULING_SETTINGS.timeZone;
 }
