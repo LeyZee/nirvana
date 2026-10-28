@@ -90,7 +90,7 @@ describe('railOf, with the screens of today', () => {
     // An operator without a team row keeps today's rail: no Équipe.
     expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Créatrices', 'Réglages']);
     expect(labels(manager)).toEqual(['Dashboard', 'Suivi', 'Équipe', 'Paie']);
-    expect(labels(chatter)).toEqual(['Aujourd’hui', 'Suivi', 'Planning']);
+    expect(labels(chatter)).toEqual(['Aujourd’hui', 'Suivi', 'Planning', 'Commissions']);
     // A creator never sees a conversation (ADR 0023): no Suivi.
     expect(labels(creator)).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
   });

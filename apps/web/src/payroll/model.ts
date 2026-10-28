@@ -882,3 +882,163 @@ const WHOLE_EUROS = new Intl.NumberFormat('fr-FR', {
 /** « +10 € », « +12,50 € »: a tier's bonus under the gauge, without cents when it has none. */
 export const tickAmountText = (minor: number): string =>
   minor % 100 === 0 ? WHOLE_EUROS.format(minor / 100).replace('-', '−') : signedAmountText(minor, 'EUR');
+
+/** A period as its member reads it in Commissions: their words, never the agency's « à valider ». */
+export function memberPhaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
+  switch (phaseOf(summary)) {
+    case 'running':
+      return { label: 'En cours', tone: 'neutral' };
+    case 'to_validate':
+      return { label: 'En validation', tone: 'wait' };
+    case 'to_pay':
+      return { label: 'Validé', tone: 'ok' };
+    case 'paid':
+      // Validated with nothing to send: the total went on the next period.
+      return summary.paidMinor === 0 && summary.statements.carried > 0
+        ? { label: 'Reporté', tone: 'warn' }
+        : { label: 'Payé', tone: 'ok' };
+  }
+}
+
+/** The one amount of a period in « Mes relevés »: what was paid, or what is still to come. */
+export function memberPeriodAmount(summary: Omit<PayPeriodSummary, 'window'>): {
+  minor: number;
+  what: string;
+} {
+  switch (phaseOf(summary)) {
+    case 'running':
+      return { minor: summary.payableMinor, what: 'à ce jour' };
+    case 'to_validate':
+    case 'to_pay':
+      return { minor: summary.payableMinor - summary.paidMinor, what: 'à toucher' };
+    case 'paid':
+      return { minor: summary.paidMinor, what: 'touché' };
+  }
+}
+
+/**
+ * The period Commissions opens on: the oldest that has ended with money still to come, then the one under way once
+ * it has a statement, else the last one ended, paid, so that a new period starts on what the last one brought.
+ */
+export function heroPeriodOf(
+  summaries: readonly Pick<
+    PayPeriodSummary,
+    'window' | 'ended' | 'statements' | 'payableMinor' | 'paidMinor'
+  >[],
+  current: PayPeriod,
+): PayPeriod {
+  const waiting = periodToOpen(summaries, current, true);
+  if (waiting !== current || summaries.some((summary) => summary.window.period === current)) return waiting;
+  return summaries.find((summary) => summary.ended)?.window.period ?? current;
+}
+
+/** What a member's statement says of itself: its stage beside the chip, what the amount is, and how it came. */
+export interface MyStatementWords {
+  readonly since: string;
+  readonly label: string;
+  readonly notes: readonly string[];
+}
+
+const PAID_BY: Readonly<Record<PaymentMethod, string>> = {
+  bank_transfer: ' par virement',
+  wise: ' par Wise',
+  paypal: ' par PayPal',
+  other: '',
+};
+
+/**
+ * The words around a member's own statement: computed, being validated, validated or paid, in the second person and
+ * in the past once paid. Never a date of payment to come: the agency pays after it validates.
+ */
+export function myStatementWords(
+  statement: CommissionStatement,
+  ended: boolean,
+  now: Date,
+): MyStatementWords {
+  const zone = statement.window.timeZone;
+  const carry = myCarryLine(statement, ended);
+  const withCarry = (notes: string[]): string[] => (carry === null ? notes : [...notes, carry]);
+  const { payment } = statement;
+  if (payment !== null)
+    return {
+      since: `le ${dayMonth(payment.paidOn)}`,
+      label: 'Ce que tu as touché',
+      notes: withCarry([
+        `Payé le ${longDay(payment.paidOn)}${PAID_BY[payment.method]}${payment.reference === null ? '' : `, référence ${payment.reference}`}.`,
+      ]),
+    };
+  if (statement.validatedAt !== null)
+    return {
+      since: `le ${dayAt(statement.validatedAt, zone)}`,
+      label: statement.payableMinor === 0 ? 'Ce que tu touches' : 'Ce que tu vas toucher',
+      notes: withCarry([
+        statement.payableMinor === 0
+          ? `Validé le ${momentAt(statement.validatedAt, zone)}.`
+          : `Validé le ${momentAt(statement.validatedAt, zone)}. Le versement suit.`,
+      ]),
+    };
+  const computed =
+    dayOf(statement.computedAt, zone) === dayOf(now, zone)
+      ? `à ${clockAt(statement.computedAt, zone)}`
+      : `le ${dayAt(statement.computedAt, zone)} à ${clockAt(statement.computedAt, zone)}`;
+  if (!ended)
+    return {
+      since: `se valide à partir du ${dayMonth(opensOn(statement.window))}`,
+      label: 'Ce que tu touches à ce jour',
+      notes: withCarry([
+        `Calculé ${computed} sur tes rapports validés. Le versement suit la validation de la quinzaine.`,
+      ]),
+    };
+  return {
+    since: `depuis le ${dayMonth(opensOn(statement.window))}`,
+    label: 'Ce que tu vas toucher',
+    notes: withCarry([
+      `Calculé ${computed} sur tes rapports validés. L’agence valide, puis le versement suit.`,
+    ]),
+  };
+}
+
+/** A member's carry-over, said as what it is while the period runs: what would go on the next one if it ended now. */
+function myCarryLine(statement: CommissionStatement, ended: boolean): string | null {
+  if (ended || statement.carryOverOutMinor === 0) return carryLine(statement);
+  if (statement.totalMinor < 0)
+    return `Ton total est sous zéro à ce jour : si la quinzaine finit ainsi, ${signedAmountText(statement.carryOverOutMinor, 'EUR')} iront sur la suivante.`;
+  return `Sous le minimum de ${amountText(statement.rules.minimumPayoutMinor, 'EUR')} à ce jour : si la quinzaine finit ainsi, ${amountText(statement.carryOverOutMinor, 'EUR')} iront sur la suivante.`;
+}
+
+/** Where a net stands among the tiers: the highest reached, its threshold included, and the next one. */
+export function tierProgress(
+  netMinor: number,
+  tiers: readonly BonusTier[],
+): { readonly reached: BonusTier | null; readonly next: BonusTier | null } {
+  const ordered = bonusTiersInOrder(tiers);
+  return {
+    reached: ordered.findLast((tier) => tier.thresholdMinor <= netMinor) ?? null,
+    next: ordered.find((tier) => tier.thresholdMinor > netMinor) ?? null,
+  };
+}
+
+/** The account that brings a statement the most net: the one its member's sales go through the most. */
+export const mainLine = (lines: readonly CommissionStatementLine[]): CommissionStatementLine | null =>
+  lines.reduce<CommissionStatementLine | null>(
+    (best, line) => (best === null || line.netMinor > best.netMinor ? line : best),
+    null,
+  );
+
+/**
+ * The sales, in the account's currency, that bring `netMinor` more of net on `line`'s account: back through the
+ * platform's fee, the VAT and the rate, rounded up to the unit. A guide for the member, never a figure pay uses.
+ */
+export function salesFor(
+  netMinor: number,
+  line: Pick<CommissionStatementLine, 'vatBps' | 'platformFeeBps' | 'rateMicros'>,
+): number {
+  const keep = 10_000 - line.platformFeeBps;
+  if (netMinor <= 0 || keep <= 0) return 0;
+  const euros = (netMinor * (10_000 + line.vatBps)) / keep;
+  return Math.ceil((euros * 1_000_000) / line.rateMicros / 100) * 100;
+}
+
+/** « 330 € », « 1 234,50 € »: an amount without its cents when it has none. */
+export const roundAmountText = (minor: number, currency: Currency): string =>
+  minor % 100 === 0 ? amountText(minor, currency).replace(/,00(?=\s)/u, '') : amountText(minor, currency);

@@ -11,7 +11,7 @@ import { useState, type JSX } from 'react';
 import { GoalDialog, TiersDialog } from './GoalForms';
 import { PayNav } from './PayNav';
 import { useCurrentPeriod, usePayNames } from './data';
-import { Gauge, Loading, LockIcon, PeriodArrows, Unreachable } from './parts';
+import { Gauge, GoalTicks, Loading, LockIcon, PeriodArrows, Unreachable } from './parts';
 
 import { usePayPeriod, usePayPeriods } from '@/payroll/api';
 import {
@@ -26,7 +26,6 @@ import {
   momentAt,
   reachedBpsOf,
   teamNetOf,
-  tickAmountText,
   tierAt,
   whoName,
 } from '@/payroll/model';
@@ -323,19 +322,14 @@ function GoalGauge({
         value={gaugePercent(reached, span)}
         mark={forecastBps === null ? null : gaugePercent(forecastBps, span)}
       />
-      <ul className="py-ticks nv-num" aria-label="Paliers">
-        {goalTiersInOrder(goal.tiers).map((one) => (
-          <li
-            key={one.reachedBps}
-            style={{ '--py-at': `${String(gaugePercent(one.reachedBps, span))}%` }}
-            data-reached={reached >= one.reachedBps ? 'true' : undefined}
-            title={`À ${percentText(one.reachedBps)} de ${amountText(goal.targetMinor, 'EUR')}, soit ${amountText(Math.ceil((goal.targetMinor * one.reachedBps) / 10_000), 'EUR')} de net : ${signedAmountText(one.bonusMinor, 'EUR')} par chatteur`}
-          >
-            {percentText(one.reachedBps)}
-            <span>{tickAmountText(one.bonusMinor)}</span>
-          </li>
-        ))}
-      </ul>
+      <GoalTicks
+        tiers={goal.tiers}
+        span={span}
+        reached={reached}
+        title={(one) =>
+          `À ${percentText(one.reachedBps)} de ${amountText(goal.targetMinor, 'EUR')}, soit ${amountText(Math.ceil((goal.targetMinor * one.reachedBps) / 10_000), 'EUR')} de net : ${signedAmountText(one.bonusMinor, 'EUR')} par chatteur`
+        }
+      />
     </div>
   );
 }

@@ -44,8 +44,9 @@ export const fetchNotes = (memberId: string): Promise<TeamMemberNote[]> =>
 
 export const MEMBERS_KEY = ['team', 'members'] as const;
 
-export function useMembers(): UseQueryResult<TeamMember[]> {
-  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers });
+/** The team as the agency reads it; `enabled` false for a member, who does not read it. */
+export function useMembers(enabled = true): UseQueryResult<TeamMember[]> {
+  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers, enabled });
 }
 
 /** The presets are the owner's settings: a manager who cannot read them sees the figures alone. */

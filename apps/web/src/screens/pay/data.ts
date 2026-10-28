@@ -119,7 +119,7 @@ const UNKNOWN: PayMember = { name: 'Un membre', color: null, manager: false, use
 
 /** The team's members and accounts as the agency reads them (`/v1/team/members`, `/v1/team/pay-rules`). */
 export function usePayNames(period: PayPeriod | null, agency: boolean): PayNames {
-  const members = useMembers();
+  const members = useMembers(agency);
   const rules = usePayRules(agency);
   // A member reads neither the team nor the rules: the reports of the period name their own accounts.
   const reports = useReports(period, !agency && period !== null);

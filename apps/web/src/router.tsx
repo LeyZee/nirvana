@@ -11,6 +11,7 @@ import { CreatorsPage } from './creators/CreatorsPage';
 import { parseCreatorsSearch } from './creators/search';
 import { parsePaySearch } from './payroll/model';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { CommissionsPage } from './screens/pay/CommissionsPage';
 import { EntriesPage } from './screens/pay/EntriesPage';
 import { GoalsPage } from './screens/pay/GoalsPage';
 import { PeriodPage } from './screens/pay/PeriodPage';
@@ -285,6 +286,15 @@ const payPeriods = createRoute({
   },
 });
 
+const commissions = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/commissions',
+  component: function Commissions() {
+    const { user } = rootRoute.useRouteContext();
+    return <CommissionsPage user={user} />;
+  },
+});
+
 const train = createRoute({ getParentRoute: () => rootRoute, path: '/entrainer', component: TrainLayout });
 const trainIndex = createRoute({
   getParentRoute: () => train,
@@ -393,6 +403,7 @@ const routeTree = rootRoute.addChildren([
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
   pay.addChildren([payIndex, payPeriod, payPeriods, payEntries, payGoals]),
+  commissions,
   settings.addChildren([
     settingsIndex,
     aiModels,

@@ -1,10 +1,18 @@
-import type { CommissionStatement, PayPeriod } from '@nirvana/contracts';
+import type { CollectiveTier, CommissionStatement, PayPeriod } from '@nirvana/contracts';
 import type { JSX } from 'react';
 
 import type { PayNames } from './data';
 
-import { flowOf, signedPercentText, totalsOf, type PayChip } from '@/payroll/model';
-import { followingPeriod, periodTitle, previousPeriod } from '@/reports/model';
+import {
+  flowOf,
+  gaugePercent,
+  goalTiersInOrder,
+  signedPercentText,
+  tickAmountText,
+  totalsOf,
+  type PayChip,
+} from '@/payroll/model';
+import { followingPeriod, percentText, periodTitle, previousPeriod } from '@/reports/model';
 import { accountLine } from '@/scheduling/model';
 import { dayMonth } from '@/scheduling/time';
 
@@ -65,6 +73,35 @@ export function Gauge({
       <span className="nv-gauge__fill" />
       {mark === null ? null : <span className="nv-gauge__mark" title="Prévision de fin" />}
     </div>
+  );
+}
+
+/** A goal's tiers under its gauge, each at its share of the span, lit once reached; `title` says each on hover. */
+export function GoalTicks({
+  tiers,
+  span,
+  reached,
+  title,
+}: {
+  tiers: readonly CollectiveTier[];
+  span: number;
+  reached: number | null;
+  title: (tier: CollectiveTier) => string;
+}): JSX.Element {
+  return (
+    <ul className="py-ticks nv-num" aria-label="Paliers">
+      {goalTiersInOrder(tiers).map((one) => (
+        <li
+          key={one.reachedBps}
+          style={{ '--py-at': `${String(gaugePercent(one.reachedBps, span))}%` }}
+          data-reached={reached !== null && reached >= one.reachedBps ? 'true' : undefined}
+          title={title(one)}
+        >
+          {percentText(one.reachedBps)}
+          <span>{tickAmountText(one.bonusMinor)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -31,8 +31,13 @@ import {
   gaugePercent,
   goalReachedBps,
   goalSpanBps,
+  heroPeriodOf,
   lateNetOf,
+  mainLine,
   memberFacts,
+  memberPeriodAmount,
+  memberPhaseChip,
+  myStatementWords,
   parsePaySearch,
   parseTarget,
   payRefusalText,
@@ -42,6 +47,8 @@ import {
   rateMissing,
   rateText,
   reachedBpsOf,
+  roundAmountText,
+  salesFor,
   salesSplit,
   signedPercentText,
   spanText,
@@ -51,6 +58,7 @@ import {
   summaryOf,
   tickAmountText,
   tierAt,
+  tierProgress,
   totalsOf,
   validatable,
   whoName,
@@ -711,5 +719,163 @@ describe('goals and tiers', () => {
       team: { netMinor: 85_000, collective: { reachedBps: 8_500, tier: null } },
     });
     expect(goalReachedBps({ statements: [frozen] }, goal)).toBe(8_500);
+  });
+});
+
+describe('Commissions, as the member reads them', () => {
+  const OCT2 = PayPeriodSchema.parse('2026-10-16');
+  const at = (
+    period: PayPeriod,
+    patch: Partial<Omit<PayPeriodSummary, 'window'>> = {},
+  ): PayPeriodSummary => ({
+    ...summary(patch),
+    window: { ...WINDOW, period },
+  });
+  const counts = (draft: number, validated: number, paid: number, carried = 0) => ({
+    draft,
+    validated,
+    paid,
+    carried,
+  });
+
+  it('names each stage in the member’s words, and a carry-over with nothing sent as such', () => {
+    const chip = (patch: Partial<Omit<PayPeriodSummary, 'window'>>) => memberPhaseChip(summary(patch));
+    expect(chip({ ended: false })).toEqual({ label: 'En cours', tone: 'neutral' });
+    expect(chip({ statements: counts(1, 0, 0), payableMinor: 2_125 })).toEqual({
+      label: 'En validation',
+      tone: 'wait',
+    });
+    expect(chip({ statements: counts(0, 1, 0), payableMinor: 2_125 })).toEqual({
+      label: 'Validé',
+      tone: 'ok',
+    });
+    expect(chip({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })).toEqual({
+      label: 'Payé',
+      tone: 'ok',
+    });
+    expect(chip({ statements: counts(0, 1, 0, 1), payableMinor: 0 })).toEqual({
+      label: 'Reporté',
+      tone: 'warn',
+    });
+  });
+
+  it('gives each period one amount: so far, still to come, or touched', () => {
+    expect(memberPeriodAmount(summary({ ended: false, payableMinor: 2_125 }))).toEqual({
+      minor: 2_125,
+      what: 'à ce jour',
+    });
+    expect(memberPeriodAmount(summary({ statements: counts(1, 0, 0), payableMinor: 2_125 }))).toEqual({
+      minor: 2_125,
+      what: 'à toucher',
+    });
+    expect(
+      memberPeriodAmount(summary({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })),
+    ).toEqual({ minor: 2_125, what: 'touché' });
+  });
+
+  it('opens on the money on its way, then on the period under way, else on what the last one brought', () => {
+    const running = at(PERIOD, { ended: false, payableMinor: 2_125 });
+    const waiting = at(OCT2, { statements: counts(1, 0, 0), payableMinor: 2_125 });
+    const unpaid = at(OCT2, { statements: counts(0, 1, 0), payableMinor: 2_125 });
+    const paid = at(OCT2, { statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 });
+    expect(heroPeriodOf([running, waiting], PERIOD)).toBe(OCT2);
+    expect(heroPeriodOf([running, unpaid], PERIOD)).toBe(OCT2);
+    expect(heroPeriodOf([running, paid], PERIOD)).toBe(PERIOD);
+    // A new period without a statement yet: the last one, paid.
+    expect(heroPeriodOf([paid], PERIOD)).toBe(OCT2);
+    expect(heroPeriodOf([], PERIOD)).toBe(PERIOD);
+  });
+
+  it('says a statement as it runs, is validated, then paid, never with a date of payment to come', () => {
+    const sameDay = new Date('2026-11-02T15:00:00Z');
+    const words = (one: CommissionStatement, ended: boolean, now = sameDay) => {
+      const said = myStatementWords(one, ended, now);
+      return { since: plain(said.since), label: said.label, notes: said.notes.map(plain) };
+    };
+    expect(words(statement(), false)).toEqual({
+      since: 'se valide à partir du lun. 16 nov.',
+      label: 'Ce que tu touches à ce jour',
+      notes: ['Calculé à 10 h 07 sur tes rapports validés. Le versement suit la validation de la quinzaine.'],
+    });
+    expect(words(statement(), false, new Date('2026-11-05T10:00:00Z')).notes[0]).toBe(
+      'Calculé le lun. 2 nov. à 10 h 07 sur tes rapports validés. Le versement suit la validation de la quinzaine.',
+    );
+    // Under the minimum while it runs: what would go on the next period, not a carry-over yet.
+    expect(
+      words(statement({ totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 }), false).notes[1],
+    ).toBe(
+      'Sous le minimum de 15,00 € à ce jour : si la quinzaine finit ainsi, 12,00 € iront sur la suivante.',
+    );
+    expect(words(statement(), true)).toMatchObject({
+      since: 'depuis le lun. 16 nov.',
+      label: 'Ce que tu vas toucher',
+    });
+    const validated = statement({ status: 'validated', validatedAt: '2026-11-16T09:41:00.000Z' });
+    expect(words(validated, true)).toEqual({
+      since: 'le lun. 16 nov.',
+      label: 'Ce que tu vas toucher',
+      notes: ['Validé le lundi 16 novembre à 10 h 41. Le versement suit.'],
+    });
+    const carried = statement({
+      status: 'validated',
+      validatedAt: '2026-11-16T09:41:00.000Z',
+      totalMinor: 1_200,
+      carryOverOutMinor: 1_200,
+      payableMinor: 0,
+    });
+    expect(words(carried, true)).toEqual({
+      since: 'le lun. 16 nov.',
+      label: 'Ce que tu touches',
+      notes: [
+        'Validé le lundi 16 novembre à 10 h 41.',
+        'Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.',
+      ],
+    });
+    const payment = {
+      paidOn: '2026-11-17',
+      method: 'bank_transfer',
+      reference: 'VIR-2611-0412',
+      sentMinor: 2_125,
+    };
+    const paid = statement({
+      ...validated,
+      status: 'paid',
+      payment: { ...payment, method: 'bank_transfer' },
+    });
+    expect(words(paid, true)).toEqual({
+      since: 'le mar. 17 nov.',
+      label: 'Ce que tu as touché',
+      notes: ['Payé le mardi 17 novembre par virement, référence VIR-2611-0412.'],
+    });
+    const other = statement({ ...paid, payment: { ...payment, method: 'other', reference: null } });
+    expect(words(other, true).notes).toEqual(['Payé le mardi 17 novembre.']);
+  });
+
+  it('finds the tier reached, its threshold included, and the next one', () => {
+    const tiers = [
+      { label: 'Argent', thresholdMinor: 100_000, bonusMinor: 2_500 },
+      { label: 'Bronze', thresholdMinor: 50_000, bonusMinor: 1_000 },
+    ];
+    const [argent, bronze] = tiers;
+    expect(tierProgress(30_000, tiers)).toEqual({ reached: null, next: bronze });
+    expect(tierProgress(50_000, tiers)).toEqual({ reached: bronze, next: argent });
+    expect(tierProgress(120_000, tiers)).toEqual({ reached: argent, next: null });
+    expect(tierProgress(0, [])).toEqual({ reached: null, next: null });
+  });
+
+  it('turns net to reach into sales on the account that brings the most, rounded up to the unit', () => {
+    const other = newId(PlatformAccountIdSchema);
+    const big = line({ platformAccountId: other, netMinor: 9_000 });
+    expect(mainLine([line(), big])).toBe(big);
+    expect(mainLine([])).toBeNull();
+    // 150 € of net: back through 15 % of fee and 20 % of VAT, 211,77 € of sales, so 212 €.
+    expect(salesFor(15_000, line())).toBe(21_200);
+    // In dollars at 1 $ = 0,92 €: 230,18 $, so 231 $.
+    expect(salesFor(15_000, line({ currency: 'USD', rateMicros: 920_000 }))).toBe(23_100);
+    expect(salesFor(0, line())).toBe(0);
+    expect(plain(roundAmountText(21_200, 'EUR'))).toBe('212 €');
+    expect(plain(roundAmountText(123_400, 'EUR'))).toBe('1 234 €');
+    expect(plain(roundAmountText(21_250, 'EUR'))).toBe('212,50 €');
+    expect(plain(roundAmountText(23_100, 'USD'))).toMatch(/^231 \$|^\$231$/u);
   });
 });
