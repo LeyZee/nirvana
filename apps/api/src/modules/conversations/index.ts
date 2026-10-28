@@ -29,7 +29,6 @@ import { createConversationRoutes, type RequireRole } from './infra/http/routes'
 
 export { SendRefused } from './domain/errors';
 export type {
-  AlertNames,
   BubbleGuard,
   Clock,
   DraftComposer,
