@@ -68,6 +68,16 @@ class SignInLimited extends DomainError {
   }
 }
 
+/**
+ * Any refused sign-in: a wrong e-mail, a wrong password, or a member who left the team (ADR 0023). One answer for all,
+ * so the page never tells whether the account exists or whether the password was right.
+ */
+class SignInRefused extends DomainError {
+  constructor() {
+    super('sign_in_unauthenticated', 'E-mail ou mot de passe incorrect');
+  }
+}
+
 class ReauthenticationRequired extends DomainError {
   constructor() {
     super(REAUTHENTICATION_ERROR_CODE, 'Mot de passe à confirmer pour cette action');
@@ -118,6 +128,9 @@ export function createAuth(config: Config, db: Database, logger: Logger) {
     databaseHooks: {
       session: {
         create: {
+          // A member who left opens no session (ADR 0023): Better Auth then answers 401, which the sign-in route turns
+          // into the same refusal as a wrong password.
+          before: async (session) => ((await hasLeftTeam(db, session.userId)) ? false : undefined),
           after: async (session, context) => {
             await db.insert(schema.auditLog).values({
               id: newId(AuditEntryIdSchema),
@@ -192,6 +205,8 @@ async function userOf(
   const user = parsed.data;
   if (user.role !== 'operator') return { user, membership: null };
   const member = await membership(db, user.id);
+  // A session still open when the member left is refused at its next request (ADR 0023), even before it is revoked.
+  if (member.team?.status === 'left') return null;
   if (member.team === null || member.teamScope !== 'self') return { user, membership: member };
   return { user: { ...user, creatorIds: [], routedCreatorIds: user.creatorIds }, membership: member };
 }
@@ -254,6 +269,12 @@ function membership(db: Database, userId: string): Promise<Membership> {
   });
 }
 
+/** Whether the account is a team member marked `left`; the owner and an account without a team row never are. */
+async function hasLeftTeam(db: Database, userId: string): Promise<boolean> {
+  const { team } = await membership(db, userId);
+  return team?.status === 'left';
+}
+
 /**
  * What `/v1/me` answers for an account, read without a request: the redeem of an invitation link (EQ-10) answers it for
  * the session it has just opened. `null` for a row that does not validate, as for a session.
@@ -286,7 +307,7 @@ export function createAuthRoutes(
       keyGenerator: signInAccountKey,
       skipOnError: false,
     });
-    const forward = async (request: FastifyRequest, reply: FastifyReply) => {
+    const forward = async (request: FastifyRequest, reply: FastifyReply, onUnauthorized?: () => never) => {
       const body =
         request.body === undefined || request.body === null ? undefined : JSON.stringify(request.body);
       const response = await auth.handler(
@@ -296,6 +317,7 @@ export function createAuthRoutes(
           ...(body === undefined ? {} : { body }),
         }),
       );
+      if (response.status === 401 && onUnauthorized !== undefined) onUnauthorized();
       reply.code(response.status);
       response.headers.forEach((value, key) => {
         if (!['set-cookie', 'content-length', 'content-encoding', 'transfer-encoding'].includes(key)) {
@@ -322,7 +344,11 @@ export function createAuthRoutes(
         void reply.header('retry-after', attempt.ttlInSeconds);
         throw new SignInLimited();
       },
-      handler: forward,
+      // Better Auth's 401s (unknown e-mail, wrong password, a member who left) all become one French refusal.
+      handler: (request, reply) =>
+        forward(request, reply, () => {
+          throw new SignInRefused();
+        }),
     });
     // Only what the dashboard calls: the rest of Better Auth (get-session and list-sessions with their tokens,
     // update-user renaming an account) stays unreachable and answers 404 like any unknown route.

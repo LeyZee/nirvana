@@ -431,6 +431,21 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     expect((await call('GET', '/payroll/periods/2025-03-02', owner)).statusCode).toBe(400);
   });
 
+  it('shows a suspended manager his own statement only, like a chatter (ADR 0024)', async () => {
+    const leaCookie = await signIn(server, 'lea@example.test', PASSWORD);
+    const setLea = (values: { teamRole: 'chatter' | 'manager'; status: 'active' | 'suspended' }) =>
+      test.admin.db.update(schema.teamMembers).set(values).where(eq(schema.teamMembers.id, lea.id));
+    await setLea({ teamRole: 'manager', status: 'active' });
+    expect((await periodAs(leaCookie, P1)).statements.map((one) => one.memberId).sort()).toEqual(
+      [theo.id, lea.id].sort(),
+    );
+    await setLea({ teamRole: 'manager', status: 'suspended' });
+    const own = await periodAs(leaCookie, P1);
+    expect(own.statements.map((one) => one.memberId)).toEqual([lea.id]);
+    expect(own.statements[0]?.team).toBeNull();
+    await setLea({ teamRole: 'chatter', status: 'active' });
+  });
+
   /** A report `member` makes on a shift of `period`, submitted. */
   const madeReport = async (member: TeamMember, cookie: string, period: PayPeriod) => {
     const shift = await shiftIn(member, period);
