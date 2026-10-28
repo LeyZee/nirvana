@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  calendarDayAt,
   nextPayPeriod,
   payPeriodAt,
   PayPeriodSchema,
@@ -60,5 +61,10 @@ describe('pay periods (ADR 0023)', () => {
     expect(payPeriodAt(new Date('2026-03-15T23:30:00Z'), 'Europe/Paris')).toBe('2026-03-16');
     expect(payPeriodAt(new Date('2026-03-15T23:30:00Z'), 'UTC')).toBe('2026-03-01');
     expect(payPeriodAt(new Date('2026-12-31T23:30:00Z'), 'Europe/Paris')).toBe('2027-01-01');
+  });
+
+  it('reads today in the agency’s zone, not in UTC', () => {
+    expect(calendarDayAt(new Date('2026-10-31T23:30:00Z'), 'Europe/Paris')).toBe('2026-11-01');
+    expect(calendarDayAt(new Date('2026-10-31T23:30:00Z'), 'UTC')).toBe('2026-10-31');
   });
 });

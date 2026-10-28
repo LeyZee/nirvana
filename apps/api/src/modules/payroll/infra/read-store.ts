@@ -17,27 +17,44 @@ import {
   PenaltySchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
+  StatementPaymentSchema,
   TeamMemberIdSchema,
+  PAYROLL_ENTRIES_MAX,
+  PayrollEntriesSchema,
+  penaltyCovers,
   UserIdSchema,
   type PayPeriod,
 } from '@nirvana/contracts';
 import { and, eq, inArray, schema, sql, withMember, type Database } from '@nirvana/db';
 import { z } from 'zod';
 
-import { PayrollForbidden } from '../domain/errors';
+import { redactAuthors } from '../domain/authors';
+import { PayPeriodCursorInvalid, PayrollEntriesTooMany, PayrollForbidden } from '../domain/errors';
 import type { PayrollReadStore, StoredStatement } from '../domain/ports';
 
-import { bonusTierSetOfRow, collectiveGoalOfRow, exchangeRateOfRow, settingsOf } from './snapshot';
+import {
+  adjustmentOfRow,
+  bonusOfRow,
+  bonusTierSetOfRow,
+  collectiveGoalOfRow,
+  exchangeRateOfRow,
+  penaltiesSpanning,
+  penaltyOfRow,
+  settingsOf,
+} from './snapshot';
 
 const {
+  bonuses,
   bonusTierSets,
   collectiveGoals,
   commissionStatementLines,
   commissionStatements,
   exchangeRates,
+  payAdjustments,
   payPeriodClosings,
   payPeriods,
   payrollSettings,
+  penalties,
   teamMembers,
 } = schema;
 
@@ -49,6 +66,35 @@ const CountedSchema = z.object({
   carryOversIn: z.array(CarryOverSchema),
   adjustments: z.array(PayAdjustmentSchema),
 });
+
+/** A `bigint` as pg gives it, in text, read only within JavaScript's exact integers: never rounded. */
+const ExactIntegerSchema = z
+  .string()
+  .regex(/^-?\d+$/u)
+  .transform((text) => BigInt(text))
+  .refine((value) => value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER))
+  .transform(Number);
+
+/** One period of the list, its counts and sums as the database gives them back. */
+const PeriodTotalsSchema = z.object({
+  draft: ExactIntegerSchema,
+  validated: ExactIntegerSchema,
+  paid: ExactIntegerSchema,
+  carried: ExactIntegerSchema,
+  net: ExactIntegerSchema,
+  payable: ExactIntegerSchema,
+  sent: ExactIntegerSchema,
+});
+
+/** A page of periods ends on a period, which the next page starts after (api.md § Pagination). */
+const encodePeriodCursor = (period: PayPeriod): string => Buffer.from(period).toString('base64url');
+
+function decodePeriodCursor(cursor: string | undefined): PayPeriod | null {
+  if (cursor === undefined) return null;
+  const parsed = PayPeriodSchema.safeParse(Buffer.from(cursor, 'base64url').toString());
+  if (!parsed.success) throw new PayPeriodCursorInvalid();
+  return parsed.data;
+}
 
 /**
  * Pay as its reader may see it (EQ-04), through `withMember`: the policies decide which statements come back (one's
@@ -175,6 +221,15 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               validatedBy: row.validatedBy === null ? null : UserIdSchema.parse(row.validatedBy),
               paidAt: iso(row.paidAt),
               paidBy: row.paidBy === null ? null : UserIdSchema.parse(row.paidBy),
+              payment:
+                row.paidOn === null
+                  ? null
+                  : StatementPaymentSchema.parse({
+                      paidOn: row.paidOn,
+                      method: row.paymentMethod,
+                      reference: row.paymentReference,
+                      sentMinor: row.sentMinor,
+                    }),
             },
             team: {
               netMinor: row.teamNetMinor,
@@ -203,8 +258,106 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
         };
       }),
 
+    // The periods, counts and sums of the statements the policies give back, in one statement: the team's for the
+    // owner and an active manager, a member's own for a member. A member reads of a closing only its date.
+    periods: (userId, page) =>
+      withMember(db, userId, async (tx, scope) => {
+        const before = decodePeriodCursor(page.cursor);
+        const rows = await tx
+          .select({
+            period: payPeriods.period,
+            startsAt: payPeriods.startsAt,
+            endsAt: payPeriods.endsAt,
+            timeZone: payPeriods.timeZone,
+            closedAt: payPeriodClosings.closedAt,
+            closedBy: payPeriodClosings.closedBy,
+            totals: {
+              draft: sql`count(*) filter (where ${commissionStatements.status} = 'draft')::text`,
+              validated: sql`count(*) filter (where ${commissionStatements.status} = 'validated')::text`,
+              paid: sql`count(*) filter (where ${commissionStatements.status} = 'paid')::text`,
+              // Under the minimum the carry-over is positive, below zero it is negative: both are carried.
+              carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} <> 0)::text`,
+              net: sql`sum(${commissionStatements.netMinor})::text`,
+              payable: sql`sum(${commissionStatements.payableMinor})::text`,
+              sent: sql`coalesce(sum(${commissionStatements.sentMinor}), 0)::text`,
+            },
+          })
+          .from(commissionStatements)
+          .innerJoin(payPeriods, eq(payPeriods.period, commissionStatements.period))
+          .leftJoin(payPeriodClosings, eq(payPeriodClosings.period, commissionStatements.period))
+          .where(before === null ? undefined : sql`${commissionStatements.period} < ${before}`)
+          .groupBy(payPeriods.period, payPeriodClosings.period)
+          .orderBy(sql`${payPeriods.period} desc`)
+          .limit(page.limit + 1);
+        const items = rows.slice(0, page.limit).map((row) => {
+          const totals = PeriodTotalsSchema.parse(row.totals);
+          return {
+            window: PayPeriodWindowSchema.parse({
+              period: row.period,
+              startsAt: row.startsAt.toISOString(),
+              endsAt: row.endsAt.toISOString(),
+              timeZone: row.timeZone,
+            }),
+            closedAt: iso(row.closedAt),
+            closedBy: scope === 'self' || row.closedBy === null ? null : UserIdSchema.parse(row.closedBy),
+            statements: {
+              draft: totals.draft,
+              validated: totals.validated,
+              paid: totals.paid,
+              carried: totals.carried,
+            },
+            netMinor: totals.net,
+            payableMinor: totals.payable,
+            paidMinor: totals.sent,
+          };
+        });
+        const last = items.at(-1);
+        return {
+          items,
+          nextCursor:
+            rows.length > page.limit && last !== undefined ? encodePeriodCursor(last.window.period) : null,
+        };
+      }),
+
     settings: (userId) =>
       withMember(db, userId, async (tx) => settingsOf((await tx.select().from(payrollSettings))[0])),
+
+    // The period's entries as the policies give them back, cancelled ones included: the team's for the owner and an
+    // active manager, one's own for anyone else, who reads no author (`redactAuthors`). Each list is read one past its
+    // cap, so that a longer one is refused, never cut short.
+    entries: (userId, period) =>
+      withMember(db, userId, async (tx, scope) => {
+        const read = PAYROLL_ENTRIES_MAX + 1;
+        const bonusRows = await tx
+          .select()
+          .from(bonuses)
+          .where(eq(bonuses.period, period))
+          .orderBy(sql`${bonuses.createdAt} desc, ${bonuses.id} desc`)
+          .limit(read);
+        const penaltyRows = await tx
+          .select()
+          .from(penalties)
+          .where(penaltiesSpanning(period))
+          .orderBy(sql`${penalties.createdAt} desc, ${penalties.id} desc`)
+          .limit(read);
+        const adjustmentRows = await tx
+          .select()
+          .from(payAdjustments)
+          .where(eq(payAdjustments.period, period))
+          .orderBy(sql`${payAdjustments.createdAt} desc, ${payAdjustments.id} desc`)
+          .limit(read);
+        if ([bonusRows, penaltyRows, adjustmentRows].some((rows) => rows.length > PAYROLL_ENTRIES_MAX))
+          throw new PayrollEntriesTooMany(PAYROLL_ENTRIES_MAX);
+
+        return PayrollEntriesSchema.parse({
+          period,
+          ...redactAuthors(scope, {
+            bonuses: bonusRows.map(bonusOfRow),
+            penalties: penaltyRows.map(penaltyOfRow).filter((penalty) => penaltyCovers(penalty, period)),
+            adjustments: adjustmentRows.map(adjustmentOfRow),
+          }),
+        });
+      }),
 
     // The agency's, closed by default: the owner and an active manager read it, anyone else is refused (a member, an
     // inactive manager, an account outside the team), who reads the rate their own lines were computed on.

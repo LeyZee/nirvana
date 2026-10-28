@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { pageOf } from './conversations';
 import {
   BonusIdSchema,
   BonusTierSetIdSchema,
@@ -292,26 +293,34 @@ const inOrder = (penalty: { readonly fromPeriod: PayPeriod; readonly toPeriod: P
  * periods), capped in each statement at the member's share plus bonuses. A cancellation stops it from `cancelledFrom`
  * on, the member's first open period: the periods already validated keep it.
  */
-export const PenaltySchema = z
-  .object({
-    id: PenaltyIdSchema,
-    memberId: TeamMemberIdSchema,
-    ...PenaltyPeriodsShape,
-    amount: PenaltyAmountSchema,
-    reason: PayReasonSchema,
-    createdBy: UserIdSchema,
-    createdAt: z.iso.datetime(),
-    cancellation: CancellationSchema.extend({ cancelledFrom: PayPeriodSchema }).nullable(),
-  })
-  .refine(inOrder, { message: 'La dernière quinzaine vient après la première', path: ['toPeriod'] });
+const PenaltyShape = {
+  id: PenaltyIdSchema,
+  memberId: TeamMemberIdSchema,
+  ...PenaltyPeriodsShape,
+  amount: PenaltyAmountSchema,
+  reason: PayReasonSchema,
+  createdBy: UserIdSchema,
+  createdAt: z.iso.datetime(),
+  cancellation: CancellationSchema.extend({ cancelledFrom: PayPeriodSchema }).nullable(),
+};
+const PENALTY_ORDER = { message: 'La dernière quinzaine vient après la première', path: ['toPeriod'] };
+export const PenaltySchema = z.object(PenaltyShape).refine(inOrder, PENALTY_ORDER);
 export type Penalty = z.infer<typeof PenaltySchema>;
 
-/** Does `penalty` count in `period`. */
+/** Does `penalty` cover `period`: one of the periods it was made for, cancelled since or not. */
+export const penaltyCovers = (
+  penalty: Pick<Penalty, 'fromPeriod' | 'toPeriod'>,
+  period: PayPeriod,
+): boolean => penalty.fromPeriod <= period && period <= penalty.toPeriod;
+
+/** Does `penalty` count in `period`: it covers it, and no cancellation stopped it there or before. */
 export function penaltyApplies(
-  penalty: Pick<Penalty, 'fromPeriod' | 'toPeriod' | 'cancellation'>,
+  penalty: Pick<Penalty, 'fromPeriod' | 'toPeriod'> & {
+    readonly cancellation: { readonly cancelledFrom: PayPeriod } | null;
+  },
   period: PayPeriod,
 ): boolean {
-  if (period < penalty.fromPeriod || period > penalty.toPeriod) return false;
+  if (!penaltyCovers(penalty, period)) return false;
   return penalty.cancellation === null || period < penalty.cancellation.cancelledFrom;
 }
 
@@ -360,6 +369,31 @@ export const CreatePayAdjustmentBodySchema = z.object({
   correctsStatementId: CommissionStatementIdSchema.nullable().default(null),
 });
 export type CreatePayAdjustmentBody = z.input<typeof CreatePayAdjustmentBodySchema>;
+
+/** Who made or cancelled an entry: the agency's to read, `null` for a member (`withMember`'s scope `self`). */
+const EntryAuthorSchema = UserIdSchema.nullable();
+const EntryCancellationSchema = z.object({ cancelledAt: z.iso.datetime(), cancelledBy: EntryAuthorSchema });
+
+/**
+ * A bonus, a penalty or an adjustment as its reader reads it, in a statement or in the period's entries: the owner and
+ * an active manager read who made and cancelled it; a member reads its reason, amount and state, its authors at
+ * `null`, never the agency's side.
+ */
+export const BonusViewSchema = BonusSchema.extend({
+  createdBy: EntryAuthorSchema,
+  cancellation: EntryCancellationSchema.nullable(),
+});
+export type BonusView = z.infer<typeof BonusViewSchema>;
+export const PenaltyViewSchema = z
+  .object({
+    ...PenaltyShape,
+    createdBy: EntryAuthorSchema,
+    cancellation: EntryCancellationSchema.extend({ cancelledFrom: PayPeriodSchema }).nullable(),
+  })
+  .refine(inOrder, PENALTY_ORDER);
+export type PenaltyView = z.infer<typeof PenaltyViewSchema>;
+export const PayAdjustmentViewSchema = PayAdjustmentSchema.extend({ createdBy: EntryAuthorSchema });
+export type PayAdjustmentView = z.infer<typeof PayAdjustmentViewSchema>;
 
 /**
  * What a validated statement carried instead of paying it (`statementId`): a total under the payout minimum, or below
@@ -436,6 +470,83 @@ export const CollectiveReachedSchema = z.object({
 });
 
 /**
+ * How the owner paid a statement (ADR 0023 § Factures): a closed list the screen says in French. A new method is a
+ * migration of the check on `commission_statements.payment_method`, never free text.
+ */
+export const PAYMENT_METHODS = ['bank_transfer', 'wise', 'paypal', 'other'] as const;
+export const PaymentMethodSchema = z.enum(PAYMENT_METHODS);
+export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
+
+/** The longest transfer reference pay keeps. */
+export const PAYMENT_REFERENCE_MAX = 100;
+
+/**
+ * How long an IBAN is in each country that issues them: ISO 13616's registry, and the national formats banks issue
+ * outside it (UEMOA and CEMAC zones, a few others), each with its check digits.
+ */
+const IBAN_LENGTHS: ReadonlyMap<string, number> = new Map(
+  (
+    'AD24 AE23 AL28 AO25 AT20 AZ28 BA20 BE16 BF28 BG22 BH22 BI27 BJ28 BR29 BY28 CF27 CG27 CH21 CI28 ' +
+    'CM27 CR22 CV25 CY28 CZ24 DE22 DJ27 DK18 DO28 DZ26 EE20 EG29 ES24 FI18 FK18 FO18 FR27 GA27 GB22 ' +
+    'GE22 GI23 GL18 GQ27 GR27 GT28 GW25 HN28 HR21 HU28 IE22 IL23 IQ23 IR26 IS26 IT27 JO30 KM27 KW30 ' +
+    'KZ20 LB28 LC32 LI21 LT20 LU20 LV21 LY25 MA28 MC27 MD24 ME22 MG27 MK19 ML28 MN20 MR27 MT31 MU30 ' +
+    'MZ25 NE28 NI28 NL18 NO15 OM23 PK24 PL28 PS29 PT25 QA29 RO24 RS22 RU33 SA24 SC31 SD18 SE24 SI19 ' +
+    'SK24 SM27 SN28 SO23 ST25 SV28 TD27 TG28 TL23 TN24 TR26 UA29 VA22 VG24 XK20 YE30'
+  )
+    .split(' ')
+    .map((entry): [string, number] => [entry.slice(0, 2), Number(entry.slice(2))]),
+);
+
+/** ISO 7064 mod 97-10: the first four characters moved to the end, a letter read as 10 to 35, one at a time. */
+function ibanCheckPasses(candidate: string): boolean {
+  let remainder = 0;
+  for (const char of candidate.slice(4) + candidate.slice(0, 4)) {
+    const value = Number.parseInt(char, 36);
+    remainder = (remainder * (value < 10 ? 10 : 100) + value) % 97;
+  }
+  return remainder === 1;
+}
+
+/**
+ * Whether `text` holds an IBAN anywhere: kept to its letters and digits in capitals, some window of it starts with a
+ * country code and two digits, has that country's exact length, and passes mod 97. « Virement FR76 3000… » is one.
+ */
+export function containsIban(text: string): boolean {
+  const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  for (let start = 0; start + 4 <= compact.length; start += 1) {
+    const length = IBAN_LENGTHS.get(compact.slice(start, start + 2));
+    if (length === undefined || start + length > compact.length) continue;
+    const candidate = compact.slice(start, start + length);
+    if (/^[A-Z]{2}\d{2}/.test(candidate) && ibanCheckPasses(candidate)) return true;
+  }
+  return false;
+}
+
+/**
+ * The transfer's reference as the bank or the service shows it, to find it again; never an IBAN (refused, here for the
+ * screen and the server alike: the repository is public and real payments go through this column) nor an account
+ * number (said by the screen).
+ */
+const PaymentReferenceSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(PAYMENT_REFERENCE_MAX)
+  .refine((reference) => !containsIban(reference), 'Une référence de virement, jamais un IBAN');
+
+/** What was sent, in euro cents: never nothing. */
+const SentMinorSchema = z.number().int().min(1).max(PAY_AMOUNT_MAX_MINOR);
+
+/** A statement's payment: the day of the transfer, how, its reference when there is one, and what was sent. */
+export const StatementPaymentSchema = z.object({
+  paidOn: CalendarDaySchema,
+  method: PaymentMethodSchema,
+  reference: PaymentReferenceSchema.nullable(),
+  sentMinor: SentMinorSchema,
+});
+export type StatementPayment = z.infer<typeof StatementPaymentSchema>;
+
+/**
  * A member's statement for a period. `revision` grows by one each time a recalculation changes it; a validation names
  * the revision it shows, and the server computes it again under its locks, on the period's closing: another revision,
  * or other inputs (`inputsHash`, which covers the reports counted, the rates, the period's team net, collective tier
@@ -443,7 +554,8 @@ export const CollectiveReachedSchema = z.object({
  *
  * `team` is `null` for a member reading their own statement when the period has no collective goal. With one, the
  * member reads how far the team got (`collective`), never the team's net itself: `netMinor` is `null` for them (the
- * agency's figure; default until Charles decides otherwise).
+ * agency's figure; default until Charles decides otherwise). Its bonuses, penalties and adjustments are read as in
+ * the period's entries: a member reads none of their authors.
  *
  * `teamShare` is a manager's share of the others' net. `penaltiesRequestedMinor` is what the penalties asked for,
  * `penaltiesMinor` what the cap let through. `totalMinor` = commission + team share + bonuses − penalties +
@@ -466,10 +578,10 @@ export const CommissionStatementSchema = z.object({
     .nullable(),
   tierBonus: BonusTierSchema.nullable(),
   collectiveBonusMinor: MinorSchema,
-  bonuses: z.array(BonusSchema),
-  penalties: z.array(PenaltySchema),
+  bonuses: z.array(BonusViewSchema),
+  penalties: z.array(PenaltyViewSchema),
   carryOversIn: z.array(CarryOverSchema),
-  adjustments: z.array(PayAdjustmentSchema),
+  adjustments: z.array(PayAdjustmentViewSchema),
   bonusesMinor: MinorSchema,
   penaltiesRequestedMinor: MinorSchema,
   penaltiesMinor: MinorSchema,
@@ -490,13 +602,15 @@ export const CommissionStatementSchema = z.object({
   validatedBy: UserIdSchema.nullable(),
   paidAt: z.iso.datetime().nullable(),
   paidBy: UserIdSchema.nullable(),
+  /** How the owner paid it, `null` until it is paid. */
+  payment: StatementPaymentSchema.nullable(),
 });
 export type CommissionStatement = z.infer<typeof CommissionStatementSchema>;
 
 /**
  * A period closed for the team (ADR 0032): when, and for the owner and an active manager by whom and on which rates.
- * A member reads of a closing only its date: `closedBy` and `exchangeRates` are `null` for them. Its team net and
- * collective goal as reached are those of each of its statements (`CommissionStatement.team`).
+ * A member reads of a closing only its date, as in the list of periods: `closedBy` and `exchangeRates` are `null` for
+ * them. Its team net and collective goal as reached are those of each of its statements (`CommissionStatement.team`).
  */
 export const PayPeriodClosingSchema = z.object({
   period: PayPeriodSchema,
@@ -527,6 +641,60 @@ export const PayrollPeriodSchema = z.object({
 });
 export type PayrollPeriod = z.infer<typeof PayrollPeriodSchema>;
 
+/** A sum of a period's statements in euro cents: a `bigint` in SQL, read only within JavaScript's exact integers. */
+const PeriodSumSchema = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+const StatementCountSchema = z.number().int().min(0);
+
+/**
+ * A period of `GET /v1/payroll/periods` (EQ-05): its window, whether it has ended, when the team closed it, and the
+ * statements its reader reads there (`withMember`), counted by status and summed. The team's for the owner and an
+ * active manager; one's own for a member, never the team's. `carried` counts the statements that carry their total
+ * over (below the minimum payout, or below zero); `paidMinor` is what was sent. `closedBy` is `null` while the period
+ * is open, and always for a member, who reads of a closing only its date (never the team's net nor its rates).
+ */
+export const PayPeriodSummarySchema = z.object({
+  window: PayPeriodWindowSchema,
+  ended: z.boolean(),
+  closedAt: z.iso.datetime().nullable(),
+  closedBy: UserIdSchema.nullable(),
+  statements: z.object({
+    draft: StatementCountSchema,
+    validated: StatementCountSchema,
+    paid: StatementCountSchema,
+    carried: StatementCountSchema,
+  }),
+  netMinor: PeriodSumSchema,
+  payableMinor: PeriodSumSchema,
+  paidMinor: PeriodSumSchema,
+});
+export type PayPeriodSummary = z.infer<typeof PayPeriodSummarySchema>;
+
+/**
+ * `GET /v1/payroll/periods?limit=&cursor=` (`PageQuerySchema`) → 200: the periods where the reader reads at least one
+ * statement, the most recent first (api.md § Pagination). 400 `cursor_invalid`, a cursor this route did not give.
+ */
+export const PayPeriodPageSchema = pageOf(PayPeriodSummarySchema);
+export type PayPeriodPage = z.infer<typeof PayPeriodPageSchema>;
+
+/** The most entries of each kind `GET /v1/payroll/entries` gives for one period: beyond, it refuses rather than cut. */
+export const PAYROLL_ENTRIES_MAX = 500;
+
+/**
+ * `GET /v1/payroll/entries?period=` (EQ-05) → 200: the bonuses of `period`, the penalties that cover it
+ * (`penaltyCovers`: one counts there per `penaltyApplies`, otherwise it shows struck through) and its adjustments,
+ * cancelled ones included, the newest first. Every member's for the owner and an active manager, one's own for a
+ * member, who reads an entry's reason, amount and state but not its authors (`createdBy` and `cancelledBy` are `null`).
+ * A period nobody wrote in gives empty lists. 422 `payroll_entries_too_many_unprocessable` beyond `PAYROLL_ENTRIES_MAX`
+ * of a kind: never a list cut short.
+ */
+export const PayrollEntriesSchema = z.object({
+  period: PayPeriodSchema,
+  bonuses: z.array(BonusViewSchema).max(PAYROLL_ENTRIES_MAX),
+  penalties: z.array(PenaltyViewSchema).max(PAYROLL_ENTRIES_MAX),
+  adjustments: z.array(PayAdjustmentViewSchema).max(PAYROLL_ENTRIES_MAX),
+});
+export type PayrollEntries = z.infer<typeof PayrollEntriesSchema>;
+
 /**
  * `POST /v1/payroll/statements/:id/validate` (owner, active manager, never one's own) → 200 `CommissionStatementSchema`.
  * The period has ended, and the member's earlier statements are validated (`commission_statement_order_conflict`
@@ -541,8 +709,22 @@ export type PayrollPeriod = z.infer<typeof PayrollPeriodSchema>;
 export const ValidateCommissionStatementBodySchema = z.object({ revision: z.number().int().min(1) });
 export type ValidateCommissionStatementBody = z.infer<typeof ValidateCommissionStatementBodySchema>;
 
-/** `POST /v1/payroll/statements/:id/pay` (owner only) → 200 `CommissionStatementSchema`: `validated` → `paid`, once. */
-export const PayCommissionStatementBodySchema = z.object({ revision: z.number().int().min(1) });
+/**
+ * `POST /v1/payroll/statements/:id/pay` (owner only) → 200 `CommissionStatementSchema`: `validated` → `paid`, once,
+ * with how it was paid (ADR 0023 § Factures). `paidOn` is the day of the transfer, never after today in the agency's
+ * zone (`payment_in_future_unprocessable`) nor before the first day of the statement's period
+ * (`payment_before_period_unprocessable`). `reference` is refused when it holds an IBAN (400, `containsIban`).
+ * `sentMinor` is what was sent, and it must be what the statement pays (`payment_amount_unprocessable`; whether another
+ * amount may be recorded is a question the EQ-05 card keeps open): a statement that pays nothing, its total carried
+ * over, stays validated.
+ */
+export const PayCommissionStatementBodySchema = z.object({
+  revision: z.number().int().min(1),
+  paidOn: CalendarDaySchema,
+  method: PaymentMethodSchema,
+  reference: PaymentReferenceSchema.optional(),
+  sentMinor: SentMinorSchema,
+});
 export type PayCommissionStatementBody = z.infer<typeof PayCommissionStatementBodySchema>;
 
 /** May `reader` validate this statement: a draft that is not their own, and a scope that validates. */
@@ -572,9 +754,14 @@ export function mayValidateStatement(
  * `collective_goal_conflict` 409, the same `id` with other values ;
  * `exchange_rate_missing_conflict` 409, a currency without a rate read ;
  * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
+ * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
+ * `payment_before_period_unprocessable` 422, a payment dated before the first day of the statement's period ;
+ * `payment_amount_unprocessable` 422, an amount sent that is not what the statement pays ;
+ * `cursor_invalid` 400, a page cursor the periods' list did not give ;
+ * `payroll_entries_too_many_unprocessable` 422, more than `PAYROLL_ENTRIES_MAX` entries of a kind in one period ;
  * `payroll_own_forbidden` 403, one's own statement, bonus, penalty or adjustment ;
- * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing, or a manager doing what only
- * the owner does.
+ * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing or reading the latest rate, or
+ * a manager doing what only the owner does.
  */
 export const PAYROLL_ERROR_CODES = [
   'team_member_not_found',
@@ -598,6 +785,11 @@ export const PAYROLL_ERROR_CODES = [
   'collective_goal_conflict',
   'exchange_rate_missing_conflict',
   'commission_rate_missing_conflict',
+  'payment_in_future_unprocessable',
+  'payment_before_period_unprocessable',
+  'payment_amount_unprocessable',
+  'cursor_invalid',
+  'payroll_entries_too_many_unprocessable',
   'payroll_own_forbidden',
   'payroll_forbidden',
 ] as const;

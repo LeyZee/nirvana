@@ -73,7 +73,8 @@ export function createPostgresBackupRunsReader(db: Database): BackupRunsReader {
  * `backup_overdue` in the outbox (ADR 0020 § 3), as `budget_threshold_crossed`: it belongs to no creator, so the row
  * has `creator_id` null and is written with the admin role (RLS). The API never runs the check, but two workers can:
  * the first writes the day's row, the other finds it (advisory lock). The payload is parsed by its contract before
- * it is written (docs/architecture/jsonb.md).
+ * it is written (docs/architecture/jsonb.md). The search looks back two days only: the day's row is younger than that,
+ * and `domain_events_created_idx` then serves it instead of a scan of every conversation's events, each hour.
  */
 export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
   return {
@@ -85,7 +86,8 @@ export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
       return withAdmin(adminDb, async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`backup_overdue:${day}`}))`);
         const seen = await tx.execute(sql`
-          select 1 from domain_events where type = 'backup_overdue' and payload->>'day' = ${day} limit 1`);
+          select 1 from domain_events where created_at >= now() - interval '2 days' and type = 'backup_overdue'
+            and payload->>'day' = ${day} limit 1`);
         if (seen.rows.length > 0) return false;
         await tx.insert(schema.domainEvents).values({
           id: newId(EventIdSchema),

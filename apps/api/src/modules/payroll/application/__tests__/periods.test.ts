@@ -64,6 +64,7 @@ const stored = (goal: boolean): StoredStatement => ({
     validatedBy: null,
     paidAt: null,
     paidBy: null,
+    payment: null,
   },
   team: { netMinor: 50_000, collective: goal ? { reachedBps: 5_000, tier: null } : null },
 });
@@ -103,6 +104,8 @@ const read = (
           collectiveGoals: [],
           settings: { minimumPayoutMinor: 1_500 },
         }),
+      periods: () => Promise.reject(new Error('not read here')),
+      entries: () => Promise.reject(new Error('not read here')),
       settings: () => Promise.reject(new Error('not read here')),
       exchangeRates: () => Promise.reject(new Error('not read here')),
     },
@@ -144,5 +147,35 @@ describe('a period as its reader sees it (EQ-04)', () => {
     expect(agency.statements[0]?.canValidate).toBe(true);
     expect(agency.ended).toBe(true);
     expect((await read({ scope: 'owner', memberId: null }, false, '2025-03-10T00:00:00Z')).ended).toBe(false);
+  });
+});
+
+describe('the periods’ list (EQ-05)', () => {
+  it('says of each period whether it has ended, at the reader’s now, and keeps the page’s cursor', async () => {
+    const summary = {
+      window,
+      closedAt: null,
+      closedBy: null,
+      statements: { draft: 1, validated: 0, paid: 0, carried: 0 },
+      netMinor: 6_400,
+      payableMinor: 1_600,
+      paidMinor: 0,
+    };
+    const list = (at: string) =>
+      createPayrollReads(
+        {
+          period: () => Promise.reject(new Error('not read here')),
+          periods: () => Promise.resolve({ items: [summary], nextCursor: 'next' }),
+          entries: () => Promise.reject(new Error('not read here')),
+          settings: () => Promise.reject(new Error('not read here')),
+          exchangeRates: () => Promise.reject(new Error('not read here')),
+        },
+        () => new Date(at),
+      ).periods(newId(UserIdSchema), { limit: 1 });
+    expect(await list('2025-03-20T00:00:00Z')).toEqual({
+      items: [{ ...summary, ended: true }],
+      nextCursor: 'next',
+    });
+    expect((await list('2025-03-10T00:00:00Z')).items[0]?.ended).toBe(false);
   });
 });

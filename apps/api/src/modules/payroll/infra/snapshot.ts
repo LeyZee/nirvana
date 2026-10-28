@@ -111,6 +111,13 @@ export const settingsOf = (row: typeof payrollSettings.$inferSelect | undefined)
   minimumPayoutMinor: row?.minimumPayoutMinor ?? DEFAULT_MINIMUM_PAYOUT_MINOR,
 });
 
+/**
+ * The penalties whose periods span `period`, as the engine and the list of entries read them: which of them count
+ * there, or show struck through, is `penaltyCovers` and `penaltyApplies`, never this condition.
+ */
+export const penaltiesSpanning = (period: PayPeriod): ReturnType<typeof sql> =>
+  sql`${penalties.fromPeriod} <= ${period} and ${penalties.toPeriod} >= ${period}`;
+
 /** The registry's period of each report among `ids` a closing counted. */
 export async function registeredAmong(
   tx: Transaction,
@@ -158,10 +165,7 @@ export async function readSnapshot(
   );
 
   const bonusRows = await tx.select().from(bonuses).where(eq(bonuses.period, period));
-  const penaltyRows = await tx
-    .select()
-    .from(penalties)
-    .where(sql`${penalties.fromPeriod} <= ${period} and ${penalties.toPeriod} >= ${period}`);
+  const penaltyRows = await tx.select().from(penalties).where(penaltiesSpanning(period));
   const carryRows = await tx.select().from(carryOvers).where(eq(carryOvers.toPeriod, period));
   const adjustmentRows = await tx.select().from(payAdjustments).where(eq(payAdjustments.period, period));
   const tierRows = await tx

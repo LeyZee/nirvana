@@ -5,6 +5,8 @@ import {
   ForeignCurrencySchema,
   PAY_AMOUNT_MAX_MINOR,
   PAY_TARGET_MAX_MINOR,
+  PAYMENT_METHODS,
+  PAYMENT_REFERENCE_MAX,
   PENALTY_KINDS,
 } from '@nirvana/contracts';
 import { sql, type SQL } from 'drizzle-orm';
@@ -54,6 +56,7 @@ const periodCheck = (name: string, period: PgColumn): ReturnType<typeof check> =
   check(name, sql`extract(day from ${period}) in (1, 16)`);
 
 const amountMax = sql.raw(String(PAY_AMOUNT_MAX_MINOR));
+const referenceMax = sql.raw(String(PAYMENT_REFERENCE_MAX));
 const targetMax = sql.raw(String(PAY_TARGET_MAX_MINOR));
 
 /**
@@ -323,7 +326,8 @@ export const penalties = pgTable(
 /**
  * A member's statement for a period: one per member and period, its amounts as the engine gave them, the rules and
  * rates it used (`rules`), what it counted (`counted`: bonuses, penalties, carry-overs, adjustments) and the team's
- * figures. `revision` grows at each recalculation that changes it.
+ * figures. `revision` grows at each recalculation that changes it. Once paid, how (ADR 0023 § Factures): the day of the
+ * transfer, the method, its reference (a transfer's, never an IBAN) and what was sent.
  */
 export const commissionStatements = pgTable(
   'commission_statements',
@@ -363,6 +367,10 @@ export const commissionStatements = pgTable(
     validatedBy: text('validated_by').references(() => user.id),
     paidAt: timestampTz('paid_at'),
     paidBy: text('paid_by').references(() => user.id),
+    paidOn: date('paid_on'),
+    paymentMethod: text('payment_method'),
+    paymentReference: text('payment_reference'),
+    sentMinor: integer('sent_minor'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -382,6 +390,11 @@ export const commissionStatements = pgTable(
     check(
       'commission_statements_state_check',
       sql`(${t.validatedAt} is null) = (${t.validatedBy} is null) and (${t.paidAt} is null) = (${t.paidBy} is null) and (${t.status} = 'draft') = (${t.validatedAt} is null) and (${t.status} = 'paid') = (${t.paidAt} is not null)`,
+    ),
+    enumCheck('commission_statements', t.paymentMethod, PAYMENT_METHODS),
+    check(
+      'commission_statements_payment_check',
+      sql`(${t.status} = 'paid') = (${t.paidOn} is not null) and (${t.paidOn} is null) = (${t.paymentMethod} is null) and (${t.paidOn} is null) = (${t.sentMinor} is null) and (${t.paymentReference} is null or (${t.paidOn} is not null and char_length(${t.paymentReference}) between 1 and ${referenceMax})) and (${t.sentMinor} is null or ${t.sentMinor} between 1 and ${amountMax})`,
     ),
     index('commission_statements_period_idx').on(t.period),
     memberRead(t.memberId),

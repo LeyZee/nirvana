@@ -12,9 +12,12 @@ import {
   CreatePenaltyBodySchema,
   DomainError,
   ExchangeRatesSchema,
+  PageQuerySchema,
   PayAdjustmentSchema,
   PayCommissionStatementBodySchema,
+  PayPeriodPageSchema,
   PayPeriodSchema,
+  PayrollEntriesSchema,
   PayrollPeriodSchema,
   PayrollSettingsSchema,
   PenaltyIdSchema,
@@ -65,12 +68,30 @@ export function createPayrollRoutes(
   const ownerOrMember = requireRole('owner', 'operator');
   return (app) => {
     app.get(
+      '/payroll/periods',
+      {
+        preHandler: ownerOrMember,
+        schema: { querystring: PageQuerySchema, response: { 200: PayPeriodPageSchema } },
+      },
+      (request) => reads.periods(userOf(request), request.query),
+    );
+
+    app.get(
       '/payroll/periods/:period',
       {
         preHandler: ownerOrMember,
         schema: { params: PeriodParamsSchema, response: { 200: PayrollPeriodSchema } },
       },
       (request) => reads.period(userOf(request), request.params.period),
+    );
+
+    app.get(
+      '/payroll/entries',
+      {
+        preHandler: ownerOrMember,
+        schema: { querystring: PeriodParamsSchema, response: { 200: PayrollEntriesSchema } },
+      },
+      (request) => reads.entries(userOf(request), request.query.period),
     );
 
     app.post(
