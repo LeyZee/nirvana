@@ -145,11 +145,12 @@
   gap: var(--nv-space-3);
   flex-wrap: wrap;
 }
+/* Wide enough for the longest state pill: when the button does not fit beside it, it goes to the next line. */
 .tr-reader__who {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
+  flex: 1 1 11rem;
   min-width: 0;
 }
 .tr-reader__who h2 {
