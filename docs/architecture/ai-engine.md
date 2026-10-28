@@ -82,6 +82,7 @@ L'heure de la créatrice (jour ou nuit, dans son fuseau), l'ancienneté de la re
 
 ```ts
 Brief {
+  // BRIEF_INTENTS, packages/contracts/src/brief.ts: the one list, read by the model's schema and by the screens.
   intent: 'small_talk'|'kyc_answer'|'flirt'|'sexting'|'media_reaction'|'asks_for_media'|'price_objection'|
           'asks_if_bot'|'asks_to_meet'|'asks_personal_contact'|'asks_for_service'|'distress'|'complaint'|
           'off_topic_request'|'other';
