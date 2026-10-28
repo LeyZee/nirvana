@@ -40,6 +40,8 @@ export {
 } from './config';
 export {
   createLlmGateway,
+  type BrainAlert,
+  type BrainInput,
   type CallMeta,
   type ConnectionTest,
   type ConversationInput,
@@ -63,6 +65,8 @@ export type { HealthReport, HealthState, ProviderHealth, RoleHealth } from './he
 export { loadPrompt } from './prompts';
 export { createModelResolver, createTranscriberResolver, type ModelResolver } from './providers';
 export {
+  BRAIN_ALERTS_MAX,
+  brainAlertId,
   BriefSchema,
   JudgeCriterionSchema,
   VoiceOutputSchema,

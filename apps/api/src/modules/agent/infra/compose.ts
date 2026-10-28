@@ -1,5 +1,13 @@
 import { desireNow, type MediaDescription } from '@nirvana/contracts';
-import type { Brief, CallTrace, ConversationTurn, LlmFailure, LlmGateway, VoiceInput } from '@nirvana/llm';
+import type {
+  BrainAlert,
+  Brief,
+  CallTrace,
+  ConversationTurn,
+  LlmFailure,
+  LlmGateway,
+  VoiceInput,
+} from '@nirvana/llm';
 
 import {
   desireMoved,
@@ -84,6 +92,8 @@ export interface ComposeTurnInput {
   readonly desire?: DesireInput;
   /** Read once the brain has spoken: true stops before the voice (a handoff, nothing to answer), at no cost. */
   readonly skipVoice?: (brief: Brief | undefined) => boolean;
+  /** Her alerts written as a phrase, for the brain to check his last message against (P4-01). */
+  readonly alerts?: readonly BrainAlert[];
 }
 
 /** A follow-up as the voice writes it: how long he has been silent, and her own way of following up if she wrote one. */
@@ -321,7 +331,10 @@ export async function composeTurn(
   };
   if (input.followUp !== undefined)
     return writeFollowUp(gateway, persona, base, followUpBrief(input.followUp), notes.dropped);
-  const brain = await gateway.brain(base);
+  const brain = await gateway.brain({
+    ...base,
+    ...(input.alerts !== undefined && input.alerts.length > 0 && { alerts: input.alerts }),
+  });
   const brief = brain.ok ? brain.value.output : undefined;
   // A trap overrides whatever the brain suggested: she does not play along (agent/domain/traps.ts).
   const trap = assessTrap({

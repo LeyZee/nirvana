@@ -213,7 +213,12 @@ export const EVENT_PAYLOADS = {
    * An alert that only lets a human know (P4-01): the agent goes on. One that pauses it is a `handoff_requested` with
    * its `trigger` instead, never both. Names the alert and how it matched, never what the fan wrote (ADR 0020).
    */
-  alert_triggered: z.object({ conversationId: ConversationIdSchema, trigger: AlertTriggerSchema }),
+  alert_triggered: z.object({
+    conversationId: ConversationIdSchema,
+    trigger: AlertTriggerSchema,
+    /** Sent to Telegram: her alert's `notify` when it went off, always for the system's; kept in the history either way. */
+    notify: z.boolean(),
+  }),
   /**
    * The engine answered nothing: the conversation goes back to `idle`. `llm_unavailable` is only read from older
    * journals; an unreachable model now hands the conversation to a human (`handoff_requested`, cause `llm_unavailable`).

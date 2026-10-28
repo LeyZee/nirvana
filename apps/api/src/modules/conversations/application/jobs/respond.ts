@@ -283,7 +283,19 @@ export function createRespondJob({ uow, clock, voice, fans, composer, replyHours
         return;
       }
       const meta: EventMeta = { actor: 'ai', correlationId: payload.correlationId, at: clock.now() };
-      const conversation = await recordDesire(tx, locked, result, meta);
+      let conversation = await recordDesire(tx, locked, result, meta);
+      // Her alerts that only let a human know (P4-01), whatever the answer becomes: named, never his words.
+      for (const alert of result.alerts ?? []) {
+        conversation = await appendEvent(
+          tx,
+          conversation,
+          {
+            type: 'alert_triggered',
+            payload: { conversationId: conversation.id, trigger: alert.trigger, notify: alert.notify },
+          },
+          meta,
+        );
+      }
       if (result.kind === 'draft') {
         await tx.drafts.insert({
           id: draftId,
@@ -323,6 +335,7 @@ export function createRespondJob({ uow, clock, voice, fans, composer, replyHours
               cause,
               ...(held && { reason: WAITED_NO_REPLY_REASON }),
               detail: [...detail],
+              ...(result.trigger !== undefined && { trigger: result.trigger }),
             },
           },
           meta,

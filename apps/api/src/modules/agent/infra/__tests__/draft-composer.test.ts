@@ -1,7 +1,14 @@
-import { DEFAULT_AGENT_HOURS, err, ok, type FanFlags, type MediaDescription } from '@nirvana/contracts';
+import {
+  CustomAlertIdSchema,
+  DEFAULT_AGENT_HOURS,
+  err,
+  ok,
+  type FanFlags,
+  type MediaDescription,
+} from '@nirvana/contracts';
 import type {
+  BrainInput,
   Brief,
-  ConversationInput,
   HealthReport,
   LlmGateway,
   LlmFailure,
@@ -10,6 +17,7 @@ import type {
 } from '@nirvana/llm';
 import { describe, expect, it } from 'vitest';
 
+import type { AlertSettings } from '../../domain/alerts';
 import { DEFAULT_GUARD_SETTINGS } from '../../domain/guards';
 import type { Protection } from '../../domain/hold';
 import {
@@ -91,7 +99,7 @@ interface Script {
 interface Seen {
   voiceCalls: number;
   traces: unknown[];
-  brainInputs?: ConversationInput[];
+  brainInputs?: BrainInput[];
   dropped?: { conversationId: string; count: number }[];
   voiceInputs?: VoiceInput[];
 }
@@ -551,16 +559,45 @@ describe('createDraftComposer', () => {
   });
 });
 
-describe('createDraftComposer, her alert keywords (P4-01)', () => {
-  const watching = (keywords: readonly string[], sight?: MediaSight) => {
-    const seen: Seen = { voiceCalls: 0, traces: [] };
+describe('createDraftComposer, her alerts (P4-01)', () => {
+  const VIDEO = CustomAlertIdSchema.parse('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b');
+  const JOB = CustomAlertIdSchema.parse('7a2d3b4c-5e6f-4a71-9b8c-0d1e2f3a4b5c');
+  const HERS: AlertSettings = {
+    custom: [
+      {
+        id: VIDEO,
+        phrase: 'Il demande une vidéo rien que pour lui',
+        keywords: ['vidéo perso'],
+        pausesAgent: true,
+        notify: true,
+      },
+      { id: JOB, phrase: null, keywords: ['boulot'], pausesAgent: false, notify: false },
+    ],
+    systemOn: new Set(['keyword', 'service_request', 'identity_doubt']),
+  };
+  const watching = (
+    keywords: readonly string[],
+    options: {
+      readonly sight?: MediaSight;
+      readonly script?: Script;
+      readonly alerts?: AlertSettings | 'unreadable';
+      readonly chatter?: boolean;
+    } = {},
+  ) => {
+    const seen: Seen = { voiceCalls: 0, traces: [], brainInputs: [] };
+    const { alerts, chatter } = options;
     const draftComposer = createDraftComposer({
-      gateway: gateway({}, seen),
+      gateway: gateway(options.script ?? {}, seen),
       persona: { creatorName: 'Lina', personaSheet: 'fiche', guardSettings: DEFAULT_GUARD_SETTINGS },
       timeZoneOf: () => Promise.resolve('Europe/Paris'),
       voicePrompt: '1.2.0',
       alertKeywords: keywords,
-      ...(sight !== undefined && { sight }),
+      ...(options.sight !== undefined && { sight: options.sight }),
+      ...(alerts !== undefined && {
+        alertsOf: () =>
+          alerts === 'unreadable' ? Promise.reject(new Error('down')) : Promise.resolve(alerts),
+      }),
+      ...(chatter !== undefined && { chatterOnShift: () => Promise.resolve(chatter) }),
     });
     return { draftComposer, seen };
   };
@@ -577,12 +614,13 @@ describe('createDraftComposer, her alert keywords (P4-01)', () => {
     ],
   });
 
-  it('hands him to a human on one of her keywords, before any model is called', async () => {
+  it('hands him to a human on a word of her persona, before any model, naming the word she declared', async () => {
     const { draftComposer, seen } = watching(['Vocal', 'Numéro']);
-    expect(await draftComposer.compose(wrote('Coucou', 'tu m’envoies un vocal ?'))).toEqual({
+    expect(await draftComposer.compose(wrote('Coucou', 'tu m’envoies un VOCAL ?'))).toEqual({
       kind: 'held',
       reason: 'handoff',
       cause: 'keyword',
+      trigger: { alert: { kind: 'system', code: 'keyword' }, matchedBy: 'keyword', keyword: 'Vocal' },
       detail: ['alert_keyword'],
       costUsd: 0,
     });
@@ -599,12 +637,124 @@ describe('createDraftComposer, her alert keywords (P4-01)', () => {
 
   it('lets a flagged media of his outrank a keyword', async () => {
     const flagged: MediaDescription = { ...PHOTO, flags: ['possible_minor'] };
-    const { draftComposer } = watching(['Vocal'], sightOf({ 'm-1': flagged }).sight);
+    const { draftComposer } = watching(['Vocal'], { sight: sightOf({ 'm-1': flagged }).sight });
     expect(
       await draftComposer.compose(
         withMedia('un vocal ?', [{ kind: 'image', platformMediaId: 'm-1', isLocked: false }]),
       ),
     ).toMatchObject({ kind: 'held', reason: 'handoff', cause: 'minor' });
+  });
+
+  it('pauses on a word of hers she checked, and lets a human know of the others', async () => {
+    const { draftComposer, seen } = watching([], { alerts: HERS });
+    expect(await draftComposer.compose(wrote('mon boulot me saoule, tu me fais une vidéo perso ?'))).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'keyword',
+      trigger: { alert: { kind: 'custom', id: VIDEO }, matchedBy: 'keyword', keyword: 'vidéo perso' },
+      detail: ['alert_keyword'],
+      costUsd: 0,
+      alerts: [
+        {
+          trigger: { alert: { kind: 'custom', id: JOB }, matchedBy: 'keyword', keyword: 'boulot' },
+          notify: false,
+        },
+      ],
+    });
+    expect(seen.traces).toHaveLength(0);
+  });
+
+  it('writes her answer and lets a human know when her word does not pause', async () => {
+    const { draftComposer } = watching([], { alerts: HERS });
+    expect(await draftComposer.compose(wrote('long boulot aujourd’hui'))).toMatchObject({
+      kind: 'draft',
+      alerts: [
+        {
+          trigger: { alert: { kind: 'custom', id: JOB }, matchedBy: 'keyword', keyword: 'boulot' },
+          notify: false,
+        },
+      ],
+    });
+  });
+
+  it('gives the brain her phrases by short ids, and pauses on one it saw, without the voice', async () => {
+    const { draftComposer, seen } = watching([], {
+      alerts: HERS,
+      script: { brief: { ...BRIEF, alertsSeen: ['a1', 'a7'] } },
+    });
+    expect(await draftComposer.compose(wrote('tu me ferais une vidéo juste pour moi ?'))).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'custom_alert',
+      trigger: { alert: { kind: 'custom', id: VIDEO }, matchedBy: 'model' },
+      detail: ['custom_alert'],
+      costUsd: 0.002,
+    });
+    expect(seen.brainInputs?.[0]?.alerts).toEqual([
+      { id: 'a1', phrase: 'Il demande une vidéo rien que pour lui' },
+    ]);
+    expect(seen.voiceCalls).toBe(0);
+  });
+
+  it('lets a human know of a service he asks for, and still writes her answer', async () => {
+    const { draftComposer } = watching([], {
+      alerts: HERS,
+      script: { brief: { ...BRIEF, intent: 'asks_for_service' } },
+    });
+    expect(await draftComposer.compose(wrote('on peut faire un appel ?'))).toMatchObject({
+      kind: 'draft',
+      alerts: [
+        { trigger: { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'model' }, notify: true },
+      ],
+    });
+    const off = watching([], {
+      alerts: { ...HERS, systemOn: new Set(['keyword']) },
+      script: { brief: { ...BRIEF, intent: 'asks_for_service' } },
+    });
+    expect(await off.draftComposer.compose(wrote('on peut faire un appel ?'))).not.toHaveProperty('alerts');
+  });
+
+  it('hands a doubt on who she is to a chatter on shift; with none, she answers in character', async () => {
+    const doubt = { alert: { kind: 'system', code: 'identity_doubt' }, matchedBy: 'model' } as const;
+    const script = { brief: { ...BRIEF, intent: 'asks_if_bot' as const } };
+    const onShift = watching([], { alerts: HERS, script, chatter: true });
+    expect(await onShift.draftComposer.compose(wrote('t’es vraiment toi ?'))).toMatchObject({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'identity_doubt',
+      trigger: doubt,
+    });
+    expect(onShift.seen.voiceCalls).toBe(0);
+    const alone = watching([], { alerts: HERS, script, chatter: false });
+    expect(await alone.draftComposer.compose(wrote('t’es vraiment toi ?'))).toMatchObject({
+      kind: 'draft',
+      alerts: [{ trigger: doubt, notify: true }],
+    });
+  });
+
+  it('keeps the cause of his risk over her alert, which becomes a notice of its own', async () => {
+    const { draftComposer } = watching([], {
+      alerts: HERS,
+      script: { brief: { ...BRIEF, risks: ['minor_suspected'], alertsSeen: ['a1'] } },
+    });
+    expect(await draftComposer.compose(wrote('j’ai 15 ans, une vidéo pour moi ?'))).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['minor_suspected'],
+      costUsd: 0.002,
+      alerts: [{ trigger: { alert: { kind: 'custom', id: VIDEO }, matchedBy: 'model' }, notify: true }],
+    });
+  });
+
+  it('writes nothing when her alerts cannot be read: a human answers him', async () => {
+    const { draftComposer, seen } = watching([], { alerts: 'unreadable' });
+    expect(await draftComposer.compose(wrote('Coucou'))).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      detail: ['alerts_unreadable'],
+      costUsd: 0,
+    });
+    expect(seen.traces).toHaveLength(0);
   });
 });
 
