@@ -49,6 +49,14 @@ const CRON_JOBS: readonly CronJob[] = [
   // Pay's drafts of every open period, computed again each hour (EQ-04): what a report, a rate or a change of period
   // brought, should its own job have been missed. A run that finds nothing new writes nothing.
   { task: 'payroll.recalculate_open', match: '23 * * * *', options: { backfillPeriod: 0, maxAttempts: 1 } },
+  // The ECB's rates (ADR 0033), published around 16:00 CET each working day: read each hour, before the hour's
+  // recalculation, so that a new rate reaches the drafts within the hour. The file holds 90 days: a run missed during
+  // an outage is caught up by the next one, no backfill. Its retries are the contract's.
+  {
+    task: 'payroll.fetch_exchange_rates',
+    match: '7 * * * *',
+    options: { backfillPeriod: 0, maxAttempts: JOB_MAX_ATTEMPTS['payroll.fetch_exchange_rates'] },
+  },
 ];
 
 export function parsedCronJobs(jobs: readonly CronJob[] = CRON_JOBS): ParsedCronItem[] {

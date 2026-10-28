@@ -39,6 +39,7 @@ export const JOB_NAMES = [
   'scheduling.lapse_swaps',
   'payroll.recalculate',
   'payroll.recalculate_open',
+  'payroll.fetch_exchange_rates',
   'media.describe',
   'providers.check_credentials',
   'telegram.scan',
@@ -113,6 +114,8 @@ export const JOB_PAYLOADS = {
   'payroll.recalculate': z.object({ period: PayPeriodSchema }),
   /** Every open period up to the current one computed again, the hour's safety net; pay's periods written first. */
   'payroll.recalculate_open': z.object({}),
+  /** The ECB's last 90 days of rates, each day written once (ADR 0033); a run that finds nothing new writes nothing. */
+  'payroll.fetch_exchange_rates': z.strictObject({}),
   'media.describe': z.object({
     creatorId: CreatorIdSchema,
     mediaAssetId: MediaAssetIdSchema,
@@ -147,6 +150,8 @@ export const JOB_MAX_ATTEMPTS = {
   // A recalculation is replayable and writes nothing when nothing changed; the hourly one catches up anyway.
   'payroll.recalculate': 5,
   'payroll.recalculate_open': 1,
+  // The ECB may be down for a minute; the next hour reads the 90 days again anyway.
+  'payroll.fetch_exchange_rates': 3,
   'media.describe': 3,
   'providers.check_credentials': 1,
   // The scan is also enqueued by the `domain_events` trigger (0006) with 25, and a flush by the module with 10:
