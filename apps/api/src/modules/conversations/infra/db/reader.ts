@@ -28,7 +28,7 @@ import {
 
 import type { Clock, ConversationReader, PageRequest } from '../../domain/ports';
 
-import { decodeCursor, decodeSeqCursor, encodeCursor, toStoredEvent } from './rows';
+import { cursorInstant, decodeCursor, decodeSeqCursor, encodeCursor, toStoredEvent } from './rows';
 
 const OPEN_DRAFT_STATUSES = ['pending', 'approved', 'edited'];
 
@@ -65,7 +65,7 @@ async function summaries(
   where: ReturnType<typeof and>,
   limit: number,
   now: Date,
-): Promise<ConversationSummary[]> {
+): Promise<{ summary: ConversationSummary; cursorAt: string }[]> {
   const rows = await tx
     .select({
       id: schema.conversations.id,
@@ -81,6 +81,7 @@ async function summaries(
       updatedAt: schema.conversations.updatedAt,
       desireScore: schema.conversations.desireScore,
       desireAt: schema.conversations.desireAt,
+      cursorAt: cursorInstant(schema.conversations.updatedAt),
     })
     .from(schema.conversations)
     .innerJoin(schema.fans, eq(schema.fans.id, schema.conversations.fanId))
@@ -88,16 +89,19 @@ async function summaries(
     .orderBy(sql`${schema.conversations.updatedAt} desc, ${schema.conversations.id} desc`)
     .limit(limit);
   return rows.map((row) => ({
-    id: ConversationIdSchema.parse(row.id),
-    fanId: FanIdSchema.parse(row.fanId),
-    fanDisplayName: row.fanDisplayName,
-    state: ConversationStateSchema.parse(row.state),
-    mode: ConversationModeSchema.parse(row.mode),
-    lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
-    lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,
-    unreadCount: row.unreadCount,
-    updatedAt: row.updatedAt.toISOString(),
-    desire: desireAt(row.desireScore, row.desireAt, now),
+    cursorAt: row.cursorAt,
+    summary: {
+      id: ConversationIdSchema.parse(row.id),
+      fanId: FanIdSchema.parse(row.fanId),
+      fanDisplayName: row.fanDisplayName,
+      state: ConversationStateSchema.parse(row.state),
+      mode: ConversationModeSchema.parse(row.mode),
+      lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
+      lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,
+      unreadCount: row.unreadCount,
+      updatedAt: row.updatedAt.toISOString(),
+      desire: desireAt(row.desireScore, row.desireAt, now),
+    },
   }));
 }
 
@@ -112,13 +116,16 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
           and(
             after === null
               ? undefined
-              : sql`(${schema.conversations.updatedAt}, ${schema.conversations.id}) < (${after.at.toISOString()}::timestamptz, ${after.id}::uuid)`,
+              : sql`(${schema.conversations.updatedAt}, ${schema.conversations.id}) < (${after.at}::timestamptz, ${after.id}::uuid)`,
             routedTo === undefined ? undefined : eq(schema.conversations.routedToUserId, routedTo),
           ),
           page.limit + 1,
           clock.now(),
         );
-        return paged(rows, page, (last) => encodeCursor(new Date(last.updatedAt), last.id));
+        const { items, nextCursor } = paged(rows, page, (last) =>
+          encodeCursor(last.cursorAt, last.summary.id),
+        );
+        return { items: items.map((row) => row.summary), nextCursor };
       }),
 
     isRoutedTo: (creatorId, id, userId) =>
@@ -136,8 +143,9 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
         db,
         creatorId,
         async (tx) => {
-          const [summary] = await summaries(tx, eq(schema.conversations.id, id), 1, clock.now());
-          if (summary === undefined) return null;
+          const [found] = await summaries(tx, eq(schema.conversations.id, id), 1, clock.now());
+          if (found === undefined) return null;
+          const { summary } = found;
           const drafts = await tx
             .select()
             .from(schema.drafts)
@@ -166,20 +174,21 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
       withTenant(db, creatorId, async (tx) => {
         const after = decodeCursor(page.cursor);
         const rows = await tx
-          .select()
+          .select({ row: schema.messages, cursorAt: cursorInstant(schema.messages.platformCreatedAt) })
           .from(schema.messages)
           .where(
             and(
               eq(schema.messages.conversationId, id),
               after === null
                 ? undefined
-                : sql`(${schema.messages.platformCreatedAt}, ${schema.messages.id}) < (${after.at.toISOString()}::timestamptz, ${after.id}::uuid)`,
+                : sql`(${schema.messages.platformCreatedAt}, ${schema.messages.id}) < (${after.at}::timestamptz, ${after.id}::uuid)`,
             ),
           )
           .orderBy(sql`${schema.messages.platformCreatedAt} desc, ${schema.messages.id} desc`)
           .limit(page.limit + 1);
-        return paged(
-          rows.map((row) => ({
+        const { items, nextCursor } = paged(rows, page, (last) => encodeCursor(last.cursorAt, last.row.id));
+        return {
+          items: items.map(({ row }) => ({
             id: MessageIdSchema.parse(row.id),
             direction: MessageDirectionSchema.parse(row.direction),
             author: MessageAuthorSchema.parse(row.author),
@@ -190,9 +199,8 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
             draftId: row.draftId === null ? null : DraftIdSchema.parse(row.draftId),
             platformCreatedAt: row.platformCreatedAt.toISOString(),
           })),
-          page,
-          (last) => encodeCursor(new Date(last.platformCreatedAt), last.id),
-        );
+          nextCursor,
+        };
       }),
 
     events: (creatorId, id, page) =>

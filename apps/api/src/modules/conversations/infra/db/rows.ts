@@ -16,7 +16,7 @@ import {
   PlatformAccountIdSchema,
   UserIdSchema,
 } from '@nirvana/contracts';
-import type { schema } from '@nirvana/db';
+import { sql, type schema } from '@nirvana/db';
 import { z } from 'zod';
 
 import type { Conversation, Draft, DraftFact, StoredEvent } from '../../domain/ports';
@@ -141,18 +141,30 @@ export function toStoredEvent(row: typeof schema.conversationEvents.$inferSelect
   };
 }
 
-/** Opaque cursors (api.md § Pagination): base64url of the sort key of the last item returned. */
+/**
+ * Opaque cursors (api.md § Pagination): base64url of the sort key of the last item returned. The instant keeps
+ * Postgres's microseconds: cut to a JS `Date`'s milliseconds, the next page skipped the rows of the same millisecond
+ * that sort after it.
+ */
 const KeyCursorSchema = z.tuple([z.iso.datetime(), z.uuid()]);
 
-export function encodeCursor(at: Date, id: string): string {
-  return Buffer.from(JSON.stringify([at.toISOString(), id])).toString('base64url');
+/** A timestamptz column as the exact ISO instant, microseconds included (a `Date` keeps only milliseconds). */
+export function cursorInstant(
+  column: typeof schema.conversations.updatedAt | typeof schema.messages.platformCreatedAt,
+): ReturnType<typeof sql<string>> {
+  return sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 }
 
-export function decodeCursor(cursor: string | undefined): { at: Date; id: string } | null {
+export function encodeCursor(at: string, id: string): string {
+  return Buffer.from(JSON.stringify([at, id])).toString('base64url');
+}
+
+/** `at` stays the ISO text the cursor carries, for Postgres to read back at full precision. */
+export function decodeCursor(cursor: string | undefined): { at: string; id: string } | null {
   if (cursor === undefined) return null;
   const parsed = KeyCursorSchema.safeParse(safeJson(Buffer.from(cursor, 'base64url').toString()));
   if (!parsed.success) throw new CursorInvalid();
-  return { at: new Date(parsed.data[0]), id: parsed.data[1] };
+  return { at: parsed.data[0], id: parsed.data[1] };
 }
 
 export function decodeSeqCursor(cursor: string | undefined): number | null {
