@@ -480,8 +480,59 @@ export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
 /** The longest transfer reference pay keeps. */
 export const PAYMENT_REFERENCE_MAX = 100;
 
-/** The transfer's reference as the bank or the service shows it, to find it again; never an IBAN nor an account number. */
-const PaymentReferenceSchema = z.string().trim().min(1).max(PAYMENT_REFERENCE_MAX);
+/**
+ * How long an IBAN is in each country that issues them: ISO 13616's registry, and the national formats banks issue
+ * outside it (UEMOA and CEMAC zones, a few others), each with its check digits.
+ */
+const IBAN_LENGTHS: ReadonlyMap<string, number> = new Map(
+  (
+    'AD24 AE23 AL28 AO25 AT20 AZ28 BA20 BE16 BF28 BG22 BH22 BI27 BJ28 BR29 BY28 CF27 CG27 CH21 CI28 ' +
+    'CM27 CR22 CV25 CY28 CZ24 DE22 DJ27 DK18 DO28 DZ26 EE20 EG29 ES24 FI18 FK18 FO18 FR27 GA27 GB22 ' +
+    'GE22 GI23 GL18 GQ27 GR27 GT28 GW25 HN28 HR21 HU28 IE22 IL23 IQ23 IR26 IS26 IT27 JO30 KM27 KW30 ' +
+    'KZ20 LB28 LC32 LI21 LT20 LU20 LV21 LY25 MA28 MC27 MD24 ME22 MG27 MK19 ML28 MN20 MR27 MT31 MU30 ' +
+    'MZ25 NE28 NI28 NL18 NO15 OM23 PK24 PL28 PS29 PT25 QA29 RO24 RS22 RU33 SA24 SC31 SD18 SE24 SI19 ' +
+    'SK24 SM27 SN28 SO23 ST25 SV28 TD27 TG28 TL23 TN24 TR26 UA29 VA22 VG24 XK20 YE30'
+  )
+    .split(' ')
+    .map((entry): [string, number] => [entry.slice(0, 2), Number(entry.slice(2))]),
+);
+
+/** ISO 7064 mod 97-10: the first four characters moved to the end, a letter read as 10 to 35, one at a time. */
+function ibanCheckPasses(candidate: string): boolean {
+  let remainder = 0;
+  for (const char of candidate.slice(4) + candidate.slice(0, 4)) {
+    const value = Number.parseInt(char, 36);
+    remainder = (remainder * (value < 10 ? 10 : 100) + value) % 97;
+  }
+  return remainder === 1;
+}
+
+/**
+ * Whether `text` holds an IBAN anywhere: kept to its letters and digits in capitals, some window of it starts with a
+ * country code and two digits, has that country's exact length, and passes mod 97. « Virement FR76 3000… » is one.
+ */
+export function containsIban(text: string): boolean {
+  const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  for (let start = 0; start + 4 <= compact.length; start += 1) {
+    const length = IBAN_LENGTHS.get(compact.slice(start, start + 2));
+    if (length === undefined || start + length > compact.length) continue;
+    const candidate = compact.slice(start, start + length);
+    if (/^[A-Z]{2}\d{2}/.test(candidate) && ibanCheckPasses(candidate)) return true;
+  }
+  return false;
+}
+
+/**
+ * The transfer's reference as the bank or the service shows it, to find it again; never an IBAN (refused, here for the
+ * screen and the server alike: the repository is public and real payments go through this column) nor an account
+ * number (said by the screen).
+ */
+const PaymentReferenceSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(PAYMENT_REFERENCE_MAX)
+  .refine((reference) => !containsIban(reference), 'Une référence de virement, jamais un IBAN');
 
 /** What was sent, in euro cents: never nothing. */
 const SentMinorSchema = z.number().int().min(1).max(PAY_AMOUNT_MAX_MINOR);
@@ -661,7 +712,8 @@ export type ValidateCommissionStatementBody = z.infer<typeof ValidateCommissionS
 /**
  * `POST /v1/payroll/statements/:id/pay` (owner only) → 200 `CommissionStatementSchema`: `validated` → `paid`, once,
  * with how it was paid (ADR 0023 § Factures). `paidOn` is the day of the transfer, never after today in the agency's
- * zone (`payment_in_future_unprocessable`). `sentMinor` is what was sent, and it must be what the statement pays
+ * zone (`payment_in_future_unprocessable`) nor before the first day of the statement's period
+ * (`payment_before_period_unprocessable`). `reference` is refused when it holds an IBAN (400, `containsIban`). `sentMinor` is what was sent, and it must be what the statement pays
  * (`payment_amount_unprocessable`; whether another amount may be recorded is a question the EQ-05 card keeps open): a
  * statement that pays nothing, its total carried over, stays validated.
  */
@@ -702,6 +754,7 @@ export function mayValidateStatement(
  * `exchange_rate_missing_conflict` 409, a currency without a rate read ;
  * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
  * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
+ * `payment_before_period_unprocessable` 422, a payment dated before the first day of the statement's period ;
  * `payment_amount_unprocessable` 422, an amount sent that is not what the statement pays ;
  * `cursor_invalid` 400, a page cursor the periods' list did not give ;
  * `payroll_entries_too_many_unprocessable` 422, more than `PAYROLL_ENTRIES_MAX` entries of a kind in one period ;
@@ -732,6 +785,7 @@ export const PAYROLL_ERROR_CODES = [
   'exchange_rate_missing_conflict',
   'commission_rate_missing_conflict',
   'payment_in_future_unprocessable',
+  'payment_before_period_unprocessable',
   'payment_amount_unprocessable',
   'cursor_invalid',
   'payroll_entries_too_many_unprocessable',

@@ -5,6 +5,7 @@ import {
   BonusTierSetSchema,
   canonicalExchangeRates,
   CollectiveGoalSchema,
+  containsIban,
   CreateBonusBodySchema,
   CreateBonusTierSetBodySchema,
   CreateCollectiveGoalBodySchema,
@@ -14,6 +15,7 @@ import {
   mayValidateStatement,
   PAY_AMOUNT_MAX_MINOR,
   PAYROLL_ERROR_CODES,
+  PayCommissionStatementBodySchema,
   PenaltySchema,
   bonusTiersFor,
   collectiveGoalFor,
@@ -200,6 +202,48 @@ describe('statements', () => {
   it('give every error code a suffix that sets its status (api.md)', () => {
     for (const code of PAYROLL_ERROR_CODES) {
       expect(code).toMatch(/_(not_found|invalid|conflict|unprocessable|forbidden)$/u);
+    }
+  });
+});
+
+describe('payments', () => {
+  // Invented, with their check digits computed: a French, a Swiss and a Beninese IBAN (UEMOA, outside SWIFT's registry).
+  const IBANS = ['FR6212345678900000ABC123456', 'CH3108390123456789012', 'BJ75BC0100100100000012345678'];
+  const spaced = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
+  const pay = (reference: string) =>
+    PayCommissionStatementBodySchema.safeParse({
+      revision: 1,
+      paidOn: '2026-11-02',
+      method: 'bank_transfer',
+      reference,
+      sentMinor: 13_333,
+    });
+
+  it('refuse a reference that holds an IBAN, alone or in a sentence, with or without spaces', () => {
+    for (const iban of IBANS)
+      for (const reference of [iban, spaced(iban), iban.toLowerCase(), `Virement ${spaced(iban)} reçu`]) {
+        expect(containsIban(reference), reference).toBe(true);
+        const refused = pay(reference);
+        expect(refused.success, reference).toBe(false);
+        expect(refused.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
+          [['reference'], 'Une référence de virement, jamais un IBAN'],
+        ]);
+      }
+  });
+
+  it('keep a transfer’s reference, a wrong check digit included', () => {
+    const wrongKey = ['FR6312345678900000ABC123456', 'CH3208390123456789012', 'BJ76BC0100100100000012345678'];
+    for (const reference of [
+      ...wrongKey,
+      ...wrongKey.map(spaced),
+      'P2P-4E7F2C1A',
+      'Transfer #1284759302',
+      '8MC585209K746392H',
+      'Commission du 16 au 31 octobre',
+      'FR76',
+    ]) {
+      expect(containsIban(reference), reference).toBe(false);
+      expect(pay(reference).success, reference).toBe(true);
     }
   });
 });
