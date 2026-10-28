@@ -12,6 +12,8 @@ import {
 } from '@nirvana/contracts';
 import { useId, useState, type JSX } from 'react';
 
+import { MinimumPayout } from './MinimumPayout';
+
 import { addPayRules, usePayRules, useRefreshPayRules, type ReportRefusal } from '@/reports/api';
 import {
   parsePercent,
@@ -90,6 +92,7 @@ export function PayRulesSection(): JSX.Element {
 
   return (
     <section className="rp-rules">
+      <MinimumPayout />
       <p className="rp-rules__lede nv-enter">
         Ce que la paie lit pour chaque compte : la devise, la TVA, la commission de la plateforme et la source
         des ventes. Des règles ne changent jamais : de nouvelles prennent la suite à une quinzaine qui n’a pas
