@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { TelegramBotIdSchema, TelegramChatIdSchema } from '@nirvana/contracts';
 import {
   createMemoryHistory,
   createRootRoute,
@@ -6,17 +7,18 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TelegramSection } from './TelegramSection';
-import { TelegramOff, fetchDeliveries, fetchOverview } from './api';
+import { TelegramOff, fetchDeliveries, fetchOverview, saveRoutes } from './api';
 import { parseTelegramSearch, searchOfTab, tabOfSearch } from './search';
 
 vi.mock('./api', async (actual) => ({
   ...(await actual<typeof import('./api')>()),
   fetchOverview: vi.fn(),
   fetchDeliveries: vi.fn(),
+  saveRoutes: vi.fn(),
 }));
 
 function renderSection(): void {
@@ -105,5 +107,47 @@ describe('Réglages › Telegram with its tab in the address', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /Bots et groupes/ }));
     expect(await screen.findByRole('tab', { name: /Bots et groupes/, selected: true })).toBeTruthy();
     expect(address()).toEqual({ search: { onglet: 'bots' }, steps: 1 });
+  });
+});
+
+describe('Réglages › Telegram, her own alerts (P4-01)', () => {
+  const chatId = TelegramChatIdSchema.parse('01900000-0000-7000-8000-0000000000c1');
+
+  beforeEach(() => {
+    vi.mocked(fetchOverview).mockResolvedValue({
+      bots: [
+        {
+          id: TelegramBotIdSchema.parse('01900000-0000-7000-8000-0000000000b1'),
+          username: 'demo_bot',
+          displayName: 'Démo',
+          state: 'active',
+          lastPolledAt: null,
+          chats: [
+            {
+              id: chatId,
+              title: 'Équipe',
+              kind: 'supergroup',
+              membership: 'member',
+              canPost: true,
+              lastSentAt: null,
+              lastError: null,
+            },
+          ],
+        },
+      ],
+      routes: [],
+      coverage: [],
+      version: 3,
+    });
+    vi.mocked(saveRoutes).mockResolvedValue({ ok: true, value: { routes: [], version: 4 } });
+  });
+
+  it('routes « Alertes personnalisées » from the Alertes tab, as Réglages › Alertes links to', async () => {
+    renderSection();
+    const row = await screen.findByRole('group', { name: 'Groupes pour Alertes personnalisées' });
+    fireEvent.click(within(row).getByRole('checkbox', { name: /Équipe/ }));
+    await waitFor(() => {
+      expect(saveRoutes).toHaveBeenCalledWith(3, [{ creatorId: null, topic: 'custom', chatId }]);
+    });
   });
 });
