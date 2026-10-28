@@ -93,6 +93,8 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
   const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
   // Never read once and not connected: no account was ever linked. A step to come, not an outage.
   const unlinked = !reveal.connected && reveal.lastReadAt === null;
+  // The session holds but nobody reads it any more: never green, the last read says since when.
+  const late = reveal.connected && reveal.late;
   const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
   const rateText = liveRate.rate === null ? 'pas encore mesuré' : `${percent(liveRate.rate)} sans retouche`;
   const rateOk = liveRate.rate !== null && liveRate.rate >= liveRate.target;
@@ -120,9 +122,15 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
   const cards: AgentState['cards'] = [
     {
       id: 'reveal',
-      tone: reveal.connected ? 'ok' : unlinked ? 'idle' : 'bad',
+      tone: late ? 'warn' : reveal.connected ? 'ok' : unlinked ? 'idle' : 'bad',
       title: 'Connexion à Reveal',
-      value: reveal.connected ? 'Connectée' : unlinked ? 'Pas encore reliée' : 'Déconnectée',
+      value: late
+        ? 'Lecture en retard'
+        : reveal.connected
+          ? 'Connectée'
+          : unlinked
+            ? 'Pas encore reliée'
+            : 'Déconnectée',
       rows: [
         ['Dernière lecture', reveal.lastReadAt === null ? 'jamais' : ago(reveal.lastReadAt, now)],
         ['Conversations suivies', String(reveal.conversations)],
@@ -210,12 +218,13 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
   ];
 
   const summary = [
-    `Reveal ${reveal.connected ? 'connecté' : unlinked ? 'pas encore relié' : 'déconnecté'}`,
+    `Reveal ${late ? 'lu en retard' : reveal.connected ? 'connecté' : unlinked ? 'pas encore relié' : 'déconnecté'}`,
     plural(reveal.conversations, 'conversation', 'conversations'),
     plural(guardCount, 'garde', 'gardes'),
     ...(jobs.dead !== null && jobs.dead > 0 ? [plural(jobs.dead, 'tâche bloquée', 'tâches bloquées')] : []),
     ...(spent === null ? [] : [`${euroCents(spent)} sur ${eur(budget.cap)}`]),
-    rateText,
+    // Said with what it measures: « pas encore mesuré » alone names nothing.
+    `taux en réel ${rateText}`,
   ].join(' · ');
   const base = {
     eyebrow: plural(reveal.conversations, 'conversation', 'conversations'),
@@ -247,13 +256,24 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       foldTitle: 'Quelque chose ne va pas',
     };
   }
+  // The session holds, nothing reads it: not an outage of Reveal, but the fans' messages no longer come in.
+  if (late && reveal.lastReadAt !== null) {
+    return {
+      ...base,
+      tone: 'warn',
+      stalled: true,
+      headline: 'Reveal n’est **plus lu**',
+      lead: `La session tient, mais Reveal a été lu pour la dernière fois ${ago(reveal.lastReadAt, now)}. Les nouveaux messages des fans n’arrivent plus à l’agent.${alsoVoice}`,
+      foldTitle: 'Quelque chose ne va pas',
+    };
+  }
   if (voice.keyMissing) {
     return {
       ...base,
       tone: 'warn',
       stalled: true,
       headline: 'L’IA qui écrit **attend sa clé**',
-      lead: 'Pose-la dans Réglages › Modèles IA › Services. D’ici là, les conversations restent aux chatteurs dans Reveal.',
+      lead: 'Pose-la dans Réglages › Modèles IA. D’ici là, les conversations restent aux chatteurs dans Reveal.',
       action: 'Poser la clé',
       actionTo: '/reglages/modeles-ia',
       foldTitle: 'Une étape reste à faire',

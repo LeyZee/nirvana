@@ -460,4 +460,23 @@ describe('GET /v1/dashboard', () => {
     expect(listed).not.toContain('Nina');
     expect(listed).not.toContain('Paul');
   });
+
+  it('says Reveal is read late once three of its polls have gone by without a read (recette 28/10, G8)', async () => {
+    const account = (set: Partial<typeof schema.platformAccounts.$inferInsert>) =>
+      test.admin.db
+        .update(schema.platformAccounts)
+        .set(set)
+        .where(eq(schema.platformAccounts.id, platformAccountId));
+    const reveal = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json()).reveal;
+
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    // The session holds, but nothing read it for an hour: the default rhythm (60 s + 20 s) allows 7 minutes.
+    await account({ lastPollAt: new Date(Date.now() - 3_600_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: true });
+    // An account read every hour is not late after one.
+    await account({ connectorConfig: { pollIntervalSeconds: 3_600, jitterSeconds: 300 } });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    await account({ lastPollAt: new Date(), connectorConfig: {} });
+  });
 });

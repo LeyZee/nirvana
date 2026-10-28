@@ -48,6 +48,8 @@ export interface DashboardFacts {
   readonly reveal: {
     readonly connected: boolean;
     readonly lastReadAt: Date | null;
+    /** The longest the account waits between two polls (its interval plus its jitter), in seconds. */
+    readonly pollEverySeconds: number;
     readonly conversations: number;
   };
   readonly voice: { readonly medianWriteMs: number | null; readonly outageHoursLast7d: number };

@@ -170,3 +170,44 @@ describe('App on an invitation link', () => {
     expect(window.location.pathname).toBe('/');
   });
 });
+
+describe('App signing out', () => {
+  const owner: Me = {
+    id: 'u1',
+    email: 'owner@example.test',
+    name: 'Nora',
+    role: 'owner',
+    creatorIds: [],
+    routedCreatorIds: [],
+    team: null,
+    teamScope: 'owner',
+  };
+
+  it('says a sign-out the server did not make, instead of doing nothing (recette 28/10, G9)', async () => {
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    );
+    let signOutStatus = 500;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) => {
+        if (input === '/v1/me') return Promise.resolve(new Response(JSON.stringify(owner), { status: 200 }));
+        if (input === '/v1/auth/sign-out')
+          return Promise.resolve(new Response('{}', { status: signOutStatus }));
+        // The screens stay on their loading state: only the way out is under test.
+        return new Promise<Response>(() => undefined);
+      }),
+    );
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nora/u }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Se déconnecter' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('La déconnexion n’a pas abouti : réessaie.');
+
+    // Tried again and made: the alert goes with the session.
+    signOutStatus = 200;
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Se déconnecter' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

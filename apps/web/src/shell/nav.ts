@@ -114,24 +114,24 @@ const RAILS: Readonly<Record<RailKind, RailPlan>> = {
     settings: false,
     phone: ['/aujourdhui', '/suivi', '/planning', '/commissions'],
   },
+  // No Entraîner for an operator nor a creator: the playground is the owner's alone on the server
+  // (`requireRole('owner')`), and a tab never leads to a screen that can only refuse.
   operator: {
     sections: [
       ['/', null],
       ['/suivi', 'chatting'],
-      ['/entrainer', 'chatting'],
       ['/creatrices', 'agency'],
     ],
     settings: true,
-    phone: ['/', '/suivi', '/entrainer', '/creatrices'],
+    phone: ['/', '/suivi', '/creatrices'],
   },
   creator: {
     sections: [
       ['/', null],
-      ['/entrainer', 'chatting'],
       ['/creatrices', 'agency'],
     ],
     settings: true,
-    phone: ['/', '/entrainer', '/creatrices'],
+    phone: ['/', '/creatrices'],
   },
 };
 
@@ -222,6 +222,11 @@ export function railOf(me: Me): Rail {
 export function sectionOf(pathname: string): Section | null {
   const first = `/${pathname.split('/')[1] ?? ''}`;
   return SECTIONS.find((section) => section === first) ?? null;
+}
+
+/** What a section is called, in the rail and in the tab's title. */
+export function sectionLabel(section: Section): string {
+  return ITEMS[section].label;
 }
 
 /** Whether the rail holds the section: what the route guard asks before every screen. */

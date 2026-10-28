@@ -33,6 +33,7 @@ import {
 } from './view';
 import './tracking.css';
 
+import { followedOf, useFollowedCreatorId } from '@/agent/followed';
 import { useLiveDashboard } from '@/agent/live';
 import { useCreators } from '@/creators/api';
 import { Page, PageHeader, Panel } from '@/shell/layout';
@@ -80,6 +81,7 @@ export function TrackingPage({
     })),
   });
   const dashboard = useLiveDashboard();
+  const { chosen } = useFollowedCreatorId();
   const now = useNow();
   const [order, setOrder] = useState<ListOrder>(readListOrder);
   const [search, setSearch] = useState('');
@@ -104,14 +106,15 @@ export function TrackingPage({
     if (creatorsQuery.isError) void creatorsQuery.refetch();
     for (const q of failed) void q.refetch();
   };
-  // The queue is the first creator's (as the Dashboard): its conversations open with her id.
+  // The queue is the followed creator's, as on the Dashboard and in the pill: its conversations open with her id.
   const todos = dashboard.kind === 'live' ? dashboard.data.todos : [];
-  const queueCreator = creators[0]?.id ?? null;
+  const followed = followedOf(creators, chosen);
+  const queueCreator = followed?.id ?? null;
   const open =
     selected === null
       ? null
       : (lines.find((l) => l.conversation.id === selected)?.creatorId ??
-        (creators.length === 1 ? queueCreator : null));
+        (creators.length === 1 || todos.some((t) => t.conversationId === selected) ? queueCreator : null));
 
   return (
     <Page className={selected === null ? '' : 'tr-is-reading'}>
@@ -161,7 +164,12 @@ export function TrackingPage({
         <div className="tr-layout">
           <div className="tr-side">
             {todos.length === 0 ? null : (
-              <Panel className="tr-panel" eyebrow="À traiter">
+              <Panel
+                className="tr-panel"
+                eyebrow={
+                  showsCreator && followed !== undefined ? `À traiter · ${followed.displayName}` : 'À traiter'
+                }
+              >
                 <ul className="nv-list tr-list" aria-label="À traiter">
                   {todos.map((todo) => (
                     <QueueRow

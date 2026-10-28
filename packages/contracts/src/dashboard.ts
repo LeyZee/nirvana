@@ -100,7 +100,16 @@ export const DashboardSchema = z.object({
     /** The same rate as it stood three weeks ago, for the trend. */
     threeWeeksAgo: percent.nullable(),
   }),
-  reveal: z.object({ connected: z.boolean(), lastReadAt: at.nullable(), conversations: count }),
+  reveal: z.object({
+    connected: z.boolean(),
+    lastReadAt: at.nullable(),
+    /**
+     * Connected, but the last read is older than three of the account's polls: the session holds and nobody reads
+     * (worker stopped, polls failing). The screen says « en retard », not « connectée ».
+     */
+    late: z.boolean(),
+    conversations: count,
+  }),
   voice: z.object({
     ok: z.boolean(),
     /**

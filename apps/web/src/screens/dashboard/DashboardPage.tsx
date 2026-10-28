@@ -3,6 +3,7 @@ import { useCallback, useState, type JSX } from 'react';
 
 import { AgentHero } from './AgentHero';
 import { BackupBanner } from './BackupBanner';
+import { CreatorPicker } from './CreatorPicker';
 import { FunnelPanel } from './Funnel';
 import { ModeControl } from './ModeControl';
 import { Reader } from './Reader';
@@ -15,6 +16,7 @@ import { useDashboard, type DashboardView } from './useDashboard';
 import './dashboard.css';
 
 import { useAgentModeWriter } from '@/agent/write';
+import { initialOf } from '@/lib/utils';
 import { NightBanner } from '@/settings/telegram/NightBanner';
 
 /** Why the control cannot change the mode: on the sample, under an operator's global switch. */
@@ -38,9 +40,11 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
     <div className="db">
       {creatorName === null ? null : (
         <header className="db-top nv-enter">
+          {/* Another creator's Dashboard may still answer: the choice stays at hand. */}
+          <CreatorPicker />
           <div className="db-top__who">
             <span className="db-top__av" aria-hidden="true">
-              {creatorName.slice(0, 1)}
+              {initialOf(creatorName)}
             </span>
             <span className="db-top__name">{creatorName}</span>
           </div>
@@ -145,9 +149,11 @@ function Loaded({
   return (
     <div className="db">
       <header className="db-top nv-enter">
+        {/* Whose agent this is, when the account sees several: the pill and Suivi follow the same choice. */}
+        {status === 'live' ? <CreatorPicker /> : null}
         <div className="db-top__who">
           <span className="db-top__av" aria-hidden="true">
-            {data.creator.name.slice(0, 1)}
+            {initialOf(data.creator.name)}
           </span>
           <span>
             <span className="db-top__name">{data.creator.name}</span>

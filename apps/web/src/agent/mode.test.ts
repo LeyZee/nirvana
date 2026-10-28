@@ -48,15 +48,16 @@ describe('isSelectable', () => {
 });
 
 describe('nextMode', () => {
-  it('moves with the arrows and wraps around', () => {
+  it('moves with the arrows and stops at the edges', () => {
     expect(nextMode('copilot', 1, open)).toBe('stop');
-    expect(nextMode('stop', 1, open)).toBe('auto');
-    expect(nextMode('auto', -1, open)).toBe('stop');
+    expect(nextMode('copilot', -1, open)).toBe('auto');
+    expect(nextMode('stop', 1, open)).toBe('stop');
+    expect(nextMode('auto', -1, open)).toBe('auto');
   });
 
-  it('skips a closed Automatique', () => {
-    expect(nextMode('stop', 1, closed)).toBe('copilot');
-    expect(nextMode('copilot', -1, closed)).toBe('stop');
+  it('skips a closed Automatique, and never wraps from Copilote onto Arrêt (recette 28/10, M6)', () => {
+    expect(nextMode('stop', -1, closed)).toBe('copilot');
+    expect(nextMode('copilot', -1, closed)).toBe('copilot');
   });
 });
 

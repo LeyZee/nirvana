@@ -30,11 +30,13 @@ export async function signIn(email: string, password: string): Promise<SignInRes
   return 'unavailable';
 }
 
+/** Throws when the server did not close the session (no answer, or a refusal): the screen must say so. */
 export async function signOut(): Promise<void> {
-  await fetch('/v1/auth/sign-out', {
+  const response = await fetch('/v1/auth/sign-out', {
     method: 'POST',
     credentials: 'include',
     headers: JSON_HEADERS,
     body: '{}',
   });
+  if (!response.ok) throw new Error(`POST /v1/auth/sign-out: ${String(response.status)}`);
 }

@@ -44,6 +44,7 @@ import { TestsPage } from './screens/train/TestsPage';
 import { TrainLayout } from './screens/train/TrainLayout';
 import { parseTelegramSearch, searchOfTab, tabOfSearch } from './settings/telegram/search';
 import { AppShell } from './shell/AppShell';
+import { NotFoundPage } from './shell/NotFoundPage';
 import { canOpen, railOf, sectionOf } from './shell/nav';
 
 /** What every screen can read: who is signed in, and how to sign out. Given by `App` once the session is known. */
@@ -429,6 +430,8 @@ const buildRouter = (context: RouterContext, history?: RouterHistory) =>
     routeTree,
     context,
     defaultPreload: 'intent',
+    // An unknown address keeps the rail and says so in French, in place of the router's « Not Found ».
+    defaultNotFoundComponent: NotFoundPage,
     ...(history === undefined ? {} : { history }),
   });
 

@@ -3,7 +3,7 @@ import { useState, type JSX, type SyntheticEvent } from 'react';
 import { signIn, type SignInResult } from './session';
 
 const MESSAGES: Record<Exclude<SignInResult, 'ok'>, string> = {
-  wrong_credentials: 'Email ou mot de passe incorrect.',
+  wrong_credentials: 'E-mail ou mot de passe incorrect.',
   too_many_attempts: 'Trop de tentatives. Réessaie dans un quart d’heure.',
   unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
 };
@@ -48,7 +48,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
           Nirvana
         </h1>
         <label className="nv-field">
-          <span className="nv-field__label">Email</span>
+          <span className="nv-field__label">E-mail</span>
           <input
             className="nv-field__control"
             name="email"

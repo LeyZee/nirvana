@@ -44,7 +44,10 @@ const lever = (id: Lever['id'], current: number, previous: number): Lever => ({
 
 describe('formatting', () => {
   it('writes euros, durations and signs the French way', () => {
-    expect(eur(1846.4).replace(/\s/gu, ' ')).toBe('1 846 €');
+    expect(eur(1846).replace(/\s/gu, ' ')).toBe('1 846 €');
+    // The cents are never rounded away: 10,50 € is not 11 €.
+    expect(eur(10.5)).toBe('10,50 €');
+    expect(eur(1846.4).replace(/\s/gu, ' ')).toBe('1 846,40 €');
     expect(hoursMinutes(125)).toBe('2 h 05');
     expect(hoursMinutes(-3)).toBe('0 h 00');
     expect(signed(12)).toBe('+12');

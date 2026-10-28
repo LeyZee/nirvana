@@ -28,11 +28,13 @@ export function useAgentMode(): AgentModeView {
       ? reveal.lastReadAt === null
         ? 'Reveal n’est pas encore relié'
         : 'Reveal est déconnecté'
-      : voice.ok
-        ? null
-        : voice.keyMissing
-          ? 'l’IA qui écrit attend sa clé'
-          : 'l’IA qui écrit ne répond pas';
+      : reveal.late
+        ? 'Reveal n’est plus lu depuis plusieurs minutes'
+        : voice.ok
+          ? null
+          : voice.keyMissing
+            ? 'l’IA qui écrit attend sa clé'
+            : 'l’IA qui écrit ne répond pas';
     return { source: 'live', mode: live.data.mode, automatic: live.data.automatic, stalled };
   }
   return { source: live.kind };

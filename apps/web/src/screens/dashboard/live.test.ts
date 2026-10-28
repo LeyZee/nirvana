@@ -69,7 +69,7 @@ describe('fromApi', () => {
   it('says a Reveal never linked is a step to come, in no colour, not an outage', () => {
     const unlinked = fromApi(
       apiDashboard({
-        reveal: { connected: false, lastReadAt: null, conversations: 0 },
+        reveal: { connected: false, lastReadAt: null, late: false, conversations: 0 },
         voice: { ok: false, keyMissing: false, medianWriteMs: null, outagesLast7d: 0 },
       }),
     );
@@ -91,13 +91,14 @@ describe('fromApi', () => {
       action: 'Poser la clé',
       actionTo: '/reglages/modeles-ia',
     });
-    expect(noKey.agent.lead).toContain('Réglages › Modèles IA › Services');
+    // The page has no « Services » heading: the lead names the page only.
+    expect(noKey.agent.lead).toContain('Pose-la dans Réglages › Modèles IA.');
     expect(card('voice', noKey)).toMatchObject({ tone: 'warn', value: 'Clé manquante' });
     expect(card('voice', noKey)?.rows[0]).toEqual(['À poser dans', 'Réglages › Modèles IA']);
     // Never linked and no key: Reveal leads, the key is said in the same lead.
     const both = fromApi(
       apiDashboard({
-        reveal: { connected: false, lastReadAt: null, conversations: 0 },
+        reveal: { connected: false, lastReadAt: null, late: false, conversations: 0 },
         voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 },
       }),
     );
@@ -126,9 +127,30 @@ describe('fromApi', () => {
     expect(todo).toMatchObject({ kind: 'À valider dans Suivi', conversationId: draft.conversationId });
   });
 
+  it('says a Reveal no longer read in amber, never « Connectée » (recette 28/10, G8)', () => {
+    const late = fromApi(
+      apiDashboard({
+        reveal: { connected: true, lastReadAt: '2026-10-19T11:30:00Z', late: true, conversations: 12 },
+      }),
+    );
+    expect(card('reveal', late)).toMatchObject({ tone: 'warn', value: 'Lecture en retard' });
+    expect(card('reveal', late)?.rows[0]).toEqual(['Dernière lecture', 'il y a 30 min']);
+    expect(late.agent).toMatchObject({ tone: 'warn', stalled: true, headline: 'Reveal n’est **plus lu**' });
+    expect(late.agent.lead).toContain('lu pour la dernière fois il y a 30 min');
+    expect(late.agent.foldSummary).toContain('Reveal lu en retard');
+    expect(card('reveal')).toMatchObject({ tone: 'ok', value: 'Connectée' });
+  });
+
+  it('names what « pas encore mesuré » is about in the summary (recette 28/10, M9)', () => {
+    const unmeasured = fromApi(
+      apiDashboard({ liveRate: { rate: null, target: 80, decided: 0, threeWeeksAgo: null } }),
+    );
+    expect(unmeasured.agent.foldSummary).toMatch(/ · taux en réel pas encore mesuré$/u);
+  });
+
   it('says first that Reveal is disconnected, then that the voice is down', () => {
     const offline = apiDashboard({
-      reveal: { connected: false, lastReadAt: '2026-10-19T11:00:00Z', conversations: 0 },
+      reveal: { connected: false, lastReadAt: '2026-10-19T11:00:00Z', late: false, conversations: 0 },
     });
     expect(fromApi(offline).agent).toMatchObject({ tone: 'bad', headline: 'Reveal est **déconnecté**' });
     const mute = apiDashboard({

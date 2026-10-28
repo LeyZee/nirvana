@@ -5,6 +5,9 @@ import { createPortal } from 'react-dom';
 import type { Fan } from './model';
 import { lightUp } from './parts';
 
+import { initialOf } from '@/lib/utils';
+import { keepTabInside } from '@/shell/focus';
+
 /**
  * The conversation of one fan, read only (revue 08): what she knows about him, the thread, and the agent's
  * notes where it stopped. Writing happens in Reveal; an answer to fix goes to Entraîner › Corrections.
@@ -31,18 +34,22 @@ export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void 
   return createPortal(
     <>
       <div className={`db-scrim${open ? ' is-on' : ''}`} onClick={onClose} aria-hidden="true" />
-      <aside
+      {/* A modal dialog over the page: Tab stays inside until it closes (recette 28/10, M5). */}
+      <div
         className={`db-reader nv-glass nv-glass--thick${open ? ' is-on' : ''}`}
+        role="dialog"
+        aria-modal="true"
         aria-label="Conversation"
         aria-hidden={!open}
         inert={!open}
         ref={lightUp}
+        onKeyDown={keepTabInside}
       >
         {fan === null ? null : (
           <>
             <div className="db-reader__head">
               <span className="nv-avatar" aria-hidden="true">
-                {fan.name.slice(0, 1)}
+                {initialOf(fan.name)}
               </span>
               <span className="db-fan__who">
                 <span className="db-fan__name">{fan.name}</span>
@@ -99,7 +106,7 @@ export function Reader({ fan, onClose }: { fan: Fan | null; onClose: () => void 
             </div>
           </>
         )}
-      </aside>
+      </div>
     </>,
     document.body,
   );

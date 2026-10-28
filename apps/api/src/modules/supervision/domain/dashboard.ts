@@ -76,6 +76,22 @@ export function unansweredSince(
   return now.getTime() - counted.getTime() >= UNANSWERED_AFTER_MINUTES * MINUTE_MS ? lastInboundAt : null;
 }
 
+/** The dispatcher looks for due polls once a minute: a poll can start that much after it is due. */
+const DISPATCH_SECONDS = 60;
+/** Polls missed in a row before the screen says Reveal is read late: one can fail or wait, three is a stop. */
+const LATE_AFTER_POLLS = 3;
+
+/**
+ * Whether Reveal is read late (recette 28/10, G8): the session holds, but its last read is older than three of the
+ * account's polls, each one counted at its longest. A worker stopped or polls failing then show, instead of a green
+ * « Connectée ». Never read yet is not late: nothing was ever due.
+ */
+export function revealLate(lastReadAt: Date | null, now: Date, pollEverySeconds: number): boolean {
+  if (lastReadAt === null) return false;
+  const allowedMs = LATE_AFTER_POLLS * (pollEverySeconds + DISPATCH_SECONDS) * 1_000;
+  return now.getTime() - lastReadAt.getTime() > allowedMs;
+}
+
 /** Safety first: a possible minor, consent or distress before everything else. */
 const GRAVE: ReadonlySet<WaitingConversation['kind']> = new Set(['minor', 'non_consent', 'distress']);
 
@@ -173,6 +189,9 @@ export function assembleDashboard(input: {
     reveal: {
       connected: facts.reveal.connected,
       lastReadAt: facts.reveal.lastReadAt?.toISOString() ?? null,
+      late:
+        facts.reveal.connected &&
+        revealLate(facts.reveal.lastReadAt, window.now, facts.reveal.pollEverySeconds),
       conversations: facts.reveal.conversations,
     },
     voice: {

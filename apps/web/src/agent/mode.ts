@@ -58,12 +58,13 @@ export function isSelectable(mode: AgentMode, gate: AutomaticGate): boolean {
 
 /**
  * The option the arrow keys move to from `from` (radio group pattern): the next selectable one in `step`
- * direction, wrapping around, skipping a closed Automatique.
+ * direction, skipping a closed Automatique. It stops at the edges instead of wrapping around: from Copilote, the
+ * left arrow would otherwise land on Arrêt and ask to stop the agent (recette 28/10, M6).
  */
 export function nextMode(from: AgentMode, step: 1 | -1, gate: AutomaticGate): AgentMode {
   const start = MODES.indexOf(from);
-  for (let offset = 1; offset <= MODES.length; offset++) {
-    const candidate = MODES[(start + step * offset + MODES.length * offset) % MODES.length];
+  for (let at = start + step; at >= 0 && at < MODES.length; at += step) {
+    const candidate = MODES[at];
     if (candidate !== undefined && isSelectable(candidate, gate)) return candidate;
   }
   return from;

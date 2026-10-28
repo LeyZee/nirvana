@@ -1,5 +1,6 @@
 import {
   AgentHoursSchema,
+  ConnectorConfigSchema,
   DEFAULT_AGENT_HOURS,
   HandoffCauseSchema,
   LIVE_WINDOW,
@@ -95,8 +96,9 @@ async function facts(
       session_state: z.string(),
       last_poll_at: timestamp.nullable(),
       paused_until: timestamp.nullable(),
+      connector_config: z.unknown(),
     }),
-    sql`select session_state, last_poll_at, paused_until from platform_accounts
+    sql`select session_state, last_poll_at, paused_until, connector_config from platform_accounts
         where platform = 'reveal' order by created_at limit 1`,
   );
   const voice = await first(
@@ -230,6 +232,10 @@ async function facts(
     account.paused_until > window.now;
   const connected =
     account !== undefined && ['valid', 'warning'].includes(account.session_state) && !isPaused;
+  // Its rhythm as the connectors read it (`account-store.ts`): unreadable is the defaults, as there.
+  const rhythm = ConnectorConfigSchema.catch(ConnectorConfigSchema.parse({})).parse(
+    account?.connector_config ?? {},
+  );
   // Stopped, or Reveal unread (session expired, paused): every conversation would fall in the net, the banner says it.
   const quiet = stopped.some((s) => s.active) || !connected;
   return {
@@ -242,6 +248,7 @@ async function facts(
     reveal: {
       connected,
       lastReadAt: account?.last_poll_at ?? null,
+      pollEverySeconds: rhythm.pollIntervalSeconds + rhythm.jitterSeconds,
       conversations: counts.total,
     },
     voice: { medianWriteMs: voice.median_ms, outageHoursLast7d: voice.outage_hours },

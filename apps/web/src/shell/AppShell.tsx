@@ -6,8 +6,10 @@ import { createPortal } from 'react-dom';
 
 import { AgentPill } from './AgentPill';
 import { NavIcon } from './NavIcon';
-import { FAMILY_LABELS, railOf, sectionOf, type NavItem, type Rail } from './nav';
+import { keepTabInside } from './focus';
+import { FAMILY_LABELS, railOf, sectionLabel, sectionOf, type NavItem, type Rail } from './nav';
 
+import { initialOf } from '@/lib/utils';
 import { HoldProvider } from '@/reports/Hold';
 import { ReopenProvider } from '@/reports/reopen';
 
@@ -22,7 +24,13 @@ function roleLabel(user: Me): string {
 export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void }): JSX.Element {
   const rail = useMemo(() => railOf(user), [user]);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const current = sectionOf(pathname) ?? rail.home;
+  // An address outside every section lights no tab: the page says it does not exist.
+  const current = sectionOf(pathname);
+
+  // The tab's title names the screen, so that several open tabs read apart.
+  useEffect(() => {
+    document.title = `${current === null ? 'Page introuvable' : sectionLabel(current)} · Nirvana`;
+  }, [current]);
 
   // The hold outlives the screens: a report sent on leaving Aujourd'hui says its refusal in Suivi, and « Rouvrir »
   // takes the reader back to it (EQ-03).
@@ -38,7 +46,7 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
           <RailNav rail={rail} current={current}>
             <UserMenu name={user.name} role={roleLabel(user)} onSignOut={onSignOut} />
           </RailNav>
-          <main className="nv-stage" key={current}>
+          <main className="nv-stage" key={current ?? 'none'}>
             <Outlet />
           </main>
         </div>
@@ -57,7 +65,8 @@ export function RailNav({
   children,
 }: {
   rail: Rail;
-  current: string;
+  /** The section on screen, or null outside every section (an unknown address): no tab is lit. */
+  current: string | null;
   children?: JSX.Element;
 }): JSX.Element {
   const railRef = useRef<HTMLElement>(null);
@@ -76,8 +85,11 @@ export function RailNav({
   useLayoutEffect(() => {
     const nav = railRef.current;
     const lens = lensRef.current;
-    const item = nav?.querySelector<HTMLElement>(`[data-section="${current}"]`);
-    if (nav === null || lens === null || item === null || item === undefined) return;
+    if (lens === null) return;
+    const item = current === null ? null : nav?.querySelector<HTMLElement>(`[data-section="${current}"]`);
+    // No tab to light: the lens goes, and comes back on the next one.
+    lens.style.opacity = item === null || item === undefined ? '0' : '';
+    if (nav === null || item === null || item === undefined) return;
     lens.style.transform = `translateY(${String(item.offsetTop)}px)`;
     if (first.current) {
       first.current = false;
@@ -175,8 +187,6 @@ export function RailNav({
   );
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled])';
-
 /**
  * What the phone's bar has no room for: a glass sheet over the bar (it floats). A modal dialog: Tab stays inside, Escape
  * or a tap outside closes it, and so does choosing a tab; the focus goes back to « Plus ».
@@ -187,7 +197,7 @@ export function MoreSheet({
   onClose,
 }: {
   items: readonly NavItem[];
-  current: string;
+  current: string | null;
   onClose: () => void;
 }): JSX.Element {
   const sheet = useRef<HTMLDivElement>(null);
@@ -220,20 +230,7 @@ export function MoreSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby="nv-more-title"
-        onKeyDown={(event) => {
-          if (event.key !== 'Tab' || sheet.current === null) return;
-          const all = [...sheet.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
-          const head = all[0];
-          const tail = all[all.length - 1];
-          if (head === undefined || tail === undefined) return;
-          if (event.shiftKey && document.activeElement === head) {
-            event.preventDefault();
-            tail.focus();
-          } else if (!event.shiftKey && document.activeElement === tail) {
-            event.preventDefault();
-            head.focus();
-          }
-        }}
+        onKeyDown={keepTabInside}
       >
         <h2 className="nv-more__title" id="nv-more-title">
           Plus
@@ -296,7 +293,7 @@ function UserMenu({
         }}
       >
         <span className="nv-avatar nv-avatar--sm" aria-hidden="true">
-          {name.slice(0, 1).toUpperCase()}
+          {initialOf(name)}
         </span>
         <span className="nv-user__id">
           <span>{name}</span>

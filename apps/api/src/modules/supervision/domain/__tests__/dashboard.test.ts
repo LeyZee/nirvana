@@ -7,7 +7,7 @@ import {
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assembleDashboard, todos, unansweredSince, type VoiceHealth } from '../dashboard';
+import { assembleDashboard, revealLate, todos, unansweredSince, type VoiceHealth } from '../dashboard';
 import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
@@ -20,7 +20,7 @@ const FACTS: DashboardFacts = {
   switches: { global: false, creator: false },
   autoConversations: 0,
   decidedThreeWeeksAgo: [],
-  reveal: { connected: true, lastReadAt: minutesAgo(1), conversations: 4 },
+  reveal: { connected: true, lastReadAt: minutesAgo(1), pollEverySeconds: 80, conversations: 4 },
   voice: { medianWriteMs: 1412.5, outageHoursLast7d: 0 },
   replies: { medianReplyMinutes: 3.25, fansWaitingOver10Min: 1, conversationsOpen: 2 },
   handoffsToday: [{ cause: 'meeting', count: 2 }],
@@ -140,6 +140,30 @@ describe('dashboard', () => {
     expect(everyone).toMatchObject({ mode: 'stop', globalStop: true });
     expect(assemble({ autoConversations: 1 }).mode).toBe('auto');
     expect(assemble().mode).toBe('copilot');
+  });
+});
+
+describe('revealLate (recette 28/10, G8)', () => {
+  it('says late once three polls, each at its longest, have gone by without a read', () => {
+    // 80 s between polls at most, plus a minute for the dispatcher: 7 minutes.
+    expect(revealLate(minutesAgo(7), NOW, 80)).toBe(false);
+    expect(revealLate(minutesAgo(8), NOW, 80)).toBe(true);
+    // An account polled every hour is not late after ten minutes.
+    expect(revealLate(minutesAgo(10), NOW, 3_600)).toBe(false);
+  });
+
+  it('is never late before the first read', () => {
+    expect(revealLate(null, NOW, 80)).toBe(false);
+  });
+
+  it('reaches the Dashboard only while the session holds: disconnected says more', () => {
+    const stale = { lastReadAt: minutesAgo(60), pollEverySeconds: 80, conversations: 4 };
+    expect(assemble({ reveal: { connected: true, ...stale } }).reveal).toMatchObject({
+      connected: true,
+      late: true,
+    });
+    expect(assemble({ reveal: { connected: false, ...stale } }).reveal.late).toBe(false);
+    expect(assemble().reveal.late).toBe(false);
   });
 });
 

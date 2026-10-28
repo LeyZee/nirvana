@@ -66,7 +66,7 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
       {isDemo ? (
         <span
           className="pg-demo"
-          title="Les routes du playground ne sont pas encore en ligne : les réponses sont écrites à l’avance."
+          title="Démo : les réponses sont écrites à l’avance, le serveur n’est pas appelé."
         >
           Démo
         </span>

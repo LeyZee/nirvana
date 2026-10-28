@@ -569,6 +569,23 @@
   justify-content: flex-start;
   width: 100%;
 }
+/* A sign-out the server did not make (App.tsx): said above everything, from either way out (menu, Réglages). */
+.nv-signout-failed.nv-glass {
+  --_radius: 16px;
+  position: fixed;
+  z-index: 50;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 16px;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-warning);
+}
 /* Glass materializes out of the button that opened it. */
 @keyframes nv-shell-pop {
   0% {

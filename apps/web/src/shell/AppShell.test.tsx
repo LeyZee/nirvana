@@ -141,7 +141,7 @@ describe('the rail of each role', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/');
     });
-    expect(tabs()).toEqual(['Dashboard', 'Entraîner', 'Créatrices', 'Réglages']);
+    expect(tabs()).toEqual(['Dashboard', 'Créatrices', 'Réglages']);
     expect(screen.getByText('Créatrice')).toBeDefined();
   });
 
@@ -353,6 +353,31 @@ describe('Suivi › Historique des alertes (P4-01)', () => {
     const router = renderApp({ ...base, role: 'creator', team: null, teamScope: 'self' }, '/suivi/alertes');
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/');
+    });
+  });
+});
+
+describe('an address that leads nowhere (recette 28/10, M1)', () => {
+  it('says so in French, lights no tab, and leads back to the first one', async () => {
+    renderApp(owner, '/nimporte-quoi');
+    expect(await screen.findByRole('heading', { name: 'Cette page n’existe pas' })).toBeDefined();
+    expect(screen.queryByText('Not Found')).toBeNull();
+    const nav = screen.getByRole('navigation', { name: 'Navigation' });
+    expect(nav.querySelector('[aria-current="page"]')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Revenir à Dashboard' }).getAttribute('href')).toBe('/');
+    expect(document.title).toBe('Page introuvable · Nirvana');
+  });
+});
+
+describe('the tab’s title (recette 28/10, M2)', () => {
+  it('names the screen on show', async () => {
+    const router = renderApp(owner, '/suivi');
+    await waitFor(() => {
+      expect(document.title).toBe('Suivi · Nirvana');
+    });
+    await router.navigate({ to: '/creatrices' });
+    await waitFor(() => {
+      expect(document.title).toBe('Créatrices · Nirvana');
     });
   });
 });

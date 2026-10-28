@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentPill } from './AgentPill';
 
-import { apiDashboard, serveDashboard } from '@/test/fakes';
+import { apiDashboard, CREATOR, serveDashboard } from '@/test/fakes';
 
 async function renderPill(): Promise<HTMLElement> {
   const root = createRootRoute({
@@ -74,7 +74,7 @@ describe('AgentPill', () => {
       status: 200,
       body: apiDashboard({
         mode: 'copilot',
-        reveal: { connected: false, lastReadAt: null, conversations: 0 },
+        reveal: { connected: false, lastReadAt: null, late: false, conversations: 0 },
       }),
     });
     const pill = await renderPill();
@@ -93,7 +93,7 @@ describe('AgentPill', () => {
       status: 200,
       body: apiDashboard({
         mode: 'copilot',
-        reveal: { connected: false, lastReadAt: '2026-10-19T11:00:00Z', conversations: 0 },
+        reveal: { connected: false, lastReadAt: '2026-10-19T11:00:00Z', late: false, conversations: 0 },
       }),
     });
     const pill = await renderPill();
@@ -147,5 +147,40 @@ describe('AgentPill', () => {
       expect(pill.textContent).toBe('Inconnu');
     });
     expect(pill.getAttribute('title')).toContain('Aucune créatrice');
+  });
+
+  it('follows the creator chosen on the Dashboard, not the first of the list (recette 28/10, G1)', async () => {
+    const ana = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Ana', timezone: 'Europe/Paris' };
+    localStorage.setItem('nirvana.followed-creator', CREATOR.id);
+    try {
+      // Ana, first of the list, is stopped; Léa, the one chosen, runs.
+      serveDashboard(
+        (url) => live(url.searchParams.get('creatorId') === ana.id ? 'stop' : 'copilot'),
+        [ana, CREATOR],
+      );
+      const pill = await renderPill();
+      await waitFor(() => {
+        expect(pill.textContent).toBe('Copilote');
+      });
+    } finally {
+      localStorage.clear();
+    }
+  });
+
+  it('says Reveal is no longer read when the session holds but nothing reads it (recette 28/10, G8)', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({
+        mode: 'copilot',
+        reveal: { connected: true, lastReadAt: '2026-10-19T11:00:00Z', late: true, conversations: 12 },
+      }),
+    });
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.title).toBe(
+        'Agent : Copilote, mais rien ne tourne : Reveal n’est plus lu depuis plusieurs minutes. Voir le Dashboard.',
+      );
+    });
+    expect(pill.dataset['tone']).toBe('unknown');
   });
 });

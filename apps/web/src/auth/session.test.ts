@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchCurrentUser, signIn } from './session';
+import { fetchCurrentUser, signIn, signOut } from './session';
 
 function answer(status: number, body: unknown = {}): void {
   vi.stubGlobal(
@@ -45,5 +45,12 @@ describe('dashboard session', () => {
     expect(await signIn('a@example.test', 'x')).toBe('too_many_attempts');
     answer(502);
     expect(await signIn('a@example.test', 'x')).toBe('unavailable');
+  });
+
+  it('throws when the server did not close the session, so that the page can say so (recette 28/10, G9)', async () => {
+    answer(200);
+    await expect(signOut()).resolves.toBeUndefined();
+    answer(500);
+    await expect(signOut()).rejects.toThrow('POST /v1/auth/sign-out: 500');
   });
 });
