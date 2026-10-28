@@ -28,6 +28,7 @@ import {
 
 import { user } from './auth';
 import { createdAt, enumCheck, id, timestampTz, updatedAt } from './columns';
+import { shiftReports } from './scheduling';
 import { teamMembers } from './team';
 import { creators, platformAccounts } from './tenancy';
 
@@ -503,5 +504,62 @@ export const carryOvers = pgTable(
       for: 'insert',
       withCheck: sql`${readsTeam} and not ${isMine(t.memberId)}`,
     }),
+  ],
+);
+
+/*
+ * The closing of a period for the whole team (ADR 0032, migration 0029): the first validation of one of its
+ * statements writes it, with the registry of the reports it counted, in its own transaction. Added only, for every
+ * role; written by the owner or an active manager, read by every member.
+ */
+
+/**
+ * A period closed for the team: its team net and collective goal as reached, and the exchange rates of its last day,
+ * frozen for every statement of the period.
+ */
+export const payPeriodClosings = pgTable(
+  'pay_period_closings',
+  {
+    period: date('period')
+      .primaryKey()
+      .references(() => payPeriods.period),
+    teamNetMinor: bigint('team_net_minor', { mode: 'number' }).notNull(),
+    collective: jsonb('collective'),
+    exchangeRates: jsonb('exchange_rates').notNull(),
+    closedBy: text('closed_by')
+      .notNull()
+      .references(() => user.id),
+    closedAt: timestampTz('closed_at').notNull().defaultNow(),
+  },
+  (t) => [
+    periodCheck('pay_period_closings_period_check', t.period),
+    check('pay_period_closings_rates_check', sql`jsonb_typeof(${t.exchangeRates}) = 'array'`),
+    pgPolicy('team_read', { for: 'select', using: anyMember }),
+    pgPolicy('agency_insert', {
+      for: 'insert',
+      withCheck: sql`${readsTeam} and ${t.closedBy} = ${currentUser}`,
+    }),
+  ],
+);
+
+/** The registry of counted reports: a report is counted once, in the period of the closing that wrote it. */
+export const payPeriodReports = pgTable(
+  'pay_period_reports',
+  {
+    shiftReportId: uuid('shift_report_id')
+      .primaryKey()
+      .references(() => shiftReports.id),
+    period: date('period')
+      .notNull()
+      .references(() => payPeriodClosings.period),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => teamMembers.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('pay_period_reports_period_member_idx').on(t.period, t.memberId),
+    memberRead(t.memberId),
+    pgPolicy('agency_insert', { for: 'insert', withCheck: readsTeam }),
   ],
 );

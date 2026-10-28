@@ -232,7 +232,7 @@ Rapports de fin de shift et règles de paie d'un compte (migration 0026, EQ-03) 
 
 ## Paie (module `payroll`, ADR 0023, EQ-04)
 
-Hors RLS des créatrices (aucun `creator_id`) : un membre lit ses lignes, la portée `owner` | `agency` de `withMember` lit tout. Les relevés, leurs lignes, les quinzaines et les taux sont écrits par les jobs (`nirvana_admin`) ; l'application lit, valide, marque payé et écrit les entrées.
+Hors RLS des créatrices (aucun `creator_id`) : un membre lit ses lignes, la portée `owner` | `agency` de `withMember` lit tout. Les relevés, leurs lignes, les quinzaines et les taux sont écrits par les jobs (`nirvana_admin`) ; l'application lit, valide (et clôture la quinzaine à sa première validation), marque payé et écrit les entrées.
 
 ```
 pay_periods                period (1er ou 16, clé), starts_at, ends_at (instants de la quinzaine dans le fuseau de
@@ -264,6 +264,12 @@ pay_adjustments            id, member_id, period (première quinzaine ouverte du
                            corrects_statement_id, created_by, created_at (agence, jamais pour soi ; ajout seul)
 carry_overs                id, member_id, from_period, to_period (la suivante), amount_minor (≠ 0), statement_id
                            (unique), created_at (écrit à la validation ; un par membre et quinzaine d'origine ; ajout seul)
+pay_period_closings        period (clé) → pay_periods, team_net_minor bigint, collective (jsonb, l'objectif tel
+                           qu'atteint), exchange_rates (jsonb, les taux figés), closed_by, closed_at (migration 0029,
+                           ADR 0032 ; écrit par la validation qui clôture la quinzaine pour toute l'équipe ; ajout seul)
+pay_period_reports         shift_report_id (clé) → shift_reports, period → pay_period_closings, member_id, created_at
+                           (le registre des rapports comptés : un rapport l'est une fois, dans une seule quinzaine ;
+                           écrit par la clôture dans sa transaction ; ajout seul)
 ```
 
 Le passé de la paie est gardé pour tous les rôles, les jobs compris (migration 0028) :
@@ -272,6 +278,12 @@ Le passé de la paie est gardé pour tous les rôles, les jobs compris (migratio
 - une ligne appartient à la révision courante d'un brouillon. Les lignes, les ajustements, les reports, les paliers, les objectifs, les quinzaines et les taux sont en ajout seul (`refuse_pay_change`) ;
 - une quinzaine est fermée pour un membre dès qu'un de ses relevés de cette quinzaine ou d'une plus récente est validé (`pay_period_closed`). Rien n'y arrive plus : ni prime, ni malus, ni ajustement, ni annulation. Paliers et objectifs ne changent plus pour une quinzaine dont un relevé est validé (`pay_period_settled`) ;
 - un report vient du relevé validé de son membre, vers la quinzaine suivante, et porte exactement ce que ce relevé a reporté (`carry_over_out_minor`, `keep_carry_over`).
+
+La clôture d'une quinzaine pour toute l'équipe (migration 0029, ADR 0032) ajoute :
+- une quinzaine ne se clôture qu'une fois finie, juste après la dernière clôturée. Les quinzaines se clôturent donc dans l'ordre, une vide aussi. La première clôture est celle de la plus ancienne quinzaine qui a un relevé. `closed_at` est l'heure de la base, quoi qu'écrive l'auteur (`keep_pay_period_closing`) ;
+- un rapport n'entre au registre que s'il est validé, de ce membre, d'une quinzaine d'origine qui n'est pas après sa quinzaine de comptage, et seulement dans la transaction qui a écrit la clôture, hors de tout point de sauvegarde (`xmin` de la clôture = `pg_current_xact_id()`, `keep_counted_report`). Aucune transaction plus tardive n'ajoute un rapport à une clôture passée ;
+- un relevé ne se valide que s'il porte la clôture de sa quinzaine : même net d'équipe, même objectif tel qu'atteint, mêmes taux (`rules.exchangeRates`), et exactement les rapports que le registre a comptés pour son membre dans la quinzaine, ni plus ni moins (`keep_commission_statement`) ;
+- une quinzaine d'avant la première clôture est fermée pour tous les membres (`pay_period_closed`) : elle ne sera plus jamais calculée, rien n'y arrive.
 
 Les droits par colonne tiennent en plus le rôle de l'application, qui part de `REVOKE ALL` : il ne touche à un relevé que par son statut, qui l'a validé et qui l'a payé.
 

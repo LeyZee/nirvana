@@ -3,6 +3,7 @@ export {
   createDbClient,
   enterCreator,
   lockMemberPeriod,
+  lockPayrollClose,
   SNAPSHOT_READ,
   withAdmin,
   withMember,
