@@ -51,6 +51,7 @@ const INTENTS: Readonly<Record<string, string>> = {
   asks_if_bot: 'Il demande si elle est un bot',
   asks_to_meet: 'Il veut la rencontrer',
   asks_personal_contact: 'Il veut ses coordonnées',
+  asks_for_service: 'Il demande un service (sur mesure, appel, cam, vocal)',
   distress: 'Il va mal',
   complaint: 'Il se plaint',
   off_topic_request: 'Il demande autre chose (recette, code…)',

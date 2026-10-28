@@ -243,3 +243,58 @@
     transition: none;
   }
 }
+
+/*
+ * « Tester » (P4-01): a message tried on the alert as written, inside its editor. The verdict is ink, its headline
+ * stronger when it would ring; a phrase that could not be read is amber. Nothing here is red.
+ */
+.al-try {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  padding: var(--nv-space-3) var(--nv-space-4);
+  border-radius: var(--nv-radius-lg);
+  background: var(--nv-glass-fill);
+}
+.al-try__title {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  font-weight: 600;
+  color: var(--nv-ink);
+}
+.al-try__run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nv-space-2);
+}
+.al-try__why {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-muted);
+}
+.al-try__verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--nv-space-2) var(--nv-space-3);
+  border-radius: var(--nv-radius-md);
+  box-shadow: inset 0 0 0 1px var(--nv-hairline);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+.al-try__verdict p {
+  margin: 0;
+}
+.al-try__headline {
+  font-weight: 500;
+  color: var(--nv-ink);
+}
+.al-try__verdict[data-rings='true'] .al-try__headline {
+  font-weight: 650;
+}
+.al-try__warning {
+  color: var(--nv-warning);
+}

@@ -18,11 +18,14 @@ import {
   hasChanges,
   newDraft,
   pauseLine,
+  sameTest,
   switchedBody,
   systemLine,
   telegramHeadLine,
   telegramLine,
+  testBodyOf,
   testCostLine,
+  testVerdict,
   watchLine,
 } from './model';
 
@@ -271,5 +274,77 @@ describe('a system alert', () => {
     expect(systemLine(setting('keyword', []), ALL)).toBe(
       'Ne se coupe pas ici : un mot se retire dans sa persona.',
     );
+  });
+});
+
+describe('« Tester »', () => {
+  const words = { phrase: '', keywords: ['Vidéo perso', ' custom '] };
+  const both = { phrase: ' Le fan demande une vidéo faite pour lui ', keywords: ['custom'] };
+
+  it('sends the alert as written, its phrase and words trimmed, once there is something to try', () => {
+    expect(testBodyOf(both, ' tu me fais une vidéo ? ')).toEqual({
+      alert: { phrase: 'Le fan demande une vidéo faite pour lui', keywords: ['custom'] },
+      message: 'tu me fais une vidéo ?',
+    });
+    expect(testBodyOf(words, 'custom stp')?.alert).toEqual({
+      phrase: null,
+      keywords: ['Vidéo perso', 'custom'],
+    });
+    expect(testBodyOf({ phrase: ' ', keywords: [] }, 'custom stp')).toBeNull();
+    expect(testBodyOf(both, '  ')).toBeNull();
+    expect(testBodyOf(both, 'x'.repeat(4_001))).toBeNull();
+  });
+
+  it('knows an answer for another phrase, other words or another message', () => {
+    const sent = testBodyOf(both, 'tu me fais une vidéo ?');
+    if (sent === null) throw new Error('nothing to try');
+    expect(sameTest(sent, { ...sent })).toBe(true);
+    expect(sameTest(sent, { ...sent, message: 'autre chose' })).toBe(false);
+    expect(sameTest(sent, { ...sent, alert: { ...sent.alert, keywords: ['custom', 'perso'] } })).toBe(false);
+    expect(sameTest(sent, { ...sent, alert: { ...sent.alert, phrase: null } })).toBe(false);
+  });
+
+  it('says whether it would ring, word by word and for the phrase', () => {
+    const sent = testBodyOf(both, 'une custom stp');
+    if (sent === null) throw new Error('nothing to try');
+    expect(testVerdict(sent, { keywords: ['custom'], phraseMatched: false, reason: null }, true)).toEqual({
+      rings: true,
+      headline: 'Elle sonnerait, et mettrait l’agent en pause pour ce fan.',
+      lines: ['Mot-clé trouvé : « custom ».', 'L’IA ne reconnaît pas la situation de la phrase.'],
+      warning: null,
+    });
+    expect(testVerdict(sent, { keywords: [], phraseMatched: true, reason: null }, false)).toEqual({
+      rings: true,
+      headline: 'Elle sonnerait.',
+      lines: ['Aucun de ses mots-clés n’est dans ce message.', 'L’IA reconnaît la situation de la phrase.'],
+      warning: null,
+    });
+    const onlyWords = testBodyOf(words, 'bonjour');
+    if (onlyWords === null) throw new Error('nothing to try');
+    expect(testVerdict(onlyWords, { keywords: [], phraseMatched: null, reason: null }, false)).toEqual({
+      rings: false,
+      headline: 'Elle ne sonnerait pas.',
+      lines: ['Aucun de ses mots-clés n’est dans ce message.'],
+      warning: null,
+    });
+    expect(
+      testVerdict(
+        onlyWords,
+        { keywords: ['Vidéo perso', 'custom'], phraseMatched: null, reason: null },
+        false,
+      ).lines,
+    ).toEqual(['Mots-clés trouvés : « Vidéo perso », « custom ».']);
+  });
+
+  it('says why the phrase could not be read, as the server wrote it', () => {
+    const sent = testBodyOf(both, 'bonjour');
+    if (sent === null) throw new Error('nothing to try');
+    const reason = 'Le budget IA du jour est atteint : la phrase sera lisible après minuit.';
+    expect(testVerdict(sent, { keywords: [], phraseMatched: null, reason }, false)).toEqual({
+      rings: false,
+      headline: 'La phrase n’a pas pu être lue.',
+      lines: ['Aucun de ses mots-clés n’est dans ce message.'],
+      warning: reason,
+    });
   });
 });

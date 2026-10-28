@@ -4,6 +4,9 @@ import {
   CUSTOM_ALERT_NAME_MAX,
   CUSTOM_ALERT_PHRASE_MAX,
   LOCKED_SYSTEM_ALERTS,
+  ALERT_TEST_MESSAGE_MAX,
+  type AlertTestBody,
+  type AlertTestResult,
   type CreatorId,
   type CustomAlertBody,
   type CustomAlertGroup,
@@ -242,6 +245,64 @@ export const testCostLine = (draft: Pick<AlertDraft, 'phrase'>): string =>
   draft.phrase.trim() === ''
     ? 'Les mots-clés se testent sans IA.'
     : 'La phrase se teste par l’IA : un appel au modèle, compté dans le budget du jour.';
+
+/**
+ * What « Tester » sends: the alert as written now, on her example message; `null` while there is nothing to try
+ * (no phrase and no word, no message, or a phrase or message past their limits).
+ */
+export function testBodyOf(
+  draft: Pick<AlertDraft, 'phrase' | 'keywords'>,
+  message: string,
+): AlertTestBody | null {
+  const phrase = draft.phrase.trim();
+  const keywords = cleanKeywords(draft.keywords);
+  const example = message.trim();
+  if (phrase === '' && keywords.length === 0) return null;
+  if (example === '' || example.length > ALERT_TEST_MESSAGE_MAX || phrase.length > CUSTOM_ALERT_PHRASE_MAX)
+    return null;
+  return { alert: { phrase: phrase === '' ? null : phrase, keywords }, message: example };
+}
+
+/** Whether an answer was for this very test: the same phrase, the same words in the same order, the same message. */
+export const sameTest = (a: AlertTestBody, b: AlertTestBody): boolean =>
+  a.message === b.message &&
+  a.alert.phrase === b.alert.phrase &&
+  a.alert.keywords.length === b.alert.keywords.length &&
+  a.alert.keywords.every((word, index) => word === b.alert.keywords[index]);
+
+/** The answer of « Tester » in her words: whether it would ring, then why, word by word and for the phrase. */
+export interface TestVerdict {
+  readonly rings: boolean;
+  readonly headline: string;
+  readonly lines: readonly string[];
+  /** Why the phrase could not be read, as the server says it: in amber, never in red. */
+  readonly warning: string | null;
+}
+
+const quoted = (words: readonly string[]): string => words.map((word) => `« ${word} »`).join(', ');
+
+export function testVerdict(sent: AlertTestBody, result: AlertTestResult, pausesAgent: boolean): TestVerdict {
+  const rings = result.keywords.length > 0 || result.phraseMatched === true;
+  const lines: string[] = [];
+  if (sent.alert.keywords.length > 0) {
+    lines.push(
+      result.keywords.length === 0
+        ? 'Aucun de ses mots-clés n’est dans ce message.'
+        : `${result.keywords.length === 1 ? 'Mot-clé trouvé' : 'Mots-clés trouvés'} : ${quoted(result.keywords)}.`,
+    );
+  }
+  if (result.phraseMatched === true) lines.push('L’IA reconnaît la situation de la phrase.');
+  if (result.phraseMatched === false) lines.push('L’IA ne reconnaît pas la situation de la phrase.');
+  const unread = sent.alert.phrase !== null && result.phraseMatched === null;
+  const headline = rings
+    ? pausesAgent
+      ? 'Elle sonnerait, et mettrait l’agent en pause pour ce fan.'
+      : 'Elle sonnerait.'
+    : unread
+      ? 'La phrase n’a pas pu être lue.'
+      : 'Elle ne sonnerait pas.';
+  return { rings, headline, lines, warning: unread ? (result.reason ?? 'Réessaie dans un instant.') : null };
+}
 
 /**
  * The routing of Réglages › Telegram as this page reads it: who has no group for which topic, `'off'` when the
