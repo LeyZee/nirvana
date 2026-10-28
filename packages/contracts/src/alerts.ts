@@ -131,11 +131,11 @@ export const CUSTOM_ALERT_TOPIC = 'custom' satisfies TelegramTopic;
 
 /**
  * The Telegram topic each system alert goes to, read by the classifier and shown by Réglages › Alertes: her words in
- * their own topic, a service asked for with the sales (a human may sell it), a doubt on who she is as important.
+ * their own topic, a service asked for and a doubt on who she is as important (an action for a human, at night too).
  */
 export const SYSTEM_ALERT_TOPICS: Readonly<Record<SystemAlertCode, TelegramTopic>> = {
   keyword: 'keyword',
-  service_request: 'sale',
+  service_request: 'important',
   identity_doubt: 'important',
 };
 

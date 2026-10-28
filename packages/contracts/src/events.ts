@@ -99,9 +99,9 @@ export const HANDOFF_CAUSES = [
   /** No model answered (provider down, no key): nobody else would answer the fan. */
   'llm_unavailable',
   'other',
-  /** One of her own alerts, written as a phrase, checked « met en pause » (P4-01); one of her words stays `keyword`. */
+  /** One of her own alerts, checked « met en pause » (P4-01); one of her persona's words stays `keyword`. */
   'custom_alert',
-  /** The system's alert « doute sur la personne » (P4-01): he doubts he is talking to her, and a chatter on shift answers. */
+  /** The system's alert « doute sur la personne » (P4-01): the fan doubts it is her; a chatter on shift answers. */
   'identity_doubt',
 ] as const;
 export const HandoffCauseSchema = z.enum(HANDOFF_CAUSES);
@@ -114,7 +114,10 @@ const handoffPayload = z.object({
   reason: z.string().min(1).max(500).optional(),
   /** What the engine held on, as codes (`guard_blocked`, `meeting_promise`…), for the journal: never shown as is. */
   detail: z.array(z.string().min(1).max(500)).max(20).optional(),
-  /** The alert that paused the agent (P4-01), with cause `keyword`, `custom_alert` or `identity_doubt`: no `alert_triggered` then. */
+  /**
+   * The alert that paused the agent (P4-01), with cause `keyword`, `custom_alert` or `identity_doubt`: no
+   * `alert_triggered` then.
+   */
   trigger: AlertTriggerSchema.optional(),
 });
 

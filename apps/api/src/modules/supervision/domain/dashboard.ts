@@ -45,7 +45,7 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   llm_unavailable: 'Aucun modèle IA n’a répondu. Un chatteur prend le relais.',
   other: 'L’agent a passé la main. Un humain doit lui répondre.',
   custom_alert: 'Une de ses alertes personnalisées a sonné. L’agent attend un humain.',
-  identity_doubt: 'Il doute de parler à elle. Un chatteur en poste lui répond.',
+  identity_doubt: 'Le fan doute que ce soit vraiment elle. Un chatteur en poste lui répond.',
   awaiting_approval: 'Un brouillon attend d’être validé depuis plus de 10 minutes.',
   send_failed: 'Un message n’a pas pu partir. L’agent ne réessaie plus, un humain doit le renvoyer.',
   unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
