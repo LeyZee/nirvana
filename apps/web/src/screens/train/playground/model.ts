@@ -1,4 +1,5 @@
 import type {
+  BriefIntent,
   Destination,
   PlaygroundAnswer,
   PlaygroundMedia,
@@ -40,7 +41,8 @@ export function suggestedDestination(verdict: Verdict): Destination | undefined 
   return RULE_REASONS.includes(verdict.reason) ? 'rule' : 'test';
 }
 
-const INTENTS: Readonly<Record<string, string>> = {
+/** Every intent of the contract has its words: an intent added to `BRIEF_INTENTS` breaks the typecheck here. */
+const INTENTS: Readonly<Record<BriefIntent, string>> = {
   small_talk: 'Il discute',
   kyc_answer: 'Il parle de lui',
   flirt: 'Il flirte',
@@ -95,7 +97,7 @@ export const MEDIA_FLAG_LABELS: Readonly<Record<string, string>> = {
 };
 
 /** The brain's codes in the team's words; an unknown code shows as is, never as an empty line. */
-export const intentLabel = (code: string): string => INTENTS[code] ?? code;
+export const intentLabel = (intent: BriefIntent): string => INTENTS[intent];
 export const sentimentLabel = (code: string): string => SENTIMENTS[code] ?? code;
 export const actionLabel = (code: string): string => ACTIONS[code] ?? code;
 export const riskLabel = (code: string): string => RISKS[code] ?? code;
