@@ -1,5 +1,5 @@
 # EQ-05 Paie : écrans de validation, de paiement et commissions du chatteur
-Statut : todo, conçue (fiche reprise et maquettes faites le 28/10/2026, relecture d'Extension demandée) ; le code commence quand #259 et les lots 3a à 3e d'EQ-04 sont dans main (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
+Statut : todo, conçue (fiche et maquettes du 28/10/2026, accord d'Extension le 28/10 après ses 12 remarques) ; le code commence quand #259 et les lots 3a à 3e d'EQ-04 sont dans main (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-04 (lot 3 : validation, saisies, paiement, règles, taux) ; EQ-11 (fait)
 Branche : task/eq-05-payroll-screens
@@ -15,32 +15,56 @@ Valider et payer les paies depuis l'onglet Paie, à la place que fixe l'ADR 0024
 | --- | --- | --- |
 | `GET /v1/payroll/periods/:period` | tous (le sien pour un membre) | Quinzaine, relevé, objectifs : relevés avec leurs lignes, règles copiées, `team`, `canValidate`, `revision`, `computedAt`, clôture, paliers, objectif, minimum |
 | `POST /v1/payroll/statements/:id/validate` `{ revision }` | propriétaire, manager actif, jamais le sien | « Valider » et « Valider (n) » |
-| `POST /v1/payroll/statements/:id/pay` `{ revision }` | propriétaire | « Marquer payé » (voir le premier manque) |
+| `POST /v1/payroll/statements/:id/pay` | propriétaire | « Marquer payé » (corps du premier ajout ci-dessous) |
 | `POST /v1/payroll/bonuses`, `/penalties`, `/adjustments`, `…/:id/cancel` | propriétaire, manager actif, jamais pour soi | Primes et malus |
 | `POST /v1/payroll/bonus-tiers`, `POST /v1/payroll/collective-goals` | propriétaire | Objectifs |
 | `GET`, `PUT /v1/payroll/settings` | lecture : tous ; écriture : propriétaire | Minimum de versement, dans Réglages › Règles de paie |
 | `GET /v1/payroll/exchange-rates` | tous | Le dernier taux de la BCE, au survol d'une ligne en dollars |
 | `GET /v1/team/members`, `GET /v1/team/pay-rules`, `GET /v1/scheduling/shift-reports?period=` | agence | Noms et couleurs (`validatedBy` et `paidBy` sont des `userId`), comptes et créatrices d'une ligne, rapports derrière une ligne |
 
-## Ce qui manque à l'API (dans cette fiche ; contrats et base par Bilan)
-1. **Les détails du paiement.** L'ADR 0023 (§ Factures) veut que « payée » porte la date, le moyen, la référence du transfert et le montant envoyé, et EQ-06 rattache ce transfert aux factures qu'il solde. Or `POST …/pay` ne prend que `{ revision }`, et la table n'a que `paid_at` et `paid_by`. À faire : une migration (numéro attribué par Bilan), en ajout seul, et le corps `{ revision, paidOn, method, reference, sentMinor }`, `method` dans une liste fermée. L'écran remplit « Montant envoyé » avec « À verser ». Un autre montant se confirme, puis s'affiche en ambre sur le relevé, sans changer le relevé. Question à Charles, avec un défaut : les moyens de paiement de l'agence (défaut : virement, Wise, PayPal, autre).
-2. **L'index des quinzaines.** `GET /v1/payroll/periods?before=&limit=`, par curseur.
-   - Pour l'agence : chaque quinzaine, finie ou non, sa clôture, le nombre de relevés par statut et le total à verser.
-   - Pour un membre : son relevé résumé.
-   - Sans cette route, « Relevés » et « Mes relevés » liraient les quinzaines une à une.
-3. **Le relevé après une validation de rapports.** Le brouillon ne se recalcule qu'à l'heure (`payroll.recalculate_open`), ou en file après un refus `commission_statement_changed_conflict`. L'écran dit « Calculé à 10 h 07 » sous la liste et dans le relevé. Après ce refus, il relit le relevé jusqu'à la révision suivante, et ne revalide jamais tout seul. À trancher avec Bilan : mettre `payroll.recalculate` en file quand un rapport est validé.
+## Ce que l'API ajoute avant les écrans (Équipe l'écrit en ajout seul, Bilan relit chaque PR)
+1. **Les détails du paiement.** L'ADR 0023 (§ Factures) veut que « payée » porte la date, le moyen, la référence du transfert et le montant envoyé, et EQ-06 rattache ce transfert aux factures qu'il solde.
+   - Migration 0031 : `paid_on`, `payment_method`, `payment_reference` et `sent_minor` sur `commission_statements`, vides jusqu'au paiement. Une contrainte veut la date, le moyen et le montant si et seulement si le relevé est payé ; la référence reste facultative.
+   - La garde `keep_commission_statement` est réécrite par `CREATE OR REPLACE` dans 0031, sans toucher 0028 ni 0029. Le passage de validé à payé n'écrit que ces quatre colonnes, le statut, `paid_at` et `paid_by`, et le droit `UPDATE` de l'application s'étend à ces quatre colonnes seulement.
+   - Corps `{ revision, paidOn, method, reference?, sentMinor }`, en Zod. Une autre révision donne `commission_statement_changed_conflict`.
+   - `paidOn` n'est jamais dans le futur, dans le fuseau de l'agence (`payment_in_future_unprocessable`).
+   - `sentMinor` est le montant à verser, sinon `payment_amount_unprocessable`. C'est le défaut ; l'autre choix (l'écart devient un ajustement de la quinzaine suivante) est une question à Charles.
+   - `method` vient de `PAYMENT_METHODS`, une liste fermée dans les contrats : `bank_transfer`, `wise`, `paypal`, `other` (Virement, Wise, PayPal, Autre), défaut posé en attendant Charles. Un moyen de plus demande une migration de la contrainte, jamais un texte libre.
+   - `payment_reference` est la référence du transfert (1 à 100 caractères), jamais un IBAN ni un numéro de compte : l'écran et la doc le disent.
+   - Un relevé à verser nul (report, quinzaine sans vente) reste validé : il n'y a rien à payer.
+2. **L'index des quinzaines.** `GET /v1/payroll/periods?limit=&cursor=`, de la plus récente à la plus ancienne, par curseur (`cursor_invalid` sinon). Une route du module payroll, son DTO dans les contrats, aucune migration. Une ligne par quinzaine où le lecteur lit au moins un relevé :
+   - `window` (la quinzaine, ses bornes, son fuseau), `ended`, `closing` (`closedAt`, `closedBy`, ou `null`) ;
+   - `statements`, le nombre de relevés par statut (`draft`, `validated`, `paid`) et `carried`, ceux qui reportent leur total ;
+   - `netMinor`, `payableMinor` et `paidMinor`, sommes des relevés lus.
+
+   Le propriétaire et le manager lisent l'équipe, le chatteur son seul relevé (RLS) : la même route sert Relevés et Mes relevés.
+3. **Le relevé après une validation de rapports.** Le lot 3a le fait déjà : valider un rapport met `payroll.recalculate` en file dans la même transaction, avec la clé `payroll.recalculate:<quinzaine>` en remplacement (une rafale de validations donne un seul calcul, 5 s après la dernière). La clé est par quinzaine et non par membre, parce que l'objectif collectif et la part d'équipe d'un manager dépendent des autres relevés. Sur une quinzaine close, le travail recalcule la première quinzaine ouverte, où va le rapport (ADR 0032). Le passage horaire reste en filet. Un test montre la rafale et le refus. L'écran dit « Calculé à 10 h 07 » sous la liste et dans le relevé. Après un refus `commission_statement_changed_conflict`, il relit le relevé jusqu'à la révision suivante, et ne revalide jamais tout seul.
 
 L'export CSV d'une quinzaine se fait dans le navigateur, depuis la lecture de la quinzaine : mêmes données, aucune route ni aucun droit nouveau. L'export comptable reste à EQ-06, côté serveur.
 
 ## Écrans
 Paie (propriétaire et manager) a les sous-onglets de l'ADR 0024, dans son ordre : Quinzaine · Relevés · Primes et malus · Objectifs. Factures et Export comptable arrivent avec EQ-06 : un onglet n'apparaît que quand son écran existe. Chez le chatteur, l'écran est Commissions.
 
+Ce qui vaut pour tous les écrans (relecture d'Extension, 28/10) :
+- `/paie` et `/commissions` sont déjà dans `apps/web/src/shell/nav.ts`. La PR les ajoute à `READY_SECTIONS` et met à jour les listes d'onglets de `nav.test.ts` et `AppShell.test.tsx` ; sur le téléphone du propriétaire, Entraîner passe sous « Plus », comme le test le prévoit.
+- Les sous-onglets sont `SubNav` tel quel (fondu du bord, défilement, onglet actif centré, dans `layout.tsx`). Rien n'est réécrit.
+- L'écran de paie importe `@/reports/reports.css` lui-même : `rp-review`, `rp-notice` et `rp-account` n'y sont pas chargés autrement. Les classes `py-*` n'utilisent que des jetons et ne redéfinissent aucune classe `rp-*` ni `nv-*`.
+- Un néon par écran : « Valider » dans Quinzaine, « Ajouter » dans Primes et malus, la jauge dans Objectifs, le héros dans Commissions. « À verser » n'est donc pas un `nv-stat--hero`.
+- L'eyebrow au-dessus du titre nomme le sous-onglet (« Quinzaine », « Relevés »…), jamais la période, qui est déjà dans le sélecteur. Commissions, sans sélecteur, garde la période.
+- Un seul formateur signé pour la paie : `signedAmountText` de `reports/model.ts` passe à `Intl.NumberFormat` avec `signDisplay: 'exceptZero'` et le vrai signe moins, collé au chiffre (« +30,00 € », « −15,00 € », « −10 % », « +12 % »). Les corrections de rapports, qui l'utilisent déjà, suivent ; leurs tests aussi.
+- L'interface ne nomme jamais une couleur.
+- `reports.css` change pour tous les écrans qui l'utilisent, dans la PR du code ou une petite PR avant :
+  - la marque de `rp-notice` devient un trait droit de 3 px à côté du texte (`::before`, de la première ligne à la dernière), au lieu d'une ombre intérieure qui suit l'arrondi. Pas d'`overflow: hidden`, qui couperait le halo d'un bouton néon dans l'avis ;
+  - `rp-account[data-missing='true']` reste neutre et « Aucune règle pour l'instant. » passe en `ink-muted` : l'avis au-dessus suffit.
+
 - [ ] **Quinzaine** (la période en cours, ou celle choisie dans Relevés).
   - En-tête : les dates, un état qui dit qui a la main (« En cours, finit le 31 oct. », « Finie : à valider », « Close le 3 nov. par Charles »), et la quinzaine précédente ou suivante.
   - Le chiffre qui domine : « À verser » quand la quinzaine est finie, sinon le net de l'équipe et sa prévision de fin. Au plus trois chiffres secondaires : prévision, écart avec la quinzaine précédente, objectif collectif.
-  - Une ligne par membre : couleur, nom, rôle, net, total, état, écart. États : Brouillon, Validé, Payé, Reporté (sous le minimum, en ambre).
-  - Sélection et « Valider (n) » en néon. Le relevé du lecteur a sa case éteinte, comme son propre rapport dans Équipe › Rapports, et dit « Ton relevé : un autre membre de l'agence le valide ».
-  - Ce qui bloque la validation, en ambre et au-dessus de la liste, avec le lien qui le lève : rapports à relire (Équipe › Rapports), taux de la BCE manquant, membre sans taux de commission (Équipe › Membres).
+  - Une ligne par membre (`rp-review`) : couleur, nom, rôle, net, total, état, écart, et le malus signé comme partout (« malus −15,00 € »). États : Brouillon, Validé, Payé, Reporté (sous le minimum). Un report n'a qu'une marque, l'étiquette ambre « Reporté » ; sa phrase est en `ink-muted` et la ligne n'a pas de bord.
+  - Sélection et « Valider (n) » en néon. Une ligne cochée a un seul état visuel, `rp-review[data-checked='true']`, et pas de `nv-tap`, dont le survol cacherait la sélection. Au bureau, « Valider (n) » est dans l'en-tête ; au téléphone, il est sur la ligne « Tout sélectionner n sur n », où il dit « Valider » puisque le nombre est à côté.
+  - Le relevé du lecteur a sa case éteinte, comme son propre rapport dans Équipe › Rapports, et dit « Ton relevé : un autre membre de l'agence le valide ».
+  - Le compteur de l'onglet Quinzaine est un compteur d'action : il n'apparaît que quand « Valider » est possible.
+  - Ce qui bloque la validation, en ambre et au-dessus de la liste, avec le lien qui le lève : rapports à relire (Équipe › Rapports), taux de la BCE manquant, membre sans taux de commission (Équipe › Membres). Tant qu'un blocage est affiché, ni « Valider », ni les cases, ni le compteur : le bouton de l'avis dit quoi faire.
   - Une fois la quinzaine close, un cadenas : « Close le … : un rapport validé maintenant va sur la quinzaine suivante ».
   - Il n'y a pas de route de lot. « Valider (n) » envoie relevé par relevé, dans l'ordre des membres. Chaque refus reste sur sa ligne, et les autres relevés passent.
 - [ ] **Relevé** (panneau ouvert depuis une ligne) : le parcours de l'argent.
@@ -49,12 +73,14 @@ Paie (propriétaire et manager) a les sous-onglets de l'ADR 0024, dans son ordre
   - Replié par défaut : les règles copiées, la révision, « Calculé à », la version du moteur, les rapports derrière chaque compte.
   - Actions :
     - « Valider (révision n) » ;
-    - « Marquer payé », propriétaire seul, en deux temps (remplir, relire) ;
+    - « Marquer payé », propriétaire seul, en deux temps (remplir, relire) : la date (aujourd'hui par défaut, jamais après), le montant envoyé (« À verser », un autre est refusé), le moyen et la « Référence du transfert, facultative », avec l'aide « Celle que montre la banque ou le service. Jamais un IBAN ni un numéro de compte. » ;
     - « Ajuster », sur un relevé validé ou payé (l'ajustement va sur la quinzaine que choisit le serveur, et l'écran la dit avant l'envoi).
-- [ ] **Relevés** : les quinzaines, de la plus récente à la plus ancienne (index du deuxième manque). Chacune montre son état, son total à verser et le nombre de relevés par statut, et s'ouvre en Quinzaine, en lecture pour une quinzaine close.
-- [ ] **Primes et malus** : les saisies de la quinzaine, membre par membre, et une saisie annulée reste barrée.
+- [ ] **Relevés** : les quinzaines, de la plus récente à la plus ancienne (l'index, deuxième ajout). Chacune montre son état (En cours, Finie : à valider, Close, Payée) et s'ouvre en Quinzaine, en lecture pour une quinzaine close.
+  - La colonne de droite n'a qu'une grandeur : le versé (« versé »), ou ce qui reste à verser (« à verser à ce jour » pour la quinzaine en cours, « à verser » pour une close).
+  - Le net, la clôture et le nombre de relevés par état vont sur la ligne du dessous : « Close le 2 nov. par Charles · 2 655,68 € de net · 3 payés, 1 reporté ».
+- [ ] **Primes et malus** : les saisies de la quinzaine, membre par membre, et une saisie annulée reste barrée. Chaque montant montre son signe : « +30,00 € », « −15,00 € », « −10 % », « −12,40 € ».
   - « Ajouter » en deux temps (remplir, relire) : prime, malus fixe, malus en pourcentage ou ajustement ; le membre (jamais soi : son nom n'est pas dans la liste) ; la quinzaine ; le montant ; le motif, obligatoire.
-  - « Annuler » une prime ou un malus après une confirmation.
+  - « Annuler » une prime ou un malus après une confirmation, en petit bouton discret (`nv-btn--plain nv-btn--sm`) qui se remplit au survol.
   - Jamais « sanction ».
 - [ ] **Objectifs**.
   - L'objectif collectif de la quinzaine : cible, paliers en pourcentage et prime par chatteur, progression avec la marque de la prévision.
@@ -62,7 +88,7 @@ Paie (propriétaire et manager) a les sous-onglets de l'ADR 0024, dans son ordre
   - Le propriétaire les change à partir d'une quinzaine pas encore validée, et le manager les lit. Une quinzaine figée dit pourquoi (`pay_period_closed_conflict`).
 - [ ] **Réglages › Règles de paie** (propriétaire) gagne le minimum de versement : 15 € par défaut, un changement s'applique aux brouillons.
 - [ ] **Commissions** (chatteur ; le manager lit son propre relevé dans Paie, case éteinte).
-  - Le héros : ce que tu touches à ce jour pour la quinzaine. Il dit si c'est encore en calcul, validé ou payé, et la date du paiement quand il est payé.
+  - Le héros : ce que tu touches à ce jour pour la quinzaine. Il dit si c'est encore en calcul, validé ou payé, et la date du paiement quand il est payé. Un relevé payé parle au passé, en haut comme en bas (« Ce que tu as touché »).
   - « Le parcours de ton argent » : du brut à ce que tu touches, ligne par ligne, puis report et versement attendu. Jamais de date de versement promise.
   - « Ma performance » : ce qu'il te reste à faire pour le palier suivant, et ta part de l'objectif collectif quand la quinzaine en a un. Jamais de classement ni le montant d'un autre.
   - « Mes relevés » : les quinzaines passées, avec leur état et leur total.
@@ -93,6 +119,9 @@ Paie (propriétaire et manager) a les sous-onglets de l'ADR 0024, dans son ordre
 | `payroll_own_forbidden` | « Personne ne décide de sa propre paie : un autre s'en charge. » |
 | `payroll_forbidden` | « Seul le propriétaire peut le faire. » |
 | `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`, `collective_goal_conflict` | « Cette saisie existe déjà avec d'autres valeurs : recharge la page. » |
+| `payment_in_future_unprocessable` | « Le paiement ne peut pas être daté après aujourd'hui. » |
+| `payment_amount_unprocessable` | « Le montant envoyé doit être celui à verser : {montant}. » |
+| `cursor_invalid` | Rien à dire : Relevés recharge la liste depuis le début. |
 
 ## Critères d'acceptation
 - Un chatteur ne voit que ses relevés. Une erreur affiche « Le serveur ne répond pas », jamais un faux état vide.
@@ -111,3 +140,4 @@ Factures, avoirs et export comptable (EQ-06), facturation des créatrices et pé
 
 ## Notes de session
 - 2026-10-28 (fil Équipe) : fiche reprise d'après l'API d'EQ-04 (lot 3) et maquettes des écrans, sans code. Trois manques relevés à l'API : les détails du paiement (ADR 0023), l'index des quinzaines, le relevé en retard d'une heure sur les rapports validés. Le code attend la fusion de #259 et des lots 3a à 3e.
+- 2026-10-28 (fil Équipe) : Bilan tranche les trois manques (Équipe les écrit en ajout seul, il relit) ; le recalcul existait déjà dans le lot 3a. Extension relit les maquettes : la conception tient, 12 remarques corrigées dans la fiche et la galerie, puis son accord avec un dernier détail pris (le malus signé sur la ligne) (compteur et bouton absents quand c'est bloqué, « Valider » sur la ligne de sélection au téléphone, un seul état coché, une seule marque ambre, eyebrow du sous-onglet, un formateur signé, une grandeur par colonne dans Relevés, passé sur un relevé payé, aucune couleur nommée, `rp-notice` et `rp-account` dans `reports.css`).
