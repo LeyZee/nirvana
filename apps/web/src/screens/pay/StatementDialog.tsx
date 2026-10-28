@@ -17,6 +17,7 @@ import { payStatement, useRefreshPayroll, type PayRefusal } from '@/payroll/api'
 import {
   changeBps,
   momentAt,
+  PAID_BY,
   PAYMENT_METHOD_LABELS,
   payRefusalText,
   rateText,
@@ -279,7 +280,7 @@ function Foot({
   const pay = statement.status === 'validated' && owner && statement.payableMinor > 0;
   const said =
     statement.status === 'paid' && statement.payment !== null
-      ? `Payé le ${longDay(statement.payment.paidOn)} par ${PAYMENT_METHOD_LABELS[statement.payment.method].toLowerCase()}${
+      ? `Payé le ${longDay(statement.payment.paidOn)}${PAID_BY[statement.payment.method]}${
           statement.payment.reference === null ? '' : `, référence ${statement.payment.reference}`
         }${statement.paidBy === null ? '' : `, marqué par ${who(statement.paidBy)}`}.`
       : statement.status === 'validated' && statement.validatedAt !== null
@@ -288,7 +289,9 @@ function Foot({
           }.${statement.payableMinor === 0 ? ' Rien à verser : le total part en report.' : owner ? '' : ' Le propriétaire le marque payé une fois le transfert fait.'}`
         : own
           ? 'Ton relevé : un autre membre de l’agence le valide.'
-          : 'Validé, il ne change plus : une erreur se corrige par un ajustement.';
+          : statement.status === 'draft'
+            ? 'Brouillon : il suit chaque rapport validé jusqu’à sa validation.'
+            : 'Validé, il ne change plus : une erreur se corrige par un ajustement.';
   return (
     <div className="py-dialog__foot">
       <p className="py-quiet">{said}</p>
@@ -395,7 +398,8 @@ function PayForm({
         <>
           <p className="py-recap nv-enter">
             <b className="nv-num">{amountText(statement.payableMinor, 'EUR')}</b> versés à <b>{memberName}</b>{' '}
-            le {longDay(day)} par {PAYMENT_METHOD_LABELS[method].toLowerCase()}
+            le {longDay(day)}
+            {PAID_BY[method]}
             {reference.trim() === '' ? '' : `, référence ${reference.trim()}`}, pour la quinzaine{' '}
             {periodLine(statement.window.period)}.
           </p>

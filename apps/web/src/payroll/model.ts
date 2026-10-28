@@ -945,7 +945,8 @@ export interface MyStatementWords {
   readonly notes: readonly string[];
 }
 
-const PAID_BY: Readonly<Record<PaymentMethod, string>> = {
+/** How a statement was paid, as a sentence goes on: « Payé le 17 novembre par PayPal », nothing for « Autre ». */
+export const PAID_BY: Readonly<Record<PaymentMethod, string>> = {
   bank_transfer: ' par virement',
   wise: ' par Wise',
   paypal: ' par PayPal',

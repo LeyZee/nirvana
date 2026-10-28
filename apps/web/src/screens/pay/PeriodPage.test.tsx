@@ -318,10 +318,12 @@ describe('Paie › Quinzaine', () => {
     expect(within(dialog).getByText(/Ceci contient un IBAN/u)).toBeTruthy();
     expect(within(dialog).queryByText(/versés à/u)).toBeNull();
 
-    fireEvent.change(reference, { target: { value: 'VIR-2611-0412' } });
+    fireEvent.change(reference, { target: { value: 'P2P-4E7F2C1A' } });
+    // A proper name keeps its capitals.
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'PayPal' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
     expect(text(await within(dialog).findByText(/versés à/u))).toBe(
-      '288,40 € versés à Théo le lundi 2 novembre par virement, référence VIR-2611-0412, pour la quinzaine du 16 au 31 octobre.',
+      '288,40 € versés à Théo le lundi 2 novembre par PayPal, référence P2P-4E7F2C1A, pour la quinzaine du 16 au 31 octobre.',
     );
     answer = () => ({ status: 200, body: statementOf(THEO, OCT2, { status: 'paid' }) });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Marquer payé' }));
@@ -332,13 +334,47 @@ describe('Paie › Quinzaine', () => {
           body: {
             revision: 3,
             paidOn: '2026-11-02',
-            method: 'bank_transfer',
+            method: 'paypal',
             sentMinor: 28_840,
-            reference: 'VIR-2611-0412',
+            reference: 'P2P-4E7F2C1A',
           },
         },
       ]);
     });
+  });
+
+  it('says in a statement’s foot where it stands: a draft follows the reports, a paid one how it was paid', async () => {
+    renderPage(OWNER);
+    fireEvent.click(await screen.findByRole('button', { name: 'Basile' }));
+    let dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText('Brouillon : il suit chaque rapport validé jusqu’à sa validation.'),
+    ).toBeTruthy();
+    fireEvent.click(within(dialog).getByText('Fermer', { selector: '.py-dialog__foot button' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    // Paid by « Autre »: the day alone, never « par autre ».
+    periods[OCT1] = periodOf(
+      OCT1,
+      [statementOf(THEO, OCT1, { ...PAID, payment: { ...PAID.payment, method: 'other', reference: 'R-1' } })],
+      {
+        closing: {
+          period: OCT1,
+          exchangeRates: [],
+          closedBy: OWNER_USER,
+          closedAt: '2026-10-16T08:00:00.000Z',
+        },
+      },
+    );
+    cleanup();
+    renderPage(OWNER, `/paie/quinzaine?quinzaine=${OCT1}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Théo' }));
+    dialog = await screen.findByRole('dialog');
+    expect(text(within(dialog).getByText(/^Payé le/u))).toBe(
+      'Payé le samedi 17 octobre, référence R-1, marqué par Charles.',
+    );
   });
 
   it('adjusts a validated statement on the member’s next period to validate, which it says before sending', async () => {
