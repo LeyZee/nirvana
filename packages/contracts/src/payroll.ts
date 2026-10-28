@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { pageOf } from './conversations';
 import {
   BonusIdSchema,
   BonusTierSetIdSchema,
@@ -523,8 +524,8 @@ export type CommissionStatement = z.infer<typeof CommissionStatementSchema>;
 
 /**
  * A period closed for the team (ADR 0032): when, and for the owner and an active manager by whom and on which rates.
- * A member reads of a closing only its date: `closedBy` and `exchangeRates` are `null` for them. Its team net and
- * collective goal as reached are those of each of its statements (`CommissionStatement.team`).
+ * A member reads of a closing only its date, as in the list of periods: `closedBy` and `exchangeRates` are `null` for
+ * them. Its team net and collective goal as reached are those of each of its statements (`CommissionStatement.team`).
  */
 export const PayPeriodClosingSchema = z.object({
   period: PayPeriodSchema,
@@ -554,6 +555,41 @@ export const PayrollPeriodSchema = z.object({
   settings: PayrollSettingsSchema,
 });
 export type PayrollPeriod = z.infer<typeof PayrollPeriodSchema>;
+
+/** A sum of a period's statements in euro cents: a `bigint` in SQL, read only within JavaScript's exact integers. */
+const PeriodSumSchema = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+const StatementCountSchema = z.number().int().min(0);
+
+/**
+ * A period of `GET /v1/payroll/periods` (EQ-05): its window, whether it has ended, when the team closed it, and the
+ * statements its reader reads there (`withMember`), counted by status and summed. The team's for the owner and an
+ * active manager; one's own for a member, never the team's. `carried` counts the statements that carry their total
+ * over (below the minimum payout, or below zero); `paidMinor` is what was sent. `closedBy` is `null` while the period
+ * is open, and always for a member, who reads of a closing only its date (never the team's net nor its rates).
+ */
+export const PayPeriodSummarySchema = z.object({
+  window: PayPeriodWindowSchema,
+  ended: z.boolean(),
+  closedAt: z.iso.datetime().nullable(),
+  closedBy: UserIdSchema.nullable(),
+  statements: z.object({
+    draft: StatementCountSchema,
+    validated: StatementCountSchema,
+    paid: StatementCountSchema,
+    carried: StatementCountSchema,
+  }),
+  netMinor: PeriodSumSchema,
+  payableMinor: PeriodSumSchema,
+  paidMinor: PeriodSumSchema,
+});
+export type PayPeriodSummary = z.infer<typeof PayPeriodSummarySchema>;
+
+/**
+ * `GET /v1/payroll/periods?limit=&cursor=` (`PageQuerySchema`) → 200: the periods where the reader reads at least one
+ * statement, the most recent first (api.md § Pagination). 400 `cursor_invalid`, a cursor this route did not give.
+ */
+export const PayPeriodPageSchema = pageOf(PayPeriodSummarySchema);
+export type PayPeriodPage = z.infer<typeof PayPeriodPageSchema>;
 
 /**
  * `POST /v1/payroll/statements/:id/validate` (owner, active manager, never one's own) → 200 `CommissionStatementSchema`.
@@ -614,9 +650,10 @@ export function mayValidateStatement(
  * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
  * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
  * `payment_amount_unprocessable` 422, an amount sent that is not what the statement pays ;
+ * `cursor_invalid` 400, a page cursor the periods' list did not give ;
  * `payroll_own_forbidden` 403, one's own statement, bonus, penalty or adjustment ;
- * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing, or a manager doing what only
- * the owner does.
+ * `payroll_forbidden` 403, a member who is not the owner nor an active manager writing or reading the latest rate, or
+ * a manager doing what only the owner does.
  */
 export const PAYROLL_ERROR_CODES = [
   'team_member_not_found',
@@ -642,6 +679,7 @@ export const PAYROLL_ERROR_CODES = [
   'commission_rate_missing_conflict',
   'payment_in_future_unprocessable',
   'payment_amount_unprocessable',
+  'cursor_invalid',
   'payroll_own_forbidden',
   'payroll_forbidden',
 ] as const;

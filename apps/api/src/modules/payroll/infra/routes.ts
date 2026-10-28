@@ -12,8 +12,10 @@ import {
   CreatePenaltyBodySchema,
   DomainError,
   ExchangeRatesSchema,
+  PageQuerySchema,
   PayAdjustmentSchema,
   PayCommissionStatementBodySchema,
+  PayPeriodPageSchema,
   PayPeriodSchema,
   PayrollPeriodSchema,
   PayrollSettingsSchema,
@@ -64,6 +66,15 @@ export function createPayrollRoutes(
 ): FastifyPluginAsyncZod {
   const ownerOrMember = requireRole('owner', 'operator');
   return (app) => {
+    app.get(
+      '/payroll/periods',
+      {
+        preHandler: ownerOrMember,
+        schema: { querystring: PageQuerySchema, response: { 200: PayPeriodPageSchema } },
+      },
+      (request) => reads.periods(userOf(request), request.query),
+    );
+
     app.get(
       '/payroll/periods/:period',
       {

@@ -17,7 +17,9 @@ import type {
   PayAdjustmentId,
   PayCommissionStatementBody,
   PayPeriod,
+  PageQuery,
   PayPeriodClosing,
+  PayPeriodSummary,
   PayPeriodWindow,
   PayrollSettings,
   Penalty,
@@ -210,8 +212,16 @@ export interface PeriodView {
   readonly settings: PayrollSettings;
 }
 
+/** A period of the list as the database sums it, before the application says whether it has ended. */
+type StoredPeriodSummary = Omit<PayPeriodSummary, 'ended'>;
+
 export interface PayrollReadStore {
   period(userId: UserId, period: PayPeriod): Promise<PeriodView>;
+  /** The periods where the reader reads a statement, the most recent first: a page after `page.cursor`. */
+  periods(
+    userId: UserId,
+    page: PageQuery,
+  ): Promise<{ readonly items: readonly StoredPeriodSummary[]; readonly nextCursor: string | null }>;
   settings(userId: UserId): Promise<PayrollSettings>;
   /** The latest rate of each currency the job read. */
   exchangeRates(userId: UserId): Promise<ExchangeRates>;

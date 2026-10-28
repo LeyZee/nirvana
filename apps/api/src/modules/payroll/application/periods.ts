@@ -4,8 +4,10 @@ import {
   mayValidateStatement,
   type CommissionStatement,
   type ExchangeRates,
+  type PageQuery,
   type PayPeriod,
   type PayPeriodClosing,
+  type PayPeriodPage,
   type PayrollPeriod,
   type PayrollSettings,
   type UserId,
@@ -36,6 +38,8 @@ const toStatement = (stored: StoredStatement, reader: PayReader): CommissionStat
 export interface PayrollReads {
   /** `GET /v1/payroll/periods/:period` (EQ-04): the period as its reader may see it. */
   period(userId: UserId, period: PayPeriod): Promise<PayrollPeriod>;
+  /** `GET /v1/payroll/periods` (EQ-05): the periods the reader has statements in, the most recent first. */
+  periods(userId: UserId, page: PageQuery): Promise<PayPeriodPage>;
   /** `GET /v1/payroll/settings`: the minimum payout, the default before the owner sets one. */
   settings(userId: UserId): Promise<PayrollSettings>;
   /** `GET /v1/payroll/exchange-rates`: the latest rate the job read, `null` before the first one; the agency's only. */
@@ -43,13 +47,15 @@ export interface PayrollReads {
 }
 
 export function createPayrollReads(store: PayrollReadStore, now: () => Date): PayrollReads {
+  const hasEnded = (window: { readonly endsAt: string }): boolean =>
+    new Date(window.endsAt).getTime() <= now().getTime();
   return {
     async period(userId: UserId, period: PayPeriod): Promise<PayrollPeriod> {
       const view = await store.period(userId, period);
       return {
         period,
         window: view.window,
-        ended: view.window !== null && new Date(view.window.endsAt).getTime() <= now().getTime(),
+        ended: view.window !== null && hasEnded(view.window),
         closing: closingFor(view.closing, view.reader),
         beforeFirstClosing: view.firstClosed !== null && period < view.firstClosed,
         statements: view.statements.map((statement) => toStatement(statement, view.reader)),
@@ -57,6 +63,10 @@ export function createPayrollReads(store: PayrollReadStore, now: () => Date): Pa
         collectiveGoal: collectiveGoalFor(view.collectiveGoals, period),
         settings: view.settings,
       };
+    },
+    async periods(userId, page) {
+      const { items, nextCursor } = await store.periods(userId, page);
+      return { items: items.map((item) => ({ ...item, ended: hasEnded(item.window) })), nextCursor };
     },
     settings: (userId) => store.settings(userId),
     exchangeRates: (userId) => store.exchangeRates(userId),

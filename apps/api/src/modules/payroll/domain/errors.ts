@@ -26,6 +26,13 @@ export class CommissionStatementNotFound extends DomainError {
   }
 }
 
+/** A page cursor the periods' list did not give (api.md § Pagination). */
+export class PayPeriodCursorInvalid extends DomainError {
+  constructor() {
+    super('cursor_invalid', 'Curseur de pagination invalide');
+  }
+}
+
 export class TeamMemberNotFound extends DomainError {
   constructor() {
     super('team_member_not_found', 'Membre introuvable');
