@@ -674,10 +674,11 @@
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--nv-hairline);
 }
+/* Held: still the selection, on its way; the locked row stays the quiet one. */
 .rp-review[data-held='true'] {
-  opacity: 0.55;
-  background: var(--nv-glass-fill);
-  box-shadow: none;
+  opacity: 0.6;
+  background: var(--nv-select);
+  box-shadow: inset 0 0 0 1px var(--nv-select-strong);
 }
 .rp-review__held {
   color: var(--nv-ink-muted);

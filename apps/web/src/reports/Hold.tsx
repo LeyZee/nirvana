@@ -52,7 +52,7 @@ interface Held {
 
 export interface Hold {
   readonly phase: Phase | null;
-  /** Holds `run` for `HOLD_MS`, said by `title` (« Rapport envoyé dans… ») and `text` (what it sends). */
+  /** Holds `run` for `HOLD_MS`, said by `title` (« Envoi du rapport », then « dans 5 s ») and `text` (what it sends). */
   readonly hold: (
     what: { readonly title: string; readonly text: string; readonly onCancel?: () => void },
     run: () => Promise<HoldResult>,
