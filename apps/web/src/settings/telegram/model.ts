@@ -161,6 +161,19 @@ export function coverOf(overview: TelegramOverview): Cover {
       sub: 'Ajoute un bot et mets-le dans un groupe : les urgences y arriveront, même à 3 h du matin.',
     };
   }
+  // Groups exist but none can be written to: the bot is what to fix, not the choice of a group (recette du 28/10).
+  if (missing.length > 0 && choices.length > 0 && !choices.some((c) => c.isReachable)) {
+    const isBotBroken = overview.bots.some((bot) => bot.state !== 'active');
+    return {
+      isOk: false,
+      title: 'Les alertes ne partent plus',
+      sub: isBotBroken
+        ? overview.bots.some((bot) => bot.state === 'refused')
+          ? 'Telegram refuse le jeton d’un bot : remplace-le dans Bots et groupes.'
+          : 'Un autre programme lit le bot : arrête-le, ou remplace le jeton dans Bots et groupes.'
+        : 'Le bot n’a le droit d’écrire dans aucun de ses groupes : fais-le administrateur du groupe.',
+    };
+  }
   if (missing.length > 0) {
     const names = missing.map((c) => c.displayName).join(', ');
     return {
@@ -281,14 +294,25 @@ export function looksLikeToken(value: string): boolean {
   return /^\d{5,15}:[A-Za-z0-9_-]{30,}$/.test(value.trim());
 }
 
-/** The identifier @BotFather will accept for a name: lowercase, underscores, ends in `bot`. */
+/** Telegram's limit on a bot's identifier. */
+const USERNAME_MAX = 32;
+
+/**
+ * The identifier @BotFather will accept for a name: starts with a letter, lowercase, underscores, ends in `bot`,
+ * 32 characters at most. A name that already ends in « bot » gets no second one.
+ */
 export function suggestedUsername(name: string): string {
-  const base = name
+  const words = name
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 28);
-  return `${base === '' ? 'nirvana' : base}_bot`;
+    .replace(/^_+|_+$/g, '');
+  const base = words === '' ? 'nirvana' : /^[a-z]/.test(words) ? words : `nirvana_${words}`;
+  if (base.endsWith('bot') && base.length >= 5 && base.length <= USERNAME_MAX) return base;
+  const stem = base
+    .replace(/_?bot$/, '')
+    .slice(0, USERNAME_MAX - '_bot'.length)
+    .replace(/_+$/, '');
+  return `${stem === '' ? 'nirvana' : stem}_bot`;
 }

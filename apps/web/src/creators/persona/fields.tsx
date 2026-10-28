@@ -388,7 +388,8 @@ export function SwitchRow({
 
 /**
  * A list of short entries (hobbies, pet names, keywords): Entrée or a comma adds, × removes, a double is refused
- * here already (the schema refuses it too). Placeholders of the example are not shown; the first real entry replaces them.
+ * here already (the schema refuses it too), and so is an entry with nothing `keyOf` keeps (« !!! » as a keyword);
+ * the refusal is said in words, not only in colour. Placeholders of the example are not shown; the first real entry replaces them.
  */
 export function Entries({
   id,
@@ -407,15 +408,19 @@ export function Entries({
   keyOf?: (value: string) => string;
 }): JSX.Element {
   const [text, setText] = useState('');
-  const [refused, setRefused] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   const shown = values.filter((v) => !isPlaceholder(v));
 
   const add = (): void => {
     const entry = text.trim();
     if (entry === '') return;
+    if (keyOf(entry) === '') {
+      setRefusal('Il faut au moins une lettre ou un chiffre.');
+      return;
+    }
     if (values.some((v) => keyOf(v) === keyOf(entry))) {
-      setRefused(true);
+      setRefusal('Déjà dans la liste.');
       return;
     }
     onChange([...shown, entry]);
@@ -432,36 +437,46 @@ export function Entries({
   };
 
   return (
-    <div className="nv-glass nv-field__control ps-entries" data-refused={refused ? 'true' : undefined}>
-      {shown.map((value, index) => (
-        <span key={`${value}-${String(index)}`} className="ps-entry">
-          <span className="ps-entry__text">{value}</span>
-          <button
-            type="button"
-            className="ps-entry__remove"
-            aria-label={`Retirer ${value}`}
-            onClick={() => {
-              onChange(shown.filter((_, i) => i !== index));
-            }}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        id={id}
-        className="ps-entries__input"
-        value={text}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        onChange={(event) => {
-          setText(event.target.value);
-          setRefused(false);
-        }}
-        onKeyDown={onKey}
-        onBlur={add}
-      />
-    </div>
+    <>
+      <div
+        className="nv-glass nv-field__control ps-entries"
+        data-refused={refusal === null ? undefined : 'true'}
+      >
+        {shown.map((value, index) => (
+          <span key={`${value}-${String(index)}`} className="ps-entry">
+            <span className="ps-entry__text">{value}</span>
+            <button
+              type="button"
+              className="ps-entry__remove"
+              aria-label={`Retirer ${value}`}
+              onClick={() => {
+                onChange(shown.filter((_, i) => i !== index));
+              }}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          id={id}
+          className="ps-entries__input"
+          value={text}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          aria-invalid={refusal === null ? undefined : true}
+          aria-describedby={refusal === null ? undefined : `${id}-refusal`}
+          onChange={(event) => {
+            setText(event.target.value);
+            setRefusal(null);
+          }}
+          onKeyDown={onKey}
+          onBlur={add}
+        />
+      </div>
+      <p id={`${id}-refusal`} className="ps-hint" role="status" hidden={refusal === null}>
+        {refusal}
+      </p>
+    </>
   );
 }
 

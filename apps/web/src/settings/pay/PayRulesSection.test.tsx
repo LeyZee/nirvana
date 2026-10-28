@@ -28,6 +28,7 @@ const rules = (n: number, accountN: number, fromPeriod: string, patch: Record<st
 });
 
 let answer: { status: number; body: unknown };
+let accounts: unknown[] | null = null;
 const writes: { path: string; body: unknown }[] = [];
 
 function serve(): void {
@@ -48,7 +49,7 @@ function serve(): void {
       if (url.pathname === '/v1/team/pay-rules') {
         return json({
           currentPeriod: '2026-10-16',
-          accounts: [
+          accounts: accounts ?? [
             {
               account: account(1, 'Anna Lys', 'anna'),
               rules: [rules(2, 1, '2026-11-01', { vatBps: 550 }), rules(1, 1, '2026-10-01')],
@@ -79,11 +80,19 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  accounts = null;
   cleanup();
   vi.unstubAllGlobals();
 });
 
 describe('Réglages › Règles de paie', () => {
+  it('asks for nothing the page cannot do when there is no account yet', async () => {
+    accounts = [];
+    renderSection();
+    expect(await screen.findByText('Aucun compte plateforme')).toBeTruthy();
+    expect(screen.queryByText(/Ajoute un compte/u)).toBeNull();
+  });
+
   it('puts the account without rules first, then each account’s rules in force and to come', async () => {
     renderSection();
     expect(await screen.findByText('Un compte sans règles de paie')).toBeTruthy();

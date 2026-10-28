@@ -11,6 +11,7 @@ function status(provider: ProviderStatus['provider'], state: ProviderStatus['sta
     source: state === 'not_connected' ? null : 'dashboard',
     keyLabel: null,
     verifiedAt: null,
+    isUnreadable: false,
     message: 'Message',
     facts: [],
     settings: {},
@@ -90,6 +91,19 @@ describe('Services view rules', () => {
         verifiedAt: '2026-10-17T20:00:00.000Z',
       }),
     ).toBeNull();
+  });
+
+  it('never blames the provider for a key Nirvana can no longer decrypt', () => {
+    const unreadable = {
+      ...status('elevenlabs', 'needs_reconnect'),
+      verifiedAt: '2026-10-17T19:00:00.000Z',
+      isUnreadable: true,
+    };
+    const notice = verifyNotice('elevenlabs', unreadable, { ...unreadable });
+    expect(notice).toBe(
+      'Nirvana ne peut plus lire la clé enregistrée : ElevenLabs n’a pas été contacté. Colle la clé à nouveau.',
+    );
+    expect(notice).not.toMatch(/n’a pas répondu/);
   });
 
   it('says what really stops when a key is removed', () => {

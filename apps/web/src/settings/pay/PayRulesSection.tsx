@@ -113,9 +113,11 @@ export function PayRulesSection(): JSX.Element {
       )}
       {accounts.length === 0 ? (
         <div className="nv-plate rp-rules__cover nv-enter">
-          <p className="rp-notice__title">Aucun compte</p>
+          <p className="rp-notice__title">Aucun compte plateforme</p>
+          {/* No screen creates an account yet (recette du 28/10): the text asks for nothing the page cannot do. */}
           <p className="rp-notice__text">
-            Ajoute un compte à une créatrice : ses règles de paie se posent ici.
+            Les règles de paie se posent sur le compte plateforme d’une créatrice, son compte Reveal par
+            exemple. Aucun n’est encore relié à Nirvana : chaque compte relié apparaîtra ici.
           </p>
         </div>
       ) : (

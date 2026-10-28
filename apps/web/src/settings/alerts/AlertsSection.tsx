@@ -65,6 +65,7 @@ import './alerts.css';
 import { useCreators } from '@/creators/api';
 import { Entries, Field, FormContext, SwitchRow, TextArea, TextInput } from '@/creators/persona/fields';
 import '@/creators/persona/persona.css';
+import { distinctNames } from '@/settings/names';
 import { fetchOverview, TelegramOff } from '@/settings/telegram/api';
 import { TOPICS } from '@/settings/telegram/model';
 import { searchOfTab, TAB_OF_TOPIC } from '@/settings/telegram/search';
@@ -114,7 +115,7 @@ export function AlertsSection(): JSX.Element {
 
   const known = routing.data ?? null;
   const telegramHead = telegramHeadLine(known);
-  const all = creators.data;
+  const all = distinctNames(creators.data, (creator) => creator.id);
   const custom = alerts.data.custom;
   return (
     <section className="ps-page al-page">
@@ -127,7 +128,8 @@ export function AlertsSection(): JSX.Element {
               le choisis, l’agent se met en pause sur ce fan et passe la main.
             </p>
           </div>
-          {editing === 'new' ? null : (
+          {/* One editor at a time: opening another would drop the changes of the open one (recette du 28/10). */}
+          {editing !== null ? null : (
             <button
               type="button"
               className="nv-btn nv-btn--neon al-head__action"
@@ -200,9 +202,13 @@ export function AlertsSection(): JSX.Element {
                   index={index}
                   creators={all}
                   routing={known}
-                  onEdit={() => {
-                    setEditing(alert.groupId);
-                  }}
+                  onEdit={
+                    editing === null
+                      ? () => {
+                          setEditing(alert.groupId);
+                        }
+                      : null
+                  }
                 />
               ),
             )}
@@ -290,7 +296,8 @@ function AlertLine({
   index: number;
   creators: readonly CreatorSummary[];
   routing: TelegramRouting | null;
-  onEdit: () => void;
+  /** `null` while another alert is being written: no « Modifier » until it is saved or abandoned. */
+  onEdit: (() => void) | null;
 }): JSX.Element {
   const queryClient = useQueryClient();
   const switchId = useId();
@@ -408,9 +415,11 @@ function AlertLine({
         </div>
       ) : (
         <div className="al-line__actions">
-          <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" disabled={busy} onClick={onEdit}>
-            Modifier
-          </button>
+          {onEdit === null ? null : (
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" disabled={busy} onClick={onEdit}>
+              Modifier
+            </button>
+          )}
           <button
             type="button"
             className="nv-btn nv-btn--plain nv-btn--sm"

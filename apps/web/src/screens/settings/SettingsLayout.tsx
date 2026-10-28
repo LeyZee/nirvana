@@ -9,11 +9,16 @@ import { TelegramSection } from '@/settings/telegram/TelegramSection';
 import type { TelegramTab } from '@/settings/telegram/search';
 import { ComingSoon, Page, PageHeader, SubNav, type SubNavItem } from '@/shell/layout';
 
+import './settings.css';
+
 /** The alerts and the backups are the owner's alone (P4-01, ADR 0028): anyone else gets no tab that would answer 403. */
 const ALERTS_TAB: SubNavItem = { to: '/reglages/alertes', label: 'Alertes' };
 const BACKUPS_TAB: SubNavItem = { to: '/reglages/sauvegardes', label: 'Sauvegardes' };
 /** The accounts' pay rules too (EQ-03): the owner alone posts them. */
 const PAY_RULES_TAB: SubNavItem = { to: '/reglages/regles-de-paie', label: 'Règles de paie' };
+/** The AI keys and the bots and groups too (P3-03, P3-07): the server serves them to the owner alone. */
+const AI_MODELS_TAB: SubNavItem = { to: '/reglages/modeles-ia', label: 'Modèles IA' };
+const TELEGRAM_TAB: SubNavItem = { to: '/reglages/telegram', label: 'Telegram' };
 
 export function SettingsLayout(): JSX.Element {
   const { user, onSignOut } = useRouteContext({ from: '__root__' });
@@ -26,16 +31,14 @@ export function SettingsLayout(): JSX.Element {
             <SubNav
               label="Réglages"
               items={[
-                { to: '/reglages/modeles-ia', label: 'Modèles IA' },
-                ...(user.role === 'owner' ? [ALERTS_TAB] : []),
-                { to: '/reglages/telegram', label: 'Telegram' },
-                ...(user.role === 'owner' ? [PAY_RULES_TAB, BACKUPS_TAB] : []),
+                ...(user.role === 'owner' ? [AI_MODELS_TAB, ALERTS_TAB] : []),
+                ...(user.role === 'owner' ? [TELEGRAM_TAB, PAY_RULES_TAB, BACKUPS_TAB] : []),
                 { to: '/reglages/appareils', label: 'Appareils' },
                 { to: '/reglages/apparence', label: 'Apparence' },
                 { to: '/reglages/mode', label: 'Mode de l’agent' },
               ]}
             />
-            <button type="button" className="nv-btn nv-btn--plain nv-btn--sm md:hidden" onClick={onSignOut}>
+            <button type="button" className="nv-btn nv-btn--plain nv-btn--sm st-signout" onClick={onSignOut}>
               Se déconnecter
             </button>
           </>
