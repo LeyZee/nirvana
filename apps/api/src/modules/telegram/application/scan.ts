@@ -1,4 +1,4 @@
-import type { CreatorId, TelegramChatId } from '@nirvana/contracts';
+import type { CreatorId, TelegramChatId, TelegramTopic } from '@nirvana/contracts';
 
 import { classify } from '../domain/classify';
 import { chatsFor } from '../domain/coverage';
@@ -44,11 +44,18 @@ export async function scanEvents(deps: ScanDeps): Promise<number> {
     const outcome = classify(event.signal);
     let deliveries: readonly NewDelivery[] = [];
     if (outcome?.kind === 'notice') {
-      const targets = chatsFor(routes, event.creatorId, outcome.topic).filter((id) => reachable.has(id));
-      if (targets.length === 0 && outcome.topic === 'urgent') deps.onUncovered(event);
+      const reach = (topic: TelegramTopic) =>
+        chatsFor(routes, event.creatorId, topic).filter((id) => reachable.has(id));
+      let notice = outcome;
+      let targets = reach(notice.topic);
+      if (targets.length === 0 && notice.fallbackTopic !== undefined) {
+        notice = { ...notice, topic: notice.fallbackTopic };
+        targets = reach(notice.topic);
+      }
+      if (targets.length === 0 && notice.topic === 'urgent') deps.onUncovered(event);
       const creatorName =
         event.creatorId === null ? null : (creatorById.get(event.creatorId)?.displayName ?? null);
-      deliveries = noticeDeliveries(event, outcome, targets, creatorName, deps.webOrigin);
+      deliveries = noticeDeliveries(event, notice, targets, creatorName, deps.webOrigin);
     } else if (outcome?.kind === 'closure') {
       deliveries = await closureDeliveries(deps, event, outcome);
     }
