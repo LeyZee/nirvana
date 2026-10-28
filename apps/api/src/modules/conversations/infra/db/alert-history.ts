@@ -17,7 +17,8 @@ const events = schema.conversationEvents;
 const seen = schema.alertSeen;
 
 /** Her triggers: every `alert_triggered`, and a `handoff_requested` that carries one (P4-01). */
-const isTrigger = sql`(${events.type} = 'alert_triggered' or (${events.type} = 'handoff_requested' and ${events.payload} -> 'trigger' is not null))`;
+const isTrigger = sql`(${events.type} = 'alert_triggered'
+  or (${events.type} = 'handoff_requested' and ${events.payload} -> 'trigger' is not null))`;
 
 const TriggerPayloadSchema = z.object({ trigger: AlertTriggerSchema });
 
@@ -53,9 +54,10 @@ async function placeOf(tx: Transaction, id: EventId): Promise<ReturnType<typeof 
 
 function alertIs(alert: NonNullable<AlertTriggerFilter['alert']>): ReturnType<typeof sql> {
   if (alert.kind === 'none') return sql`false`;
+  const ref = sql`${events.payload} -> 'trigger' -> 'alert'`;
   return alert.kind === 'custom'
-    ? sql`${events.payload} -> 'trigger' -> 'alert' ->> 'kind' = 'custom' and ${events.payload} -> 'trigger' -> 'alert' ->> 'id' = ${alert.id}`
-    : sql`${events.payload} -> 'trigger' -> 'alert' ->> 'kind' = 'system' and ${events.payload} -> 'trigger' -> 'alert' ->> 'code' = ${alert.code}`;
+    ? sql`(${ref} ->> 'kind' = 'custom' and ${ref} ->> 'id' = ${alert.id})`
+    : sql`(${ref} ->> 'kind' = 'system' and ${ref} ->> 'code' = ${alert.code})`;
 }
 
 /** The history of her alerts, under her RLS like everything else; the seen mark is the agency's, one per event. */
