@@ -1,6 +1,6 @@
 # 0032. Paie : la quinzaine se clôture pour toute l'équipe à sa première validation
 
-Statut : proposed
+Statut : accepted (Charles, 28/10/2026 16h27, « oui ;) » à « accepter l'ADR 0032, puis un mot pour pousser »)
 Date : 2026-10-28
 Complète : ADR 0023 § Paie (la course entre un rapport tardif et la validation, la vente tardive, le taux de change)
 

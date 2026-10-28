@@ -153,3 +153,12 @@ export async function lockMemberPeriod(tx: Transaction, memberId: string, period
     sql`select pg_advisory_xact_lock(hashtextextended(${`payroll.member_period:${memberId}:${period}`}, 0))`,
   );
 }
+
+/**
+ * The lock of a period's closing (ADR 0032), global: the validation of a statement, the recalculation of a period's
+ * drafts and the writes of tiers, goals and the payout minimum take it, always before `lockMemberPeriod`. A report
+ * never takes it: the registry of counted reports sends one validated during a closing to the next open period.
+ */
+export async function lockPayrollClose(tx: Transaction): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('payroll.close', 0))`);
+}
