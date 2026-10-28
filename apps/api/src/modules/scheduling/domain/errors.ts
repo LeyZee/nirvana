@@ -276,8 +276,8 @@ export class ShiftReportEarly extends DomainError {
 }
 
 export class ShiftReportChanged extends DomainError {
-  constructor() {
-    super('shift_report_changed_conflict', 'Ce rapport a changé depuis qu’il a été lu');
+  constructor(message = 'Ce rapport a changé depuis qu’il a été lu') {
+    super('shift_report_changed_conflict', message);
   }
 }
 

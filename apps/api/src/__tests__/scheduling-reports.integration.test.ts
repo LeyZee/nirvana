@@ -34,7 +34,7 @@ import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
-import { parisDay, parisInstant } from './support/paris';
+import { PARIS, parisDay, parisInstant } from './support/paris';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 /** Invented people, creators and accounts only (ADR 0010). */
@@ -167,10 +167,16 @@ describe('Équipe › Rapports de fin de shift (/v1/scheduling, EQ-03, ADR 0023)
     cookie: string,
     shiftId: ShiftId,
     amountMinor: number,
-    extra: { correctsId?: ShiftReportId; currency?: 'EUR' | 'USD'; comment?: string; incident?: string } = {},
+    extra: {
+      id?: ShiftReportId;
+      correctsId?: ShiftReportId;
+      currency?: 'EUR' | 'USD';
+      comment?: string;
+      incident?: string;
+    } = {},
   ) =>
     call('POST', '/scheduling/shift-reports', cookie, {
-      id: newId(ShiftReportIdSchema),
+      id: extra.id ?? newId(ShiftReportIdSchema),
       shiftId,
       amountMinor,
       currency: extra.currency ?? 'EUR',
@@ -217,8 +223,8 @@ describe('Équipe › Rapports de fin de shift (/v1/scheduling, EQ-03, ADR 0023)
       )
     ).rows[0]?.waiting ?? 0;
 
-  const untilWaiting = async (kind: 'advisory' | null): Promise<void> => {
-    for (let tries = 0; (await waitingOnLocks(kind)) < 1; tries += 1) {
+  const untilWaiting = async (kind: 'advisory' | null, count = 1): Promise<void> => {
+    for (let tries = 0; (await waitingOnLocks(kind)) < count; tries += 1) {
       if (tries > 250) throw new Error('nobody waited for the lock');
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
@@ -641,6 +647,74 @@ describe('Équipe › Rapports de fin de shift (/v1/scheduling, EQ-03, ADR 0023)
     lock.release();
     await lock.done;
     expect((await correcting).statusCode).toBe(201);
+  });
+
+  it('answers the same report sent twice at once with the one it made', async () => {
+    // A double click or a network retry: both wait on the lock, the second finds the first's report under it.
+    const shiftId = await shiftOn(
+      basile,
+      anna,
+      annaMain,
+      parisInstant(parisDay(-1), 840),
+      parisInstant(parisDay(-1), 960),
+    );
+    const lock = holding((tx) => lockMemberPeriod(tx, basile.id, theoPeriod));
+    await lock.ready;
+    const id = newId(ShiftReportIdSchema);
+    const twice = Promise.all([
+      make(basileCookie, shiftId, 4_200, { id }),
+      make(basileCookie, shiftId, 4_200, { id }),
+    ]);
+    await untilWaiting('advisory', 2);
+    lock.release();
+    await lock.done;
+    const answers = await twice;
+    expect(answers.map((one) => one.statusCode).toSorted()).toEqual([200, 201]);
+    const [first, second] = answers.map((one) => ShiftReportSchema.parse(one.json()));
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({ id, shiftId, memberId: basile.id, period: theoPeriod });
+  });
+
+  it('reads the shift again under the lock, and keeps no report on a shift changed meanwhile', async () => {
+    // The planning keeps the start and the member of a started shift (migration 0021): these shifts have not started,
+    // and what the test holds is that nothing is decided on the shift read before the lock.
+    const sentWhile = async (
+      minutes: number,
+      change: (tx: Transaction, shiftId: ShiftId) => Promise<void>,
+    ) => {
+      const startsAt = new Date((Math.floor(Date.now() / MINUTE) + minutes) * MINUTE);
+      const shiftId = await shiftOn(
+        basile,
+        anna,
+        annaThird,
+        startsAt,
+        new Date(startsAt.getTime() + 20 * MINUTE),
+      );
+      const period = payPeriodOfDay(new Intl.DateTimeFormat('en-CA', { timeZone: PARIS }).format(startsAt));
+      const meanwhile = holding((tx) => lockMemberPeriod(tx, basile.id, period));
+      await meanwhile.ready;
+      const making = make(basileCookie, shiftId, 3_100);
+      await untilWaiting('advisory');
+      meanwhile.release((tx) => change(tx, shiftId));
+      await meanwhile.done;
+      const made = await making;
+      const kept = await test.admin.db.execute<{ count: number }>(
+        sql`select count(*)::int as count from shift_reports where shift_id = ${shiftId}`,
+      );
+      return [made.statusCode, codeOf(made), kept.rows[0]?.count];
+    };
+    // Moved by the planning: the period and the window it was read with no longer hold.
+    const moved = await sentWhile(60, async (tx, shiftId) => {
+      await tx.execute(
+        sql`update shifts set starts_at = starts_at + interval '5 minutes' where id = ${shiftId}`,
+      );
+    });
+    expect(moved).toEqual([409, 'shift_report_changed_conflict', 0]);
+    // Given to another member by a swap: the lock was not theirs, and the chatter no longer reads the shift.
+    const given = await sentWhile(100, async (tx, shiftId) => {
+      await tx.execute(sql`update shifts set member_id = ${nora.id} where id = ${shiftId}`);
+    });
+    expect(given).toEqual([404, 'shift_not_found', 0]);
   });
 
   it('never keeps a report made while its shift was being cancelled', async () => {

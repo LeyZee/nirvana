@@ -162,6 +162,21 @@ async function shiftOf(tx: Transaction, id: string): Promise<(StoredShift & { ca
   return row === undefined ? null : { ...toShift(row), cancelled: row.cancelledAt !== null };
 }
 
+const SHIFT_MOVED = 'Ce shift a changé pendant l’envoi : relis-le avant de faire son rapport';
+
+/**
+ * The shift read again, as its report was decided on: cancelled, it is no longer found; with another member or another
+ * start, the report would be under a lock, or in a period, that are not its own.
+ */
+async function shiftAsSeen(tx: Transaction, seen: StoredShift): Promise<StoredShift> {
+  const shift = await shiftOf(tx, seen.id);
+  if (shift === null || shift.cancelled) throw new ShiftNotFound();
+  if (shift.memberId !== seen.memberId || shift.startsAt.getTime() !== seen.startsAt.getTime()) {
+    throw new ShiftReportChanged(SHIFT_MOVED);
+  }
+  return shift;
+}
+
 /** The account's pay rules, every period. */
 async function rulesOf(tx: Transaction, platformAccountId: string): Promise<RulesRow[]> {
   const rows = await tx
@@ -250,11 +265,17 @@ export function createDrizzleShiftReportStore(db: Database, adminDb: Database): 
       if (creatorId === null) throw new ShiftNotFound();
       return withTenantMember(db, creatorId, actor.userId, async (tx, scope) => {
         const reader = await readerIn(tx, actor.userId, scope);
-        const [existing] = await tx
-          .select({ ...reportColumns, createdBy: shiftReports.createdBy })
-          .from(shiftReports)
-          .where(eq(shiftReports.id, report.id));
-        if (existing !== undefined) {
+        /** The same report sent again is given back; the same id with other values is refused. */
+        const replay = async (): Promise<{
+          report: StoredShiftReport;
+          created: false;
+          reader: Reader;
+        } | null> => {
+          const [existing] = await tx
+            .select({ ...reportColumns, createdBy: shiftReports.createdBy })
+            .from(shiftReports)
+            .where(eq(shiftReports.id, report.id));
+          if (existing === undefined) return null;
           const same =
             existing.createdBy === actor.userId &&
             existing.shiftId === report.shiftId &&
@@ -265,18 +286,27 @@ export function createDrizzleShiftReportStore(db: Database, adminDb: Database): 
             existing.incident === report.incident;
           if (!same) throw new ShiftReportConflict();
           return { report: toReport(existing), created: false, reader };
-        }
+        };
+        const sent = await replay();
+        if (sent !== null) return sent;
 
-        const shift = await shiftOf(tx, report.shiftId);
-        if (shift === null || shift.cancelled) throw new ShiftNotFound();
+        const seen = await shiftOf(tx, report.shiftId);
+        if (seen === null || seen.cancelled) throw new ShiftNotFound();
         const correcting = report.correctsId !== null;
-        const { byAgency } = makerOf(shift.memberId, correcting, reader);
+        const { byAgency } = makerOf(seen.memberId, correcting, reader);
         assertReportValues(report);
         const corrected = report.correctsId === null ? null : await readReport(tx, report.correctsId);
-        if (correcting && corrected?.shiftId !== shift.id) throw new ShiftReportNotFound();
+        if (correcting && corrected?.shiftId !== seen.id) throw new ShiftReportNotFound();
         // A correction keeps the period of the report it corrects; a report takes its shift's, frozen now.
-        const period = corrected?.period ?? shiftPeriod(shift.startsAt, await agencyTimeZone(tx));
-        await lockMemberPeriod(tx, shift.memberId, period);
+        const period = corrected?.period ?? shiftPeriod(seen.startsAt, await agencyTimeZone(tx));
+        await lockMemberPeriod(tx, seen.memberId, period);
+
+        // Under the lock, read again what was read before it: the same request sent twice at once (a double click, a
+        // network retry) waited here behind its twin and is a replay; a shift given to another member meanwhile would
+        // put this report under a lock that is not its member's.
+        const twin = await replay();
+        if (twin !== null) return twin;
+        const shift = await shiftAsSeen(tx, seen);
 
         const shiftReportsNow = await reportsOfShift(tx, shift.id);
         if (corrected === null) {
@@ -321,6 +351,10 @@ export function createDrizzleShiftReportStore(db: Database, adminDb: Database): 
           );
         } catch (error) {
           const failure = pgErrorOf(error);
+          // A swap gave the shift to another member after the read under the lock: the foreign key no longer holds.
+          if (failure?.code === '23503' && failure.constraint === 'shift_reports_shift_fk') {
+            throw new ShiftReportChanged(SHIFT_MOVED);
+          }
           if (failure?.code !== '23505') throw error;
           if (failure.constraint === 'shift_reports_shift_unique') {
             const raced = (await reportsOfShift(tx, shift.id)).find((one) => one.correctsId === null);
@@ -329,9 +363,9 @@ export function createDrizzleShiftReportStore(db: Database, adminDb: Database): 
           // The same id is a report this account does not see, or was recorded in the meantime.
           throw new ShiftReportConflict();
         }
-        // A cancellation that held the shift's row (`for update`) made the insert wait on it, through its foreign key:
-        // read the shift again now that it is written, and give the report back to nobody when it was cancelled.
-        if ((await shiftOf(tx, shift.id))?.cancelled !== false) throw new ShiftNotFound();
+        // A cancellation or a move that held the shift's row (`for update`) made the insert wait on it, through its
+        // foreign key: read the shift again now that it is written, and keep the report only on the shift it was made on.
+        await shiftAsSeen(tx, shift);
         await audit(
           tx,
           actor,
