@@ -33,12 +33,21 @@ export function createConnectorSessions(deps: {
     async store({ platformAccountId, session, correlationId }) {
       const creatorId = await deps.accounts.creatorOf(platformAccountId);
       if (creatorId === null) throw new PlatformAccountNotFound();
+      // Compared in clear: GCM seals the same session differently each time. One that no longer opens (a retired key)
+      // counts as changed.
+      const previous = await deps.accounts.sessionOf(creatorId, platformAccountId);
+      const changed = previous === null || openOrNull(vault(), platformAccountId, previous) !== session;
       const sealed = vault().seal(platformAccountId, session);
-      await deps.accounts.storeSession(creatorId, platformAccountId, sealed, {
-        correlationId,
-        at: deps.clock.now(),
-        userId: null,
-      });
+      await deps.accounts.storeSession(
+        creatorId,
+        platformAccountId,
+        { ciphertext: sealed, changed },
+        {
+          correlationId,
+          at: deps.clock.now(),
+          userId: null,
+        },
+      );
     },
     async load(creatorId, platformAccountId) {
       const sealed = await deps.accounts.sessionOf(creatorId, platformAccountId);
@@ -50,4 +59,16 @@ export function createConnectorSessions(deps: {
         at: deps.clock.now(),
       }),
   };
+}
+
+function openOrNull(
+  vault: SessionVault,
+  platformAccountId: PlatformAccountId,
+  sealed: Buffer,
+): string | null {
+  try {
+    return vault.open(platformAccountId, sealed);
+  } catch {
+    return null;
+  }
 }

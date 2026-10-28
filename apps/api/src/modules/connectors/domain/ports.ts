@@ -55,11 +55,15 @@ export interface AccountStore {
     to: SessionState,
     meta: EventMeta,
   ): Promise<void>;
-  /** Stores a new encrypted session, sets the state to `valid` and closes the breaker. */
+  /**
+   * Stores an encrypted session, sets the state to `valid` and closes the breaker. `session_updated_at` moves only for
+   * a session that `changed`, or one stored over no session or an expired one: an identical one sent again is not a
+   * new session, and must not hide a read that is late (the Dashboard counts from the latest of the two dates).
+   */
   storeSession(
     creatorId: CreatorId,
     id: PlatformAccountId,
-    ciphertext: Buffer,
+    session: { readonly ciphertext: Buffer; readonly changed: boolean },
     meta: EventMeta & { readonly userId: string | null },
   ): Promise<void>;
   publish(creatorId: CreatorId, body: EventBody, meta: EventMeta): Promise<void>;

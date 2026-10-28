@@ -131,7 +131,7 @@ export function createDrizzleAccountStore(db: Database, adminDb: Database): Acco
         );
       }),
 
-    storeSession: (creatorId, id, ciphertext, meta) =>
+    storeSession: (creatorId, id, session, meta) =>
       withTenant(db, creatorId, async (tx) => {
         const [row] = await tx
           .select({ sessionState: schema.platformAccounts.sessionState })
@@ -139,11 +139,12 @@ export function createDrizzleAccountStore(db: Database, adminDb: Database): Acco
           .where(byId(id))
           .for('update');
         if (row === undefined) return;
+        const renewed = session.changed || row.sessionState === 'none' || row.sessionState === 'expired';
         await tx
           .update(schema.platformAccounts)
           .set({
-            sessionCiphertext: ciphertext,
-            sessionUpdatedAt: meta.at,
+            sessionCiphertext: session.ciphertext,
+            ...(renewed ? { sessionUpdatedAt: meta.at } : {}),
             sessionState: 'valid',
             consecutiveErrors: 0,
             pausedUntil: null,
