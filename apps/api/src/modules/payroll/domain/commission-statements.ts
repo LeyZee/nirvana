@@ -209,7 +209,35 @@ function hasAnything(member: MemberPayInput, collectiveBonusMinor: number, teamS
   );
 }
 
+/** The first value `key` gives twice, or `null`. */
+function twice<T>(items: readonly T[], key: (item: T) => string): string | null {
+  const seen = new Set<string>();
+  for (const item of items) {
+    const one = key(item);
+    if (seen.has(one)) return one;
+    seen.add(one);
+  }
+  return null;
+}
+
+/**
+ * What the application must never hand the engine, since the answer would then hang on the order of the input: a
+ * member twice (the team's net would count the member twice), two rates for one currency, or one account twice in a
+ * currency for a member (the account's total would be rounded in two pieces). A bug of the caller, never a case of pay.
+ */
+function refuseDuplicates(input: PeriodPayInput): void {
+  const member = twice(input.members, (one) => one.memberId);
+  if (member !== null) throw new RangeError(`Member ${member} comes twice in one period`);
+  const currency = twice(input.rates, (one) => one.currency);
+  if (currency !== null) throw new RangeError(`Two exchange rates for ${currency}`);
+  for (const one of input.members) {
+    const account = twice(one.accounts, (earnings) => `${earnings.platformAccountId} ${earnings.currency}`);
+    if (account !== null) throw new RangeError(`Account ${account} comes twice for member ${one.memberId}`);
+  }
+}
+
 export function computeCommissionStatements(input: PeriodPayInput): PeriodStatements {
+  refuseDuplicates(input);
   const lines = new Map(
     input.members.map((member) => [
       member.memberId,

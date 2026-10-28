@@ -435,6 +435,35 @@ describe('what goes from a period to the next', () => {
 });
 
 describe('the period', () => {
+  it('refuses a member twice, two rates for one currency, or an account twice for a member', () => {
+    // Each would make the answer hang on the order: the team's net counted twice, the first rate taken, the account's
+    // total rounded in two pieces.
+    const theo = chatter('theo', { accounts: [account({ grossMinor: 10_000 })] });
+    expect(() => computeCommissionStatements(period([theo, chatter('theo')]))).toThrow(RangeError);
+    expect(() =>
+      computeCommissionStatements(
+        period([theo], { rates: [USD_AT_092, { ...USD_AT_092, rateMicros: 930_000 }] }),
+      ),
+    ).toThrow(RangeError);
+    expect(() =>
+      computeCommissionStatements(
+        period([
+          chatter('theo', { accounts: [account({ grossMinor: 10_000 }), account({ grossMinor: 5_000 })] }),
+        ]),
+      ),
+    ).toThrow(RangeError);
+    // The same account in two currencies (its rules changed between a late report's period and this one) is two lines.
+    const both = statementOf(
+      period([
+        chatter('theo', {
+          accounts: [account({ grossMinor: 10_000 }), account({ grossMinor: 10_000, currency: 'USD' })],
+        }),
+      ]),
+      'theo',
+    );
+    expect(both.lines.map((line) => line.netMinor)).toEqual([10_000, 9_200]);
+  });
+
   it('makes a statement only for a member with something in it, and says its engine', () => {
     const result = computeCommissionStatements(
       period([chatter('lea'), chatter('theo', { accounts: [account({ grossMinor: 100 })] })]),
