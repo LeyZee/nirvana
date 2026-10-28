@@ -435,7 +435,7 @@ describe('what goes from a period to the next', () => {
 });
 
 describe('the period', () => {
-  it('refuses a member twice, two rates for one currency, or an account twice for a member', () => {
+  it('refuses a member twice, two rates for one currency, or an account twice under the same rules', () => {
     // Each would make the answer hang on the order: the team's net counted twice, the first rate taken, the account's
     // total rounded in two pieces.
     const theo = chatter('theo', { accounts: [account({ grossMinor: 10_000 })] });
@@ -452,16 +452,31 @@ describe('the period', () => {
         ]),
       ),
     ).toThrow(RangeError);
-    // The same account in two currencies (its rules changed between a late report's period and this one) is two lines.
+    // The same account under other rules (they changed between a late report's period and this one) is a line of its
+    // own: in dollars, 10 000 × 0,92 = 9 200 ; in euros at 20 % VAT, 12 000 ÷ 1,2 = 10 000.
     const both = statementOf(
       period([
         chatter('theo', {
-          accounts: [account({ grossMinor: 10_000 }), account({ grossMinor: 10_000, currency: 'USD' })],
+          accounts: [
+            account({ grossMinor: 10_000 }),
+            account({ grossMinor: 10_000, currency: 'USD' }),
+            account({ grossMinor: 12_000, vatBps: 2_000 }),
+          ],
         }),
       ]),
       'theo',
     );
-    expect(both.lines.map((line) => line.netMinor)).toEqual([10_000, 9_200]);
+    expect(both.lines.map((line) => line.netMinor)).toEqual([10_000, 9_200, 10_000]);
+    // Same account, same currency, another platform fee: 10 000 × 0,8 = 8 000.
+    const fee = statementOf(
+      period([
+        chatter('theo', {
+          accounts: [account({ grossMinor: 10_000 }), account({ grossMinor: 10_000, platformFeeBps: 2_000 })],
+        }),
+      ]),
+      'theo',
+    );
+    expect(fee.lines.map((line) => line.netMinor)).toEqual([10_000, 8_000]);
   });
 
   it('makes a statement only for a member with something in it, and says its engine', () => {
