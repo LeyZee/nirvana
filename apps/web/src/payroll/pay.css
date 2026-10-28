@@ -7,6 +7,10 @@
   gap: var(--nv-space-4);
   max-width: 980px;
 }
+/* A panel without a head (Relevés): its list as far from the top edge as from the bottom one. */
+.py-board > .nv-panel > .rp-sec:first-child {
+  padding-top: 22px;
+}
 
 /* ── The period on top: one figure leads, three at most beside it ── */
 .py-sum {
@@ -515,7 +519,7 @@
   gap: var(--nv-space-2);
 }
 .py-dialog__foot .py-quiet {
-  flex: 1 1 220px;
+  flex: 1 1 100%;
 }
 .py-rules {
   display: grid;
@@ -1062,11 +1066,11 @@
   justify-content: space-between;
   gap: var(--nv-space-2) var(--nv-space-3);
 }
-.py-validate--row {
+.nv-btn.py-validate--row {
   display: none;
 }
 @media (max-width: 640px) {
-  .py-validate--head {
+  .nv-btn.py-validate--head {
     display: none;
   }
   /* The count is already on the line (« 4 sur 4 »), so the button says only « Valider » and fits beside it. */
@@ -1076,7 +1080,7 @@
   .py-allrow .rp-all {
     padding-right: var(--nv-space-1);
   }
-  .py-validate--row {
+  .nv-btn.py-validate--row {
     display: inline-flex;
   }
 }

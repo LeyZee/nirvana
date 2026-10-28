@@ -29,9 +29,10 @@ export function Dialog({
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // A tall dialog opens at its top, even when the field it focuses is lower down (a statement's « Valider »).
     dialog.current
       ?.querySelector<HTMLElement>('[data-autofocus], select, input, button:not(.tm-close)')
-      ?.focus();
+      ?.focus({ preventScroll: true });
     return () => {
       opener?.focus();
     };

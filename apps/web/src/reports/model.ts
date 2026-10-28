@@ -82,10 +82,11 @@ export function periodLine(period: PayPeriod): string {
   return `du ${dayNumber(period)} au ${dayNumber(last)} ${MONTH.format(new Date(`${period}T12:00:00Z`))}`;
 }
 
-/** « 1er – 15 octobre 2026 »: a period as a title. */
-export function periodTitle(period: PayPeriod): string {
+/** « 1er – 15 octobre 2026 »: a period as a title; « 1er – 15 octobre » in a list that has room for no more. */
+export function periodTitle(period: PayPeriod, year = true): string {
   const last = payPeriodLastDay(period);
-  return `${dayNumber(period)} – ${dayNumber(last)} ${MONTH_YEAR.format(new Date(`${period}T12:00:00Z`))}`;
+  const month = (year ? MONTH_YEAR : MONTH).format(new Date(`${period}T12:00:00Z`));
+  return `${dayNumber(period)} – ${dayNumber(last)} ${month}`;
 }
 
 /** The period running at `now` in the agency's zone, which the periods follow (ADR 0023). */

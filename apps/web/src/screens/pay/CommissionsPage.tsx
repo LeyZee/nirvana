@@ -18,7 +18,6 @@ import { Chip, Empty, Gauge, GoalTicks, Loading, MoneyPath, Unreachable } from '
 
 import { PAYROLL_KEY, PeriodCursorInvalid, usePayPeriod, usePayPeriods } from '@/payroll/api';
 import {
-  dayAt,
   forecastNet,
   gaugePercent,
   goalSpanBps,
@@ -470,15 +469,12 @@ function GoalShare({
 function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: () => void }): JSX.Element {
   const { window } = summary;
   const amount = memberPeriodAmount(summary);
-  const sub = [
-    `${amountText(summary.netMinor, 'EUR')} de net${summary.ended ? '' : ' à ce jour'}`,
-    summary.closedAt === null ? null : `close le ${dayAt(summary.closedAt, window.timeZone)}`,
-  ].filter((part) => part !== null);
+  const sub = `${amountText(summary.netMinor, 'EUR')} de net${summary.ended ? '' : ' à ce jour'}`;
   return (
     <button type="button" className="py-period nv-tap" onClick={onOpen}>
       <span>
-        <span className="py-period__name nv-num">{periodTitle(window.period)}</span>
-        <span className="py-period__sub nv-num">{sub.join(' · ')}</span>
+        <span className="py-period__name nv-num">{periodTitle(window.period, false)}</span>
+        <span className="py-period__sub nv-num">{sub}</span>
       </span>
       <Chip chip={memberPhaseChip(summary)} />
       <span className="py-period__amount nv-num">

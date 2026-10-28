@@ -212,8 +212,8 @@ describe('CommissionsPage', () => {
 
     const rows = within(panel('Mes relevés')).getAllByRole('button');
     expect(rows.map(text)).toEqual([
-      '1er – 15 novembre 2026300,00 € de net à ce jourEn cours21,25 €à ce jour',
-      '1er – 15 octobre 202685,00 € de net · close le ven. 16 oct.Payé21,25 €touché',
+      '1er – 15 novembre300,00 € de net à ce jourEn cours21,25 €à ce jour',
+      '1er – 15 octobre85,00 € de netPayé21,25 €touché',
     ]);
     // A chatter reads neither the team nor its rules.
     expect(asked).not.toContain('/v1/team/members');
@@ -223,7 +223,7 @@ describe('CommissionsPage', () => {
   it('opens a past statement in the second person, paid in the past tense', async () => {
     renderPage();
     const past = await within(await waitFor(() => panel('Mes relevés'))).findByRole('button', {
-      name: /1er – 15 octobre/u,
+      name: /^1er – 15 octobre/u,
     });
     fireEvent.click(past);
     const dialog = await screen.findByRole('dialog');
