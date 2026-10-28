@@ -437,8 +437,8 @@ describe('Paie › Quinzaine', () => {
   });
 
   it('says a period before the team’s first closing is closed without a statement, never paid', async () => {
-    // Pay never wrote it: no window, so it never reads as ended either.
-    periods[OCT1] = periodOf(OCT1, [], { window: null, beforeFirstClosing: true });
+    // Pay never wrote it: no window, so the server never says it has ended either.
+    periods[OCT1] = periodOf(OCT1, [], { window: null, ended: false, beforeFirstClosing: true });
     renderPage(OWNER, `/paie/quinzaine?quinzaine=${OCT1}`);
     expect(await screen.findByText('Close avant la première clôture')).toBeTruthy();
     expect(
@@ -446,7 +446,9 @@ describe('Paie › Quinzaine', () => {
     ).toBeTruthy();
     expect(screen.getByText('Aucun relevé avant la première clôture.')).toBeTruthy();
     expect(screen.queryByText('Payée')).toBeNull();
-    expect(screen.queryByText(/pour la quinzaine/u)).toBeNull();
+    // No sum, ended or running: there is nothing to sum, ever.
+    expect(screen.queryByText(/pour la quinzaine|Net de l’équipe/u)).toBeNull();
+    expect(screen.queryByText('À ce jour, membre par membre')).toBeNull();
   });
 
   it('shows a running period’s net and where its pace leads, with nothing to validate', async () => {

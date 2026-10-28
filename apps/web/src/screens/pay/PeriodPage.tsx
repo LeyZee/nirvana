@@ -327,7 +327,9 @@ function PeriodView({
         />
         <Panel
           className="nv-enter"
-          eyebrow={ended ? 'Relevés de commissions' : 'À ce jour, membre par membre'}
+          eyebrow={
+            ended || data.beforeFirstClosing ? 'Relevés de commissions' : 'À ce jour, membre par membre'
+          }
           actions={
             rows.length === 0 ? undefined : (
               <button
