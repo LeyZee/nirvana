@@ -47,7 +47,8 @@ export function alertTriggerReason(trigger: AlertTrigger, alertName: string): st
 /**
  * One trigger. `id` is the event's. `alertGroupId` and `alertName` name her alert as it was, archived since or not;
  * `alertName` is the system's label for a system alert. `pausedAgent`: the alert handed the conversation to a human
- * (a `handoff_requested`), and its line is in « À traiter » too. `seenAt`: when someone of the agency marked it seen.
+ * (a `handoff_requested`), and its line is in « À traiter » too. `seenAt`: when someone of the agency marked it
+ * seen.
  */
 export const AlertTriggerItemSchema = z.object({
   id: EventIdSchema,
@@ -67,8 +68,9 @@ export type AlertTriggerItem = z.infer<typeof AlertTriggerItemSchema>;
 
 /**
  * `GET /v1/alerts/triggers?creatorId=` (owner, an operator who reads the whole creator): her triggers, newest first,
- * by cursor pages (the cursor names the last trigger of its page, read again in the base: no date is rounded). `seen` keeps the seen ones (`true`) or the others (`false`); `alert` keeps one alert, her own by its
- * `groupId` or the system's by its code.
+ * by cursor pages. The cursor names the last trigger of its page, whose place is read again in the base: no date is
+ * rounded. `seen` keeps the seen ones (`true`) or the others (`false`); `alert` keeps one alert, her own by its
+ * `groupId` or the system's by its code. 400 `cursor_invalid` when the cursor names no trigger of hers.
  */
 export const AlertTriggerQuerySchema = PageQuerySchema.extend({
   creatorId: CreatorIdSchema,
@@ -84,10 +86,11 @@ export type AlertTriggerQuery = z.infer<typeof AlertTriggerQuerySchema>;
 export const AlertTriggerSeenParamsSchema = z.object({ id: EventIdSchema });
 
 /**
- * `POST /v1/alerts/triggers/seen` → 200: « Tout marquer comme vu ». Every trigger of the creator up to `untilId`, the
- * newest one the screen shows, that one included, is seen: one come since stays unseen. The order is the list's, read
- * in the base (`created_at` to the microsecond, then `id`), never a date sent back rounded. `alert` keeps the list's
- * filter: what the screen does not show is not marked. 404 `alert_trigger_not_found` when `untilId` is not hers.
+ * `POST /v1/alerts/triggers/seen` → 200: « Tout marquer comme vu ». Every trigger of the creator up to `untilId`,
+ * the newest one the screen shows, that one included, is seen: one come since stays unseen. The order is the list's,
+ * read in the base (`created_at` to the microsecond, then `id`), never a date sent back rounded. `alert` keeps the
+ * list's filter: what the screen does not show is not marked. 404 `alert_trigger_not_found` when `untilId` is not
+ * hers.
  */
 export const MarkAlertTriggersSeenBodySchema = z.object({
   creatorId: CreatorIdSchema,
