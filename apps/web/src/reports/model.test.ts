@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amountInput,
   amountText,
+  incidentsOf,
   parseAmount,
   parsePercent,
   percentText,
@@ -149,6 +150,23 @@ describe('what a period’s list says', () => {
   it('adds up a shift’s validated report and corrections', () => {
     expect(validatedTotal(reports, first.id)).toBe(8_000);
     expect(validatedTotal(reports, second.id)).toBe(0);
+  });
+
+  it('gathers the incidents shift by shift, in the order they were said', () => {
+    const said = (one: ShiftReport, incident: string, createdAt: string): ShiftReport => ({
+      ...one,
+      incident,
+      createdAt,
+    });
+    const report = reports.find((one) => one.id === firstReport);
+    const correction = reports.find((one) => one.status === 'submitted');
+    if (report === undefined || correction === undefined) throw new Error('no fixture');
+    const incidents = incidentsOf([
+      said(correction, 'Puis un fan insistant', '2026-10-21T09:00:00.000Z'),
+      said(report, 'Reveal a coupé', '2026-10-20T10:00:00.000Z'),
+      ...reports.filter((one) => one.shiftId === second.id),
+    ]);
+    expect([...incidents]).toEqual([[first.id, ['Reveal a coupé', 'Puis un fan insistant']]]);
   });
 
   it('sums what is validated and what waits, per currency', () => {
