@@ -152,6 +152,8 @@ function serve(
     members?: TeamMember[];
     leaves?: unknown[];
     swaps?: unknown[];
+    /** The reports of every period asked. */
+    reports?: unknown[];
     write?: (method: string, path: string, body: unknown) => Reply;
   } = {},
 ): Written[] {
@@ -211,6 +213,11 @@ function serve(
               { id: BASILE, displayName: 'Basile', color: null },
             ],
           },
+        };
+      else if (path === '/v1/scheduling/shift-reports')
+        reply = {
+          status: 200,
+          body: { reports: routes.reports ?? [], shifts: [], accounts: [], members: [] },
         };
       else reply = { status: 404 };
       return Promise.resolve(
@@ -675,6 +682,53 @@ describe('Équipe › Planning', () => {
     expect(written.map(({ method, path }) => `${method} ${path}`)).toEqual([
       'POST /v1/scheduling/shift-templates',
     ]);
+  });
+
+  it('marks the shift whose report says an incident, and its sheet says the report (EQ-03)', async () => {
+    const past = (n: number, day: string) => ({
+      ...night,
+      id: id(n),
+      startsAt: `${day}T15:00:00Z`,
+      endsAt: `${day}T21:00:00Z`,
+      templateId: null,
+    });
+    const report = {
+      id: id(301),
+      shiftId: id(103),
+      creatorId: NORA,
+      platformAccountId: NORA_REVEAL,
+      memberId: THEO,
+      period: '2026-10-16',
+      correctsId: null,
+      amount: { amountMinor: 21_240, currency: 'EUR' },
+      comment: null,
+      incident: 'Reveal a coupé vingt minutes vers 21 h.',
+      status: 'submitted',
+      version: 1,
+      byAgency: false,
+      canReview: true,
+      submittedAt: '2026-10-26T21:05:00Z',
+      reviewedAt: null,
+      reviewNote: null,
+      createdAt: '2026-10-26T21:05:00Z',
+    };
+    serve({
+      planning: planning([], [night, past(103, '2026-10-26'), past(104, '2026-10-27')]),
+      reports: [report],
+    });
+    renderPage();
+
+    const marked = await screen.findByRole('button', { name: /incident signalé/u });
+    expect(screen.getAllByRole('button', { name: /incident signalé/u })).toHaveLength(1);
+    fireEvent.click(marked);
+    const sheet = screen.getByRole('dialog');
+    expect(text(sheet)).toContain('212,40 €');
+    expect(within(sheet).getByText('À valider')).toBeTruthy();
+    expect(text(sheet)).toContain('Incident Reveal a coupé vingt minutes vers 21 h.');
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Fermer' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Théo, 16\sh\s–\s22\sh$/u }));
+    expect(within(screen.getByRole('dialog')).getByText('Sans rapport')).toBeTruthy();
   });
 
   it('says how long a single shift really lasts the night the clocks go forward', async () => {

@@ -19,6 +19,8 @@ export type Signal =
       readonly conversationId: ConversationId | null;
       /** `null` for an event written before the cause existed (#54): it ranks as important. */
       readonly cause: HandoffCause | null;
+      /** The alert of hers that paused the agent (P4-01), named in the message; absent for any other cause. */
+      readonly alert?: AlertRef;
     }
   | {
       readonly kind: 'takeover';

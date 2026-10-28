@@ -170,12 +170,13 @@ describe('Réglages › Sauvegardes', () => {
     );
   });
 
-  it('is a tab of the owner, after Telegram', async () => {
+  it('is a tab of the owner, after Telegram and the pay rules', async () => {
     const router = renderApp(owner, '/reglages/sauvegardes');
     expect(await subTabs()).toEqual([
       'Modèles IA',
       'Alertes',
       'Telegram',
+      'Règles de paie',
       'Sauvegardes',
       'Appareils',
       'Apparence',
@@ -211,6 +212,17 @@ describe('Réglages › Sauvegardes', () => {
       expect(await subTabs()).not.toContain('Alertes');
       cleanup();
     }
+  });
+
+  it('keeps the pay rules to the owner too (EQ-03)', async () => {
+    const router = renderApp(
+      { ...base, role: 'operator', team: null, teamScope: 'self' },
+      '/reglages/regles-de-paie',
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
+    });
+    expect(await subTabs()).not.toContain('Règles de paie');
   });
 });
 

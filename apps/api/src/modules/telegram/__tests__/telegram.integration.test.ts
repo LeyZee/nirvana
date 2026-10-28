@@ -42,6 +42,8 @@ describe('telegram module on Postgres', () => {
   let telegram: FakeTelegram;
   let module: TelegramModule;
   let uncovered: string[];
+  /** Her alerts' names, as the `alerts` module gives them. */
+  const names = new Map<string, ReadonlyMap<string, string>>();
 
   function build(encryptionKeys = keys): {
     module: TelegramModule;
@@ -60,6 +62,7 @@ describe('telegram module on Postgres', () => {
         webOrigin: WEB_ORIGIN,
         onUncovered: (event) => uncovered.push(event.id),
         resealTokens: store.resealTokens,
+        alertNames: { ofCreator: (creatorId) => Promise.resolve(names.get(creatorId) ?? new Map()) },
       }),
       resealTokens: store.resealTokens,
     };
@@ -369,6 +372,7 @@ describe('telegram module on Postgres', () => {
     if (!saved.ok) throw new Error('routes not saved');
 
     const custom = { kind: 'custom', id: newId(CustomAlertIdSchema) } as const;
+    names.set(other, new Map([[custom.id, 'Appel vidéo']]));
     const trigger = { alert: custom, matchedBy: 'keyword', keyword: 'mot-déclaré' } as const;
     const paused = newId(ConversationIdSchema);
     const told = newId(ConversationIdSchema);
@@ -377,7 +381,11 @@ describe('telegram module on Postgres', () => {
     await publish('alert_triggered', { conversationId: newId(ConversationIdSchema), trigger, notify: true });
     await publish('alert_triggered', { conversationId: told, trigger, notify: true }, other);
     await publish('alert_triggered', { conversationId: told, trigger, notify: false }, other);
-    await publish('handoff_requested', { conversationId: pausedOther, cause: 'custom_alert' }, other);
+    await publish(
+      'handoff_requested',
+      { conversationId: pausedOther, cause: 'custom_alert', trigger },
+      other,
+    );
     // The trigger knows the new type (0027).
     expect(await jobs('telegram.scan')).toMatchObject([{ key: 'telegram.scan' }]);
     await module.jobs.scan();
@@ -399,7 +407,11 @@ describe('telegram module on Postgres', () => {
     );
     expect(rows.map((row) => row.text).join()).not.toContain('mot-déclaré');
     await module.jobs.flushChat(chatId);
-    expect(telegram.sent.map((m) => m.text).join()).toContain('🔔 <b>Alerte · Autre</b>');
+    const sent = telegram.sent.map((m) => m.text).join();
+    // Named as the history names it: her alert's name, written by the agency, never the word.
+    expect(sent).toContain('🔔 <b>Appel vidéo · Autre</b>');
+    expect(sent).toContain('Le message du fan correspond à l’alerte « Appel vidéo ». Il n’écrit plus');
+    expect(sent).not.toContain('mot-déclaré');
   });
 
   it('logs an urgent alert that no group can receive', async () => {

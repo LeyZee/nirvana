@@ -152,6 +152,27 @@ describe('reading the outbox', () => {
     });
   });
 
+  it('reads which alert of hers paused the agent, and lets a trigger it cannot read go', () => {
+    const alert = { kind: 'custom', id: newId(CustomAlertIdSchema) } as const;
+    const handoff = (trigger: unknown) =>
+      toScannedEvent({
+        ...base,
+        type: 'handoff_requested',
+        payload: { conversationId, cause: 'custom_alert', trigger },
+      })?.signal;
+    expect(handoff({ alert, matchedBy: 'keyword', keyword: 'appel' })).toEqual({
+      kind: 'handoff',
+      conversationId,
+      cause: 'custom_alert',
+      alert,
+    });
+    expect(handoff({ alert: { kind: 'other' } })).toEqual({
+      kind: 'handoff',
+      conversationId,
+      cause: 'custom_alert',
+    });
+  });
+
   it('reads the hand-back to the agent, with or without its conversation', () => {
     expect(
       toScannedEvent({ ...base, type: 'takeover_ended', payload: { conversationId, userId: 'u1' } }),

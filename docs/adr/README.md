@@ -56,3 +56,4 @@ Date : AAAA-MM-JJ
 | 0029 | L'export garde les droits de la base, et s'outille sans binaire hors d'Alpine | accepted |
 | 0030 | Médiathèque : un média, ses liaisons par plateforme, le coffre fait foi | accepted |
 | 0031 | Congés et échanges de shift : le congé appartient au membre, l'échange se fait entre chatteurs | accepted (remplace en partie 0023 : congés) |
+| 0032 | Paie : la quinzaine se clôture pour toute l'équipe à sa première validation | proposed (complète 0023 § Paie) |

@@ -5,12 +5,15 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TodayPage } from './TodayPage';
+
+import { ReopenProvider } from '@/reports/reopen';
 
 vi.mock('@/scheduling/time', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/scheduling/time')>()),
@@ -50,7 +53,13 @@ function serve(body: unknown): void {
 }
 
 function renderPage(): void {
-  const root = createRootRoute();
+  const root = createRootRoute({
+    component: () => (
+      <ReopenProvider>
+        <Outlet />
+      </ReopenProvider>
+    ),
+  });
   const page = createRoute({ getParentRoute: () => root, path: '/aujourdhui', component: TodayPage });
   const router = createRouter({
     routeTree: root.addChildren([page]),

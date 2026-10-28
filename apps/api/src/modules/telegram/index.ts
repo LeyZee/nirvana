@@ -20,7 +20,7 @@ import {
   saveRoutes,
   sendTest,
 } from './application/settings';
-import type { BotsStore, Clock, DeliveriesStore, NotificationChannel } from './domain/ports';
+import type { AlertNames, BotsStore, Clock, DeliveriesStore, NotificationChannel } from './domain/ports';
 import type { ScannedEvent } from './domain/signals';
 import { createPostgresTelegramStore, type ResealReport } from './infra/postgres.store';
 import { createTelegramRoutes, type TelegramRoutesOptions } from './infra/routes';
@@ -39,6 +39,8 @@ export interface TelegramDeps {
   readonly onUncovered?: (event: ScannedEvent) => void;
   /** Re-seals the tokens with the newest key at start (rotation); absent in tests. */
   readonly resealTokens?: () => Promise<ResealReport>;
+  /** Her alerts' names, to name the alert in its message (P4-01). */
+  readonly alertNames?: AlertNames;
 }
 
 /** The job handlers, one per `telegram.*` job (TELEGRAM_JOB_PAYLOADS); the worker wires them. */
@@ -83,6 +85,7 @@ export function createTelegramModule(deps: TelegramDeps): TelegramModule {
           ...base,
           webOrigin: deps.webOrigin,
           onUncovered: deps.onUncovered ?? (() => undefined),
+          ...(deps.alertNames !== undefined && { alertNames: deps.alertNames }),
         }),
       flushChat: (chatId) => flushChat(base, chatId),
       dispatchPolls: () => dispatchPolls(base),
@@ -103,6 +106,7 @@ export interface TelegramStartOptions {
   readonly onUncovered: (event: ScannedEvent) => void;
   /** Tokens no listed key opens, found at start: the caller logs them (the old key was dropped too early). */
   readonly onUnreadableTokens: (bots: readonly string[]) => void;
+  readonly alertNames: AlertNames;
 }
 
 /** Builds the module on Postgres and the Telegram Bot API, and re-seals the tokens of a past rotation. */
@@ -118,6 +122,7 @@ export async function startTelegramModule(options: TelegramStartOptions): Promis
     webOrigin: options.webOrigin,
     onUncovered: options.onUncovered,
     resealTokens: store.resealTokens,
+    alertNames: options.alertNames,
   });
   const report = await module.start();
   if (report.unreadable.length > 0) options.onUnreadableTokens(report.unreadable);

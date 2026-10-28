@@ -260,3 +260,8 @@ export interface NotificationChannel {
 export interface Clock {
   now(): Date;
 }
+
+/** Her alerts' names by the id of their row, archived ones too (the `alerts` module, wired by the composition root). */
+export interface AlertNames {
+  ofCreator(creatorId: CreatorId): Promise<ReadonlyMap<string, string>>;
+}

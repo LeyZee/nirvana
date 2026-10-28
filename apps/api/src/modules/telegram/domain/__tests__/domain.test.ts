@@ -49,26 +49,48 @@ describe('classification (ADR 0020 §2)', () => {
     });
   });
 
+  it('names the alert of hers that paused the agent, as the history does', () => {
+    const alert = { kind: 'custom', id: newId(CustomAlertIdSchema) } as const;
+    const handoff = { kind: 'handoff', conversationId, cause: 'custom_alert', alert } as const;
+    expect(classify(handoff, (one) => (one.id === alert.id ? 'Appel vidéo' : null))).toMatchObject({
+      title: 'Important',
+      body: 'Le message du fan correspond à l’alerte « Appel vidéo ». Il n’écrit plus à ce fan et attend un humain.',
+    });
+    // Its name not read (archived and purged, or the read failed): the generic line, the message still goes.
+    expect(classify(handoff)).toMatchObject({
+      body: 'Une alerte personnalisée a sonné. Il n’écrit plus à ce fan et attend un humain.',
+    });
+  });
+
   it('says an alert that only lets a human know in its topic, with nothing to close and no fan words', () => {
     const custom = newId(CustomAlertIdSchema);
-    expect(classify({ kind: 'alert', conversationId, alert: { kind: 'custom', id: custom } })).toEqual({
+    const signal = { kind: 'alert', conversationId, alert: { kind: 'custom', id: custom } } as const;
+    expect(classify(signal, () => 'Appel vidéo')).toEqual({
       kind: 'notice',
       topic: 'custom',
       threadKey: null,
-      title: 'Alerte',
-      body: 'Une alerte personnalisée a sonné. L’agent continue de lui répondre.',
+      title: 'Appel vidéo',
+      body: 'Le message du fan correspond à l’alerte « Appel vidéo ». L’agent continue de lui répondre.',
       link: { label: 'Ouvrir la conversation', path: `/suivi?conversation=${conversationId}` },
     });
+    expect(classify(signal)).toMatchObject({
+      title: 'Alerte personnalisée',
+      body: 'Une alerte personnalisée a sonné. L’agent continue de lui répondre.',
+    });
+    // The system's alerts by the label Suivi › Historique des alertes gives them.
     expect(
       classify({ kind: 'alert', conversationId, alert: { kind: 'system', code: 'service_request' } }),
     ).toMatchObject({
       topic: 'important',
-      title: 'Important',
+      title: 'Demande de service',
       body: 'Le fan demande un service (contenu sur mesure, appel, cam, vocal) : un humain peut le lui vendre. L’agent continue de lui répondre.',
     });
     expect(
       classify({ kind: 'alert', conversationId, alert: { kind: 'system', code: 'keyword' } }),
-    ).toMatchObject({ topic: 'keyword', title: 'Mot surveillé', threadKey: null });
+    ).toMatchObject({ topic: 'keyword', title: 'Mot-clé de sa persona', threadKey: null });
+    expect(
+      classify({ kind: 'alert', conversationId, alert: { kind: 'system', code: 'identity_doubt' } }),
+    ).toMatchObject({ topic: 'important', title: 'Doute sur la personne' });
   });
 
   it('says a silent model in the alert, without the fan’s text', () => {

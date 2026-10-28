@@ -1,4 +1,4 @@
-import { DESIRE_BRAIN_SIGNALS, MediaDescriptionSchema } from '@nirvana/contracts';
+import { BriefIntentSchema, DESIRE_BRAIN_SIGNALS, MediaDescriptionSchema } from '@nirvana/contracts';
 import { z } from 'zod';
 
 /** Her alerts the brain reads at most, and how it names them (`a1`, `a2`…): short ids, never her alert's own. */
@@ -8,23 +8,7 @@ export const brainAlertId = (index: number): string => `a${String(index + 1)}`;
 
 /** Brain output (docs/architecture/ai-engine.md, « Le Brief »). Decisions are taken by the policy in code, not here. */
 export const BriefSchema = z.object({
-  intent: z.enum([
-    'small_talk',
-    'kyc_answer',
-    'flirt',
-    'sexting',
-    'media_reaction',
-    'asks_for_media',
-    'price_objection',
-    'asks_if_bot',
-    'asks_to_meet',
-    'asks_personal_contact',
-    'asks_for_service',
-    'distress',
-    'complaint',
-    'off_topic_request',
-    'other',
-  ]),
+  intent: BriefIntentSchema,
   sentiment: z.enum(['positive', 'neutral', 'negative', 'aroused', 'frustrated']),
   factsProposed: z.array(
     z.object({

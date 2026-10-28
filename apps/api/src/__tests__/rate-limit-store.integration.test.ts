@@ -13,11 +13,23 @@ import { DASHBOARD_ORIGIN } from './support/sign-in';
 
 const PER_MINUTE = 4;
 
+/**
+ * The limiter's pool for the tests that count: its production bounds (`RATE_LIMIT_POOL_OPTIONS`, 500 ms to connect,
+ * 200 ms per statement) let a request through uncounted on a cold, busy CI runner, and a count one short reads as
+ * a missing 429. Giving up when Postgres is slow is tested below, on the production pool.
+ */
+const COUNTING_POOL_OPTIONS = {
+  ...RATE_LIMIT_POOL_OPTIONS,
+  connectionTimeoutMillis: 10_000,
+  options: '-c statement_timeout=10000',
+};
+
 describe('rate limits shared by every API instance (ADR 0027)', () => {
   let test: TestDb;
   let app: App;
   let first: Server;
   let second: Server;
+  let countingDb: DbClient;
   let config: ReturnType<typeof testConfig>;
 
   const me = (server: Server, remoteAddress: string) =>
@@ -31,6 +43,7 @@ describe('rate limits shared by every API instance (ADR 0027)', () => {
       RATE_LIMIT_PER_MINUTE: String(PER_MINUTE),
     });
     app = await createApp(config, createLogger(config));
+    countingDb = createDbClient(test.appUrl, COUNTING_POOL_OPTIONS);
     // Two instances of the API, as two containers behind the proxy: same routes, same store, no shared memory.
     const instance = () =>
       buildServer({
@@ -38,7 +51,7 @@ describe('rate limits shared by every API instance (ADR 0027)', () => {
         logger: createLogger(config),
         routes: app.routes,
         readiness: app.readiness,
-        rateLimitStore: app.rateLimitStore,
+        rateLimitStore: postgresRateLimitStore({ db: countingDb.db, logger: createLogger(config) }),
       });
     first = await instance();
     second = await instance();
@@ -56,6 +69,7 @@ describe('rate limits shared by every API instance (ADR 0027)', () => {
   afterAll(async () => {
     await first.close();
     await second.close();
+    await countingDb.close();
     await app.shutdown();
     await test.close();
   });

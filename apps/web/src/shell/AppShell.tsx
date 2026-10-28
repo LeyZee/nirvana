@@ -8,6 +8,9 @@ import { AgentPill } from './AgentPill';
 import { NavIcon } from './NavIcon';
 import { FAMILY_LABELS, railOf, sectionOf, type NavItem, type Rail } from './nav';
 
+import { HoldProvider } from '@/reports/Hold';
+import { ReopenProvider } from '@/reports/reopen';
+
 /** What the account is, under its name: a manager on leave has the chatter's rail, and stays a manager. */
 function roleLabel(user: Me): string {
   if (user.role === 'owner') return 'Propriétaire';
@@ -21,20 +24,26 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const current = sectionOf(pathname) ?? rail.home;
 
+  // The hold outlives the screens: a report sent on leaving Aujourd'hui says its refusal in Suivi, and « Rouvrir »
+  // takes the reader back to it (EQ-03).
   return (
-    <div className="nv-app">
-      <div className="nv-ambient" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </div>
-      <RailNav rail={rail} current={current}>
-        <UserMenu name={user.name} role={roleLabel(user)} onSignOut={onSignOut} />
-      </RailNav>
-      <main className="nv-stage" key={current}>
-        <Outlet />
-      </main>
-    </div>
+    <HoldProvider>
+      <ReopenProvider>
+        <div className="nv-app">
+          <div className="nv-ambient" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+          <RailNav rail={rail} current={current}>
+            <UserMenu name={user.name} role={roleLabel(user)} onSignOut={onSignOut} />
+          </RailNav>
+          <main className="nv-stage" key={current}>
+            <Outlet />
+          </main>
+        </div>
+      </ReopenProvider>
+    </HoldProvider>
   );
 }
 

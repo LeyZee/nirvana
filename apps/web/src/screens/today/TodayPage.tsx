@@ -1,7 +1,12 @@
-import type { MyShift } from '@nirvana/contracts';
+import { SHIFT_REPORT_OPENS_BEFORE_END_MINUTES, type MyShift, type ShiftReport } from '@nirvana/contracts';
 import { Link } from '@tanstack/react-router';
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
 
+import { MyReportsCard, useMyReports, type MyReports } from '@/reports/MyReports';
+import { ReportPanel } from '@/reports/ReportPanel';
+import { MEMBER_STATUS, reportOf, STATUS_TONES } from '@/reports/model';
+import { useReopening, type ReportDraft } from '@/reports/reopen';
+import '@/reports/reports.css';
 import { useMyShifts } from '@/scheduling/api';
 import { accountLine, dayStateOf, platformName, progressOf, type DayState } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
@@ -10,14 +15,25 @@ import { useNow } from '@/scheduling/useNow';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 /**
- * Aujourd'hui (ADR 0024, EQ-02): the chatter's shift first, where to go and until when; then the next one. Read in
- * the chatter's own time, the browser's. The report, the goal and the announcements come with their own cards.
+ * Aujourd'hui (ADR 0024, EQ-02, EQ-03): the chatter's shift first, where to go and until when, and « Faire mon
+ * rapport » as it ends; then the reports left to do and the period's, then the next shift. Read in the chatter's own
+ * time, the browser's. The goal and the announcements come with their own cards.
  */
 export function TodayPage(): JSX.Element {
   const mine = useMyShifts();
   const now = useNow();
   const zone = readerZone();
   const today = dayOf(now, zone);
+  const reports = useMyReports(now);
+  const [open, setOpen] = useState<{ readonly shiftId: string; readonly draft: ReportDraft | null } | null>(
+    null,
+  );
+  const openReport = (shiftId: string): void => {
+    setOpen({ shiftId, draft: null });
+  };
+  useReopening('/aujourdhui', (what) => {
+    setOpen({ shiftId: what.shiftId, draft: what.draft });
+  });
 
   return (
     <Page>
@@ -47,7 +63,25 @@ export function TodayPage(): JSX.Element {
           </div>
         </Panel>
       ) : (
-        <Day state={dayStateOf(mine.data, now)} now={now} zone={zone} today={today} />
+        <Day
+          state={dayStateOf(mine.data, now)}
+          now={now}
+          zone={zone}
+          today={today}
+          reports={reports}
+          onReport={openReport}
+        />
+      )}
+      {open === null ? null : (
+        <ReportPanel
+          key={open.shiftId + (open.draft?.id ?? '')}
+          shiftId={open.shiftId}
+          draft={open.draft}
+          from="/aujourdhui"
+          onClose={() => {
+            setOpen(null);
+          }}
+        />
       )}
     </Page>
   );
@@ -58,16 +92,42 @@ function Day({
   now,
   zone,
   today,
+  reports,
+  onReport,
 }: {
   state: DayState;
   now: Date;
   zone: string;
   today: string;
+  reports: MyReports;
+  onReport: (shiftId: string) => void;
 }): JSX.Element {
   const next = state.kind === 'on' || state.kind === 'ended' ? state.next : null;
+  const heroShift = state.kind === 'on' || state.kind === 'ended' ? state.shift : null;
+  const list = reports.list;
+  const made = heroShift === null || list === undefined ? null : reportOf(list.reports, heroShift.id);
+  const report: HeroReport =
+    heroShift === null || list === undefined
+      ? { kind: 'none' }
+      : made !== null
+        ? { kind: 'made', report: made }
+        : // The list is read each minute; the shift's own opening time says it on the minute.
+          list.shifts.some((shift) => shift.id === heroShift.id) || reportOpensAt(heroShift) <= now
+          ? { kind: 'due' }
+          : { kind: 'later' };
   return (
     <div className="sc-today">
-      <Hero state={state} now={now} zone={zone} today={today} />
+      <Hero
+        state={state}
+        now={now}
+        zone={zone}
+        today={today}
+        report={report}
+        onReport={() => {
+          if (heroShift !== null) onReport(heroShift.id);
+        }}
+      />
+      <MyReportsCard reports={reports} heroShiftId={heroShift?.id ?? null} onOpen={onReport} />
       {next === null ? null : <NextCard shift={next} now={now} zone={zone} today={today} />}
       <Link to="/planning" className="sc-more">
         Tout mon planning
@@ -92,16 +152,33 @@ function dayWord(instant: string, zone: string, today: string): string {
   return long.charAt(0).toUpperCase() + long.slice(1);
 }
 
+/** The report of the hero's shift: not open yet, to make now, or made (and how it stands). */
+type HeroReport =
+  { readonly kind: 'none' | 'later' | 'due' } | { readonly kind: 'made'; readonly report: ShiftReport };
+
+/** When a shift takes its report: `SHIFT_REPORT_OPENS_BEFORE_END_MINUTES` before its end, never before its start. */
+const reportOpensAt = (shift: MyShift): Date =>
+  new Date(
+    Math.max(
+      new Date(shift.startsAt).getTime(),
+      new Date(shift.endsAt).getTime() - SHIFT_REPORT_OPENS_BEFORE_END_MINUTES * 60_000,
+    ),
+  );
+
 function Hero({
   state,
   now,
   zone,
   today,
+  report,
+  onReport,
 }: {
   state: DayState;
   now: Date;
   zone: string;
   today: string;
+  report: HeroReport;
+  onReport: () => void;
 }): JSX.Element {
   if (state.kind === 'none') {
     return (
@@ -166,9 +243,26 @@ function Hero({
       <p className="sc-hero__note">{noteOf(state, zone)}</p>
       {state.kind === 'later' ? null : (
         <div className="sc-hero__actions">
+          {report.kind === 'due' ? (
+            <button type="button" className="nv-btn nv-btn--neon rp-hero__go" onClick={onReport}>
+              Faire mon rapport
+            </button>
+          ) : null}
           <Link to="/suivi" className="nv-btn nv-btn--soft">
             Ouvrir Suivi
           </Link>
+          {report.kind === 'made' ? (
+            <button type="button" className="rp-hero__made nv-tap" onClick={onReport}>
+              <span className={`rp-chip rp-chip--${STATUS_TONES[report.report.status]}`}>
+                Rapport {MEMBER_STATUS[report.report.status].toLowerCase()}
+              </span>
+              <span className="rp-hero__see">Voir</span>
+            </button>
+          ) : report.kind === 'later' && state.kind === 'on' ? (
+            <span className="rp-hero__later nv-num">
+              Rapport à partir de {clockAt(reportOpensAt(state.shift), zone)}
+            </span>
+          ) : null}
         </div>
       )}
     </Panel>
