@@ -1,7 +1,7 @@
 # Test à l'aveugle avant l'Automatique (ID à valider par Charles)
 Statut : proposed (demande du coordinateur le 28/10 à 8h17 ; ID à valider par Charles)
 Phase : 3
-Dépend de : capture Reveal (des réponses humaines réelles à comparer), P3-08 (recette du copilote), clé xAI ; ADR 0019, 0022
+Dépend de : ADR 0034 (proposée), capture Reveal (des réponses humaines réelles à comparer), P3-08 (recette du copilote), clé xAI ; ADR 0019, 0022, 0023
 Branche : claude/project-thread-e0j3ow
 
 ## Objectif
@@ -11,7 +11,8 @@ Faire du test à l'aveugle exigé par les ADR 0019 et 0022 une séance outillée
 - `blind_tests` (append-only) et `POST /v1/creators/:id/blind-tests { rate }` : propriétaire seul, connexion de moins de 10 minutes, version et persona posées par le serveur, ligne `audit_log` (`docs/architecture/message-flow.md` §6).
 - Le verrou `automaticGate` (`packages/contracts/src/automatic.ts`) lit le dernier test de la version. Le Dashboard dit ce qui manque.
 - Le playground sait rejouer une situation sur le vrai chemin de l'agent sans rien envoyer (`/v1/playground`, `compare`).
-- Les messages capturés portent leur auteur (`messages.author` : `fan`, `human`, `ai`). Une réponse écrite par un chatteur dans Reveal est donc reconnaissable.
+- Les messages capturés portent leur auteur (`messages.author` : `fan`, `human`, `ai`) et, quand ils viennent d'un brouillon, son identifiant (`messages.draft_id`). Attention : un brouillon de l'agent retouché par un chatteur sort avec `author = 'human'` (`conversations/application/jobs/send.ts:121`). `author` seul ne suffit donc pas à reconnaître une réponse écrite par une personne.
+- Les faits du fan sont datés (`fan_facts.observed_at`, append-only avec `superseded_by`), ses limites ont leurs événements (`fan_flag_set`, `fan_flag_cleared`), sa note de désir aussi (`desire_scored`), et chaque résumé dit sur quel message il s'appuie (`fan_summaries.based_on_message_id`).
 
 Ce qui manque : le jeu de cartes, le masquage, l'écran de jugement, le calcul du taux par le serveur.
 
@@ -19,19 +20,35 @@ Ce qui manque : le jeu de cartes, le masquage, l'écran de jugement, le calcul d
 
 ### Qui juge
 - **La créatrice elle-même** (Messa pour Messalina), comme l'écrit l'ADR 0019. Elle connaît sa voix mieux que personne.
-- **Sur la session du propriétaire**, à l'écran de Charles, et pas sur un compte créatrice : une créatrice ne voit jamais les données de ses fans (ADR 0023, droits des routes `fans` et `conversations`). Les pseudonymes et prénoms des fans sont remplacés à l'affichage (« Fan A », « Fan B »…). C'est un choix par défaut, à confirmer par Charles (question 1).
+- **Sur la session du propriétaire**, à l'écran de Charles, et pas sur un compte créatrice. C'est une **exception à l'ADR 0023**, qui dit qu'une créatrice ne voit jamais une conversation ni un fan : ici, elle voit des extraits de conversations réelles, noms masqués. Aucun droit d'un compte créatrice n'est élargi. L'exception est écrite dans l'ADR 0034 et attend la décision de Charles (question 1). Sans son accord, le test se fait sur des conversations inventées et la fiche est revue.
 - Charles ne commente pas pendant la séance. Il clique « Suivant » si elle le lui demande, et c'est tout.
 
 ### Les paires
 - **50 situations réelles, 100 cartes.** Une situation, c'est la fin d'une conversation réelle au moment où le fan attend une réponse : ses 6 derniers messages au plus, et rien de plus ancien.
 - Chaque situation donne deux réponses :
-  - **humaine** : ce qu'un chatteur a réellement envoyé à ce moment-là (`messages.author = 'human'` juste après le message du fan, dans Reveal ou dans Nirvana) ;
-  - **agent** : ce que la version active écrit sur la même situation, rejouée par le playground sur le vrai chemin (brain, voix, gardes), sans rien envoyer.
+  - **humaine** : ce qu'un chatteur a écrit lui-même dans Reveal à ce moment-là. C'est toutes les bulles consécutives de `author = 'human'` après le dernier message du fan, jusqu'au message suivant du fan, et **aucune ne vient d'un brouillon** (`draft_id` nul). Une réponse dont une seule bulle vient d'un brouillon, retouché ou non, écarte la situation : sinon la référence humaine contiendrait du texte de l'agent, et le test se comparerait en partie à lui-même ;
+  - **agent** : ce que la version active écrit sur la même situation, rejouée sur le vrai chemin (brain, voix, gardes), sans rien envoyer, **avec le fan tel qu'il était à la date de la situation** (voir « Le rejeu à la date de la situation »).
 - **Tirage** :
   - 50 conversations différentes, un seul fan par conversation, tirées au hasard parmi celles des 60 derniers jours qui ont une réponse humaine ;
   - un quota par moment de la relation, pour ne pas tester que du bavardage : environ 15 relation et KYC, 10 flirt, 10 sexto ou intime, 10 refus ou objection de prix, et 5 sujets délicats (demande de rencontre, « t'es un bot ? », hors sujet) ;
-  - exclus : les situations avec détresse, mineur présumé ou passation (l'agent ne répond pas, il passe la main), et celles qui demandent l'envoi d'un média ou d'une étape de script (l'agent n'en envoie pas pendant le test).
+  - exclus :
+    - les situations avec détresse, mineur présumé ou passation (l'agent ne répond pas, il passe la main) ;
+    - celles qui demandent l'envoi d'un média ou d'une étape de script (l'agent n'en envoie pas pendant le test) ;
+    - celles dont la réponse humaine contient un média, un PPV ou une étape de script, même si la situation ne les demandait pas : la forme trahirait l'auteur ;
+    - celles dont la réponse humaine vient, même en partie, d'un brouillon ;
+    - celles qu'on ne peut pas reconstruire à leur date (voir ci-dessous).
 - **Seuil de taille** : le test n'est valide qu'avec au moins 40 situations jugées. Si le tirage en trouve moins de 40, la séance ne s'ouvre pas, et l'écran dit combien il en manque.
+
+### Le rejeu à la date de la situation
+L'agent ne doit savoir que ce que le chatteur savait à ce moment-là. Le rejeu du playground lit l'état actuel du fan, ce qui ne convient pas : un fait appris plus tard, un gel ou un curseur posé ensuite, une offre déjà faite fausseraient la carte de l'agent. Pour une situation à la date t (le dernier message du fan) :
+- **faits** : ceux observés avant t (`observed_at < t`), en prenant pour chaque clé le dernier observé avant t, même s'il a été remplacé depuis ;
+- **limites** : rejouées à partir des événements `fan_flag_set` et `fan_flag_cleared` antérieurs à t ;
+- **note de désir** : le dernier `desire_scored` antérieur à t, ou aucune ;
+- **résumé** : la dernière version dont le message d'appui est antérieur à t, ou aucun ;
+- **historique** : les messages antérieurs à t seulement ;
+- **horloge** : l'agent rejoue à l'heure t, pour les heures calmes, les créneaux et les cooldowns.
+
+Si l'un de ces éléments ne peut pas être reconstruit (événements manquants, données purgées), la situation est écartée et remplacée par la suivante du tirage. Aucune n'est rejouée avec l'état actuel.
 
 ### Le masquage
 - **Même forme** pour les deux auteurs :
@@ -39,6 +56,7 @@ Ce qui manque : le jeu de cartes, le masquage, l'écran de jugement, le calcul d
   - pas d'heure ni de délai de réponse ;
   - pas d'accusé de lecture ;
   - aucune marque « modifié », « IA » ou « brouillon ».
+- **Les noms partout** : les prénoms et pseudonymes du fan sont remplacés par « Fan A », « Fan B »… dans le contexte **et dans le texte des deux réponses**, de la même façon. Un chatteur écrit souvent le prénom (« coucou Julien »), et l'agent le connaît par ses faits : un prénom réel d'un côté, ou son absence, trahirait l'auteur. Le remplacement part du nom affiché du fan et du fait `name` à la date de la situation, insensible à la casse et aux accents.
 - **Rien de corrigé** : ni fautes ni emojis ne sont retouchés, d'un côté comme de l'autre. On compare des réponses telles qu'elles partiraient.
 - **Ordre aléatoire** : les 100 cartes sont mélangées. Les deux réponses d'une même situation ne se suivent jamais, avec au moins 10 cartes entre elles. Le tirage est fixé par une graine enregistrée, pour pouvoir rejouer la séance à l'identique.
 - **Une carte à la fois** : le contexte de la conversation, puis la réponse. Elle ne voit jamais deux réponses côte à côte, qui se trahiraient l'une l'autre.
@@ -69,14 +87,17 @@ Elle peut revenir sur la carte précédente, jamais plus loin. Une séance peut 
 - **À la fin de la séance**, le serveur calcule le taux et écrit la ligne `blind_tests` comme aujourd'hui. Le `POST` existant prend alors `sessionId` au lieu de `rate`, et le taux n'est plus saisi à la main. Le propriétaire valide sous une connexion de moins de 10 minutes.
 - **Le Dashboard et le verrou** lisent `blind_tests` sans changement. Le détail (cartes, taux humain, devinettes) se lit dans Entraîner › Test à l'aveugle, avec les cartes « jamais » listées. Chaque carte « jamais » de l'agent peut devenir un cas de test d'éval, comme une note du playground.
 - **Une séance périme** si la voix ou la persona change avant la fin : elle passe `abandoned`, puisque son résultat ne vaudrait plus pour la version active (ADR 0022).
+- **Rétention** : quand la purge d'un fan efface ses messages ou ses faits (`docs/conventions/security.md`), les références de ses cartes (message, appel `llm_calls`) passent à NULL et leur texte est effacé. Le taux enregistré dans `blind_tests` reste.
+- **Rien dans l'outbox** : aucun événement de séance ne porte le texte d'une carte. Un éventuel avis Telegram « test enregistré » ne porte que le taux et la version.
+- Le minimum de 40, le taux calculé par le serveur et le `POST { sessionId }` sont décidés par l'**ADR 0034** (proposée).
 
 ## Ce que ça demande
 - **Agent (playground)** :
   - le tirage des situations dans `conversations` et `messages`, par une lecture fournie par Bilan ;
-  - le rejeu de l'agent sur chaque situation avec la version active ;
+  - le rejeu de l'agent sur chaque situation avec la version active et le fan reconstruit à la date de la situation (règle pure, testée) ;
   - le masquage, le mélange avec la graine et le calcul des taux, sous forme de règles pures avec leurs tests ;
   - les routes `/v1/blind-tests`.
-- **Bilan** : la migration des deux tables, le `POST` de `blind_tests` qui lit une séance, la lecture des situations avec réponse humaine (add-only dans `conversations`), et les contrats.
+- **Bilan** : la migration des deux tables, le `POST` de `blind_tests` qui lit une séance, la lecture des situations avec réponse humaine sans brouillon et de l'état du fan à une date (add-only dans `conversations` et `fans`), et les contrats.
 - **Suivi** : rien à changer pour juger. Un tag « tiré pour un test à l'aveugle » n'est pas nécessaire, puisque le tirage ne modifie rien.
 - **Extension (écran)** : Entraîner › Test à l'aveugle.
   - Avant : combien de situations sont disponibles, le coût estimé en appels IA, le bouton « Commencer » (propriétaire).
@@ -97,11 +118,16 @@ Elle peut revenir sur la carte précédente, jamais plus loin. Une séance peut 
 - Pendant la séance, aucun champ de l'API ni de l'écran ne permet de savoir l'auteur d'une carte (test de contrat sur le DTO de carte : ni `author`, ni identifiant de message, ni d'appel).
 - Le même tirage, rejoué avec la même graine, donne les mêmes situations dans le même ordre.
 - Un changement de voix ou de persona en cours de séance la rend `abandoned`.
+- Une réponse humaine dont une bulle porte un `draft_id`, retouchée ou non, n'entre jamais dans un tirage (test d'intégration avec un brouillon `edited` envoyé).
+- Une réponse humaine avec un média, un PPV ou une étape de script n'entre jamais dans un tirage.
+- Le rejeu d'une situation à la date t ne voit aucun fait observé, aucune limite, aucune note de désir ni aucun message postérieurs à t (test avec un fait appris après t).
+- Le prénom du fan n'apparaît ni dans le contexte ni dans aucune des deux réponses d'une carte.
+- Une carte dont le fan est purgé garde sa ligne sans texte ni référence, et le taux de `blind_tests` ne change pas.
 - Aucune vraie donnée de fan dans le dépôt : les tests utilisent des conversations inventées (ADR 0010).
 - Rien n'est envoyé à un fan pendant toute la séance.
 
 ## Questions pour Charles (défauts pris en attendant)
-1. Messa juge sur ta session, à ton écran, avec les noms des fans masqués, plutôt qu'avec un accès créatrice ouvert pour l'occasion. Défaut : oui, sur ta session.
+1. Exception à l'ADR 0023 : Messa voit des extraits de vraies conversations, noms masqués, sur ta session et à ton écran, sans aucun droit nouveau pour son compte. Défaut : oui. Si c'est non, le test se fait sur des conversations inventées.
 2. Le taux de « jamais » et l'indiscernabilité restent des informations, sans devenir des conditions. En faire des conditions demanderait une nouvelle ADR. Défaut : informations seulement.
 3. 50 situations (100 cartes) et un minimum de 40. Défaut : 50 et 40.
 

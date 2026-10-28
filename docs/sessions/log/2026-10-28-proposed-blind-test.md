@@ -3,3 +3,4 @@ Fait : `docs/sessions/tasks/PROPOSED-blind-test.md` (protocole, masquage, seuil,
 Pas fait : tout le code, en attente de l'ID de Charles.
 Découvertes : le test à l'aveugle s'enregistre aujourd'hui par un taux tapé à la main (`POST /v1/creators/:id/blind-tests { rate }`) ; rien ne relie ce taux à une séance réelle.
 Candidats à suppression : aucun.
+Relecture Telegram : réponse humaine sans brouillon (`send.ts:121` écrit `human` pour un brouillon retouché), rejeu à la date de la situation, noms masqués dans les réponses, définition de la réponse humaine, rétention et outbox, exception à l'ADR 0023 ; ADR 0034 proposée (numéro réservé par le coordinateur).
