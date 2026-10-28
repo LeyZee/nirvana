@@ -2,10 +2,21 @@ import { CreatorIdSchema, newId, type CreatorSummary } from '@nirvana/contracts'
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState, type SyntheticEvent, type JSX } from 'react';
 
-import { createCreator } from './api';
+import { createCreator, type CreateResult } from './api';
 import { Field } from './persona/fields';
 
+import { SignInAgain } from '@/settings/services/PasswordPrompt';
+
 const DEFAULT_ZONE = 'Europe/Paris';
+
+/** What each refusal of `POST /v1/creators` says; nothing was created on any of them. */
+const PROBLEMS: Record<Exclude<CreateResult['kind'], 'created'>, string> = {
+  unknown_zone: 'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
+  invalid: 'Ce nom n’est pas accepté. Vérifie-le, puis réessaie.',
+  conflict: 'Cette créatrice vient d’être créée sous un autre nom. Recharge la page pour la voir.',
+  expired: 'Ta session a expiré : reconnecte-toi, puis recommence. Rien n’a été créé.',
+  failed: 'Rien n’a été créé : Nirvana ne répond pas. Réessaie dans un instant.',
+};
 
 /** Every zone the browser knows, for the suggestions under the field; the server checks the one typed. */
 const ZONES: readonly string[] = Intl.supportedValuesOf('timeZone');
@@ -49,13 +60,7 @@ export function NewCreatorForm({
       await client.invalidateQueries({ queryKey: ['creators'] });
       onCreated(result.creator);
     } else {
-      setProblem(
-        result.kind === 'invalid'
-          ? 'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.'
-          : result.kind === 'conflict'
-            ? 'Cette créatrice vient d’être créée sous un autre nom. Recharge la page pour la voir.'
-            : 'Rien n’a été créé : Nirvana ne répond pas. Réessaie dans un instant.',
-      );
+      setProblem(PROBLEMS[result.kind]);
     }
   };
 
@@ -100,6 +105,7 @@ export function NewCreatorForm({
           {problem}
         </p>
       )}
+      {problem === PROBLEMS.expired ? <SignInAgain /> : null}
       <div className="ps-head__actions">
         {onCancel === null ? null : (
           <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" onClick={onCancel}>

@@ -70,7 +70,12 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
 
   it('lists every creator to the owner and only their own to an operator', async () => {
     const anna = await app.modules.persona.creators.create({ displayName: 'Anna' });
-    await app.modules.persona.creators.create({ displayName: 'Bea', timezone: 'Europe/Brussels' });
+    // A zone typed in the wrong case is stored as the runtime spells it (recette 28/10).
+    const bea = await app.modules.persona.creators.create({
+      displayName: 'Bea',
+      timezone: 'europe/brussels',
+    });
+    expect(bea.timezone).toBe('Europe/Brussels');
     const { userId } = await createOwner(app.auth, app.db.db, OPERATOR);
     await test.admin.db
       .update(schema.user)
@@ -83,11 +88,9 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
       url: '/v1/creators',
       headers: { cookie: await signIn(server, OWNER.email, OWNER.password) },
     });
-    expect(owner.json<{ creators: { displayName: string }[] }>().creators.map((c) => c.displayName)).toEqual([
-      'Anna',
-      'Bea',
-      'Zoé',
-    ]);
+    const listed = owner.json<{ creators: { displayName: string; timezone: string }[] }>().creators;
+    expect(listed.map((c) => c.displayName)).toEqual(['Anna', 'Bea', 'Zoé']);
+    expect(listed[1]?.timezone).toBe('Europe/Brussels');
     const operator = await server.inject({
       method: 'GET',
       url: '/v1/creators',

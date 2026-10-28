@@ -1,6 +1,7 @@
 import {
   AgentHoursSchema,
   AuditEntryIdSchema,
+  canonicalTimezone,
   CreatorIdSchema,
   DEFAULT_AGENT_HOURS,
   JOB_MAX_ATTEMPTS,
@@ -42,7 +43,8 @@ export function createDrizzleCreatorDirectory(
     },
 
     async create(input, userId) {
-      const { id: chosen, ...parsed } = NewCreatorSchema.parse(input);
+      const { id: chosen, displayName, timezone } = NewCreatorSchema.parse(input);
+      const parsed = { displayName, timezone: canonicalTimezone(timezone) };
       const id = chosen ?? newId(CreatorIdSchema);
       return db.transaction(async (tx) => {
         const inserted = await tx

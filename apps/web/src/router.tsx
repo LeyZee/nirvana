@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-router';
 
 import { CreatorsPage } from './creators/CreatorsPage';
-import { parseCreatorsSearch } from './creators/search';
+import { creatorsSearch, parseCreatorsSearch } from './creators/search';
 import { parsePaySearch } from './payroll/model';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
 import { CommissionsPage } from './screens/pay/CommissionsPage';
@@ -84,16 +84,23 @@ const creators = createRoute({
   beforeLoad: ({ context, search }) => {
     if (search.onglet === 'heures' && context.user.role !== 'owner') {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
-      throw redirect({ to: '/creatrices', search: {}, replace: true });
+      throw redirect({
+        to: '/creatrices',
+        search: creatorsSearch('persona', search.creatrice ?? null),
+        replace: true,
+      });
     }
   },
   component: function Creators() {
-    const { onglet } = creators.useSearch();
+    const { onglet, creatrice } = creators.useSearch();
     const navigate = creators.useNavigate();
+    const tab = onglet === 'heures' ? 'hours' : 'persona';
     return (
       <CreatorsPage
-        tab={onglet === 'heures' ? 'hours' : 'persona'}
-        onTab={(tab) => void navigate({ search: tab === 'hours' ? { onglet: 'heures' } : {} })}
+        tab={tab}
+        creatorId={creatrice ?? null}
+        onTab={(next) => void navigate({ search: creatorsSearch(next, creatrice ?? null) })}
+        onCreator={(id) => void navigate({ search: creatorsSearch(tab, id) })}
       />
     );
   },

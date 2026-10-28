@@ -1,4 +1,5 @@
 import {
+  ActivatePersonaVersionBodySchema,
   ActivatePersonaVersionParamsSchema,
   CreatePersonaVersionBodySchema,
   CreatorIdSchema,
@@ -80,13 +81,14 @@ export function createPersonaRoutes(
         preValidation: requireRole('owner', 'creator'),
         schema: {
           params: ActivatePersonaVersionParamsSchema,
+          body: ActivatePersonaVersionBodySchema,
           response: { 200: PersonaVersionSummarySchema },
         },
       },
       async (request) => {
         const { creatorId, versionId } = request.params;
         const user = actorFor(request, creatorId);
-        return store.activate(creatorId, versionId, user.id);
+        return store.activate(creatorId, versionId, request.body.expectedActive, user.id);
       },
     );
     return Promise.resolve();

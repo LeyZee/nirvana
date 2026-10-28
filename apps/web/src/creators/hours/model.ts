@@ -97,11 +97,56 @@ export const orderedSlots = (
     .map((slot, index) => ({ slot, index }))
     .sort((a, b) => a.slot.day - b.slot.day || a.slot.startMinute - b.slot.startMinute || a.index - b.index);
 
-/** The slot « Ajouter un créneau » adds: 9 h – 1 h on the first day with none, else on Monday. */
-export function newSlot(slots: readonly AgentSlot[]): AgentSlot {
+const WEEK_MINUTES = 7 * MINUTES_PER_DAY;
+
+/** Where a slot sits in the week, in minutes from Monday 0 h, cut in two when it runs past Sunday night. */
+function weekSpans(slot: AgentSlot): { from: number; to: number }[] {
+  const from = (slot.day - 1) * MINUTES_PER_DAY + slot.startMinute;
+  const length = (slot.endMinute - slot.startMinute + MINUTES_PER_DAY) % MINUTES_PER_DAY || MINUTES_PER_DAY;
+  const to = from + length;
+  return to <= WEEK_MINUTES
+    ? [{ from, to }]
+    : [
+        { from, to: WEEK_MINUTES },
+        { from: 0, to: to - WEEK_MINUTES },
+      ];
+}
+
+/** A new slot is never longer than the one suggested, 9 h – 1 h. */
+const NEW_SLOT_MAX = 16 * 60;
+/** Nor shorter than an hour. */
+const NEW_SLOT_MIN = 60;
+
+/**
+ * The slot « Ajouter un créneau » adds, never over another one: 9 h – 1 h on the first day with none; when every day
+ * has one, the first free stretch of the week (an hour at least, 16 h at most). Null when no hour is free.
+ */
+export function newSlot(slots: readonly AgentSlot[]): AgentSlot | null {
+  const spans = slots.flatMap(weekSpans).sort((a, b) => a.from - b.from);
+  const free = (from: number, to: number): boolean =>
+    [-WEEK_MINUTES, 0, WEEK_MINUTES].every((shift) =>
+      spans.every((span) => !(span.from < to + shift && from + shift < span.to)),
+    );
   const taken = new Set(slots.map((slot) => slot.day));
-  const day = [1, 2, 3, 4, 5, 6, 7].find((d) => !taken.has(d)) ?? 1;
-  return { day, startMinute: 9 * 60, endMinute: 60, enabled: true };
+  const day = [1, 2, 3, 4, 5, 6, 7].find((d) => !taken.has(d));
+  if (day !== undefined) {
+    const suggested: AgentSlot = { day, startMinute: 9 * 60, endMinute: 60, enabled: true };
+    if (weekSpans(suggested).every((span) => free(span.from, span.to))) return suggested;
+  }
+  // Each stretch starts where a slot ends; the week is a circle, Sunday night runs into Monday.
+  for (const start of [0, ...spans.map((span) => span.to % WEEK_MINUTES)].sort((a, b) => a - b)) {
+    if (!free(start, start + NEW_SLOT_MIN)) continue;
+    let length = NEW_SLOT_MIN;
+    while (length < NEW_SLOT_MAX && free(start, start + length + 15)) length += 15;
+    const startMinute = start % MINUTES_PER_DAY;
+    return {
+      day: Math.floor(start / MINUTES_PER_DAY) + 1,
+      startMinute,
+      endMinute: (startMinute + length) % MINUTES_PER_DAY,
+      enabled: true,
+    };
+  }
+  return null;
 }
 
 export const canAddSlot = (slots: readonly AgentSlot[]): boolean => slots.length < AGENT_SLOTS_MAX;

@@ -76,8 +76,12 @@ describe('NewCreatorForm', () => {
     expect(z.object({ id: z.string() }).parse(sentBody(fetch, 1)).id).toBe(first);
   });
 
+  const refused = (fields: { path: string; message: string }[]) => ({
+    error: { code: 'request_invalid', message: 'Requête invalide', details: { fields }, requestId: 'req-1' },
+  });
+
   it('says what went wrong and creates nothing', async () => {
-    const { onCreated } = show(400);
+    const { onCreated } = show(400, refused([{ path: '/timezone', message: 'Fuseau horaire IANA inconnu' }]));
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
       'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
@@ -92,6 +96,21 @@ describe('NewCreatorForm', () => {
       'Cette créatrice vient d’être créée sous un autre nom. Recharge la page pour la voir.',
     );
     expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('blames the zone only when the server refused the zone, and a lost session is not a silent server', async () => {
+    show(400, refused([{ path: '/displayName', message: 'Too big' }]));
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Ce nom n’est pas accepté. Vérifie-le, puis réessaie.',
+    );
+    cleanup();
+    show(401, { error: { code: 'session_unauthenticated', message: 'x', details: {}, requestId: 'r' } });
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Ta session a expiré : reconnecte-toi, puis recommence. Rien n’a été créé.',
+    );
+    expect(screen.getByRole('button', { name: 'Se reconnecter' })).toBeDefined();
   });
 
   it('cannot create a creator without a name', () => {

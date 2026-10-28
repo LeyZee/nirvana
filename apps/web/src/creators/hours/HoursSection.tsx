@@ -6,7 +6,7 @@ import {
   type MinuteRange,
 } from '@nirvana/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useState, type JSX } from 'react';
+import { useEffect, useId, useState, type JSX } from 'react';
 
 import { Segment } from '../persona/fields';
 
@@ -45,9 +45,12 @@ import { ReauthRequired } from '@/settings/services/api';
 export function HoursSection({
   creatorId,
   creatorName,
+  onDirty = ignore,
 }: {
   creatorId: string;
   creatorName: string;
+  /** Told whether her hours hold changes not saved, so that leaving the page can ask first. Must be stable. */
+  onDirty?: (dirty: boolean) => void;
 }): JSX.Element {
   const query = useAgentHours(creatorId);
 
@@ -81,8 +84,18 @@ export function HoursSection({
       </section>
     );
   }
-  return <HoursForm key={creatorId} creatorId={creatorId} creatorName={creatorName} view={query.data} />;
+  return (
+    <HoursForm
+      key={creatorId}
+      creatorId={creatorId}
+      creatorName={creatorName}
+      view={query.data}
+      onDirty={onDirty}
+    />
+  );
 }
+
+const ignore = (): void => undefined;
 
 interface Problem {
   readonly text: string;
@@ -93,10 +106,12 @@ function HoursForm({
   creatorId,
   creatorName,
   view,
+  onDirty,
 }: {
   creatorId: string;
   creatorName: string;
   view: AgentHoursView;
+  onDirty: (dirty: boolean) => void;
 }): JSX.Element {
   const queryClient = useQueryClient();
   const [stored, setStored] = useState(view);
@@ -114,6 +129,16 @@ function HoursForm({
   // A stored setting that no longer reads is replaced by saving, even unchanged: the defaults then go in its place.
   const changed = !sameHours(draft, stored.hours) || stored.invalidStored;
   const blocked = issues.size > 0;
+  const dirty = !sameHours(draft, stored.hours);
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
+  useEffect(
+    () => () => {
+      onDirty(false);
+    },
+    [onDirty],
+  );
   const noFollowUp = noFollowUpEver(draft, stored.timeZone, new Date());
 
   const edit = (next: AgentHours): void => {
@@ -169,6 +194,8 @@ function HoursForm({
                 : { dot: 'idle', text: 'Aucune modification' };
 
   const slots = draft.reply.mode === 'slots' ? draft.reply.slots : null;
+  /** What « Ajouter un créneau » would add: a free stretch of her week, or nothing when none is left. */
+  const added = slots === null ? null : newSlot(slots);
 
   return (
     <section className="ps-page">
@@ -286,18 +313,22 @@ function HoursForm({
                   {issues.get('reply.slots')}
                 </p>
               )}
-              {canAddSlot(slots) ? (
+              {!canAddSlot(slots) ? (
+                <p className="ps-hint">28 créneaux au plus.</p>
+              ) : added === null ? (
+                <p className="ps-hint">
+                  Plus une heure de libre dans la semaine : raccourcis un créneau d’abord.
+                </p>
+              ) : (
                 <button
                   type="button"
                   className="nv-btn nv-btn--soft nv-btn--sm ps-self-start"
                   onClick={() => {
-                    editSlots([...slots, newSlot(slots)]);
+                    editSlots([...slots, added]);
                   }}
                 >
                   Ajouter un créneau
                 </button>
-              ) : (
-                <p className="ps-hint">28 créneaux au plus.</p>
               )}
             </div>
           )}

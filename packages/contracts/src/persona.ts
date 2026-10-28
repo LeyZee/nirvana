@@ -125,9 +125,9 @@ const text = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => text(max).nullable();
 
 /** A list of short entries, each unique regardless of case (hobbies, traits, keywords). */
-const entries = (maxEach: number, maxCount: number) =>
+const entries = (maxEach: number, maxCount: number, item: z.ZodType<string> = text(maxEach)) =>
   z
-    .array(text(maxEach))
+    .array(item)
     .max(maxCount)
     .refine((list) => new Set(list.map((v) => v.toLocaleLowerCase('fr'))).size === list.length, {
       message: 'Entrée en double',
@@ -148,6 +148,18 @@ export const TimezoneSchema = z.string().refine(
   },
   { message: 'Fuseau horaire IANA inconnu' },
 );
+
+/**
+ * A zone as the runtime spells it (`europe/paris` → `Europe/Paris`): the runtime accepts any case, a stored zone and
+ * what the screens print of it read the canonical one. A zone it does not know is returned as it is.
+ */
+export function canonicalTimezone(zone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en', { timeZone: zone }).resolvedOptions().timeZone;
+  } catch {
+    return zone;
+  }
+}
 
 /** The two fields every strategy shares: a style, and the creator's instructions when the style is custom. */
 const strategyShape = <S extends readonly [string, ...string[]]>(styles: S) => ({
@@ -269,12 +281,21 @@ export const PersonaNotificationsSchema = z.strictObject({
   alert_keywords: entries(40, 100),
 });
 
+/**
+ * An entry the guards look for in her answers as words (`never_say`, `disgusts`): one made only of punctuation (« ? »)
+ * would match almost every message, so it holds a letter or a digit.
+ */
+const guardWord = text(120).refine(
+  (entry) => normaliseWords(entry) !== '',
+  'Une entrée contient une lettre ou un chiffre',
+);
+
 /** What she never does, shows or says. Safety data: guards.ts loads it, the prompt only mirrors it. */
 export const PersonaLimitsSchema = z.strictObject({
   never_do: entries(120, 100),
   never_show: entries(120, 100),
-  never_say: entries(120, 200),
-  disgusts: entries(120, 200),
+  never_say: entries(120, 200, guardWord),
+  disgusts: entries(120, 200, guardWord),
 });
 
 export const PERSONA_EMOJIS_MAX = 20;

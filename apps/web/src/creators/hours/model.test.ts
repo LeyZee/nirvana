@@ -83,7 +83,19 @@ describe('her week', () => {
       endMinute: 60,
       enabled: true,
     });
-    expect(newSlot(SUGGESTED_REPLY_SLOTS).day).toBe(1);
+    // Every day taken (recette 28/10): the first free stretch of the week, never a line that overlaps at once.
+    const added = newSlot(SUGGESTED_REPLY_SLOTS);
+    expect(added).toEqual({ day: 1, startMinute: 60, endMinute: 540, enabled: true });
+    if (added === null) throw new Error('a free stretch is left');
+    expect(issuesOf(slots({ mode: 'slots', slots: [...SUGGESTED_REPLY_SLOTS, added] })).size).toBe(0);
+    // A day-long slot on Tuesday leaves no room for 9 h – 1 h on Monday: the first free stretch instead.
+    const tuesday = [
+      { day: 2, startMinute: 0, endMinute: 0, enabled: true },
+      ...[3, 4, 5, 6, 7].map((day) => ({ day, startMinute: 600, endMinute: 1200, enabled: true })),
+    ];
+    expect(newSlot(tuesday)).toEqual({ day: 1, startMinute: 0, endMinute: 960, enabled: true });
+    const week = [1, 2, 3, 4, 5, 6, 7].map((day) => ({ day, startMinute: 0, endMinute: 0, enabled: true }));
+    expect(newSlot(week)).toBeNull();
     const one = { day: 1, startMinute: 540, endMinute: 60, enabled: true };
     expect(canAddSlot(Array.from({ length: 27 }, () => one))).toBe(true);
     expect(canAddSlot(Array.from({ length: 28 }, () => one))).toBe(false);

@@ -18,9 +18,15 @@ export interface PersonaVersionStore {
   ): Promise<PersonaVersionSummary>;
   /**
    * Makes a stored version her only active one, audited with who did it; the active one is returned as it is.
-   * Throws `PersonaVersionNotFound` when she has no version with this id.
+   * Throws `PersonaVersionNotFound` when she has no version with this id, and `PersonaVersionConflict` when her
+   * active version is no longer `expectedActive` (null: none), what the caller last read.
    */
-  activate(creatorId: CreatorId, versionId: PersonaVersionId, userId: string): Promise<PersonaVersionSummary>;
+  activate(
+    creatorId: CreatorId,
+    versionId: PersonaVersionId,
+    expectedActive: PersonaVersionId | null,
+    userId: string,
+  ): Promise<PersonaVersionSummary>;
   /**
    * `pnpm persona:load`: stores a version read from a YAML file, or finds the same one already stored, and with
    * `activate` makes it her only active version. A number already stored with another content is a conflict.

@@ -650,7 +650,11 @@
 .ps-fold__body {
   gap: 16px;
 }
-.ps-panel > .ps-fold {
+/* The panel's fields sit in a fieldset that only disables them (read-only): it draws no box of its own. */
+.ps-fieldset {
+  display: contents;
+}
+.ps-fieldset > .ps-fold {
   margin-top: 6px;
   padding-top: 10px;
   border-top: 1px solid var(--nv-hairline);

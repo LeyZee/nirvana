@@ -10,6 +10,8 @@ import {
 } from '@nirvana/contracts';
 import { useCallback, useEffect, useState } from 'react';
 
+import { firstDraft } from './model';
+
 /**
  * Where the persona screen reads from: her stored versions (`GET /v1/creators/:id/persona`), or, while she has none
  * or no creator is known, the placeholder of the repository (`personas/messalina/v0.0.0.yaml`, ADR 0010), shown with
@@ -42,13 +44,17 @@ async function loadExample(): Promise<Persona> {
 }
 
 async function loadPersona(creatorId: string | null): Promise<PersonaReady> {
-  const empty = async (): Promise<PersonaReady> => ({
-    kind: 'ready',
-    persona: await loadExample(),
-    source: 'example',
-    basedOn: null,
-    versions: [],
-  });
+  const empty = async (): Promise<PersonaReady> => {
+    const example = await loadExample();
+    return {
+      kind: 'ready',
+      // For a known creator, the start of her first version: nothing of the example that nobody typed.
+      persona: creatorId === null ? example : firstDraft(example, creatorId),
+      source: 'example',
+      basedOn: null,
+      versions: [],
+    };
+  };
   if (creatorId === null) return empty();
   const response = await fetch(`/v1/creators/${encodeURIComponent(creatorId)}/persona`, {
     credentials: 'include',
@@ -126,14 +132,27 @@ export async function saveVersion(
   return { kind: 'failed' };
 }
 
-export type ActivateResult = 'activated' | 'forbidden' | 'failed';
+export type ActivateResult = 'activated' | 'conflict' | 'forbidden' | 'failed';
 
-/** `POST /v1/creators/:id/persona/versions/:versionId/activate`: the agent writes with this version from now on. */
-export async function activateVersion(creatorId: string, versionId: string): Promise<ActivateResult> {
+/**
+ * `POST /v1/creators/:id/persona/versions/:versionId/activate`. `expectedActive` is her active version as this screen
+ * read it: if another became active since (another tab), the server refuses (409) and nothing changes.
+ */
+export async function activateVersion(
+  creatorId: string,
+  versionId: string,
+  expectedActive: string | null,
+): Promise<ActivateResult> {
   const response = await fetch(
     `/v1/creators/${encodeURIComponent(creatorId)}/persona/versions/${encodeURIComponent(versionId)}/activate`,
-    { method: 'POST', credentials: 'include' },
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedActive }),
+    },
   );
   if (response.ok) return 'activated';
+  if (response.status === 409) return 'conflict';
   return response.status === 403 ? 'forbidden' : 'failed';
 }

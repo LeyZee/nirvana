@@ -15,6 +15,7 @@ import {
   hasChange,
   issueCountByTab,
   isPlaceholder,
+  localDay,
   nextVersion,
   NOTHING_REFUSED,
   refusedReplyIssues,
@@ -47,16 +48,21 @@ export function PersonaSection({
   creatorId,
   canSave,
   timezone,
+  onDirty = ignore,
 }: {
   /** Null while no creator is known: the example shows, nothing can be saved. */
   creatorId: string | null;
   /** The owner and the creator herself save versions; chatters read. */
   canSave: boolean;
   timezone: string | null;
+  /** Told whether the draft holds changes not saved, so that leaving the page can ask first. Must be stable. */
+  onDirty?: (dirty: boolean) => void;
 }): JSX.Element {
   const { load, reload } = usePersona(creatorId);
   /** Said once a save went through, until the next edit. */
   const [notice, setNotice] = useState<string | null>(null);
+  /** Kept here, so that a save, which starts the editor again from the new version, stays on the same tab. */
+  const [tab, setTab] = useState<TabId>('details');
 
   if (load.kind !== 'ready') {
     return (
@@ -86,6 +92,9 @@ export function PersonaSection({
       canSave={canSave}
       timezone={timezone}
       notice={notice}
+      tab={tab}
+      onTab={setTab}
+      onDirty={onDirty}
       onEdit={() => {
         setNotice(null);
       }}
@@ -94,7 +103,7 @@ export function PersonaSection({
         reload();
       }}
       onActivated={(version) => {
-        setNotice(`Version ${version} active : l’agent écrit avec elle`);
+        setNotice(`Version ${version} marquée active`);
         reload();
       }}
       onReload={reload}
@@ -102,13 +111,17 @@ export function PersonaSection({
   );
 }
 
+const ignore = (): void => undefined;
+
 const tabIndex = (tab: TabId): number => TABS.findIndex((t) => t.id === tab);
 
 const CONFLICT =
   'Une autre version a été enregistrée pendant que tu modifiais. Recharge pour repartir de la dernière : tes modifications ici seront perdues.';
 
-/** Today as the persona's `created_at` (YYYY-MM-DD). */
-const today = (): string => new Date().toISOString().slice(0, 10);
+const ACTIVATION_CONFLICT =
+  'Sa version active a changé depuis l’ouverture de cette page, sans doute dans un autre onglet. Rien n’a été activé : recharge pour voir où elle en est.';
+
+const READ_ONLY = 'Lecture seule : seuls le propriétaire et la créatrice modifient sa persona.';
 
 function Editor({
   ready,
@@ -116,6 +129,9 @@ function Editor({
   canSave,
   timezone,
   notice,
+  tab,
+  onTab,
+  onDirty,
   onEdit,
   onSaved,
   onActivated,
@@ -126,6 +142,9 @@ function Editor({
   canSave: boolean;
   timezone: string | null;
   notice: string | null;
+  tab: TabId;
+  onTab: (tab: TabId) => void;
+  onDirty: (dirty: boolean) => void;
   onEdit: () => void;
   onSaved: (version: PersonaVersionSummary) => void;
   onActivated: (version: string) => void;
@@ -136,7 +155,6 @@ function Editor({
   const [saving, setSaving] = useState(false);
   /** Why the last save did not go through, and whether reloading is the way out. */
   const [problem, setProblem] = useState<{ text: string; reload: boolean } | null>(null);
-  const [tab, setTab] = useState<TabId>('details');
   /** Which way the panel slides in: towards the tab picked, like a page turning. */
   const [direction, setDirection] = useState<'left' | 'right' | 'none'>('none');
   /** A field to bring into view once its tab is on screen (« Voir »). */
@@ -150,10 +168,21 @@ function Editor({
   const changed = useMemo(() => changedFields(saved, draft), [saved, draft]);
   const form = useMemo(() => ({ issues, changed }), [issues, changed]);
 
+  const dirty = changed.length > 0;
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
+  useEffect(
+    () => () => {
+      onDirty(false);
+    },
+    [onDirty],
+  );
+
   const select = (next: TabId): void => {
     if (next === tab) return;
     setDirection(tabIndex(next) > tabIndex(tab) ? 'right' : 'left');
-    setTab(next);
+    onTab(next);
   };
 
   useEffect(() => {
@@ -190,7 +219,7 @@ function Editor({
       withoutPlaceholders({
         ...draft,
         details: { ...draft.details, timezone: timezone ?? draft.details.timezone },
-        meta: { ...draft.meta, version: nextVersion(taken), created_at: today() },
+        meta: { ...draft.meta, version: nextVersion(taken), created_at: localDay() },
       }),
     );
     const result = persona.success
@@ -230,9 +259,14 @@ function Editor({
     if (creatorId === null || version === undefined) return;
     setSaving(true);
     setProblem(null);
-    const result = await activateVersion(creatorId, version.id).catch(() => 'failed' as const);
+    // The active version this page read: if another tab activated one since, the server refuses.
+    const expectedActive = ready.versions.find((v) => v.isActive)?.id ?? null;
+    const result = await activateVersion(creatorId, version.id, expectedActive).catch(
+      () => 'failed' as const,
+    );
     setSaving(false);
     if (result === 'activated') onActivated(version.version);
+    else if (result === 'conflict') setProblem({ text: ACTIVATION_CONFLICT, reload: true });
     else {
       setProblem({
         text:
@@ -244,16 +278,15 @@ function Editor({
     }
   };
 
-  const blocked =
-    creatorId === null
+  const blocked = !canSave
+    ? READ_ONLY
+    : creatorId === null
       ? 'Ajoute d’abord une créatrice pour enregistrer sa persona.'
-      : !canSave
-        ? 'Seuls le propriétaire et la créatrice peuvent enregistrer sa persona.'
-        : issues.length > 0
-          ? 'Corrige d’abord les champs signalés.'
-          : changed.length === 0
-            ? 'Rien à enregistrer pour l’instant.'
-            : null;
+      : issues.length > 0
+        ? 'Corrige d’abord les champs signalés.'
+        : changed.length === 0
+          ? 'Rien à enregistrer pour l’instant.'
+          : null;
   const props = <K extends TabId>(key: K) => ({
     value: draft[key],
     onChange: (value: Persona[K]) => {
@@ -269,6 +302,7 @@ function Editor({
           draft={draft}
           ready={ready}
           known={creatorId !== null}
+          readOnly={!canSave}
           issues={issues}
           completion={completion}
           changes={changed.length}
@@ -317,18 +351,21 @@ function Editor({
           ref={panelRef}
           key={tab}
         >
-          {tab === 'details' ? <DetailsTab {...props('details')} timezone={timezone} /> : null}
-          {tab === 'lifestyle' ? <LifestyleTab {...props('lifestyle')} /> : null}
-          {tab === 'tastes' ? <TastesTab {...props('tastes')} /> : null}
-          {tab === 'intimate' ? <IntimateTab {...props('intimate')} /> : null}
-          {tab === 'writing_style' ? <WritingStyleTab {...props('writing_style')} /> : null}
-          {tab === 'sample_replies' ? <SampleRepliesTab {...props('sample_replies')} /> : null}
-          {tab === 'additional_info' ? <AdditionalInfoTab {...props('additional_info')} /> : null}
-          {tab === 'behavior' ? <BehaviorTab {...props('behavior')} /> : null}
-          {tab === 'strategies' ? <StrategiesTab {...props('strategies')} /> : null}
-          {tab === 'follow_ups' ? <FollowUpsTab {...props('follow_ups')} /> : null}
-          {tab === 'notifications' ? <NotificationsTab {...props('notifications')} /> : null}
-          {tab === 'limits' ? <LimitsTab {...props('limits')} /> : null}
+          {/* A chatter reads her persona: every field shows, none takes a change. */}
+          <fieldset className="ps-fieldset" disabled={!canSave}>
+            {tab === 'details' ? <DetailsTab {...props('details')} timezone={timezone} /> : null}
+            {tab === 'lifestyle' ? <LifestyleTab {...props('lifestyle')} /> : null}
+            {tab === 'tastes' ? <TastesTab {...props('tastes')} /> : null}
+            {tab === 'intimate' ? <IntimateTab {...props('intimate')} /> : null}
+            {tab === 'writing_style' ? <WritingStyleTab {...props('writing_style')} /> : null}
+            {tab === 'sample_replies' ? <SampleRepliesTab {...props('sample_replies')} /> : null}
+            {tab === 'additional_info' ? <AdditionalInfoTab {...props('additional_info')} /> : null}
+            {tab === 'behavior' ? <BehaviorTab {...props('behavior')} /> : null}
+            {tab === 'strategies' ? <StrategiesTab {...props('strategies')} /> : null}
+            {tab === 'follow_ups' ? <FollowUpsTab {...props('follow_ups')} /> : null}
+            {tab === 'notifications' ? <NotificationsTab {...props('notifications')} /> : null}
+            {tab === 'limits' ? <LimitsTab {...props('limits')} /> : null}
+          </fieldset>
         </div>
       </section>
     </FormContext.Provider>
@@ -347,11 +384,12 @@ function noteOf(ready: PersonaReady, known: boolean): string {
     return 'Elle n’a pas encore de persona enregistrée. Pars de cet exemple : ton premier enregistrement deviendra sa version 0.0.1.';
   }
   const active = ready.versions.find((v) => v.isActive);
-  return `Chaque enregistrement crée une nouvelle version, inactive : l’agent écrit avec la version active, et tu actives la nouvelle quand elle est prête. ${
+  // The agent still reads the persona set on the server (its file), not these versions: say so (recette 28/10, G4).
+  return `Chaque enregistrement crée une nouvelle version, inactive, et tu actives la nouvelle quand elle est prête. ${
     active === undefined
       ? 'Aucune version n’est active pour l’instant.'
       : `Version active : ${active.version}.`
-  }`;
+  } L’agent n’écrit pas encore avec ces versions : il lit toujours la persona fixée sur le serveur.`;
 }
 
 /** The first thing read: whose persona, which version, whether the draft holds, and the one action. */
@@ -359,6 +397,7 @@ function Head({
   draft,
   ready,
   known,
+  readOnly,
   issues,
   completion,
   changes,
@@ -377,6 +416,8 @@ function Head({
   draft: Persona;
   ready: PersonaReady;
   known: boolean;
+  /** Nothing can change here (a chatter): the state says so instead of what is still to fix. */
+  readOnly: boolean;
   issues: readonly FieldIssue[];
   completion: PersonaCompletion;
   changes: number;
@@ -411,13 +452,20 @@ function Head({
   const state =
     problem !== null
       ? { dot: 'warn', text: problem.text }
-      : first !== undefined
-        ? { dot: 'warn', text: `${plural(issues.length, 'champ', 'champs')} à corriger` }
-        : changes > 0
-          ? { dot: 'ok', text: `${plural(changes, 'modification', 'modifications')}, prête à enregistrer` }
-          : notice !== null
-            ? { dot: 'ok', text: notice }
-            : { dot: 'idle', text: 'Aucune modification' };
+      : readOnly
+        ? { dot: 'idle', text: READ_ONLY }
+        : first !== undefined
+          ? { dot: 'warn', text: `${plural(issues.length, 'champ', 'champs')} à corriger` }
+          : changes > 0
+            ? blocked === null
+              ? {
+                  dot: 'ok',
+                  text: `${plural(changes, 'modification', 'modifications')}, prête à enregistrer`,
+                }
+              : { dot: 'idle', text: `${plural(changes, 'modification', 'modifications')} : ${blocked}` }
+            : notice !== null
+              ? { dot: 'ok', text: notice }
+              : { dot: 'idle', text: 'Aucune modification' };
   const created = new Date(`${draft.meta.created_at}T12:00:00Z`).toLocaleDateString('fr-FR', {
     day: 'numeric',
     month: 'long',
@@ -439,9 +487,14 @@ function Head({
                 {current?.isActive === true ? 'Active' : 'Pas encore active'}
               </span>
             )}
-            <span>Version {draft.meta.version}</span>
-            <span aria-hidden="true">·</span>
-            <span>{created}</span>
+            {/* The example's own number and date are not hers: nothing is stored yet. */}
+            {ready.source === 'example' ? null : (
+              <>
+                <span>Version {draft.meta.version}</span>
+                <span aria-hidden="true">·</span>
+                <span>{created}</span>
+              </>
+            )}
           </p>
           <h2 className="ps-title" data-placeholder={name === '' || isPlaceholder(name) ? 'true' : undefined}>
             {name === '' || isPlaceholder(name) ? 'Prénom à remplir' : name}
@@ -458,7 +511,7 @@ function Head({
               type="button"
               className="nv-btn nv-btn--soft ps-pop"
               disabled={saving}
-              title="L’agent écrira avec cette version dès maintenant."
+              title="Elle devient sa version active, à la place de la précédente."
               onClick={() => {
                 if (confirming) {
                   setConfirming(false);
@@ -491,7 +544,7 @@ function Head({
           <button type="button" className="nv-btn nv-btn--plain nv-btn--sm ps-pop" onClick={onReload}>
             Recharger
           </button>
-        ) : first !== undefined && problem === null ? (
+        ) : first !== undefined && problem === null && !readOnly ? (
           <button
             type="button"
             className="nv-btn nv-btn--plain nv-btn--sm ps-pop"
