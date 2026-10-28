@@ -60,6 +60,8 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Fausse urgence | `fake_emergency` | Une maladie, une dette, le loyer ou une urgence invoqués pour vendre, ou une demande d'argent pour elle : bloquée, jamais utilisée pour vendre (P3-13). |
 | Suivi d'offre | `post_offer` | Ce que fait l'agent après un achat ou une offre refusée. |
 | Mot-clé d'alerte | `alert_keyword` | Un mot qui, écrit par un fan, met l'agent en pause pour ce fan et prévient un humain. |
+| Alerte personnalisée | `custom_alert` | Une alerte que le propriétaire écrit lui-même (P4-01) : une phrase que le cerveau évalue, des mots-clés lus en code, ou les deux ; elle prévient un humain et, si elle est cochée « met en pause », passe la main. Une ligne par créatrice, montrées comme une seule alerte. |
+| Déclenchement d'alerte | `alert_triggered` | L'événement d'une alerte qui prévient sans mettre l'agent en pause : il nomme l'alerte et comment elle a sonné, jamais ce que le fan a écrit. Une alerte qui met en pause est un passage à l'humain avec son `trigger`. |
 | Rester en personnage | `asks_if_bot`, `ai_disclosure` | Le bot ne dit jamais qu'il est une IA : à « t'es un bot ? » (`asks_if_bot`), il répond en personnage, et la garde `ai_disclosure` bloque tout aveu. Fixé dans le code, pas un réglage (ADR 0021). |
 | Média | `media_asset` | Une photo, vidéo ou audio de la créatrice (catalogue) ou reçue d'un fan. |
 | Description de média | `media_description` | La sortie du rôle sens, au vocabulaire Nirvana. |
@@ -116,7 +118,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Liste blanche d'envoi | `send_allowlist` | Fans vers lesquels le connecteur accepte d'envoyer tant qu'elle n'est pas vide (phase 2). |
 | Enregistreur | `recorder` | Fonction de l'extension qui note les échanges réseau du site d'une plateforme, anonymisés. |
 | Notification Telegram | `telegram_delivery` | Un message que le CRM livre dans un groupe Telegram (alerte, vente, mot-clé, validation). Ne contient jamais de donnée de fan (ADR 0020). |
-| Sujet | `topic` | Ce dont parle une notification Telegram : `urgent`, `important`, `info` (onglet Alertes), `sale`, `keyword`, `validation`. Chaque sujet a son routage. |
+| Sujet | `topic` | Ce dont parle une notification Telegram : `urgent`, `important`, `info` (onglet Alertes), `sale`, `keyword`, `validation`, `custom` (les alertes personnalisées, un seul sujet pour toutes). Chaque sujet a son routage. |
 | Bot (Telegram) | `telegram_bot` | Un bot créé par @BotFather, ajouté dans Réglages › Telegram par son jeton, chiffré en base. Il n'agit sur rien, il prévient. |
 | Groupe (Telegram) | `telegram_chat` | Un groupe où un bot se trouve, découvert automatiquement, jamais saisi à la main. |
 | Routage | `telegram_route` | Quel sujet va dans quel groupe, pour une créatrice ou pour toutes. |

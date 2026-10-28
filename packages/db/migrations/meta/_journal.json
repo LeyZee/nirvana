@@ -176,6 +176,13 @@
       "when": 1793139620797,
       "tag": "0024_agent_hours",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793145311146,
+      "tag": "0025_custom_alerts",
+      "breakpoints": true
     }
   ]
 }

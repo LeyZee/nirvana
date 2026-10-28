@@ -72,7 +72,7 @@ blind_tests          id, creator_id, voice_prompt, voice_model, persona_version_
 
 `conversations.last_inbound_at` est l'heure où Nirvana a lu le dernier message du fan (ordre d'arrivée : debounce, brouillon périmé, relances). Ce que l'écran montre (« A écrit il y a… », `ConversationSummary.lastInboundAt`) est l'heure du message sur la plateforme, `max(messages.platform_created_at)` des messages entrants : une capture qui relit l'historique ne fait pas dire « à l'instant » d'un message de cinq heures.
 
-Types d'événements (liste fermée dans `packages/contracts/src/events.ts`) : `message_received`, `message_sent`, `send_attempted`, `send_failed`, `send_verified`, `media_described`, `draft_created`, `draft_approved`, `draft_edited`, `draft_rejected`, `draft_expired`, `fact_proposed`, `fact_confirmed`, `fact_rejected`, `summary_refreshed`, `handoff_requested`, `takeover_started`, `takeover_ended`, `mode_changed`, `kill_switch_toggled`, `follow_up_scheduled`, `follow_up_cancelled`, `offer_made`, `sale_detected`, `script_started`, `script_step_sent`, `script_ended`, `session_state_changed`, `budget_threshold_crossed`, `automatic_closed`, `error`.
+Types d'événements (liste fermée dans `packages/contracts/src/events.ts`) : `message_received`, `message_sent`, `send_attempted`, `send_failed`, `send_verified`, `media_described`, `draft_created`, `draft_approved`, `draft_edited`, `draft_rejected`, `draft_expired`, `fact_proposed`, `fact_confirmed`, `fact_rejected`, `summary_refreshed`, `handoff_requested`, `alert_triggered`, `takeover_started`, `takeover_ended`, `mode_changed`, `kill_switch_toggled`, `follow_up_scheduled`, `follow_up_cancelled`, `offer_made`, `sale_detected`, `script_started`, `script_step_sent`, `script_ended`, `session_state_changed`, `budget_threshold_crossed`, `automatic_closed`, `error`.
 
 Payload minimal par famille d'événement (clés en camelCase, jamais de contenu média, jamais de secret) :
 
@@ -83,7 +83,8 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
-| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other` ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi) |
+| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other`, `custom_alert` ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi), `trigger?` (l'alerte qui a mis l'agent en pause, P4-01, comme ci-dessous) |
+| `alert_triggered` | `conversationId`, `trigger` : `alert` (`{ kind: 'custom', id }` ou `{ kind: 'system', code }`, codes `keyword`, `service_request`, `identity_doubt`), `matchedBy` (`keyword` \| `rule` \| `model`), `keyword?` (le mot tel qu'elle l'a déclaré, présent pour un mot-clé et lui seul). Une alerte qui prévient seulement ; celle qui met en pause est un `handoff_requested` avec son `trigger`, jamais les deux. Rien de ce que le fan a écrit (ADR 0020). |
 | `takeover_started`, `takeover_ended` | `conversationId`, `userId?`, `reason?` |
 | `mode_changed` | `userId?`, `reason?`, `mode?` |
 | `kill_switch_toggled` | `scope`, `scopeId`, `active`, `reason` |
@@ -154,6 +155,17 @@ notifications   id, creator_id, user_id, type, payload jsonb, read_at, created_a
 kill_switches   id, scope (global|creator|conversation), scope_id (nullable pour global), creator_id (nullable pour global),
                 active, reason, set_by, set_at
 ```
+
+Alertes (module `alerts`, P4-01, migration 0025) :
+
+```
+custom_alerts   id, group_id, creator_id, name, phrase (≤ 500, nullable), keywords text[] (≤ 40), pauses_agent, notify,
+                enabled, created_by, updated_by, created_at, updated_at, archived_at
+system_alert_settings  creator_id, code (keyword|service_request|identity_doubt), enabled, updated_by, updated_at
+alert_seen      creator_id, event_id → conversation_events, seen_by, seen_at   (clé : creator_id, event_id)
+```
+
+Une alerte personnalisée a une ligne par créatrice (RLS), et les lignes écrites ensemble partagent `group_id` : l'écran les montre comme une seule alerte. Il faut une phrase ou au moins un mot-clé (contrôle en base comme dans le contrat). Une alerte retirée est archivée (`archived_at`), jamais supprimée, pour que l'historique garde son nom (`nirvana_app` n'a pas `DELETE`). Une alerte système sans ligne dans `system_alert_settings` est active, et `keyword` ne peut pas être désactivée (contrôle en base). `alert_seen` porte le « vu » de l'historique, puisque le journal est en ajout seul : une marque par événement, partagée par l'agence, en ajout seul aussi.
 
 Les approbations et prises en main ne sont pas une table : ce sont des `conversation_events` (`draft_approved`, `takeover_started`, …) et l'état des `drafts`.
 

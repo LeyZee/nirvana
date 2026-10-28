@@ -22,6 +22,7 @@ const TOPIC_MARK: Readonly<Record<TelegramTopic, string>> = {
   sale: '💰',
   keyword: '🔎',
   validation: '🎙️',
+  custom: '🔔',
 };
 
 /** Info and sales do not ring (ADR 0020 §2): they must not wake anyone at night. */
@@ -34,9 +35,10 @@ export const TOPIC_RANK: Readonly<Record<TelegramTopic, number>> = {
   urgent: 0,
   important: 1,
   keyword: 2,
-  validation: 3,
-  sale: 4,
-  info: 5,
+  custom: 3,
+  validation: 4,
+  sale: 5,
+  info: 6,
 };
 
 /** Telegram refuses a text over 4 096 characters. */

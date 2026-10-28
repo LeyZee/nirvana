@@ -27,6 +27,7 @@ export const TOPICS: Record<TelegramTopic, TopicMeta> = {
   sale: { label: 'Ventes', sub: 'Un message sans son à chaque vente' },
   keyword: { label: 'Mots-clés', sub: 'Un fan a écrit un mot surveillé' },
   validation: { label: 'Validations', sub: 'Vocaux et brouillons qui attendent' },
+  custom: { label: 'Alertes personnalisées', sub: 'Les alertes que tu as écrites, quand elles sonnent' },
 };
 
 export const ALERT_TOPICS = ['urgent', 'important', 'info'] as const satisfies readonly TelegramTopic[];

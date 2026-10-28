@@ -15,8 +15,16 @@ export type TelegramBotId = z.infer<typeof TelegramBotIdSchema>;
 export const TelegramChatIdSchema = uuid.brand<'TelegramChatId'>();
 export type TelegramChatId = z.infer<typeof TelegramChatIdSchema>;
 
-/** One per tab topic; the three alert levels first (ADR 0020 §2). */
-export const TelegramTopicSchema = z.enum(['urgent', 'important', 'info', 'sale', 'keyword', 'validation']);
+/** One per tab topic; the three alert levels first (ADR 0020 §2). `custom`: her own alerts, one topic for all (P4-01). */
+export const TelegramTopicSchema = z.enum([
+  'urgent',
+  'important',
+  'info',
+  'sale',
+  'keyword',
+  'validation',
+  'custom',
+]);
 export type TelegramTopic = z.infer<typeof TelegramTopicSchema>;
 
 /** `refused`: Telegram turned the token down (revoked). `conflict`: another program reads the same token. */
