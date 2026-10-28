@@ -61,6 +61,11 @@ export function describeError(error: unknown): string {
   return ERROR_MESSAGES[error instanceof ServicesError ? error.kind : 'unavailable'];
 }
 
+/** A member who is not the owner (403 `role_forbidden`): retrying changes nothing. */
+export function isForbidden(error: unknown): boolean {
+  return error instanceof ServicesError && error.kind === 'forbidden';
+}
+
 /** A 401 somewhere on the page: the only way out is to sign in again (`window.location.reload()`). */
 export function isSessionExpired(error: unknown): boolean {
   return error instanceof ServicesError && error.kind === 'session_expired';

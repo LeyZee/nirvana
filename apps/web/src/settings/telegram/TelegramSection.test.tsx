@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { TelegramBotIdSchema, TelegramChatIdSchema } from '@nirvana/contracts';
+import { CreatorIdSchema, TelegramBotIdSchema, TelegramChatIdSchema } from '@nirvana/contracts';
 import {
   createMemoryHistory,
   createRootRoute,
@@ -11,7 +11,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TelegramSection } from './TelegramSection';
-import { TelegramOff, fetchDeliveries, fetchOverview, saveRoutes } from './api';
+import { TelegramForbidden, TelegramOff, fetchDeliveries, fetchOverview, saveRoutes } from './api';
 import { parseTelegramSearch, searchOfTab, tabOfSearch } from './search';
 
 vi.mock('./api', async (actual) => ({
@@ -56,6 +56,73 @@ describe('Réglages › Telegram when the page cannot load', () => {
     renderSection();
     expect(await screen.findByText('Telegram est éteint')).toBeTruthy();
     expect(screen.queryByText('Le serveur ne répond pas')).toBeNull();
+  });
+
+  it('tells a member who is not the owner whose page it is, with nothing to retry', async () => {
+    vi.mocked(fetchOverview).mockRejectedValue(new TelegramForbidden());
+    renderSection();
+    expect(await screen.findByText('Seul le propriétaire règle Telegram')).toBeTruthy();
+    expect(screen.queryByText('Le serveur ne répond pas')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
+  });
+});
+
+describe('Réglages › Telegram with a bot Telegram refuses', () => {
+  beforeEach(() => {
+    vi.mocked(fetchOverview).mockResolvedValue({
+      bots: [
+        {
+          id: TelegramBotIdSchema.parse('01900000-0000-7000-8000-0000000000b2'),
+          username: 'refuse_bot',
+          displayName: 'Refusé',
+          state: 'refused',
+          lastPolledAt: null,
+          chats: [
+            {
+              id: TelegramChatIdSchema.parse('01900000-0000-7000-8000-0000000000c2'),
+              title: 'Astreinte',
+              kind: 'group',
+              membership: 'member',
+              canPost: true,
+              lastSentAt: null,
+              lastError: null,
+            },
+          ],
+        },
+      ],
+      routes: [],
+      coverage: [
+        {
+          creatorId: CreatorIdSchema.parse('01900000-0000-7000-8000-0000000000a1'),
+          displayName: 'Démo',
+          urgentReachable: false,
+          topicsWithoutGroup: [],
+        },
+      ],
+      version: 1,
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('offers to repair that bot, not to choose a group or add a new bot', async () => {
+    renderSection();
+    expect(await screen.findByText('Les alertes ne partent plus')).toBeTruthy();
+    expect(screen.queryByText(/Choisis au moins un groupe/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mettre un bot dans un groupe' })).toBeNull();
+    const [repair] = screen.getAllByRole('button', { name: 'Réparer le bot' });
+    if (repair === undefined) throw new Error('no « Réparer le bot »');
+    fireEvent.click(repair);
+    expect(await screen.findByRole('tab', { name: /Bots et groupes/, selected: true })).toBeTruthy();
+  });
+
+  it('says « son groupe » for a bot that serves one group', async () => {
+    renderSection();
+    const [repair] = await screen.findAllByRole('button', { name: 'Réparer le bot' });
+    if (repair === undefined) throw new Error('no « Réparer le bot »');
+    fireEvent.click(repair);
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+    expect(await screen.findByText(/Son groupe ne recevra plus rien\./)).toBeTruthy();
+    expect(screen.queryByText(/Ses 1 groupe/)).toBeNull();
   });
 });
 

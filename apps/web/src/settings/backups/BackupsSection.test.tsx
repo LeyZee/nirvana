@@ -99,6 +99,19 @@ describe('Réglages › Sauvegardes', () => {
     expect(screen.getByRole('button', { name: 'Noter un essai' }).className).toContain('nv-btn--neon');
   });
 
+  it('offers no test to record before a copy has ever succeeded', async () => {
+    serve({
+      status: () => ({
+        status: 200,
+        body: { ...STATUS, state: 'never', lastSucceededAt: null, lastRun: null },
+      }),
+    });
+    renderPage();
+    const button = await screen.findByRole('button', { name: 'Noter un essai' });
+    expect(button).toHaveProperty('disabled', true);
+    expect(screen.getByText('Il faut d’abord une sauvegarde réussie à restaurer.')).toBeTruthy();
+  });
+
   it('says the server does not answer, after one quiet retry, and tries again', async () => {
     let answers = 0;
     serve({ status: () => (answers++ < 2 ? { status: 500 } : { status: 200, body: STATUS }) });

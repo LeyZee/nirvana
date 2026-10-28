@@ -192,7 +192,7 @@ describe('Réglages › Sauvegardes', () => {
     ] satisfies Me[]) {
       const router = renderApp(user, '/reglages/sauvegardes');
       await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
+        expect(router.state.location.pathname).toBe('/reglages/apparence');
       });
       expect(await subTabs()).not.toContain('Sauvegardes');
       cleanup();
@@ -207,7 +207,7 @@ describe('Réglages › Sauvegardes', () => {
     ] satisfies Me[]) {
       const router = renderApp(user, '/reglages/alertes');
       await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
+        expect(router.state.location.pathname).toBe('/reglages/apparence');
       });
       expect(await subTabs()).not.toContain('Alertes');
       cleanup();
@@ -220,7 +220,7 @@ describe('Réglages › Sauvegardes', () => {
       '/reglages/regles-de-paie',
     );
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/reglages/modeles-ia');
+      expect(router.state.location.pathname).toBe('/reglages/apparence');
     });
     expect(await subTabs()).not.toContain('Règles de paie');
   });

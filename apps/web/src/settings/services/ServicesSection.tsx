@@ -6,6 +6,7 @@ import { PasswordPrompt, SignInAgain } from './PasswordPrompt';
 import {
   disconnect,
   fetchOverview,
+  isForbidden,
   isSessionExpired,
   ReauthRequired,
   showError,
@@ -20,7 +21,9 @@ import './services.css';
 const REFRESH_MS = 30_000;
 
 type Load =
-  { kind: 'loading' } | { kind: 'failed'; error: ShownError } | { kind: 'ready'; overview: ProviderOverview };
+  | { kind: 'loading' }
+  | { kind: 'failed'; error: ShownError; isForbidden: boolean }
+  | { kind: 'ready'; overview: ProviderOverview };
 type Sheet = { provider: DashboardProvider; isReplace: boolean } | null;
 /** `warning`: nothing failed in Nirvana, the provider did not answer and the last verification stands. */
 type Notice = ShownError & { tone: 'error' | 'warning' };
@@ -61,7 +64,11 @@ export function ServicesSection(): JSX.Element {
     } catch (error) {
       if (ticket !== latest.current) return;
       const shown = showError(error);
-      setLoad((current) => (current.kind === 'ready' ? current : { kind: 'failed', error: shown }));
+      setLoad((current) =>
+        current.kind === 'ready'
+          ? current
+          : { kind: 'failed', error: shown, isForbidden: isForbidden(error) },
+      );
       // The list already on screen stays, but an expired session must not go unnoticed.
       if (isSessionExpired(error)) setNotice({ ...shown, tone: 'error' });
     }
@@ -130,9 +137,13 @@ export function ServicesSection(): JSX.Element {
       <section className="sv-page" aria-busy={load.kind === 'loading'}>
         {load.kind === 'failed' ? (
           <div className="nv-plate sv-next">
-            <p className="sv-lead">L’état des clés n’a pas pu être lu</p>
+            <p className="sv-lead">
+              {load.isForbidden
+                ? 'Seul le propriétaire règle les modèles IA'
+                : 'L’état des clés n’a pas pu être lu'}
+            </p>
             <p className="sv-muted">{load.error.message}</p>
-            {load.error.isSessionExpired ? (
+            {load.isForbidden ? null : load.error.isSessionExpired ? (
               <SignInAgain />
             ) : (
               <button

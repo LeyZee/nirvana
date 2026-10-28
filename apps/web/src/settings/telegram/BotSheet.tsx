@@ -1,5 +1,6 @@
 import type { TelegramBot, TelegramChat, TelegramTopic } from '@nirvana/contracts';
 import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ReauthRequired } from '../services/api';
 
@@ -127,7 +128,9 @@ export function BotSheet({
 
 function CreateStep({ onNext }: { onNext: () => void }): JSX.Element {
   const [name, setName] = useState('Nirvana Alertes');
-  const username = suggestedUsername(name);
+  // The identifier follows the name the chip offers, the default one when the field is emptied.
+  const shownName = name.trim() === '' ? 'Nirvana Alertes' : name.trim();
+  const username = suggestedUsername(shownName);
   return (
     <>
       <h2 id="tg-sheet-title">Crée ton bot</h2>
@@ -151,7 +154,7 @@ function CreateStep({ onNext }: { onNext: () => void }): JSX.Element {
                 setName(event.target.value);
               }}
             />
-            <CopyChip value={name.trim() === '' ? 'Nirvana Alertes' : name.trim()} />
+            <CopyChip value={shownName} />
           </div>
         </li>
         <li>
@@ -675,7 +678,8 @@ function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void
       window.removeEventListener('keydown', onKey);
     };
   }, []);
-  return (
+  // Portalled to <body>: an ancestor's transform or filter (the page's entrance) would otherwise trap the fixed scrim.
+  return createPortal(
     <div
       className="tg-scrim"
       onMouseDown={(event) => {
@@ -705,6 +709,7 @@ function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

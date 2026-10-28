@@ -1,5 +1,6 @@
 import type { ProviderStatus, ProviderVoice } from '@nirvana/contracts';
 import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { PasswordPrompt, SignInAgain } from './PasswordPrompt';
 import { connectKey, ReauthRequired, saveSettings, showError, type ShownError } from './api';
@@ -444,7 +445,8 @@ function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void
     },
     [opener],
   );
-  return (
+  // Portalled to <body>: an ancestor's transform or filter (the page's entrance) would otherwise trap the fixed scrim.
+  return createPortal(
     <div
       className="sv-scrim"
       onMouseDown={(event) => {
@@ -474,6 +476,7 @@ function Scrim({ children, onClose }: { children: ReactNode; onClose: () => void
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

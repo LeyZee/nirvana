@@ -9,12 +9,14 @@ import type {
 import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState, type JSX, type KeyboardEvent } from 'react';
 
+import { distinctNames } from '../names';
 import { ReauthRequired } from '../services/api';
 
 import { BotSheet, type SheetMode } from './BotSheet';
 import { GroupPreview, PreviewMessage } from './Preview';
 import { Reauth } from './Reauth';
 import {
+  TelegramForbidden,
   TelegramOff,
   fetchAlertKeywords,
   fetchDeliveries,
@@ -53,7 +55,11 @@ const REFRESH_MS = 30_000;
 const OFFLINE = 'Le serveur ne répond pas. Réessaie dans un instant.';
 
 type Load =
-  { kind: 'loading' } | { kind: 'failed' } | { kind: 'off' } | { kind: 'ready'; overview: TelegramOverview };
+  | { kind: 'loading' }
+  | { kind: 'failed' }
+  | { kind: 'off' }
+  | { kind: 'forbidden' }
+  | { kind: 'ready'; overview: TelegramOverview };
 type Tab = TelegramTab;
 
 const TABS: readonly { key: Tab; label: string }[] = [
@@ -98,12 +104,18 @@ export function TelegramSection({
       const overview = await fetchOverview();
       if (ticket !== latest.current) return;
       version.current = overview.version;
-      setLoad({ kind: 'ready', overview });
+      // Two creators of the same name stay apart on the chips.
+      const coverage = distinctNames(overview.coverage, (creator) => creator.creatorId);
+      setLoad({ kind: 'ready', overview: { ...overview, coverage } });
       setNow(new Date());
     } catch (error) {
       if (ticket !== latest.current) return;
       if (error instanceof TelegramOff) {
         setLoad({ kind: 'off' });
+        return;
+      }
+      if (error instanceof TelegramForbidden) {
+        setLoad({ kind: 'forbidden' });
         return;
       }
       setLoad((current) => (current.kind === 'ready' ? current : { kind: 'failed' }));
@@ -116,12 +128,13 @@ export function TelegramSection({
   }, [refresh]);
 
   useEffect(() => {
-    if (sheet !== null) return undefined;
+    // Neither a sheet open nor a page the server refuses (not the owner) is read again on a timer.
+    if (sheet !== null || load.kind === 'forbidden') return undefined;
     const timer = window.setInterval(() => void refresh(), REFRESH_MS);
     return () => {
       window.clearInterval(timer);
     };
-  }, [refresh, sheet]);
+  }, [refresh, sheet, load.kind]);
 
   /** Shows the new routing at once, then saves it; a refusal puts back what the server holds. */
   const applyRoutes = useCallback(
@@ -174,6 +187,16 @@ export function TelegramSection({
             </div>
           </div>
         ) : null}
+        {load.kind === 'forbidden' ? (
+          <div className="nv-plate tg-cover">
+            <div>
+              <p className="tg-cover__title">Seul le propriétaire règle Telegram</p>
+              <p className="tg-cover__sub">
+                Les bots, les groupes et qui reçoit quelles alertes se règlent depuis son compte.
+              </p>
+            </div>
+          </div>
+        ) : null}
         {load.kind === 'off' ? (
           <div className="nv-plate tg-cover" data-state="warn">
             <div>
@@ -197,6 +220,9 @@ export function TelegramSection({
   };
   const openAdd = (): void => {
     setSheet({ kind: 'add' });
+  };
+  const openBots = (): void => {
+    setTab('bots');
   };
 
   return (
@@ -231,6 +257,7 @@ export function TelegramSection({
             onScope={setScope}
             onToggle={toggle}
             onAdd={openAdd}
+            onRepair={openBots}
           />
         ) : tab === 'sales' ? (
           <SalesTab
@@ -240,9 +267,16 @@ export function TelegramSection({
             onScope={setScope}
             onToggle={toggle}
             onAdd={openAdd}
+            onRepair={openBots}
           />
         ) : tab === 'keywords' ? (
-          <KeywordsTab overview={overview} choices={choices} onToggle={toggle} onAdd={openAdd} />
+          <KeywordsTab
+            overview={overview}
+            choices={choices}
+            onToggle={toggle}
+            onAdd={openAdd}
+            onRepair={openBots}
+          />
         ) : tab === 'validations' ? (
           <ValidationsTab
             overview={overview}
@@ -251,6 +285,7 @@ export function TelegramSection({
             onScope={setScope}
             onToggle={toggle}
             onAdd={openAdd}
+            onRepair={openBots}
           />
         ) : (
           <BotsTab
@@ -422,6 +457,8 @@ interface RoutingProps {
   readonly choices: readonly ChatChoice[];
   readonly onToggle: (topic: TelegramTopic, chatId: TelegramChatId, at?: Scope) => void;
   readonly onAdd: () => void;
+  /** Opens Bots et groupes, where a refused bot is repaired. */
+  readonly onRepair: () => void;
 }
 
 interface ScopedProps extends RoutingProps {
@@ -482,8 +519,17 @@ function ChatChips({
   topic,
   onToggle,
   onAdd,
+  onRepair,
 }: RoutingProps & { scope: Scope; topic: TelegramTopic }): JSX.Element {
   const reachable = choices.filter((c) => c.isReachable);
+  // Groups that exist but cannot be written to: a new bot would not help, the one in place needs fixing.
+  if (reachable.length === 0 && choices.length > 0) {
+    return (
+      <button type="button" className="nv-btn nv-btn--plain nv-btn--sm tg-self-start" onClick={onRepair}>
+        {choices.some((c) => c.bot.state !== 'active') ? 'Réparer le bot' : 'Voir les groupes'}
+      </button>
+    );
+  }
   if (reachable.length === 0) {
     return (
       <button type="button" className="nv-btn nv-btn--plain nv-btn--sm tg-self-start" onClick={onAdd}>
@@ -782,7 +828,7 @@ function CreatorKeywords({
             ))}
           </div>
         ) : null}
-        {words.kind === 'ready' && !words.isActive ? (
+        {words.kind === 'ready' && !words.isActive && words.words.length > 0 ? (
           <p className="tg-hint">
             Ces mots viennent de sa dernière version, pas encore activée : l’agent les appliquera quand elle
             le sera.
@@ -1023,9 +1069,11 @@ function BotsTab({
                         <p>
                           <b>Supprimer {bot.displayName} ?</b>{' '}
                           <span className="tg-hint">
-                            {botChoices.length > 0
-                              ? `Ses ${plural(botChoices.length, 'groupe')} ne recevront plus rien. `
-                              : ''}
+                            {botChoices.length === 1
+                              ? 'Son groupe ne recevra plus rien. '
+                              : botChoices.length > 1
+                                ? `Ses ${plural(botChoices.length, 'groupe')} ne recevront plus rien. `
+                                : ''}
                             Le bot reste dans Telegram : pour l’effacer, envoie /deletebot à @BotFather.
                           </span>
                         </p>

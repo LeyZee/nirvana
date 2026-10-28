@@ -3,7 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReauthRequired } from '../services/api';
 
-import { TelegramOff, addBot, fetchAlertKeywords, fetchOverview, removeBot, saveRoutes } from './api';
+import {
+  TelegramForbidden,
+  TelegramOff,
+  addBot,
+  fetchAlertKeywords,
+  fetchOverview,
+  removeBot,
+  saveRoutes,
+} from './api';
 
 const bot = {
   id: newId(TelegramBotIdSchema),
@@ -57,6 +65,11 @@ describe('Telegram API client', () => {
     await expect(fetchOverview()).rejects.toBeInstanceOf(TelegramOff);
     answer(500, null);
     await expect(fetchOverview()).rejects.not.toBeInstanceOf(TelegramOff);
+  });
+
+  it('tells a member who is not the owner from a server that fails', async () => {
+    answer(403, { error: { code: 'role_forbidden', message: 'x', details: {}, requestId: 'r' } });
+    await expect(fetchOverview()).rejects.toBeInstanceOf(TelegramForbidden);
   });
 
   it('never takes a refused removal for a success', async () => {

@@ -145,6 +145,25 @@ describe('health and coverage', () => {
     expect(coverOf(overview({ bots: [] })).sub).toContain('Ajoute un bot');
   });
 
+  it('sends to the broken bot, not to a group to choose, when no group can be written to', () => {
+    const coverage = [
+      { creatorId: creator, displayName: 'Démo', urgentReachable: false, topicsWithoutGroup: [] },
+    ];
+    const refused = coverOf(
+      overview({ bots: [bot([chat(groupA, 'Astreinte')], { state: 'refused' })], coverage }),
+    );
+    expect(refused).toEqual({
+      isOk: false,
+      title: 'Les alertes ne partent plus',
+      sub: 'Telegram refuse le jeton d’un bot : remplace-le dans Bots et groupes.',
+    });
+    expect(refused.sub).not.toContain('Choisis');
+    const muted = coverOf(
+      overview({ bots: [bot([chat(groupA, 'Astreinte', { canPost: false })])], coverage }),
+    );
+    expect(muted.sub).toContain('administrateur');
+  });
+
   it('never offers a group the bot cannot post in', () => {
     const choices = chatChoices([
       bot([chat(groupA, 'Muet', { canPost: false })]),
@@ -215,6 +234,12 @@ describe('the sheet', () => {
     expect(suggestedUsername('Nirvana Alertes')).toBe('nirvana_alertes_bot');
     expect(suggestedUsername('Équipe nuit !')).toBe('equipe_nuit_bot');
     expect(suggestedUsername('   ')).toBe('nirvana_bot');
+    // @BotFather wants a letter first, and one « bot » at the end.
+    expect(suggestedUsername('3h Alertes')).toBe('nirvana_3h_alertes_bot');
+    expect(suggestedUsername('Nirvana Bot')).toBe('nirvana_bot');
+    expect(suggestedUsername('Robot')).toBe('robot');
+    expect(suggestedUsername('A'.repeat(40))).toBe(`${'a'.repeat(28)}_bot`);
+    expect(suggestedUsername('Bot')).toBe('nirvana_bot');
   });
 
   it('draws two letters for a group, an emoji as one', () => {

@@ -119,6 +119,37 @@ describe('/v1/settings/providers', () => {
     expect(providers.apiKeySource('xai')).toBeUndefined();
   });
 
+  it('answers an obvious mistake before asking for the password, never before the owner check', async () => {
+    const { app, headers } = await server();
+    const url = '/v1/settings/providers/xai/key';
+    const stale = { ...headers, 'x-test-stale': '1' };
+    const short = await app.inject({ method: 'PUT', url, headers: stale, payload: { key: 'court' } });
+    expect(short.statusCode).toBe(422);
+    expect(short.json()).toMatchObject({ kind: 'too_short' });
+    const misplaced = await app.inject({
+      method: 'PUT',
+      url: '/v1/settings/providers/mistral/key',
+      headers: stale,
+      payload: { key: 'sk_FAKEFAKEFAKEFAKEFAKEFAKE0000' },
+    });
+    expect(misplaced.json()).toEqual({
+      kind: 'wrong_provider',
+      message: 'Cette clé vient d’ElevenLabs : elle va dans ElevenLabs.',
+    });
+    // A key that could be right still asks for the password first.
+    const plausible = await app.inject({ method: 'PUT', url, headers: stale, payload: { key: XAI_KEY } });
+    expect(plausible.statusCode).toBe(403);
+    expect(plausible.body).toContain('reauthentication_forbidden');
+    const stranger = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { origin: headers.origin },
+      payload: { key: 'court' },
+    });
+    expect(stranger.statusCode).toBe(403);
+    expect(stranger.body).not.toContain('too_short');
+  });
+
   it('refuses settings for a service without a key, and an unknown service', async () => {
     const { app, headers } = await server();
     const settings = await app.inject({

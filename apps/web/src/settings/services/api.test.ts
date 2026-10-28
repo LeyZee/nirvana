@@ -19,6 +19,7 @@ const status = {
   source: 'dashboard',
   keyLabel: 'nirvana-prod',
   verifiedAt: '2026-10-17T20:00:00.000Z',
+  isUnreadable: false,
   message: 'Grok 4.7 écrit et décide',
   facts: [{ label: 'Modèle', value: 'Grok 4.7' }],
   settings: {},

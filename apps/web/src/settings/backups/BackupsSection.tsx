@@ -44,6 +44,8 @@ export function BackupsSection(): JSX.Element {
   const now = new Date();
   const copy = exportViewOf(status.data, now);
   const restore = restoreViewOf(status.data, now);
+  // A test restores a copy that succeeded and checks its fingerprint: without one, any test would be refused.
+  const hasCopy = status.data.lastSucceededAt !== null;
 
   return (
     <section className="bk-page">
@@ -86,13 +88,20 @@ export function BackupsSection(): JSX.Element {
         {restore.validity === null ? null : <p className="bk-validity">{restore.validity}</p>}
         <button
           type="button"
-          className="nv-btn nv-btn--neon bk-self-start"
+          className={`nv-btn ${hasCopy ? 'nv-btn--neon' : 'nv-btn--soft'} bk-self-start`}
+          disabled={!hasCopy}
+          aria-describedby={hasCopy ? undefined : 'bk-restore-needs-copy'}
           onClick={() => {
             setIsOpen(true);
           }}
         >
           Noter un essai
         </button>
+        {hasCopy ? null : (
+          <p id="bk-restore-needs-copy" className="bk-meta">
+            Il faut d’abord une sauvegarde réussie à restaurer.
+          </p>
+        )}
         <details className="nv-disclosure bk-how">
           <summary>
             <span className="nv-disclosure__title">Comment se joue un essai</span>

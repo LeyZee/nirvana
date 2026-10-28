@@ -622,7 +622,9 @@
   height: 100%;
 }
 .nv-page > * {
-  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
+  /* backwards, not both: a fill that outlives the entrance keeps a transform and a filter on the section, which then
+     traps any position: fixed descendant (a sheet's scrim) inside it. */
+  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) backwards;
 }
 .nv-page > *:nth-child(2) {
   animation-delay: var(--nv-stagger);

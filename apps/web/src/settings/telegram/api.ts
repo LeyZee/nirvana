@@ -31,6 +31,9 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 /** `GET /v1/settings/telegram` is not served: the server runs without Telegram (no encryption key, ADR 0020). */
 export class TelegramOff extends Error {}
 
+/** The server answers 403 `role_forbidden`: Telegram is the owner's alone (`requireRole('owner')`). */
+export class TelegramForbidden extends Error {}
+
 export type Outcome<T> = { ok: true; value: T } | { ok: false; refusal: TelegramRefusal };
 
 /** 422 and 409 carry a refusal with its French sentence; anything else that is not 2xx throws. */
@@ -39,6 +42,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
   if (response.status === 403) {
     const body = ApiErrorSchema.safeParse(await response.json().catch(() => null));
     if (body.success && body.data.error.code === REAUTHENTICATION_ERROR_CODE) throw new ReauthRequired();
+    if (body.success && body.data.error.code === 'role_forbidden') throw new TelegramForbidden();
   }
   if (response.status === 404 && path === '') throw new TelegramOff();
   if (!response.ok && response.status !== 422 && response.status !== 409)

@@ -339,19 +339,37 @@ const settings = createRoute({
 const settingsIndex = createRoute({
   getParentRoute: () => settings,
   path: '/',
-  beforeLoad: () => {
+  // The owner lands on Modèles IA; anyone else on Apparence, the first tab the server lets them use.
+  beforeLoad: ({ context }) => {
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
-    throw redirect({ to: '/reglages/modeles-ia', replace: true });
+    throw redirect({
+      to: context.user.role === 'owner' ? '/reglages/modeles-ia' : '/reglages/apparence',
+      replace: true,
+    });
   },
 });
 const aiModels = createRoute({
   getParentRoute: () => settings,
   path: '/modeles-ia',
+  // The owner's alone, as the server serves the keys: anyone else is sent to Réglages.
+  beforeLoad: ({ context }) => {
+    if (context.user.role !== 'owner') {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: '/reglages', replace: true });
+    }
+  },
   component: AiModelsPage,
 });
 const telegram = createRoute({
   getParentRoute: () => settings,
   path: '/telegram',
+  // The owner's alone too (fiche P3-07).
+  beforeLoad: ({ context }) => {
+    if (context.user.role !== 'owner') {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+      throw redirect({ to: '/reglages', replace: true });
+    }
+  },
   validateSearch: parseTelegramSearch,
   component: function Telegram() {
     const search = telegram.useSearch();

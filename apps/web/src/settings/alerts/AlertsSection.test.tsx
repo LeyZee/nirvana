@@ -290,6 +290,35 @@ describe('her own alerts', () => {
     });
   });
 
+  it('says in words why a keyword is refused, a double or one with nothing to match', async () => {
+    serve({ ...BASE, 'GET /v1/alerts': ok({ custom: [], system: SYSTEM }) });
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Nouvelle alerte' }));
+    const form = screen.getByRole('form', { name: 'Nouvelle alerte' });
+    const words = within(form).getByLabelText('Mots-clés');
+    for (const word of ['appel', 'APPEL']) {
+      fireEvent.change(words, { target: { value: word } });
+      fireEvent.keyDown(words, { key: 'Enter' });
+    }
+    expect(within(form).getByText('Déjà dans la liste.').getAttribute('role')).toBe('status');
+    expect(words.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.change(words, { target: { value: '!!!' } });
+    expect(within(form).queryByText('Déjà dans la liste.')).toBeNull();
+    fireEvent.keyDown(words, { key: 'Enter' });
+    expect(within(form).getByText('Il faut au moins une lettre ou un chiffre.').getAttribute('role')).toBe(
+      'status',
+    );
+    expect(within(form).queryByText('!!!', { selector: '.ps-entry__text' })).toBeNull();
+  });
+
+  it('keeps one editor open at a time, so that no change is dropped without a word', async () => {
+    serve(BASE);
+    renderSection();
+    fireEvent.click(within(await line('Vidéo perso')).getByRole('button', { name: 'Modifier' }));
+    expect(screen.getByRole('form', { name: 'Modifier « Vidéo perso »' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Nouvelle alerte' })).toBeNull();
+  });
+
   it('turns one off for all its creators from its line', async () => {
     const calls = serve({
       ...BASE,

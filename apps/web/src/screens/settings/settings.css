@@ -1,0 +1,11 @@
+/* Réglages' frame. Only what the design system has no class for, prefixed `st-`. */
+
+/*
+ * « Se déconnecter » lives in the user menu on a wide screen. Not Tailwind's `md:hidden`: `.nv-btn` sits outside any
+ * cascade layer, so it beats a layered utility and the button showed on a computer (recette du 28/10).
+ */
+@media (width >= 48rem) {
+  .nv-btn.st-signout {
+    display: none;
+  }
+}
