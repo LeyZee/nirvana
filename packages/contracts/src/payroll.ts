@@ -470,10 +470,11 @@ export const CollectiveReachedSchema = z.object({
 });
 
 /**
- * How the owner paid a statement (ADR 0023 § Factures): a closed list the screen says in French. A new method is a
- * migration of the check on `commission_statements.payment_method`, never free text.
+ * How the owner paid a statement (ADR 0023 § Factures): a closed list the screen says in French. The chatters are paid
+ * by WorldRemit only (Charles, 28/10/2026); a new method is a migration of the check on
+ * `commission_statements.payment_method`, never free text.
  */
-export const PAYMENT_METHODS = ['bank_transfer', 'wise', 'paypal', 'other'] as const;
+export const PAYMENT_METHODS = ['worldremit'] as const;
 export const PaymentMethodSchema = z.enum(PAYMENT_METHODS);
 export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
 
@@ -509,7 +510,7 @@ function ibanCheckPasses(candidate: string): boolean {
 
 /**
  * Whether `text` holds an IBAN anywhere: kept to its letters and digits in capitals, some window of it starts with a
- * country code and two digits, has that country's exact length, and passes mod 97. « Virement FR76 3000… » is one.
+ * country code and two digits, has that country's exact length, and passes mod 97. « Transfert FR76 3000… » is one.
  */
 export function containsIban(text: string): boolean {
   const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -532,7 +533,7 @@ const PaymentReferenceSchema = z
   .trim()
   .min(1)
   .max(PAYMENT_REFERENCE_MAX)
-  .refine((reference) => !containsIban(reference), 'Une référence de virement, jamais un IBAN');
+  .refine((reference) => !containsIban(reference), 'Une référence de transfert, jamais un IBAN');
 
 /** What was sent, in euro cents: never nothing. */
 const SentMinorSchema = z.number().int().min(1).max(PAY_AMOUNT_MAX_MINOR);

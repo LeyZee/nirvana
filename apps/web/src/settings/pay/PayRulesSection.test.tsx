@@ -37,13 +37,14 @@ function serve(): void {
       const url = new URL(input, 'http://localhost');
       const json = (body: unknown, status = 200) =>
         Promise.resolve(new Response(JSON.stringify(body), { status }));
-      if (init?.method === 'POST') {
+      if (init?.method === 'POST' || init?.method === 'PUT') {
         writes.push({
           path: url.pathname,
           body: typeof init.body === 'string' ? JSON.parse(init.body) : null,
         });
         return json(answer.body, answer.status);
       }
+      if (url.pathname === '/v1/payroll/settings') return json({ minimumPayoutMinor: 1_500 });
       if (url.pathname === '/v1/team/pay-rules') {
         return json({
           currentPeriod: '2026-10-16',
@@ -139,6 +140,25 @@ describe('Réglages › Règles de paie', () => {
         earningsSource: 'declared',
       },
     });
+  });
+
+  it('changes the payout minimum for the whole team after a recap', async () => {
+    answer = { status: 200, body: { minimumPayoutMinor: 2_000 } };
+    renderSection();
+    const minimum = (await screen.findByText('Minimum de versement')).closest<HTMLElement>('.rp-account');
+    if (minimum === null) throw new Error('No minimum');
+    fireEvent.click(await within(minimum).findByRole('button', { name: 'Changer' }));
+    expect(plain(minimum.querySelector('.rp-account__rules')?.textContent)).toBe('15,00 €');
+    const dialog = screen.getByRole('dialog', { name: 'Minimum de versement' });
+    fireEvent.change(within(dialog).getByLabelText('Minimum'), { target: { value: '20' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(plain(within(dialog).getByText(/^Sous/u).textContent)).toBe(
+      'Sous 20,00 €, un relevé ne verse rien et reporte son total sur la quinzaine suivante.',
+    );
+    expect(writes).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer le minimum' }));
+    await act(() => Promise.resolve());
+    expect(writes).toEqual([{ path: '/v1/payroll/settings', body: { minimumPayoutMinor: 2_000 } }]);
   });
 
   it('starts new rules of an account from its last ones, never from a period that has begun', async () => {

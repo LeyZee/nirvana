@@ -77,9 +77,9 @@ describe('the rail of each role', () => {
   it('gives the owner his tabs in the order of ADR 0024, under Chatting and Agence', async () => {
     renderApp(owner, '/');
     await screen.findByText('Chatting');
-    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Équipe', 'Créatrices', 'Réglages']);
+    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Entraîner', 'Équipe', 'Paie', 'Créatrices', 'Réglages']);
     expect(screen.getByText('Agence')).toBeDefined();
-    // Six places: the phone keeps four on its bar and folds the rest under « Plus ».
+    // Seven places: the phone keeps four on its bar and folds the rest under « Plus ».
     expect(screen.getByRole('button', { name: 'Plus' })).toBeDefined();
     expect(screen.getByText('Propriétaire')).toBeDefined();
   });
@@ -105,7 +105,7 @@ describe('the rail of each role', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/aujourdhui');
     });
-    expect(tabs()).toEqual(['Aujourd’hui', 'Suivi', 'Planning']);
+    expect(tabs()).toEqual(['Aujourd’hui', 'Suivi', 'Planning', 'Commissions']);
     expect(screen.getByText('Chatteur')).toBeDefined();
     // No Dashboard in his rail: no agent pill reading it either.
     expect(screen.queryByText('Agent')).toBeNull();
@@ -130,7 +130,7 @@ describe('the rail of each role', () => {
   it('names a manager on leave a manager, though he has the chatter’s rail', async () => {
     renderApp({ ...manager, team: { role: 'manager', status: 'on_leave' }, teamScope: 'self' }, '/suivi');
     expect(await screen.findByText('Manager')).toBeDefined();
-    expect(tabs()).toEqual(['Aujourd’hui', 'Suivi', 'Planning']);
+    expect(tabs()).toEqual(['Aujourd’hui', 'Suivi', 'Planning', 'Commissions']);
   });
 
   it('sends a creator who opens Suivi to the Dashboard: she never sees a conversation', async () => {
@@ -150,7 +150,7 @@ describe('the rail of each role', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/');
     });
-    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Équipe']);
+    expect(tabs()).toEqual(['Dashboard', 'Suivi', 'Équipe', 'Paie']);
   });
 });
 

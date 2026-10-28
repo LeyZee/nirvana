@@ -86,6 +86,7 @@ describe('an amount typed in a report', () => {
     expect(parseAmount('-5')).toBeNull();
     expect(parseAmount('50000,01')).toBeNull();
     expect(parseAmount('50000')).toBe(5_000_000);
+    expect(parseAmount('150 000', false, 100_000_000)).toBe(15_000_000);
   });
 
   it('takes a sign on a correction', () => {
@@ -99,8 +100,13 @@ describe('an amount typed in a report', () => {
     expect(amountInput(-3_005)).toBe('-30,05');
     expect(plain(amountText(123_456, 'EUR'))).toBe('1 234,56 €');
     expect(plain(amountText(8_000, 'USD'))).toBe('80,00 $US');
-    expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('− 30,00 €');
-    expect(plain(signedAmountText(500, 'EUR'))).toBe('+ 5,00 €');
+    expect(plain(amountText(-3_000, 'EUR'))).toBe('−30,00 €');
+    expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('−30,00 €');
+    expect(plain(signedAmountText(500, 'EUR'))).toBe('+5,00 €');
+    expect(plain(signedAmountText(-123_456, 'USD'))).toBe('−1 234,56 $US');
+    // A zero is a zero, whatever its sign: never « −0,00 € ».
+    expect(plain(amountText(-0, 'EUR'))).toBe('0,00 €');
+    expect(plain(signedAmountText(-0, 'EUR'))).toBe('0,00 €');
   });
 });
 
@@ -191,6 +197,8 @@ describe('a rate', () => {
     expect(parsePercent('5,5 %')).toBe(550);
     expect(parsePercent('100')).toBe(10_000);
     expect(parsePercent('100,01')).toBeNull();
+    expect(parsePercent('1000')).toBeNull();
+    expect(parsePercent('120', 100_000)).toBe(12_000);
     expect(parsePercent('vingt')).toBeNull();
   });
 });

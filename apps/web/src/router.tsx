@@ -9,7 +9,13 @@ import {
 
 import { CreatorsPage } from './creators/CreatorsPage';
 import { parseCreatorsSearch } from './creators/search';
+import { parsePaySearch } from './payroll/model';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { CommissionsPage } from './screens/pay/CommissionsPage';
+import { EntriesPage } from './screens/pay/EntriesPage';
+import { GoalsPage } from './screens/pay/GoalsPage';
+import { PeriodPage } from './screens/pay/PeriodPage';
+import { PeriodsPage } from './screens/pay/PeriodsPage';
 import { MyPlanningPage } from './screens/planning/MyPlanningPage';
 import { AppearancePage } from './screens/settings/AppearancePage';
 import {
@@ -205,6 +211,90 @@ const teamMembers = createRoute({
   },
 });
 
+const pay = createRoute({ getParentRoute: () => rootRoute, path: '/paie' });
+const payIndex = createRoute({
+  getParentRoute: () => pay,
+  path: '/',
+  beforeLoad: () => {
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
+    throw redirect({ to: '/paie/quinzaine', replace: true });
+  },
+});
+const payPeriod = createRoute({
+  getParentRoute: () => pay,
+  path: '/quinzaine',
+  validateSearch: parsePaySearch,
+  component: function PayPeriod() {
+    const { quinzaine } = payPeriod.useSearch();
+    const navigate = payPeriod.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <PeriodPage
+        user={user}
+        chosen={quinzaine ?? null}
+        onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
+      />
+    );
+  },
+});
+const payEntries = createRoute({
+  getParentRoute: () => pay,
+  path: '/primes-malus',
+  validateSearch: parsePaySearch,
+  component: function PayEntries() {
+    const { quinzaine } = payEntries.useSearch();
+    const navigate = payEntries.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <EntriesPage
+        user={user}
+        chosen={quinzaine ?? null}
+        onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
+      />
+    );
+  },
+});
+const payGoals = createRoute({
+  getParentRoute: () => pay,
+  path: '/objectifs',
+  validateSearch: parsePaySearch,
+  component: function PayGoals() {
+    const { quinzaine } = payGoals.useSearch();
+    const navigate = payGoals.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <GoalsPage
+        user={user}
+        chosen={quinzaine ?? null}
+        onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
+      />
+    );
+  },
+});
+const payPeriods = createRoute({
+  getParentRoute: () => pay,
+  path: '/releves',
+  component: function PayPeriods() {
+    const navigate = payPeriods.useNavigate();
+    const { user } = rootRoute.useRouteContext();
+    return (
+      <PeriodsPage
+        user={user}
+        onOpen={(period) => void navigate({ to: '/paie/quinzaine', search: { quinzaine: period } })}
+      />
+    );
+  },
+});
+
+const commissions = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/commissions',
+  component: function Commissions() {
+    const { user } = rootRoute.useRouteContext();
+    return <CommissionsPage user={user} />;
+  },
+});
+
 const train = createRoute({ getParentRoute: () => rootRoute, path: '/entrainer', component: TrainLayout });
 const trainIndex = createRoute({
   getParentRoute: () => train,
@@ -312,6 +402,8 @@ const routeTree = rootRoute.addChildren([
   today,
   myPlanning,
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
+  pay.addChildren([payIndex, payPeriod, payPeriods, payEntries, payGoals]),
+  commissions,
   settings.addChildren([
     settingsIndex,
     aiModels,

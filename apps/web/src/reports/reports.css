@@ -50,18 +50,30 @@
   display: block;
   margin-top: 2px;
 }
+/* A notice's mark is a straight bar beside its text, from its first line to its last: an inset shadow on a rounded box
+   follows the corner and reads as a bracket. No overflow: hidden, so the glow of a button inside is never cut. */
 .rp-notice {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: var(--nv-space-4);
   border-radius: var(--nv-radius-md);
   background: var(--nv-glass-fill);
-  box-shadow: inset 3px 0 0 var(--nv-ink-faint);
+}
+.rp-notice::before {
+  content: '';
+  position: absolute;
+  inset: var(--nv-space-4) auto var(--nv-space-4) 0;
+  width: 3px;
+  border-radius: 0 var(--nv-radius-full) var(--nv-radius-full) 0;
+  background: var(--nv-ink-faint);
 }
 .rp-notice[data-tone='warn'] {
   background: color-mix(in srgb, var(--nv-warning) 9%, var(--nv-glass-fill));
-  box-shadow: inset 3px 0 0 var(--nv-warning);
+}
+.rp-notice[data-tone='warn']::before {
+  background: var(--nv-warning);
 }
 .rp-notice__title {
   margin: 0;
@@ -876,9 +888,6 @@
 .rp-account:hover {
   background: var(--nv-plate-hover);
 }
-.rp-account[data-missing='true'] {
-  box-shadow: inset 3px 0 0 var(--nv-warning);
-}
 .rp-account__head {
   display: flex;
   flex-wrap: wrap;
@@ -902,11 +911,11 @@
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
 }
+/* An account without rules: the notice above the list says it once, the card stays neutral and its button acts. */
 .rp-account__none {
   margin: 0;
-  color: var(--nv-warning);
+  color: var(--nv-ink-muted);
   font-size: var(--nv-text-footnote);
-  font-weight: 600;
 }
 .rp-account__now,
 .rp-account__next {

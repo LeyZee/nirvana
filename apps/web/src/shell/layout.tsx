@@ -101,12 +101,21 @@ export interface SubNavItem {
   readonly count?: number;
 }
 
+/** The thumb put under the active tab at once, with no slide. */
+function placeStill(nav: HTMLElement, active: HTMLElement, thumb: HTMLElement | undefined): void {
+  thumb?.style.setProperty('transition', 'none');
+  placeTabBarLens(nav, active);
+  thumb?.getBoundingClientRect();
+  thumb?.style.removeProperty('transition');
+}
+
 /** The screens of a section, as tabs. The active one follows the URL; its glass slides from tab to tab. */
 export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: string }): JSX.Element {
   const pathname = useRouterState({ select: (router) => router.location.pathname });
   const navRef = useRef<HTMLElement>(null);
   const thumbRef = useRef<HTMLSpanElement>(null);
   const placed = useRef(false);
+  const counts = items.map((item) => item.count ?? 0).join(',');
 
   useLayoutEffect(() => {
     const nav = navRef.current;
@@ -118,12 +127,18 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
       return;
     }
     // First paint: the thumb appears in place, without sliding in from the left or squashing.
-    thumb?.style.setProperty('transition', 'none');
-    placeTabBarLens(nav, active);
-    thumb?.getBoundingClientRect();
-    thumb?.style.removeProperty('transition');
+    placeStill(nav, active, thumb);
     placed.current = true;
   }, [pathname]);
+
+  // A count that arrives after the tabs (Paie's « Quinzaine 4 ») widens its tab and moves the others: the thumb
+  // follows them where they are, without sliding.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (!placed.current || nav === null || !(active instanceof HTMLElement)) return;
+    placeStill(nav, active, thumbRef.current ?? undefined);
+  }, [counts]);
 
   // On a phone a section's tabs can be wider than the screen: the nav scrolls, keeps the active tab in view and fades
   // the edge that hides more tabs, so none is cut off without a sign.

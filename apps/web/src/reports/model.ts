@@ -24,9 +24,9 @@ const NBSP = '\u00a0';
 
 /**
  * A typed amount in minor units: « 1 234,56 », « 1234.5 », « 12 € »; a sign only where it is allowed (a correction).
- * `null` for anything else: letters, three decimals, more than the slip guard.
+ * `null` for anything else: letters, three decimals, more than `max` (the slip guard, or a target's ceiling).
  */
-export function parseAmount(text: string, signed = false): number | null {
+export function parseAmount(text: string, signed = false, max = SHIFT_REPORT_MAX_MINOR): number | null {
   const bare = text.replace(/[\s\u00a0\u202f€$]/gu, '').replace(/^(EUR|USD)|(EUR|USD)$/giu, '');
   const match = /^([+\-−]?)(\d+)(?:[.,](\d{1,2}))?$/u.exec(bare);
   if (match === null) return null;
@@ -34,25 +34,33 @@ export function parseAmount(text: string, signed = false): number | null {
   if (sign !== '' && !signed) return null;
   if (units.length > 9) return null;
   const minor = Number(units) * 100 + Number(cents.padEnd(2, '0'));
-  if (minor > SHIFT_REPORT_MAX_MINOR) return null;
+  if (minor > max) return null;
   return sign === '-' || sign === '−' ? -minor : minor;
 }
 
-const MONEY = new Map<Currency, Intl.NumberFormat>();
+const MONEY = new Map<string, Intl.NumberFormat>();
 
-/** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */
-export function amountText(minor: number, currency: Currency): string {
-  let format = MONEY.get(currency);
+/** An amount in French, the true minus sign « − » in place of the hyphen `Intl` gives. */
+function money(minor: number, currency: Currency, signDisplay: 'auto' | 'exceptZero'): string {
+  const key = `${currency} ${signDisplay}`;
+  let format = MONEY.get(key);
   if (format === undefined) {
-    format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency });
-    MONEY.set(currency, format);
+    format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency, signDisplay });
+    MONEY.set(key, format);
   }
-  return format.format(minor / 100).replace('-', '−');
+  // A sum that cancels out can be -0 (« −5 + 5 » in a reduce): written « 0,00 € », never « −0,00 € ».
+  return format.format(minor === 0 ? 0 : minor / 100).replace('-', '−');
 }
 
-/** A correction's amount, its sign always said: « + 5,00 € », « − 30,00 € ». */
+/** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */
+export const amountText = (minor: number, currency: Currency): string => money(minor, currency, 'auto');
+
+/**
+ * An amount whose sign is always said, attached to its figure: « +5,00 € », « −30,00 € ». A correction, a bonus, a
+ * penalty, a gap: every signed amount of the team's screens reads through this one.
+ */
 export const signedAmountText = (minor: number, currency: Currency): string =>
-  `${minor < 0 ? '−' : '+'}${NBSP}${amountText(Math.abs(minor), currency)}`;
+  money(minor, currency, 'exceptZero');
 
 /** The figure an amount field shows back, without its currency: « 1234,56 ». */
 export const amountInput = (minor: number): string =>
@@ -75,10 +83,11 @@ export function periodLine(period: PayPeriod): string {
   return `du ${dayNumber(period)} au ${dayNumber(last)} ${MONTH.format(new Date(`${period}T12:00:00Z`))}`;
 }
 
-/** « 1er – 15 octobre 2026 »: a period as a title. */
-export function periodTitle(period: PayPeriod): string {
+/** « 1er – 15 octobre 2026 »: a period as a title; « 1er – 15 octobre » in a list that has room for no more. */
+export function periodTitle(period: PayPeriod, year = true): string {
   const last = payPeriodLastDay(period);
-  return `${dayNumber(period)} – ${dayNumber(last)} ${MONTH_YEAR.format(new Date(`${period}T12:00:00Z`))}`;
+  const month = (year ? MONTH_YEAR : MONTH).format(new Date(`${period}T12:00:00Z`));
+  return `${dayNumber(period)} – ${dayNumber(last)} ${month}`;
 }
 
 /** The period running at `now` in the agency's zone, which the periods follow (ADR 0023). */
@@ -218,13 +227,13 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
 export const percentText = (bps: number): string =>
   `${(bps / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}${NBSP}%`;
 
-/** A typed percentage in basis points, 0 to 100 with two decimals at most; `null` otherwise. */
-export function parsePercent(text: string): number | null {
-  const match = /^(\d{1,3})(?:[.,](\d{1,2}))?$/u.exec(text.replace(/[\s\u00a0%]/gu, ''));
+/** A typed percentage in basis points, 0 to `max` (100 %) with two decimals at most; `null` otherwise. */
+export function parsePercent(text: string, max = 10_000): number | null {
+  const match = /^(\d{1,4})(?:[.,](\d{1,2}))?$/u.exec(text.replace(/[\s\u00a0%]/gu, ''));
   if (match === null) return null;
   const [, units = '0', decimals = ''] = match;
   const bps = Number(units) * 100 + Number(decimals.padEnd(2, '0'));
-  return bps <= 10_000 ? bps : null;
+  return bps <= max ? bps : null;
 }
 
 /** The periods new rules may start with: the current one for an account's first rules, then the next ones. */

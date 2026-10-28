@@ -98,7 +98,7 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
     const payment = {
       revision: paid.revision,
       paidOn: '2025-05-20',
-      method: 'wise',
+      method: 'worldremit',
       sentMinor: paid.payableMinor,
     };
     expect(

@@ -282,7 +282,7 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
 
   it('lets the owner alone pay a validated statement, once, saying how', async () => {
     const { id, revision, payableMinor } = await team.statementOf(theo, Q2);
-    const payment = { revision, paidOn: '2025-06-02', method: 'bank_transfer', sentMinor: payableMinor };
+    const payment = { revision, paidOn: '2025-06-02', method: 'worldremit', sentMinor: payableMinor };
     const pay = (cookie: string, patch: Record<string, unknown> = {}) =>
       post(`/payroll/statements/${id}/pay`, cookie, { ...payment, ...patch });
     expect(team.refusal(await pay(monaCookie)).code).toBe('payroll_forbidden');
@@ -290,8 +290,8 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
     expect(team.refusal(await pay(team.owner, { revision: revision + 1 })).code).toBe(
       'commission_statement_changed_conflict',
     );
-    // A transfer to come, one before the period began (a slip of the year), another amount, a method off the list,
-    // no amount, an IBAN for a reference: nothing is written.
+    // A transfer to come, one before the period began (a slip of the year), another amount, a method off the list
+    // (0031's default ones included: WorldRemit only), no amount, an IBAN for a reference: nothing is written.
     const later = calendarDayAt(new Date(Date.now() + 2 * 86_400_000), 'Europe/Paris');
     expect(team.refusal(await pay(team.owner, { paidOn: later })).code).toBe(
       'payment_in_future_unprocessable',
@@ -305,22 +305,23 @@ describe('Équipe › Paie : primes, malus, ajustements et paiement (EQ-04, ADR 
       code: 'payment_amount_unprocessable',
       details: { payableMinor },
     });
-    expect((await pay(team.owner, { method: 'cash' })).statusCode).toBe(400);
+    for (const method of ['cash', 'bank_transfer', 'wise', 'paypal', 'other'])
+      expect((await pay(team.owner, { method })).statusCode, method).toBe(400);
     expect((await pay(team.owner, { sentMinor: undefined })).statusCode).toBe(400);
     expect(
-      (await pay(team.owner, { reference: 'Virement FR62 1234 5678 9000 00AB C123 456' })).statusCode,
+      (await pay(team.owner, { reference: 'Transfert FR62 1234 5678 9000 00AB C123 456' })).statusCode,
     ).toBe(400);
     expect((await team.statementOf(theo, Q2)).status).toBe('validated');
 
-    const paid = await pay(team.owner, { reference: '  VIR-0412 ' });
+    const paid = await pay(team.owner, { reference: '  WR-0412 ' });
     expect(paid.statusCode, paid.body).toBe(200);
     expect(CommissionStatementSchema.parse(paid.json())).toMatchObject({
       status: 'paid',
       paidBy: team.ownerId,
       payment: {
         paidOn: '2025-06-02',
-        method: 'bank_transfer',
-        reference: 'VIR-0412',
+        method: 'worldremit',
+        reference: 'WR-0412',
         sentMinor: payableMinor,
       },
     });
