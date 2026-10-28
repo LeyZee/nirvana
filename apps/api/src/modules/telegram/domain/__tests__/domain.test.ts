@@ -145,6 +145,24 @@ describe('classification (ADR 0020 §2)', () => {
     });
   });
 
+  it('says no ECB rate came for a currency since a day, or ever, without a figure of the pay', () => {
+    expect(classify({ kind: 'exchange_rate_overdue', currency: 'USD', lastRateDay: '2026-10-23' })).toEqual({
+      kind: 'notice',
+      topic: 'important',
+      threadKey: null,
+      title: 'Important',
+      body: 'Pas de nouveau taux USD de la BCE depuis le 23 oct. : une quinzaine qui finit sans taux récent ne pourra pas être clôturée.',
+      link: { label: 'Ouvrir le Dashboard', path: '/' },
+    });
+    // A calendar day, never shifted by a time zone: the 1st stays the 1st.
+    const first = classify({ kind: 'exchange_rate_overdue', currency: 'USD', lastRateDay: '2026-11-01' });
+    expect(first?.kind === 'notice' ? first.body : '').toContain('depuis le 1 nov. :');
+    expect(classify({ kind: 'exchange_rate_overdue', currency: 'USD', lastRateDay: null })).toMatchObject({
+      topic: 'important',
+      body: 'Aucun taux USD de la BCE n’est encore arrivé : une quinzaine payée en USD ne peut pas être clôturée.',
+    });
+  });
+
   it('says a message could not leave, as important, in the conversation’s thread', () => {
     expect(classify({ kind: 'send_failed', conversationId })).toEqual({
       kind: 'notice',

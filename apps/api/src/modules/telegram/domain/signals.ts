@@ -69,6 +69,15 @@ export type Signal =
       readonly lastSucceededAt: Date | null;
     }
   | {
+      /**
+       * No ECB rate of a currency pay converts for more than two weekdays (ADR 0033); `lastRateDay` is the ECB's day
+       * of the last one, null when none ever came.
+       */
+      readonly kind: 'exchange_rate_overdue';
+      readonly currency: string;
+      readonly lastRateDay: string | null;
+    }
+  | {
       /** Automatique closed on its own (ADR 0019): its conversations went back to the copilot. */
       readonly kind: 'automatic_closed';
       /** What the lock misses now, with the server's figures. */
