@@ -17,7 +17,6 @@ import { z } from 'zod';
 
 import type { FansService } from '../../application/fans';
 import { FanNotFound } from '../../domain/errors';
-import { kycSlotsToLearn } from '../../domain/facts';
 import { requestedChange, type FlagAuthor } from '../../domain/flags';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
@@ -127,7 +126,7 @@ export function createKycRoutes(
         actorFor(request, creatorId);
         const fanId = request.params.id;
         if ((await fans.getFan(creatorId, fanId)) === null) throw new FanNotFound();
-        return { fanId, toLearn: kycSlotsToLearn(slots, await fans.activeFacts(creatorId, fanId)) };
+        return { fanId, toLearn: await fans.kycToLearn(creatorId, fanId, slots) };
       },
     );
     return Promise.resolve();

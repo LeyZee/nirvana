@@ -59,15 +59,19 @@ function normalizeValue(value: string, category: FactCategory): string {
 }
 
 /**
- * The canvas lines still to learn, among `slots` and in their order (P5-01): a line is learnt once one of his active
- * facts has it as key (« Location » and « location » alike). A chatter's note never fills a line.
+ * The canvas lines still to learn, among `slots` and in their order (P5-01): a line is learnt once one of his facts
+ * still true at `now` has it as key (« Location » and « location » alike), however many facts he has. A chatter's note
+ * never fills a line.
  */
 export function kycSlotsToLearn(
   slots: readonly KycSlot[],
-  active: readonly Pick<StoredFact, 'category' | 'key'>[],
+  facts: readonly StoredFact[],
+  now: Date,
 ): KycSlot[] {
   const learnt = new Set(
-    active.filter((fact) => fact.category !== 'operator_note').map((fact) => normalizeKey(fact.key)),
+    facts
+      .filter((fact) => isActive(fact, now) && fact.category !== 'operator_note')
+      .map((fact) => normalizeKey(fact.key)),
   );
   return slots.filter((slot) => !learnt.has(slot));
 }

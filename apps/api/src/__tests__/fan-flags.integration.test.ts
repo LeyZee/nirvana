@@ -9,11 +9,13 @@ import {
 } from '@nirvana/contracts';
 import { and, eq, schema, withAdmin } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
+import type { preHandlerAsyncHookHandler } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
 import { createLogger } from '../logger';
+import { createFansModule } from '../modules/fans';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
@@ -185,9 +187,64 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
       fanId: fan,
       toLearn: ['first_name', 'age', 'situation', 'hobbies'],
     });
+    // Past the 40 facts of the context, with a chatter's notes first, a line learnt stays learnt.
+    await app.modules.fans.proposeFacts(
+      anna,
+      fan,
+      Array.from({ length: 45 }, (_, index) => ({
+        ...fact,
+        category: 'operator_note' as const,
+        key: `note_${String(index)}`,
+        value: `Note ${String(index)}`,
+      })),
+    );
+    expect((await app.modules.fans.activeFacts(anna, fan)).some((f) => f.key === 'location')).toBe(false);
+    expect((await kyc(owner)).json<{ toLearn: string[] }>().toLearn).toEqual([
+      'first_name',
+      'age',
+      'situation',
+      'hobbies',
+    ]);
     // As his limits: never the creator, never a creator out of reach, never a fan of another creator.
     expect((await kyc(creator)).statusCode).toBe(403);
     expect((await kyc(operator, bea)).statusCode).toBe(403);
     expect((await kyc(owner, bea)).statusCode).toBe(404);
+  });
+
+  it('says every canvas line, in the canvas order, when no persona gives hers', async () => {
+    // Stands in for `requireRole`: an owner, set as auth.ts does.
+    const asOwner: preHandlerAsyncHookHandler = (request) => {
+      request.user = {
+        id: operatorId,
+        email: 'owner@example.test',
+        name: 'Owner',
+        role: 'owner',
+        creatorIds: [],
+        routedCreatorIds: [],
+      };
+      return Promise.resolve();
+    };
+    const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
+    const fans = createFansModule({ db: app.db.db, adminDb: test.admin.db });
+    const bare = await buildServer({
+      config,
+      logger: createLogger(config),
+      routes: [fans.routes(() => asOwner)],
+      readiness: app.readiness,
+    });
+    try {
+      const read = await bare.inject({ method: 'GET', url: `/v1/fans/${fan}/kyc?creatorId=${anna}` });
+      expect(read.statusCode, read.body).toBe(200);
+      // `location` and `job` are learnt by the test above.
+      expect(FanKycViewSchema.parse(read.json()).toLearn).toEqual([
+        'first_name',
+        'age',
+        'hobbies',
+        'desires',
+        'situation',
+      ]);
+    } finally {
+      await bare.close();
+    }
   });
 });

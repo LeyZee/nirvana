@@ -154,19 +154,32 @@ describe('selectActiveFacts', () => {
 describe('kycSlotsToLearn', () => {
   it('keeps her lines in her order, without those an active fact has as key', () => {
     const slots = ['first_name', 'age', 'location', 'job'] as const;
-    expect(kycSlotsToLearn(slots, [])).toEqual(['first_name', 'age', 'location', 'job']);
+    expect(kycSlotsToLearn(slots, [], now)).toEqual(['first_name', 'age', 'location', 'job']);
     expect(
-      kycSlotsToLearn(slots, [
-        stored({ key: 'location' }),
-        stored({ category: 'life', key: ' Job ' }),
-        stored({ key: 'city' }),
-      ]),
+      kycSlotsToLearn(
+        slots,
+        [stored({ key: 'location' }), stored({ category: 'life', key: ' Job ' }), stored({ key: 'city' })],
+        now,
+      ),
     ).toEqual(['first_name', 'age']);
+  });
+
+  it('reads every active fact, past the 40 of the context, and none that is no longer true', () => {
+    const notes = Array.from({ length: MAX_ACTIVE_FACTS + 5 }, (_, index) =>
+      stored({ id: `n-${String(index)}`, category: 'operator_note', key: `note_${String(index)}` }),
+    );
+    const facts = [
+      ...notes,
+      stored({ category: 'interests', key: 'hobbies', confidence: 0.1 }),
+      stored({ key: 'age', supersededBy: 'f-2' }),
+      stored({ key: 'job', expiresAt: may }),
+    ];
+    expect(kycSlotsToLearn(['age', 'job', 'hobbies'], facts, now)).toEqual(['age', 'job']);
   });
 
   it('never counts a chatter’s note as a learnt line', () => {
     expect(
-      kycSlotsToLearn(['first_name'], [stored({ category: 'operator_note', key: 'first_name' })]),
+      kycSlotsToLearn(['first_name'], [stored({ category: 'operator_note', key: 'first_name' })], now),
     ).toEqual(['first_name']);
   });
 });
