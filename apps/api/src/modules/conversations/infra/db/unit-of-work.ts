@@ -229,6 +229,24 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           createdAt: meta.at,
         });
       },
+      async alertsSince(conversationId, since) {
+        const rows = await tx
+          .select()
+          .from(schema.conversationEvents)
+          .where(
+            and(
+              eq(schema.conversationEvents.conversationId, conversationId),
+              eq(schema.conversationEvents.type, 'alert_triggered'),
+              since === null
+                ? undefined
+                : sql`${schema.conversationEvents.createdAt} > ${since.toISOString()}`,
+            ),
+          )
+          .orderBy(schema.conversationEvents.seq);
+        return rows
+          .map(toStoredEvent)
+          .flatMap(({ body }) => (body.type === 'alert_triggered' ? [body.payload.trigger] : []));
+      },
       async list(conversationId) {
         const rows = await tx
           .select()

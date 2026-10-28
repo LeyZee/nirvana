@@ -45,6 +45,9 @@ import {
 import type { TelegramTab } from './search';
 import './telegram.css';
 
+/** The topics of the Alertes tab, her own alerts with them: what « Dernières alertes » lists. */
+const ALERT_TOPIC_SET: ReadonlySet<TelegramTopic> = new Set(ALERT_TOPICS);
+
 /** The page refreshes on its own: a bot removed from a group turns orange without a reload. */
 const REFRESH_MS = 30_000;
 const OFFLINE = 'Le serveur ne répond pas. Réessaie dans un instant.';
@@ -549,9 +552,7 @@ function AlertsTab({
   const { overview } = routing;
   const cover = coverOf(overview);
   const name = scopeName(overview, scope);
-  const alerts = deliveries.filter(
-    (d) => d.topic === 'urgent' || d.topic === 'important' || d.topic === 'info',
-  );
+  const alerts = deliveries.filter((d) => ALERT_TOPIC_SET.has(d.topic));
   const shown = alerts.slice(0, 8);
   const failed = shown.filter((d) => !deliveryLabel(d).isOk).length;
   return (

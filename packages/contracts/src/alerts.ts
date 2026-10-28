@@ -185,6 +185,31 @@ export const AlertTriggerSchema = z
   });
 export type AlertTrigger = z.infer<typeof AlertTriggerSchema>;
 
+/** As a message of the playground (`PlaygroundMessageBodySchema`). */
+export const ALERT_TEST_MESSAGE_MAX = 4_000;
+
+/**
+ * `POST /v1/alerts/test` (owner): an alert being written, tried on an example message, before it is saved. Nothing is
+ * stored, nothing is sent; the words are read in code as on a real message, the phrase by one call to the brain.
+ */
+export const AlertTestBodySchema = z.object({
+  alert: customAlertFields.pick({ phrase: true, keywords: true }).refine(phraseOrKeyword, PHRASE_OR_KEYWORD),
+  message: z.string().trim().min(1).max(ALERT_TEST_MESSAGE_MAX),
+});
+export type AlertTestBody = z.infer<typeof AlertTestBodySchema>;
+
+/**
+ * What the alert would do on that message. `keywords`: her words found, as she wrote them, in her order.
+ * `phraseMatched`: whether the brain sees the situation she described; null without a phrase, or when it could not
+ * be asked, and then `reason` says why in French (written by code, never by a model).
+ */
+export const AlertTestResultSchema = z.object({
+  keywords: z.array(AlertKeywordSchema),
+  phraseMatched: z.boolean().nullable(),
+  reason: z.string().nullable(),
+});
+export type AlertTestResult = z.infer<typeof AlertTestResultSchema>;
+
 /**
  * The error codes of `/v1/alerts`, for the screen to say them in French (the suffix gives the status, api.md):
  * `custom_alert_not_found` 404, the alert has no row left that is not archived ; `custom_alert_conflict` 409, the same

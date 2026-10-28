@@ -77,6 +77,17 @@ export interface ConversationInput {
   readonly trace?: CallTrace;
 }
 
+/** One of her own alerts, as the brain reads it (P4-01): the id it answers with, the phrase she wrote. */
+export interface BrainAlert {
+  readonly id: string;
+  readonly phrase: string;
+}
+
+export interface BrainInput extends ConversationInput {
+  /** Her alerts written as a phrase, at most `BRAIN_ALERTS_MAX`; absent or empty, none is read. */
+  readonly alerts?: readonly BrainAlert[];
+}
+
 export interface VoiceInput extends ConversationInput {
   readonly brief: Brief;
 }
@@ -121,7 +132,7 @@ export interface ConnectionTest {
 
 export interface LlmGateway {
   sense(input: SenseInput): Promise<Result<LlmSuccess<MediaDescription>, LlmFailure>>;
-  brain(input: ConversationInput): Promise<Result<LlmSuccess<Brief>, LlmFailure>>;
+  brain(input: BrainInput): Promise<Result<LlmSuccess<Brief>, LlmFailure>>;
   voice(input: VoiceInput): Promise<Result<LlmSuccess<VoiceOutput>, LlmFailure>>;
   /** Scores a reply against the rubric criteria (`pnpm evals`). */
   judge(input: JudgeInput): Promise<Result<LlmSuccess<JudgeOutput>, LlmFailure>>;

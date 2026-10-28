@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import {
   ConversationIdSchema,
   CreatorIdSchema,
+  CustomAlertIdSchema,
   DraftIdSchema,
   EventIdSchema,
   newId,
@@ -351,6 +352,54 @@ describe('telegram module on Postgres', () => {
     offsetMs = 4000;
     await module.jobs.flushChat(chatId);
     expect(telegram.edits[0]?.text).toMatch(/✓ Pris en main$/);
+  });
+
+  it('sends her alerts to their topic, a paused fan to the important groups when none has it (P4-01)', async () => {
+    const { chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
+    // A second creator whose own alerts have a group; « Démo »'s have none.
+    const other = newId(CreatorIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: other, displayName: 'Autre', timezone: 'Europe/Paris' });
+    const { routes, version } = await module.overview();
+    const saved = await module.saveRoutes(version, [
+      ...routes,
+      { creatorId: other, topic: 'custom', chatId },
+    ]);
+    if (!saved.ok) throw new Error('routes not saved');
+
+    const custom = { kind: 'custom', id: newId(CustomAlertIdSchema) } as const;
+    const trigger = { alert: custom, matchedBy: 'keyword', keyword: 'mot-déclaré' } as const;
+    const paused = newId(ConversationIdSchema);
+    const told = newId(ConversationIdSchema);
+    const pausedOther = newId(ConversationIdSchema);
+    await publish('handoff_requested', { conversationId: paused, cause: 'custom_alert', trigger });
+    await publish('alert_triggered', { conversationId: newId(ConversationIdSchema), trigger, notify: true });
+    await publish('alert_triggered', { conversationId: told, trigger, notify: true }, other);
+    await publish('alert_triggered', { conversationId: told, trigger, notify: false }, other);
+    await publish('handoff_requested', { conversationId: pausedOther, cause: 'custom_alert' }, other);
+    // The trigger knows the new type (0027).
+    expect(await jobs('telegram.scan')).toMatchObject([{ key: 'telegram.scan' }]);
+    await module.jobs.scan();
+
+    const rows = await deliveryRows(chatId);
+    expect(rows).toHaveLength(3);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        // « Démo »: no group for her alerts, the paused fan goes to important; the alert that only tells, nowhere.
+        expect.objectContaining({ creatorId, topic: 'important', threadKey: `conversation:${paused}` }),
+        // « Autre »: in her alerts' group, the paused fan in its thread; once, `notify: false` is not sent.
+        expect.objectContaining({ creatorId: other, topic: 'custom', threadKey: null }),
+        expect.objectContaining({
+          creatorId: other,
+          topic: 'custom',
+          threadKey: `conversation:${pausedOther}`,
+        }),
+      ]),
+    );
+    expect(rows.map((row) => row.text).join()).not.toContain('mot-déclaré');
+    await module.jobs.flushChat(chatId);
+    expect(telegram.sent.map((m) => m.text).join()).toContain('🔔 <b>Alerte · Autre</b>');
   });
 
   it('logs an urgent alert that no group can receive', async () => {

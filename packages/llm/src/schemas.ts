@@ -1,6 +1,11 @@
 import { DESIRE_BRAIN_SIGNALS, MediaDescriptionSchema } from '@nirvana/contracts';
 import { z } from 'zod';
 
+/** Her alerts the brain reads at most, and how it names them (`a1`, `a2`…): short ids, never her alert's own. */
+export const BRAIN_ALERTS_MAX = 50;
+const BRAIN_ALERT_ID = /^a[1-9]\d?$/;
+export const brainAlertId = (index: number): string => `a${String(index + 1)}`;
+
 /** Brain output (docs/architecture/ai-engine.md, « Le Brief »). Decisions are taken by the policy in code, not here. */
 export const BriefSchema = z.object({
   intent: z.enum([
@@ -14,6 +19,7 @@ export const BriefSchema = z.object({
     'asks_if_bot',
     'asks_to_meet',
     'asks_personal_contact',
+    'asks_for_service',
     'distress',
     'complaint',
     'off_topic_request',
@@ -50,6 +56,11 @@ export const BriefSchema = z.object({
    * the brain never gives a number. Absent, nothing read.
    */
   desireSignals: z.array(z.enum(DESIRE_BRAIN_SIGNALS)).max(DESIRE_BRAIN_SIGNALS.length).optional(),
+  /**
+   * Her own alerts whose phrase his last message clearly meets (P4-01), by the ids the prompt gave them (`a1`…): the
+   * code keeps only the ids it gave and decides what each does. Never a free text. Absent, none.
+   */
+  alertsSeen: z.array(z.string().regex(BRAIN_ALERT_ID)).max(BRAIN_ALERTS_MAX).optional(),
   action: z.enum(['reply', 'offer', 'wait', 'follow_up', 'handoff']),
   replyBrief: z.string().min(1),
   toneHints: z.array(z.string()),

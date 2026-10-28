@@ -1,4 +1,6 @@
 import {
+  AlertTestBodySchema,
+  AlertTestResultSchema,
   ApiErrorSchema,
   PlaygroundAdvanceBodySchema,
   PlaygroundAnswerSchema,
@@ -17,6 +19,7 @@ import {
 import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
+import type { AlertTester } from '../../agent/index';
 import { LlmUnavailable, type PlaygroundEngine } from '../application/engine';
 import type { PlaygroundService } from '../application/playground-service';
 
@@ -33,6 +36,7 @@ const state = { 200: PlaygroundStateSchema };
  */
 export function createPlaygroundRoutes(
   service: PlaygroundService,
+  alertTester: AlertTester,
   options: PlaygroundRoutesOptions,
 ): FastifyPluginAsyncZod {
   return (app) => {
@@ -125,6 +129,13 @@ export function createPlaygroundRoutes(
         const { isLocked, ...media } = request.body;
         return engineOf(request).sendCreatorMedia(media, isLocked);
       },
+    );
+
+    // Réglages › Alertes (P4-01): served here, beside the persona the brain reads; `/v1/alerts` stays the module's.
+    app.post(
+      '/alerts/test',
+      { schema: { body: AlertTestBodySchema, response: { 200: AlertTestResultSchema } } },
+      (request) => alertTester.test(request.body),
     );
 
     return Promise.resolve();

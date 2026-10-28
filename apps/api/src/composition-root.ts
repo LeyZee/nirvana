@@ -239,6 +239,8 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     adminDb: adminDb.db,
     creators: { list: () => persona.creators.list('all') },
   });
+  // Before the composer: the agent checks each of his messages against her alerts (P4-01).
+  const alerts = createAlertsModule({ db: db.db, requireRole });
   const playground =
     options.withPlayground === false
       ? null
@@ -278,6 +280,18 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           onLimitsNotSaved: (event) => {
             logger.warn(event, 'fan limit not saved');
           },
+          // Her alerts that are on, and the system's on for her (P4-01).
+          alertsOf: async (creatorId) => {
+            const id = CreatorIdSchema.parse(creatorId);
+            const [custom, systemOn] = await Promise.all([
+              alerts.store.activeFor(id),
+              alerts.store.systemOn(id),
+            ]);
+            return { custom, systemOn };
+          },
+          // A doubt on who she is goes to a chatter on shift now, without the margin (P4-01).
+          chatterOnShift: async (creatorId, at) =>
+            (await scheduling.onShift(CreatorIdSchema.parse(creatorId), at)).length > 0,
           // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
           timeZoneOf: async (creatorId) => {
             const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);
@@ -314,7 +328,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     voicePrompt: loadPrompt('voice').header.version,
     voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
   };
-  const alerts = createAlertsModule({ db: db.db, requireRole });
   const conversations = createConversationsModule({
     db: db.db,
     fans,

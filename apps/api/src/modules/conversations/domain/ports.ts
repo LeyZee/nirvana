@@ -176,6 +176,8 @@ interface EventWriter {
   publish(creatorId: CreatorId, body: EventBody, meta: EventMeta): Promise<void>;
   /** The whole journal in `seq` order. */
   list(conversationId: ConversationId): Promise<readonly StoredEvent[]>;
+  /** What set off each `alert_triggered` after `since` (all of them when null), in `seq` order (P4-01). */
+  alertsSince(conversationId: ConversationId, since: Date | null): Promise<readonly AlertTrigger[]>;
 }
 
 interface JobOptions {
@@ -431,12 +433,16 @@ export type ComposeResult =
       /** What the brief read about the fan in his messages. */
       readonly factsProposed?: readonly ProposedFact[];
       readonly desire?: ComposedDesire;
+      /** Her alerts that went off on his message and only let a human know: one `alert_triggered` each (P4-01). */
+      readonly alerts?: readonly ComposedAlert[];
     }
   | {
       readonly kind: 'held';
       readonly reason: HoldReason;
       /** Why a human must answer, when the engine knows (vision, conversation checks); `other` otherwise. */
       readonly cause?: HandoffCause;
+      /** The alert that paused the agent (P4-01), carried by the handoff: never also an `alert_triggered`. */
+      readonly trigger?: AlertTrigger;
       readonly detail: readonly string[];
       readonly costUsd: number;
       /**
@@ -447,7 +453,15 @@ export type ComposeResult =
        */
       readonly retryAt?: Date;
       readonly desire?: ComposedDesire;
+      readonly alerts?: readonly ComposedAlert[];
     };
+
+/** An alert of hers that went off and only lets a human know (P4-01): named, never with what the fan wrote. */
+interface ComposedAlert {
+  readonly trigger: AlertTrigger;
+  /** Sent to Telegram, as her alert says when it went off. */
+  readonly notify: boolean;
+}
 
 /**
  * The engine behind `conversation.respond`, implemented by the agent's adapter and injected by the composition

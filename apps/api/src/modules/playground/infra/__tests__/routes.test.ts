@@ -1,4 +1,5 @@
 import {
+  AlertTestResultSchema,
   ApiErrorSchema,
   PlaygroundAnswerSchema,
   PlaygroundRatingResultSchema,
@@ -319,5 +320,44 @@ describe('/v1/playground', () => {
     });
     const comparison = await post('/compare', { voiceModel: 'mistral-large-latest' });
     expect(codeOf(comparison)).toBe('nothing_to_compare_conflict');
+  });
+});
+
+describe('POST /v1/alerts/test (P4-01)', () => {
+  const alert = { phrase: 'Il demande une vidéo rien que pour lui', keywords: ['vidéo perso'] };
+
+  it('is closed to anyone without the owner session', async () => {
+    const { app } = await server();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/alerts/test',
+      payload: { alert, message: 'une vidéo perso ?' },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('reads her words in code, and says why the phrase was not read when no brain is reachable', async () => {
+    const { app, headers } = await server();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/alerts/test',
+      headers,
+      payload: { alert, message: 'Tu me fais une Video-Perso ?' },
+    });
+    expect(response.statusCode).toBe(200);
+    const result = AlertTestResultSchema.parse(response.json());
+    expect(result).toMatchObject({ keywords: ['vidéo perso'], phraseMatched: null });
+    expect(result.reason).toContain('Modèles IA');
+  });
+
+  it('refuses an alert with neither phrase nor word', async () => {
+    const { app, headers } = await server();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/alerts/test',
+      headers,
+      payload: { alert: { phrase: null, keywords: [] }, message: 'coucou' },
+    });
+    expect(response.statusCode).toBe(400);
   });
 });

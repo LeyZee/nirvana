@@ -94,6 +94,34 @@ expect:
     ]);
   });
 
+  it('checks exactly which of her alerts the brain saw, by name (P4-01)', () => {
+    const alerted = readScenario(`
+description: Il demande une vidéo rien que pour lui.
+persona_version: demo
+alerts:
+  - { name: video, phrase: Il demande une vidéo personnalisée }
+  - { name: job, phrase: Il a perdu son travail }
+inbound: une vidéo juste pour moi ?
+expect:
+  brief: { alerts_seen: [video] }
+`);
+    const seen = (alertsSeen: string[]) => ({ ...fine, brief: { ...fine.brief!, alertsSeen } });
+    expect(checkScenario(alerted, seen(['video']))).toEqual([]);
+    expect(checkScenario(alerted, seen(['video', 'job']))).toEqual([
+      'alertes vues [job, video], attendues [video]',
+    ]);
+    expect(checkScenario(alerted, fine)).toEqual(['alertes vues [], attendues [video]']);
+    expect(() =>
+      readScenario(`
+description: deux fois le même nom
+persona_version: demo
+alerts: [{ name: video, phrase: a }, { name: video, phrase: b }]
+inbound: coucou
+expect: {}
+`),
+    ).toThrow();
+  });
+
   it('fails when the brain did not answer', () => {
     expect(
       checkScenario(scenario, {

@@ -1,4 +1,4 @@
-import { ConversationIdSchema, DraftIdSchema, newId } from '@nirvana/contracts';
+import { ConversationIdSchema, CustomAlertIdSchema, DraftIdSchema, newId } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { FAKE_TOKEN } from '../../__tests__/support/fake-telegram';
@@ -175,6 +175,27 @@ describe('reading the outbox', () => {
     });
     expect(failed({ ...attempt, conversationId, isFinal: false })).toBeNull();
     expect(failed({ ...attempt, conversationId })).toBeNull();
+  });
+
+  it('reads which alert rang when it was to go to Telegram, never how it matched nor the word', () => {
+    const alert = { kind: 'custom', id: newId(CustomAlertIdSchema) } as const;
+    const triggered = (payload: object) => toScannedEvent({ ...base, type: 'alert_triggered', payload });
+    const trigger = { alert, matchedBy: 'keyword', keyword: 'appel' };
+    expect(triggered({ conversationId, trigger, notify: true })?.signal).toEqual({
+      kind: 'alert',
+      conversationId,
+      alert,
+    });
+    expect(
+      triggered({
+        conversationId,
+        trigger: { alert: { kind: 'system', code: 'service_request' } },
+        notify: true,
+      })?.signal,
+    ).toEqual({ kind: 'alert', conversationId, alert: { kind: 'system', code: 'service_request' } });
+    // Off when it rang, or a row that does not say: nothing leaves.
+    expect(triggered({ conversationId, trigger, notify: false })).toBeNull();
+    expect(triggered({ conversationId, trigger })).toBeNull();
   });
 
   it('keeps only the session changes that open or close a thread', () => {

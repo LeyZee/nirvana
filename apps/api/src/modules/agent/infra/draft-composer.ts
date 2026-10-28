@@ -1,14 +1,32 @@
 import type {
   AgentHours,
+  AlertTrigger,
   FanFlags,
   HandoffCause,
   MediaDescription,
   MediaFlag,
   Result,
 } from '@nirvana/contracts';
-import type { ConversationTurn, LlmFailure, LlmGateway } from '@nirvana/llm';
+import {
+  BRAIN_ALERTS_MAX,
+  brainAlertId,
+  type Brief,
+  type ConversationTurn,
+  type LlmFailure,
+  type LlmGateway,
+} from '@nirvana/llm';
 
-import { alertKeywordsIn } from '../domain/alerts';
+import {
+  briefAlerts,
+  keywordAlerts,
+  noticeOf,
+  phraseAlerts,
+  settleAlerts,
+  type AlertNotice,
+  type AlertSettings,
+  type FiredAlert,
+  type PhraseAlert,
+} from '../domain/alerts';
 import { measureDesire, type DesireReading } from '../domain/desire';
 import { followUpDecision } from '../domain/follow-up';
 import {
@@ -122,6 +140,8 @@ type AgentComposeResult = (
       readonly reason: 'guard_blocked' | 'handoff' | 'budget_reached' | 'llm_unavailable' | 'no_reply';
       /** Why a human must answer, when the vision knows it: the alert ranks on it. */
       readonly cause?: HandoffCause;
+      /** The alert that paused the agent (P4-01), journaled on the handoff: never also a notice. */
+      readonly trigger?: AlertTrigger;
       readonly detail: readonly string[];
       readonly costUsd: number;
       /**
@@ -130,7 +150,11 @@ type AgentComposeResult = (
        */
       readonly retryAt?: Date;
     }
-) & { readonly desire?: ScoredDesire };
+) & {
+  readonly desire?: ScoredDesire;
+  /** Her alerts that went off on his message and only let a human know (`alert_triggered` each, P4-01). */
+  readonly alerts?: readonly AlertNotice[];
+};
 
 export interface AgentDraftComposer {
   compose(input: AgentComposeInput): Promise<AgentComposeResult>;
@@ -168,6 +192,13 @@ export interface DraftComposerDeps {
    * for him, before any model is called (P4-01). Without them, nothing is watched.
    */
   readonly alertKeywords?: readonly string[];
+  /**
+   * Her own alerts that are on and the system's that are on for her (P4-01). Without it, only her persona's words are
+   * watched; unreadable, a human answers him, as with his limits.
+   */
+  readonly alertsOf?: (creatorId: string) => Promise<AlertSettings>;
+  /** Whether a chatter is on shift on her accounts now: a doubt on who she is goes to them (P4-01). Unknown: no. */
+  readonly chatterOnShift?: (creatorId: string, at: Date) => Promise<boolean>;
   /** Lines of her notes kept out of the prompt for looking like an order: counted, never their text. */
   readonly onDroppedNotes?: (event: { readonly conversationId: string; readonly count: number }) => void;
 }
@@ -398,6 +429,39 @@ async function followUp(
   };
 }
 
+/** Her alerts for this message; unreadable, nothing is written and a human answers him (fail closed). */
+async function alertSettings(
+  deps: DraftComposerDeps,
+  input: AgentComposeInput,
+): Promise<{ readonly held: Held } | { readonly settings: AlertSettings }> {
+  if (deps.alertsOf === undefined) return { settings: { custom: [], systemOn: new Set() } };
+  try {
+    return { settings: await deps.alertsOf(input.creatorId) };
+  } catch {
+    return { held: { ...HANDOFF, detail: ['alerts_unreadable'] } };
+  }
+}
+
+/** Whether a chatter is on shift, read only when a doubt on who she is would go to them. */
+async function onShift(deps: DraftComposerDeps, input: AgentComposeInput, settings: AlertSettings) {
+  if (!settings.systemOn.has('identity_doubt') || deps.chatterOnShift === undefined) return false;
+  return deps.chatterOnShift(input.creatorId, input.now).catch(() => false);
+}
+
+/** The alerts of his message read from the brief, beside those read in code. */
+const firedWith = (
+  coded: readonly FiredAlert[],
+  brief: Pick<Brief, 'intent' | 'alertsSeen'> | undefined,
+  asked: readonly PhraseAlert[],
+  settings: AlertSettings,
+  chatter: boolean,
+): FiredAlert[] =>
+  brief === undefined ? [...coded] : [...coded, ...briefAlerts(brief, asked, settings.systemOn, chatter)];
+
+/** A result with the notices of her alerts that went off, when there are any. */
+const withNotices = (result: AgentComposeResult, notices: readonly AlertNotice[]): AgentComposeResult =>
+  notices.length === 0 ? result : { ...result, alerts: notices };
+
 /** What his composed answer becomes: a draft, or held for a human, a wait or a failure. */
 async function settle(
   deps: DraftComposerDeps,
@@ -405,6 +469,7 @@ async function settle(
   composed: ComposedTurn,
   flags: FanFlags | undefined,
   waited: boolean,
+  alertPause: ReturnType<typeof settleAlerts>['pause'],
 ): Promise<AgentComposeResult> {
   const { costUsd } = composed;
   if (composed.droppedNotes !== undefined) {
@@ -427,6 +492,15 @@ async function settle(
     const held: Held = { ...HANDOFF, detail: decision.detail, costUsd };
     return protect(deps.limits, input, composed.brief.risks, held);
   }
+  // One of her alerts pauses the agent (P4-01): a human answers him, the voice did not write.
+  if (alertPause !== null)
+    return {
+      ...HANDOFF,
+      cause: alertPause.cause,
+      trigger: alertPause.trigger,
+      detail: [alertPause.cause],
+      costUsd,
+    };
   // He stated an adult age himself: confirmed for his next messages (Charles, 27/10), never once his age was
   // taken back. Not saved, his age stays unconfirmed and she keeps steering back, the safe side: counted.
   const his = flags;
@@ -490,10 +564,22 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         const held: Held = { ...HANDOFF, cause: handoffCauseOf(flags), detail: flags };
         return protect(deps.limits, input, flags, held);
       }
-      // Her alert keywords, in code and at no cost: a human answers him (cause `keyword`). The journal keeps the
-      // code only, never his words.
-      const watched = alertKeywordsIn(sinceAnswer.map((m) => m.text).join('\n'), deps.alertKeywords ?? []);
-      if (watched.length > 0) return { ...HANDOFF, cause: 'keyword', detail: ['alert_keyword'] };
+      // What he wrote since her last answer: her alerts and the traps read it as one message.
+      const fanText = sinceAnswer.map((m) => m.text).join('\n');
+      const read = await alertSettings(deps, input);
+      if ('held' in read) return read.held;
+      const { settings } = read;
+      // Her words, in code and at no cost (P4-01): one that pauses hands him over before any model. The journal names
+      // the word she declared, never his.
+      const coded = keywordAlerts(fanText, deps.alertKeywords ?? [], settings);
+      const early = settleAlerts(coded);
+      if (early.pause !== null)
+        return withNotices(
+          { ...HANDOFF, cause: early.pause.cause, trigger: early.pause.trigger, detail: ['alert_keyword'] },
+          early.notices,
+        );
+      const asked = phraseAlerts(settings, coded, brainAlertId, BRAIN_ALERTS_MAX);
+      const chatter = await onShift(deps, input, settings);
       if (voiceUnavailable(deps.gateway)) {
         return { kind: 'held', reason: 'llm_unavailable', detail: ['no voice key'], costUsd: 0 };
       }
@@ -505,8 +591,6 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
           ...(described.length > 0 && { media: described.map((description) => ({ description })) }),
         };
       });
-      // What he wrote since her last answer: the traps read it as one message.
-      const fanText = sinceAnswer.map((m) => m.text).join('\n');
       const offer = await offerInput(deps, input, stop.flags);
       const waited = (input.waited ?? 0) >= 1;
       const composed = await composeTurn(deps.gateway, deps.persona, {
@@ -542,9 +626,21 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         },
         // Safety first: a possible minor or distress hands over even when he is testing her, and without the
         // brain's reading of the risks nobody knows, so the voice does not write either.
-        skipVoice: (brief) => brief === undefined || holdDecision(brief, waited).kind !== 'answer',
+        // An alert of hers that pauses the agent stops the voice too: a human answers him.
+        skipVoice: (brief) =>
+          brief === undefined ||
+          holdDecision(brief, waited).kind !== 'answer' ||
+          settleAlerts(firedWith(coded, brief, asked, settings, chatter)).pause !== null,
+        ...(asked.length > 0 && { alerts: asked.map((a) => ({ id: a.brainId, phrase: a.alert.phrase })) }),
       });
-      const settled = await settle(deps, input, composed, stop.flags, waited);
+      const fired = firedWith(coded, composed.brief, asked, settings, chatter);
+      const alerts = settleAlerts(fired);
+      // A risk of his outranks her alert: the handoff keeps the risk's cause, and the alert is a notice of its own.
+      const riskFirst =
+        composed.brief !== undefined && holdDecision(composed.brief, waited).kind === 'handoff';
+      const pause = composed.handoff !== undefined || riskFirst ? null : alerts.pause;
+      const notices = pause === null ? fired.map(noticeOf) : alerts.notices;
+      const settled = withNotices(await settle(deps, input, composed, stop.flags, waited, pause), notices);
       if (composed.desire === undefined) return settled;
       const { before, score, signals, weightsVersion } = composed.desire;
       return { ...settled, desire: { before, score, signals, weightsVersion } };

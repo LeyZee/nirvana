@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ALERT_ERROR_CODES,
   alertKeywordKey,
+  AlertTestBodySchema,
+  AlertTestResultSchema,
   AlertTriggerSchema,
   CUSTOM_ALERT_TOPIC,
   CustomAlertBodySchema,
@@ -72,7 +74,7 @@ describe('custom alerts (P4-01)', () => {
     expect(
       EventBodySchema.safeParse({
         type: 'alert_triggered',
-        payload: { conversationId: CONVERSATION, trigger },
+        payload: { conversationId: CONVERSATION, trigger, notify: true },
       }).success,
     ).toBe(true);
     expect(
@@ -89,7 +91,7 @@ describe('custom alerts (P4-01)', () => {
     expect(
       EventBodySchema.safeParse({
         type: 'alert_triggered',
-        payload: { conversationId: CONVERSATION, trigger, excerpt: 'his words' },
+        payload: { conversationId: CONVERSATION, trigger, notify: false, excerpt: 'his words' },
       }).data,
     ).not.toHaveProperty('payload.excerpt');
   });
@@ -105,6 +107,19 @@ describe('custom alerts (P4-01)', () => {
       expect(TelegramTopicSchema.safeParse(SYSTEM_ALERT_TOPICS[code]).success).toBe(true);
     }
     expect(CUSTOM_ALERT_TOPIC).toBe('custom');
+  });
+
+  it('tries an alert being written on one message, and answers without the fan’s words', () => {
+    const alert = { phrase: null, keywords: ['vidéo perso'] };
+    expect(AlertTestBodySchema.safeParse({ alert, message: 'une vidéo perso ?' }).success).toBe(true);
+    expect(AlertTestBodySchema.safeParse({ alert, message: '   ' }).success).toBe(false);
+    expect(
+      AlertTestBodySchema.safeParse({ alert: { phrase: null, keywords: [] }, message: 'coucou' }).success,
+    ).toBe(false);
+    expect(
+      AlertTestResultSchema.safeParse({ keywords: ['vidéo perso'], phraseMatched: null, reason: null })
+        .success,
+    ).toBe(true);
   });
 
   it('gives every error code a suffix that sets its status (api.md)', () => {
