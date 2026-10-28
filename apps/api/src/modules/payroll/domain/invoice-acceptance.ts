@@ -3,7 +3,10 @@ import { InvoiceAcceptanceConflict } from './errors';
 /**
  * Where an invoice stands with its contractor (EQ-06, ADR 0023 § Factures; BOI-TVA-DECLA-30-20-10-30 § 150-160): each
  * invoice is accepted or contested with a reason before the mandate's deadline, and accepted tacitly after it. A
- * contest ends in a credit note or in a refusal with its reason. Each step is dated in `audit_log` by the caller.
+ * contest ends in a credit note or in a refusal with its reason. A credit note follows the same acceptance, from
+ * `pending`. One the agency issues of its own accord (a credit a period owes, ADR 0036, or a reduction) leaves the
+ * invoice it cites where it stands: only the credit note that answers a contest moves it, to `credited`. Each step is
+ * dated in `audit_log` by the caller.
  */
 
 export type AcceptanceState =
@@ -52,4 +55,16 @@ export function nextAcceptance(
       break;
   }
   throw new InvoiceAcceptanceConflict(state);
+}
+
+/**
+ * The invoice's state once a credit note cites it: `credited` when the note answers the invoice's contest, unchanged
+ * when the agency issued it of its own accord, whatever the state, the note following its own acceptance.
+ */
+export function stateAfterCreditNote(
+  state: AcceptanceState,
+  note: { readonly answersContest: boolean },
+  at: { readonly now: Date; readonly deadline: Date },
+): AcceptanceState {
+  return note.answersContest ? nextAcceptance(state, { kind: 'credit' }, at) : state;
 }

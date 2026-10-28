@@ -5,9 +5,10 @@ import { CreditNoteExceedsInvoice } from './errors';
 import { BPS, mulDivRound } from './rounding';
 
 /**
- * A contractor's invoice and its credit notes (EQ-06, ADR 0023 § Factures), the pure rules: its number, its lines from
- * a validated statement, its totals under the regime, its due date, and the lines of a credit note. The invoice is
- * frozen at its issue: every text here is computed once and copied, never recomputed for an issued invoice.
+ * A contractor's invoice and its credit notes (EQ-06, ADR 0023 § Factures and ADR 0036), the pure rules: its number,
+ * its lines from a validated statement, its totals under the regime, its due date, the credit notes a period owes and
+ * the invoice each one cites, and the lines of a credit note. The invoice is frozen at its issue: every text here is
+ * computed once and copied, never recomputed for an issued invoice.
  */
 
 type InvoiceLineKind =
@@ -19,7 +20,8 @@ type InvoiceLineKind =
   | 'penalty'
   | 'penalty_cap'
   | 'adjustment'
-  | 'reduction';
+  | 'reduction'
+  | 'negative_period';
 
 /** A line as the invoice prints it: what it is, its detail, its amount excluding VAT (negative for a deduction). */
 export interface InvoiceLine {
@@ -114,6 +116,13 @@ export function periodWords(period: PayPeriod): string {
   return `du ${first === 1 ? '1er' : String(first)} au ${longDay(payPeriodLastDay(period))}`;
 }
 
+/** An adjustment's detail, on an invoice or a credit note: the period it corrects when it is known, and its reason. */
+function adjustmentDetail(reason: string, correctsPeriod: PayPeriod | null): string {
+  return correctsPeriod === null
+    ? quoted(reason)
+    : `Période ${periodWords(correctsPeriod)}${COLON}${quoted(reason)}`;
+}
+
 /**
  * Each percent penalty's share of the one rounding the engine made on their sum: the rounded running total less the
  * one before, so that the lines add up to the engine's amount to the cent, each within a cent of its own share.
@@ -135,9 +144,12 @@ function penaltyAmounts(penalties: readonly PenaltyForInvoice[], netMinor: numbe
 /**
  * The lines of a statement's invoice: a commission per account, the team share, the tier and collective bonuses, each
  * manual bonus, each penalty as a deduction the contract provides for, the cap of penalties when it applied, and each
- * adjustment with the period it corrects. What comes in from earlier periods (carry-overs) is never invoiced again: it
- * was in its own period's invoice. The lines add up to the statement's own amount for the period, or the source is a
- * bug of the caller.
+ * adjustment in the contractor's favour with the period it corrects (ADR 0023: an omission becomes a line of the next
+ * invoice). An adjustment in the agency's favour is never a line: it is a credit note on the invoice it corrects
+ * (`creditsDue`). A carry-over, positive or negative, is never invoiced again: it stays invoiced in its own period,
+ * and only delays the payment. The lines add up to the statement's own amount for the period, less what it owes back,
+ * or the source is a bug of the caller. When they add up to less than zero, nothing is issued and the period owes the
+ * difference (`creditsDue`).
  */
 export function invoiceLines(source: InvoiceSource): InvoiceLine[] {
   const { statement } = source;
@@ -214,21 +226,100 @@ export function invoiceLines(source: InvoiceSource): InvoiceLine[] {
       amountMinor: capMinor,
     });
   }
-  for (const adjustment of source.adjustments) {
+  for (const adjustment of source.adjustments.filter((one) => one.amountMinor > 0)) {
     lines.push({
       kind: 'adjustment',
       label: 'Régularisation',
-      detail:
-        adjustment.correctsPeriod === null
-          ? quoted(adjustment.reason)
-          : `Période ${periodWords(adjustment.correctsPeriod)}${COLON}${quoted(adjustment.reason)}`,
+      detail: adjustmentDetail(adjustment.reason, adjustment.correctsPeriod),
       amountMinor: adjustment.amountMinor,
     });
   }
-  if (sum(lines.map((line) => line.amountMinor)) !== statement.totalMinor - statement.carryOversInMinor) {
+  const owedBackMinor = sum(
+    source.adjustments.filter((one) => one.amountMinor < 0).map((one) => one.amountMinor),
+  );
+  if (
+    sum(lines.map((line) => line.amountMinor)) !==
+    statement.totalMinor - statement.carryOversInMinor - owedBackMinor
+  ) {
     throw new RangeError('The lines do not add up to the statement');
   }
   return lines;
+}
+
+/** What a period owes back, each a credit note of its own (ADR 0023 § Factures, ADR 0036), amounts excluding VAT. */
+export type CreditDue =
+  /** An adjustment in the agency's favour: an error of the invoice of the period it corrects. */
+  | {
+      readonly kind: 'adjustment';
+      readonly amountMinor: number;
+      readonly reason: string;
+      readonly correctsPeriod: PayPeriod | null;
+    }
+  /** What the period's own lines leave below zero, refunds above sales for instance: the period has no invoice. */
+  | { readonly kind: 'negative_period'; readonly amountMinor: number; readonly period: PayPeriod };
+
+/**
+ * The credit notes a validated statement makes due: one per adjustment in the agency's favour, then what its invoice's
+ * lines leave below zero. Every amount the statement pays less is on a document: its invoice, or one of these.
+ */
+export function creditsDue(source: InvoiceSource): CreditDue[] {
+  const dues: CreditDue[] = source.adjustments
+    .filter((one) => one.amountMinor < 0)
+    .map((one) => ({
+      kind: 'adjustment',
+      amountMinor: minus(one.amountMinor),
+      reason: one.reason,
+      correctsPeriod: one.correctsPeriod,
+    }));
+  const leftMinor = sum(invoiceLines(source).map((line) => line.amountMinor));
+  if (leftMinor < 0)
+    dues.push({ kind: 'negative_period', amountMinor: minus(leftMinor), period: source.period });
+  return dues;
+}
+
+/** An issued invoice of the contractor, as a credit note's target reads it. */
+export interface IssuedInvoice {
+  readonly number: string;
+  readonly period: PayPeriod;
+  readonly exclVatMinor: number;
+  readonly creditedMinor: number;
+}
+
+/** A credit note to issue: the invoice it cites and what it credits. */
+export interface PlannedCreditNote {
+  readonly invoiceNumber: string;
+  readonly request: CreditDue;
+}
+
+/**
+ * Where each credit note a period owes goes (ADR 0036), in order, each on one invoice that has enough left once the
+ * notes before it are counted: an adjustment on the invoice of the period it corrects, a negative period on the
+ * latest invoice of an earlier period. A due that no invoice can take whole is never split nor issued: it goes back to
+ * the owner, who settles it with the accountant.
+ */
+export function planCreditNotes(
+  dues: readonly CreditDue[],
+  invoices: readonly IssuedInvoice[],
+): { readonly notes: PlannedCreditNote[]; readonly unplaced: CreditDue[] } {
+  const credited = new Map(invoices.map((one) => [one.number, one.creditedMinor]));
+  const left = (one: IssuedInvoice): number => one.exclVatMinor - (credited.get(one.number) ?? 0);
+  const latestFirst = invoices.toSorted((a, b) => b.period.localeCompare(a.period));
+  const notes: PlannedCreditNote[] = [];
+  const unplaced: CreditDue[] = [];
+  for (const due of dues) {
+    const candidates =
+      due.kind === 'adjustment'
+        ? invoices.filter((one) => due.correctsPeriod !== null && one.period === due.correctsPeriod)
+        : latestFirst.filter((one) => one.period < due.period);
+    const target = candidates.find((one) => left(one) >= due.amountMinor);
+    if (target === undefined) {
+      unplaced.push(due);
+      continue;
+    }
+    credited.set(target.number, (credited.get(target.number) ?? 0) + due.amountMinor);
+    notes.push({ invoiceNumber: target.number, request: due });
+  }
+  return { notes, unplaced };
 }
 
 /** An invoice's totals: what it charges, and the VAT the agency self-assesses for the purchase journal. */
@@ -278,9 +369,11 @@ export function creditNoteMention(invoiceNumber: string, issuedOn: string): stri
   return `Avoir sur la facture ${invoiceNumber} du ${longDay(issuedOn)}`;
 }
 
+/** A whole cancellation, a reduction the agency writes with its reason, or a credit a period owes. */
 export type CreditRequest =
   | { readonly kind: 'full' }
-  | { readonly kind: 'partial'; readonly amountMinor: number; readonly reason: string };
+  | { readonly kind: 'partial'; readonly amountMinor: number; readonly reason: string }
+  | CreditDue;
 
 /** An issued invoice, with what its credit notes already took off. */
 export interface CreditableInvoice {
@@ -290,8 +383,9 @@ export interface CreditableInvoice {
 }
 
 /**
- * The lines of a credit note: the whole invoice cancelled line by line, or one reduction with its reason. Never more
- * than what is left of the invoice: a whole cancellation only of an invoice nothing was credited on yet.
+ * The lines of a credit note: the whole invoice cancelled line by line, or one line: a reduction with its reason, the
+ * adjustment that corrects the invoice with its period, or a period's negative balance. Never more than what is left
+ * of the invoice: a whole cancellation only of an invoice nothing was credited on yet.
  */
 export function creditNoteLines(invoice: CreditableInvoice, request: CreditRequest): InvoiceLine[] {
   const leftMinor = invoice.exclVatMinor - invoice.creditedMinor;
@@ -310,7 +404,27 @@ export function creditNoteLines(invoice: CreditableInvoice, request: CreditReque
   ) {
     throw new CreditNoteExceedsInvoice(leftMinor);
   }
+  if (request.kind === 'negative_period') {
+    return [
+      {
+        kind: 'negative_period',
+        label: 'Solde négatif',
+        detail: `Période ${periodWords(request.period)}`,
+        amountMinor: minus(request.amountMinor),
+      },
+    ];
+  }
   if (request.reason.trim() === '') throw new RangeError('A reduction gives its reason');
+  if (request.kind === 'adjustment') {
+    return [
+      {
+        kind: 'adjustment',
+        label: 'Régularisation',
+        detail: adjustmentDetail(request.reason, request.correctsPeriod),
+        amountMinor: minus(request.amountMinor),
+      },
+    ];
+  }
   return [
     {
       kind: 'reduction',
