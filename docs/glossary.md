@@ -168,7 +168,7 @@ Le code (identifiants, tables, événements) est en anglais. Les docs, l'interfa
 | Palier | `bonus_tier` | Seuil de net hors taxes qui débloque une prime ; le plus haut atteint compte. |
 | Prime | `bonus` | Montant ajouté à un relevé : palier, objectif collectif ou prime manuelle avec motif. |
 | Malus | `penalty` | Retenue fixe ou en pourcentage avec motif, plafonnée à la part du membre plus ses primes. Sur la facture, une ligne négative (réfaction prévue au contrat). |
-| Report | `carry_over` | Montant sous le minimum de versement, reporté sur la période suivante. |
+| Report | `carry_over` | Montant sous le minimum de versement, ou total sous zéro après un ajustement, reporté sur la période suivante ; rien n'est versé (EQ-04). |
 | Ajustement | `pay_adjustment` | Correction d'un relevé déjà validé, portée sur la prochaine période ouverte. |
 | Dossier prestataire | `contractor_profile` | L'identité légale et fiscale d'un membre pour ses factures : nom complet, adresse, pays, identifiant fiscal, attestation de résidence datée, mandat et contrat acceptés. |
 | Autofacturation | `self_billing` | L'agence établit la facture au nom et pour le compte du prestataire (art. 289 I-2 du CGI) ; la facture porte la mention « Autofacturation ». |

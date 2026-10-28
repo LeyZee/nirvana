@@ -30,7 +30,7 @@ media ──▶ packages/llm
 sales ──▶ conversations, media            (phase 6, non créé)
 scripts ──▶ sales, media, conversations   (phase 6, non créé)
 playground ──▶ agent, packages/llm        (écran Entraîner, P3-06)
-fans, persona, providers, telegram, team, backups, scheduling, alerts ──▶ (feuilles)
+fans, persona, providers, telegram, team, backups, scheduling, alerts, payroll ──▶ (feuilles)
 ```
 
 Ce graphe est **sans cycle**, et `import-x/no-cycle` le vérifie. Deux inversions le rendent possible :
@@ -77,6 +77,7 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | scheduling (planning, ADR 0023, ADR 0025, ADR 0031) | équipe | réglages, shifts, modèles de la semaine et leur job horaire, « en poste » et « mes shifts », congés et échanges de shifts (job `scheduling.lapse_swaps`), routes `/v1/scheduling` (EQ-02) ; rapports de fin de shift et règles de paie des comptes, routes `/v1/scheduling/shift-reports` et `/v1/team/pay-rules` (EQ-03) ; les créatrices et leurs noms lui viennent de `persona` par le composition root |
 | backups (sauvegardes, ADR 0028) | mise en production | lecture de `backup_runs` écrite par le service `backup`, route `/v1/backups/status` (propriétaire), contrôle horaire des 26 h qui publie `backup_overdue` (OPS-02) |
 | alerts (alertes personnalisées, P4-01) | 4 | ses alertes à elle, une ligne par créatrice sous RLS, alertes système activées par créatrice, routes `/v1/alerts` (propriétaire) ; l'agent les lira par `activeFor` et `systemOn`, et l'historique de `conversations` nomme ses alertes par `names` (port `AlertNames`, branché par le composition root) |
+| payroll (paie, ADR 0023) | équipe | relevés de commissions par quinzaine avec les règles d'Imperium, au centime en entiers (EQ-04) ; pour l'instant le calcul pur seul, les tables, le recalcul, la validation sous verrou et les taux de change viennent ensuite |
 | content (Instagram) | 7 | non créé |
 | platform (Nirvana propre) | 8 | non créé, voir `own-platform.md` |
 
