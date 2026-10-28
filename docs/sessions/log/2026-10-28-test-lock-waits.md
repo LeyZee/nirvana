@@ -1,6 +1,6 @@
 # 2026-10-28 — Tests : compter les attentes de verrou de sa seule base — done
 Fait :
-- `apps/api/src/__tests__/support/lock-waits.ts` : `lockWaits(db, kind)` compte les verrous attendus dans la base du test (`pg_locks` filtré sur `current_database()`), consultatifs par défaut ou de toute sorte ; une attente de ligne (`transactionid`), qui n'a pas de base, ne compte qu'avec toute sorte.
+- `apps/api/src/__tests__/support/lock-waits.ts` : `lockWaits(db, kind)` compte les verrous attendus par les sessions connectées à la base du test (`pg_locks` filtré par `pid` sur `pg_stat_activity`, où `datname = current_database()`), consultatifs par défaut ou de toute sorte. Le filtre par session vaut aussi pour une attente de ligne (`transactionid`), qui n'a pas de base dans `pg_locks` (relecture de Bilan sur #270).
 - Les tests du planning qui attendent un verrou (`scheduling`, `scheduling-reports`, `scheduling-leaves-swaps`) l'utilisent au lieu de leur propre requête.
 
 Pas fait : les tests de la paie qui attendent un verrou (`support/payroll-team.ts`, `payroll.integration.test.ts`) passent à `lockWaits` avec leur lot, qui n'est pas encore dans `main`.
