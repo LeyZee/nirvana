@@ -4,10 +4,13 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createPayrollReads } from './application/periods';
 import { createRecalculation, type RecalculationOutcome } from './application/recalculation';
+import { createPayrollValidation } from './application/validation';
 import type { JobLogger } from './domain/ports';
-import { createDrizzlePayrollJobStore, type PayInputReads } from './infra/job-store';
+import { createDrizzlePayrollJobStore } from './infra/job-store';
 import { createDrizzlePayrollReadStore } from './infra/read-store';
 import { createPayrollRoutes, type RequireRole } from './infra/routes';
+import type { PayInputReads } from './infra/snapshot';
+import { createDrizzlePayrollValidationStore } from './infra/validation-store';
 
 /** Public entry point of the `payroll` module (EQ-04, ADR 0002). Other modules import this file only. */
 export interface PayrollModule {
@@ -28,9 +31,12 @@ export interface PayrollModule {
 export interface PayrollDeps {
   /** Application role: what a member reads runs through `withMember`. */
   readonly db: Database;
-  /** Admin role, for the jobs only: they read every creator's reports (ADR 0023 § Paie). */
+  /**
+   * Admin role, for the jobs, which read every creator's reports (ADR 0023 § Paie), and for the one check of a closing
+   * that the member who validates read every report it counts (ADR 0032).
+   */
   readonly adminDb: Database;
-  /** What pay reads of the planning and the team, from their `index.ts`. */
+  /** What pay reads of the planning, the team and the creators, from their `index.ts`. */
   readonly reads: PayInputReads;
   readonly now?: () => Date;
 }
@@ -39,9 +45,13 @@ export function createPayrollModule(deps: PayrollDeps): PayrollModule {
   const now = deps.now ?? (() => new Date());
   const jobStore = createDrizzlePayrollJobStore(deps.adminDb, deps.reads, now);
   const reads = createPayrollReads(createDrizzlePayrollReadStore(deps.db), now);
+  const validation = createPayrollValidation(
+    createDrizzlePayrollValidationStore(deps.db, deps.adminDb, deps.reads, now),
+    reads,
+  );
   return {
     name: 'payroll',
-    routes: (requireRole) => createPayrollRoutes(reads, requireRole),
+    routes: (requireRole) => createPayrollRoutes(reads, validation, requireRole),
     jobs: {
       recalculate: (period, logger) => createRecalculation(jobStore, logger, now).recalculate(period),
       recalculateOpen: (logger) => createRecalculation(jobStore, logger, now).recalculateOpen(),

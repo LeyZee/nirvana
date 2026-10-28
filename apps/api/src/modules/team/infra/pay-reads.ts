@@ -35,9 +35,10 @@ const RowSchema = z.object({
 
 /**
  * Every member, those who left included (their reports are still paid), each with the latest rate effective on `day`
- * or before (`member_commission_rates`, one per member and day). Pay's job runs on the admin connection.
+ * or before (`member_commission_rates`, one per member and day), in the caller's transaction: pay's job on the admin
+ * connection, or a validation as its member, whose scope (`owner`, `agency`) reads every member.
  */
-export async function membersForPayUnscoped(tx: Transaction, day: string): Promise<MemberForPay[]> {
+export async function membersForPay(tx: Transaction, day: string): Promise<MemberForPay[]> {
   const result = await tx.execute(sql`
     select m.id, m.team_role, m.status, m.joined_on::text as joined_on, rate.rate_bps, rate.team_share_bps
     from team_members m

@@ -11,7 +11,13 @@ import { createSwapService } from './application/swaps';
 import type { CreatorDirectory, JobLogger, OnShift } from './domain/ports';
 import { createDrizzleColleagueReads } from './infra/colleague-reads';
 import { createDrizzleLeaveStore } from './infra/leave-store';
-import { validatedReportsUnscoped, type ValidatedReportForPay } from './infra/pay-reads';
+import {
+  reportsAwaitingReviewScoped,
+  validatedReportsScoped,
+  validatedReportsUnscoped,
+  type CreatorReportsForPay,
+  type ValidatedReportForPay,
+} from './infra/pay-reads';
 import { createDrizzlePayRulesStore } from './infra/pay-rules-store';
 import { createDrizzlePlanningAdmin, createDrizzlePlanningStore } from './infra/planning-store';
 import { createDrizzleShiftReportStore } from './infra/report-store';
@@ -35,11 +41,23 @@ export interface SchedulingModule {
   onShift(creatorId: CreatorId, at: Date): Promise<OnShift[]>;
   /**
    * What pay reads of the planning (EQ-04), in pay's own transaction, given by the composition root: the validated
-   * reports up to a period on every creator, each with its account's rules for the period it was made in (pay's job,
-   * admin connection), and the agency's zone the periods follow. A validated report enqueues `payroll.recalculate`.
+   * reports up to a period, each with its account's rules for the period it was made in, on every creator (pay's job,
+   * admin connection) or creator by creator as the validating member reads them (ADR 0032), the reports still waiting
+   * for review, and the agency's zone the periods follow. A validated report enqueues `payroll.recalculate`.
    */
   readonly pay: {
     readonly validatedReportsUnscoped: (tx: Transaction, upTo: PayPeriod) => Promise<ValidatedReportForPay[]>;
+    readonly validatedReportsScoped: (
+      tx: Transaction,
+      creatorIds: readonly string[],
+      upTo: PayPeriod,
+    ) => Promise<CreatorReportsForPay[]>;
+    readonly reportsAwaitingReviewScoped: (
+      tx: Transaction,
+      creatorIds: readonly string[],
+      after: PayPeriod | null,
+      upTo: PayPeriod,
+    ) => Promise<number>;
     readonly agencyTimeZone: (tx: Transaction) => Promise<string>;
   };
   readonly jobs: {
@@ -102,7 +120,7 @@ export function createSchedulingModule(deps: SchedulingDeps): SchedulingModule {
   return {
     name: 'scheduling',
     onShift: (creatorId, at) => admin.onShiftUnscoped(creatorId, at),
-    pay: { validatedReportsUnscoped, agencyTimeZone },
+    pay: { validatedReportsUnscoped, validatedReportsScoped, reportsAwaitingReviewScoped, agencyTimeZone },
     routes: (requireRole) => createSchedulingRoutes(services, requireRole),
     jobs: {
       makeShifts: (logger) => makeShifts(admin, logger, now()),

@@ -419,6 +419,20 @@ function computePeriod(snapshot: PeriodSnapshot): {
   return { computed, given: members.map(({ member }) => member.id).filter((id) => given.has(id)), contentOf };
 }
 
+/** `computePeriod`, and a closed period must give its closing's team net and collective goal again: it is the truth. */
+function computedOnClosing(snapshot: PeriodSnapshot): ReturnType<typeof computePeriod> {
+  const period = computePeriod(snapshot);
+  const { closing } = snapshot;
+  if (
+    closing !== null &&
+    (closing.teamNetMinor !== period.computed.teamNetMinor ||
+      canonicalJson(closing.collective) !== canonicalJson(period.computed.collective))
+  ) {
+    throw new Error(`Period ${snapshot.period} no longer gives its closing's team net`);
+  }
+  return period;
+}
+
 /**
  * What to write for the period: a draft for each member it gives a statement to, the next revision of a draft whose
  * content changed (a draft left with nothing gets a zero revision), nothing for what did not change. A closed period
@@ -426,16 +440,7 @@ function computePeriod(snapshot: PeriodSnapshot): {
  */
 export function planPeriod(snapshot: PeriodSnapshot): PeriodPlan {
   if (snapshot.firstClosed !== null && snapshot.period < snapshot.firstClosed) return { kind: 'never' };
-  const { computed, given, contentOf } = computePeriod(snapshot);
-  const { closing } = snapshot;
-  if (
-    closing !== null &&
-    (closing.teamNetMinor !== computed.teamNetMinor ||
-      canonicalJson(closing.collective) !== canonicalJson(computed.collective))
-  ) {
-    throw new Error(`Period ${snapshot.period} no longer gives its closing's team net`);
-  }
-
+  const { given, contentOf } = computedOnClosing(snapshot);
   const stored = new Map(snapshot.statements.map((statement) => [statement.memberId, statement]));
   const memberIds = new Set<TeamMemberId>([...given, ...stored.keys()]);
   const inserts: StatementDraft[] = [];
@@ -453,4 +458,81 @@ export function planPeriod(snapshot: PeriodSnapshot): PeriodPlan {
     } else drifted.push(statement.id);
   }
   return { kind: 'write', inserts, updates, unchanged, drifted };
+}
+
+/** What a period's closing freezes for the team (ADR 0032), with the reports its registry holds from then on. */
+export interface ClosingPlan {
+  readonly counted: readonly ReportForPay[];
+  readonly teamNetMinor: number;
+  readonly collective: CollectiveReached;
+  readonly exchangeRates: readonly ExchangeRate[];
+}
+
+/**
+ * The closing of `snapshot.period`, the team's first open period (ADR 0032): the reports it counts now go to its
+ * registry; its team net, goal as reached and rates are frozen. With it, the snapshot as it reads once the closing is
+ * written, on which every statement of the period is computed from then on. A rate or a commission rate missing is
+ * refused here as in the recalculation: a period never closes on a guess.
+ */
+export function closePeriod(snapshot: PeriodSnapshot): {
+  readonly closing: ClosingPlan;
+  readonly closed: PeriodSnapshot;
+} {
+  const { period } = snapshot;
+  if (snapshot.closing !== null) throw new Error(`Period ${period} is closed already`);
+  const firstOpen = firstOpenPeriod(snapshot.lastClosed);
+  if (firstOpen !== null && firstOpen !== period)
+    throw new Error(`Period ${period} is not the first open one`);
+  // Before any closing, a period counts its own reports: one still waiting from earlier would be left behind.
+  if (
+    firstOpen === null &&
+    snapshot.reports.some((report) => report.period < period && !snapshot.registered.has(report.id))
+  ) {
+    throw new Error(`An earlier period than ${period} must close first`);
+  }
+  const counted = reportsCounted(snapshot);
+  const { computed } = computePeriod(snapshot);
+  const frozen = {
+    teamNetMinor: computed.teamNetMinor,
+    collective: computed.collective,
+    exchangeRates: periodRates(snapshot, counted),
+  };
+  const registered = new Map(snapshot.registered);
+  for (const report of counted) registered.set(report.id, period);
+  return {
+    closing: { ...frozen, counted },
+    closed: {
+      ...snapshot,
+      closing: frozen,
+      registered,
+      firstClosed: snapshot.firstClosed ?? period,
+      lastClosed: period,
+    },
+  };
+}
+
+/** A member's statement of the period as it computes now, with its `inputsHash`: what a validation compares. */
+export function statementOf(snapshot: PeriodSnapshot, memberId: TeamMemberId): StatementDraft {
+  const content = computedOnClosing(snapshot).contentOf(memberId);
+  return { content, inputsHash: sha256Of(content) };
+}
+
+/** Whether the period counts something for the member: a report, or a statement the engine gives them. */
+export function paysMember(snapshot: PeriodSnapshot, memberId: TeamMemberId): boolean {
+  return (
+    reportsCounted(snapshot).some((report) => report.memberId === memberId) ||
+    computedOnClosing(snapshot).given.includes(memberId)
+  );
+}
+
+/**
+ * Whether the period may close on the way to a later one (ADR 0032): no statement, no report counted, nothing the
+ * engine gives anyone (a bonus, an adjustment, a carry-over in). Otherwise its statements are validated first.
+ */
+export function periodIsEmpty(snapshot: PeriodSnapshot): boolean {
+  return (
+    snapshot.statements.length === 0 &&
+    reportsCounted(snapshot).length === 0 &&
+    computedOnClosing(snapshot).given.length === 0
+  );
 }

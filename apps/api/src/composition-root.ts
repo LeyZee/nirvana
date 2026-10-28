@@ -257,8 +257,11 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     adminDb: adminDb.db,
     reads: {
       validatedReportsUnscoped: scheduling.pay.validatedReportsUnscoped,
+      validatedReportsScoped: scheduling.pay.validatedReportsScoped,
+      reportsAwaitingReviewScoped: scheduling.pay.reportsAwaitingReviewScoped,
       agencyTimeZone: scheduling.pay.agencyTimeZone,
-      membersUnscoped: team.pay.membersUnscoped,
+      members: team.pay.members,
+      creatorIds: async () => (await persona.creators.list('all')).map((creator) => creator.id),
     },
   });
   const playground =

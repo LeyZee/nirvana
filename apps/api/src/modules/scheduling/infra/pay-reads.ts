@@ -11,7 +11,7 @@ import {
   type ShiftReportId,
   type TeamMemberId,
 } from '@nirvana/contracts';
-import { sql, type Transaction } from '@nirvana/db';
+import { enterCreator, sql, type Transaction } from '@nirvana/db';
 import { z } from 'zod';
 
 /**
@@ -43,15 +43,8 @@ const RowSchema = z.object({
   platform_fee_bps: z.number().int().nullable(),
 });
 
-/**
- * Every validated report made for `upTo` or an earlier period, on every creator: pay's job runs on the admin
- * connection, a read bounded to that job (ADR 0023 § Paie). A report was validated only under its period's rules
- * (`assertDeclarable`), so a report without them is a broken database, never a case of pay.
- */
-export async function validatedReportsUnscoped(
-  tx: Transaction,
-  upTo: PayPeriod,
-): Promise<ValidatedReportForPay[]> {
+/** The validated reports made for `upTo` or an earlier period that the transaction reads. */
+async function validatedReports(tx: Transaction, upTo: PayPeriod): Promise<ValidatedReportForPay[]> {
   const result = await tx.execute(sql`
     select r.id, r.member_id, r.platform_account_id, r.period::text as period, r.amount_minor, r.currency,
       rules.vat_bps, rules.platform_fee_bps
@@ -79,6 +72,61 @@ export async function validatedReportsUnscoped(
       platformFeeBps: row.platform_fee_bps,
     };
   });
+}
+
+/**
+ * Every validated report made for `upTo` or an earlier period, on every creator: pay's job runs on the admin
+ * connection, a read bounded to that job (ADR 0023 § Paie). A report was validated only under its period's rules
+ * (`assertDeclarable`), so a report without them is a broken database, never a case of pay.
+ */
+export function validatedReportsUnscoped(tx: Transaction, upTo: PayPeriod): Promise<ValidatedReportForPay[]> {
+  return validatedReports(tx, upTo);
+}
+
+/** One creator's validated reports, as the validation of a statement reads them. */
+export interface CreatorReportsForPay {
+  readonly creatorId: string;
+  readonly reports: readonly ValidatedReportForPay[];
+}
+
+/**
+ * The same reports as the member of the transaction may read them, creator by creator (`enterCreator` on the list the
+ * caller checked): the validation that closes a period runs as its member, so that the policies keep the four eyes
+ * (ADR 0032). The transaction is left in the last creator of the list.
+ */
+export async function validatedReportsScoped(
+  tx: Transaction,
+  creatorIds: readonly string[],
+  upTo: PayPeriod,
+): Promise<CreatorReportsForPay[]> {
+  const read: CreatorReportsForPay[] = [];
+  for (const creatorId of creatorIds) {
+    await enterCreator(tx, creatorId, creatorIds);
+    read.push({ creatorId, reports: await validatedReports(tx, upTo) });
+  }
+  return read;
+}
+
+/**
+ * How many reports made for a period after `after` (any, when `null`) up to `upTo` wait for review, sent and neither
+ * validated nor sent back, creator by creator as `validatedReportsScoped`: a closing would send them to the next
+ * period unseen (ADR 0032).
+ */
+export async function reportsAwaitingReviewScoped(
+  tx: Transaction,
+  creatorIds: readonly string[],
+  after: PayPeriod | null,
+  upTo: PayPeriod,
+): Promise<number> {
+  let waiting = 0;
+  for (const creatorId of creatorIds) {
+    await enterCreator(tx, creatorId, creatorIds);
+    const result = await tx.execute(sql`
+      select count(*)::int as count from shift_reports
+      where status = 'submitted' and period <= ${upTo} and (${after}::date is null or period > ${after}::date)`);
+    waiting += z.object({ count: z.number().int() }).parse(result.rows[0]).count;
+  }
+  return waiting;
 }
 
 /**

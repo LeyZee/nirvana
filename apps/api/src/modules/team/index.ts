@@ -4,7 +4,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { createTeamService } from './application/team';
 import type { CreatorRoster, InvitationLinkDirectory } from './domain/ports';
 import { createTeamRoutes, type RequireRole } from './infra/http/routes';
-import { membersForPayUnscoped, type MemberForPay } from './infra/pay-reads';
+import { membersForPay, type MemberForPay } from './infra/pay-reads';
 import { createDrizzleTeamStore } from './infra/team-store';
 
 /** Until the agency has a setting of its own (ADR 0023 § Paie): where « today » is read for rates and presets. */
@@ -17,9 +17,9 @@ export interface TeamModule {
   routes(requireRole: RequireRole): FastifyPluginAsyncZod;
   /**
    * What pay reads of the team (EQ-04), in pay's own transaction, given by the composition root: every member with
-   * the rate in force on a day (pay's job, admin connection).
+   * the rate in force on a day (pay's job on the admin connection, or a validation as its member).
    */
-  readonly pay: { readonly membersUnscoped: (tx: Transaction, day: string) => Promise<MemberForPay[]> };
+  readonly pay: { readonly members: (tx: Transaction, day: string) => Promise<MemberForPay[]> };
 }
 
 export interface TeamDeps {
@@ -43,6 +43,6 @@ export function createTeamModule(deps: TeamDeps): TeamModule {
   return {
     name: 'team',
     routes: (requireRole) => createTeamRoutes(service, requireRole),
-    pay: { membersUnscoped: membersForPayUnscoped },
+    pay: { members: membersForPay },
   };
 }
