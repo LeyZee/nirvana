@@ -713,9 +713,10 @@ export type ValidateCommissionStatementBody = z.infer<typeof ValidateCommissionS
  * `POST /v1/payroll/statements/:id/pay` (owner only) → 200 `CommissionStatementSchema`: `validated` → `paid`, once,
  * with how it was paid (ADR 0023 § Factures). `paidOn` is the day of the transfer, never after today in the agency's
  * zone (`payment_in_future_unprocessable`) nor before the first day of the statement's period
- * (`payment_before_period_unprocessable`). `reference` is refused when it holds an IBAN (400, `containsIban`). `sentMinor` is what was sent, and it must be what the statement pays
- * (`payment_amount_unprocessable`; whether another amount may be recorded is a question the EQ-05 card keeps open): a
- * statement that pays nothing, its total carried over, stays validated.
+ * (`payment_before_period_unprocessable`). `reference` is refused when it holds an IBAN (400, `containsIban`).
+ * `sentMinor` is what was sent, and it must be what the statement pays (`payment_amount_unprocessable`; whether another
+ * amount may be recorded is a question the EQ-05 card keeps open): a statement that pays nothing, its total carried
+ * over, stays validated.
  */
 export const PayCommissionStatementBodySchema = z.object({
   revision: z.number().int().min(1),
