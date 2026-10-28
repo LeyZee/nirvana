@@ -328,7 +328,6 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     voicePrompt: loadPrompt('voice').header.version,
     voiceModel: DEFAULT_LLM_CONFIG.roles.voice.model,
   };
-  const alerts = createAlertsModule({ db: db.db, requireRole });
   const conversations = createConversationsModule({
     db: db.db,
     fans,

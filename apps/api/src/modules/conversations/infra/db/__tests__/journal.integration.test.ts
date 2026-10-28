@@ -81,6 +81,7 @@ describe('the journal’s outbox', () => {
     const payload = {
       conversationId,
       trigger: { alert: { kind: 'custom', id: newId(CustomAlertIdSchema) }, matchedBy: 'model' },
+      notify: true,
     } as const;
     await createDrizzleUnitOfWork(test.app.db).inTenant(creatorId, async (tx) => {
       const conversation = await lockConversation(tx, conversationId);
