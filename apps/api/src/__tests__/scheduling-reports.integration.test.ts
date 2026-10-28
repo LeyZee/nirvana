@@ -34,6 +34,7 @@ import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { lockWaits } from './support/lock-waits';
 import { PARIS, parisDay, parisInstant } from './support/paris';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
@@ -213,15 +214,8 @@ describe('Équipe › Rapports de fin de shift (/v1/scheduling, EQ-03, ADR 0023)
     return ShiftReportListSchema.parse(response.json());
   };
 
-  /** How many locks someone waits on, of `kind` or of any kind: `pg_locks` shows every role's. */
-  const waitingOnLocks = async (kind: 'advisory' | null): Promise<number> =>
-    (
-      await test.admin.db.execute<{ waiting: number }>(
-        kind === null
-          ? sql`select count(*)::int as waiting from pg_locks where not granted`
-          : sql`select count(*)::int as waiting from pg_locks where locktype = ${kind} and not granted`,
-      )
-    ).rows[0]?.waiting ?? 0;
+  /** How many locks someone waits on in this test's database, of `kind` or of any kind. */
+  const waitingOnLocks = (kind: 'advisory' | null): Promise<number> => lockWaits(test.admin.db, kind);
 
   const untilWaiting = async (kind: 'advisory' | null, count = 1): Promise<void> => {
     for (let tries = 0; (await waitingOnLocks(kind)) < count; tries += 1) {

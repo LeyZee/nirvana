@@ -31,6 +31,7 @@ import { createLogger } from '../logger';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { lockWaits } from './support/lock-waits';
 import { iso, parisDay, parisInstant } from './support/paris';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
@@ -181,13 +182,8 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
     return PlanningSchema.parse(response.json()).shifts.find((one) => one.id === shift.id)?.memberId;
   };
 
-  /** How many advisory locks someone waits on: `pg_locks` shows every role's, `pg_stat_activity` hides them. */
-  const waitingOnLocks = async (): Promise<number> =>
-    (
-      await test.admin.db.execute<{ waiting: number }>(
-        sql`select count(*)::int as waiting from pg_locks where locktype = 'advisory' and not granted`,
-      )
-    ).rows[0]?.waiting ?? 0;
+  /** How many advisory locks someone waits on in this test's database. */
+  const waitingOnLocks = (): Promise<number> => lockWaits(test.admin.db);
 
   const untilWaiting = async (count: number): Promise<void> => {
     for (let tries = 0; (await waitingOnLocks()) < count; tries += 1) {
