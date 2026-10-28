@@ -102,7 +102,7 @@ interface Bubble {
 export interface Fan {
   readonly id: string;
   readonly name: string;
-  /** The conversation of his latest sale of the period, for « Ouvrir dans Suivi »; the sample has none. */
+  /** The conversation of his latest purchase over the period, for « Ouvrir dans Suivi »; the sample has none. */
   readonly conversationId?: string;
   /** « abonné depuis 3 semaines · Nantes » */
   readonly line: string;

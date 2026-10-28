@@ -599,7 +599,7 @@ describe('DashboardPage, its fan reader', () => {
     expect(screen.queryByText(/Corrections/)).toBeNull();
     fireEvent.click(screen.getByRole('link', { name: 'Ouvrir dans Suivi' }));
     await waitFor(() => {
-      expect(location()).toBe(`/suivi?conversation=${theo.conversationId}`);
+      expect(location()).toBe(`/suivi?conversation=${theo.conversationId}&creatrice=${CREATOR.id}`);
     });
   });
 

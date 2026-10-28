@@ -49,6 +49,7 @@ const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, A
  */
 export function TrackingPage({
   selected,
+  selectedCreator = null,
   onSelect,
   canDecide,
   canAddCreator,
@@ -57,6 +58,8 @@ export function TrackingPage({
 }: {
   /** The conversation open in the reader (`/suivi?conversation=<id>`), or null for the list alone. */
   selected: string | null;
+  /** The creator the link names for it (`&creatrice=<id>`), read first when she is one of this account's. */
+  selectedCreator?: string | null;
   onSelect: (conversationId: string | null) => void;
   /** Owners and chatters decide on drafts and take over; a creator reads. */
   canDecide: boolean;
@@ -112,6 +115,7 @@ export function TrackingPage({
     selected === null
       ? null
       : (lines.find((l) => l.conversation.id === selected)?.creatorId ??
+        creators.find((c) => c.id === selectedCreator)?.id ??
         (creators.length === 1 || todos.some((t) => t.conversationId === selected) ? queueCreator : null));
 
   return (

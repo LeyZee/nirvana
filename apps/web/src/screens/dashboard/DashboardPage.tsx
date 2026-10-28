@@ -251,7 +251,9 @@ function Loaded({
       )}
 
       {tip.element}
-      {forCreator ? null : <Reader fan={fan} onClose={close} opensTracking={opensTracking} />}
+      {forCreator ? null : (
+        <Reader fan={fan} creatorId={creatorId} onClose={close} opensTracking={opensTracking} />
+      )}
     </div>
   );
 }

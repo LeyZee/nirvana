@@ -103,6 +103,17 @@ describe('parseTrackingSearch', () => {
     expect(parseTrackingSearch({ conversation: 42 })).toEqual({});
     expect(parseTrackingSearch({})).toEqual({});
   });
+
+  it('keeps the creator the link names, only with a conversation and only as an id', () => {
+    const id = '0192f3a0-0000-7000-8000-000000000001';
+    const creator = '0192f3a0-0000-7000-8000-0000000000a1';
+    expect(parseTrackingSearch({ conversation: id, creatrice: creator })).toEqual({
+      conversation: id,
+      creatrice: creator,
+    });
+    expect(parseTrackingSearch({ conversation: id, creatrice: 'Anna' })).toEqual({ conversation: id });
+    expect(parseTrackingSearch({ creatrice: creator })).toEqual({});
+  });
 });
 
 describe('bubblesFromText', () => {

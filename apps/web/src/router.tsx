@@ -117,12 +117,13 @@ const tracking = createRoute({
   path: '/suivi',
   validateSearch: parseTrackingSearch,
   component: function Tracking() {
-    const { conversation } = tracking.useSearch();
+    const { conversation, creatrice } = tracking.useSearch();
     const navigate = tracking.useNavigate();
     const { user } = rootRoute.useRouteContext();
     const rail = railOf(user);
     const props = {
       selected: conversation ?? null,
+      selectedCreator: creatrice ?? null,
       onSelect: (id: string | null) => void navigate({ search: id === null ? {} : { conversation: id } }),
       canDecide: user.role !== 'creator',
       canAddCreator: canOpen(rail, '/creatrices'),

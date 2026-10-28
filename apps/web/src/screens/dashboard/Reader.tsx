@@ -15,10 +15,13 @@ import { keepTabInside } from '@/shell/focus';
  */
 export function Reader({
   fan,
+  creatorId,
   onClose,
   opensTracking,
 }: {
   fan: Fan | null;
+  /** Hers, for Suivi to open his conversation even outside her latest ones; null on the sample. */
+  creatorId: string | null;
   onClose: () => void;
   opensTracking: boolean;
 }): JSX.Element {
@@ -112,7 +115,10 @@ export function Reader({
               {opensTracking && fan.conversationId !== undefined ? (
                 <Link
                   to="/suivi"
-                  search={{ conversation: fan.conversationId }}
+                  search={{
+                    conversation: fan.conversationId,
+                    ...(creatorId === null ? {} : { creatrice: creatorId }),
+                  }}
                   className="nv-btn nv-btn--soft nv-btn--sm"
                 >
                   Ouvrir dans Suivi
