@@ -7,7 +7,7 @@ Fait :
 - `domain/accounting.ts` : le journal des achats (`purchaseJournal`) et les bénéficiaires de la DAS2 (`das2Beneficiaries`).
 - Le glossaire gagne « Pièce du prestataire », « Acceptation d'une facture », « Journal des achats » et « DAS2 » ; « Malus » et « Ajustement » disent leur ligne de facture. Le README du module suit.
 
-Pas fait : les lots 2 à 8 (base et contrats par Bilan, émission, PDF et ADR 0035, dossier et mandat, acceptation, export, écrans). Rien n'est poussé avant le mot de Charles.
+Pas fait : les lots 2 à 8 (base et contrats par Bilan, émission, PDF et ADR 0036, dossier et mandat, acceptation, export, écrans). Rien n'est poussé avant le mot de Charles.
 
 Décisions (défauts à faire valider par Charles et le comptable, détaillés dans la fiche) :
 - Une identité à laquelle manque une mention (nom, adresse, pays, identifiant fiscal quand le régime l'imprime) bloque l'émission ; les pièces et le mandat dépassé restent des avertissements.
