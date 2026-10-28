@@ -229,4 +229,33 @@ describe('Créatrices › Heures (P3-14)', () => {
     expect(await screen.findByText('Le serveur ne répond pas. Réessaie dans un instant.')).toBeDefined();
     expect(screen.getByRole('radio', { name: 'Par créneaux' }).getAttribute('aria-checked')).toBe('true');
   });
+
+  it('reads her hours on her new clock once the owner moves her, and keeps them as they were', async () => {
+    const slots: AgentHours = {
+      ...DEFAULT_AGENT_HOURS,
+      reply: { mode: 'slots', slots: [{ day: 1, startMinute: 540, endMinute: 1080, enabled: true }] },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const body =
+          init?.method === 'PATCH'
+            ? { id: CREATOR, displayName: 'Nora Vidal', timezone: 'America/New_York' }
+            : view(slots, { isDefault: false });
+        expect(url).toBe(
+          init?.method === 'PATCH' ? `/v1/creators/${CREATOR}` : `/v1/creators/${CREATOR}/agent-hours`,
+        );
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+      }),
+    );
+    renderSection();
+    expect(await screen.findByText('À l’heure de Nora (Paris)')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    fireEvent.change(screen.getByLabelText('Fuseau'), { target: { value: 'America/New_York' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le fuseau' }));
+    expect(await screen.findByText('À l’heure de Nora (New York)')).toBeDefined();
+    // Her hours are not touched: nothing to save, her slot as it was.
+    expect(save()).toHaveProperty('disabled', true);
+    expect(screen.getByLabelText('Début du créneau du lundi')).toHaveProperty('value', '09:00');
+  });
 });

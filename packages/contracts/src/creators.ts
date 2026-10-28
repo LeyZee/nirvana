@@ -48,6 +48,13 @@ export const NewCreatorSchema = z.object({
 export type NewCreator = z.input<typeof NewCreatorSchema>;
 
 /**
+ * `PATCH /v1/creators/:creatorId` (owner only, a recent sign-in): her zone, and nothing else. A wrong zone at her
+ * creation is no longer final; her name stays as it was made.
+ */
+export const UpdateCreatorBodySchema = z.strictObject({ timezone: TimezoneSchema });
+export type UpdateCreatorBody = z.infer<typeof UpdateCreatorBodySchema>;
+
+/**
  * The error codes of `/v1/creators` (the suffix gives the status, api.md): `creator_conflict` 409, this form's id
  * already made a creator under another name or zone ; `creator_name_conflict` 409, another creator has this name
  * (`creatorNameKey`) ; `creator_not_found` 404. Nothing is written on any of them.

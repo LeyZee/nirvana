@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   CreatorListSchema,
   CreatorSummarySchema,
+  REAUTHENTICATION_ERROR_CODE,
   type CreatorErrorCode,
   type CreatorId,
   type CreatorSummary,
@@ -68,4 +69,48 @@ export async function createCreator(
   const fields = RefusedFieldsSchema.safeParse(error.data?.error.details);
   const onZone = fields.success && fields.data.fields.some((field) => field.path === '/timezone');
   return onZone ? { kind: 'unknown_zone' } : { kind: 'invalid' };
+}
+
+export type MoveResult =
+  | { readonly kind: 'moved'; readonly creator: CreatorSummary }
+  /** 400: the server does not know this zone. */
+  | { readonly kind: 'unknown_zone' }
+  /** 403 `reauthentication_forbidden`: the sign-in is over 10 minutes old, the password is asked again. */
+  | { readonly kind: 'reauth' }
+  /** Any other 403: only the owner moves a creator. */
+  | { readonly kind: 'forbidden' }
+  | { readonly kind: 'not_found' }
+  | { readonly kind: 'expired' }
+  | { readonly kind: 'failed' };
+
+/**
+ * `PATCH /v1/creators/:creatorId` (owner only, a recent sign-in): her zone, nothing else. Answers her as stored, the
+ * zone spelled as the runtime spells it. Nothing behind her is computed again.
+ */
+export async function moveCreator(creatorId: string, timezone: string): Promise<MoveResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/v1/creators/${encodeURIComponent(creatorId)}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ timezone }),
+    });
+  } catch {
+    return { kind: 'failed' };
+  }
+  if (response.ok) {
+    const creator = CreatorSummarySchema.safeParse(await response.json().catch(() => null));
+    return creator.success ? { kind: 'moved', creator: creator.data } : { kind: 'failed' };
+  }
+  if (response.status === 400) return { kind: 'unknown_zone' };
+  if (response.status === 401) return { kind: 'expired' };
+  if (response.status === 404) return { kind: 'not_found' };
+  if (response.status === 403) {
+    const error = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+    return error.data?.error.code === REAUTHENTICATION_ERROR_CODE
+      ? { kind: 'reauth' }
+      : { kind: 'forbidden' };
+  }
+  return { kind: 'failed' };
 }

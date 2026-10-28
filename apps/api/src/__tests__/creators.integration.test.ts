@@ -288,6 +288,94 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     expect((await read()).isDefault).toBe(true);
   });
 
+  it('lets the owner alone move her to another zone, with a recent sign-in and an audit line', async () => {
+    const lou = await app.modules.persona.creators.create({ displayName: 'Lou', timezone: 'Europe/Paris' });
+    // Her hours by slots: the opening moves with her clock.
+    const slots: AgentHours = {
+      ...DEFAULT_AGENT_HOURS,
+      reply: { mode: 'slots', slots: [...SUGGESTED_REPLY_SLOTS] },
+    };
+    await app.modules.persona.creators.setAgentHours(lou.id, slots, 'system');
+    const url = `/v1/creators/${lou.id}`;
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const operator = {
+      cookie: await signIn(server, OPERATOR.email, OPERATOR.password),
+      origin: DASHBOARD_ORIGIN,
+    };
+    const patch = (headers: Record<string, string>, payload: Record<string, string>, at = url) =>
+      server.inject({ method: 'PATCH', url: at, headers, payload });
+    const status = (response: Awaited<ReturnType<typeof patch>>) => [
+      response.statusCode,
+      response.json<{ error?: { code: string } }>().error?.code,
+    ];
+    const zone = async () =>
+      (await test.admin.db.select().from(schema.creators).where(eq(schema.creators.id, lou.id)))[0]?.timezone;
+    const audits = () =>
+      test.admin.db
+        .select({
+          action: schema.auditLog.action,
+          details: schema.auditLog.details,
+          userId: schema.auditLog.userId,
+        })
+        .from(schema.auditLog)
+        .where(
+          sql`${schema.auditLog.entityId} = ${lou.id} and ${schema.auditLog.action} = 'creator.timezone'`,
+        );
+
+    expect(status(await patch(operator, { timezone: 'America/New_York' }))).toEqual([403, 'role_forbidden']);
+    expect(status(await patch(owner, { timezone: 'Europe/Atlantis' }))).toEqual([400, 'request_invalid']);
+    // Her zone and nothing else: her name is not changed here.
+    expect((await patch(owner, { timezone: 'America/New_York', displayName: 'Louise' })).statusCode).toBe(
+      400,
+    );
+    expect(await zone()).toBe('Europe/Paris');
+
+    const moved = await patch(owner, { timezone: 'america/new_york' });
+    expect(moved.statusCode).toBe(200);
+    expect(moved.json()).toEqual({ id: lou.id, displayName: 'Lou', timezone: 'America/New_York' });
+    expect(await zone()).toBe('America/New_York');
+    const [owner_] = await test.admin.db
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(schema.user.email, OWNER.email));
+    expect(await audits()).toEqual([
+      {
+        action: 'creator.timezone',
+        details: { from: 'Europe/Paris', to: 'America/New_York' },
+        userId: owner_?.id,
+      },
+    ]);
+    // Those who wait are answered at her next opening on her new clock.
+    const [reopen] = await reopenJobs(lou.id);
+    expect(reopen?.run_at.getTime()).toBe(
+      nextReplyOpening(slots, 'America/New_York', reopen?.run_at ?? new Date()).getTime(),
+    );
+    // Her hours read on the new clock.
+    const hours = await server.inject({ method: 'GET', url: `${url}/agent-hours`, headers: owner });
+    expect(AgentHoursViewSchema.parse(hours.json()).timeZone).toBe('America/New_York');
+
+    // The same zone again: nothing written.
+    expect((await patch(owner, { timezone: 'America/New_York' })).statusCode).toBe(200);
+    expect(await audits()).toHaveLength(1);
+
+    const missing = '0199f2a0-0000-7000-8000-0000000000fe';
+    expect(status(await patch(owner, { timezone: 'Europe/Paris' }, `/v1/creators/${missing}`))).toEqual([
+      404,
+      'creator_not_found',
+    ]);
+
+    // A change asks for the password again after 10 minutes.
+    await test.admin.db.execute(
+      sql`update "session" set created_at = now() - interval '11 minutes' where user_id = (select id from "user" where email = ${OWNER.email})`,
+    );
+    expect(status(await patch(owner, { timezone: 'Asia/Tokyo' }))).toEqual([
+      403,
+      'reauthentication_forbidden',
+    ]);
+    expect(await zone()).toBe('America/New_York');
+    expect(await audits()).toHaveLength(1);
+  });
+
   it('says when her stored hours no longer read, and follows the defaults', async () => {
     const iris = await app.modules.persona.creators.create({ displayName: 'Iris' });
     // Hours a later contract would refuse: every slot switched off.

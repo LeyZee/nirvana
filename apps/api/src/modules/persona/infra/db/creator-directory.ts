@@ -11,6 +11,8 @@ import {
   newId,
   nextReplyOpening,
   reopenJobKey,
+  TimezoneSchema,
+  type AgentHours,
   type CreatorSummary,
 } from '@nirvana/contracts';
 import { eq, inArray, schema, sql, type Database } from '@nirvana/db';
@@ -30,6 +32,32 @@ const isNameTaken = (error: unknown): boolean =>
       'constraint' in e &&
       e.constraint === 'creators_name_key_unique',
   );
+
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/**
+ * The fans her old hours or clock put off wait for her opening under the new ones, which may be now
+ * (`conversation.reopen`, one per creator): never until an opening that no longer is. With nobody waiting, the job
+ * finds nothing.
+ */
+async function moveReopen(
+  tx: Transaction,
+  creator: { id: string; hours: AgentHours | null; timezone: string },
+  at: Date,
+  correlationId: string,
+): Promise<void> {
+  const opening = nextReplyOpening(creator.hours ?? DEFAULT_AGENT_HOURS, creator.timezone, at);
+  const payload = JOB_PAYLOADS['conversation.reopen'].parse({ creatorId: creator.id, correlationId });
+  await tx.execute(
+    sql`select public.enqueue_job(
+      task => 'conversation.reopen',
+      payload => ${JSON.stringify(payload)}::jsonb,
+      run_at => ${opening.toISOString()}::timestamptz,
+      max_attempts => ${JOB_MAX_ATTEMPTS['conversation.reopen']}::int,
+      job_key => ${reopenJobKey(creator.id)}
+    )`,
+  );
+}
 
 const toSummary = (row: { id: string; displayName: string; timezone: string }): CreatorSummary => ({
   id: CreatorIdSchema.parse(row.id),
@@ -111,6 +139,40 @@ export function createDrizzleCreatorDirectory(
       }
     },
 
+    async setTimezone(id, timezone, userId) {
+      const zone = canonicalTimezone(TimezoneSchema.parse(timezone));
+      return db.transaction(async (tx) => {
+        // Locked: two changes at once each read the zone the other left, and the audit says from where to where.
+        const [current] = await tx
+          .select({
+            id: schema.creators.id,
+            displayName: schema.creators.displayName,
+            timezone: schema.creators.timezone,
+            agentHours: schema.creators.agentHours,
+          })
+          .from(schema.creators)
+          .where(eq(schema.creators.id, id))
+          .for('update');
+        if (current === undefined) return null;
+        if (current.timezone === zone) return toSummary(current);
+        await tx.update(schema.creators).set({ timezone: zone }).where(eq(schema.creators.id, id));
+        const auditId = newId(AuditEntryIdSchema);
+        // Her hours read on her new clock; unreadable ones are the defaults, as the worker reads them.
+        const stored = current.agentHours === null ? null : AgentHoursSchema.safeParse(current.agentHours);
+        const hours = stored?.success === true ? stored.data : null;
+        await moveReopen(tx, { id, hours, timezone: zone }, now(), `timezone:${auditId}`);
+        await tx.insert(schema.auditLog).values({
+          id: auditId,
+          userId,
+          action: 'creator.timezone',
+          entity: 'creator',
+          entityId: id,
+          details: { from: current.timezone, to: zone },
+        });
+        return toSummary({ ...current, timezone: zone });
+      });
+    },
+
     async agentHours(id) {
       const [row] = await db
         .select({ timezone: schema.creators.timezone, agentHours: schema.creators.agentHours })
@@ -137,21 +199,11 @@ export function createDrizzleCreatorDirectory(
         const [creator] = updated;
         if (creator === undefined) return false;
         const auditId = newId(AuditEntryIdSchema);
-        // The fans her old hours put off wait for her opening under the new ones, which may be now (`conversation.reopen`,
-        // one per creator): never until an opening that no longer is. With nobody waiting, the job finds nothing.
-        const opening = nextReplyOpening(parsed ?? DEFAULT_AGENT_HOURS, creator.timezone, now());
-        const payload = JOB_PAYLOADS['conversation.reopen'].parse({
-          creatorId: id,
-          correlationId: `agent_hours:${auditId}`,
-        });
-        await tx.execute(
-          sql`select public.enqueue_job(
-            task => 'conversation.reopen',
-            payload => ${JSON.stringify(payload)}::jsonb,
-            run_at => ${opening.toISOString()}::timestamptz,
-            max_attempts => ${JOB_MAX_ATTEMPTS['conversation.reopen']}::int,
-            job_key => ${reopenJobKey(id)}
-          )`,
+        await moveReopen(
+          tx,
+          { id, hours: parsed, timezone: creator.timezone },
+          now(),
+          `agent_hours:${auditId}`,
         );
         await tx.insert(schema.auditLog).values({
           id: auditId,
