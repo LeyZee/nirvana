@@ -1,0 +1,7 @@
+# 2026-10-28 — EQ-04 : calcul pur des relevés de commissions — in-progress
+Fait : module `payroll` (feuille), enregistré dans `eslint.config.js` et `docs/architecture/modules.md`, avec son README. `domain/rounding.ts` : `mulDivRound`, l'unique arrondi de la paie (demi qui s'éloigne de zéro, négatifs compris, produit en `bigint`, entiers seulement). `domain/commission-statements.ts` : `computeCommissionStatements`, fonction pure de toute la quinzaine, avec `ENGINE_VERSION` ; chaîne d'Imperium compte par compte (brut → euros → hors TVA → net → commission), paliers, objectif collectif, primes manuelles, malus plafonnés, part d'équipe d'un manager, reports et ajustements, minimum de versement, relevé final. Erreur `exchange_rate_missing_conflict`. Glossaire : report (un total sous zéro est reporté aussi).
+Pas fait : contrats et tables (avec Bilan), recalcul par job, validation sous verrou avec `inputs_hash`, « payé », taux de change, tests d'intégration.
+Décisions : voir les notes de la fiche EQ-04 (calcul de toute la quinzaine, part d'équipe sans le propre net du manager en attendant la réponse de Charles, total négatif reporté, paliers à égalité, vente tardive dans le total de son compte, tests par propriétés sans dépendance).
+Découvertes : l'écran des paliers (EQ-05) doit refuser deux paliers au même seuil.
+Candidats à suppression : aucun.
+Vérifié : `pnpm check` ✓, `pnpm test` ✓ (27 tests nouveaux : 23 cas de référence, 4 propriétés sur 400 quinzaines chacune).

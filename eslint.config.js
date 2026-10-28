@@ -27,6 +27,7 @@ const MODULE_DEPENDENCIES = {
   backups: [],
   scheduling: [],
   alerts: [],
+  payroll: [],
 };
 
 const moduleNames = Object.keys(MODULE_DEPENDENCIES);
