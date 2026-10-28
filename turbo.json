@@ -21,7 +21,7 @@
     },
     "test": {
       "dependsOn": ["^transit"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/personas/**"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/personas/**", "$TURBO_ROOT$/evals/**"],
       "outputs": []
     },
     "test:integration": {
