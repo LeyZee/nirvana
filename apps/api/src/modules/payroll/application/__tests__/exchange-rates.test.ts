@@ -14,7 +14,7 @@ function job(options: {
   ecb: readonly EcbRate[] | Error;
   lastDay: string | null;
   at: string;
-  production?: { scheduledAt: string | null };
+  production?: { scheduledAt: string | null } | Error;
 }) {
   const published: OverdueRate[] = [];
   const deps: RateJobDeps = {
@@ -41,7 +41,9 @@ function job(options: {
       options.production === undefined
         ? null
         : () => {
-            const at = options.production?.scheduledAt ?? null;
+            const { production } = options;
+            if (production instanceof Error) return Promise.reject(production);
+            const at = production?.scheduledAt ?? null;
             return Promise.resolve(at === null ? null : new Date(at));
           },
     now: () => new Date(options.at),
@@ -122,6 +124,17 @@ describe('payroll.fetch_exchange_rates, when rates stop coming (ADR 0033)', () =
     });
     await expect(unscheduled.run()).rejects.toThrow('network down');
     expect(unscheduled.published).toEqual([]);
+  });
+
+  it('fails the job when the first schedule cannot be read, never taking it for a job never scheduled', async () => {
+    const { run, published } = job({
+      ecb: [],
+      lastDay: null,
+      at: '2026-12-01T08:07:00Z',
+      production: new Error('relation "graphile_worker._private_known_crontabs" does not exist'),
+    });
+    await expect(run()).rejects.toThrow('_private_known_crontabs');
+    expect(published).toEqual([]);
   });
 
   it('measures a currency from its last rate in production too, not from the first schedule', async () => {

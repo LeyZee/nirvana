@@ -72,8 +72,10 @@ describe('payroll.fetch_exchange_rates', () => {
     down = true;
     // Wednesday 1 October: one weekday without a rate.
     await expect(run('2025-10-01T09:07:00.000Z', production)).rejects.toThrow('network down');
-    // Friday 3 October: a third, but outside production a database without rates is the normal case.
+    // Outside production a database without rates is the normal case: nothing on Friday 3 October, the third weekday,
+    // nor a month later.
     await expect(run('2025-10-03T09:07:00.000Z')).rejects.toThrow('network down');
+    await expect(run('2025-10-31T09:07:00.000Z')).rejects.toThrow('network down');
     expect(await alerts()).toEqual([]);
     await expect(run('2025-10-03T09:07:00.000Z', production)).rejects.toThrow('network down');
     await expect(run('2025-10-03T10:07:00.000Z', production)).rejects.toThrow('network down');

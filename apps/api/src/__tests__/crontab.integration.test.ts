@@ -1,3 +1,4 @@
+import { sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { Logger, run } from 'graphile-worker';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -14,9 +15,6 @@ describe('cronKnownSince', () => {
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
-    // Graphile's schema, as the API installs it when it starts.
-    const queue = await createJobQueue(test.admin.pool);
-    await queue.close();
   });
 
   afterAll(() => test.close());
@@ -34,6 +32,15 @@ describe('cronKnownSince', () => {
     await runner.stop();
   };
 
+  it('throws, never reads null, while Graphile’s table is missing', async () => {
+    await expect(cronKnownSince(test.admin.db, 'payroll.fetch_exchange_rates')).rejects.toThrow(
+      '_private_known_crontabs',
+    );
+    // Graphile's schema, as the API installs it when it starts.
+    const queue = await createJobQueue(test.admin.pool);
+    await queue.close();
+  });
+
   it('is null until a worker carries the job, then the moment the first one started, kept across restarts', async () => {
     expect(await cronKnownSince(test.admin.db, 'payroll.fetch_exchange_rates')).toBeNull();
     const before = Date.now();
@@ -44,5 +51,20 @@ describe('cronKnownSince', () => {
     expect(since?.getTime()).toBeLessThanOrEqual(after);
     await carry();
     expect(await cronKnownSince(test.admin.db, 'payroll.fetch_exchange_rates')).toEqual(since);
+  });
+
+  it('throws when an update of Graphile renames the column it reads', async () => {
+    await test.admin.db.execute(
+      sql`alter table graphile_worker._private_known_crontabs rename column known_since to first_seen`,
+    );
+    try {
+      await expect(cronKnownSince(test.admin.db, 'payroll.fetch_exchange_rates')).rejects.toThrow(
+        'known_since',
+      );
+    } finally {
+      await test.admin.db.execute(
+        sql`alter table graphile_worker._private_known_crontabs rename column first_seen to known_since`,
+      );
+    }
   });
 });
