@@ -16,4 +16,4 @@ Découvertes :
 - La prévision de l'objectif chez le chatteur compte tout le net de l'équipe au rythme, puisqu'il ne lit pas les rapports tardifs des autres.
 - Le résumé d'une quinzaine (`GET /v1/payroll/periods`) ne porte pas la date de paiement, que « Mes relevés » aimerait dire.
 Candidats à suppression : aucun.
-Vérifié : `pnpm check` ✓ ; tests web ✓ (dont 5 d'écran pour Commissions, 6 du modèle et un pour `SubNav`) ; 70 captures des vrais écrans relues (données inventées, ADR 0010).
+Vérifié : `pnpm check` ✓ ; tests web ✓ (dont 5 d'écran pour Commissions, 6 du modèle et un pour `SubNav`) ; 70 captures des vrais écrans relues (données inventées, ADR 0010), galerie https://claude.ai/artifact/2GBd9MF6gJQnPJ1jgqZfY6.
