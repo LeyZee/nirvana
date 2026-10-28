@@ -174,10 +174,15 @@ export async function fetchFanFlags(creatorId: string, fanId: string): Promise<F
   return FanFlagsViewSchema.parse(await response.json()).flags;
 }
 
+/** The server will not tell what is left to learn about this fan (403 or 404): asking again changes nothing. */
+export class FanKycRefused extends Error {}
+
 /** `GET /v1/fans/:id/kyc` (P5-01): the canvas lines she has still to learn about him, in her persona's order. */
 export async function fetchFanKyc(creatorId: string, fanId: string): Promise<KycSlot[]> {
   const path = `/v1/fans/${encodeURIComponent(fanId)}/kyc?${new URLSearchParams({ creatorId }).toString()}`;
   const response = await fetch(path, { credentials: 'include' });
+  if (response.status === 403 || response.status === 404)
+    throw new FanKycRefused(`GET kyc: ${String(response.status)}`);
   if (!response.ok) throw new Error(`GET kyc: ${String(response.status)}`);
   return FanKycViewSchema.parse(await response.json()).toLearn;
 }

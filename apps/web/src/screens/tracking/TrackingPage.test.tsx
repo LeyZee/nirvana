@@ -99,8 +99,8 @@ function serve(routes: {
   flags?: { before?: FanFlags; after?: FanFlags };
   /** His desire curve (`/desire`), no point when not given. */
   desire?: Reply;
-  /** The canvas lines left to learn about him (`/kyc`), none when not given. */
-  kyc?: KycSlot[];
+  /** The canvas lines left to learn about him (`/kyc`), none when not given; `down` answers 500. */
+  kyc?: KycSlot[] | 'down';
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -120,7 +120,10 @@ function serve(routes: {
           routes.command?.(action) ??
           (init.method === 'PUT' ? flagsView(routes.flags?.after ?? routes.flags?.before) : { status: 204 });
       } else if (path.startsWith('/v1/fans/') && path.endsWith('/kyc')) {
-        reply = { status: 200, body: { fanId: path.split('/')[3], toLearn: routes.kyc ?? [] } };
+        reply =
+          routes.kyc === 'down'
+            ? { status: 500 }
+            : { status: 200, body: { fanId: path.split('/')[3], toLearn: routes.kyc ?? [] } };
       } else if (path.startsWith('/v1/fans/')) {
         reply = flagsView(routes.flags?.before);
       } else if (path === '/v1/creators') {
@@ -145,11 +148,11 @@ function serve(routes: {
   return posted;
 }
 
-/** Suivi as the app mounts it: the open conversation lives in the address. */
 /** The calls the reader made for what is left to learn about the fan. */
 const kycCalls = (): unknown[] =>
   vi.mocked(fetch).mock.calls.filter(([input]) => typeof input === 'string' && input.includes('/kyc?'));
 
+/** Suivi as the app mounts it: the open conversation lives in the address. */
 function renderPage(at = '/suivi', canDecide = true, canAddCreator = true): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute();
@@ -466,6 +469,17 @@ describe('the reader of Suivi', () => {
     await screen.findByText('Limites du fan');
     expect(screen.queryByText('À apprendre')).toBeNull();
     expect(kycCalls()).toHaveLength(0);
+  });
+
+  it('says nothing to learn when the server does not answer for it', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), kyc: 'down' });
+    renderPage(OPEN);
+    await screen.findByText('Limites du fan');
+    await waitFor(() => {
+      expect(kycCalls()).toHaveLength(1);
+    });
+    expect(screen.queryByText('À apprendre')).toBeNull();
+    expect(document.querySelector('.tr-learn')).toBeNull();
   });
 
   it('opens when a limit blocks, and stays open once it is lifted', async () => {
