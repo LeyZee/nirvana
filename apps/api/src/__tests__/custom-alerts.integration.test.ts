@@ -342,4 +342,68 @@ describe('alerts (P4-01, /v1/alerts)', () => {
       'Rendez-vous',
     ]);
   });
+
+  it('keeps archived an alert changed at the same moment, on every creator', async () => {
+    const ines = await app.modules.persona.creators.create({ displayName: 'Inès R.' });
+    const lou = await app.modules.persona.creators.create({ displayName: 'Lou R.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const fields = {
+      phrase: null,
+      keywords: ['adresse'],
+      pausesAgent: false,
+      notify: false,
+    };
+    for (let round = 0; round < 8; round += 1) {
+      const groupId = newId(CustomAlertGroupIdSchema);
+      const name = `Adresse ${String(round)}`;
+      const created = await server.inject({
+        method: 'POST',
+        url: '/v1/alerts',
+        headers: owner,
+        payload: { groupId, name, ...fields, creators: [{ creatorId: ines.id, enabled: true }] },
+      });
+      expect(created.statusCode).toBe(201);
+      // The change also puts the alert on a second creator: an insert, besides the update of the first row.
+      const [changed, archived] = await Promise.all([
+        server.inject({
+          method: 'PUT',
+          url: `/v1/alerts/${groupId}`,
+          headers: owner,
+          payload: {
+            name,
+            ...fields,
+            keywords: ['adresse', 'rue'],
+            creators: [
+              { creatorId: ines.id, enabled: true },
+              { creatorId: lou.id, enabled: true },
+            ],
+          },
+        }),
+        server.inject({ method: 'DELETE', url: `/v1/alerts/${groupId}`, headers: owner }),
+      ]);
+      expect(archived.statusCode).toBe(204);
+      const rows = await test.admin.db
+        .select({ archivedAt: schema.customAlerts.archivedAt })
+        .from(schema.customAlerts)
+        .where(eq(schema.customAlerts.groupId, groupId));
+      const audit = await test.admin.db
+        .select({ action: schema.auditLog.action })
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.entityId, groupId));
+      if (changed.statusCode === 200) {
+        // Both were written, so the change went first and the archive after it: archived on every creator, the
+        // second one included, never brought back by the change.
+        expect(audit.map((a) => a.action).toSorted()).toEqual([
+          'custom_alert.archive',
+          'custom_alert.create',
+          'custom_alert.update',
+        ]);
+        expect(rows.every((row) => row.archivedAt !== null)).toBe(true);
+      } else {
+        // The archive came first: the change finds no alert to change.
+        expect(errorOf(changed)).toEqual([404, 'custom_alert_not_found']);
+        expect(rows.every((row) => row.archivedAt !== null)).toBe(true);
+      }
+    }
+  });
 });
