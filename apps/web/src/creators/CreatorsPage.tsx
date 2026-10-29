@@ -106,6 +106,12 @@ export function CreatorsPage({
     if (showForm) {
       return (
         <section className="ps-page">
+          {creators.length === 0 ? (
+            // The first visit: one line on where this leads, before the form (CREA-28).
+            <p className="ps-muted cr-first">
+              Commence par ta première créatrice : son nom, puis sa persona juste après.
+            </p>
+          ) : null}
           <NewCreatorForm
             onCreated={(creator) => {
               setAdding(false);
@@ -122,54 +128,38 @@ export function CreatorsPage({
         </section>
       );
     }
-    return (
-      <>
-        {isOwner && current !== undefined ? (
-          <div className="hr-tabs">
-            <Segment
-              label="Fiche de la créatrice"
-              options={[
-                { value: 'persona', label: 'Persona' },
-                { value: 'hours', label: 'Heures d’activité' },
-              ]}
-              value={shown}
-              onChange={onTab}
-            />
-          </div>
-        ) : null}
-        {shown === 'hours' && current !== undefined ? (
-          <HoursSection
-            key={current.id}
-            creatorId={current.id}
-            creatorName={current.displayName}
-            onDirty={setDirty}
-          />
-        ) : (
-          <PersonaSection
-            key={selected ?? 'none'}
-            creatorId={selected}
-            canSave={user.role === 'owner' || user.role === 'creator'}
-            timezone={current?.timezone ?? null}
-            onDirty={setDirty}
-          />
-        )}
-      </>
+    return shown === 'hours' && current !== undefined ? (
+      <HoursSection
+        key={current.id}
+        creatorId={current.id}
+        creatorName={current.displayName}
+        onDirty={setDirty}
+      />
+    ) : (
+      <PersonaSection
+        key={selected ?? 'none'}
+        creatorId={selected}
+        canSave={user.role === 'owner' || user.role === 'creator'}
+        isOwner={isOwner}
+        creatorName={current?.displayName ?? null}
+        timezone={current?.timezone ?? null}
+        onDirty={setDirty}
+      />
     );
   };
+  // The switch Persona · Heures says where one is: the eyebrow then says nothing more (CREA-24).
+  const switchShown = isOwner && current !== undefined && !showForm && query.isSuccess;
 
   return (
     <Page>
       <PageHeader
-        eyebrow={
-          current === undefined || showForm
-            ? undefined
-            : `${current.displayName} · ${shown === 'hours' ? 'Heures d’activité' : 'Persona'}`
-        }
+        eyebrow={current === undefined || showForm || switchShown ? undefined : current.displayName}
         title="Créatrices"
         actions={
           <>
-            {creators.length > 1 ? (
-              <div className="ps-chips" role="radiogroup" aria-label="Créatrice">
+            {/* While a creator is added, only « Annuler » leads back: a chip would change nothing on screen. */}
+            {creators.length > 1 && !showForm ? (
+              <div className="ps-chips cr-creators" role="radiogroup" aria-label="Créatrice">
                 {creators.map((creator) => (
                   <button
                     key={creator.id}
@@ -204,8 +194,24 @@ export function CreatorsPage({
           </>
         }
       />
-      {leaving ? <LeaveConfirm onLeave={leave} onStay={stay} /> : null}
-      {body()}
+      {/* One child of the page: the sheet follows the switch, never pushed to the foot of the screen (CREA-03). */}
+      <div className="ps-sheet">
+        {switchShown ? (
+          <div className="hr-tabs">
+            <Segment
+              label="Fiche de la créatrice"
+              options={[
+                { value: 'persona', label: 'Persona' },
+                { value: 'hours', label: 'Heures d’activité' },
+              ]}
+              value={shown}
+              onChange={onTab}
+            />
+          </div>
+        ) : null}
+        {leaving ? <LeaveConfirm onLeave={leave} onStay={stay} /> : null}
+        {body()}
+      </div>
     </Page>
   );
 }
@@ -217,7 +223,7 @@ function LeaveConfirm({ onLeave, onStay }: { onLeave: () => void; onStay: () => 
     stayRef.current?.focus();
   }, []);
   return (
-    <div className="nv-confirm" role="alertdialog" aria-labelledby="ps-leave-text">
+    <div className="nv-confirm ps-leave" role="alertdialog" aria-labelledby="ps-leave-text">
       <p id="ps-leave-text">
         <b>Tes modifications ne sont pas enregistrées.</b> Si tu quittes cette fiche, elles seront perdues.
       </p>
@@ -225,7 +231,8 @@ function LeaveConfirm({ onLeave, onStay }: { onLeave: () => void; onStay: () => 
         <button type="button" className="nv-btn nv-btn--soft nv-btn--destructive" onClick={onLeave}>
           Les abandonner
         </button>
-        <button type="button" className="nv-btn nv-btn--neon" ref={stayRef} onClick={onStay}>
+        {/* Soft, not neon: the one neon of the screen stays on « Enregistrer » (CREA-07). */}
+        <button type="button" className="nv-btn nv-btn--soft" ref={stayRef} onClick={onStay}>
           Rester
         </button>
       </div>

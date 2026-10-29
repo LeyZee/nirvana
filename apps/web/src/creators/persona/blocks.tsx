@@ -1,14 +1,25 @@
 import {
+  PERSONA_BLOCK_LABELS,
   PERSONA_EMOJIS_MAX,
   PERSONA_OPTIONS,
   SAMPLE_REPLIES_MAX,
   type Persona,
+  type PersonaCompletion,
   type PersonaWritingStyle,
 } from '@nirvana/contracts';
-import { useId, type JSX } from 'react';
+import { useId, type JSX, type ReactNode } from 'react';
 
-import { Choice, Entries, Field, TextArea, TextInput } from './fields';
-import { emojiKey, intimateOrNone, lifestyleOrNone, repliesOrNone, tastesOrNone } from './model';
+import { Choice, Entries, Field, Fold, TextArea, TextInput } from './fields';
+import {
+  emojiKey,
+  IN_DEPTH_BLOCKS,
+  intimateOrNone,
+  issuesOf,
+  lifestyleOrNone,
+  repliesOrNone,
+  tastesOrNone,
+  type FieldIssue,
+} from './model';
 import { Block, orNull, type TabProps } from './tabs';
 
 /*
@@ -368,3 +379,42 @@ export const repliesLine = (list: Persona['sample_replies']): string => {
   const n = list?.length ?? 0;
   return n === 0 ? 'Aucune' : `${String(n)} réponse${n > 1 ? 's' : ''} type${n > 1 ? 's' : ''}`;
 };
+
+/**
+ * « Elle en détail » (CREA-02, accepted by Charles on 29/10): the five P5-01 blocks in one tab, each folded behind
+ * its name and a line that says where it stands. None is required; a block with a field to fix opens by itself.
+ */
+export function InDepthTab({
+  issues,
+  missing,
+  sections,
+}: {
+  issues: readonly FieldIssue[];
+  missing: PersonaCompletion['missing'];
+  sections: Record<(typeof IN_DEPTH_BLOCKS)[number], ReactNode>;
+}): JSX.Element {
+  return (
+    <>
+      <p className="ps-lead ps-in-depth__lead">
+        Pour aller plus loin que les Détails : sa vie, ses goûts, l’intime, sa façon d’écrire et des réponses
+        types. Rien n’est obligatoire, et ces blocs remplacent peu à peu Infos en plus.
+      </p>
+      {IN_DEPTH_BLOCKS.map((block) => {
+        const toFix = issuesOf(issues, block).length;
+        const summary =
+          toFix > 0
+            ? `${String(toFix)} à corriger`
+            : missing.some((m) => m.block === block)
+              ? 'À compléter'
+              : 'Complet';
+        return (
+          <Fold key={block} title={PERSONA_BLOCK_LABELS[block]} summary={summary} open={toFix > 0}>
+            <div className="ps-in-depth__body" data-path={block}>
+              {sections[block]}
+            </div>
+          </Fold>
+        );
+      })}
+    </>
+  );
+}

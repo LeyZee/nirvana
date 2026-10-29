@@ -107,14 +107,47 @@
   opacity: 0.6;
 }
 
-/* ── The lines: one slot, one range ── */
-.hr-slots {
+/* ── The planner: a line a day, its slots side by side (CREA-21) ── */
+.hr-days {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+}
+.hr-day {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--nv-hairline);
+}
+.hr-day:first-child {
+  border-top: 0;
+}
+.hr-day__name {
+  padding-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nv-ink);
+  text-transform: capitalize;
+}
+.hr-day__slots {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.hr-day[data-empty='true'] .hr-day__slots {
+  padding-top: 13px;
+}
+.hr-day__add {
+  margin-top: 6px;
+}
+.hr-day__full {
+  flex-basis: 100%;
+  margin: 0;
 }
 .hr-slot,
 .hr-range {
@@ -131,13 +164,21 @@
   gap: 8px 12px;
   min-width: 0;
 }
-.hr-clock {
-  margin: 0 0 4px;
+/* A slot of the planner: its hours, then what they do not say, then its switch and ×, aligned from line to line. */
+.hr-slot {
+  flex: 1 1 100%;
 }
-/* Two classes: `.nv-field__control` makes every field as wide as its line. */
-.hr-slot .hr-slot__day {
-  width: 128px;
-  flex: none;
+.hr-slot > .hr-slot__fields {
+  display: grid;
+  grid-template-columns: auto minmax(max-content, 1fr) auto;
+}
+.hr-slot > .hr-slot__fields > .hr-slot__end {
+  grid-column: 3;
+}
+/* A slot on is data, like its bar on the week: the warm neutral of the chart, never the neon of the action. */
+.hr-slot .nv-switch:checked {
+  background: var(--nv-data-1);
+  box-shadow: none;
 }
 .hr-slot__hours {
   display: inline-flex;
@@ -150,8 +191,8 @@
   width: 144px;
 }
 .hr-slot__words {
-  flex: 1 1 140px;
-  min-width: 0;
+  flex: none;
+  white-space: nowrap;
 }
 .hr-slot__end {
   display: inline-flex;
@@ -166,7 +207,6 @@
   cursor: pointer;
 }
 /* Switched off: kept in place, in pale ink; the switch itself stays readable to turn it back on. */
-.hr-slot[data-off='true'] .hr-slot__day,
 .hr-slot[data-off='true'] .hr-time,
 .hr-slot[data-off='true'] .hr-slot__words {
   color: var(--nv-ink-faint);
@@ -191,9 +231,37 @@
   color: var(--nv-warning);
 }
 
-/* A phone: the day and the hours on one line, the words and the switch on the next. */
+/* A phone: the day and « Ajouter » on one line, its slots under them, full width. */
 @media (max-width: 520px) {
-  .hr-slot .hr-slot__day,
+  .hr-day {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name add'
+      'slots slots';
+  }
+  .hr-day__name {
+    grid-area: name;
+    padding-top: 6px;
+  }
+  .hr-day__add {
+    grid-area: add;
+    margin-top: 0;
+  }
+  .hr-day__slots {
+    grid-area: slots;
+  }
+  .hr-day[data-empty='true'] .hr-day__slots {
+    padding-top: 0;
+  }
+  .hr-slot > .hr-slot__fields {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .hr-slot > .hr-slot__fields > .hr-slot__hours {
+    grid-column: 1 / -1;
+  }
+  .hr-slot > .hr-slot__fields > .hr-slot__end {
+    grid-column: 2;
+  }
   .hr-range__label {
     width: 100%;
   }

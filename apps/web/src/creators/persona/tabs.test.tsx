@@ -9,7 +9,15 @@ import blocksYaml from '../../../../../personas/demo/v0.2.0.yaml?raw';
 
 import { validate } from './model';
 import { parsePersonaYaml } from './source';
-import { ageLine, FollowUpsTab, orNull, StrategiesTab } from './tabs';
+import {
+  ageLine,
+  DetailsTab,
+  FollowUpsTab,
+  LimitsTab,
+  NotificationsTab,
+  orNull,
+  StrategiesTab,
+} from './tabs';
 
 afterEach(() => {
   cleanup();
@@ -22,8 +30,8 @@ describe('Stratégies › the desire thresholds (P3-12)', () => {
     render(<StrategiesTab value={persona.strategies} onChange={onChange} issues={[]} />);
     const opening = screen.getByLabelText('Elle ne l’ouvre qu’à partir d’une note de désir de');
     expect(opening).toHaveProperty('value', '45');
-    expect(screen.getByText('À partir de 45 : bande joueur.')).toBeDefined();
-    expect(screen.getByText('À partir de 75 : bande chaud.')).toBeDefined();
+    expect(screen.getByText('À partir de 45 : dès qu’il devient joueur.')).toBeDefined();
+    expect(screen.getByText('À partir de 75 : dès qu’il devient chaud.')).toBeDefined();
 
     fireEvent.change(opening, { target: { value: '' } });
     const [emptied] = onChange.mock.lastCall ?? [];
@@ -31,17 +39,15 @@ describe('Stratégies › the desire thresholds (P3-12)', () => {
     expect(JSON.stringify(emptied)).not.toContain('min_desire_to_open');
   });
 
-  it('says Suivi still shows « joueur » when scripts go out under 70, without a warning', async () => {
+  it('says in plain words when scripts go out under 70, without a warning (CREA-10)', async () => {
     const persona: Persona = await parsePersonaYaml(demoYaml);
     const strategies = {
       ...persona.strategies,
       script_launch: { ...persona.strategies.script_launch, min_desire: 60 },
     };
     render(<StrategiesTab value={strategies} onChange={vi.fn()} issues={[]} />);
-    const hint = screen.getByText(/À partir de 60 : bande joueur/u);
-    expect(hint.textContent).toBe(
-      'À partir de 60 : bande joueur. Le Suivi dira encore « joueur » quand les scripts partent.',
-    );
+    const hint = screen.getByText('À partir de 60 : dès qu’il devient joueur.');
+    expect(hint.textContent).not.toMatch(/bande/u);
     expect(hint.className).toBe('ps-hint');
   });
 });
@@ -51,7 +57,7 @@ describe('Stratégies › the canvas lines (P5-01)', () => {
     const persona: Persona = await parsePersonaYaml(blocksYaml);
     const onChange = vi.fn<(value: Persona['strategies']) => void>();
     render(<StrategiesTab value={persona.strategies} onChange={onChange} issues={[]} />);
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Lignes du canevas' }));
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Infos à collecter' }));
     fireEvent.click(screen.getByRole('option', { name: /Envies/u }));
     const [changed] = onChange.mock.lastCall ?? [];
     expect(changed?.kyc.collect).toEqual([
@@ -128,5 +134,30 @@ describe('recette 28/10', () => {
     expect(ageLine('2000-10-28', '2026-10-28')).toBe('26 ans aujourd’hui');
     expect(ageLine('2030-01-01', '2026-10-28')).toBeUndefined();
     expect(ageLine('', '2026-10-28')).toBeUndefined();
+  });
+});
+
+describe('Notifications and Limites, their words (CREA-25, CREA-29)', () => {
+  it('names where the alerts are routed, without a link to a page that is the owner’s', async () => {
+    const persona: Persona = await parsePersonaYaml(blocksYaml);
+    render(<NotificationsTab value={persona.notifications} onChange={vi.fn()} issues={[]} />);
+    expect(screen.getByText(/réglés dans Réglages › Alertes par le propriétaire/u)).toBeDefined();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('does not send a creator to Heures d’activité, which is the owner’s', async () => {
+    const persona: Persona = await parsePersonaYaml(blocksYaml);
+    render(<DetailsTab value={persona.details} onChange={vi.fn()} issues={[]} timezone="Europe/Paris" />);
+    expect(
+      screen.getByText('Celui de la créatrice. Il dit à l’agent s’il fait jour ou nuit chez elle.'),
+    ).toBeDefined();
+    expect(screen.queryByText(/à changer dans Heures d’activité/u)).toBeNull();
+  });
+
+  it('asks for a dislike in her words, variants included', async () => {
+    const persona: Persona = await parsePersonaYaml(blocksYaml);
+    render(<LimitsTab value={persona.limits} onChange={vi.fn()} issues={[]} />);
+    expect(screen.getByPlaceholderText('Ajouter un dégoût')).toBeDefined();
+    expect(screen.getByText('Variantes comprises.')).toBeDefined();
   });
 });
