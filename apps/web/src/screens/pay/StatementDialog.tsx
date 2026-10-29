@@ -9,7 +9,7 @@ import {
 import { useId, useState, type JSX } from 'react';
 
 import { EntryForm, type EntryAdded } from './EntryForm';
-import type { PayNames } from './data';
+import { useCfaFrancs, type PayNames } from './data';
 import { Chip, Delta, MoneyPath, Swatch } from './parts';
 
 import { payStatement, useLatestPayPeriod, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
@@ -346,6 +346,7 @@ function PayForm({
   onCancel: () => void;
 }): JSX.Element {
   const id = useId();
+  const cfa = useCfaFrancs(statement.memberId);
   const refresh = useRefreshPayroll();
   const latest = useLatestPayPeriod();
   const today = dayOf(new Date(), statement.window.timeZone);
@@ -415,10 +416,12 @@ function PayForm({
             {reference.trim() === '' ? '' : `, référence ${reference.trim()}`}, pour la quinzaine{' '}
             {periodLine(statement.window.period)}.
           </p>
-          <p className="tm-hint nv-num">
-            {fcfaText(statement.payableMinor)} (1 € = 655,957 FCFA, parité fixe). Indicatif : le montant
-            envoyé reste en euros.
-          </p>
+          {cfa ? (
+            <p className="tm-hint nv-num">
+              {fcfaText(statement.payableMinor)} (1 € = 655,957 FCFA, parité fixe). Indicatif : le montant
+              envoyé reste en euros.
+            </p>
+          ) : null}
           <p className="tm-hint">Payé, le relevé ne change plus. Une erreur se corrige par un ajustement.</p>
           <div className="tm-dialog__foot">
             <button

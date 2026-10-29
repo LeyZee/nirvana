@@ -247,6 +247,19 @@ describe('Paie › Quinzaine', () => {
     expect(screen.getByText(/Le premier relevé validé clôt la quinzaine pour toute l’équipe/u)).toBeTruthy();
   });
 
+  it('counts a draft under zero apart from one under the minimum, with the words of their chips', async () => {
+    periods[OCT2] = periodOf(OCT2, [
+      statementOf(THEO, OCT2),
+      statementOf(BASILE, OCT2, { totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 }),
+      statementOf(LOU, OCT2, { totalMinor: -500, carryOverOutMinor: -500, payableMinor: 0 }),
+    ]);
+    renderPage(OWNER);
+    const hero = (await screen.findByText('À verser une fois validé')).closest('.py-hero');
+    expect(text(hero)).toContain('1 sous le minimum');
+    expect(text(hero)).toContain('1 sous zéro');
+    expect(within(row('Lou')).getByText('Sous zéro')).toBeTruthy();
+  });
+
   it('says of a closed period what is left to send, apart from what went and what waits, each amount named', async () => {
     const validatedAt = '2026-11-02T08:41:00.000Z';
     periods[OCT2] = periodOf(
@@ -298,9 +311,13 @@ describe('Paie › Quinzaine', () => {
     const notice = await screen.findByText(/^Dernier lu/u);
     // Monday 2 November: six working days without a rate since Thursday 22 October.
     expect(text(notice)).toBe(
-      'Dernier lu : 1 $ = 0,8612 € le jeu. 22 oct. Le taux n’arrive plus depuis plusieurs jours ouvrés : préviens le support.',
+      'Dernier lu : 1 $ = 0,8612 € le jeu. 22 oct. Le taux n’arrive plus depuis plus de deux jours ouvrés : la lecture des taux de la BCE est en panne.',
     );
     expect(screen.getByText(/^Provisoire : les ventes en dollars/u)).toBeTruthy();
+    // A manager cannot repair it: the notice says whom to warn.
+    cleanup();
+    renderPage(IRIS_ME);
+    expect(text(await screen.findByText(/^Dernier lu/u))).toMatch(/en panne\. Préviens le propriétaire\.$/u);
   });
 
   it('says before the first validation that it closes the period, then validates one by one, a refusal on its row', async () => {
@@ -438,6 +455,28 @@ describe('Paie › Quinzaine', () => {
         },
       ]);
     });
+  });
+
+  it.each([
+    ['Lou', LOU, 'Madagascar'],
+    ['Basile', BASILE, 'France'],
+  ])('gives no amount in CFA francs to pay %s, who lives in %s', async (name, who) => {
+    periods[OCT2] = periodOf(OCT2, [statementOf(who, OCT2, { status: 'validated', canValidate: false })], {
+      closing: {
+        period: OCT2,
+        exchangeRates: [],
+        closedBy: OWNER_USER,
+        closedAt: '2026-11-02T08:41:00.000Z',
+      },
+    });
+    renderPage(OWNER);
+    fireEvent.click(
+      await within(await waitFor(() => row(name))).findByRole('button', { name: 'Marquer payé' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(await within(dialog).findByText(/versés à/u)).toBeTruthy();
+    expect(within(dialog).queryByText(/FCFA/u)).toBeNull();
   });
 
   it('keeps « Marquer payé » busy until the period is read again, and reads a statement paid meanwhile without a word', async () => {

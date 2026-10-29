@@ -54,7 +54,7 @@ import {
   goalReachedBps,
   goalSpanBps,
   lateNetOf,
-  missedRateDays,
+  rateOverdue,
   memberFacts,
   momentAt,
   opensOn,
@@ -380,7 +380,7 @@ function PeriodView({
         >
           <div className="rp-sec">
             {block !== null ? (
-              <BlockNotice block={block} zone={data.window?.timeZone ?? null} now={now} />
+              <BlockNotice block={block} zone={data.window?.timeZone ?? null} now={now} owner={owner} />
             ) : stop !== null ? (
               <StopNotice
                 refusal={stop}
@@ -740,7 +740,10 @@ function EndedHero({
   const payments = statements.filter((one) => one.status === 'paid');
   const sent = payments.reduce((total, one) => total + (one.payment?.sentMinor ?? 0), 0);
   const carried = statements.filter((one) => one.carryOverOutMinor !== 0 && one.status !== 'draft').length;
-  const under = statements.filter((one) => one.carryOverOutMinor !== 0 && one.status === 'draft').length;
+  // Counted with the words of the rows' chips (carryChip): under the minimum, or under zero.
+  const carryingDrafts = statements.filter((one) => one.carryOverOutMinor !== 0 && one.status === 'draft');
+  const under = carryingDrafts.filter((one) => one.totalMinor >= 0).length;
+  const belowZero = carryingDrafts.length - under;
   const [label, minor] = paid
     ? ['Versé pour la quinzaine', sent]
     : validated.length + payments.length === 0
@@ -758,6 +761,7 @@ function EndedHero({
       : null,
     carried > 0 ? `${String(carried)} reporté${carried > 1 ? 's' : ''}` : null,
     under > 0 ? `${String(under)} sous le minimum` : null,
+    belowZero > 0 ? `${String(belowZero)} sous zéro` : null,
   ].filter((note) => note !== null);
   return (
     <div className="py-hero">
@@ -1050,10 +1054,12 @@ function BlockNotice({
   block,
   zone,
   now,
+  owner,
 }: {
   block: PeriodBlock;
   zone: string | null;
   now: Date;
+  owner: boolean;
 }): JSX.Element {
   if (block.kind === 'rate_missing') {
     const { latest } = block;
@@ -1061,14 +1067,14 @@ function BlockNotice({
       latest === null
         ? 'Aucun taux lu pour l’instant.'
         : `Dernier lu : ${rateText(latest.rateMicros, latest.currency)} le ${dayMonthText(latest.day).replace(/\.$/u, '')}.`;
-    const stale = latest !== null && zone !== null && missedRateDays(latest.day, dayOf(now, zone)) >= 2;
+    const stale = latest !== null && zone !== null && rateOverdue(latest.day, dayOf(now, zone));
     return (
       <div className="rp-notice" data-tone="warn">
         <p className="rp-notice__title">Le taux du dollar de la BCE manque pour la fin de la quinzaine</p>
         <p className="rp-notice__text nv-num">
           {read}{' '}
           {stale
-            ? 'Le taux n’arrive plus depuis plusieurs jours ouvrés : préviens le support.'
+            ? `Le taux n’arrive plus depuis plus de deux jours ouvrés : la lecture des taux de la BCE est en panne.${owner ? '' : ' Préviens le propriétaire.'}`
             : 'Il arrive chaque jour ouvré vers 16 h : la quinzaine se valide dès qu’il est là. Rien à faire de ton côté.'}
         </p>
       </div>

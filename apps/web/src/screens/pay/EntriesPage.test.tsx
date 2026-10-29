@@ -249,10 +249,11 @@ describe('Paie › Primes et malus', () => {
       expect(text(entry('Basile', 'Malus'))).toContain('−60,00 €retenu −23,34 € (plafonné)');
     });
     expect(text(entry('Théo', 'Malus en pourcentage'))).toContain('−10 %de son net, soit −100,00 €');
-    // A total may go under zero (an adjustment): only a penalty never takes it there.
+    // The cap is on the share plus bonuses, not on the total: a negative carry-over may still leave it under zero.
     expect(
-      screen.getByText(/^Un malus ne fait jamais passer un relevé sous zéro : il est plafonné/u),
+      screen.getByText(/^Un malus est plafonné à la part du membre plus ses primes de la quinzaine/u),
     ).toBeTruthy();
+    expect(screen.queryByText(/jamais passer un relevé sous zéro/u)).toBeNull();
   });
 
   it('cancels a bonus only once confirmed, and keeps it struck through', async () => {

@@ -9,7 +9,14 @@ import type {
 } from '@nirvana/contracts';
 
 import { useExchangeRates, usePayPeriod, usePayPeriodReads, usePayPeriods } from '@/payroll/api';
-import { draftPeriodsBefore, firstOpenPeriod, periodToOpen, rateMissing, validatable } from '@/payroll/model';
+import {
+  draftPeriodsBefore,
+  firstOpenPeriod,
+  inCfaFrancZone,
+  periodToOpen,
+  rateMissing,
+  validatable,
+} from '@/payroll/model';
 import { usePayRules, useReports, useSchedulingSettings } from '@/reports/api';
 import { periodAt } from '@/reports/model';
 import { useNow } from '@/scheduling/useNow';
@@ -153,4 +160,14 @@ export function usePayNames(period: PayPeriod | null, agency: boolean): PayNames
     account: (platformAccountId) => accounts.get(platformAccountId) ?? null,
     members: members.data ?? [],
   };
+}
+
+/**
+ * Whether the member of a statement is paid in CFA francs, read from their line of the team: the whole team for the
+ * agency, their own line alone for a member (`/v1/team/members`, scope `self`). `false` until it is read.
+ */
+export function useCfaFrancs(memberId: string | undefined): boolean {
+  const members = useMembers(memberId !== undefined);
+  const member = members.data?.find((one) => one.id === memberId);
+  return member !== undefined && inCfaFrancZone(member.country);
 }

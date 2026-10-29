@@ -13,7 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState, type JSX } from 'react';
 
-import { useCurrentPeriod, usePayNames } from './data';
+import { useCfaFrancs, useCurrentPeriod, usePayNames } from './data';
 import { Chip, Empty, Gauge, GoalTicks, Loading, MoneyPath, Unreachable } from './parts';
 
 import { PAYROLL_KEY, PeriodCursorInvalid, usePayPeriod, usePayPeriods } from '@/payroll/api';
@@ -292,6 +292,7 @@ function Hero({
   now: Date;
 }): JSX.Element {
   const words = myStatementWords(statement, period.ended, now);
+  const cfa = useCfaFrancs(statement.memberId);
   return (
     <section className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter" aria-label={words.label}>
       <div className="py-mehero__top">
@@ -303,7 +304,7 @@ function Hero({
       <p className="py-hero__value nv-num nv-swap" key={statement.revision}>
         {amountText(statement.payableMinor, 'EUR')}
       </p>
-      {statement.payableMinor === 0 ? null : (
+      {statement.payableMinor === 0 || !cfa ? null : (
         <p className="py-hero__note nv-num">{fcfaText(statement.payableMinor)}</p>
       )}
       {words.notes.map((note) => (
@@ -526,6 +527,7 @@ function MyStatementDialog({
   const names = usePayNames(period, false);
   const data = read.data?.period === period ? read.data : undefined;
   const statement = data?.statements[0];
+  const cfa = useCfaFrancs(statement?.memberId);
   const words =
     data === undefined || statement === undefined ? null : myStatementWords(statement, data.ended, now);
   return (
@@ -560,7 +562,7 @@ function MyStatementDialog({
               <div className="py-hero">
                 <p className="py-hero__label">{words.label}</p>
                 <p className="py-hero__value nv-num">{amountText(statement.payableMinor, 'EUR')}</p>
-                {statement.payableMinor === 0 ? null : (
+                {statement.payableMinor === 0 || !cfa ? null : (
                   <p className="py-hero__note nv-num">{fcfaText(statement.payableMinor)}</p>
                 )}
               </div>

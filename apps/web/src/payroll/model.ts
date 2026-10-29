@@ -226,13 +226,26 @@ export function computedText(instant: string, timeZone: string, now: Date): stri
   return dayOf(instant, timeZone) === dayOf(now, timeZone) ? at : `le ${dayAt(instant, timeZone)} ${at}`;
 }
 
+/**
+ * The countries of the CFA franc, West (UEMOA) and Central (CEMAC): both are pegged at the same parity. Only there does
+ * an amount in FCFA say what a member receives.
+ */
+const CFA_FRANC_COUNTRIES: ReadonlySet<string> = new Set([
+  ...'BJ BF CI GW ML NE SN TG'.split(' '), // UEMOA
+  ...'CM CF CG GA GQ TD'.split(' '), // CEMAC
+]);
+
+/** Whether a member living in `country` is paid in CFA francs, so that the FCFA guide is worth showing them. */
+export const inCfaFrancZone = (country: string): boolean => CFA_FRANC_COUNTRIES.has(country);
+
 /** The fixed parity of the CFA franc: 1 € = 655,957 FCFA. */
 const FCFA_PER_EURO = 655.957;
 const WHOLE = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 
 /**
- * « ≈ 705 173 FCFA, avant frais WorldRemit »: an amount in euros at the CFA franc's fixed parity. A guide for whoever is
- * paid in Benin, never an amount to pay: the euro stays the one currency pay computes in (ADR 0011).
+ * « ≈ 705 173 FCFA, avant frais WorldRemit »: an amount in euros at the CFA franc's fixed parity. A guide for a member
+ * of the CFA franc zone (`inCfaFrancZone`), never an amount to pay: the euro stays the one currency pay computes in
+ * (ADR 0011).
  */
 export const fcfaText = (minor: number): string =>
   `≈${NBSP}${WHOLE.format(Math.round((minor * FCFA_PER_EURO) / 100))}${NBSP}FCFA, avant frais WorldRemit`;
@@ -679,6 +692,12 @@ export function missedRateDays(lastRead: string, today: string): number {
   }
 }
 
+/**
+ * The rate is overdue after more than two working days without one, as the server says (`isRateOverdue`, payroll
+ * domain, `exchange_rate_overdue`): the ECB may stay shut two working days in a row (Good Friday, Easter Monday).
+ */
+export const rateOverdue = (lastRead: string, today: string): boolean => missedRateDays(lastRead, today) > 2;
+
 /** The refusals that concern the whole period: the validation of the others stops there, the notice says it. */
 const PERIOD_REFUSALS: ReadonlySet<PayRefusalCode> = new Set<PayRefusalCode>([
   'pay_period_reports_pending_conflict',
@@ -1048,7 +1067,8 @@ export function memberPhaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayC
     case 'to_validate':
       return { label: 'En validation', tone: 'wait' };
     case 'to_pay':
-      return { label: 'Validé', tone: 'ok' };
+      // Validated, the money not sent yet: the tone of waiting, as on Quinzaine's rows (statementStage).
+      return { label: 'Validé', tone: 'wait' };
     case 'paid':
       // Validated with nothing to send: the total went on the next period.
       return summary.paidMinor === 0 && summary.statements.carried > 0

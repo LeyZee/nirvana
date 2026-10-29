@@ -173,8 +173,8 @@ export function EntriesPage({
                 </ul>
               )}
               <p className="py-quiet">
-                Un malus ne fait jamais passer un relevé sous zéro : il est plafonné à la part du membre plus
-                ses primes. Personne ne saisit pour soi.
+                Un malus est plafonné à la part du membre plus ses primes de la quinzaine : il ne prend jamais
+                plus que ce qu’elle lui rapporte. Personne ne saisit pour soi.
               </p>
             </div>
           )}

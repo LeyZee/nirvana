@@ -44,6 +44,7 @@ import {
   memberPeriodAmount,
   memberPhaseChip,
   missedRateDays,
+  rateOverdue,
   myStatementWords,
   parsePaySearch,
   parseTarget,
@@ -901,7 +902,7 @@ describe('Commissions, as the member reads them', () => {
     });
     expect(chip({ statements: counts(0, 1, 0), payableMinor: 2_125 })).toEqual({
       label: 'Validé',
-      tone: 'ok',
+      tone: 'wait',
     });
     expect(chip({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })).toEqual({
       label: 'Payé',
@@ -1053,6 +1054,13 @@ describe('the words of pay', () => {
     // Friday's rate, today Monday: the weekend has none, and Monday's may still come.
     expect(missedRateDays('2026-10-23', '2026-10-26')).toBe(0);
     expect(missedRateDays('2026-10-27', '2026-10-29')).toBe(1);
+  });
+
+  it('calls a rate overdue only past two working days without one, as the server does', () => {
+    // Thursday 25 March 2027, today Tuesday 30: Good Friday and Easter Monday shut the ECB, nothing is broken.
+    expect(rateOverdue('2027-03-25', '2027-03-30')).toBe(false);
+    // Today Wednesday 31: three working days without a rate.
+    expect(rateOverdue('2027-03-25', '2027-03-31')).toBe(true);
   });
 
   it('says what a penalty really takes, read in the member’s statement', () => {
