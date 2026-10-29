@@ -35,6 +35,7 @@ import './tracking.css';
 
 import { useLiveDashboard } from '@/agent/live';
 import { useCreators } from '@/creators/api';
+import { initialOf } from '@/lib/utils';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const REFRESH_MS = 30_000;
@@ -423,7 +424,7 @@ function Row({
         onClick={onOpen}
       >
         <span className="nv-avatar nv-avatar--sm" aria-hidden="true">
-          {name.slice(0, 1).toUpperCase()}
+          {initialOf(name)}
         </span>
         <span className="nv-convo__main">
           <span className="nv-convo__name tr-row__name">

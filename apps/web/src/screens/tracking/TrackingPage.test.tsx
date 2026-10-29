@@ -400,6 +400,21 @@ describe('the list of Suivi', () => {
     expect(screen.getByText('Aucun fan ne porte ce pseudo dans la liste.')).toBeDefined();
   });
 
+  it('puts a whole emoji in the avatar when the pseudo starts with one, in the list and the reader', async () => {
+    serve({
+      ...ONE,
+      conversations: {
+        [LEA.id]: { items: [conversation('1', { fanDisplayName: '💋 Max' })], nextCursor: null },
+      },
+      detail: () => ({ status: 200, body: waiting({ fanDisplayName: '💋 Max' }) }),
+    });
+    renderPage(OPEN);
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    expect(list.querySelector('.nv-avatar')?.textContent).toBe('💋');
+    await screen.findByRole('heading', { name: '💋 Max' });
+    expect(document.querySelector('.tr-reader__head .nv-avatar')?.textContent).toBe('💋');
+  });
+
   it('says a long wait of « À traiter » in days, as the list does', async () => {
     const [todo] = apiDashboard().todos;
     if (todo === undefined) throw new Error('no todo');
