@@ -176,11 +176,15 @@ function freeSlot(
 
 export const canAddSlot = (slots: readonly AgentSlot[]): boolean => slots.length < AGENT_SLOTS_MAX;
 
-/** Why « Ajouter » adds nothing that day, said in the day's line rather than in a tooltip; null when it adds one. */
+/** Said once under the days when the week holds all the slots it may. */
+export const WEEK_FULL = `${String(AGENT_SLOTS_MAX)} créneaux au plus dans la semaine : retires-en un d’abord.`;
+
+/**
+ * Why « Ajouter » adds nothing that day, said in the day's line rather than in a tooltip; null when it adds one, and
+ * null too when the week is full, which `WEEK_FULL` says once for all the days.
+ */
 export function noSlotWhy(slots: readonly AgentSlot[], day: number): string | null {
-  if (!canAddSlot(slots)) {
-    return `${String(AGENT_SLOTS_MAX)} créneaux au plus dans la semaine : retires-en un d’abord.`;
-  }
+  if (!canAddSlot(slots)) return null;
   return newSlotOn(slots, day) === null
     ? 'Plus une heure de libre ce jour-là : raccourcis un créneau d’abord.'
     : null;

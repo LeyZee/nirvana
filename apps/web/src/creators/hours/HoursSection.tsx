@@ -33,6 +33,7 @@ import {
   slotsToOffer,
   slotWords,
   sortedHours,
+  WEEK_FULL,
 } from './model';
 import './hours.css';
 
@@ -340,7 +341,7 @@ function HoursForm({
                   {issues.get('reply.slots')}
                 </p>
               )}
-              {canAddSlot(slots) ? null : <p className="ps-hint">28 créneaux au plus.</p>}
+              {canAddSlot(slots) ? null : <p className="ps-hint">{WEEK_FULL}</p>}
             </div>
           )}
         </section>

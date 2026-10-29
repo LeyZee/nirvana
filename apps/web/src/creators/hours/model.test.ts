@@ -18,6 +18,7 @@ import {
   slotsToOffer,
   sortedHours,
   slotWords,
+  WEEK_FULL,
 } from './model';
 
 const NBSP = '\u00a0';
@@ -126,7 +127,7 @@ describe('her week', () => {
     expect(canAddSlot(Array.from({ length: 28 }, () => one))).toBe(false);
   });
 
-  it('says in words why « Ajouter » adds nothing: the day is full, or the week holds 28 slots', () => {
+  it('says in words why « Ajouter » adds nothing that day, and leaves a full week to its one line', () => {
     const tuesday = [{ day: 2, startMinute: 0, endMinute: 0, enabled: true }];
     expect(noSlotWhy(tuesday, 1)).toBeNull();
     expect(noSlotWhy(tuesday, 2)).toBe('Plus une heure de libre ce jour-là : raccourcis un créneau d’abord.');
@@ -136,7 +137,8 @@ describe('her week', () => {
         Array.from({ length: 28 }, () => one),
         3,
       ),
-    ).toBe('28 créneaux au plus dans la semaine : retires-en un d’abord.');
+    ).toBeNull();
+    expect(WEEK_FULL).toBe('28 créneaux au plus dans la semaine : retires-en un d’abord.');
   });
 
   it('offers back the slots she had, or 9 h – 1 h every day', () => {
