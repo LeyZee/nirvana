@@ -54,7 +54,7 @@ conversations        id, creator_id, platform_account_id, fan_id, platform_conve
                      mode (copilot|auto), last_inbound_at, last_outbound_at, unread_count,
                      cooldowns jsonb, active_script_run_id (nullable), routed_to_user_id (nullable, fk user), desire_score, desire_band, desire_at (nullables ensemble, P3-12), updated_at
 messages             id, creator_id, platform_account_id (dénormalisé pour l'unicité), conversation_id, platform_message_id,
-                     direction (inbound|outbound), author (fan|human|ai), text, media_ids uuid[], price_minor, currency, is_paid,
+                     direction (inbound|outbound), author (fan|human|ai), text, media_ids uuid[], price_minor (≥ 0, migration 0036), currency, is_paid,
                      platform_created_at, created_at, draft_id (nullable),
                      platform_media jsonb (médias listés par la plateforme : kind, ref, isLocked ; lus par le moteur
                      avant que le module media ne les range dans media_ids)
@@ -122,7 +122,7 @@ media_assets        id, creator_id, kind (image|video|audio), origin (creator|fa
                     storage_key, mime, bytes, duration_ms, sha256, rights jsonb, expires_at, created_at
 media_descriptions  id, creator_id, media_asset_id, vocabulary_version, content jsonb (MediaDescription),
                     model, prompt_hash, created_at
-media_sends         id, creator_id, media_asset_id, fan_id, conversation_id, message_id, price_minor, currency, sent_at
+media_sends         id, creator_id, media_asset_id, fan_id, conversation_id, message_id, price_minor (≥ 0), currency, sent_at
                     (anti-doublon : un média payant n'est jamais revendu au même fan)
 ```
 

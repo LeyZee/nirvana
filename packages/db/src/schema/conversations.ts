@@ -169,6 +169,8 @@ export const messages = pgTable(
     enumCheck('messages', t.direction, MessageDirectionSchema.options),
     enumCheck('messages', t.author, MessageAuthorSchema.options),
     enumCheck('messages', t.currency, CurrencySchema.options),
+    // A price is what a fan pays, never a credit (the connectors' contracts already refuse one below zero).
+    check('messages_price_minor_check', sql`${t.priceMinor} is null or ${t.priceMinor} >= 0`),
     unique('messages_platform_message_unique').on(t.platformAccountId, t.platformMessageId),
     index('messages_conversation_created_idx').on(t.conversationId, t.platformCreatedAt.desc()),
     tenantPolicy(t.creatorId),
