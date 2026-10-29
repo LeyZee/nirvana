@@ -119,7 +119,7 @@ export function TrackingPage({
         (creators.length === 1 || todos.some((t) => t.conversationId === selected) ? queueCreator : null));
 
   return (
-    <Page className={selected === null ? '' : 'tr-is-reading'}>
+    <Page className={selected === null ? 'tr-page' : 'tr-page tr-is-reading'}>
       <PageHeader
         eyebrow={creators.length === 1 ? creators[0]?.displayName : undefined}
         title="Suivi"
@@ -157,7 +157,11 @@ export function TrackingPage({
             Aller à Créatrices
           </Link>
         </Notice>
-      ) : creators.length === 0 && offShift !== undefined ? null : creators.length === 0 ? (
+      ) : offShift !== undefined &&
+        lines.length === 0 &&
+        todos.length ===
+          0 ? null : creators // Off shift with nothing listed: the banner above says it all, never « no conversation yet ».
+        .length === 0 ? (
         <Notice
           title="Rien pour toi pour l’instant"
           text="Les conversations des créatrices qui te sont confiées arrivent ici."

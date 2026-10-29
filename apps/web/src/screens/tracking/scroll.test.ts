@@ -28,12 +28,12 @@ describe('bringIntoView', () => {
     expect(end.scrolledIntoView).not.toHaveBeenCalled();
   });
 
-  it('shows a waiting draft from its top inside the thread', () => {
+  it('keeps the thread on its last message when a draft waits pinned under it', () => {
     const body = box({ scrollHeight: 2000, clientHeight: 500, top: 100, ownScroll: true });
     body.element.scrollTop = 300;
     const draft = box({ top: 700 });
     bringIntoView(body.element, draft.element, box({}).element);
-    expect(body.element.scrollTop).toBe(900);
+    expect(body.element.scrollTop).toBe(2000);
     expect(draft.scrolledIntoView).not.toHaveBeenCalled();
   });
 

@@ -14,7 +14,8 @@ export const STATE_LABELS: Readonly<Record<ConversationState, string>> = {
   error: 'Erreur',
 };
 
-const MODE_LABELS: Readonly<Record<ConversationMode, string>> = {
+/** The mode in a word, said in the reader beside the state. */
+export const MODE_LABELS: Readonly<Record<ConversationMode, string>> = {
   copilot: 'Copilote',
   auto: 'Automatique',
 };

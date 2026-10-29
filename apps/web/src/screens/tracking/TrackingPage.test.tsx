@@ -487,10 +487,11 @@ describe('the reader of Suivi', () => {
       detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
     });
     renderPage(OPEN);
-    fireEvent.change(await screen.findByLabelText(/À retenir sur ce fan/u), {
+    fireEvent.change(await screen.findByLabelText(/Note pour l’agent/u), {
       target: { value: '  Il fête son anniversaire le 12 mars  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Rendre la main à l’agent' }));
+    // The button beside the note says it goes with it.
+    fireEvent.click(screen.getByRole('button', { name: 'Rendre la main (avec la note)' }));
     await waitFor(() => {
       expect(posted).toEqual([{ action: 'release', body: { note: 'Il fête son anniversaire le 12 mars' } }]);
     });
@@ -502,7 +503,7 @@ describe('the reader of Suivi', () => {
       detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
     });
     renderPage(OPEN);
-    expect((await screen.findByLabelText(/À retenir sur ce fan/u)).getAttribute('maxlength')).toBe('300');
+    expect((await screen.findByLabelText(/Note pour l’agent/u)).getAttribute('maxlength')).toBe('300');
     fireEvent.click(screen.getByRole('button', { name: 'Rendre la main à l’agent' }));
     await waitFor(() => {
       expect(posted).toEqual([{ action: 'release', body: {} }]);
@@ -556,7 +557,7 @@ describe('the reader of Suivi', () => {
     expect(document.querySelector('.tr-learn')).toBeNull();
   });
 
-  it('opens when a limit blocks, and stays open once it is lifted', async () => {
+  it('stays folded when a limit blocks: the amber line says it, the thread comes first', async () => {
     const posted = serve({
       ...withDraft,
       detail: () => ({ status: 200, body: waiting() }),
@@ -565,11 +566,11 @@ describe('the reader of Suivi', () => {
     renderPage(OPEN);
     const lift = await screen.findByRole('switch', { name: /Ne plus lui écrire/u });
     const section = lift.closest('details');
-    expect(section).toHaveProperty('open', true);
+    expect(section).toHaveProperty('open', false);
+    expect(screen.getByText('Ne plus lui écrire', { selector: '.tr-sheet__sum .tr-warn' })).toBeDefined();
     fireEvent.click(lift);
     expect(await screen.findByText('Aucune', { selector: '.tr-limits__sum' })).toBeDefined();
     expect(posted).toEqual([{ action: 'flags', body: { flag: 'doNotContact', set: false } }]);
-    expect(section).toHaveProperty('open', true);
   });
 
   it('freezes sales as a human’s call, and shows the limits the server answers', async () => {
@@ -739,10 +740,34 @@ describe('the reader of Suivi', () => {
     expect(flagCalls).toHaveLength(1);
   });
 
+  it('reads a disputed age as a suspected minor, in amber, and says confirming lifts the dispute', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
+      flags: { before: { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'policy' } } },
+    });
+    renderPage(OPEN);
+    expect(await screen.findByText('Âge contesté', { selector: '.tr-sheet__sum .tr-warn' })).toBeDefined();
+    expect(screen.getByText('Âge contesté', { selector: '.tr-limit__label' }).className).toContain('tr-warn');
+    expect(screen.getByText(/l’agent a relevé un signe de minorité/u)).toBeDefined();
+    expect(screen.queryByText(/Pas encore confirmé/u)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer son âge' }));
+    expect(screen.getByText(/Ça lève la contestation/u)).toBeDefined();
+  });
+
+  it('says a draft waits for the hand to come back, not for a role, while a human has it', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting({ state: 'human' }) }) });
+    renderPage(OPEN);
+    expect(
+      await screen.findByText('Un humain a la main : rends-la à l’agent pour décider de ce brouillon.'),
+    ).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
+  });
+
   it('lets a creator read, never decide', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
     renderPage(OPEN, false);
-    expect(await screen.findByText(/Seuls le propriétaire et les chatteurs/u)).toBeDefined();
+    expect(await screen.findByText('Tu lis seulement : l’équipe décide.')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reprendre la main' })).toBeNull();
     // Her fan's limits: read, never changed.

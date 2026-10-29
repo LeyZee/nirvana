@@ -21,24 +21,21 @@ export function useEndInView(endRef: RefObject<HTMLDivElement | null>): RefObjec
 }
 
 /**
- * Shows the waiting draft, else the end of the thread. From 900 px the thread has its own scroll (`tracking.css`): only
- * the thread moves, never the page, even when the thread is shorter than its box. On a phone, where the reader is the
- * whole screen, the page scrolls as before. The choice follows the thread's computed overflow, so it follows the CSS.
+ * Shows the end of the thread, and the waiting draft under it. From 900 px the thread has its own scroll and the draft
+ * sits pinned under it (`tracking.css`): only the thread moves, to its last message, never the page, even when the
+ * thread is shorter than its box. On a phone, where the reader is the whole screen, the page scrolls to the draft, else
+ * to the end; the draft keeps the tab bar's room under it (`scroll-margin-bottom`). The choice follows the thread's
+ * computed overflow, so it follows the CSS.
  */
 export function bringIntoView(
   body: HTMLElement | null,
   draft: HTMLElement | null,
   end: HTMLElement | null,
 ): void {
-  const target = draft ?? end;
-  if (body === null || target === null) return;
-  if (getComputedStyle(body).overflowY !== 'auto') {
-    target.scrollIntoView({ block: 'nearest' });
+  if (body === null) return;
+  if (getComputedStyle(body).overflowY === 'auto') {
+    body.scrollTop = body.scrollHeight;
     return;
   }
-  // A draft shows from its top; without one, the thread sits on its last message.
-  body.scrollTop =
-    draft === null
-      ? body.scrollHeight
-      : body.scrollTop + draft.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  (draft ?? end)?.scrollIntoView({ block: 'nearest' });
 }

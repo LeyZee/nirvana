@@ -2,9 +2,7 @@ import type { DraftView } from '@nirvana/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type JSX } from 'react';
 
-import { DesireSheet } from './Desire';
-import { FanLimits } from './FanLimits';
-import { FanToLearn } from './FanToLearn';
+import { FanSheet } from './FanSheet';
 import {
   approveDraft,
   ConversationGone,
@@ -17,7 +15,7 @@ import {
 } from './api';
 import { draftsOf, threadOf, whyHuman } from './reader-model';
 import { bringIntoView, useEndInView } from './scroll';
-import { bubblesFromText, bubblesProblem, STATE_LABELS, statusClass } from './view';
+import { bubblesFromText, bubblesProblem, MODE_LABELS, STATE_LABELS, statusClass } from './view';
 
 /** The reader follows the conversation more closely than the list: a draft or a fan's message shows up quickly. */
 const REFRESH_MS = 10_000;
@@ -35,12 +33,15 @@ export function Reader({
   conversationId,
   canDecide,
   onClose,
+  backLabel = 'Toutes les conversations',
 }: {
   creatorId: string;
   conversationId: string;
   /** Owners and chatters decide; a creator reads. */
   canDecide: boolean;
   onClose: () => void;
+  /** Where the phone's back button leads: the list the reader was opened from. */
+  backLabel?: string;
 }): JSX.Element {
   const key = ['conversation', creatorId, conversationId];
   const query = useQuery({
@@ -62,7 +63,7 @@ export function Reader({
   return (
     <section className="nv-plate tr-reader" aria-label="Conversation">
       <button type="button" className="nv-btn nv-btn--plain nv-btn--sm tr-back" onClick={onClose}>
-        ← Toutes les conversations
+        ← {backLabel}
       </button>
       {query.error instanceof ConversationGone ? (
         <p className="tr-reader__empty">Cette conversation n’existe plus.</p>
@@ -146,7 +147,8 @@ function Loaded({
   // Like any messenger, the reader opens on the end of the thread: the draft waiting for a decision, else the last
   // message. A new draft brings it into view again only if the end of the thread was in view: a person reading higher
   // up is not pulled down. From 900 px the thread scrolls on its own, so the list beside it never moves.
-  const pendingId = detail.openDrafts.find((draft) => draft.status === 'pending')?.id ?? null;
+  const pending = detail.openDrafts.find((draft) => draft.status === 'pending') ?? null;
+  const pendingId = pending?.id ?? null;
   const bodyRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<HTMLDivElement>(null);
@@ -158,6 +160,23 @@ function Loaded({
     if (opening || endInView.current) bringIntoView(bodyRef.current, draftRef.current, endRef.current);
   }, [detail.id, pendingId, endInView]);
 
+  const handButton = (
+    <button
+      type="button"
+      className="nv-btn nv-btn--soft nv-btn--sm"
+      disabled={hand.pending}
+      onClick={() => void toggleHand()}
+    >
+      {hand.pending
+        ? 'Envoi au serveur…'
+        : !isHuman
+          ? 'Reprendre la main'
+          : note.trim() === ''
+            ? 'Rendre la main à l’agent'
+            : 'Rendre la main (avec la note)'}
+    </button>
+  );
+
   return (
     <>
       <header className="tr-reader__head">
@@ -166,21 +185,15 @@ function Loaded({
         </span>
         <span className="tr-reader__who">
           <h2>{name}</h2>
-          <span className={`nv-status ${statusClass(drafts.state)}`}>
-            <span className="nv-status__dot" />
-            {STATE_LABELS[drafts.state]}
+          <span className="tr-reader__state">
+            <span className={`nv-status ${statusClass(drafts.state)}`}>
+              <span className="nv-status__dot" />
+              {STATE_LABELS[drafts.state]}
+            </span>
+            <span className="nv-meta">{MODE_LABELS[detail.mode]}</span>
           </span>
         </span>
-        {canDecide ? (
-          <button
-            type="button"
-            className="nv-btn nv-btn--soft nv-btn--sm"
-            disabled={hand.pending}
-            onClick={() => void toggleHand()}
-          >
-            {hand.pending ? 'Envoi au serveur…' : isHuman ? 'Rendre la main à l’agent' : 'Reprendre la main'}
-          </button>
-        ) : null}
+        {canDecide && !isHuman ? handButton : null}
       </header>
       {stale ? (
         <p className="tr-warn tr-line">Le serveur ne répond pas : ce fil peut avoir changé depuis.</p>
@@ -196,30 +209,38 @@ function Loaded({
         </p>
       )}
       {isHuman ? (
-        <p className="tr-hand">
-          {why === null ? 'Un humain a la main.' : `${why}.`} Il répond dans Reveal ; l’agent n’écrit plus à
-          ce fan jusqu’à ce qu’on lui rende la main.
-        </p>
+        <div className="tr-hand">
+          <p>
+            {why === null ? 'Un humain a la main.' : `${why}.`} Il répond dans Reveal ; l’agent n’écrit plus à
+            ce fan jusqu’à ce qu’on lui rende la main.
+          </p>
+          {canDecide ? (
+            <div className="tr-hand__give">
+              <label className="nv-field">
+                <span className="nv-field__label">Note pour l’agent (facultatif)</span>
+                <input
+                  className="nv-field__control"
+                  maxLength={NOTE_MAX}
+                  value={note}
+                  disabled={hand.pending}
+                  placeholder="Ex. : anniversaire le 12 mars"
+                  onChange={(event) => {
+                    setNote(event.target.value);
+                  }}
+                />
+              </label>
+              {handButton}
+            </div>
+          ) : null}
+        </div>
       ) : null}
-      {isHuman && canDecide ? (
-        <label className="nv-field">
-          <span className="nv-field__label">À retenir sur ce fan (facultatif, l’agent s’en souviendra)</span>
-          <input
-            className="nv-field__control"
-            maxLength={NOTE_MAX}
-            value={note}
-            disabled={hand.pending}
-            placeholder="Par exemple : il fête son anniversaire le 12 mars"
-            onChange={(event) => {
-              setNote(event.target.value);
-            }}
-          />
-        </label>
-      ) : null}
-      <FanLimits creatorId={creatorId} fanId={detail.fanId} canDecide={canDecide} />
-      {/* A creator never reads what is known of her fans (ADR 0023): the server answers her 403. */}
-      {canDecide ? <FanToLearn creatorId={creatorId} fanId={detail.fanId} /> : null}
-      <DesireSheet creatorId={creatorId} conversationId={detail.id} desire={detail.desire} />
+      <FanSheet
+        creatorId={creatorId}
+        fanId={detail.fanId}
+        conversationId={detail.id}
+        desire={detail.desire}
+        canDecide={canDecide}
+      />
       <div className="tr-reader__body" ref={bodyRef}>
         {read.isPartial ? (
           <p className="tr-more">Seuls les derniers messages sont affichés ; le reste se lit dans Reveal.</p>
@@ -241,19 +262,6 @@ function Loaded({
                 {item.byHuman ? <span className="tr-ppv">Écrit par un humain</span> : null}
               </div>
             ),
-          )}
-          {detail.openDrafts.map((draft) =>
-            draft.status === 'pending' ? (
-              <div key={draft.id} ref={draft.id === pendingId ? draftRef : undefined}>
-                <DraftPanel
-                  draft={draft}
-                  creatorId={creatorId}
-                  conversationId={detail.id}
-                  canDecide={canDecide && !isHuman}
-                  decided={decided}
-                />
-              </div>
-            ) : null,
           )}
           {drafts.sending.map((draft) => (
             <div key={draft.id} className="tr-draft-sending">
@@ -278,6 +286,19 @@ function Loaded({
           <div ref={endRef} />
         </div>
       </div>
+      {/* The draft waiting for a person, pinned under the thread with its buttons: never scrolled away with it. */}
+      {pending === null ? null : (
+        <div className="tr-reader__foot" ref={draftRef}>
+          <DraftPanel
+            key={pending.id}
+            draft={pending}
+            creatorId={creatorId}
+            conversationId={detail.id}
+            blocked={!canDecide ? 'reader' : isHuman ? 'human' : null}
+            decided={decided}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -289,13 +310,14 @@ function DraftPanel({
   draft,
   creatorId,
   conversationId,
-  canDecide,
+  blocked,
   decided,
 }: {
   draft: DraftView;
   creatorId: string;
   conversationId: string;
-  canDecide: boolean;
+  /** Why this person cannot decide now: a human has the hand, or she only reads (a creator); null when she can. */
+  blocked: 'human' | 'reader' | null;
   /** What follows a decision: the sentence to show here when it was refused, null when it went through or came late. */
   decided: (decision: Decision) => Promise<string | null>;
 }): JSX.Element {
@@ -333,7 +355,7 @@ function DraftPanel({
           />
         </label>
       ) : (
-        <div className="nv-thread">
+        <div className="nv-thread tr-draft__bubbles">
           {draft.bubbles.map((bubble, i) => (
             <div key={i} className="nv-bubble nv-bubble--draft">
               {bubble}
@@ -364,11 +386,12 @@ function DraftPanel({
           {error}
         </p>
       )}
-      {!canDecide ? (
+      {blocked === 'human' ? (
         <p className="nv-draft-panel__brief">
-          Seuls le propriétaire et les chatteurs décident des brouillons, et pas pendant qu’un humain a la
-          main.
+          Un humain a la main : rends-la à l’agent pour décider de ce brouillon.
         </p>
+      ) : blocked === 'reader' ? (
+        <p className="nv-draft-panel__brief">Tu lis seulement : l’équipe décide.</p>
       ) : step === 'rejecting' ? (
         <div className="nv-draft-panel__actions">
           <button
