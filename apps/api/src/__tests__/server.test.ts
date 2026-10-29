@@ -30,6 +30,15 @@ const probeRoutes: FastifyPluginAsyncZod = (app) => {
     { schema: { body: z.object({ name: z.string().min(1), count: z.number().int() }) } },
     (request) => ({ hello: request.body.name }),
   );
+  app.post(
+    '/probe-own-message',
+    {
+      schema: {
+        body: z.object({ day: z.number().refine((day) => day === 1 || day === 16, 'Un 1er ou un 16') }),
+      },
+    },
+    () => ({}),
+  );
   app.get('/missing', () => {
     throw new ConversationNotFound('conversation_not_found', 'Conversation introuvable');
   });
@@ -108,12 +117,28 @@ describe('error format (api.md)', () => {
     }>();
     expect(body.error.code).toBe('request_invalid');
     expect(body.error.requestId).toBe('req-400');
+    // Zod's own messages in French, like the rest of the body (recette 28/10).
     expect(body.error.details.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: '/name' }),
-        expect.objectContaining({ path: '/count' }),
+        { path: '/name', message: 'Trop petit : chaîne de caractères doit avoir >=1 caractères' },
+        { path: '/count', message: 'Entrée invalide : entier attendu, nombre reçu' },
       ]),
     );
+  });
+
+  it('keeps the French message a schema writes itself', async () => {
+    const response = await (
+      await server()
+    ).inject({
+      method: 'POST',
+      url: '/v1/probe-own-message',
+      payload: { day: 31 },
+      headers: ORIGIN,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { details: { fields: unknown[] } } }>().error.details.fields).toEqual([
+      { path: '/day', message: 'Un 1er ou un 16' },
+    ]);
   });
 
   it('accepts a valid body under /v1', async () => {

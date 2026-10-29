@@ -24,6 +24,7 @@ import {
 import type { Config } from './config';
 import type { Logger } from './logger';
 import type { Readiness } from './readiness';
+import { useFrenchValidationMessages } from './validation-messages';
 
 export interface ServerDeps {
   readonly config: Config;
@@ -84,6 +85,7 @@ export type Server = FastifyInstance<
 /** Builds the HTTP server without listening, so tests can call it with `inject`. */
 export async function buildServer(deps: ServerDeps): Promise<Server> {
   const { config } = deps;
+  useFrenchValidationMessages();
   const server = Fastify({
     loggerInstance: deps.logger,
     genReqId: requestIdFor,
