@@ -484,6 +484,17 @@
 .nv-more__item:hover .nav-icon {
   transform: translateY(-1px);
 }
+/* Se déconnecter: a button that reads as the sheet's other lines (recette 28/10, M14). */
+.nv-more__out {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
 @keyframes nv-more-fade {
   from {
     opacity: 0;

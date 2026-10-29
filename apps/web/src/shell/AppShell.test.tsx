@@ -309,6 +309,47 @@ describe('« Plus » on the phone', () => {
   });
 });
 
+describe('« Plus » on the phone, signing out (recette 28/10, M14)', () => {
+  const rail: Rail = {
+    kind: 'chatter',
+    items: [{ to: '/suivi', label: 'Suivi', icon: 'tracking', family: null }],
+    settings: null,
+    home: '/suivi',
+    headed: new Set(),
+    more: new Set(),
+  };
+
+  function renderRail(onSignOut: () => void): void {
+    const root = createRootRoute({
+      component: (): JSX.Element => <RailNav rail={rail} current="/suivi" onSignOut={onSignOut} />,
+    });
+    const router = createRouter({
+      routeTree: root.addChildren([createRoute({ getParentRoute: () => root, path: '/suivi' })]),
+      history: createMemoryHistory({ initialEntries: ['/suivi'] }),
+    });
+    render(<RouterProvider router={router} />);
+  }
+
+  it('offers to sign out, even on a rail whose tabs all fit on the bar', async () => {
+    const onSignOut = vi.fn();
+    renderRail(onSignOut);
+    fireEvent.click(await screen.findByRole('button', { name: 'Plus' }));
+    const sheet = screen.getByRole('dialog', { name: 'Plus' });
+    const out = within(sheet).getByRole('button', { name: 'Se déconnecter' });
+    expect(document.activeElement).toBe(out);
+    fireEvent.click(out);
+    expect(onSignOut).toHaveBeenCalledOnce();
+  });
+
+  it('puts it under the tabs of the sheet in the app', async () => {
+    renderApp(owner, '/');
+    fireEvent.click(await screen.findByRole('button', { name: 'Plus' }));
+    const sheet = screen.getByRole('dialog', { name: 'Plus' });
+    const lines = [...sheet.querySelectorAll('.nv-more__item')].map((line) => line.textContent);
+    expect(lines.at(-1)).toBe('Se déconnecter');
+  });
+});
+
 describe('Suivi › Historique des alertes (P4-01)', () => {
   const suiviTabs = async (): Promise<{ readonly label: string; readonly current: boolean }[]> =>
     within(await screen.findByRole('navigation', { name: 'Suivi' }))
