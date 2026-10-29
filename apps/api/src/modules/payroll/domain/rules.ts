@@ -1,6 +1,6 @@
-import type { PayPeriod } from '@nirvana/contracts';
+import { collectiveGoalWindow, payPeriodNotBegun, type PayPeriod } from '@nirvana/contracts';
 
-import { PayrollForbidden } from './errors';
+import { CollectiveGoalLate, PayRuleStarted, PayrollForbidden } from './errors';
 import type { PayReader } from './ports';
 
 /**
@@ -54,4 +54,20 @@ export function draftPeriodsFrom(drafts: readonly PayPeriod[], from: PayPeriod |
 /** A goal changes its own period once it has begun: it may pay a chatter who has nothing else there. */
 export function goalPeriods(period: PayPeriod, current: PayPeriod): PayPeriod[] {
   return period <= current ? [period] : [];
+}
+
+/**
+ * PAIE-22: tiers and the payout minimum start with a period that has not begun (its first day today at the earliest,
+ * in the agency's zone), as a commission rate does. `today` is the server's, never the client's.
+ */
+export function assertRuleStarts(period: PayPeriod, today: string): void {
+  if (!payPeriodNotBegun(period, today)) throw new PayRuleStarted(period);
+}
+
+/**
+ * PAIE-22: the goal of a period may still be set up to its 3rd day, the screen warning that the period has begun; after
+ * that, it is refused.
+ */
+export function assertGoalOpen(period: PayPeriod, today: string): void {
+  if (collectiveGoalWindow(period, today) === 'closed') throw new CollectiveGoalLate(period);
 }

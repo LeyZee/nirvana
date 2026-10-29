@@ -185,7 +185,8 @@ export class PayEntryConflict extends DomainError {
       | 'penalty_conflict'
       | 'pay_adjustment_conflict'
       | 'bonus_tier_set_conflict'
-      | 'collective_goal_conflict',
+      | 'collective_goal_conflict'
+      | 'payout_minimum_conflict',
   ) {
     super(code, 'Cet identifiant est déjà pris par une autre saisie');
   }
@@ -238,6 +239,27 @@ export class PayrollEntriesTooMany extends DomainError {
 export class PayPeriodTooFar extends DomainError {
   constructor(period: PayPeriod) {
     super('request_invalid', 'Une prime vise la quinzaine en cours, une passée ou la suivante', {
+      details: { period },
+    });
+  }
+}
+
+/**
+ * PAIE-22: tiers or a payout minimum from a period that has begun (400). A pay rule starts with a fortnight not worked
+ * yet, as a commission rate does: it never changes under a chatter's feet.
+ */
+export class PayRuleStarted extends DomainError {
+  constructor(period: PayPeriod) {
+    super('pay_rule_started_invalid', 'Une règle de paie part d’une quinzaine qui n’a pas commencé', {
+      details: { period },
+    });
+  }
+}
+
+/** PAIE-22: a collective goal set after the 3rd day of its period (400). */
+export class CollectiveGoalLate extends DomainError {
+  constructor(period: PayPeriod) {
+    super('collective_goal_late_invalid', 'L’objectif d’une quinzaine se pose au plus tard son 3e jour', {
       details: { period },
     });
   }

@@ -1,11 +1,12 @@
-import type {
-  ExchangeRate,
-  PayPeriod,
-  PayrollPeriod,
-  PlanningAccount,
-  PlanningMember,
-  ShiftReport,
-  TeamMember,
+import {
+  calendarDayAt,
+  type ExchangeRate,
+  type PayPeriod,
+  type PayrollPeriod,
+  type PlanningAccount,
+  type PlanningMember,
+  type ShiftReport,
+  type TeamMember,
 } from '@nirvana/contracts';
 
 import { useExchangeRates, usePayPeriod, usePayPeriodReads, usePayPeriods } from '@/payroll/api';
@@ -28,6 +29,13 @@ import { useMembers } from '@/screens/team/api';
  */
 
 /** The period under way in the agency's zone, `null` until its settings are read. */
+/** Today in the agency's zone, the day the server reads pay's rules against (PAIE-22); null until the zone is read. */
+export function useAgencyToday(): string | null {
+  const now = useNow();
+  const settings = useSchedulingSettings();
+  return settings.data === undefined ? null : calendarDayAt(now, settings.data.timeZone);
+}
+
 export function useCurrentPeriod(): PayPeriod | null {
   const now = useNow();
   const settings = useSchedulingSettings();

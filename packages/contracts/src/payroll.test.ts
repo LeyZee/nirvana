@@ -24,6 +24,11 @@ import {
   PenaltySchema,
   bonusTiersFor,
   collectiveGoalFor,
+  nextPayoutMinimum,
+  payoutMinimumFor,
+  PayoutMinimumSchema,
+  PayrollSettingsSchema,
+  UpdatePayrollSettingsBodySchema,
   penaltyApplies,
   penaltyCovers,
 } from './payroll';
@@ -338,9 +343,43 @@ describe('a blocked period', () => {
       statements: [],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
     expect(PayrollPeriodSchema.safeParse(periodRead).success).toBe(false);
     expect(PayrollPeriodSchema.parse({ ...periodRead, blocked: null }).blocked).toBeNull();
+  });
+});
+
+describe('the payout minimum and delay (PAIE-22, PAIE-32)', () => {
+  const minimum = (id: string, fromPeriod: string, createdAt: string, minimumPayoutMinor: number) =>
+    PayoutMinimumSchema.parse({ id, fromPeriod, minimumPayoutMinor, createdBy: USER, createdAt });
+  const a = minimum('0199f2a0-0000-7000-8000-0000000000a1', '2026-11-01', '2026-10-20T10:00:00.000Z', 2_000);
+  const b = minimum('0199f2a0-0000-7000-8000-0000000000a2', '2026-11-01', '2026-10-21T10:00:00.000Z', 2_500);
+  const c = minimum('0199f2a0-0000-7000-8000-0000000000a3', '2026-12-01', '2026-10-21T11:00:00.000Z', 3_000);
+
+  it('reads the newest of the latest period at or before, and the first change after', () => {
+    expect(payoutMinimumFor([a, b, c], period('2026-10-16'))).toBeNull();
+    expect(payoutMinimumFor([c, b, a], period('2026-11-16'))?.minimumPayoutMinor).toBe(2_500);
+    expect(payoutMinimumFor([a, b, c], period('2026-12-01'))?.minimumPayoutMinor).toBe(3_000);
+    expect(nextPayoutMinimum([c, a, b], period('2026-10-16'))?.minimumPayoutMinor).toBe(2_500);
+    expect(nextPayoutMinimum([a, b, c], period('2026-11-01'))?.minimumPayoutMinor).toBe(3_000);
+    expect(nextPayoutMinimum([a, b, c], period('2026-12-01'))).toBeNull();
+  });
+
+  it('takes a delay in whole business days, from 1 to 30, or none', () => {
+    expect(UpdatePayrollSettingsBodySchema.safeParse({ payoutDelayBusinessDays: 3 }).success).toBe(true);
+    expect(UpdatePayrollSettingsBodySchema.safeParse({ payoutDelayBusinessDays: null }).success).toBe(true);
+    for (const wrong of [0, 31, 2.5, '3']) {
+      expect(UpdatePayrollSettingsBodySchema.safeParse({ payoutDelayBusinessDays: wrong }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      PayrollSettingsSchema.parse({
+        minimumPayoutMinor: 1_500,
+        nextMinimum: null,
+        payoutDelayBusinessDays: null,
+      }),
+    ).toEqual({ minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null });
   });
 });

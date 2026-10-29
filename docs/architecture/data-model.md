@@ -244,7 +244,12 @@ pay_periods                period (1er ou 16, clé), starts_at, ends_at (instant
                            (ajout seul, écrit par le job)
 exchange_rates             (currency, day) clé, rate_micros bigint (euros pour une unité, en millionièmes), source,
                            fetched_at (globale, lecture seule pour l'application, écrite par le job des taux, ajout seul)
-payroll_settings           id = 1, minimum_payout_minor (15 € sans ligne), updated_by, updated_at (propriétaire)
+payroll_settings           id = 1, minimum_payout_minor (15 € sans ligne ; plus modifiable par l'application, migration
+                           0040), payout_delay_business_days (1 à 30, null = aucun délai annoncé), updated_by,
+                           updated_at (propriétaire)
+payout_minimums            id, from_period, minimum_payout_minor, created_by, created_at (propriétaire, ajout seul ;
+                           le plus récent de la dernière quinzaine ≤ la période fait foi, jamais sur une quinzaine
+                           déjà validée)
 bonus_tier_sets            id, from_period, tiers (jsonb : seuil, prime, libellé), created_by, created_at (propriétaire,
                            ajout seul ; le plus récent de la dernière quinzaine ≤ la période fait foi)
 collective_goals           id, period, target_minor bigint, tiers (jsonb : pourcentage en points de base, prime par

@@ -1,21 +1,31 @@
+import { newId, PayoutMinimumIdSchema, type PayPeriod } from '@nirvana/contracts';
 import { useId, useState, type JSX } from 'react';
 
-import { setPayrollSettings, usePayrollSettings, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
-import { payRefusalText } from '@/payroll/model';
+import { addPayoutMinimum, usePayrollSettings, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
+import { payRefusalText, rulePeriods } from '@/payroll/model';
 import '@/payroll/pay.css';
-import { amountInput, amountText, parseAmount } from '@/reports/model';
+import { amountInput, amountText, parseAmount, periodLine, periodTitle } from '@/reports/model';
+import { useAgencyToday } from '@/screens/pay/data';
 import { Dialog } from '@/screens/team/Dialog';
 
 const STEPS = ['Remplir', 'Relire'] as const;
 
+/** How many periods ahead a new minimum may start. */
+const MINIMUM_PERIODS = 4;
+
+/** « 1er – 15 novembre »: a period on a chip. */
+const periodChip = (period: PayPeriod): string => periodTitle(period).replace(/\s\d{4}$/u, '');
+
 /**
  * The payout minimum in Réglages › Règles de paie (EQ-05, owner): below it a statement pays nothing and carries its
- * total over. A change applies to the statements not validated yet; a member's final statement has none.
+ * total over. A new minimum starts with a fortnight that has not begun (PAIE-22): the fortnights already worked keep
+ * theirs. A member's final statement has none.
  */
 export function MinimumPayout(): JSX.Element {
   const settings = usePayrollSettings();
+  const today = useAgencyToday();
   const [open, setOpen] = useState(false);
-  const minimum = settings.data?.minimumPayoutMinor;
+  const data = settings.data;
 
   return (
     <div className="nv-plate rp-account nv-enter">
@@ -24,7 +34,7 @@ export function MinimumPayout(): JSX.Element {
           <p className="rp-account__name">Minimum de versement</p>
           <p className="rp-account__handle">pour toute l’équipe</p>
         </div>
-        {minimum === undefined ? null : (
+        {data === undefined || today === null ? null : (
           <button
             type="button"
             className="nv-btn nv-btn--soft nv-btn--sm"
@@ -36,7 +46,7 @@ export function MinimumPayout(): JSX.Element {
           </button>
         )}
       </div>
-      {minimum === undefined ? (
+      {data === undefined ? (
         settings.isError ? (
           <div className="rp-account__now">
             <p className="tm-warn">Le serveur ne répond pas : le minimum n’a pas pu être lu.</p>
@@ -59,17 +69,28 @@ export function MinimumPayout(): JSX.Element {
         <div className="rp-account__now">
           <span className="rp-chip rp-chip--ok">En vigueur</span>
           <p className="rp-account__rules nv-num">
-            {minimum === 0 ? 'Aucun minimum' : amountText(minimum, 'EUR')}
+            {data.minimumPayoutMinor === 0 ? 'Aucun minimum' : amountText(data.minimumPayoutMinor, 'EUR')}
           </p>
+          {data.nextMinimum === null ? null : (
+            <p className="rp-account__since">
+              {`Puis ${
+                data.nextMinimum.minimumPayoutMinor === 0
+                  ? 'aucun minimum'
+                  : amountText(data.nextMinimum.minimumPayoutMinor, 'EUR')
+              } à partir de la quinzaine ${periodLine(data.nextMinimum.fromPeriod)}.`}
+            </p>
+          )}
           <p className="rp-account__since">
-            Sous ce total, un relevé ne verse rien et reporte tout sur la quinzaine suivante. Un changement
-            s’applique aux relevés pas encore validés ; le relevé final d’un membre qui part verse tout.
+            Sous ce total, un relevé ne verse rien et reporte tout sur la quinzaine suivante. Un nouveau
+            minimum part d’une quinzaine qui n’a pas commencé ; le relevé final d’un membre qui part verse
+            tout.
           </p>
         </div>
       )}
-      {open && minimum !== undefined ? (
+      {open && data !== undefined && today !== null ? (
         <MinimumDialog
-          minimum={minimum}
+          minimum={data.minimumPayoutMinor}
+          periods={rulePeriods(today, MINIMUM_PERIODS)}
           onClose={() => {
             setOpen(false);
           }}
@@ -79,9 +100,20 @@ export function MinimumPayout(): JSX.Element {
   );
 }
 
-function MinimumDialog({ minimum, onClose }: { minimum: number; onClose: () => void }): JSX.Element {
+function MinimumDialog({
+  minimum,
+  periods,
+  onClose,
+}: {
+  minimum: number;
+  /** The periods the minimum may start with: not begun yet, in order (PAIE-22). */
+  periods: readonly PayPeriod[];
+  onClose: () => void;
+}): JSX.Element {
   const id = useId();
   const refresh = useRefreshPayroll();
+  const [minimumId] = useState(() => newId(PayoutMinimumIdSchema));
+  const [from, setFrom] = useState<PayPeriod | undefined>(periods[0]);
   const [amount, setAmount] = useState(amountInput(minimum));
   const [touched, setTouched] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -91,10 +123,10 @@ function MinimumDialog({ minimum, onClose }: { minimum: number; onClose: () => v
   const step = checking ? 1 : 0;
 
   const send = async (): Promise<void> => {
-    if (minor === null || busy) return;
+    if (minor === null || from === undefined || busy) return;
     setBusy(true);
     setRefusal(null);
-    const outcome = await setPayrollSettings({ minimumPayoutMinor: minor });
+    const outcome = await addPayoutMinimum({ id: minimumId, fromPeriod: from, minimumPayoutMinor: minor });
     await refresh();
     setBusy(false);
     if (outcome.kind === 'ok') {
@@ -120,22 +152,23 @@ function MinimumDialog({ minimum, onClose }: { minimum: number; onClose: () => v
             </li>
           ))}
         </ol>
-        {checking && minor !== null ? (
+        {checking && minor !== null && from !== undefined ? (
           <>
             <p className="py-recap nv-enter">
+              À partir de la quinzaine {periodLine(from)},{' '}
               {minor === 0 ? (
                 <>
-                  <b>Aucun minimum</b> : chaque relevé verse son total, même petit.
+                  <b>aucun minimum</b> : chaque relevé verse son total, même petit.
                 </>
               ) : (
                 <>
-                  Sous <b className="nv-num">{amountText(minor, 'EUR')}</b>, un relevé ne verse rien et
+                  sous <b className="nv-num">{amountText(minor, 'EUR')}</b>, un relevé ne verse rien et
                   reporte son total sur la quinzaine suivante.
                 </>
               )}
             </p>
             <p className="tm-hint">
-              {`Les relevés pas encore validés sont recalculés ; ceux déjà validés gardent le minimum d’avant, ${amountText(minimum, 'EUR')}.`}
+              {`Les quinzaines déjà commencées gardent leur minimum, ${amountText(minimum, 'EUR')} pour celle en cours : une règle de paie ne change pas en cours de route.`}
             </p>
             <div className="tm-dialog__foot">
               <button
@@ -169,9 +202,30 @@ function MinimumDialog({ minimum, onClose }: { minimum: number; onClose: () => v
             onSubmit={(event) => {
               event.preventDefault();
               setTouched(true);
-              if (minor !== null) setChecking(true);
+              if (minor !== null && from !== undefined) setChecking(true);
             }}
           >
+            <div className="nv-field tm-field">
+              <span className="nv-field__label" id={`${id}-from`}>
+                À partir de la quinzaine
+              </span>
+              <div className="tm-choices" role="radiogroup" aria-labelledby={`${id}-from`}>
+                {periods.map((one) => (
+                  <button
+                    key={one}
+                    type="button"
+                    role="radio"
+                    className="nv-chip nv-num"
+                    aria-checked={from === one}
+                    onClick={() => {
+                      setFrom(one);
+                    }}
+                  >
+                    {periodChip(one)}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="nv-field rp-amount" data-invalid={touched && minor === null ? 'true' : undefined}>
               <label className="nv-field__label" htmlFor={`${id}-minimum`}>
                 Minimum

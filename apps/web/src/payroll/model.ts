@@ -1,6 +1,9 @@
 import {
+  collectiveGoalLastDay,
+  nextPayPeriod,
   PAY_TARGET_MAX_MINOR,
   payPeriodLastDay,
+  payPeriodNotBegun,
   payPeriodOfDay,
   PayPeriodSchema,
   penaltyApplies,
@@ -523,7 +526,16 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
     case 'pay_adjustment_conflict':
     case 'bonus_tier_set_conflict':
     case 'collective_goal_conflict':
+    case 'payout_minimum_conflict':
       return 'Cette saisie existe déjà avec d’autres valeurs : recharge la page.';
+    case 'pay_rule_started_invalid':
+      return period === null
+        ? 'Cette quinzaine a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.'
+        : `La quinzaine ${period} a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.`;
+    case 'collective_goal_late_invalid':
+      return named.success
+        ? `L’objectif de la quinzaine ${periodLine(named.data)} se posait au plus tard le ${longDay(collectiveGoalLastDay(named.data))}.`
+        : 'L’objectif d’une quinzaine se pose au plus tard son 3e jour.';
     case 'payment_in_future_unprocessable':
       return 'Le paiement ne peut pas être daté après aujourd’hui.';
     case 'payment_before_period_unprocessable':
@@ -1218,8 +1230,14 @@ export function myStatementWords(
   statement: CommissionStatement,
   ended: boolean,
   now: Date,
+  /** PAIE-32: the usual delay the owner announced, `null` when none. */
+  payoutDelayBusinessDays: number | null = null,
 ): MyStatementWords {
   const zone = statement.window.timeZone;
+  const delay =
+    payoutDelayBusinessDays === null
+      ? null
+      : `En général, le versement part ${payoutDelayText(payoutDelayBusinessDays)}.`;
   const carry = myCarryLine(statement, ended);
   const withCarry = (notes: string[]): string[] => (carry === null ? notes : [...notes, carry]);
   const { payment } = statement;
@@ -1238,7 +1256,7 @@ export function myStatementWords(
       notes: withCarry([
         statement.payableMinor === 0
           ? `Validé le ${momentAt(statement.validatedAt, zone)}.`
-          : `Validé le ${momentAt(statement.validatedAt, zone)}. Le versement suit.`,
+          : `Validé le ${momentAt(statement.validatedAt, zone)}. ${delay ?? 'Le versement suit.'}`,
       ]),
     };
   const computed = computedText(statement.computedAt, zone, now);
@@ -1247,14 +1265,16 @@ export function myStatementWords(
       since: `validation par l’agence à partir du ${dayMonthText(opensOn(statement.window))}`,
       label: 'Ce que tu touches à ce jour',
       notes: withCarry([
-        `Calculé ${computed} sur tes rapports validés. Le versement suit la validation de la quinzaine.`,
+        `Calculé ${computed} sur tes rapports validés. ${delay ?? 'Le versement suit la validation de la quinzaine.'}`,
       ]),
     };
   return {
     since: `depuis le ${dayMonthText(opensOn(statement.window))}`,
     label: 'Ce que tu vas toucher',
     notes: withCarry([
-      `Calculé ${computed} sur tes rapports validés. L’agence valide, puis le versement suit.`,
+      `Calculé ${computed} sur tes rapports validés. L’agence valide, puis le versement suit${
+        payoutDelayBusinessDays === null ? '' : `, en général ${payoutDelayText(payoutDelayBusinessDays)}`
+      }.`,
     ]),
   };
 }
@@ -1303,3 +1323,24 @@ export function salesFor(
 /** « 330 € », « 1 234,50 € »: an amount without its cents when it has none. */
 export const roundAmountText = (minor: number, currency: Currency): string =>
   minor % 100 === 0 ? amountText(minor, currency).replace(/,00(?=\s)/u, '') : amountText(minor, currency);
+
+/**
+ * The periods a team rule (tiers, the payout minimum) may start with (PAIE-22): not begun on `today` in the agency's
+ * zone, today's own only on its first day, as a commission rate; `count` of them in order.
+ */
+export function rulePeriods(today: string, count: number): PayPeriod[] {
+  const current = payPeriodOfDay(today);
+  const periods: PayPeriod[] = [];
+  for (
+    let one = payPeriodNotBegun(current, today) ? current : nextPayPeriod(current);
+    periods.length < count;
+    one = nextPayPeriod(one)
+  )
+    periods.push(one);
+  return periods;
+}
+
+/** « 3 jours ouvrés après la validation » (PAIE-32): the delay the owner announced, in words. */
+export function payoutDelayText(businessDays: number): string {
+  return `${String(businessDays)} jour${businessDays > 1 ? 's' : ''} ouvré${businessDays > 1 ? 's' : ''} après la validation`;
+}

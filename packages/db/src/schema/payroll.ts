@@ -158,6 +158,8 @@ export const payrollSettings = pgTable(
   {
     id: smallint('id').primaryKey(),
     minimumPayoutMinor: integer('minimum_payout_minor').notNull(),
+    /** PAIE-32: business days between validation and payout, as announced to the team; null announces none. */
+    payoutDelayBusinessDays: smallint('payout_delay_business_days'),
     updatedBy: text('updated_by')
       .notNull()
       .references(() => user.id),
@@ -166,6 +168,10 @@ export const payrollSettings = pgTable(
   (t) => [
     check('payroll_settings_single_check', sql`${t.id} = 1`),
     check('payroll_settings_minimum_check', sql`${t.minimumPayoutMinor} between 0 and ${amountMax}`),
+    check(
+      'payroll_settings_payout_delay_check',
+      sql`${t.payoutDelayBusinessDays} is null or ${t.payoutDelayBusinessDays} between 1 and 30`,
+    ),
     pgPolicy('team_read', { for: 'select', using: anyMember }),
     pgPolicy('owner_insert', {
       for: 'insert',
@@ -175,6 +181,33 @@ export const payrollSettings = pgTable(
       for: 'update',
       using: isOwner,
       withCheck: sql`${isOwner} and ${t.updatedBy} = ${currentUser}`,
+    }),
+  ],
+);
+
+/**
+ * The payout minimum from a period on (PAIE-22), added only, from a period that has not begun; the newest of the latest
+ * period at or before a period is in force, `payroll_settings` before any.
+ */
+export const payoutMinimums = pgTable(
+  'payout_minimums',
+  {
+    id: id(),
+    fromPeriod: date('from_period').notNull(),
+    minimumPayoutMinor: integer('minimum_payout_minor').notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    periodCheck('payout_minimums_period_check', t.fromPeriod),
+    check('payout_minimums_minimum_check', sql`${t.minimumPayoutMinor} between 0 and ${amountMax}`),
+    index('payout_minimums_period_idx').on(t.fromPeriod),
+    pgPolicy('team_read', { for: 'select', using: anyMember }),
+    pgPolicy('owner_insert', {
+      for: 'insert',
+      withCheck: sql`${isOwner} and ${t.createdBy} = ${currentUser}`,
     }),
   ],
 );

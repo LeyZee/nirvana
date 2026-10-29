@@ -8,6 +8,7 @@ import type {
   CreateBonusBody,
   CreateBonusTierSetBody,
   CreateCollectiveGoalBody,
+  CreatePayoutMinimumBody,
   CreatePenaltyBody,
   DomainError,
   ExchangeRate,
@@ -23,11 +24,13 @@ import type {
   PayPeriodSummary,
   PayPeriodWindow,
   PayrollEntries,
+  PayoutMinimum,
   PayrollSettings,
   Penalty,
   PenaltyId,
   TeamMemberId,
   TeamScope,
+  UpdatePayrollSettingsBody,
   UserId,
 } from '@nirvana/contracts';
 
@@ -147,8 +150,10 @@ export interface PayrollEntryStore {
 export interface PayrollRuleStore {
   createBonusTierSet(actor: Actor, body: CreateBonusTierSetBody): Promise<Recorded<BonusTierSet>>;
   createCollectiveGoal(actor: Actor, body: CreateCollectiveGoalBody): Promise<Recorded<CollectiveGoal>>;
-  /** The minimum as it stands once set; the same value again writes nothing. */
-  setSettings(actor: Actor, settings: PayrollSettings): Promise<PayrollSettings>;
+  /** PAIE-22: a payout minimum from a period that has not begun. */
+  createPayoutMinimum(actor: Actor, body: CreatePayoutMinimumBody): Promise<Recorded<PayoutMinimum>>;
+  /** PAIE-32: the payout delay announced; the settings as they stand for today's period. */
+  setSettings(actor: Actor, body: UpdatePayrollSettingsBody): Promise<PayrollSettings>;
 }
 
 /** A rate as the ECB writes it (ADR 0033): units of `currency` for one euro, in decimal text, on `day`. */

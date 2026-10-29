@@ -51,6 +51,7 @@ import {
   parsePaySearch,
   parseTarget,
   payRefusalText,
+  payoutDelayText,
   penaltyTaken,
   periodAmount,
   periodToOpen,
@@ -59,6 +60,7 @@ import {
   rateText,
   reachedBpsOf,
   roundAmountText,
+  rulePeriods,
   rowChips,
   salesFor,
   salesSplit,
@@ -324,7 +326,7 @@ describe('a period in the list', () => {
       ],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
     // The draft under the minimum would carry its total, but only the validated one did.
     expect(summaryOf(period)).toMatchObject({
@@ -444,6 +446,20 @@ describe('words', () => {
     const names = { memberName: () => 'Basile' };
     expect(
       payRefusalText(
+        { kind: 'refused', code: 'pay_rule_started_invalid', details: { period: '2026-11-01' } },
+        names,
+      ),
+    ).toBe(
+      'La quinzaine du 1er au 15 novembre a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.',
+    );
+    expect(
+      payRefusalText(
+        { kind: 'refused', code: 'collective_goal_late_invalid', details: { period: '2026-11-16' } },
+        names,
+      ),
+    ).toBe('L’objectif de la quinzaine du 16 au 30 novembre se posait au plus tard le mercredi 18 novembre.');
+    expect(
+      payRefusalText(
         { kind: 'refused', code: 'pay_period_order_conflict', details: { period: '2026-10-16' } },
         names,
       ),
@@ -514,7 +530,7 @@ describe('the export of a period', () => {
       statements: [statement()],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
     const csv = statementsCsv(
       period,
@@ -540,7 +556,7 @@ describe('the export of a period', () => {
       statements: [statement({ penaltiesMinor: 500 })],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
     const lines = (name: string) =>
       statementsCsv(
@@ -640,7 +656,7 @@ describe('the dollar’s rate before a closing', () => {
     ],
     bonusTiers: null,
     collectiveGoal: null,
-    settings: { minimumPayoutMinor: 1_500 },
+    settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     ...patch,
   });
 
@@ -874,6 +890,13 @@ describe('Primes et malus', () => {
 });
 
 describe('goals and tiers', () => {
+  it('starts a pay rule with a period that has not begun (PAIE-22)', () => {
+    // The 1st itself has not begun yet as a rule's start: the period of that day is offered.
+    expect(rulePeriods('2026-11-01', 2)).toEqual(['2026-11-01', '2026-11-16']);
+    expect(rulePeriods('2026-11-02', 2)).toEqual(['2026-11-16', '2026-12-01']);
+    expect(rulePeriods('2026-12-31', 2)).toEqual(['2027-01-01', '2027-01-16']);
+  });
+
   it('reads a target up to its own ceiling, beyond an entry’s slip guard', () => {
     expect(parseTarget('150 000')).toBe(15_000_000);
     expect(parseTarget('1000000')).toBe(100_000_000);
@@ -1024,6 +1047,27 @@ describe('Commissions, as the member reads them', () => {
     });
     const bare = statement({ ...paid, payment: { ...payment, reference: null } });
     expect(words(bare, true).notes).toEqual(['Payé le mardi 17 novembre par WorldRemit.']);
+  });
+
+  it('says the payout delay the owner announced, never one of its own (PAIE-32)', () => {
+    const sameDay = new Date('2026-11-02T15:00:00Z');
+    const notes = (one: CommissionStatement, ended: boolean, delay: number | null) =>
+      myStatementWords(one, ended, sameDay, delay).notes.map(plain);
+    expect(notes(statement(), false, 3)).toEqual([
+      'Calculé à 10 h 07 sur tes rapports validés. En général, le versement part 3 jours ouvrés après la validation.',
+    ]);
+    expect(notes(statement(), true, 1)).toEqual([
+      'Calculé à 10 h 07 sur tes rapports validés. L’agence valide, puis le versement suit, en général 1 jour ouvré après la validation.',
+    ]);
+    const validated = statement({ status: 'validated', validatedAt: '2026-11-16T09:41:00.000Z' });
+    expect(notes(validated, true, 3)).toEqual([
+      'Validé le lundi 16 novembre à 10 h 41. En général, le versement part 3 jours ouvrés après la validation.',
+    ]);
+    // Nothing to pay: no delay to announce.
+    expect(notes(statement({ ...validated, payableMinor: 0 }), true, 3)).toEqual([
+      'Validé le lundi 16 novembre à 10 h 41.',
+    ]);
+    expect(payoutDelayText(2)).toBe('2 jours ouvrés après la validation');
   });
 
   it('finds the tier reached, its threshold included, and the next one', () => {
