@@ -1,4 +1,11 @@
-import { SPENDING_LIMIT_MAX_MINOR, type FanFlags, type SalesFreezeReason } from '@nirvana/contracts';
+import {
+  AGE_DISPUTE_FORBIDDEN,
+  AGE_DISPUTE_REASON_INVALID,
+  ApiErrorSchema,
+  SPENDING_LIMIT_MAX_MINOR,
+  type FanFlags,
+  type SalesFreezeReason,
+} from '@nirvana/contracts';
 
 /** The switches of the fan's limits: on or off, nothing else to say when setting them. */
 export type SwitchFlag = 'doNotContact' | 'salesFrozen' | 'noExplicit' | 'fragile';
@@ -54,12 +61,17 @@ export const isAgeDisputed = (flags: FanFlags): boolean => flags.ageDisputed !==
 /** What the summary shows in amber: a limit that stops the agent, or a suspected minor. */
 export const needsAttention = (flags: FanFlags): boolean => isBlocking(flags) || isAgeDisputed(flags);
 
-export function ageLine(flags: FanFlags): string {
+/**
+ * The line under « Âge »: a disputed age says who may lift it to a reader who may not (SUIVI-04), so that the missing
+ * button is never a mystery.
+ */
+export function ageLine(flags: FanFlags, mayConfirmDisputedAge = false): string {
   if (flags.ageDisputed !== undefined) {
     const day = dayOf(flags.ageDisputed.since);
+    const who = mayConfirmDisputedAge ? '' : ' Seuls le propriétaire et les managers peuvent le confirmer.';
     return flags.ageDisputed.by === 'policy'
-      ? `Contesté le ${day} : l’agent a relevé un signe de minorité. Rien d’explicite.`
-      : `Contesté le ${day} par un humain. Rien d’explicite.`;
+      ? `Contesté le ${day} : l’agent a relevé un signe de minorité. Rien d’explicite.${who}`
+      : `Contesté le ${day} par un humain. Rien d’explicite.${who}`;
   }
   return flags.ageConfirmedAt === undefined
     ? 'Pas encore confirmé : rien d’explicite tant qu’il ne l’est pas.'
@@ -70,7 +82,7 @@ export function ageLine(flags: FanFlags): string {
 export const ageQuestion = (flags: FanFlags): string =>
   flags.ageDisputed === undefined
     ? 'Tu as vérifié qu’il est majeur ? L’agent pourra devenir explicite.'
-    : 'Tu as vérifié qu’il est majeur ? Ça lève la contestation : l’agent pourra devenir explicite.';
+    : 'Tu as vérifié qu’il est majeur ? Écris comment, c’est gardé au journal. Ça lève la contestation : l’agent pourra devenir explicite.';
 
 /** The folded line of the section: a disputed age first, then the limits on, or that there are none. */
 export function flagsSummary(flags: FanFlags): string {
@@ -105,7 +117,13 @@ export function ceilingProblem(text: string): string | null {
 }
 
 /** Why a change was refused (`fan_not_found` 404, `creator_forbidden` or a creator's role 403): nothing changed. */
-export function flagError(status: number): string {
+export function flagError(status: number, body: unknown): string {
+  const answer = ApiErrorSchema.safeParse(body);
+  const code = answer.success ? answer.data.error.code : null;
+  // A disputed age (SUIVI-04): the refusal says which rule, not « not accepted as is ».
+  if (code === AGE_DISPUTE_FORBIDDEN)
+    return 'Seuls le propriétaire et les managers confirment un âge contesté : rien n’a changé.';
+  if (code === AGE_DISPUTE_REASON_INVALID) return 'Écris pourquoi tu confirmes son âge : rien n’a changé.';
   if (status === 404) return 'Ce fan n’existe plus.';
   // A creator has no switch: a 403 is a member this fan's conversation is not open to (EQ-13).
   if (status === 403) return 'Tu ne peux pas changer les limites de ce fan : rien n’a changé.';

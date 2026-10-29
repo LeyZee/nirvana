@@ -6,6 +6,8 @@ import {
   type FanFlags,
   type FanId,
   type KycSlot,
+  type TeamScope,
+  type UserId,
 } from '@nirvana/contracts';
 
 import {
@@ -21,6 +23,7 @@ import {
   withDeclaredAge,
   withFlag,
   withFlagIfUnset,
+  mayConfirmDisputedAge,
   withHumanConfirmation,
   withoutFlag,
   type FlagAuthor,
@@ -45,6 +48,15 @@ export interface FansService {
   kycToLearn(creatorId: CreatorId, fanId: FanId, slots: readonly KycSlot[]): Promise<KycSlot[]>;
   /** His limits (`fans.flags`), read by the policy before any offer. */
   flags(creatorId: CreatorId, fanId: FanId): Promise<FanFlags>;
+  /**
+   * His limits as a person reads them, and whether that person may confirm his age once disputed: the owner and an
+   * active manager only (SUIVI-04), as the database says.
+   */
+  flagsFor(
+    creatorId: CreatorId,
+    fanId: FanId,
+    userId: UserId,
+  ): Promise<{ flags: FanFlags; mayConfirmDisputedAge: boolean }>;
   /** Sets one limit; writes `fan_flag_set` only when it changed. Returns his limits after. */
   setFlag(creatorId: CreatorId, fanId: FanId, change: FlagChange, command: FlagCommand): Promise<FanFlags>;
   /** Sets one limit only where none of that name is set (a human's freeze keeps its reason). Returns his limits after. */
@@ -86,11 +98,20 @@ export function createFansService(
     kycToLearn: async (creatorId, fanId, slots) =>
       kycSlotsToLearn(slots, await facts.current(creatorId, fanId), now()),
     flags: (creatorId, fanId) => flagStore.read(creatorId, fanId),
+    flagsFor: async (creatorId, fanId, userId) => {
+      const { flags, scope } = await flagStore.readAs(creatorId, fanId, userId);
+      return { flags, mayConfirmDisputedAge: mayConfirmDisputedAge(scope) };
+    },
     setFlag: (creatorId, fanId, change, command) => {
-      // A human confirming his age settles a dispute; the policy never does.
+      // A human confirming his age settles a dispute (the owner or a manager, with a reason); the policy never does.
       const human = command.author !== 'system' && change.flag === 'ageConfirmedAt';
-      const apply = (flags: FanFlags) =>
-        human ? withHumanConfirmation(flags, change) : withFlag(flags, change);
+      const apply = (flags: FanFlags, scope: TeamScope | null) =>
+        human
+          ? withHumanConfirmation(flags, change, {
+              scope,
+              ...(command.reason !== undefined && { reason: command.reason }),
+            })
+          : withFlag(flags, change);
       return flagStore.change(creatorId, fanId, apply, {
         type: 'fan_flag_set',
         flag: change.flag,

@@ -11,7 +11,7 @@ import {
   type ConversationEventView,
   type ConversationSummary,
   type DesirePoint,
-  type FanFlags,
+  type FanFlagsView,
   type KycSlot,
   type MessageView,
   type SetFanFlagBody,
@@ -179,12 +179,15 @@ const flagsPath = (creatorId: string, fanId: string): string =>
 /** The server will not show this fan's limits to this person (403): asking again changes nothing. */
 export class FanFlagsRefused extends Error {}
 
-/** `GET /v1/fans/:id/flags`: the fan's limits, as the policy reads them before any offer. */
-export async function fetchFanFlags(creatorId: string, fanId: string): Promise<FanFlags> {
+/**
+ * `GET /v1/fans/:id/flags`: the fan's limits, as the policy reads them before any offer, and whether this person may
+ * confirm his age once disputed (the owner or a manager, SUIVI-04).
+ */
+export async function fetchFanFlags(creatorId: string, fanId: string): Promise<FanFlagsView> {
   const response = await fetch(flagsPath(creatorId, fanId), { credentials: 'include' });
   if (response.status === 403) throw new FanFlagsRefused(`GET flags: ${String(response.status)}`);
   if (!response.ok) throw new Error(`GET flags: ${String(response.status)}`);
-  return FanFlagsViewSchema.parse(await response.json()).flags;
+  return FanFlagsViewSchema.parse(await response.json());
 }
 
 /** The server will not tell what is left to learn about this fan (403 or 404): asking again changes nothing. */
@@ -202,7 +205,7 @@ export async function fetchFanKyc(creatorId: string, fanId: string): Promise<Kyc
 
 /** His limits after a change, or why it was refused (they stay as they were). */
 export type FlagChange =
-  { readonly ok: true; readonly flags: FanFlags } | { readonly ok: false; readonly message: string };
+  { readonly ok: true; readonly view: FanFlagsView } | { readonly ok: false; readonly message: string };
 
 /** `PUT /v1/fans/:id/flags`: a person sets or lifts one limit; the server dates an age confirmation and a freeze. */
 export async function setFanFlag(
@@ -217,9 +220,12 @@ export async function setFanFlag(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!response.ok) return { ok: false, message: flagError(response.status) };
-    return { ok: true, flags: FanFlagsViewSchema.parse(await response.json()).flags };
+    if (!response.ok) {
+      const answer: unknown = await response.json().catch(() => null);
+      return { ok: false, message: flagError(response.status, answer) };
+    }
+    return { ok: true, view: FanFlagsViewSchema.parse(await response.json()) };
   } catch {
-    return { ok: false, message: flagError(0) };
+    return { ok: false, message: flagError(0, null) };
   }
 }
