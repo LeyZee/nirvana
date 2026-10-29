@@ -248,13 +248,14 @@
   margin: 0;
 }
 /* Amber: the server does not answer, a decision did not go through. Red stays for urgencies. */
-.tr-queue-error {
-  margin: 0 0 8px;
-}
 .tr-warn {
   margin: 0;
   color: var(--nv-warning);
   font-weight: 600;
+}
+/* After .tr-warn, whose margin it overrides: « À traiter » unread keeps a gap above its Réessayer. */
+.tr-queue-error {
+  margin: 0 0 8px;
 }
 .tr-line {
   font-size: var(--nv-text-footnote);
