@@ -274,6 +274,17 @@ describe('her own alerts', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Créer l’alerte' }));
     expect(await within(form).findByText('Une alerte active porte déjà ce nom.')).toBeTruthy();
     expect(screen.getByRole('form', { name: 'Nouvelle alerte' })).toBeTruthy();
+    const name = within(form).getByLabelText('Nom');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(name);
+    });
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.closest('[data-invalid="true"]')).not.toBeNull();
+
+    // Renamed: the field is no longer refused.
+    fireEvent.change(name, { target: { value: 'Vidéo perso 2' } });
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+    expect(within(form).queryByText('Une alerte active porte déjà ce nom.')).toBeNull();
   });
 
   it('edits one in place and sends it whole', async () => {
