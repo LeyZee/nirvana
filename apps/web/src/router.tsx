@@ -18,7 +18,6 @@ import { GoalsPage } from './screens/pay/GoalsPage';
 import { PeriodPage } from './screens/pay/PeriodPage';
 import { PeriodsPage } from './screens/pay/PeriodsPage';
 import { MyPlanningPage } from './screens/planning/MyPlanningPage';
-import { AppearancePage } from './screens/settings/AppearancePage';
 import {
   DevicesPage,
   AgentModePage,
@@ -54,14 +53,19 @@ export interface RouterContext {
   readonly onSignOut: () => void;
 }
 
+/** What the shell says when the route guard sends someone to the first tab of their rail (NAV-21). */
+export const NOT_YOURS = 'Cette page n’est pas dans ton espace.';
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   // A section outside the account's rail sends it to its first tab (ADR 0024); the server's 403 stays the barrier.
   beforeLoad: ({ context, location }) => {
     const rail = railOf(context.user);
     const section = sectionOf(location.pathname);
     if (section !== null && !canOpen(rail, section)) {
+      // Said once on arrival (NAV-21): a link pasted from someone else's space is not a broken app. The word rides
+      // with the redirect, in the history's state: each arrival has its own, even on the address already shown.
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
-      throw redirect({ to: rail.home, replace: true });
+      throw redirect({ to: rail.home, replace: true, state: { notice: NOT_YOURS } });
     }
   },
   component: function Root() {
@@ -354,13 +358,10 @@ const settings = createRoute({
 const settingsIndex = createRoute({
   getParentRoute: () => settings,
   path: '/',
-  // The owner lands on Modèles IA; anyone else on Apparence, the first tab the server lets them use.
-  beforeLoad: ({ context }) => {
+  // Réglages is the owner's alone (the root sends anyone else home): it opens on Modèles IA.
+  beforeLoad: () => {
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
-    throw redirect({
-      to: context.user.role === 'owner' ? '/reglages/modeles-ia' : '/reglages/apparence',
-      replace: true,
-    });
+    throw redirect({ to: '/reglages/modeles-ia', replace: true });
   },
 });
 const aiModels = createRoute({
@@ -410,11 +411,6 @@ const alerts = createRoute({
   component: AlertsPage,
 });
 const devices = createRoute({ getParentRoute: () => settings, path: '/appareils', component: DevicesPage });
-const appearance = createRoute({
-  getParentRoute: () => settings,
-  path: '/apparence',
-  component: AppearancePage,
-});
 const backups = createRoute({
   getParentRoute: () => settings,
   path: '/sauvegardes',
@@ -452,17 +448,7 @@ const routeTree = rootRoute.addChildren([
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
   pay.addChildren([payIndex, payPeriod, payPeriods, payEntries, payGoals]),
   commissions,
-  settings.addChildren([
-    settingsIndex,
-    aiModels,
-    alerts,
-    telegram,
-    payRules,
-    backups,
-    devices,
-    appearance,
-    agentMode,
-  ]),
+  settings.addChildren([settingsIndex, aiModels, alerts, telegram, payRules, backups, devices, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext, history?: RouterHistory) =>
@@ -485,5 +471,9 @@ export function createAppRouter(context: RouterContext, history?: RouterHistory)
 declare module '@tanstack/react-router' {
   interface Register {
     router: AppRouter;
+  }
+  interface HistoryState {
+    /** A word for the screen a redirect lands on (NAV-21). */
+    notice?: string;
   }
 }

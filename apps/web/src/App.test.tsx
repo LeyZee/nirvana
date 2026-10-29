@@ -202,12 +202,12 @@ describe('App signing out', () => {
     );
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: /Nora/u }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Se déconnecter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Se déconnecter' }));
     expect((await screen.findByRole('alert')).textContent).toBe('La déconnexion n’a pas abouti : réessaie.');
 
     // Tried again and made: the alert goes with the session.
     signOutStatus = 200;
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Se déconnecter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Se déconnecter' }));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });

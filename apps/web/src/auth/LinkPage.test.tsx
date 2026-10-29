@@ -187,7 +187,7 @@ describe('WelcomePage', () => {
     serve({ inspect: [[404, refusal('invitation_link_not_found')]] });
     const { onLeave } = open('welcome');
     expect(await screen.findByText('Ce lien ne marche plus')).toBeDefined();
-    expect(screen.getByText('Demande-en un nouveau.')).toBeDefined();
+    expect(screen.getByText('Demande un nouveau lien à ton responsable.')).toBeDefined();
     expect(screen.queryByLabelText('Mot de passe')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Aller à la connexion' }));
     expect(onLeave).toHaveBeenCalledOnce();
@@ -238,7 +238,7 @@ describe('an answer lost after the link was used', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
     expect(await screen.findByText('Ce lien a déjà servi')).toBeDefined();
     expect(screen.getByText(/connecte-toi avec lui/u)).toBeDefined();
-    expect(screen.queryByText('Demande-en un nouveau.')).toBeNull();
+    expect(screen.queryByText('Demande un nouveau lien à ton responsable.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Aller à la connexion' }));
     expect(onLeave).toHaveBeenCalledOnce();
   });
@@ -252,8 +252,9 @@ describe('another account signed in on this browser', () => {
     name: 'Charles',
     role: 'owner',
   };
+  // No « de » before a name, which would need « d’ » before Alex or Inès (NAV-15).
   const WARNING =
-    /Ce navigateur est connecté au compte de Charles\. « Entrer » ouvrira celui de Théo à sa place\./u;
+    /Ce navigateur est ouvert sur le compte Charles\. « Entrer » ouvrira à sa place le compte Théo\./u;
 
   it('says the member’s session will take its place, before he enters', async () => {
     serve({
@@ -261,14 +262,18 @@ describe('another account signed in on this browser', () => {
       me: [200, { ...CHARLES, team: null, teamScope: 'owner' }],
     });
     open('welcome');
-    await screen.findByRole('heading', { name: 'Bienvenue, Théo' });
+    // The page's title in the body's face, the name in the rail's (NAV-14), and the tab named after the page (NAV-12).
+    const title = await screen.findByRole('heading', { level: 1, name: 'Bienvenue, Théo' });
+    expect(title.className).not.toContain('font-serif');
+    expect(screen.getByText('Nirvana').className).toContain('nv-wordmark');
+    expect(document.title).toBe('Bienvenue · Nirvana');
     expect(await screen.findByText(WARNING)).toBeDefined();
   });
 
   it('says it with the button of the page, on a new password link', async () => {
     serve({ inspect: [[200, preview('reset')]], me: [200, { ...CHARLES, team: null, teamScope: 'owner' }] });
     open('reset');
-    expect(await screen.findByText(/« Enregistrer » ouvrira celui de Théo à sa place\./u)).toBeDefined();
+    expect(await screen.findByText(/« Enregistrer » ouvrira à sa place le compte Théo\./u)).toBeDefined();
   });
 
   it('says nothing when it is his own account, when no one is signed in, or when the session cannot be read', async () => {

@@ -175,12 +175,25 @@ describe('DashboardPage on the server’s data', () => {
     });
   });
 
-  it('says the voice waits for its key and leads to where it goes', async () => {
+  it('tells a manager who puts the key, and offers no way to Réglages, which he does not have', async () => {
     serveDashboard({
       status: 200,
       body: apiDashboard({ voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 } }),
     });
     renderDashboard();
+    await waitFor(() => {
+      expect(headline()).toBe('L’IA qui écrit attend sa clé');
+    });
+    expect(screen.getByText(/^Le propriétaire la pose dans Réglages › Modèles IA\./u)).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'Poser la clé' })).toBeNull();
+  });
+
+  it('says the voice waits for its key and leads the owner to where it goes', async () => {
+    serveDashboard({
+      status: 200,
+      body: apiDashboard({ voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 } }),
+    });
+    renderDashboard(false, true);
     await waitFor(() => {
       expect(headline()).toBe('L’IA qui écrit attend sa clé');
     });

@@ -59,6 +59,8 @@ export interface AgentState {
   readonly stalled?: true;
   /** Where the action leads, when it is a page and not the first todo (« Poser la clé » › Réglages). */
   readonly actionTo?: '/reglages/modeles-ia';
+  /** The lead read by whoever cannot open `actionTo` (Réglages is the owner's alone): who does it, and where. */
+  readonly leadWithoutAction?: string;
   /** The fold's title (« L'agent fonctionne normalement ») and its one-line summary. */
   readonly foldTitle: string;
   readonly foldSummary: string;

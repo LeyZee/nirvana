@@ -302,6 +302,8 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       lead: 'Pose-la dans Réglages › Modèles IA. D’ici là, les conversations restent aux chatteurs dans Reveal.',
       action: 'Poser la clé',
       actionTo: '/reglages/modeles-ia',
+      leadWithoutAction:
+        'Le propriétaire la pose dans Réglages › Modèles IA. D’ici là, les conversations restent aux chatteurs dans Reveal.',
       foldTitle: 'Une étape reste à faire',
     };
   }

@@ -71,19 +71,19 @@ describe('nextMode', () => {
 });
 
 describe('pillOf', () => {
-  it('says what the agent does in the control’s words, red only when it is stopped', () => {
+  it('says what the agent does in the control’s words, amber when it is stopped, never red (NAV-06)', () => {
     expect(pillOf('copilot')).toEqual({ label: 'Copilote', tone: 'ok', live: true });
     expect(pillOf('auto')).toEqual({ label: 'Automatique', tone: 'ok', live: true });
-    expect(pillOf('stop')).toEqual({ label: 'Arrêt', tone: 'bad', live: false });
+    expect(pillOf('stop')).toEqual({ label: 'Arrêt', tone: 'warn', live: false });
   });
 
   it('keeps the mode set but neither green nor alive when nothing runs', () => {
     expect(pillOf('copilot', false)).toEqual({ label: 'Copilote', tone: 'unknown', live: false });
     expect(pillOf('auto', false)).toEqual({ label: 'Automatique', tone: 'unknown', live: false });
-    expect(pillOf('stop', false)).toEqual({ label: 'Arrêt', tone: 'bad', live: false });
+    expect(pillOf('stop', false)).toEqual({ label: 'Arrêt', tone: 'warn', live: false });
   });
 
   it('never shows a mode the server did not give', () => {
-    expect(pillOf(null)).toEqual({ label: 'Inconnu', tone: 'unknown', live: false });
+    expect(pillOf(null)).toEqual({ label: 'Injoignable', tone: 'unknown', live: false });
   });
 });

@@ -217,6 +217,7 @@ function Loaded({
         onDone={undefined}
         onResume={status === 'live' && !globalStop && !forCreator ? resume : undefined}
         forCreator={forCreator}
+        opensSettings={forOwner}
       />
 
       {/* The sample reads nothing: the banner speaks of the server's exports only. */}

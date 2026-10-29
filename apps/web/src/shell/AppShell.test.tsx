@@ -10,7 +10,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { JSX } from 'react';
+import { StrictMode, type JSX } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAppRouter, type AppRouter } from '../router';
@@ -141,7 +141,8 @@ describe('the rail of each role', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/');
     });
-    expect(tabs()).toEqual(['Dashboard', 'Créatrices', 'Réglages']);
+    // Her own persona, and no Réglages: every page of it is the owner's (NAV-18).
+    expect(tabs()).toEqual(['Dashboard', 'Persona']);
     expect(screen.getByText('Créatrice')).toBeDefined();
   });
 
@@ -172,55 +173,32 @@ describe('Réglages › Sauvegardes', () => {
 
   it('is a tab of the owner, after Telegram and the pay rules', async () => {
     const router = renderApp(owner, '/reglages/sauvegardes');
-    expect(await subTabs()).toEqual([
-      'Modèles IA',
-      'Alertes',
-      'Telegram',
-      'Règles de paie',
-      'Sauvegardes',
-      'Apparence',
-    ]);
+    expect(await subTabs()).toEqual(['Modèles IA', 'Alertes', 'Telegram', 'Règles de paie', 'Sauvegardes']);
     expect(router.state.location.pathname).toBe('/reglages/sauvegardes');
   });
 
-  it('is no tab of an operator or a creator, and its address sends them back to Réglages', async () => {
-    for (const user of [
-      { ...base, role: 'operator', team: null, teamScope: 'self' },
-      { ...base, role: 'creator', team: null, teamScope: 'self' },
-    ] satisfies Me[]) {
-      const router = renderApp(user, '/reglages/sauvegardes');
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/reglages/apparence');
-      });
-      expect(await subTabs()).not.toContain('Sauvegardes');
-      cleanup();
-    }
-  });
-
-  // The alerts are the owner's too (P4-01): same tab rule, same way back.
-  it('keeps Réglages › Alertes for the owner alone', async () => {
-    for (const user of [
-      { ...base, role: 'operator', team: null, teamScope: 'self' },
-      { ...base, role: 'creator', team: null, teamScope: 'self' },
-    ] satisfies Me[]) {
-      const router = renderApp(user, '/reglages/alertes');
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/reglages/apparence');
-      });
-      expect(await subTabs()).not.toContain('Alertes');
-      cleanup();
-    }
-  });
-
-  it('keeps the pay rules to the owner too (EQ-03)', async () => {
-    const router = renderApp(
-      { ...base, role: 'operator', team: null, teamScope: 'self' },
+  // Réglages is the owner's alone (NAV-18): any of its addresses sends anyone else to the Dashboard, and says why.
+  it('sends an operator or a creator from any page of Réglages to the Dashboard, and says why (NAV-21)', async () => {
+    for (const path of [
+      '/reglages/sauvegardes',
+      '/reglages/alertes',
       '/reglages/regles-de-paie',
-    );
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/reglages/apparence');
-    });
-    expect(await subTabs()).not.toContain('Règles de paie');
+      '/reglages/apparence',
+    ]) {
+      for (const user of [
+        { ...base, role: 'operator', team: null, teamScope: 'self' },
+        { ...base, role: 'creator', team: null, teamScope: 'self' },
+      ] satisfies Me[]) {
+        const router = renderApp(user, path);
+        await waitFor(() => {
+          expect(router.state.location.pathname).toBe('/');
+        });
+        const said = await screen.findByText('Cette page n’est pas dans ton espace.');
+        expect(said.closest('[role="status"]')).not.toBeNull();
+        expect(screen.queryByRole('navigation', { name: 'Réglages' })).toBeNull();
+        cleanup();
+      }
+    }
   });
 });
 
@@ -418,5 +396,198 @@ describe('the tab’s title (recette 28/10, M2)', () => {
     await waitFor(() => {
       expect(document.title).toBe('Créatrices · Nirvana');
     });
+  });
+});
+
+describe('the shell’s landmarks (design 29/10)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('lights no tab on an unknown screen inside a section (NAV-01)', async () => {
+    renderApp(owner, '/equipe/nexiste-pas');
+    expect(await screen.findByRole('heading', { name: 'Cette page n’existe pas' })).toBeDefined();
+    const nav = screen.getByRole('navigation', { name: 'Navigation' });
+    expect(nav.querySelector('[aria-current="page"]')).toBeNull();
+  });
+
+  it('names the view and its section in the tab’s title (NAV-12)', async () => {
+    renderApp(owner, '/equipe/membres');
+    await waitFor(() => {
+      expect(document.title).toBe('Membres · Équipe · Nirvana');
+    });
+  });
+
+  it('leaves the agent’s mode to the Dashboard’s own control on the Dashboard (NAV-07)', async () => {
+    const router = renderApp(owner, '/');
+    await screen.findByText('Chatting');
+    const nav = screen.getByRole('navigation', { name: 'Navigation' });
+    expect(nav.querySelector('.nv-rail__agent')).toBeNull();
+    await router.navigate({ to: '/suivi' });
+    await waitFor(() => {
+      expect(nav.querySelector('.nv-rail__agent')).not.toBeNull();
+    });
+  });
+
+  it('opens on a link to skip the rail, and puts the keyboard on the new section (NAV-20)', async () => {
+    const router = renderApp(owner, '/suivi');
+    const skip = await screen.findByRole('link', { name: 'Aller au contenu' });
+    expect(skip.getAttribute('href')).toBe('#contenu');
+    expect(document.getElementById('contenu')?.tagName).toBe('MAIN');
+    await router.navigate({ to: '/creatrices' });
+    await waitFor(() => {
+      expect(document.getElementById('contenu')?.contains(document.activeElement)).toBe(true);
+    });
+  });
+});
+
+describe('the account’s menu (NAV-02, NAV-03)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('names who is signed in, holds the appearance and the way out, and closes on Escape', async () => {
+    const onSignOut = vi.fn();
+    const router = createAppRouter(
+      { user: owner, onSignOut },
+      createMemoryHistory({ initialEntries: ['/suivi'] }),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    const button = await screen.findByRole('button', { name: /Nora/u });
+    expect(button.textContent).toContain('Propriétaire');
+    fireEvent.click(button);
+    const menu = document.getElementById('nv-user-menu');
+    if (menu === null) throw new Error('no menu');
+    const night = within(menu).getByRole('radio', { name: 'Nuit' });
+    expect(within(menu).getByRole('radiogroup', { name: 'Apparence' })).toBeDefined();
+    fireEvent.keyDown(night, { key: 'ArrowRight' });
+    expect(within(menu).getByRole('radio', { name: 'Jour' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(within(menu).getByRole('button', { name: 'Se déconnecter' }));
+    expect(onSignOut).toHaveBeenCalledOnce();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.getElementById('nv-user-menu')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    localStorage.clear();
+  });
+
+  it('says the same on the phone, in « Plus »', async () => {
+    renderApp(owner, '/');
+    fireEvent.click(await screen.findByRole('button', { name: 'Plus' }));
+    const sheet = screen.getByRole('dialog', { name: 'Plus' });
+    expect(within(sheet).getByText('Nora')).toBeDefined();
+    expect(within(sheet).getByText('Propriétaire')).toBeDefined();
+    expect(within(sheet).getByRole('radiogroup', { name: 'Apparence' })).toBeDefined();
+    // What « Appareil » means is on screen: a phone has no hover to show a title.
+    expect(
+      within(sheet).getByText(
+        'Appareil suit le réglage clair ou sombre du téléphone ou de l’ordinateur. Le choix vaut pour ce navigateur.',
+      ),
+    ).toBeDefined();
+  });
+});
+
+describe('the shell while a screen loads (review of #313)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('never reads « introuvable » on the way between two sub-tabs, keeps its stage, and leaves the focus alone', async () => {
+    const router = renderApp(owner, '/equipe/membres');
+    await waitFor(() => {
+      expect(document.title).toBe('Membres · Équipe · Nirvana');
+    });
+    const stage = document.getElementById('contenu');
+    const titles: string[] = [];
+    const observer = new MutationObserver(() => {
+      titles.push(document.title);
+    });
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    const lit: (string | null)[] = [];
+    const unsubscribe = router.subscribe('onBeforeRouteMount', () => {
+      lit.push(document.querySelector('.nv-rail [aria-current="page"]')?.getAttribute('title') ?? null);
+    });
+    await router.navigate({ to: '/equipe/rapports' });
+    await waitFor(() => {
+      expect(document.title).toBe('Rapports · Équipe · Nirvana');
+    });
+    observer.disconnect();
+    unsubscribe();
+    expect(titles.filter((title) => title.startsWith('Page introuvable'))).toEqual([]);
+    expect(lit.filter((title) => title !== 'Équipe')).toEqual([]);
+    expect(document.getElementById('contenu')).toBe(stage);
+    expect(document.activeElement?.tagName).not.toBe('H1');
+  });
+
+  it('says « pas dans ton espace » on a link followed inside the app, even to the screen already shown', async () => {
+    const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
+    const router = renderApp(operator, '/');
+    await screen.findByRole('navigation', { name: 'Navigation' });
+    const region = screen.getAllByRole('status').find((node) => node.classList.contains('nv-notice-region'));
+    // The region is there before it speaks: a screen reader announces what comes into it.
+    expect(region?.textContent).toBe('');
+    await router.navigate({ to: '/reglages/alertes' });
+    await waitFor(() => {
+      expect(region?.textContent).toBe('Cette page n’est pas dans ton espace.');
+    });
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('says it once: neither « Précédent » nor a reload says it again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
+    const router = renderApp(operator, '/reglages/alertes');
+    expect(await screen.findByText('Cette page n’est pas dans ton espace.')).toBeDefined();
+    await waitFor(() => {
+      expect(router.state.location.state.notice).toBeUndefined();
+    });
+    vi.advanceTimersByTime(6_000);
+    await waitFor(() => {
+      expect(screen.queryByText('Cette page n’est pas dans ton espace.')).toBeNull();
+    });
+    await router.navigate({ to: '/suivi' });
+    router.history.back();
+    await waitFor(() => {
+      expect(router.state.resolvedLocation?.pathname).toBe('/');
+    });
+    expect(screen.queryByText('Cette page n’est pas dans ton espace.')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('says it under StrictMode too, as in the app', async () => {
+    const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
+    const router = createAppRouter(
+      { user: operator, onSignOut: () => undefined },
+      createMemoryHistory({ initialEntries: ['/reglages/alertes'] }),
+    );
+    render(
+      <StrictMode>
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    expect(await screen.findByText('Cette page n’est pas dans ton espace.')).toBeDefined();
   });
 });

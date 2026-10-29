@@ -1,5 +1,6 @@
 import { useState, type JSX, type SyntheticEvent } from 'react';
 
+import { PublicBrand } from './PublicBrand';
 import { signIn, type SignInResult } from './session';
 
 const MESSAGES: Record<Exclude<SignInResult, 'ok'>, string> = {
@@ -37,16 +38,8 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
         className="nv-plate nv-plate--pad flex w-full max-w-sm flex-col gap-5"
         onSubmit={(event) => void submit(event)}
       >
-        <h1 className="flex items-center gap-2 font-serif text-4xl italic">
-          <img
-            src="/nirvana-mark.svg"
-            alt=""
-            width={34}
-            height={34}
-            className="drop-shadow-[0_0_10px_color-mix(in_srgb,var(--nv-neon)_45%,transparent)]"
-          />
-          Nirvana
-        </h1>
+        <PublicBrand page="Connexion" />
+        <h1 className="sr-only">Connexion</h1>
         <label className="nv-field">
           <span className="nv-field__label">E-mail</span>
           <input
