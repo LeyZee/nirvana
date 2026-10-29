@@ -154,7 +154,11 @@ export function healthOf(overview: TelegramOverview): Health {
     };
   }
   if (isBotBroken) return { ...base, tone: 'warn', label: 'Un bot demande ton attention', fix: 'bots' };
-  if (choices.some((c) => c.chat.lastError !== null || !c.isReachable))
+  // A group the bot left or was banned from waits to be removed (REG-28): its line is amber, so is the strip.
+  if (
+    choices.some((c) => c.chat.lastError !== null || !c.isReachable) ||
+    overview.bots.some((bot) => goneChats(bot).length > 0)
+  )
     return { ...base, tone: 'warn', label: 'Un groupe demande ton attention', fix: 'bots' };
   return { ...base, tone: 'ok', label: 'Tout fonctionne', fix: null };
 }
@@ -187,6 +191,17 @@ export function coverOf(overview: TelegramOverview): Cover {
           ? 'Telegram refuse le jeton d’un bot : remplace-le dans Bots et groupes.'
           : 'Un autre programme lit le bot : arrête-le, ou remplace le jeton dans Bots et groupes.'
         : 'Le bot n’a le droit d’écrire dans aucun de ses groupes : fais-le administrateur du groupe.',
+    };
+  }
+  // No group at all to choose: the fix is to put a bot in one, not to pick one (REG-28, a bot out of its only group).
+  if (missing.length > 0 && choices.length === 0) {
+    const isOut = overview.bots.some((bot) => goneChats(bot).length > 0);
+    return {
+      isOk: false,
+      title: 'Les alertes ne partent plus',
+      sub: isOut
+        ? 'Le bot n’est plus dans aucun de ses groupes : rajoute-le à un groupe dans Bots et groupes.'
+        : 'Le bot n’est dans aucun groupe : ajoute-le à un groupe dans Bots et groupes.',
     };
   }
   if (missing.length > 0) {
@@ -307,6 +322,14 @@ export function deliveryLabel(delivery: TelegramDelivery): { text: string; isOk:
     case 'unknown':
       return { text: 'Incertaine', isOk: false };
   }
+}
+
+/**
+ * The groups a bot sits in when the sheet starts waiting for a new one. A group it left or was banned from is not one
+ * of them: added back, it is found again (REG-28).
+ */
+export function knownChatIds(bot: TelegramBot): ReadonlySet<string> {
+  return new Set(bot.chats.filter((chat) => chat.membership === 'member').map((chat) => chat.id));
 }
 
 /** The groups a bot entered while the sheet was waiting for one. */

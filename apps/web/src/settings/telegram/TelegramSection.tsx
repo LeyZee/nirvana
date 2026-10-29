@@ -865,6 +865,8 @@ function BotsTab({
   const [pending, setPending] = useState<Pending>(null);
   const [tests, setTests] = useState<TestState>({});
   const [error, setError] = useState<string | null>(null);
+  /** The groups whose removal is under way: their button waits, and is never pressed twice. */
+  const [forgetting, setForgetting] = useState<ReadonlySet<string>>(new Set());
   const choices = chatChoices(overview.bots);
   const active = choices.filter((c) => c.isReachable).length;
 
@@ -881,12 +883,18 @@ function BotsTab({
 
   const forget = (chat: TelegramChat): void => {
     setError(null);
+    const done = (): void => {
+      setForgetting((all) => new Set([...all].filter((id) => id !== chat.id)));
+    };
+    setForgetting((all) => new Set([...all, chat.id]));
     removeChat(chat.id).then(
       (result) => {
+        done();
         if (result === 'still_member') setError(`Le bot est revenu dans ${chat.title} : le groupe reste.`);
         onChanged();
       },
       () => {
+        done();
         setError(`${chat.title} n’a pas été retiré. ${OFFLINE}`);
       },
     );
@@ -1015,11 +1023,12 @@ function BotsTab({
                             <button
                               type="button"
                               className="nv-btn nv-btn--plain nv-btn--sm nv-btn--destructive"
+                              disabled={forgetting.has(chat.id)}
                               onClick={() => {
                                 setPending({ kind: 'forget', chatId: chat.id });
                               }}
                             >
-                              Retirer de la liste
+                              {forgetting.has(chat.id) ? 'Retrait…' : 'Retirer de la liste'}
                             </button>
                           </div>
                           {pending?.kind === 'forget' && pending.chatId === chat.id ? (

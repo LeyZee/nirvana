@@ -35,13 +35,13 @@ export const TelegramChatKindSchema = z.enum(['group', 'supergroup', 'channel'])
 export type TelegramChatKind = z.infer<typeof TelegramChatKindSchema>;
 
 export const TelegramMembershipSchema = z.enum(['member', 'left', 'kicked']);
+export type TelegramMembership = z.infer<typeof TelegramMembershipSchema>;
 
 /**
  * `DELETE /v1/settings/telegram/chats/:id` (REG-28) while the bot still sits in the group (409): only a group it left
  * (`left`) or was banned from (`kicked`) leaves the list.
  */
 export const TELEGRAM_CHAT_MEMBER_CONFLICT = 'telegram_chat_member_conflict';
-export type TelegramMembership = z.infer<typeof TelegramMembershipSchema>;
 
 /** Why Telegram or the shape check said no; each kind has exactly one French sentence (module `telegram`). */
 export const TelegramErrorKindSchema = z.enum([
@@ -54,6 +54,8 @@ export const TelegramErrorKindSchema = z.enum([
   'rate_limited',
   'unreachable',
   'routes_version_conflict',
+  /** A message still waiting when its group was removed from the list (REG-28): it never left. */
+  'chat_removed',
 ]);
 export type TelegramErrorKind = z.infer<typeof TelegramErrorKindSchema>;
 

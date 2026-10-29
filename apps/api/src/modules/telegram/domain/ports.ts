@@ -57,6 +57,12 @@ export interface NewDelivery {
   readonly closedBy: string | null;
 }
 
+/** A delivery as the « Dernières alertes » log reads it: its group may be gone (REG-28), its title stays. */
+export interface LoggedDelivery extends Omit<DeliveryRecord, 'chatId'> {
+  readonly chatId: TelegramChatId | null;
+  readonly chatTitle: string;
+}
+
 export interface DeliveryRecord extends NewDelivery {
   readonly id: string;
   readonly status: TelegramDeliveryStatus;
@@ -115,8 +121,10 @@ export interface BotsStore {
   ): Promise<void>;
 
   /**
-   * REG-28, in one transaction: deletes the group, its routes and its deliveries (cascade) if `mayRemove` says so of its
-   * membership read under a row lock, and moves the routing version so open screens reload; writes `audit_log`.
+   * REG-28, in one transaction: deletes the group and its routes (cascade) if `mayRemove` says so of its membership
+   * read under a row lock. Its deliveries stay, without a group and with its title (the night counts read them): those
+   * still pending fail, those being sent turn `unknown`, both `chat_removed`. Moves the routing version so open
+   * screens reload; writes `audit_log`.
    */
   removeChat(
     id: TelegramChatId,
@@ -180,10 +188,7 @@ export interface DeliveriesStore {
   enqueueFlush(chatId: TelegramChatId, runAt: Date): Promise<void>;
   enqueuePoll(botId: TelegramBotId, waitSeconds: number): Promise<void>;
 
-  listDeliveries(
-    limit: number,
-    topic: TelegramTopic | null,
-  ): Promise<readonly (DeliveryRecord & { readonly chatTitle: string })[]>;
+  listDeliveries(limit: number, topic: TelegramTopic | null): Promise<readonly LoggedDelivery[]>;
   countTopics(creatorId: CreatorId, from: Date, to: Date): Promise<Partial<Record<TelegramTopic, number>>>;
   purgeBefore(at: Date): Promise<number>;
 }

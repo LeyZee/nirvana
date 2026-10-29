@@ -367,6 +367,26 @@ describe('Réglages › Telegram with a group the bot was banned from (REG-28)',
     });
   });
 
+  it('shows the removal under way and takes no second click', async () => {
+    let finish: (result: 'removed') => void = () => undefined;
+    vi.mocked(removeChat).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    renderSection();
+    fireEvent.click(await screen.findByRole('tab', { name: /Bots et groupes/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retirer de la liste' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }));
+    const busy = await screen.findByRole('button', { name: 'Retrait…' });
+    expect(busy).toHaveProperty('disabled', true);
+    finish('removed');
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Retrait…' })).toBeNull();
+    });
+    expect(removeChat).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the group when the bot came back in meanwhile, and says so', async () => {
     vi.mocked(removeChat).mockResolvedValue('still_member');
     renderSection();

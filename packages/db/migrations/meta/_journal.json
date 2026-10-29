@@ -260,6 +260,13 @@
       "when": 1793239666360,
       "tag": "0036_non_negative_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793291281391,
+      "tag": "0037_telegram_deliveries_keep",
+      "breakpoints": true
     }
   ]
 }
