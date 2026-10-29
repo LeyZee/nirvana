@@ -5,6 +5,7 @@ import {
   newId,
   PersonaSchema,
   PersonaVersionIdSchema,
+  type Persona,
   type PersonaVersionSummary,
 } from '@nirvana/contracts';
 import { and, eq, schema, sql, withTenant, type Database, type Transaction } from '@nirvana/db';
@@ -108,7 +109,14 @@ async function activateRow(
   return { row: active, activated: true };
 }
 
-export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionStore {
+/**
+ * `checkBeforeActivate` reads a stored version again before the screen activates it, and throws to refuse it: the
+ * guards may have changed since it was saved (the sample replies, P5-01).
+ */
+export function createDrizzlePersonaVersionStore(
+  db: Database,
+  checkBeforeActivate?: (persona: Persona) => void,
+): PersonaVersionStore {
   return {
     active(creatorId) {
       return withTenant(db, creatorId, async (tx) => {
@@ -241,6 +249,13 @@ export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionSt
         if (row === undefined) throw new PersonaVersionNotFound();
         // A screen left open activates only over the active version it read: never undo an activation made since.
         if ((rows.find((r) => r.isActive)?.id ?? null) !== expectedActive) throw new PersonaVersionConflict();
+        if (!row.isActive && checkBeforeActivate !== undefined) {
+          const [stored] = await tx
+            .select({ content: schema.personaVersions.content })
+            .from(schema.personaVersions)
+            .where(eq(schema.personaVersions.id, row.id));
+          checkBeforeActivate(PersonaSchema.parse(stored?.content));
+        }
         return toSummary((await activateRow(tx, creatorId, row, userId)).row);
       });
     },

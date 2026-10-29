@@ -34,6 +34,17 @@ describe('activePersonaForModels (recette G4)', () => {
     expect((await activePersonaForModels(sourceOf(unnamed), 'creator-1', NOW))?.creatorName).toBe('Nora');
   });
 
+  it('names the version it was read from, for the draft to carry it', async () => {
+    expect((await activePersonaForModels(sourceOf(DEMO), 'creator-1', NOW))?.versionId).toBe('version-2');
+  });
+
+  it('never takes her clock from the file: the creator’s own zone is read apart (Créatrices, P3-14)', async () => {
+    const elsewhere = { ...DEMO, details: { ...DEMO.details, timezone: 'America/New_York' } };
+    const read = await activePersonaForModels(sourceOf(elsewhere), 'creator-1', NOW);
+    expect(read?.personaSheet).not.toContain('New_York');
+    expect(JSON.stringify(read)).not.toContain('America/New_York');
+  });
+
   it('gives nothing without an active version, and lets a failed read through', async () => {
     expect(await activePersonaForModels(sourceOf(null), 'creator-1', NOW)).toBeNull();
     await expect(

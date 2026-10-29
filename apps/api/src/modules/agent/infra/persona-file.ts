@@ -15,6 +15,8 @@ import type { SexualizationLimits } from '../domain/sexualization';
 
 /** Who she is for the models, read from the persona YAML: the playground and the drafts share it. */
 export interface PersonaForModels {
+  /** Her persona version it was read from, when read from the base: written on each draft it writes (ADR 0019). */
+  readonly versionId?: string;
   readonly creatorName: string;
   readonly personaSheet: string;
   readonly forbiddenTerms: readonly string[];

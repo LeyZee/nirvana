@@ -23,5 +23,8 @@ export async function activePersonaForModels(
 ): Promise<PersonaForModels | null> {
   const stored = await source(creatorId);
   if (stored === null) return null;
-  return personaForModels(stored.persona, stored.creatorName, now.toISOString().slice(0, 10));
+  return {
+    ...personaForModels(stored.persona, stored.creatorName, now.toISOString().slice(0, 10)),
+    versionId: stored.id,
+  };
 }

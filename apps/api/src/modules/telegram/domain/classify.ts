@@ -109,6 +109,8 @@ const percent = (value: number, minimumFractionDigits: 0 | 1): string =>
 /** Why Automatique closed, in the owner's words; the figures are the server's, the thresholds too. */
 function missingText(missing: AutomaticMissing): string {
   switch (missing.kind) {
+    case 'active_persona':
+      return 'elle n’a pas de persona active';
     case 'live_rate':
       return missing.value === null
         ? `le taux en réel n’est pas encore mesuré (objectif : ${percent(missing.target, 0)})`

@@ -21,6 +21,15 @@ describe('missingRows', () => {
     ]);
   });
 
+  it('says first that she has no active persona (recette 28/10, G4)', () => {
+    expect(
+      missingRows({ open: false, missing: [{ kind: 'active_persona' }, { kind: 'blind_test' }] }),
+    ).toEqual([
+      ['Persona', 'aucune version active'],
+      ['Test à l’aveugle', 'pas encore validé'],
+    ]);
+  });
+
   it('writes the tenth the server measured the French way', () => {
     expect(missingRows({ open: false, missing: [{ kind: 'live_rate', value: 64.5, target: 80 }] })).toEqual([
       ['Taux en réel', '64,5\u00a0% sur 80\u00a0%'],

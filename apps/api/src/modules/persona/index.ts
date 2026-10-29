@@ -38,15 +38,19 @@ export interface PersonaDeps {
   readonly sampleReplyFaults?: (persona: Persona) => readonly PersonaSampleReplyFault[];
 }
 
-/** The store, refusing before any write a version whose sample replies teach what a guard blocks. */
-function withSampleReplyCheck(
-  store: PersonaVersionStore,
-  faultsOf: NonNullable<PersonaDeps['sampleReplyFaults']>,
-): PersonaVersionStore {
-  const check = (persona: Persona): void => {
+/** Refuses a persona whose sample replies teach what a guard of her answers blocks. */
+const sampleReplyCheck =
+  (faultsOf: NonNullable<PersonaDeps['sampleReplyFaults']>) =>
+  (persona: Persona): void => {
     const faults = faultsOf(persona);
     if (faults.length > 0) throw new PersonaSampleReplyUnprocessable(faults);
   };
+
+/** The store, refusing before any write a version whose sample replies teach what a guard blocks. */
+function withSampleReplyCheck(
+  store: PersonaVersionStore,
+  check: (persona: Persona) => void,
+): PersonaVersionStore {
   return {
     ...store,
     create: async (creatorId, body, userId) => {
@@ -63,9 +67,10 @@ function withSampleReplyCheck(
 export function createPersonaModule(deps: PersonaDeps): PersonaModule {
   const creators = createDrizzleCreatorDirectory(deps.db);
   const creatorRoutes = createCreatorRoutes(creators, deps.requireRole, deps.recentLogin);
-  const stored = createDrizzlePersonaVersionStore(deps.db);
-  const versions =
-    deps.sampleReplyFaults === undefined ? stored : withSampleReplyCheck(stored, deps.sampleReplyFaults);
+  const check = deps.sampleReplyFaults === undefined ? undefined : sampleReplyCheck(deps.sampleReplyFaults);
+  // Checked again on activation: a version saved before a guard changed is not activated as it is (P5-01).
+  const stored = createDrizzlePersonaVersionStore(deps.db, check);
+  const versions = check === undefined ? stored : withSampleReplyCheck(stored, check);
   const personaRoutes = createPersonaRoutes(versions, deps.requireRole);
   return {
     name: 'persona',

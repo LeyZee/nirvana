@@ -198,6 +198,14 @@ describe('classification (ADR 0020 §2)', () => {
       conversations: 2,
     });
     expect(unmeasured?.kind === 'notice' ? unmeasured.body : '').toContain('pas encore mesuré');
+    const noPersona = classify({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'active_persona' }],
+      conversations: 1,
+    });
+    expect(noPersona?.kind === 'notice' ? noPersona.body : '').toContain(
+      'Raison : elle n’a pas de persona active.',
+    );
   });
 
   it('opens a thread on an expired session and closes it with a reply when it comes back', () => {
