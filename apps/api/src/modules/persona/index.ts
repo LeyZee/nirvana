@@ -16,7 +16,10 @@ export interface PersonaModule {
   readonly name: 'persona';
   /** The creators (one creator, one persona): listed by the dashboard, created by `pnpm creator:create`. */
   readonly creators: CreatorDirectory;
-  /** Her persona versions: saved from the dashboard, loaded and activated by `pnpm persona:load`. */
+  /**
+   * Her persona versions: saved from the dashboard, loaded and activated by `pnpm persona:load`. `versions.active` is
+   * the port the agent writes with (her active version, read at each draft), wired by the composition root.
+   */
   readonly versions: PersonaVersionStore;
   /** Mounted under `/v1` by the server: `/creators` and her `/agent-hours`, and each creator's `/persona` with its versions. */
   readonly routes: FastifyPluginAsyncZod;

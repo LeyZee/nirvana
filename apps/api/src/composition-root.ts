@@ -258,6 +258,9 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     // An example the voice imitates never teaches what a hard guard blocks (P5-01).
     sampleReplyFaults,
   });
+  // Her active persona version, the one the owner activates in Créatrices › Persona: the agent writes with it, and
+  // « Tester » an alert reads her phrase with it (ADR 0010, 0022; recette G4, M13). Read at each call, under RLS.
+  const activePersona = (creatorId: string) => persona.versions.active(CreatorIdSchema.parse(creatorId));
   const team = createTeamModule({
     db: db.db,
     adminDb: adminDb.db,
@@ -306,8 +309,9 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           logger.warn({ err: error }, 'playground not started: persona unreadable');
           return null;
         });
-  // Without a readable persona, drafts stay empty as before the engine (P0-05) and the dashboard says why. In
-  // production the fictional demo persona never writes to real fans: no persona set, no composer.
+  // Each draft is written with her active persona version; without one, a human answers (`persona_inactive`). In
+  // production the composer still starts only with PLAYGROUND_PERSONA_PATH set, as before: the guard on approval and
+  // the lines to learn below read that file, never the fictional demo for real fans.
   const isDemoPersonaInProduction = !mayComposeDrafts(config);
   if (isDemoPersonaInProduction && options.composer === undefined) {
     logger.warn('draft composer not started: PLAYGROUND_PERSONA_PATH is not set in production');
@@ -318,7 +322,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       ? undefined
       : await startDraftComposer({
           gateway: llm.gateway,
-          personaPath,
+          activePersona,
           trainingDir,
           fans,
           onDroppedNotes: (event) => {
@@ -346,7 +350,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
             return creator?.timezone ?? DEFAULT_LLM_CONFIG.dailyBudget.timeZone;
           },
         }).catch((error: unknown) => {
-          logger.warn({ err: error }, 'draft composer not started: persona unreadable');
+          logger.warn({ err: error }, 'draft composer not started: voice examples unreadable');
           return undefined;
         }));
   // Her follow-up delays only beside the agent's own composer, the one that writes what `conversation.follow_up`
@@ -354,10 +358,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   const followUps =
     composer === undefined || options.composer !== undefined
       ? undefined
-      : await startFollowUpPlan({ personaPath }).catch((error: unknown) => {
-          logger.warn({ err: error }, 'follow-ups not scheduled: persona unreadable');
-          return undefined;
-        });
+      : startFollowUpPlan({ activePersona });
   // Every approval passes the hard guards again (revue 09, G5): her own limits when her persona is readable,
   // otherwise the ones every creator shares (never an AI, no meeting, no contact). Never no guard at all.
   const agentGuard =

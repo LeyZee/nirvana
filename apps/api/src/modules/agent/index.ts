@@ -7,18 +7,20 @@ import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 import type { FansModule } from '../fans';
 
 import { DEFAULT_GUARD_SETTINGS as SHARED_GUARD_SETTINGS } from './domain/guards';
+import { activePersonaForModels, type ActivePersonaSource } from './infra/active-persona';
 import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
 import { voiceExamples } from './infra/calibration-record';
 import { withExamples } from './infra/compose';
 import {
   createDraftComposer,
   type AgentDraftComposer,
+  type ComposerPersonaFields,
   type DraftComposerDeps,
   type MediaSight,
 } from './infra/draft-composer';
 import { createFanLimits } from './infra/fan-limits';
 import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
-import { guardSettingsOf, readPersonaFile } from './infra/persona-file';
+import { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
 
 /** Public entry point of the `agent` module (ADR 0002). Other modules import this file only. */
 export {
@@ -59,6 +61,8 @@ export {
 export { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 export { asSent, composeTurn, guardContextOf, withExamples, type OfferInput } from './infra/compose';
 export { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
+/** @public Her active persona version, the port the composition root wires to `persona` (ADR 0010, 0022). */
+export { activePersonaForModels, type ActivePersonaSource } from './infra/active-persona';
 
 /** @public Réglages › Alertes tries an alert on an example message (`POST /v1/alerts/test`, P4-01). */
 export { createAlertTester, type AlertTester } from './infra/alert-test';
@@ -74,8 +78,11 @@ export type { AgentBubbleGuard } from './infra/bubble-guard';
 
 export interface DraftComposerStartOptions {
   readonly gateway: LlmGateway;
-  /** A persona YAML (PersonaSchema); the real one lives outside the repository (ADR 0010). */
-  readonly personaPath: string;
+  /**
+   * Her active persona version (`persona` module, `versions.active`), read at each draft: the agent writes with the
+   * one the owner activated in Créatrices › Persona. Without one, nothing is written and a human answers (ADR 0022).
+   */
+  readonly activePersona: ActivePersonaSource;
   /** The playground's ratings: her corrected answers become the voice's examples here too. */
   readonly trainingDir: string;
   /** Her clock, read for each draft: the creator's time zone. */
@@ -97,25 +104,41 @@ export interface DraftComposerStartOptions {
   readonly chatterOnShift?: DraftComposerDeps['chatterOnShift'];
 }
 
-/** Reads the persona and the corrected answers, then builds the composer behind `conversation.respond`. */
-export async function startDraftComposer(options: DraftComposerStartOptions): Promise<AgentDraftComposer> {
-  const today = new Date().toISOString().slice(0, 10);
-  const persona = readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today);
-  const records = await createJsonlCalibrationStore(join(options.trainingDir, 'ratings.jsonl')).list();
-  return createDraftComposer({
-    gateway: options.gateway,
+/** Her fields for the composer, from her persona: the sheet with the corrected answers as voice examples. */
+function composerFields(persona: PersonaForModels, examples: readonly string[]): ComposerPersonaFields {
+  return {
     persona: {
       creatorName: persona.creatorName,
-      personaSheet: withExamples(persona.personaSheet, voiceExamples(records)),
+      personaSheet: withExamples(persona.personaSheet, examples),
       guardSettings: guardSettingsOf(persona),
       splitMessages: persona.splitMessages,
     },
-    timeZoneOf: options.timeZoneOf,
-    voicePrompt: loadPrompt('voice').header.version,
     offerLimits: persona.offerLimits,
     sexualizationLimits: persona.sexualizationLimits,
     followUpSpirit: persona.followUps.spirit,
     alertKeywords: persona.alertKeywords,
+  };
+}
+
+/** No persona until hers is read: every draft reads her active version (`personaOf`), this one is never used. */
+const UNREAD_PERSONA = { creatorName: '', personaSheet: '', guardSettings: SHARED_GUARD_SETTINGS };
+
+/**
+ * Reads the corrected answers, then builds the composer behind `conversation.respond`. Her persona is not read here:
+ * each draft reads her active version (ADR 0022: nothing kept in memory can be stale).
+ */
+export async function startDraftComposer(options: DraftComposerStartOptions): Promise<AgentDraftComposer> {
+  const records = await createJsonlCalibrationStore(join(options.trainingDir, 'ratings.jsonl')).list();
+  const examples = voiceExamples(records);
+  return createDraftComposer({
+    gateway: options.gateway,
+    persona: UNREAD_PERSONA,
+    personaOf: async (creatorId, now) => {
+      const persona = await activePersonaForModels(options.activePersona, creatorId, now);
+      return persona === null ? null : composerFields(persona, examples);
+    },
+    timeZoneOf: options.timeZoneOf,
+    voicePrompt: loadPrompt('voice').header.version,
     ...(options.sight !== undefined && { sight: options.sight }),
     ...(options.fans !== undefined && { limits: createFanLimits(options.fans) }),
     ...(options.onDroppedNotes !== undefined && { onDroppedNotes: options.onDroppedNotes }),
@@ -131,19 +154,20 @@ export interface AgentFollowUpPlan {
 }
 
 /**
- * Her follow-up delays, read once from the persona the composer writes with (`follow_ups`): none when she has them
- * off. Wired only beside `startDraftComposer`, which writes the follow-ups `conversation.follow_up` asks for (P3-10).
+ * Her follow-up delays, read at each call from the persona the composer writes with, her active version
+ * (`follow_ups`): none when she has them off, or has no active version (the composer would write none). A failed
+ * read throws: `conversations` decides. Wired only beside `startDraftComposer`, which writes the follow-ups
+ * `conversation.follow_up` asks for (P3-10).
  */
-export async function startFollowUpPlan(options: {
-  readonly personaPath: string;
-}): Promise<AgentFollowUpPlan> {
-  const today = new Date().toISOString().slice(0, 10);
-  const { delaysHours } = readPersonaFile(
-    await readFile(options.personaPath, 'utf8'),
-    'Messa',
-    today,
-  ).followUps;
-  return { delaysHours: () => Promise.resolve(delaysHours) };
+export function startFollowUpPlan(options: {
+  readonly activePersona: ActivePersonaSource;
+  readonly now?: () => Date;
+}): AgentFollowUpPlan {
+  const now = options.now ?? (() => new Date());
+  return {
+    delaysHours: async (creatorId) =>
+      (await activePersonaForModels(options.activePersona, creatorId, now()))?.followUps.delaysHours ?? [],
+  };
 }
 
 /** The canvas lines her persona collects (P5-01), in her order: what the Suivi says is left to learn of a fan. */
