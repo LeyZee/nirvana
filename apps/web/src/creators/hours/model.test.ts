@@ -129,7 +129,7 @@ describe('what the contract refuses, on its line', () => {
       night: { startMinute: 600, endMinute: 600 },
     });
     expect(issues.get('reply.slots')).toBe('Au moins un créneau actif ; pour tout couper, c’est l’arrêt');
-    expect(rangeIssue(issues, 'night')).toBe('Une plage commence et finit à des heures différentes');
+    expect(rangeIssue(issues, 'night')).toBe('Une plage doit commencer et finir à des heures différentes');
     expect(rangeIssue(issues, 'followUpQuiet')).toBeNull();
   });
 
