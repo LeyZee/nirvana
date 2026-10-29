@@ -103,6 +103,11 @@ export const HANDOFF_CAUSES = [
   'custom_alert',
   /** The system's alert « doute sur la personne » (P4-01): the fan doubts it is her; a chatter on shift answers. */
   'identity_doubt',
+  /**
+   * She has no active persona version, or it no longer reads (recette 28/10, G4): the agent writes nothing without
+   * it (ADR 0010, 0022).
+   */
+  'persona_inactive',
 ] as const;
 export const HandoffCauseSchema = z.enum(HANDOFF_CAUSES);
 export type HandoffCause = z.infer<typeof HandoffCauseSchema>;

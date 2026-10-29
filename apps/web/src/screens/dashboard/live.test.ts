@@ -44,13 +44,21 @@ describe('fromApi', () => {
     ]);
   });
 
-  it('counts only the guards, never a relay for the AI budget, a voice down or no named reason', () => {
+  it('counts only the guards, never a relay for the AI budget, a voice down, no active persona or no named reason', () => {
     const base = apiDashboard();
     const data = fromApi(
       apiDashboard({
         guards: {
           ...base.guards,
-          today: { ...base.guards.today, minor: 1, budget: 3, llm_unavailable: 5, other: 2, custom_alert: 1 },
+          today: {
+            ...base.guards.today,
+            minor: 1,
+            budget: 3,
+            llm_unavailable: 5,
+            other: 2,
+            custom_alert: 1,
+            persona_inactive: 4,
+          },
         },
       }),
     );

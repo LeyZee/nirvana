@@ -1,10 +1,13 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
   ApiErrorSchema,
+  newId,
   PersonaSampleReplyUnprocessableDetailsSchema,
   PersonaSchema,
+  PersonaVersionIdSchema,
   type CreatorId,
   type Persona,
   type PersonaOverview,
@@ -255,6 +258,38 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
     const activations = audit.filter((row) => row.action === 'persona_version.activate');
     expect(activations).toHaveLength(1);
     expect(activations[0]?.userId).not.toBeNull();
+  });
+
+  it('checks a stored version again before activating it: one saved before a guard changed stays inactive (P5-01)', async () => {
+    const before = (await get(anna, owner)).json<PersonaOverview>().versions;
+    const active = before.find((v) => v.isActive);
+    if (active === undefined) throw new Error('an active version expected');
+    // Stored as it would have been before the guard that now blocks it: straight in the base, past every check.
+    const id = newId(PersonaVersionIdSchema);
+    const taught = {
+      ...withVersion(demo(), '0.8.0'),
+      sample_replies: [{ situation: 'Il propose de se voir', reply: 'On se fait un rdv samedi ?' }],
+    };
+    await test.admin.db.insert(schema.personaVersions).values({
+      id,
+      creatorId: anna,
+      version: '0.8.0',
+      sourcePath: 'dashboard',
+      content: taught,
+      contentHash: createHash('sha256').update('stored before the guard').digest('hex'),
+      createdBy: 'cli',
+    });
+
+    const refused = await server.inject({
+      method: 'POST',
+      url: `/v1/creators/${anna}/persona/versions/${id}/activate`,
+      headers: { cookie: owner, origin: DASHBOARD_ORIGIN },
+      payload: { expectedActive: active.id },
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(ApiErrorSchema.parse(refused.json()).error.code).toBe('persona_sample_reply_unprocessable');
+    const after = (await get(anna, owner)).json<PersonaOverview>().versions;
+    expect(after.filter((v) => v.isActive).map((v) => v.id)).toEqual([active.id]);
   });
 
   it('lets the owner add a creator, and nobody else', async () => {

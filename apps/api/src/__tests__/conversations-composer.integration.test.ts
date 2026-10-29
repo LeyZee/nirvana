@@ -21,7 +21,9 @@ import {
 import { createFansModule } from '../modules/fans';
 
 /** Lets every bubble through: the guards themselves are tested in `agent` and `approval-guard`. */
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 
 type ComposeInput = Parameters<DraftComposer['compose']>[0];

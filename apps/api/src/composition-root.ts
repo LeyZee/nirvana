@@ -29,10 +29,9 @@ import type { Logger } from './logger';
 import {
   createAgentModule,
   guardContextOf,
-  readKycSlots,
   sampleReplyFaults,
   startBubbleGuard,
-  startSharedBubbleGuard,
+  startKycSlots,
   startDraftComposer,
   startFollowUpPlan,
   type AgentModule,
@@ -121,10 +120,6 @@ export interface App {
  */
 const fromRepoRoot = (path: string): string =>
   resolve(fileURLToPath(new URL('../../../', import.meta.url)), path);
-
-/** The demo persona is fictional (ADR 0010): in production, drafts for real fans need her persona to be set. */
-export const mayComposeDrafts = (config: Pick<Config, 'NODE_ENV' | 'PLAYGROUND_PERSONA_PATH'>): boolean =>
-  config.NODE_ENV !== 'production' || config.PLAYGROUND_PERSONA_PATH !== undefined;
 
 /**
  * Production only: when the rate job was first scheduled, so that a currency that never got a rate is alerted too
@@ -258,6 +253,9 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     // An example the voice imitates never teaches what a hard guard blocks (P5-01).
     sampleReplyFaults,
   });
+  // Her active persona version, the one the owner activates in Créatrices › Persona: the agent writes with it, and
+  // « Tester » an alert reads her phrase with it (ADR 0010, 0022; recette G4, M13). Read at each call, under RLS.
+  const activePersona = (creatorId: string) => persona.versions.active(CreatorIdSchema.parse(creatorId));
   const team = createTeamModule({
     db: db.db,
     adminDb: adminDb.db,
@@ -302,81 +300,58 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           },
           personaPath,
           trainingDir,
+          activePersona,
         }).catch((error: unknown) => {
           logger.warn({ err: error }, 'playground not started: persona unreadable');
           return null;
         });
-  // Without a readable persona, drafts stay empty as before the engine (P0-05) and the dashboard says why. In
-  // production the fictional demo persona never writes to real fans: no persona set, no composer.
-  const isDemoPersonaInProduction = !mayComposeDrafts(config);
-  if (isDemoPersonaInProduction && options.composer === undefined) {
-    logger.warn('draft composer not started: PLAYGROUND_PERSONA_PATH is not set in production');
-  }
+  // Each draft is written with her active persona version, read at each message; without one, a human answers
+  // (`persona_inactive`). No file is read on this path: the fictional demo never writes to real fans unless an owner
+  // activates it as her version (ADR 0010, 0022).
   const composer =
     options.composer ??
-    (isDemoPersonaInProduction
-      ? undefined
-      : await startDraftComposer({
-          gateway: llm.gateway,
-          personaPath,
-          trainingDir,
-          fans,
-          onDroppedNotes: (event) => {
-            logger.warn(event, 'fan notes shaped like an order kept out of the prompt');
-          },
-          // His declared age could not be saved: the next answer stays careful, the miss is counted here (P3-09).
-          onLimitsNotSaved: (event) => {
-            logger.warn(event, 'fan limit not saved');
-          },
-          // Her alerts that are on, and the system's on for her (P4-01).
-          alertsOf: async (creatorId) => {
-            const id = CreatorIdSchema.parse(creatorId);
-            const [custom, systemOn] = await Promise.all([
-              alerts.store.activeFor(id),
-              alerts.store.systemOn(id),
-            ]);
-            return { custom, systemOn };
-          },
-          // A doubt on who she is goes to a chatter on shift now, without the margin (P4-01).
-          chatterOnShift: async (creatorId, at) =>
-            (await scheduling.onShift(CreatorIdSchema.parse(creatorId), at)).length > 0,
-          // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
-          timeZoneOf: async (creatorId) => {
-            const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);
-            return creator?.timezone ?? DEFAULT_LLM_CONFIG.dailyBudget.timeZone;
-          },
-        }).catch((error: unknown) => {
-          logger.warn({ err: error }, 'draft composer not started: persona unreadable');
-          return undefined;
-        }));
+    startDraftComposer({
+      gateway: llm.gateway,
+      activePersona,
+      fans,
+      onDroppedNotes: (event) => {
+        logger.warn(event, 'fan notes shaped like an order kept out of the prompt');
+      },
+      // His declared age could not be saved: the next answer stays careful, the miss is counted here (P3-09).
+      onLimitsNotSaved: (event) => {
+        logger.warn(event, 'fan limit not saved');
+      },
+      // Her alerts that are on, and the system's on for her (P4-01).
+      alertsOf: async (creatorId) => {
+        const id = CreatorIdSchema.parse(creatorId);
+        const [custom, systemOn] = await Promise.all([alerts.store.activeFor(id), alerts.store.systemOn(id)]);
+        return { custom, systemOn };
+      },
+      // A doubt on who she is goes to a chatter on shift now, without the margin (P4-01).
+      chatterOnShift: async (creatorId, at) =>
+        (await scheduling.onShift(CreatorIdSchema.parse(creatorId), at)).length > 0,
+      // Her clock is the creator's (`creators.timezone`); Paris when the row cannot be read.
+      timeZoneOf: async (creatorId) => {
+        const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);
+        return creator?.timezone ?? DEFAULT_LLM_CONFIG.dailyBudget.timeZone;
+      },
+    });
   // Her follow-up delays only beside the agent's own composer, the one that writes what `conversation.follow_up`
   // asks for (P3-10): a composer plugged by a test would answer his last message again.
-  const followUps =
-    composer === undefined || options.composer !== undefined
-      ? undefined
-      : await startFollowUpPlan({ personaPath }).catch((error: unknown) => {
-          logger.warn({ err: error }, 'follow-ups not scheduled: persona unreadable');
-          return undefined;
-        });
-  // Every approval passes the hard guards again (revue 09, G5): her own limits when her persona is readable,
-  // otherwise the ones every creator shares (never an AI, no meeting, no contact). Never no guard at all.
-  const agentGuard =
-    (isDemoPersonaInProduction
-      ? undefined
-      : await startBubbleGuard({ personaPath }).catch((error: unknown) => {
-          logger.warn({ err: error }, 'bubble guard without her persona: shared guards only');
-          return undefined;
-        })) ?? startSharedBubbleGuard();
-  // The canvas lines her persona collects, for « À apprendre » in the Suivi (P5-01); every line without her persona.
-  const kycSlots = isDemoPersonaInProduction
-    ? undefined
-    : await readKycSlots({ personaPath }).catch((error: unknown) => {
-        logger.warn({ err: error }, 'lines to learn: persona unreadable, every canvas line shown');
-        return undefined;
-      });
+  const followUps = options.composer !== undefined ? undefined : startFollowUpPlan({ activePersona });
+  // Every approval passes the hard guards again (revue 09, G5), her active persona's limits included, read before
+  // each approval (recette 28/10, G4). Without an active version nothing is approved: fail closed.
+  const agentGuard = startBubbleGuard({ activePersona });
+  // The canvas lines her active persona collects, for « À apprendre » in the Suivi (P5-01); every line without one.
+  const kycSlotsOf = startKycSlots({ activePersona });
   // Read against what she already sent him (P3-13); an approved draft never carries a media.
   const guard: BubbleGuard = {
-    check: (bubbles, { history }) => agentGuard.check(bubbles, guardContextOf(history)),
+    forCreator: async (creatorId) => {
+      const hers = await agentGuard.forCreator(creatorId);
+      return hers === null
+        ? null
+        : { check: (bubbles, { history }) => hers.check(bubbles, guardContextOf(history)) };
+    },
   };
   // The voice version the server writes with now, the one Automatique is proved on (ADR 0019): defined here only.
   const activeVoice = {
@@ -391,7 +366,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     recentLogin: createRequireRecentLogin(auth),
     voice: activeVoice,
     guard,
-    ...(composer !== undefined && { composer }),
+    composer,
     ...(followUps !== undefined && { followUps }),
     replyHours: {
       of: async (creatorId) => {
@@ -692,7 +667,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       modules.conversations.routes,
       modules.persona.routes,
       modules.alerts.routes,
-      modules.fans.routes(requireRole, kycSlots),
+      modules.fans.routes(requireRole, kycSlotsOf),
       modules.team.routes(requireRole),
       modules.scheduling.routes(requireRole),
       modules.payroll.routes(requireRole),

@@ -24,6 +24,7 @@ import { buildServer, type Server } from '../server';
 import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
+import { activateDemoPersona } from './support/persona';
 
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-000000000001');
@@ -111,6 +112,7 @@ describe('connectors module (P0-06)', () => {
     await test.admin.db
       .insert(schema.creators)
       .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+    await activateDemoPersona(app, creatorId);
   });
 
   afterAll(async () => {

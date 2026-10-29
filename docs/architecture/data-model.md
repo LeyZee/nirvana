@@ -63,7 +63,7 @@ conversation_events  id, creator_id, conversation_id, seq bigint, type, payload 
                      correlation_id, created_at      (append-only, UNIQUE (conversation_id, seq))
 drafts               id, creator_id, conversation_id, status (pending|approved|edited|rejected|sent|failed|expired),
                      brief jsonb (sortie du cerveau), bubbles text[], final_bubbles text[] (après édition),
-                     persona_version_id (la persona active quand il est écrit, ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
+                     persona_version_id (la version avec laquelle le composeur l'a écrit, lue avec la persona du brouillon, jamais celle active à l'enregistrement ; ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
                      decided_by (nullable user_id), decided_at, idempotency_key, created_at
 blind_tests          id, creator_id, voice_prompt, voice_model, persona_version_id (nullable), rate_per_mille (0 à 1000, 800 = 80 %), recorded_by,
                      recorded_at      (append-only : ni UPDATE ni DELETE pour nirvana_app)
@@ -84,7 +84,7 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
-| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other`, `custom_alert`, `identity_doubt` ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi), `trigger?` (l'alerte qui a mis l'agent en pause, P4-01, comme ci-dessous) |
+| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other`, `custom_alert`, `identity_doubt`, `persona_inactive` (elle n'a pas de version de persona active, ou elle ne se lit plus) ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi), `trigger?` (l'alerte qui a mis l'agent en pause, P4-01, comme ci-dessous) |
 | `alert_triggered` | `conversationId`, `trigger` : `alert` (`{ kind: 'custom', id }` ou `{ kind: 'system', code }`, codes `keyword`, `service_request`, `identity_doubt`), `matchedBy` (`keyword` \| `rule` \| `model`), `keyword?` (le mot tel qu'elle l'a déclaré, présent pour un mot-clé et lui seul) ; `notify` (booléen : envoyer ou non sur Telegram, la case « prévenir » de son alerte au moment où elle s'est déclenchée, toujours vrai pour une alerte du système). Une alerte qui prévient seulement ; celle qui met en pause est un `handoff_requested` avec son `trigger`, jamais les deux. Rien de ce que le fan a écrit (ADR 0020). |
 | `takeover_started`, `takeover_ended` | `conversationId`, `userId?`, `reason?` |
 | `mode_changed` | `userId?`, `reason?`, `mode?` |
@@ -145,7 +145,7 @@ calibration_ratings   id, creator_id, session_id, rated_at, voice_prompt, voice_
                       (voice_example|rule|test, nullable), fan_message, bubbles jsonb, moment jsonb (RatedMoment,
                       opaque, nullable une fois purgé), moment_purged_at, created_at
   Append-only (trigger) : seule la purge de `moment` après 90 jours est permise, le verdict et la version restent.
-  Lu pour le taux de validation (50 derniers par version), les exemples de voix (corrected + voice_example, 12 max)
+  Lu pour le taux de validation (50 derniers par version), les exemples de voix du playground seulement (corrected + voice_example, 12 max ; jamais dans la fiche d'une créatrice)
   et les tests rejouables (tout sauf validated). Contenu intime : jamais copié dans les logs.
 ```
 

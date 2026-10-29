@@ -30,7 +30,9 @@ import { createFansModule } from '../modules/fans';
 
 const T0 = new Date('2026-10-17T20:00:00.000Z');
 const HOUR_S = 3_600;
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-000000000002');
 
