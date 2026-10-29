@@ -9,6 +9,8 @@ import {
   problemsOf,
   readReport,
   restoreViewOf,
+  runErrorOf,
+  runNowOf,
   withReport,
   type RestoreDraft,
 } from './model';
@@ -61,7 +63,7 @@ describe('exportViewOf', () => {
           startedAt: '2026-10-27T02:00:00Z',
           finishedAt: '2026-10-27T02:00:40Z',
           sizeBytes: null,
-          error: 'upload',
+          error: 'failed at step upload',
         },
       }),
       NOW,
@@ -70,7 +72,9 @@ describe('exportViewOf', () => {
     expect(view.tone).toBe('warn');
     expect(view.title).toBe('Aucune sauvegarde réussie depuis le 25 octobre à 03:12');
     expect(view.text).toMatch(/^La dernière tentative a échoué\./u);
-    expect(view.lastRun).toBe('Dernière tentative échouée le 27 octobre à 03:00 (upload).');
+    expect(view.lastRun).toBe(
+      'Dernière tentative échouée le 27 octobre à 03:00 : l’envoi vers le stockage a échoué.',
+    );
   });
 
   it('says that none ever succeeded, and that one is running', () => {
@@ -97,6 +101,39 @@ describe('exportViewOf', () => {
     expect(
       exportViewOf(status({ state: 'never', lastSucceededAt: null, lastRun: null }), NOW, PARIS).lastRun,
     ).toBe(null);
+  });
+});
+
+describe('runErrorOf', () => {
+  it('words each step of export.sh, and never shows the raw line', () => {
+    expect(runErrorOf('failed at step dump')).toBe('la copie de la base a échoué');
+    expect(runErrorOf('failed at step encrypt')).toBe('le chiffrement a échoué');
+    expect(runErrorOf('failed at step somewhere-new')).toBe(null);
+    expect(runErrorOf('ERROR: relation x does not exist')).toBe(null);
+    expect(runErrorOf(null)).toBe(null);
+  });
+});
+
+describe('runNowOf (REG-24)', () => {
+  it('offers to export now, says a request that waits, and hides while an export runs', () => {
+    expect(runNowOf(status())).toEqual({ kind: 'offer' });
+    expect(runNowOf(status({ runRequestedAt: '2026-10-27T09:58:00Z' }), PARIS)).toEqual({
+      kind: 'asked',
+      text: 'Relance demandée à 10:58 : elle démarre dans la minute.',
+    });
+    expect(
+      runNowOf(
+        status({
+          lastRun: {
+            status: 'running',
+            startedAt: '2026-10-27T09:59:00Z',
+            finishedAt: null,
+            sizeBytes: null,
+            error: null,
+          },
+        }),
+      ),
+    ).toEqual({ kind: 'running' });
   });
 });
 

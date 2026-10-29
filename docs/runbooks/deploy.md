@@ -114,7 +114,7 @@ Une PR fusionnée dans `main` déclenche le déploiement. Rien à faire à la ma
 ## 4. Sauvegardes
 
 - **PITR Neon** (§ 1.1) : retour à n'importe quel instant des 7 derniers jours ; procédure dans `restore.md` § A.
-- **Export quotidien chiffré hors Neon** (ADR 0028, service `backup`) : chaque nuit à 3 h, heure de Paris, un dump complet, relu avant envoi, chiffré pour une clé publique, envoyé chez Hetzner. Chaque export laisse une ligne dans `backup_runs`. Restauration et essai trimestriel : `restore.md` § B et § C.
+- **Export quotidien chiffré hors Neon** (ADR 0028, service `backup`) : chaque nuit à 3 h, heure de Paris, un dump complet, relu avant envoi, chiffré pour une clé publique, envoyé chez Hetzner. Chaque export laisse une ligne dans `backup_runs`. Le propriétaire peut aussi demander un export tout de suite (Réglages › Sauvegardes, « Relancer la sauvegarde maintenant ») : l'API inscrit seulement la demande dans `backup_requests`, et le service `backup` la prend dans les 30 secondes pour lancer le même `export.sh` ; rien ne tourne dans l'API ni dans le worker. Restauration et essai trimestriel : `restore.md` § B et § C.
 - Les volumes du serveur ne contiennent rien d'irremplaçable : `training` (notes du playground) et la persona montée (dont l'original est hors serveur).
 
 ### 4.1 Mettre l'export en service

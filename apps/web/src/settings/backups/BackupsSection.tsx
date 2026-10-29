@@ -1,6 +1,7 @@
 import { useState, type JSX } from 'react';
 
 import { RestoreTestDialog } from './RestoreTestDialog';
+import { RunNow } from './RunNow';
 import { useBackupStatusQuery } from './api';
 import { exportViewOf, restoreViewOf, type Tone } from './model';
 
@@ -8,8 +9,9 @@ import './backups.css';
 
 /**
  * Réglages › Sauvegardes (EQ-17, ADR 0028), owner only: the nightly export as a strip, then the restore test, the
- * one thing to do here (« Noter un essai », the page's only neon). Everything is read from `GET /v1/backups/status`;
- * nothing on this page touches the export itself.
+ * one thing to do here (« Noter un essai », the page's only neon). Everything is read from `GET /v1/backups/status`.
+ * The strip can ask for an export now (REG-24, a soft button): the API records the request, the `backup` service
+ * runs it; nothing here starts anything on the PC.
  */
 export function BackupsSection(): JSX.Element {
   const status = useBackupStatusQuery();
@@ -68,6 +70,7 @@ export function BackupsSection(): JSX.Element {
           </h2>
           <p className="bk-text">{copy.text}</p>
           {copy.lastRun === null ? null : <p className="bk-meta">{copy.lastRun}</p>}
+          <RunNow status={status.data} />
         </div>
       </article>
 
@@ -102,15 +105,14 @@ export function BackupsSection(): JSX.Element {
             Il faut d’abord une sauvegarde réussie à restaurer.
           </p>
         )}
-        <details className="nv-disclosure bk-how">
+        {/* REG-23: open by itself while the test is not fresh, the steps are then the thing to read. */}
+        <details className="nv-disclosure bk-how" open={!status.data.restoreTestFresh}>
           <summary>
             <span className="nv-disclosure__title">Comment se joue un essai</span>
             <span className="nv-disclosure__sum">Sur ton PC, rien ne part</span>
           </summary>
           <ol className="nv-disclosure__body bk-steps">
-            <li>
-              Une session Remote Control le joue sur ton PC : tu approuves, tu ne tapes aucune commande.
-            </li>
+            <li>Une session Claude sur ton PC le joue : tu approuves, tu ne tapes aucune commande.</li>
             <li>
               Elle restaure la dernière sauvegarde dans une base jetable, sans les clés de l’application :
               rien ne peut joindre un fan ni un service.

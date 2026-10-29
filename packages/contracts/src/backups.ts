@@ -63,6 +63,11 @@ export const BackupStatusSchema = z.object({
    * latest test only: a recent failed one means the restore is broken now, whatever older ones said.
    */
   restoreTestFresh: z.boolean(),
+  /**
+   * When the owner asked for an export now (REG-24) and the `backup` service has not picked it up yet; absent when no
+   * request waits. Once picked, the export shows as `lastRun` (`running`, then its outcome).
+   */
+  runRequestedAt: z.iso.datetime().exactOptional(),
 });
 export type BackupStatus = z.infer<typeof BackupStatusSchema>;
 
@@ -106,6 +111,25 @@ export const RestoreTestSchema = z.object({
 export type RestoreTest = z.infer<typeof RestoreTestSchema>;
 
 /**
+ * `POST /v1/backups/runs`, owner only, after a recent sign-in (REG-24): export now, out of the nightly hour. The
+ * `backup` service runs the same export as each night (ADR 0028 § 1); the API only records the request. `id` is made
+ * by the client when the button is pressed: the same request sent twice is one.
+ */
+export const RequestBackupRunBodySchema = z.object({ id: z.uuid() });
+export type RequestBackupRunBody = z.infer<typeof RequestBackupRunBodySchema>;
+
+/**
+ * A request to export now: 202 when it is new, 200 when one already waits (this one or another: one at a time).
+ * `pickedAt` is when the `backup` service started the export.
+ */
+export const BackupRunRequestSchema = z.object({
+  id: z.uuid(),
+  requestedAt: z.iso.datetime(),
+  pickedAt: z.iso.datetime().nullable(),
+});
+export type BackupRunRequest = z.infer<typeof BackupRunRequestSchema>;
+
+/**
  * The error codes of `POST /v1/backups/restore-tests`. `reauthentication_forbidden`: sign-in older than 10 minutes.
  * `restore_test_backup_unprocessable`: no export succeeded with this fingerprint.
  * `restore_test_before_backup_unprocessable`: the test is dated before the export ended.
@@ -117,6 +141,15 @@ export const BACKUP_ERROR_CODES = [
   'restore_test_before_backup_unprocessable',
   'restore_test_in_future_unprocessable',
   'restore_test_conflict',
+  REAUTHENTICATION_ERROR_CODE,
+] as const;
+
+/**
+ * The error codes of `POST /v1/backups/runs`. `backup_run_in_progress_conflict`: an export is running now (started less
+ * than 26 hours ago); its outcome shows on the page. `reauthentication_forbidden`: sign-in older than 10 minutes.
+ */
+export const BACKUP_RUN_ERROR_CODES = [
+  'backup_run_in_progress_conflict',
   REAUTHENTICATION_ERROR_CODE,
 ] as const;
 export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];

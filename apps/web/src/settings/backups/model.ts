@@ -59,6 +59,30 @@ function sizeOf(bytes: number): string {
 
 export type Tone = 'ok' | 'warn';
 
+/** The steps of `ops/db-export/export.sh`, as the service names them in « failed at step … ». */
+const FAILED_STEPS: Record<string, string> = {
+  start: 'la sauvegarde n’a pas pu démarrer',
+  record: 'la sauvegarde n’a pas pu s’inscrire dans la base',
+  settings: 'la lecture des réglages de la base a échoué',
+  snapshot: 'la base n’a pas pu être figée pour la copie',
+  dump: 'la copie de la base a échoué',
+  count: 'le comptage des lignes a échoué',
+  verify: 'la vérification de la copie a échoué',
+  encrypt: 'le chiffrement a échoué',
+  upload: 'l’envoi vers le stockage a échoué',
+  finish: 'la fin de la sauvegarde n’a pas pu être notée',
+};
+
+/**
+ * The step that failed, in the page's words. The service writes « failed at step upload »: never shown raw. A step the
+ * page does not know yet reads as a failure without detail.
+ */
+export function runErrorOf(error: string | null): string | null {
+  if (error === null) return null;
+  const step = /^failed at step (\w+)$/.exec(error.trim())?.[1];
+  return step === undefined ? null : (FAILED_STEPS[step] ?? null);
+}
+
 export interface ExportView {
   readonly tone: Tone;
   readonly title: string;
@@ -73,13 +97,14 @@ export interface ExportView {
  */
 export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string): ExportView {
   const run = status.lastRun;
+  const failedStep = runErrorOf(run?.error ?? null);
   const lastRun =
     run === null
       ? null
       : run.status === 'running'
         ? `Une sauvegarde est en cours depuis ${clockOf(run.startedAt, timeZone)}.`
         : run.status === 'failed'
-          ? `Dernière tentative échouée le ${dayOf(run.startedAt, now, timeZone)} à ${clockOf(run.startedAt, timeZone)}${run.error === null ? '' : ` (${run.error})`}.`
+          ? `Dernière tentative échouée le ${dayOf(run.startedAt, now, timeZone)} à ${clockOf(run.startedAt, timeZone)}${failedStep === null ? '' : ` : ${failedStep}`}.`
           : `Dernière tentative réussie le ${dayOf(run.startedAt, now, timeZone)}${
               run.finishedAt === null
                 ? ''
@@ -101,6 +126,25 @@ export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string)
     text: `Chaque copie est gardée 30${NBSP}jours. Après ${String(status.overdueAfterHours)}${NBSP}h sans copie réussie, le Dashboard et Telegram te préviennent.`,
     lastRun,
   };
+}
+
+/**
+ * « Relancer la sauvegarde maintenant » (REG-24): what the strip offers. `asked`: a request waits for the service,
+ * which picks it up within a minute. `running`: an export runs now, its outcome will show. Otherwise the button.
+ */
+export type RunNowView =
+  | { readonly kind: 'offer' }
+  | { readonly kind: 'asked'; readonly text: string }
+  | { readonly kind: 'running' };
+
+export function runNowOf(status: BackupStatus, timeZone?: string): RunNowView {
+  if (status.runRequestedAt !== undefined) {
+    return {
+      kind: 'asked',
+      text: `Relance demandée à ${clockOf(status.runRequestedAt, timeZone)} : elle démarre dans la minute.`,
+    };
+  }
+  return status.lastRun?.status === 'running' ? { kind: 'running' } : { kind: 'offer' };
 }
 
 export interface RestoreView {

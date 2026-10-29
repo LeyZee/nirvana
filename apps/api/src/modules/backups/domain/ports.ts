@@ -1,4 +1,5 @@
 import type { RestoreTestEntry, StoredRestoreTest } from './restore-tests';
+import type { RequestContext, RequestDecision, StoredBackupRequest } from './run-requests';
 import type { BackupRun } from './status';
 
 export interface BackupRunsReader {
@@ -43,4 +44,19 @@ export interface RestoreTestsStore {
   ): Promise<{ readonly inserted: boolean; readonly test: StoredRestoreTest }>;
   /** The latest test by `testedAt`. */
   latest(): Promise<StoredRestoreTest | null>;
+}
+
+/** `backup_requests` (REG-24), with the application role: SELECT and INSERT only (migration 0039). */
+export interface BackupRequestsStore {
+  /**
+   * Under one lock (two owners' clicks never make two requests): reads what stands, lets `decide` choose, and inserts
+   * the request with its `audit_log` line when it says so.
+   */
+  request(
+    entry: { readonly id: string; readonly requestedByUserId: string },
+    actor: RestoreTestActor,
+    decide: (context: RequestContext) => RequestDecision,
+  ): Promise<{ readonly created: boolean; readonly request: StoredBackupRequest }>;
+  /** The oldest request not picked up yet, for the status. */
+  pending(): Promise<StoredBackupRequest | null>;
 }

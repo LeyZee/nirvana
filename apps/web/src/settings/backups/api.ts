@@ -1,8 +1,10 @@
 import {
   ApiErrorSchema,
   BACKUP_ERROR_CODES,
+  BackupRunRequestSchema,
   REAUTHENTICATION_ERROR_CODE,
   RestoreTestSchema,
+  type BackupRunRequest,
   type BackupStatus,
   type RecordRestoreTestBody,
   type RestoreTest,
@@ -61,6 +63,40 @@ export async function recordRestoreTest(body: RecordRestoreTestBody): Promise<Ou
     const { code } = parsed.data.error;
     if (code === REAUTHENTICATION_ERROR_CODE) return { kind: 'reauth' };
     return isRefusal(code) ? { kind: 'refused', code } : { kind: 'failed' };
+  } catch {
+    return { kind: 'failed' };
+  }
+}
+
+/** `in_progress`: an export runs now (409); its outcome will show on the strip. */
+export type RunOutcome =
+  | { readonly kind: 'ok'; readonly value: BackupRunRequest }
+  | { readonly kind: 'in_progress' }
+  | { readonly kind: 'reauth' }
+  | { readonly kind: 'session_expired' }
+  | { readonly kind: 'rate_limited' }
+  | { readonly kind: 'failed' };
+
+/**
+ * `POST /v1/backups/runs` (REG-24, owner, sign-in under 10 minutes): export now. The same `id` sent twice is one
+ * request, and a request already waiting answers a second one: pressing again never queues two exports.
+ */
+export async function requestBackupRun(id: string): Promise<RunOutcome> {
+  try {
+    const response = await fetch('/v1/backups/runs', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (response.ok) return { kind: 'ok', value: BackupRunRequestSchema.parse(await response.json()) };
+    if (response.status === 401) return { kind: 'session_expired' };
+    if (response.status === 429) return { kind: 'rate_limited' };
+    const parsed = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+    if (!parsed.success) return { kind: 'failed' };
+    const { code } = parsed.data.error;
+    if (code === REAUTHENTICATION_ERROR_CODE) return { kind: 'reauth' };
+    return code === 'backup_run_in_progress_conflict' ? { kind: 'in_progress' } : { kind: 'failed' };
   } catch {
     return { kind: 'failed' };
   }

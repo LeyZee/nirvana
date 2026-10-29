@@ -397,3 +397,11 @@
     transform: none;
   }
 }
+
+/* « Relancer la sauvegarde maintenant » (REG-24): under the strip's last line, soft, never the page's neon. */
+.bk-run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-2);
+  margin-top: var(--nv-space-2);
+}
