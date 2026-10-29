@@ -60,11 +60,15 @@ export function Reader({
     ]);
   };
 
+  const back = (
+    <button type="button" className="nv-btn nv-btn--plain nv-btn--sm tr-back" onClick={onClose}>
+      ← {backLabel}
+    </button>
+  );
+
   return (
     <section className="nv-plate tr-reader" aria-label="Conversation">
-      <button type="button" className="nv-btn nv-btn--plain nv-btn--sm tr-back" onClick={onClose}>
-        ← {backLabel}
-      </button>
+      {query.data === undefined ? back : null}
       {query.error instanceof ConversationGone ? (
         <p className="tr-reader__empty">Cette conversation n’existe plus.</p>
       ) : query.isError && query.data === undefined ? (
@@ -80,6 +84,7 @@ export function Reader({
         </div>
       ) : (
         <Loaded
+          back={back}
           read={query.data}
           stale={query.isError}
           creatorId={creatorId}
@@ -92,12 +97,15 @@ export function Reader({
 }
 
 function Loaded({
+  back,
   read,
   stale,
   creatorId,
   canDecide,
   settle,
 }: {
+  /** The way back to the list, kept with the fan's name at the top of the screen on a phone. */
+  back: JSX.Element;
   read: ConversationRead;
   /** The last read failed: what shows is the previous answer, and the screen says so. */
   stale: boolean;
@@ -179,22 +187,25 @@ function Loaded({
 
   return (
     <>
-      <header className="tr-reader__head">
-        <span className="nv-avatar" aria-hidden="true">
-          {name.slice(0, 1).toUpperCase()}
-        </span>
-        <span className="tr-reader__who">
-          <h2>{name}</h2>
-          <span className="tr-reader__state">
-            <span className={`nv-status ${statusClass(drafts.state)}`}>
-              <span className="nv-status__dot" />
-              {STATE_LABELS[drafts.state]}
-            </span>
-            <span className="nv-meta">{MODE_LABELS[detail.mode]}</span>
+      <div className="tr-reader__top">
+        {back}
+        <header className="tr-reader__head">
+          <span className="nv-avatar" aria-hidden="true">
+            {name.slice(0, 1).toUpperCase()}
           </span>
-        </span>
-        {canDecide && !isHuman ? handButton : null}
-      </header>
+          <span className="tr-reader__who">
+            <h2>{name}</h2>
+            <span className="tr-reader__state">
+              <span className={`nv-status ${statusClass(drafts.state)}`}>
+                <span className="nv-status__dot" />
+                {STATE_LABELS[drafts.state]}
+              </span>
+              <span className="nv-meta">{MODE_LABELS[detail.mode]}</span>
+            </span>
+          </span>
+          {canDecide && !isHuman ? handButton : null}
+        </header>
+      </div>
       {stale ? (
         <p className="tr-warn tr-line">Le serveur ne répond pas : ce fil peut avoir changé depuis.</p>
       ) : null}
@@ -281,6 +292,7 @@ function Loaded({
                 </div>
               ))}
               <span className="nv-meta nv-meta--end">N’est pas parti : à envoyer dans Reveal</span>
+              <CopyText bubbles={drafts.failed.finalBubbles ?? drafts.failed.bubbles} />
             </div>
           )}
           <div ref={endRef} />
@@ -300,6 +312,45 @@ function Loaded({
         </div>
       )}
     </>
+  );
+}
+
+/** How long « Copié » stays on the button. */
+const COPIED_MS = 2_000;
+
+/** What did not leave, copied to paste in Reveal: one bubble per line, as the chatter sends them. */
+function CopyText({ bubbles }: { bubbles: readonly string[] }): JSX.Element {
+  const [said, setSaid] = useState<'idle' | 'copied' | 'failed'>('idle');
+  useEffect(() => {
+    if (said === 'idle') return;
+    const timer = window.setTimeout(() => {
+      setSaid('idle');
+    }, COPIED_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [said]);
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(bubbles.join('\n'));
+      setSaid('copied');
+    } catch {
+      setSaid('failed');
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="nv-btn nv-btn--soft nv-btn--sm tr-copy"
+      aria-live="polite"
+      onClick={() => void copy()}
+    >
+      {said === 'copied'
+        ? 'Copié'
+        : said === 'failed'
+          ? 'Copie impossible : sélectionne le texte'
+          : 'Copier le texte'}
+    </button>
   );
 }
 

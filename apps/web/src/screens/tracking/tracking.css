@@ -146,6 +146,11 @@
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
   }
+  /* Its panels keep their height: the column scrolls, never a squeezed panel. */
+  .tr-page .tr-side > * {
+    flex: none;
+    max-height: none;
+  }
   .tr-page .tr-side {
     min-height: 0;
     overflow-y: auto;
@@ -441,32 +446,21 @@
   min-height: 72px;
 }
 
-/* The line under a fan's name: a narrow row cuts the creator and the time, never the band of his desire score.
- * The text keeps the nowrap of .nv-convo__preview, so it is cut with an ellipsis instead of wrapping. */
-.tr-preview {
+/* The pseudo is cut first; the creator's name beside it never is. */
+.tr-row__name {
   display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
   min-width: 0;
 }
-/* A narrow line cuts whose fan and the mode first, then when he wrote, never the band. */
-.tr-preview__lead {
-  flex: 0 1000 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tr-preview__sep {
-  flex: none;
-  white-space: pre;
-}
-.tr-preview__text {
-  flex: 0 1 auto;
+.tr-row__pseudo {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tr-preview__band {
+.tr-row__creator {
   flex: none;
-  white-space: pre;
 }
 
 /* « Récents · Chauds d'abord » (P3-12): above the list, quiet, the list's own width. */
@@ -535,4 +529,89 @@
 }
 .tr-desire__signals {
   white-space: normal;
+}
+
+/* The why of a line of « À traiter » says what to do: two lines rather than cut. */
+.nv-convo__preview.tr-why {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}
+.tr-more--action {
+  padding-block: var(--nv-space-1) var(--nv-space-2);
+}
+
+/* Nothing open: the reader's column says where a conversation opens. A phone shows the list alone. */
+.tr-reader--idle {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.tr-reader--idle .tr-reader__empty {
+  max-width: 22rem;
+  color: var(--nv-ink-faint);
+}
+@media (max-width: 899px) {
+  .tr-reader--idle {
+    display: none;
+  }
+}
+
+/* A failed send: its text copied, to paste in Reveal. */
+.tr-copy {
+  align-self: flex-end;
+}
+
+/* An empty state or a first read: one shape, the list's own width or a centred notice, as tall as its words. */
+.tr-page > .nv-coming {
+  align-self: start;
+  justify-self: center;
+  width: 100%;
+  max-width: 560px;
+}
+.tr-page > .tr-panel {
+  align-self: start;
+  max-width: 380px;
+}
+
+/* A failed send is a warning, as in « À traiter »: amber, never red (red stays for the grave guards). */
+.tr-page .nv-status--error {
+  --_c: var(--nv-warning);
+}
+
+/* On a phone, reading takes the screen: the page's title and sub-tabs step aside, and the way back, the fan's name,
+ * his state and the hand stay at the top while the thread scrolls. */
+@media (max-width: 899px) {
+  .tr-is-reading > .nv-page__head {
+    display: none;
+  }
+  .tr-reader__top {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nv-space-1);
+    margin: calc(-1 * var(--nv-space-4)) calc(-1 * var(--nv-space-4)) 0;
+    padding: var(--nv-space-2) var(--nv-space-4) var(--nv-space-3);
+    border-radius: var(--nv-radius-lg) var(--nv-radius-lg) 0 0;
+    background: var(--nv-surface-raised);
+    box-shadow: 0 1px 0 var(--nv-hairline);
+  }
+  .tr-reader__top .tr-reader__head {
+    flex-wrap: nowrap;
+  }
+  .tr-reader__top .tr-reader__who h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* From 900 px the way back is hidden and the head is a plain row of the reader. */
+@media (min-width: 900px) {
+  .tr-reader__top {
+    display: contents;
+  }
 }

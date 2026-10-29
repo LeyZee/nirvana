@@ -39,6 +39,9 @@ import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const REFRESH_MS = 30_000;
 
+/** The lines of « À traiter » shown before « Voir les N autres ». */
+const QUEUE_SHOWN = 3;
+
 /** Arrow keys of a radio group and the way they move. */
 const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 
@@ -86,6 +89,7 @@ export function TrackingPage({
   const now = useNow();
   const [order, setOrder] = useState<ListOrder>(readListOrder);
   const [search, setSearch] = useState('');
+  const [allTodos, setAllTodos] = useState(false);
 
   const isLoading = creatorsQuery.isPending || queries.some((q) => q.isPending);
   const failed = queries.filter((q) => q.isError);
@@ -111,6 +115,13 @@ export function TrackingPage({
   const queue = dashboard.kind === 'live' ? dashboard.data : null;
   const todos = queue?.todos ?? [];
   const queueCreator = queue?.creator.id ?? null;
+  // The gravest first (the server's order): three lines keep the search and the list above the fold; the one open stays.
+  const openIndex = todos.findIndex((t) => t.conversationId === selected);
+  const shownTodos =
+    allTodos || todos.length <= QUEUE_SHOWN + 1 || openIndex >= QUEUE_SHOWN
+      ? todos
+      : todos.slice(0, QUEUE_SHOWN);
+  const hiddenTodos = todos.length - shownTodos.length;
   const open =
     selected === null
       ? null
@@ -175,7 +186,7 @@ export function TrackingPage({
                 eyebrow={showsCreator && queue !== null ? `À traiter · ${queue.creator.name}` : 'À traiter'}
               >
                 <ul className="nv-list tr-list" aria-label="À traiter">
-                  {todos.map((todo) => (
+                  {shownTodos.map((todo) => (
                     <QueueRow
                       key={todo.id}
                       todo={todo}
@@ -186,6 +197,19 @@ export function TrackingPage({
                     />
                   ))}
                 </ul>
+                {hiddenTodos === 0 ? null : (
+                  <p className="tr-more tr-more--action">
+                    <button
+                      type="button"
+                      className="nv-btn nv-btn--plain nv-btn--sm"
+                      onClick={() => {
+                        setAllTodos(true);
+                      }}
+                    >
+                      {hiddenTodos === 1 ? 'Voir l’autre' : `Voir les ${String(hiddenTodos)} autres`}
+                    </button>
+                  </p>
+                )}
               </Panel>
             )}
             {lines.length === 0 ? (
@@ -229,7 +253,6 @@ export function TrackingPage({
                         key={conversation.id}
                         conversation={conversation}
                         creatorName={showsCreator ? creatorName : undefined}
-                        withMode={mode === null}
                         now={now}
                         isOpen={conversation.id === selected}
                         onOpen={() => {
@@ -251,7 +274,13 @@ export function TrackingPage({
               </Panel>
             )}
           </div>
-          {selected === null ? null : open === null ? (
+          {selected === null ? (
+            <section className="nv-plate tr-reader tr-reader--idle" aria-label="Conversation">
+              <p className="tr-reader__empty">
+                Choisis une conversation à gauche : elle s’ouvre ici, avec son brouillon s’il y en a un.
+              </p>
+            </section>
+          ) : open === null ? (
             <section className="nv-plate tr-reader" aria-label="Conversation">
               <p className="tr-reader__empty">Cette conversation n’est pas dans la liste.</p>
             </section>
@@ -363,7 +392,7 @@ function QueueRow({
           <span className="nv-convo__name">
             {todoLabel(todo)} · {todo.title}
           </span>
-          <span className="nv-convo__preview">{todo.why}</span>
+          <span className="nv-convo__preview tr-why">{todo.why}</span>
         </span>
         <span className="nv-convo__side tr-wait">{duration(todo.waitingMinutes)}</span>
       </button>
@@ -374,23 +403,19 @@ function QueueRow({
 function Row({
   conversation,
   creatorName,
-  withMode,
   now,
   isOpen,
   onOpen,
 }: {
   conversation: ConversationSummary;
-  /** Shown before the mode when the account sees several creators. */
+  /** Shown beside his pseudo when the account sees several creators, never cut. */
   creatorName: string | undefined;
-  withMode: boolean;
   now: Date;
   isOpen: boolean;
   onOpen: () => void;
 }): JSX.Element {
   const name = conversation.fanDisplayName.trim() === '' ? 'Fan sans nom' : conversation.fanDisplayName;
-  const line = subline(conversation, now, withMode);
-  // Whose fan and in which mode: what a narrow line cuts first, before when he wrote.
-  const lead = [creatorName, line.mode].flatMap((part) => part ?? []);
+  const line = subline(conversation, now);
   return (
     <li className="nv-enter">
       <button
@@ -403,16 +428,14 @@ function Row({
           {name.slice(0, 1).toUpperCase()}
         </span>
         <span className="nv-convo__main">
-          <span className="nv-convo__name">{name}</span>
-          <span className="nv-convo__preview tr-preview">
-            {lead.length === 0 ? null : (
-              <>
-                <span className="tr-preview__lead">{lead.join(' · ')}</span>
-                <span className="tr-preview__sep">{' · '}</span>
-              </>
+          <span className="nv-convo__name tr-row__name">
+            <span className="tr-row__pseudo">{name}</span>
+            {creatorName === undefined ? null : (
+              <span className="nv-tag nv-tag--declared tr-row__creator">{creatorName}</span>
             )}
-            <span className="tr-preview__text">{line.text}</span>
-            {line.band === null ? null : <span className="tr-preview__band">{` · ${line.band}`}</span>}
+          </span>
+          <span className="nv-convo__preview">
+            {line.band === null ? line.text : `${line.text} · ${line.band}`}
           </span>
         </span>
         <span className="nv-convo__side">

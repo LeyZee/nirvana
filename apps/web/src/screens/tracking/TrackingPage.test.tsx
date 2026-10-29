@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import {
   ConversationDetailSchema,
+  ConversationIdSchema,
   ConversationSummarySchema,
   DraftIdSchema,
   MessageViewSchema,
@@ -298,11 +299,12 @@ describe('TrackingPage', () => {
     });
     renderPage();
     const list = await screen.findByRole('list', { name: 'Conversations' });
-    const text = within(list)
+    // Beside his pseudo, apart from the line a narrow row cuts.
+    const names = within(list)
       .getAllByRole('listitem')
-      .map((row) => row.textContent);
-    expect(text.some((line) => line.includes('Léa · '))).toBe(true);
-    expect(text.some((line) => line.includes('Nina · '))).toBe(true);
+      .map((row) => row.querySelector('.tr-row__creator')?.textContent);
+    expect(names).toContain('Léa');
+    expect(names).toContain('Nina');
   });
 
   it('opens a conversation outside every list when the link names its creator (Dashboard, fan reader)', async () => {
@@ -341,6 +343,33 @@ describe('TrackingPage', () => {
     fireEvent.click(within(queue).getByRole('button'));
     expect(await screen.findByText('Salut, ça va ?')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Rendre la main à l’agent' })).toBeDefined();
+  });
+
+  it('shows the three gravest of « À traiter », and the others on demand', async () => {
+    const [first] = apiDashboard().todos;
+    if (first === undefined) throw new Error('the fake dashboard has a todo');
+    const todo = (n: number) => ({
+      ...first,
+      id: `todo-${String(n)}`,
+      title: `Fan ${String(n)}`,
+      conversationId: ConversationIdSchema.parse(`0192f3a0-0000-7000-8000-00000000010${String(n)}`),
+    });
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      dashboard: { status: 200, body: apiDashboard({ todos: [1, 2, 3, 4, 5].map(todo) }) },
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    expect(within(queue).getAllByRole('listitem')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les 2 autres' }));
+    expect(within(queue).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  it('says where a conversation opens while none is', async () => {
+    serve({ ...ONE, conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } } });
+    renderPage();
+    expect(await screen.findByText(/Choisis une conversation à gauche/u)).toBeDefined();
   });
 });
 
@@ -714,6 +743,12 @@ describe('the reader of Suivi', () => {
       screen.getByText('L’envoi a échoué, rien n’est parti : l’envoi est désactivé pour ce compte Reveal'),
     ).toBeDefined();
     expect(screen.queryByText('Envoi en cours')).toBeNull();
+    // What did not leave, ready to paste in Reveal.
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Copier le texte' }));
+    expect(await screen.findByRole('button', { name: 'Copié' })).toBeDefined();
+    expect(writeText).toHaveBeenCalledWith('Coucou toi, tu es là ?');
   });
 
   it('says a ceiling of 0 € or past 100 000 € cannot be saved, and why', async () => {
@@ -802,11 +837,9 @@ describe('his desire score in Suivi (P3-12)', () => {
     renderPage();
     const list = await screen.findByRole('list', { name: 'Conversations' });
     const [first, second] = within(list).getAllByRole('listitem');
-    expect(second?.querySelector('.nv-convo__preview')?.textContent).toBe('N’a pas encore écrit · chaud');
-    // Apart from the rest of the line, which a narrow row cuts first: the band is never the part cut off.
-    expect(second?.querySelector('.tr-preview__band')?.textContent).toBe(' · chaud');
+    expect(second?.querySelector('.nv-convo__preview')?.textContent).toBe('Pas encore écrit · chaud');
     expect(second?.textContent).not.toContain('82');
-    expect(first?.querySelector('.nv-convo__preview')?.textContent).toBe('N’a pas encore écrit');
+    expect(first?.querySelector('.nv-convo__preview')?.textContent).toBe('Pas encore écrit');
     expect(list.querySelector('[class*="neon"], [class*="danger"], [class*="amber"]')).toBeNull();
   });
 
