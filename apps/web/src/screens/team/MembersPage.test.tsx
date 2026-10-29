@@ -13,7 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MembersPage } from './MembersPage';
-import { parseTeamSearch } from './model';
+import { parseTeamSearch, periodStartsFrom, today } from './model';
 
 const confirmPassword = vi.fn<(password: string) => Promise<string>>();
 vi.mock('@/settings/services/api', () => ({
@@ -82,7 +82,7 @@ function serve(
     vi.fn((input: string, init?: RequestInit) => {
       const path = new URL(input, 'http://localhost').pathname;
       let reply: Reply;
-      if (init?.method === 'POST') {
+      if (init?.method !== undefined && init.method !== 'GET') {
         const body: unknown = JSON.parse(typeof init.body === 'string' ? init.body : 'null');
         posted.push({ path, body });
         reply = routes.post?.(path, body) ?? { status: 500 };
@@ -92,6 +92,7 @@ function serve(
       else if (path === '/v1/team/commission-presets') reply = { status: 200, body: { presets: PRESETS } };
       else if (path === '/v1/creators') reply = { status: 200, body: { creators: [LEA] } };
       else if (path.endsWith('/notes')) reply = { status: 200, body: { notes: [] } };
+      else if (path === `/v1/team/members/${THEO.id}`) reply = { status: 200, body: THEO };
       else reply = { status: 404 };
       return Promise.resolve(new Response(JSON.stringify(reply.body ?? null), { status: reply.status }));
     }),
@@ -331,7 +332,8 @@ describe('adding a member', () => {
     who();
     // The team name followed the first name; the zone follows the country.
     fireEvent.change(await screen.findByLabelText('Pays'), { target: { value: 'MG' } });
-    expect(screen.getByText(/Indian\/Antananarivo/u)).toBeDefined();
+    // The zone named by its city, never its IANA name (EQ-08).
+    expect(screen.getByText(/là-bas en ce moment · Antananarivo/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Continuer' }));
     fireEvent.click(await screen.findByRole('radio', { name: /Confirmé/u }));
     fireEvent.click(screen.getByRole('button', { name: 'Léa' }));
@@ -359,6 +361,17 @@ describe('adding a member', () => {
       path: `/v1/team/members/${KOFI.id}/invitation-link`,
       body: { purpose: 'invitation' },
     });
+
+    // The gesture expected next comes first: the welcome and the link copied together (EQ-12).
+    const copy = screen.getByRole('button', { name: 'Copier le message' });
+    expect(document.activeElement).toBe(copy);
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    fireEvent.click(copy);
+    expect(await screen.findByRole('button', { name: 'Message copié' })).toBeDefined();
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringMatching(/^Bienvenue dans l’équipe, Kofi ! Choisis ton mot de passe ici : http/u),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Voir sa fiche' }));
     await waitFor(() => {
@@ -389,6 +402,76 @@ describe('adding a member', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter Kofi' }));
     expect(await screen.findByText('Un compte utilise déjà cet e-mail.')).toBeDefined();
     expect(screen.getByLabelText('E-mail').getAttribute('aria-invalid')).toBe('true');
+  });
+});
+
+describe('changing a member once added (EQ-10)', () => {
+  const sheet = async (): Promise<HTMLElement> => {
+    renderPage(`/equipe/membres?membre=${THEO.id}`);
+    return screen.findByRole('region', { name: 'Théo' });
+  };
+
+  it('changes the team name and the creators, sending only what changed', async () => {
+    const posted = serve({ post: () => ({ status: 200, body: { ...THEO, displayName: 'Théo M.' } }) });
+    fireEvent.click(within(await sheet()).getByRole('button', { name: 'Modifier' }));
+    const panel = await screen.findByRole('dialog', { name: 'Modifier Théo' });
+    const save = within(panel).getByRole('button', { name: 'Enregistrer' });
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(panel).getByLabelText('Nom dans l’équipe'), { target: { value: 'Théo M.' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Léa', pressed: true }));
+    fireEvent.click(save);
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(posted).toEqual([
+      { path: `/v1/team/members/${THEO.id}`, body: { displayName: 'Théo M.', creatorIds: [] } },
+    ]);
+  });
+
+  it('gives a new rate from the 1st or the 16th ahead, and words a refusal', async () => {
+    const posted = serve({ post: () => ({ status: 409, body: apiError('commission_rate_conflict') }) });
+    fireEvent.click(within(await sheet()).getByRole('button', { name: 'Changer le taux' }));
+    const panel = await screen.findByRole('dialog', { name: 'Changer le taux' });
+    const save = within(panel).getByRole('button', { name: 'Enregistrer le taux' });
+    // Nothing chosen: a rate never changes by a stray tap.
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(within(panel).getByRole('radio', { name: /Confirmé/u }));
+    const first = periodStartsFrom(today(), 1)[0];
+    expect(within(panel).getAllByRole('radio', { name: /\d{4}$/u })).toHaveLength(4);
+    fireEvent.click(save);
+    expect(await within(panel).findByText('Ce membre a déjà un taux à partir de ce jour.')).toBeDefined();
+    expect(posted).toEqual([
+      {
+        path: `/v1/team/members/${THEO.id}/commission`,
+        body: { commission: { presetId: PRESET }, teamShareBps: null, effectiveFrom: first },
+      },
+    ]);
+  });
+
+  it('marks a departure only after a confirmation that says what it does', async () => {
+    const posted = serve({
+      post: () => ({ status: 200, body: { ...THEO, status: 'left', creatorIds: [] } }),
+    });
+    fireEvent.click(within(await sheet()).getByRole('button', { name: 'Changer le statut' }));
+    const panel = await screen.findByRole('dialog', { name: 'Statut de Théo' });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Parti' }));
+    const confirm = within(panel).getByRole('alertdialog', { name: 'Confirmer le départ' });
+    expect(confirm.textContent).toContain('Ce changement est définitif.');
+    const leave = within(panel).getByRole('button', { name: 'Confirmer le départ' });
+    expect(leave.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(within(confirm).getByRole('checkbox'));
+    fireEvent.click(leave);
+    await waitFor(() => {
+      expect(posted).toEqual([{ path: `/v1/team/members/${THEO.id}/status`, body: { status: 'left' } }]);
+    });
+  });
+
+  it('offers nothing to change to a manager', async () => {
+    serve();
+    renderPage(`/equipe/membres?membre=${THEO.id}`, false);
+    const region = await screen.findByRole('region', { name: 'Théo' });
+    expect(within(region).queryByRole('button', { name: 'Modifier' })).toBeNull();
+    expect(within(region).queryByRole('button', { name: 'Changer le taux' })).toBeNull();
   });
 });
 
@@ -461,6 +544,36 @@ describe('a link from the sheet', () => {
     expect(invitedOf('Théo')).toBe(false);
     expect(invitedOf('Mialy')).toBe(true);
     expect(screen.getByRole('button', { name: 'Remplacer le lien' })).toBeDefined();
+  });
+
+  it('pills only what is not the rule: no « Actif », one « Invité » or « Lien expiré » (EQ-05, EQ-06)', async () => {
+    const live = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    const dead = new Date(Date.now() - 86_400_000).toISOString();
+    const invited = member(15, { displayName: 'Mialy', invitationPending: true, invitationExpiresAt: live });
+    const expired = member(16, { displayName: 'Koffi', invitationPending: true, invitationExpiresAt: dead });
+    serve({ members: { status: 200, body: { members: [THEO, BASILE, invited, expired] } } });
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Chatteurs' });
+    const side = (name: string): string =>
+      within(list)
+        .getAllByRole('button')
+        .find((row) => row.querySelector('.nv-convo__name')?.textContent === name)
+        ?.querySelector('.nv-convo__side')?.textContent ?? 'none';
+    expect(side('Théo')).toBe('');
+    expect(side('Basile')).toBe('En congé');
+    expect(side('Mialy')).toBe('Invité');
+    expect(side('Koffi')).toBe('Lien expiré');
+    expect(screen.getByText('3 actifs · 1 absent · 1 invitation en attente · 1 lien expiré')).toBeDefined();
+  });
+
+  it('says the member’s city and hour under the name, never an IANA zone (EQ-07, EQ-08)', async () => {
+    serve();
+    renderPage(`/equipe/membres?membre=${THEO.id}`);
+    const sheet = await screen.findByRole('region', { name: 'Théo' });
+    expect(sheet.querySelector('.tm-sheet__where')?.textContent).toMatch(/^🇧🇯 Porto-Novo · \d+\sh\s\d{2}$/u);
+    expect(sheet.textContent).not.toContain('Africa/');
+    expect(sheet.textContent).not.toContain('Chez lui');
+    expect(within(sheet).getByText('Dans l’équipe depuis')).toBeDefined();
   });
 
   it('shows a manager his own record without the notes about him', async () => {

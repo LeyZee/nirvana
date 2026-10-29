@@ -92,15 +92,19 @@ export function listMembers(members: readonly TeamMember[], tab: TeamRole, query
 }
 
 /** The sentence under the title: how many are at work, away, and still to sign in. */
-export function teamSummary(members: readonly TeamMember[]): string | null {
+export function teamSummary(members: readonly TeamMember[], now: Date): string | null {
   const here = members.filter((member) => member.status !== 'left');
   if (here.length === 0) return null;
   const active = here.filter((member) => member.status === 'active').length;
   const away = here.filter((member) => STATUS_TONES[member.status] === 'away').length;
-  const pending = here.filter((member) => member.invitationPending).length;
+  // A dead link is no invitation waiting: it is counted apart, since it asks for a new link (EQ-06).
+  const expired = here.filter((member) => invitationState(member, now).kind === 'expired').length;
+  const pending = here.filter((member) => member.invitationPending).length - expired;
   const parts = [`${String(active)} actif${active > 1 ? 's' : ''}`];
   if (away > 0) parts.push(`${String(away)} absent${away > 1 ? 's' : ''}`);
   if (pending > 0) parts.push(`${String(pending)} invitation${pending > 1 ? 's' : ''} en attente`);
+  if (expired > 0)
+    parts.push(`${String(expired)} lien${expired > 1 ? 's' : ''} expiré${expired > 1 ? 's' : ''}`);
   return parts.join(' · ');
 }
 
@@ -285,4 +289,29 @@ export function parsePlanningSearch(search: Record<string, unknown>): PlanningSe
   const day = new Date(`${semaine}T12:00:00Z`);
   if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== semaine) return {};
   return { semaine: mondayOf(semaine) };
+}
+
+/**
+ * The days a new rate may start from (EQ-10): the 1st and the 16th of the months ahead, today included when it is
+ * one; the server checks the same rule (`commission_date_invalid`).
+ */
+export function periodStartsFrom(from: string, count: number): string[] {
+  const starts: string[] = [];
+  const [year = 0, month = 1, day = 1] = from.split('-').map(Number);
+  let y = year;
+  let m = month;
+  let d = day <= 1 ? 1 : day <= 16 ? 16 : 32;
+  while (starts.length < count) {
+    if (d > 16) {
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+      d = 1;
+    }
+    starts.push(`${String(y)}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    d = d === 1 ? 16 : 32;
+  }
+  return starts;
 }

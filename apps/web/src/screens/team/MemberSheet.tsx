@@ -2,6 +2,7 @@ import type { CommissionPreset, CreatorSummary, TeamMember } from '@nirvana/cont
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type JSX } from 'react';
 
+import { EditMemberPanel, RatePanel, StatusPanel } from './EditMember';
 import { ShareLink } from './ShareLink';
 import { addNote, useNotes } from './api';
 import {
@@ -17,14 +18,15 @@ import { Avatar, StatusPill } from './parts';
 
 import { localTime } from '@/creators/persona/model';
 import { countryFlag, countryName } from '@/lib/country';
+import { cityOf } from '@/scheduling/time';
 
 /** Arrived less than this many days ago: the « Nouveau » badge of Imperium. */
 const NEW_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 /**
- * One member, read on the right of the list: who he is and where (his own hour), his creators, his rate, his first
- * access, and the internal notes the member himself never reads.
+ * One member, read on the right of the list: who they are, their city and hour in one line, their creators, their
+ * rate, their first access, and the internal notes the member never reads.
  */
 export function MemberSheet({
   member,
@@ -50,6 +52,10 @@ export function MemberSheet({
   const gone = member.status === 'left';
   // A share counts for a manager only (pay ignores a chatter's): a manager who became a chatter shows none.
   const share = member.teamRole === 'manager' ? (member.commission?.teamShareBps ?? null) : null;
+  const [editing, setEditing] = useState<'member' | 'rate' | 'status' | null>(null);
+  const close = (): void => {
+    setEditing(null);
+  };
 
   return (
     <section className="nv-plate tm-sheet nv-enter" aria-label={member.displayName}>
@@ -64,6 +70,11 @@ export function MemberSheet({
             {member.firstName} {member.lastName} · {ROLE_LABELS[member.teamRole]}
             {arrivedDays >= 0 && arrivedDays < NEW_DAYS ? <span className="tm-new">Nouveau</span> : null}
           </p>
+          {/* Where and what hour, one small line: the team is mostly one hour apart (EQ-08). */}
+          <p className="tm-sheet__where">
+            <span aria-hidden="true">{countryFlag(member.country)} </span>
+            {cityOf(member.timeZone)} · <span className="nv-num">{localTime(member.timeZone, now)}</span>
+          </p>
           <StatusPill member={member} />
         </div>
         <button type="button" className="tm-close" aria-label="Fermer la fiche" onClick={onClose}>
@@ -72,6 +83,39 @@ export function MemberSheet({
           </svg>
         </button>
       </header>
+
+      {/* What changes once a member is in: the owner's, and nothing for one who left (EQ-10). */}
+      {canManage && !gone ? (
+        <div className="tm-sheet__actions nv-enter">
+          <button
+            type="button"
+            className="nv-btn nv-btn--soft nv-btn--sm"
+            onClick={() => {
+              setEditing('member');
+            }}
+          >
+            Modifier
+          </button>
+          <button
+            type="button"
+            className="nv-btn nv-btn--plain nv-btn--sm"
+            onClick={() => {
+              setEditing('rate');
+            }}
+          >
+            Changer le taux
+          </button>
+          <button
+            type="button"
+            className="nv-btn nv-btn--plain nv-btn--sm"
+            onClick={() => {
+              setEditing('status');
+            }}
+          >
+            Changer le statut
+          </button>
+        </div>
+      ) : null}
 
       <div className="tm-figures">
         <div className="tm-figure nv-enter" style={{ '--nv-i': 1 }}>
@@ -85,16 +129,8 @@ export function MemberSheet({
               : `${preset === undefined ? 'Taux à la main' : preset.name} · depuis le ${longDay(member.commission.effectiveFrom)}`}
           </span>
         </div>
-        <div className="tm-figure nv-enter" style={{ '--nv-i': 2 }}>
-          <span className="nv-figure__label">Chez lui</span>
-          <span className="tm-figure__value">{localTime(member.timeZone, now)}</span>
-          <span className="tm-figure__note">
-            <span aria-hidden="true">{countryFlag(member.country)} </span>
-            {countryName(member.country)}
-          </span>
-        </div>
         {share === null ? null : (
-          <div className="tm-figure nv-enter" style={{ '--nv-i': 3 }}>
+          <div className="tm-figure nv-enter" style={{ '--nv-i': 2 }}>
             <span className="nv-figure__label">Part de l’équipe</span>
             <span className="tm-figure__value">{formatRate(share)}</span>
             <span className="tm-figure__note">du net de l’équipe</span>
@@ -124,11 +160,11 @@ export function MemberSheet({
           <dd className="tm-mail">{member.email}</dd>
         </div>
         <div>
-          <dt>Fuseau</dt>
-          <dd>{member.timeZone.replaceAll('_', ' ')}</dd>
+          <dt>Pays</dt>
+          <dd>{countryName(member.country)}</dd>
         </div>
         <div>
-          <dt>Arrivé le</dt>
+          <dt>Dans l’équipe depuis</dt>
           <dd>{longDay(member.joinedOn)}</dd>
         </div>
       </dl>
@@ -169,6 +205,10 @@ export function MemberSheet({
       )}
 
       {isSelf ? null : <Notes memberId={member.id} name={member.displayName} />}
+
+      {editing === 'member' ? <EditMemberPanel member={member} creators={creators} onClose={close} /> : null}
+      {editing === 'rate' ? <RatePanel member={member} presets={presets} onClose={close} /> : null}
+      {editing === 'status' ? <StatusPanel member={member} onClose={close} /> : null}
     </section>
   );
 }

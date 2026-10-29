@@ -37,6 +37,7 @@ export function ShareLink({
   purpose,
   label,
   initial = null,
+  primary = false,
 }: {
   memberId: string;
   name: string;
@@ -45,6 +46,8 @@ export function ShareLink({
   label: string;
   /** A link already made (the add panel asks for it right after creating the member). */
   initial?: InvitationLinkCreated | null;
+  /** The panel's main action: « Copier le message » in neon (the add panel); soft on the member's sheet. */
+  primary?: boolean;
 }): JSX.Element {
   const client = useQueryClient();
   const [step, setStep] = useState<Step>(
@@ -68,7 +71,7 @@ export function ShareLink({
       });
   };
 
-  if (step.kind === 'made') return <Made link={step.link} name={name} purpose={purpose} />;
+  if (step.kind === 'made') return <Made link={step.link} name={name} purpose={purpose} primary={primary} />;
   if (step.kind === 'password') {
     return (
       <PasswordStep
@@ -103,22 +106,29 @@ export function ShareLink({
   );
 }
 
+/**
+ * The link made, handed over as a message (EQ-12): « Copier le message » copies the welcome and the link together, so
+ * that WhatsApp never carries a bare address; « Partager » opens the phone's sheet with the same.
+ */
 function Made({
   link,
   name,
   purpose,
+  primary,
 }: {
   link: InvitationLinkCreated;
   name: string;
   purpose: InvitationLinkPurpose;
+  primary: boolean;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   const canShare = typeof navigator.share === 'function';
+  const message = `${SHARE_TEXT[purpose](name)} ${link.url}`;
 
   const copy = async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(link.url);
+      await navigator.clipboard.writeText(message);
       setCopied(true);
     } catch {
       // No clipboard (an old browser, a refusal): the link stays selected, ready for a copy by hand.
@@ -136,22 +146,24 @@ function Made({
         aria-label="Lien à envoyer"
         onFocus={(event) => {
           event.target.select();
+          // Selected whole, read from its start: the address, not the end of its token (EQ-12).
+          event.target.scrollLeft = 0;
         }}
       />
       <div className="tm-share__actions">
         <button
           type="button"
-          className="nv-btn nv-btn--soft nv-btn--sm"
+          className={`nv-btn ${primary ? 'nv-btn--neon tm-primary' : 'nv-btn--soft nv-btn--sm'}`}
           onClick={() => {
             void copy();
           }}
         >
-          {copied ? 'Copié' : 'Copier'}
+          {copied ? 'Message copié' : 'Copier le message'}
         </button>
         {canShare ? (
           <button
             type="button"
-            className="nv-btn nv-btn--soft nv-btn--sm"
+            className={`nv-btn nv-btn--soft${primary ? '' : ' nv-btn--sm'}`}
             onClick={() => {
               void navigator.share({ text: SHARE_TEXT[purpose](name), url: link.url }).catch(() => undefined);
             }}
@@ -161,8 +173,8 @@ function Made({
         ) : null}
       </div>
       <p className="tm-hint">
-        Valable jusqu’à {deadline(new Date(link.expiresAt))}, pour un seul usage. Un nouveau lien annule
-        celui-ci.
+        Le message : « {SHARE_TEXT[purpose](name)} » suivi du lien. Valable jusqu’à{' '}
+        {deadline(new Date(link.expiresAt))}, pour un seul usage. Un nouveau lien annule celui-ci.
       </p>
     </div>
   );
