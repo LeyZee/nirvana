@@ -138,7 +138,7 @@ export const PlaygroundStateSchema = z.object({
    * The persona the playground plays (`PLAYGROUND_PERSONA_PATH`, the demo's by default): its first name, so that a
    * trainer never takes it for one of the agency's creators (recette 28/10, M13).
    */
-  persona: z.object({ name: z.string() }),
+  persona: z.object({ name: z.string().min(1) }),
   presets: z.array(PlaygroundPresetSchema),
   presetId: z.string().nullable(),
   situation: PlaygroundSituationSchema,
