@@ -253,6 +253,10 @@
   color: var(--nv-warning);
   font-weight: 600;
 }
+/* After .tr-warn, whose margin it overrides: « À traiter » unread keeps a gap above its Réessayer. */
+.tr-queue-error {
+  margin: 0 0 8px;
+}
 .tr-line {
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);

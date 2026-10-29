@@ -69,6 +69,32 @@ export const DashboardTodoSchema = z.object({
 });
 export type DashboardTodo = z.infer<typeof DashboardTodoSchema>;
 
+/** One line of « À traiter » across the creators a person follows (SUIVI-09): whose conversation it is. */
+export const CreatorTodoSchema = DashboardTodoSchema.extend({
+  creatorId: CreatorIdSchema,
+  creatorName: z.string().min(1),
+});
+export type CreatorTodo = z.infer<typeof CreatorTodoSchema>;
+
+/** How many lines wait for one creator, and how many of them are grave (tone `bad`): the picker shows them (DASH-03). */
+export const CreatorTodoCountSchema = z.object({
+  creatorId: CreatorIdSchema,
+  name: z.string().min(1),
+  todos: count,
+  grave: count,
+});
+export type CreatorTodoCount = z.infer<typeof CreatorTodoCountSchema>;
+
+/**
+ * `GET /v1/dashboard/todos`: « À traiter » of every creator the person follows (every creator for the owner, those of
+ * the account otherwise), the gravest first then the longest waiting, and the count of each creator in her order.
+ */
+export const TodosAcrossCreatorsSchema = z.object({
+  items: z.array(CreatorTodoSchema),
+  creators: z.array(CreatorTodoCountSchema),
+});
+export type TodosAcrossCreators = z.infer<typeof TodosAcrossCreatorsSchema>;
+
 /** One of her best fans over the period. */
 export const DashboardFanSchema = z.object({
   id: FanIdSchema,

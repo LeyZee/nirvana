@@ -2,6 +2,7 @@ import {
   ConversationDetailSchema,
   CreatorIdSchema,
   DashboardSchema,
+  TodosAcrossCreatorsSchema,
   DEFAULT_AGENT_HOURS,
   DraftIdSchema,
   EventIdSchema,
@@ -10,6 +11,7 @@ import {
   MessageIdSchema,
   newId,
   PlatformAccountIdSchema,
+  TeamMemberIdSchema,
   type AgentHours,
   type ConversationId,
   type CreatorId,
@@ -619,5 +621,115 @@ describe('GET /v1/dashboard', () => {
     });
     expect(await reveal()).toMatchObject({ connected: true, late: false });
     await account({ lastPollAt: new Date() });
+  });
+
+  it('gathers « À traiter » of every creator followed, each line naming hers, never one not followed (SUIVI-09)', async () => {
+    // Inès, a second invented creator (ADR 0010): Arthur's send failed for good.
+    const ines = newId(CreatorIdSchema);
+    const inesAccount = newId(PlatformAccountIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: ines, nameKey: ines, displayName: 'Inès', timezone: 'Europe/Paris' });
+    await test.admin.db.insert(schema.platformAccounts).values({
+      id: inesAccount,
+      creatorId: ines,
+      platform: 'reveal',
+      handle: 'test-dashboard-ines',
+      sessionState: 'valid',
+      lastPollAt: new Date(),
+    });
+    const { conversationId: arthur } = await app.modules.conversations.ingestMessage({
+      creatorId: ines,
+      platformAccountId: inesAccount,
+      platformConversationId: 'c-Arthur',
+      platformFanId: 'f-Arthur',
+      fanDisplayName: 'Arthur',
+      message: {
+        ref: { platform: 'reveal', id: 'm-Arthur' },
+        conversationRef: { platform: 'reveal', id: 'c-Arthur' },
+        direction: 'inbound',
+        text: 'Salut',
+        media: [],
+        priceMinor: null,
+        currency: null,
+        isPaid: false,
+        createdAt: new Date().toISOString(),
+      },
+      correlationId: 'seed',
+    });
+    await test.admin.db.execute(sql`update conversations set state = 'error' where id = ${arthur}::uuid`);
+
+    const todosOf = async (cookie: string) =>
+      TodosAcrossCreatorsSchema.parse((await call('/v1/dashboard/todos', cookie)).json());
+    // The owner follows both: one list, each line with its creator, the gravest first.
+    const all = await todosOf(ownerCookie);
+    expect(all.items.find((t) => t.conversationId === arthur)).toMatchObject({
+      creatorId: ines,
+      creatorName: 'Inès',
+      kind: 'send_failed',
+    });
+    expect(all.items.some((t) => t.creatorId === creatorId && t.creatorName === 'Lina')).toBe(true);
+    const tones = all.items.map((t) => t.tone);
+    expect(tones).toEqual([...tones].sort((a, b) => Number(b === 'bad') - Number(a === 'bad')));
+    // The count of each creator, for the Dashboard's picker (DASH-03).
+    for (const creator of all.creators) {
+      const hers = all.items.filter((t) => t.creatorId === creator.creatorId);
+      expect(creator).toEqual({
+        creatorId: creator.creatorId,
+        name: creator.creatorId === ines ? 'Inès' : 'Lina',
+        todos: hers.length,
+        grave: hers.filter((t) => t.tone === 'bad').length,
+      });
+    }
+    expect(all.creators.map((c) => c.creatorId).sort()).toEqual([creatorId, ines].sort());
+
+    // A chatter of Inès alone reads hers only; one of no existing creator reads nothing; a creator never.
+    const chatter = {
+      email: 'ines-chatter@example.test',
+      name: 'Chatter',
+      password: 'correct horse battery',
+    };
+    const { userId } = await createOwner(app.auth, app.db.db, chatter);
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'operator', creatorIds: [ines] })
+      .where(eq(schema.user.id, userId));
+    const hers = await todosOf(await signIn(server, chatter.email, chatter.password));
+    expect(hers.items.map((t) => [t.creatorName, t.conversationId])).toEqual([['Inès', arthur]]);
+    expect(hers.creators).toEqual([{ creatorId: ines, name: 'Inès', todos: 1, grave: 0 }]);
+    expect(await todosOf(operatorCookie)).toEqual({ items: [], creators: [] });
+    // A team chatter of Inès reads only the conversations routed to him: her queue is not his, even Arthur's.
+    const routedChatter = {
+      email: 'ines-routed@example.test',
+      name: 'Routed',
+      password: 'correct horse battery',
+    };
+    const routed = (await createOwner(app.auth, app.db.db, routedChatter)).userId;
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'operator', creatorIds: [ines] })
+      .where(eq(schema.user.id, routed));
+    // An invented member (ADR 0010).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: routed,
+      teamRole: 'chatter',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Chatteur',
+      country: 'BJ',
+      timeZone: 'Africa/Porto-Novo',
+      joinedOn: '2026-10-01',
+    });
+    await test.admin.db
+      .update(schema.conversations)
+      .set({ routedToUserId: routed })
+      .where(eq(schema.conversations.id, arthur));
+    expect(await todosOf(await signIn(server, routedChatter.email, routedChatter.password))).toEqual({
+      items: [],
+      creators: [],
+    });
+    expect((await call('/v1/dashboard/todos', creatorCookie)).statusCode).toBe(403);
+    expect((await call('/v1/dashboard/todos')).statusCode).toBe(401);
   });
 });

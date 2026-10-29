@@ -3,6 +3,7 @@ import {
   ConversationDetailSchema,
   ConversationIdSchema,
   ConversationSummarySchema,
+  DashboardSchema,
   DraftIdSchema,
   MessageViewSchema,
   type ConversationDetail,
@@ -113,6 +114,8 @@ function serve(routes: {
   flagsRefused?: boolean;
   /** The thread's messages, newest first; one message of his when not given. */
   messages?: unknown[];
+  /** « À traiter » across creators; the Dashboard's todos, named after its creator, when not given. */
+  todos?: Reply | (() => Reply);
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -146,6 +149,21 @@ function serve(routes: {
         reply = typeof routes.creators === 'function' ? routes.creators() : routes.creators;
       } else if (path === '/v1/conversations') {
         reply = { status: 200, body: routes.conversations?.[url.searchParams.get('creatorId') ?? ''] };
+      } else if (path === '/v1/dashboard/todos') {
+        const dashboard = DashboardSchema.parse(
+          (routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) }).body,
+        );
+        reply = (typeof routes.todos === 'function' ? routes.todos() : routes.todos) ?? {
+          status: 200,
+          body: {
+            items: dashboard.todos.map((todo) => ({
+              ...todo,
+              creatorId: dashboard.creator.id,
+              creatorName: dashboard.creator.name,
+            })),
+            creators: [],
+          },
+        };
       } else if (path === '/v1/dashboard') {
         reply = routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) };
       } else if (path.endsWith('/messages')) {
@@ -253,6 +271,29 @@ describe('TrackingPage', () => {
     expect(document.querySelector('a[href="/creatrices"]')).toBeNull();
   });
 
+  it('says « À traiter » could not be read, in amber, and Réessayer reads it again', async () => {
+    const [kevin] = apiDashboard().todos;
+    if (kevin === undefined) throw new Error('no todo');
+    let calls = 0;
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      todos: () =>
+        ++calls === 1
+          ? { status: 500 }
+          : {
+              status: 200,
+              body: { items: [{ ...kevin, creatorId: LEA.id, creatorName: 'Léa' }], creators: [] },
+            },
+    });
+    renderPage();
+    const warning = await screen.findByText(/« À traiter » n’a pas pu être lu/u);
+    expect(warning.classList.contains('tr-warn')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByRole('list', { name: 'À traiter' })).toBeDefined();
+    expect(screen.queryByText(/« À traiter » n’a pas pu être lu/u)).toBeNull();
+  });
+
   it('says the server does not answer, and Réessayer reads again', async () => {
     let calls = 0;
     serve({
@@ -335,6 +376,62 @@ describe('TrackingPage', () => {
     serve(routes);
     renderPage(`/suivi?conversation=${elsewhere}`);
     expect(await screen.findByText('Cette conversation n’est pas dans la liste.')).toBeDefined();
+  });
+
+  it('gathers what waits for a human for every creator followed, each line naming hers (SUIVI-09)', async () => {
+    const INES = {
+      id: '0192f3a0-0000-7000-8000-0000000000c2',
+      displayName: 'Inès',
+      timezone: 'Europe/Paris',
+    };
+    const arthur = '0192f3a0-0000-7000-8000-0000000000a9';
+    const [kevin] = apiDashboard().todos;
+    if (kevin === undefined) throw new Error('no todo');
+    serve({
+      creators: { status: 200, body: { creators: [LEA, INES] } },
+      conversations: {
+        [LEA.id]: { items: [conversation('1')], nextCursor: null },
+        [INES.id]: { items: [], nextCursor: null },
+      },
+      todos: {
+        status: 200,
+        body: {
+          items: [
+            { ...kevin, creatorId: LEA.id, creatorName: 'Léa' },
+            {
+              ...kevin,
+              id: 'todo-2',
+              tone: 'warn',
+              kind: 'awaiting_approval',
+              title: 'Arthur',
+              conversationId: arthur,
+              creatorId: INES.id,
+              creatorName: 'Inès',
+            },
+          ],
+          creators: [],
+        },
+      },
+      detail: () => ({ status: 200, body: { ...waiting(), id: arthur, fanDisplayName: 'Arthur' } }),
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    const rows = within(queue).getAllByRole('button');
+    expect(rows.map((row) => row.querySelector('.nv-convo__name')?.textContent)).toEqual([
+      'Léa · Mineur possible · Kévin',
+      'Inès · Brouillon à valider · Arthur',
+    ]);
+    // Inès's conversation is not in the loaded list: it opens with her id, from the queue's line.
+    const second = rows[1];
+    if (second === undefined) throw new Error('no second line');
+    fireEvent.click(second);
+    await waitFor(() => {
+      const details = vi
+        .mocked(fetch)
+        .mock.calls.flatMap(([input]) => (typeof input === 'string' ? [input] : []))
+        .filter((url) => url.startsWith(`/v1/conversations/${arthur}?`));
+      expect(details[0]).toContain(`creatorId=${INES.id}`);
+    });
   });
 
   it('puts first what waits for a human, as the server computed it, and opens it', async () => {
@@ -468,11 +565,18 @@ describe('the reader of Suivi', () => {
       },
     });
     renderPage(OPEN);
+    const queueReads = (): number =>
+      vi.mocked(fetch).mock.calls.filter(([input]) => input === '/v1/dashboard/todos').length;
     fireEvent.click(await screen.findByRole('button', { name: 'Valider' }));
+    const before = queueReads();
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Brouillon à valider' })).toBeNull();
     });
     expect(posted).toEqual([{ action: 'approve', body: {} }]);
+    // « À traiter » is read again at once: the line just decided leaves it.
+    await waitFor(() => {
+      expect(queueReads()).toBeGreaterThan(before);
+    });
   });
 
   it('sends the retouched bubbles, one per line', async () => {

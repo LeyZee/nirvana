@@ -7,6 +7,7 @@ import {
   FanKycViewSchema,
   MessageViewSchema,
   pageOf,
+  TodosAcrossCreatorsSchema,
   type ConversationDetail,
   type ConversationEventView,
   type ConversationSummary,
@@ -15,6 +16,7 @@ import {
   type KycSlot,
   type MessageView,
   type SetFanFlagBody,
+  type TodosAcrossCreators,
 } from '@nirvana/contracts';
 
 import { flagError } from './flags-model';
@@ -228,4 +230,14 @@ export async function setFanFlag(
   } catch {
     return { ok: false, message: flagError(0, null) };
   }
+}
+
+/**
+ * `GET /v1/dashboard/todos` (SUIVI-09): « À traiter » of every creator this person follows, the gravest first across
+ * them, each line naming its creator.
+ */
+export async function fetchTodosAcross(): Promise<TodosAcrossCreators> {
+  const response = await fetch('/v1/dashboard/todos', { credentials: 'include' });
+  if (!response.ok) throw new Error(`GET /v1/dashboard/todos: ${String(response.status)}`);
+  return TodosAcrossCreatorsSchema.parse(await response.json());
 }
