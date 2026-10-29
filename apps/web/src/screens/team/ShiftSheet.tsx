@@ -6,11 +6,12 @@ import type {
   TeamMember,
   UpdateShiftBody,
 } from '@nirvana/contracts';
+import { Link } from '@tanstack/react-router';
 import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
 
-import { AGENCY_STATUS, amountText, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
+import { AGENCY_STATUS, amountText, periodAt, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
 import '@/reports/reports.css';
 import { TimeField, useUnreadableTimes } from '@/scheduling/TimeField';
 import {
@@ -147,6 +148,8 @@ export function ShiftSheet({
   };
 
   const hours = typed();
+  // Its report, said where the member's reports of its period are: Rapports opens on his fold (EQ-13).
+  const toReports = { quinzaine: periodAt(new Date(shift.startsAt), agency), membre: shift.memberId };
   // Another zone is shown only where its hours differ from those above: Porto-Novo and Paris share them in winter.
   const shownRange = rangeAt(shift.startsAt, shift.endsAt, zone);
   const differs = rangeAt(shift.startsAt, shift.endsAt, agency) !== shownRange;
@@ -155,7 +158,12 @@ export function ShiftSheet({
 
   return (
     <Dialog
-      title={shown?.displayName ?? 'Un membre'}
+      title={
+        // His name opens his record in Membres (EQ-11).
+        <Link to="/equipe/membres" search={{ membre: shift.memberId }} className="sc-sheet__who">
+          {shown?.displayName ?? 'Un membre'}
+        </Link>
+      }
       lead={account === null ? undefined : `${account.creatorName} · ${accountLine(account)}`}
       busy={busy}
       onClose={onClose}
@@ -227,21 +235,21 @@ export function ShiftSheet({
           {report !== null ? (
             <li>
               <span>Rapport</span>
-              <span className="sc-sheet__report">
+              <Link to="/equipe/rapports" search={toReports} className="sc-sheet__report">
                 <span className="nv-num">
                   {amountText(report.amount.amountMinor, report.amount.currency)}
                 </span>
                 <span className={`rp-chip rp-chip--${STATUS_TONES[report.status]}`}>
                   {AGENCY_STATUS[report.status]}
                 </span>
-              </span>
+              </Link>
             </li>
           ) : reports !== null && phase === 'past' ? (
             <li>
               <span>Rapport</span>
-              <span className="sc-sheet__report" data-warn="true">
+              <Link to="/equipe/rapports" search={toReports} className="sc-sheet__report" data-warn="true">
                 Sans rapport
-              </span>
+              </Link>
             </li>
           ) : null}
           {report === null || reports === null || !corrected ? null : (
@@ -261,9 +269,7 @@ export function ShiftSheet({
           ),
         )}
 
-        {phase === 'past' ? (
-          <p className="tm-hint">Ce shift est fini : il reste au planning tel qu’il a eu lieu.</p>
-        ) : (
+        {phase === 'past' ? null : (
           <form
             className="sc-sheet__edit"
             noValidate

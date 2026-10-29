@@ -28,6 +28,7 @@ import {
 
 import type { PayRefusal, PayRefusalCode } from './api';
 
+import { memberOf } from '@/lib/utils';
 import {
   amountText,
   followingPeriod,
@@ -716,16 +717,19 @@ export function statementsCsv(
   return `${rows.map((row) => row.map(cell).join(';')).join('\r\n')}\r\n`;
 }
 
-/** Paie's address: the period Quinzaine shows when one was chosen, from Historique or its arrows. */
+/**
+ * Paie's address: the period Quinzaine shows when one was chosen, from Historique or its arrows, and the member whose
+ * statement opens on it, from his record in Équipe (EQ-11).
+ */
 export interface PaySearch {
   readonly quinzaine?: PayPeriod;
+  readonly membre?: string;
 }
 
 /** Anything else in the address is ignored: a broken link opens the period to validate, or the one under way. */
 export function parsePaySearch(search: Record<string, unknown>): PaySearch {
-  const { quinzaine } = search;
-  const parsed = PayPeriodSchema.safeParse(quinzaine);
-  return parsed.success ? { quinzaine: parsed.data } : {};
+  const parsed = PayPeriodSchema.safeParse(search['quinzaine']);
+  return { ...(parsed.success ? { quinzaine: parsed.data } : {}), ...memberOf(search) };
 }
 
 /**

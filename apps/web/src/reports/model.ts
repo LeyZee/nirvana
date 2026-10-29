@@ -13,6 +13,7 @@ import {
 
 import type { ReportRefusalCode } from './api';
 
+import { swapShiftLine } from '@/scheduling/model';
 import { dayOf } from '@/scheduling/time';
 
 /**
@@ -95,7 +96,8 @@ export const periodAt = (now: Date, agencyZone: string): PayPeriod => payPeriodO
 
 /** A status as its member reads it, and as the agency does. */
 export const MEMBER_STATUS: Readonly<Record<ShiftReportStatus, string>> = {
-  submitted: 'Envoyé',
+  // The word of the figure above it, « En attente », not a second name for the same state (EQ-21).
+  submitted: 'En attente',
   validated: 'Validé',
   rejected: 'Renvoyé',
 };
@@ -185,6 +187,39 @@ export function linesOf(list: ShiftReportList): ShiftLine[] {
       validatedMinor: validatedTotal(list.reports, shift.id),
     }))
     .toSorted((a, b) => b.shift.startsAt.localeCompare(a.shift.startsAt));
+}
+
+/** The shifts over with no report yet, the oldest first: the late ones the agency sees at a glance (EQ-14). */
+export function lateLines(list: ShiftReportList, now: Date): ShiftLine[] {
+  return linesOf(list)
+    .filter((line) => line.report === null && new Date(line.shift.endsAt).getTime() <= now.getTime())
+    .toReversed();
+}
+
+/** « depuis 25 min », « depuis 8 h », « depuis 2 jours »: how long a report has been waiting since its shift ended. */
+export function lateFor(endsAt: string, now: Date): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - new Date(endsAt).getTime()) / 60_000));
+  if (minutes < 60) return `depuis ${String(minutes)}${NBSP}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `depuis ${String(hours)}${NBSP}h`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'depuis 1 jour' : `depuis ${String(days)} jours`;
+}
+
+/**
+ * The word « Relancer » copies for a member whose report is late (EQ-15), at his own hour: « Romaric, ton rapport du
+ * mer. 28 oct. · 11 h – 17 h (Léa) n’est pas encore fait. Fais-le dans Nirvana dès que tu peux. » Nirvana sends
+ * nothing: the agency pastes it where it talks to him.
+ */
+export function nudgeText(
+  name: string,
+  shift: Pick<Shift, 'startsAt' | 'endsAt'>,
+  creatorName: string | undefined,
+  timeZone: string,
+): string {
+  const when = swapShiftLine(shift.startsAt, shift.endsAt, undefined, timeZone);
+  const on = creatorName === undefined ? '' : ` (${creatorName})`;
+  return `${name}, ton rapport du ${when}${on} n’est pas encore fait. Fais-le dans Nirvana dès que tu peux.`;
 }
 
 /**

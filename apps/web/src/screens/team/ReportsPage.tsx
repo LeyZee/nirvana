@@ -10,6 +10,7 @@ import {
 import { useEffect, useId, useRef, useState, type JSX } from 'react';
 
 import { TeamNav } from './TeamNav';
+import { useMembers } from './api';
 
 import { useAppHold, type HoldResult } from '@/reports/Hold';
 import { ReportPanel } from '@/reports/ReportPanel';
@@ -17,6 +18,7 @@ import {
   rejectReport,
   useRefreshReports,
   useReports,
+  useReportsOf,
   useSchedulingSettings,
   validateInBatches,
   type ReportRefusal,
@@ -34,6 +36,9 @@ import {
   signedAmountText,
   STATUS_TONES,
   followingPeriod,
+  lateFor,
+  lateLines,
+  nudgeText,
   type ShiftLine,
 } from '@/reports/model';
 import { useReopening, type ReportDraft } from '@/reports/reopen';
@@ -65,15 +70,31 @@ const emptyCorrection = (): ReportDraft => ({
  * or sent back with a word; then a period member by member, its shifts without a report in amber, a validated report
  * corrected from there (a refund the member did not declare). The server says who may review what (`canReview`).
  */
-export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
+export function ReportsPage({
+  owner,
+  period: asked = null,
+  member = null,
+  onPeriod = () => undefined,
+}: {
+  owner: boolean;
+  /** The period in the address (`?quinzaine=`), `null` for the one under way. */
+  period?: PayPeriod | null;
+  /** The member whose fold opens (`?membre=`), from his record or a shift's report (EQ-11, EQ-13). */
+  member?: string | null;
+  onPeriod?: (period: PayPeriod | null) => void;
+}): JSX.Element {
   const now = useNow();
   const zone = readerZone();
   const hold = useAppHold();
   const settings = useSchedulingSettings();
   const open = useReports(null);
   const current = settings.data === undefined ? null : periodAt(now, settings.data.timeZone);
-  const [picked, setPicked] = useState<PayPeriod | null>(null);
-  const period = picked ?? current;
+  const period = asked ?? current;
+  // The late reports, of this period and the one before (still open until its closing): at a glance (EQ-14).
+  const recent = useReportsOf(current === null ? [] : [previousPeriod(current), current]);
+  const members = useMembers();
+  const homeOf = (memberId: string): string =>
+    members.data?.find((one) => one.id === memberId)?.timeZone ?? zone;
   const ofPeriod = useReports(period, period !== null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [held, setHeld] = useState<ReadonlySet<string>>(new Set());
@@ -161,12 +182,6 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
         actions={
           <>
             <TeamNav />
-            {/* Only with a choice: never a greyed neon above a list that may not be there (EQ-22, EQ-26). */}
-            {chosen.length === 0 ? null : (
-              <button type="button" className="nv-btn nv-btn--neon nv-swap" onClick={validate}>
-                Valider ({chosen.length})
-              </button>
-            )}
           </>
         }
       />
@@ -180,8 +195,14 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
           waiting={waiting}
           held={held}
           selected={selected}
+          chosen={chosen.length}
+          late={recent === null ? null : lateLines(recent, now)}
+          lateNames={recent}
+          now={now}
           zone={zone}
+          homeOf={homeOf}
           onSelect={setSelected}
+          onValidate={validate}
         />
         <PeriodPanel
           period={period}
@@ -193,7 +214,9 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
             void ofPeriod.refetch();
           }}
           zone={zone}
-          onPeriod={setPicked}
+          focus={member}
+          homeOf={homeOf}
+          onPeriod={onPeriod}
           onCorrect={(line, memberName) => {
             setCorrecting({ shiftId: line.shift.id, memberName, draft: emptyCorrection() });
           }}
@@ -271,8 +294,14 @@ function ToValidate({
   waiting,
   held,
   selected,
+  chosen,
+  late,
+  lateNames,
+  now,
   zone,
+  homeOf,
   onSelect,
+  onValidate,
 }: {
   list: ShiftReportList | undefined;
   isError: boolean;
@@ -281,8 +310,18 @@ function ToValidate({
   /** Reports whose validation is held: shown dimmed, out of the selection, until it is sent or taken back. */
   held: ReadonlySet<string>;
   selected: ReadonlySet<string>;
+  /** How many of the selection can be validated now. */
+  chosen: number;
+  /** The shifts over without a report, the oldest first; `null` while they are not read. */
+  late: readonly ShiftLine[] | null;
+  /** The list the late shifts come from, for their names. */
+  lateNames: ShiftReportList | null;
+  now: Date;
   zone: string;
+  /** A member's own zone, for the hours of the word « Relancer » copies. */
+  homeOf: (memberId: string) => string;
   onSelect: (next: ReadonlySet<string>) => void;
+  onValidate: () => void;
 }): JSX.Element {
   const id = useId();
   if (isError) {
@@ -340,6 +379,10 @@ function ToValidate({
           )}
         </div>
 
+        {late === null || lateNames === null || late.length === 0 ? null : (
+          <Late lines={late} list={lateNames} now={now} zone={zone} homeOf={homeOf} />
+        )}
+
         {waiting.length === 0 ? (
           <p className="rp-mine__empty">
             Tout est validé. Un rapport arrive ici dès qu’un membre le fait, à la fin de son shift.
@@ -384,6 +427,17 @@ function ToValidate({
                 />
               ))}
             </ul>
+            {/* Only with a choice, at the foot of the list it validates, and kept in sight while it scrolls (EQ-26). */}
+            {chosen === 0 ? null : (
+              <div className="rp-validate__bar nv-glass nv-swap">
+                <span className="rp-validate__chosen nv-num">
+                  {chosen === 1 ? '1 rapport choisi' : `${String(chosen)} rapports choisis`}
+                </span>
+                <button type="button" className="nv-btn nv-btn--neon" onClick={onValidate}>
+                  Valider ({chosen})
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -624,6 +678,8 @@ function PeriodPanel({
   isError,
   onRetry,
   zone,
+  focus,
+  homeOf,
   onPeriod,
   onCorrect,
 }: {
@@ -633,6 +689,9 @@ function PeriodPanel({
   isError: boolean;
   onRetry: () => void;
   zone: string;
+  /** The member whose fold opens, `null` for none. */
+  focus: string | null;
+  homeOf: (memberId: string) => string;
   onPeriod: (period: PayPeriod | null) => void;
   onCorrect: (line: ShiftLine, memberName: string) => void;
 }): JSX.Element {
@@ -733,6 +792,8 @@ function PeriodPanel({
                 reports={list.reports.filter((one) => one.memberId === memberId)}
                 accounts={names.accounts}
                 zone={zone}
+                home={homeOf(memberId)}
+                focused={memberId === focus}
                 onCorrect={onCorrect}
               />
             ))}
@@ -750,6 +811,8 @@ function MemberPeriod({
   reports,
   accounts,
   zone,
+  home,
+  focused,
   onCorrect,
 }: {
   index: number;
@@ -758,31 +821,47 @@ function MemberPeriod({
   reports: readonly ShiftReport[];
   accounts: ReadonlyMap<string, PlanningAccount>;
   zone: string;
+  /** The member's own zone: « Relancer » says his hours. */
+  home: string;
+  /** Opened from his record or a shift's report: the fold opens, in sight (EQ-11, EQ-13). */
+  focused: boolean;
   onCorrect: (line: ShiftLine, memberName: string) => void;
 }): JSX.Element {
+  const fold = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!focused || fold.current === null) return;
+    fold.current.open = true;
+    fold.current.querySelector('summary')?.focus();
+  }, [focused]);
   const name = member?.displayName ?? 'Un membre';
   const missing = lines.filter((line) => line.report === null).length;
   const sums = periodSums(reports);
   const waiting = reports.filter((one) => one.status === 'submitted').length;
   const sentBack = reports.filter((one) => one.status === 'rejected').length;
-  // What the member's period holds, said only where there is something: « 210,00 € validés · 1 à valider ».
+  // What the member's period holds, said only where there is something: « 210,00 € validés · 1 à valider ». Only
+  // the shifts without a report are amber, not the money validated beside them (EQ-14).
   const summary = [
     ...sums
       .filter((sum) => sum.validatedMinor !== 0)
       .map((sum) => `${amountText(sum.validatedMinor, sum.currency)} validés`),
     waiting === 0 ? null : `${String(waiting)} à valider`,
     sentBack === 0 ? null : `${String(sentBack)} renvoyé${sentBack > 1 ? 's' : ''}`,
-    missing === 0 ? null : `${String(missing)} sans rapport`,
   ]
     .filter((part) => part !== null)
     .join(' · ');
   return (
-    <details className="nv-disclosure rp-member nv-enter" style={{ '--nv-i': Math.min(index, 8) }}>
+    <details ref={fold} className="nv-disclosure rp-member nv-enter" style={{ '--nv-i': Math.min(index, 8) }}>
       <summary>
         <span className="sc-swatch" style={swatchOf(member)} aria-hidden="true" />
         <span className="nv-disclosure__title">{name}</span>
-        <span className="nv-disclosure__sum" data-warn={missing > 0 ? 'true' : undefined}>
+        <span className="nv-disclosure__sum">
           {summary}
+          {missing === 0 ? null : (
+            <span className="rp-member__late">
+              {summary === '' ? '' : ' · '}
+              {String(missing)} sans rapport
+            </span>
+          )}
         </span>
       </summary>
       <ul className="nv-disclosure__body rp-lines">
@@ -795,7 +874,10 @@ function MemberPeriod({
                 {swapShiftLine(line.shift.startsAt, line.shift.endsAt, account?.creatorName, zone)}
               </span>
               {report === null ? (
-                <span className="rp-chip rp-chip--warn">Sans rapport</span>
+                <>
+                  <span className="rp-chip rp-chip--warn">Sans rapport</span>
+                  <Nudge text={nudgeText(name, line.shift, account?.creatorName, home)} name={name} />
+                </>
               ) : (
                 <>
                   <span className="rp-pline__amount nv-num">
@@ -831,5 +913,92 @@ function MemberPeriod({
         })}
       </ul>
     </details>
+  );
+}
+
+/**
+ * « N shifts sans rapport » under the count to validate (EQ-14): who, on what, and since when, the oldest first, each
+ * with « Relancer ».
+ */
+function Late({
+  lines,
+  list,
+  now,
+  zone,
+  homeOf,
+}: {
+  lines: readonly ShiftLine[];
+  list: ShiftReportList;
+  now: Date;
+  zone: string;
+  homeOf: (memberId: string) => string;
+}): JSX.Element {
+  const names = namesOf(list);
+  const [oldest] = lines;
+  return (
+    <details className="nv-disclosure rp-late">
+      <summary>
+        <span className="nv-disclosure__title rp-late__title">
+          {lines.length === 1 ? '1 shift sans rapport' : `${String(lines.length)} shifts sans rapport`}
+        </span>
+        {oldest === undefined ? null : (
+          <span className="nv-disclosure__sum nv-num">
+            {lines.length === 1 ? '' : 'le plus ancien '}
+            {lateFor(oldest.shift.endsAt, now)}
+          </span>
+        )}
+      </summary>
+      <ul className="nv-disclosure__body rp-lines">
+        {lines.map((line) => {
+          const member = names.members.get(line.shift.memberId);
+          const name = member?.displayName ?? 'Un membre';
+          const creator = names.accounts.get(line.shift.platformAccountId)?.creatorName;
+          return (
+            <li key={line.shift.id} className="rp-late__one">
+              <span className="rp-late__who">
+                <span className="sc-swatch" style={swatchOf(member)} aria-hidden="true" />
+                {name}
+              </span>
+              <span className="rp-late__when nv-num">
+                {swapShiftLine(line.shift.startsAt, line.shift.endsAt, creator, zone)}
+              </span>
+              <span className="rp-late__since nv-num">{lateFor(line.shift.endsAt, now)}</span>
+              <Nudge text={nudgeText(name, line.shift, creator, homeOf(line.shift.memberId))} name={name} />
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
+/**
+ * « Relancer » (EQ-15): copies a word ready for WhatsApp; Nirvana sends nothing, and only the member makes his report.
+ * Without a clipboard the word shows, to copy by hand.
+ */
+function Nudge({ text, name }: { text: string; name: string }): JSX.Element {
+  const [state, setState] = useState<'idle' | 'copied' | 'shown'>('idle');
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+    } catch {
+      setState('shown');
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className="nv-btn nv-btn--plain nv-btn--sm rp-nudge"
+        aria-label={state === 'copied' ? `Message copié pour ${name}` : `Relancer ${name}`}
+        onClick={() => {
+          void copy();
+        }}
+      >
+        {state === 'copied' ? 'Message copié' : 'Relancer'}
+      </button>
+      {state === 'shown' ? <p className="rp-nudge__text">{text}</p> : null}
+    </>
   );
 }

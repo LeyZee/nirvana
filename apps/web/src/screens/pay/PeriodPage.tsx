@@ -107,10 +107,13 @@ import { Page, PageHeader, Panel } from '@/shell/layout';
 export function PeriodPage({
   user,
   chosen,
+  member = null,
   onPeriod,
 }: {
   user: Me;
   chosen: PayPeriod | null;
+  /** The member whose statement opens once the period is read: « Son relevé » on his record in Équipe (EQ-11). */
+  member?: string | null;
   onPeriod: (period: PayPeriod | null) => void;
 }): JSX.Element {
   const toOpen = usePeriodToOpen(user.role === 'owner');
@@ -119,7 +122,9 @@ export function PeriodPage({
   const [first, setFirst] = useState<PayPeriod | null>(null);
   if (first === null && toOpen !== null) setFirst(toOpen);
   const period = chosen ?? first ?? toOpen;
-  return <PeriodView key={period ?? 'none'} user={user} period={period} onPeriod={onPeriod} />;
+  return (
+    <PeriodView key={period ?? 'none'} user={user} period={period} member={member} onPeriod={onPeriod} />
+  );
 }
 
 /** A validation that stopped on a refusal of the whole period, while the period reads the same. */
@@ -135,10 +140,12 @@ const stateOf = (period: PayrollPeriod): string =>
 function PeriodView({
   user,
   period,
+  member,
   onPeriod,
 }: {
   user: Me;
   period: PayPeriod | null;
+  member: string | null;
   onPeriod: (period: PayPeriod | null) => void;
 }): JSX.Element {
   const owner = user.role === 'owner';
@@ -161,6 +168,15 @@ function PeriodView({
   const [stopped, setStopped] = useState<Stopped | null>(null);
   const [closing, setClosing] = useState<readonly CommissionStatement[] | null>(null);
   const [opened, setOpened] = useState<{ readonly id: string; readonly paying: boolean } | null>(null);
+  // The statement asked from a member's record: opened once the period is read, or said missing (EQ-11).
+  const [asked, setAsked] = useState(member);
+  const [absent, setAbsent] = useState<string | null>(null);
+  if (asked !== null && data !== undefined) {
+    const theirs = data.statements.find((one) => one.memberId === asked);
+    setAsked(null);
+    if (theirs === undefined) setAbsent(asked);
+    else setOpened({ id: theirs.id, paying: false });
+  }
 
   const rows =
     data?.statements.toSorted((a, b) =>
@@ -410,6 +426,11 @@ function PeriodView({
                 </p>
               </div>
             ) : null}
+            {absent === null ? null : (
+              <p className="py-quiet" role="status">
+                Pas de relevé de {names.member(absent).name} sur cette quinzaine.
+              </p>
+            )}
             {pickable.length === 0 ? null : (
               <SelectAll
                 all={allChecked}

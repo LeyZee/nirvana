@@ -17,6 +17,7 @@ import {
   OTHER_COUNTRIES,
   parsePlanningSearch,
   parseRate,
+  parseReportsSearch,
   parseTeamSearch,
   rateAhead,
   rateLine,
@@ -191,6 +192,21 @@ describe('the address', () => {
     expect(parsePlanningSearch({ semaine: '2026-02-30' })).toEqual({});
     expect(parsePlanningSearch({ semaine: 'lundi' })).toEqual({});
     expect(parsePlanningSearch({})).toEqual({});
+    const theo = '0199f2a0-0000-7000-8000-0000000000a1';
+    expect(parsePlanningSearch({ semaine: '2026-10-28', membre: theo })).toEqual({
+      semaine: '2026-10-26',
+      membre: theo,
+    });
+    expect(parsePlanningSearch({ semaine: 'lundi', membre: theo })).toEqual({ membre: theo });
+  });
+
+  it('keeps the period and the member of Rapports, and drops anything else (EQ-11, EQ-13)', () => {
+    const theo = '0199f2a0-0000-7000-8000-0000000000a1';
+    expect(parseReportsSearch({ quinzaine: '2026-10-16', membre: theo })).toEqual({
+      quinzaine: '2026-10-16',
+      membre: theo,
+    });
+    expect(parseReportsSearch({ quinzaine: '2026-10-17', membre: 'x' })).toEqual({});
   });
 
   it('keeps the managers tab and a member id, and drops anything else', () => {

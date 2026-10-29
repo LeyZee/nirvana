@@ -1,5 +1,6 @@
 import type { CommissionPreset, CreatorSummary, TeamMember } from '@nirvana/contracts';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useState, type JSX } from 'react';
 
 import { EditMemberPanel, RatePanel, StatusPanel } from './EditMember';
@@ -180,8 +181,33 @@ export function MemberSheet({
         </div>
       </dl>
 
+      {/* Where his work is: the record is not a dead end (EQ-11). Right under the facts, above the notes that grow. */}
+      <nav
+        className="tm-sheet__links nv-enter"
+        style={{ '--nv-i': 4 }}
+        aria-label={`Le travail de ${member.displayName}`}
+      >
+        <Link
+          to="/equipe/planning"
+          search={{ membre: member.id }}
+          className="nv-btn nv-btn--plain nv-btn--sm"
+        >
+          Ses shifts
+        </Link>
+        <Link
+          to="/equipe/rapports"
+          search={{ membre: member.id }}
+          className="nv-btn nv-btn--plain nv-btn--sm"
+        >
+          Ses rapports
+        </Link>
+        <Link to="/paie/quinzaine" search={{ membre: member.id }} className="nv-btn nv-btn--plain nv-btn--sm">
+          Son relevé
+        </Link>
+      </nav>
+
       {gone ? null : (
-        <section className="tm-block nv-enter" style={{ '--nv-i': 4 }} aria-label="Accès">
+        <section className="tm-block nv-enter" style={{ '--nv-i': 5 }} aria-label="Accès">
           <h3>Accès</h3>
           <p className="tm-hint">
             {access.kind === 'signed-in'

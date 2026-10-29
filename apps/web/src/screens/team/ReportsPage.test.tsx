@@ -38,6 +38,9 @@ const MEMBERS = [
   { id: BASILE, displayName: 'Basile', color: null },
 ];
 
+const text = (element: Element | null | undefined): string =>
+  (element?.textContent ?? '').replaceAll('\u00a0', ' ');
+
 const shift = (n: number, memberId: string, day: number) => ({
   id: id(100 + n),
   creatorId: id(1),
@@ -149,7 +152,7 @@ const validatesAll = (body: unknown): { status: number; body: unknown } => {
 };
 
 /** Renders the page, and gives the way to Suivi, as the rail would take it. */
-function renderPage(): () => Promise<void> {
+function renderPage(focus: string | null = null): () => Promise<void> {
   // The app's one hold, as the shell mounts it, and Suivi to leave Équipe › Rapports for.
   const root = createRootRoute({
     component: () => (
@@ -163,7 +166,7 @@ function renderPage(): () => Promise<void> {
   const page = createRoute({
     getParentRoute: () => root,
     path: '/equipe/rapports',
-    component: () => <ReportsPage owner />,
+    component: () => <ReportsPage owner member={focus} />,
   });
   const tracking = createRoute({ getParentRoute: () => root, path: '/suivi', component: () => <p>Suivi</p> });
   const router = createRouter({
@@ -222,8 +225,11 @@ describe('Équipe › Rapports', () => {
     expect(screen.getByText('Le compte a été déconnecté une heure')).toBeTruthy();
     expect(screen.getByText('Ton propre shift : un autre membre de l’agence le valide.')).toBeTruthy();
 
+    // No « Valider » until something is chosen, then at the foot of the list (EQ-26).
+    expect(screen.queryByRole('button', { name: /^Valider/u })).toBe(null);
     fireEvent.click(screen.getByLabelText('Tout sélectionner'));
-    expect(screen.getByRole('button', { name: 'Valider (2)' })).toBeTruthy();
+    const bar = screen.getByRole('button', { name: 'Valider (2)' }).closest('.rp-validate__bar');
+    expect(text(bar)).toContain('2 rapports choisis');
     expect(
       screen
         .getAllByRole('checkbox', { name: /Sélectionner le rapport de Théo/u })
@@ -374,6 +380,8 @@ describe('Équipe › Rapports', () => {
     expect((summary?.textContent ?? '').replaceAll(/\s/gu, ' ')).toContain(
       '150,00 € validés · 1 sans rapport',
     );
+    // Only the shifts without a report are amber, not the money beside them (EQ-14).
+    expect(text(summary?.querySelector('.rp-member__late') ?? null)).toBe(' · 1 sans rapport');
     expect(screen.getByText(/16 – 31 octobre 2026/u)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Quinzaine suivante' }).matches(':disabled')).toBe(true);
 
@@ -383,6 +391,42 @@ describe('Équipe › Rapports', () => {
     expect(await within(dialog).findByText('Pas encore de règles de paie')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: 'Poser les règles' })).toBeTruthy();
     expect(dialog.textContent).not.toContain('Préviens l’agence');
+  });
+
+  it('says the shifts without a report at a glance, oldest first, and copies a word to send (EQ-14, EQ-15)', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (value: string) => {
+          copied.push(value);
+          return Promise.resolve();
+        },
+      },
+    });
+    renderPage();
+    const late = (await screen.findByText('3 shifts sans rapport')).closest('details');
+    if (!(late instanceof HTMLDetailsElement)) throw new Error('no late fold');
+    expect(text(late.querySelector('summary'))).toContain('le plus ancien depuis 3 jours');
+    const rows = [...late.querySelectorAll('.rp-late__one')].map((row) => text(row));
+    expect(rows[0]).toMatch(/^Basilesam\. 24 oct\./u);
+    expect(rows[1]).toMatch(/^Théodim\. 25 oct\./u);
+    expect(rows[2]).toMatch(/^Basilelun\. 26 oct\./u);
+    fireEvent.click(within(late).getAllByRole('button', { name: 'Relancer Basile' })[0] ?? late);
+    await within(late).findByRole('button', { name: 'Message copié pour Basile' });
+    expect(copied[0]).toMatch(
+      /^Basile, ton rapport du sam\. 24 oct\. · 18\sh – 0\sh \(Nora Vidal\) n’est pas encore fait\. Fais-le dans Nirvana dès que tu peux\.$/u,
+    );
+  });
+
+  it('opens the fold of the member asked from his record or a shift (EQ-11, EQ-13)', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    renderPage(THEO);
+    const theo = await screen.findByText('Théo', { selector: '.nv-disclosure__title' });
+    const basile = screen.getByText('Basile', { selector: '.nv-disclosure__title' });
+    expect(theo.closest('details')?.open).toBe(true);
+    expect(basile.closest('details')?.open).toBe(false);
   });
 
   it('opens a refused correction again here, its member named, wherever the reader went since', async () => {

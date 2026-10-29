@@ -246,6 +246,17 @@ describe('Équipe › Membres', () => {
     expect(within(sheet).getByText(/Confirmé · depuis le/u)).toBeDefined();
     expect(within(sheet).getByText('Léa')).toBeDefined();
     expect(within(sheet).getByText('Lues par toi et les managers, jamais par Théo.')).toBeDefined();
+    // Where his work is, from his record (EQ-11).
+    const work = within(sheet).getByRole('navigation', { name: 'Le travail de Théo' });
+    expect(
+      within(work)
+        .getAllByRole('link')
+        .map((link) => [link.textContent, link.getAttribute('href')]),
+    ).toEqual([
+      ['Ses shifts', `/equipe/planning?membre=${THEO.id}`],
+      ['Ses rapports', `/equipe/rapports?membre=${THEO.id}`],
+      ['Son relevé', `/paie/quinzaine?membre=${THEO.id}`],
+    ]);
     fireEvent.click(within(sheet).getByRole('button', { name: 'Fermer la fiche' }));
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Théo' })).toBeNull();
@@ -570,8 +581,8 @@ describe('changing a member once added (EQ-10)', () => {
     fireEvent.click(within(panel).getByRole('radio', { name: 'Suspendu' }));
     expect(panel.textContent).toContain('Théo garde sa connexion et ne voit plus que ses propres shifts');
     const left = await within(panel).findByText(/2 shifts à venir restent au planning/u);
-    expect(within(left).getByRole('link', { name: 'Voir le planning' }).getAttribute('href')).toBe(
-      '/equipe/planning',
+    expect(within(left).getByRole('link', { name: 'Voir ses shifts' }).getAttribute('href')).toBe(
+      `/equipe/planning?membre=${THEO.id}`,
     );
     // Gone, the same count sits in the confirmation, beside what Nirvana does not do yet.
     fireEvent.click(within(panel).getByRole('radio', { name: 'Parti' }));
@@ -592,7 +603,7 @@ describe('changing a member once added (EQ-10)', () => {
       { timeout: 4_000 },
     );
     expect(within(unread).getByRole('link', { name: 'Vérifier au planning' }).getAttribute('href')).toBe(
-      '/equipe/planning',
+      `/equipe/planning?membre=${THEO.id}`,
     );
   });
 

@@ -138,6 +138,19 @@
   justify-content: space-between;
   gap: var(--nv-space-3) var(--nv-space-4);
 }
+/* « Ses shifts » (EQ-11): whose shifts stand out, and the way back to the whole team. */
+.sc-focus {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  color: var(--nv-ink-muted);
+}
+.sc-focus b {
+  color: var(--nv-ink);
+  font-weight: 650;
+}
 .sc-filters {
   display: flex;
   flex-wrap: wrap;
@@ -429,6 +442,10 @@ button.sc-duty__one:active {
 }
 .sc-chip[data-phase='past'] {
   opacity: 0.58;
+}
+/* Another member's shift while one member's stand out (« Ses shifts », EQ-11). */
+.sc-chip[data-muted='true'] {
+  opacity: 0.35;
 }
 .sc-chip[data-phase='live'] {
   box-shadow:

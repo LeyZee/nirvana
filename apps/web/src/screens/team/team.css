@@ -883,6 +883,11 @@
 }
 
 /* The owner's gestures on a member once added (EQ-10): one row under the head. */
+.tm-sheet__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nv-space-2);
+}
 .tm-sheet__actions {
   display: flex;
   flex-wrap: wrap;
