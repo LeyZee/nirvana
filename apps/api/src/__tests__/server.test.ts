@@ -191,6 +191,22 @@ describe('error format (api.md)', () => {
     expect(response.json<{ error: { code: string } }>().error.code).toBe('route_not_found');
   });
 
+  it('answers a known path asked with another method with 405 and Allow', async () => {
+    const app = await server();
+    const deleted = await app.inject({ method: 'DELETE', url: '/v1/probe', headers: ORIGIN });
+    expect(deleted.statusCode).toBe(405);
+    expect(deleted.headers.allow).toBe('POST');
+    expect(deleted.json<{ error: { code: string } }>().error.code).toBe('method_not_allowed');
+    const posted = await app.inject({ method: 'POST', url: '/v1/missing?x=1', headers: ORIGIN });
+    expect([posted.statusCode, posted.headers.allow]).toEqual([405, 'GET, HEAD']);
+    // An unknown path stays a 404, whatever the method, preflight route or not.
+    const unknown = await app.inject({ method: 'PATCH', url: '/v1/nothing-here', headers: ORIGIN });
+    expect([unknown.statusCode, unknown.json<{ error: { code: string } }>().error.code]).toEqual([
+      404,
+      'route_not_found',
+    ]);
+  });
+
   it('maps the code suffixes to their status', () => {
     expect(statusForCode('fan_not_found')).toBe(404);
     expect(statusForCode('price_invalid')).toBe(400);
@@ -233,6 +249,10 @@ describe('HTTP protections (security.md §6)', () => {
       'http://localhost:5173',
     );
     expect((await preflight('https://evil.example')).headers['access-control-allow-origin']).toBeUndefined();
+    // Every method the API uses, not only CORS's default GET, HEAD and POST.
+    expect((await preflight('http://localhost:5173')).headers['access-control-allow-methods']).toBe(
+      'GET, HEAD, POST, PUT, PATCH, DELETE',
+    );
   });
 
   it('rate-limits per IP with the common error body', async () => {

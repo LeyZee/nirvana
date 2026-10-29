@@ -47,6 +47,19 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const BODY_LIMIT_BYTES = 1_048_576;
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/** Every method CORS lets the dashboard send (security.md §6); `OPTIONS` is the preflight itself. */
+const CORS_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+/** A route's path as a pattern: a `:param` segment takes any one segment, a `*` the rest of the path. */
+function pathPattern(url: string): RegExp {
+  const segments = url.split('/').map((segment) => {
+    if (segment === '*') return '.*';
+    if (segment.includes(':')) return '[^/]+';
+    return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  });
+  return new RegExp(`^${segments.join('/')}$`);
+}
+
 /** Reuses the caller's `x-request-id` when it is sane (it ends up in logs), otherwise a fresh one. */
 function requestIdFor(request: { headers: Record<string, string | string[] | undefined> }): string {
   const header = request.headers['x-request-id'];
@@ -114,7 +127,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   });
 
   await server.register(helmet);
-  await server.register(cors, { origin: [config.WEB_ORIGIN], credentials: true });
+  await server.register(cors, { origin: [config.WEB_ORIGIN], credentials: true, methods: CORS_METHODS });
   await server.register(rateLimit, {
     max: config.RATE_LIMIT_PER_MINUTE,
     timeWindow: '1 minute',
@@ -171,9 +184,27 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     return reply.code(500).send(errorBody(request, 'internal_error', 'Erreur interne'));
   });
 
-  server.setNotFoundHandler((request, reply) =>
-    reply.code(404).send(errorBody(request, 'route_not_found', 'Route introuvable')),
-  );
+  // The methods each path answers, so a known path asked with another method gets 405 and `Allow`, not 404. The
+  // preflight (`OPTIONS`, a wildcard route of the CORS plugin) is left out: it would match every path.
+  const routeMethods: { readonly pattern: RegExp; readonly methods: readonly string[] }[] = [];
+  server.addHook('onRoute', (route) => {
+    const methods = [route.method].flat().filter((method) => method !== 'OPTIONS');
+    if (methods.length > 0) routeMethods.push({ pattern: pathPattern(route.url), methods });
+  });
+  server.setNotFoundHandler((request, reply) => {
+    const path = request.url.split('?')[0] ?? request.url;
+    const allowed = new Set(
+      routeMethods.filter((route) => route.pattern.test(path)).flatMap((route) => route.methods),
+    );
+    if (allowed.size === 0) {
+      return reply.code(404).send(errorBody(request, 'route_not_found', 'Route introuvable'));
+    }
+    if (allowed.has('GET')) allowed.add('HEAD');
+    return reply
+      .code(405)
+      .header('allow', [...allowed].sort().join(', '))
+      .send(errorBody(request, 'method_not_allowed', 'Méthode non prévue sur cette route'));
+  });
 
   // Outside `/v1` (api.md): liveness and readiness, for Coolify and the uptime check.
   server.get('/health', { config: { rateLimit: false } }, () => ({ status: 'ok' }));
