@@ -423,6 +423,31 @@ describe('database (RLS, constraints, migrations)', () => {
     ).toMatch(/conversations_state_check/);
   });
 
+  it('refuses a price below zero on a message or a media send, and takes a free one', async () => {
+    const message = (platformMessageId: string, priceMinor: number) =>
+      withTenant(test.app.db, a.creatorId, (tx) =>
+        tx.insert(s.messages).values({
+          id: newId(MessageIdSchema),
+          creatorId: a.creatorId,
+          platformAccountId: a.accountId,
+          conversationId: a.conversationId,
+          platformMessageId,
+          direction: 'outbound',
+          author: 'human',
+          priceMinor,
+          currency: 'EUR',
+          platformCreatedAt: at,
+        }),
+      );
+    expect(await failure(message('msg-price-below-zero', -1))).toMatch(/messages_price_minor_check/);
+    await message('msg-price-free', 0);
+    expect(
+      await failure(
+        withTenant(test.app.db, a.creatorId, (tx) => tx.update(s.mediaSends).set({ priceMinor: -1500 })),
+      ),
+    ).toMatch(/media_sends_price_minor_check/);
+  });
+
   it('migrating again changes nothing', async () => {
     await runMigrations(test.admin.db);
     const applied = await test.admin.db.execute(

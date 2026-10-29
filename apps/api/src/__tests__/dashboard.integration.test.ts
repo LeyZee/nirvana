@@ -547,7 +547,7 @@ describe('GET /v1/dashboard', () => {
     expect((await read(creatorCookie)).usdSales).toEqual({ seen: false, rate: null });
   });
 
-  it('leaves out a paid message whose price is not positive, without failing (recette 28/10, #296)', async () => {
+  it('leaves out a paid message at a zero price, a negative one refused by the base (recette 28/10, #296)', async () => {
     const leo = conversations.get('Leo')!;
     const sale = (id: string, priceMinor: number, currency: 'EUR' | 'USD') =>
       test.admin.db.insert(schema.messages).values({
@@ -574,9 +574,12 @@ describe('GET /v1/dashboard', () => {
         fetchedAt: new Date(),
       })
       .onConflictDoNothing();
-    // Nothing in the base forbids it: a negative or zero price never counts, and never fails the Dashboard.
+    // A negative price is refused by the base (migration 0036); a zero price is allowed and never counts.
     await sale('paid-leo-eur', 1_000, 'EUR');
-    await sale('paid-leo-usd-negative', -5_000, 'USD');
+    await expect(sale('paid-leo-usd-negative', -5_000, 'USD')).rejects.toHaveProperty(
+      'cause.constraint',
+      'messages_price_minor_check',
+    );
     await sale('paid-leo-eur-zero', 0, 'EUR');
     const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
     expect(response.statusCode).toBe(200);
