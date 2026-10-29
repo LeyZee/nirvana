@@ -342,4 +342,38 @@ describe('alerts (P4-01, /v1/alerts)', () => {
       'Rendez-vous',
     ]);
   });
+
+  it('writes and audits once the same alert posted five times at once, the replays unaudited (recette 28/10)', async () => {
+    const lea = await app.modules.persona.creators.create({ displayName: 'Léa N.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const groupId = newId(CustomAlertGroupIdSchema);
+    const payload = {
+      groupId,
+      name: 'Double envoi',
+      phrase: null,
+      keywords: ['double'],
+      pausesAgent: false,
+      notify: false,
+      creators: [{ creatorId: lea.id, enabled: true }],
+    };
+    const answers = await Promise.all(
+      Array.from({ length: 5 }, () => payload).map((body) =>
+        server.inject({ method: 'POST', url: '/v1/alerts', headers: owner, payload: body }),
+      ),
+    );
+    // Without the writers' lock, four of them were created and audited, the fifth a 500.
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([200, 200, 200, 200, 201]);
+    const [first, ...replays] = answers.map((answer) => CustomAlertGroupSchema.parse(answer.json()));
+    for (const replay of replays) expect(replay).toEqual(first);
+    const audit = await test.admin.db
+      .select({ action: schema.auditLog.action })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.entityId, groupId));
+    expect(audit).toEqual([{ action: 'custom_alert.create' }]);
+    const rows = await test.admin.db
+      .select({ id: schema.customAlerts.id })
+      .from(schema.customAlerts)
+      .where(eq(schema.customAlerts.groupId, groupId));
+    expect(rows).toHaveLength(1);
+  });
 });
