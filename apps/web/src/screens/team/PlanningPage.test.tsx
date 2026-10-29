@@ -316,12 +316,15 @@ describe('Équipe › Planning', () => {
     serve();
     renderPage();
     const row = await screen.findByRole('row', { name: /Nora Vidal/u }, { timeout: 4_000 });
-    // Wednesday 28, 1 h in Paris: Théo's night covers Tuesday's evening and Wednesday's night; 3 + 4 × 4 are ahead.
-    expect(text(document.querySelector('.sc-grid__corner'))).toBe('1 shift · 6 h · 19 créneaux à pourvoir');
+    // Wednesday 28, 1 h in Paris: Théo's night ends at 5 h, so Wednesday's night is left to fill from 5 h to 6 h;
+    // 4 + 4 × 4 are ahead.
+    expect(text(document.querySelector('.sc-grid__corner'))).toBe('1 shift · 6 h · 20 créneaux à pourvoir');
     const cells = within(row).getAllByRole('cell');
     const fills = (index: number): HTMLElement[] =>
       within(cells[index] ?? row).queryAllByRole('button', { name: /^À pourvoir/u });
-    expect([0, 1, 2, 3, 4, 5, 6].map((index) => fills(index).length)).toEqual([0, 0, 3, 4, 4, 4, 4]);
+    expect([0, 1, 2, 3, 4, 5, 6].map((index) => fills(index).length)).toEqual([0, 0, 4, 4, 4, 4, 4]);
+    // A créneau covered in part says the part with nobody (Équipe's review of #317).
+    expect(fills(2)[0]?.getAttribute('aria-label')).toMatch(/^À pourvoir : 5\sh – 6\sh, le mercredi 28/u);
     // A créneau gone by with nobody is grey, with nothing to press.
     expect(cells[0]?.querySelectorAll('.sc-slot__gone')).toHaveLength(4);
     // Every day holds its four créneaux in the same order, the shift in the evening one.
@@ -488,6 +491,25 @@ describe('Équipe › Planning', () => {
     fireEvent.click(within(decide).getByRole('button', { name: 'Voir le shift' }));
     const flagged = await screen.findAllByRole('button', { name: /pendant un congé à valider$/u });
     expect(flagged.map((chip) => chip.getAttribute('data-flagged'))).toEqual(flagged.map(() => 'true'));
+  });
+
+  it('counts the shifts to give as the server does: a shift of the leave already over is not one (EQ-16)', async () => {
+    // A leave from Monday 26, still to decide on Wednesday: Monday's shift is done, Tuesday's night is under way.
+    const monday = {
+      ...night,
+      id: id(106),
+      startsAt: '2026-10-26T05:00:00Z',
+      endsAt: '2026-10-26T11:00:00Z',
+    };
+    serve({
+      planning: planning([], [monday, night]),
+      leaves: [leave({ firstDay: '2026-10-26', startsAt: '2026-10-25T23:00:00Z' })],
+    });
+    renderPage();
+    const decide = await decideFold();
+    await waitFor(() => {
+      expect(text(decide)).toContain('1 shift à donner avant de valider');
+    });
   });
 
   it('takes « Voir le shift » to the first shift in the way, whatever its week and filter, while the leave waits', async () => {

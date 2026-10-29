@@ -359,50 +359,94 @@ export function gridOf(planning: Planning, days: readonly string[], timeZone: st
 /** Past this many créneaux a day (slots under four hours), the cells stack their shifts instead of lining them up. */
 export const LINED_SLOTS_MAX = 6;
 
-/** One créneau of one day on one account (EQ-01): the shifts that start in it, and whether any shift covers it. */
+/** One créneau of one day on one account (EQ-01): the shifts that start in it, and what of it is left to fill. */
 export interface SlotCell {
   readonly slot: ShiftSlot;
+  /** Its first and last instants, read at the agency's: a créneau over a change of time is an hour shorter or longer. */
   readonly from: Date;
   readonly to: Date;
   readonly chips: readonly Chip[];
   /** A shift of the account overlaps it, whether it starts in it or earlier (a long shift covers the next one). */
   readonly covered: boolean;
+  /**
+   * The first stretch of it still ahead with nobody on the account, from now at the minute for the créneau under way;
+   * `null` when nothing of it is left to fill. A shift stopped under way, or a short one, leaves one.
+   */
+  readonly open: { readonly from: Date; readonly to: Date } | null;
 }
 
 /**
- * A day of one account cut into the agency's créneaux, so that one créneau sits at the same height all week and an
- * empty one shows. A shift goes to the créneau it starts in, by the hour of the agency; one carried over from the week
- * before goes to the first. `null` when the créneaux are too many to line up.
+ * The days of one account cut into the agency's créneaux, so that one créneau sits at the same height all week and a
+ * stretch with nobody shows. A day of créneaux begins at the first one: a shift goes to the créneau that holds its
+ * start, so one at 2 h belongs to the night before when the créneaux begin at 5 h. One that starts before the
+ * week's first créneau (carried over, or early on Monday) goes to it. `null` when the créneaux are too many to line
+ * up.
  */
-export function slotCellsOf(
-  chips: readonly Chip[],
+export function slotRowOf(
+  row: GridRow,
   shifts: readonly Pick<Shift, 'startsAt' | 'endsAt'>[],
-  day: string,
+  days: readonly string[],
   settings: Pick<SchedulingSettings, 'timeZone' | 'slotStartMinute' | 'slotLengthMinutes'>,
-): SlotCell[] | null {
+  now: Date,
+): ReadonlyMap<string, readonly SlotCell[]> | null {
   const slots = shiftSlotsOf(settings);
   if (slots.length > LINED_SLOTS_MAX) return null;
   const length = settings.slotLengthMinutes;
-  const indexOf = (chip: Chip): number => {
-    if (chip.continued) return 0;
-    const minute = minuteOf(chip.shift.startsAt, settings.timeZone);
-    return Math.floor(((minute - settings.slotStartMinute + 1440) % 1440) / length);
-  };
-  return slots.map((slot, index) => {
-    const from = zonedInstant(day, settings.slotStartMinute + index * length, settings.timeZone);
-    const to = new Date(from.getTime() + length * 60_000);
-    return {
+  const zone = settings.timeZone;
+  // Both ends are wall-clock minutes of the agency, so the créneaux of a week follow each other without a gap.
+  const windows = days.flatMap((day) =>
+    slots.map((slot, index) => ({
+      day,
       slot,
-      from,
-      to,
-      chips: chips.filter((chip) => indexOf(chip) === index),
-      covered: shifts.some(
-        (shift) =>
-          new Date(shift.startsAt).getTime() < to.getTime() &&
-          new Date(shift.endsAt).getTime() > from.getTime(),
-      ),
+      from: zonedInstant(day, settings.slotStartMinute + index * length, zone),
+      to: zonedInstant(day, settings.slotStartMinute + (index + 1) * length, zone),
+    })),
+  );
+  const placed = windows.map((): Chip[] => []);
+  for (const chips of row.days.values()) {
+    for (const chip of chips) {
+      const start = new Date(chip.shift.startsAt).getTime();
+      const at = windows.findIndex((window) => window.from.getTime() <= start && start < window.to.getTime());
+      placed[at === -1 ? (start < (windows[0]?.from.getTime() ?? 0) ? 0 : windows.length - 1) : at]?.push(
+        chip,
+      );
+    }
+  }
+  const spans = shifts
+    .map((shift) => ({ from: new Date(shift.startsAt).getTime(), to: new Date(shift.endsAt).getTime() }))
+    .sort((a, b) => a.from - b.from);
+  const ahead = Math.ceil(now.getTime() / 60_000) * 60_000;
+  const cells = windows.map((window, index): SlotCell => {
+    const from = window.from.getTime();
+    const to = window.to.getTime();
+    return {
+      slot: window.slot,
+      from: window.from,
+      to: window.to,
+      chips: placed[index] ?? [],
+      covered: spans.some((span) => span.from < to && span.to > from),
+      open: gapIn(Math.max(from, ahead), to, spans),
     };
   });
+  return new Map(
+    days.map((day, index) => [day, cells.slice(index * slots.length, (index + 1) * slots.length)]),
+  );
+}
+
+/** The first stretch of [from, to) that no span covers, or `null`; `spans` sorted by start. */
+function gapIn(
+  from: number,
+  to: number,
+  spans: readonly { readonly from: number; readonly to: number }[],
+): { from: Date; to: Date } | null {
+  let at = from;
+  for (const span of spans) {
+    if (at >= to) return null;
+    if (span.to <= at) continue;
+    if (span.from > at) return { from: new Date(at), to: new Date(Math.min(span.from, to)) };
+    at = span.to;
+  }
+  return at < to ? { from: new Date(at), to: new Date(to) } : null;
 }
 
 /** « Lun. 26 · 23 h – 5 h · Théo est déjà sur un autre shift »: one occurrence a template could not place. */
@@ -410,6 +454,8 @@ export interface ConflictLine {
   readonly key: string;
   readonly when: string;
   readonly what: string;
+  /** The account is left with nobody (on leave, busy elsewhere), or it already has someone: a double, not a gap. */
+  readonly toFill: boolean;
   /** The shift in the way, to open it; none when the member is on leave (ADR 0031). */
   readonly shiftId: string | null;
   /** A shift to fill, when the member is on leave: its account and hours at the agency's, and who is away. */
@@ -447,6 +493,7 @@ export function conflictLines(
         key: `${conflict.templateId}-${conflict.startsAt}`,
         when: `${shortDay(dayOf(conflict.startsAt, timeZone))} · ${rangeAt(conflict.startsAt, conflict.endsAt, timeZone)}${where}`,
         what: what.charAt(0).toUpperCase() + what.slice(1),
+        toFill: conflict.reason !== 'account_taken',
         shiftId: conflict.reason === 'member_on_leave' ? null : conflict.shiftId,
         fill:
           conflict.reason !== 'member_on_leave' || template === undefined
@@ -461,6 +508,22 @@ export function conflictLines(
               },
       };
     });
+}
+
+/**
+ * The title over the template lines: only an account left with nobody is « à pourvoir »; one that already has someone
+ * is a double to sort out (« 1 shift à pourvoir · 1 en double »).
+ */
+export function conflictTitle(lines: readonly Pick<ConflictLine, 'toFill'>[]): string {
+  const fill = lines.filter((line) => line.toFill).length;
+  const double = lines.length - fill;
+  const shifts = (count: number): string => (count === 1 ? '1 shift' : `${String(count)} shifts`);
+  return [
+    fill === 0 ? null : `${shifts(fill)} à pourvoir`,
+    double === 0 ? null : fill === 0 ? `${shifts(double)} en double` : `${String(double)} en double`,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
 }
 
 function whatOf(

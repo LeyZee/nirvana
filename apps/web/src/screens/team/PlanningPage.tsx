@@ -17,9 +17,10 @@ import '@/scheduling/exchanges.css';
 import {
   accountLine,
   conflictLines,
+  conflictTitle,
   gridOf,
   phaseOf,
-  slotCellsOf,
+  slotRowOf,
   type Chip,
   type Fill,
   type GridRow,
@@ -30,10 +31,10 @@ import {
   addDays,
   cityOf,
   clockAt,
-  clockOf,
   dayOf,
   lengthOf,
   longDay,
+  minuteOf,
   mondayOf,
   rangeAt,
   readerZone,
@@ -522,7 +523,7 @@ function Conflicts({
   return (
     <section className="nv-plate sc-conflicts nv-swap" role="status" aria-labelledby="sc-conflicts-title">
       <h2 id="sc-conflicts-title" className="sc-conflicts__title">
-        {lines.length === 1 ? '1 shift à pourvoir' : `${String(lines.length)} shifts à pourvoir`}
+        {conflictTitle(lines)}
       </h2>
       <ul className="sc-conflicts__list">
         {lines.map((line) => {
@@ -617,25 +618,23 @@ function Grid({
   );
   // The créneaux are the agency's: they line up at its hour, not at another one (EQ-01).
   const lined = zone === planning.settings.timeZone;
-  const slotted = rows.map((row) => {
-    const shifts = planning.shifts.filter((shift) => shift.platformAccountId === row.account.id);
-    return new Map(
-      days.map((day) => [
-        day,
-        lined ? slotCellsOf(row.days.get(day) ?? [], shifts, day, planning.settings) : null,
-      ]),
-    );
-  });
+  const slotted = rows.map((row) =>
+    lined
+      ? slotRowOf(
+          row,
+          planning.shifts.filter((shift) => shift.platformAccountId === row.account.id),
+          days,
+          planning.settings,
+          now,
+        )
+      : null,
+  );
   const toFill = slotted.reduce(
     (sum, cells) =>
-      sum +
-      [...cells.values()].reduce(
-        (inDay, slots) => inDay + (slots ?? []).filter((slot) => openSlot(slot, now)).length,
-        0,
-      ),
+      sum + [...(cells?.values() ?? [])].reduce((inDay, slots) => inDay + slots.filter(isOpen).length, 0),
     0,
   );
-  const slotCount = lined ? (slotCellsOf([], [], days[0] ?? today, planning.settings)?.length ?? 0) : 0;
+  const slotCount = slotted.find((cells) => cells !== null)?.get(days[0] ?? today)?.length ?? 0;
   const marked = {
     repeat: week.some((shift) => shift.templateId !== null),
     incident: week.some((shift) => incidents.has(shift.id)),
@@ -711,6 +710,7 @@ function Grid({
                 day={day}
                 chips={row.days.get(day) ?? []}
                 slots={slotted[rowIndex]?.get(day) ?? null}
+                agency={planning.settings.timeZone}
                 accountId={row.account.id}
                 where={`${row.account.creatorName}, ${accountLine(row.account)}`}
                 today={day === today}
@@ -748,14 +748,14 @@ function Grid({
   );
 }
 
-/** An empty créneau still ahead: a dashed amber « À pourvoir » that opens the new-shift panel on it. */
-const openSlot = (slot: SlotCell, now: Date): boolean =>
-  slot.chips.length === 0 && !slot.covered && slot.from.getTime() > now.getTime();
+/** A créneau with a stretch ahead and nobody on it: a dashed amber « À pourvoir » that opens a shift on that stretch. */
+const isOpen = (slot: SlotCell): boolean => slot.open !== null;
 
 function Cell({
   day,
   chips,
   slots,
+  agency,
   accountId,
   where,
   today,
@@ -772,6 +772,8 @@ function Cell({
   chips: readonly Chip[];
   /** The day cut into the agency's créneaux, `null` when they do not line up (another hour, too many créneaux). */
   slots: readonly SlotCell[] | null;
+  /** The agency's zone: the hours a new shift is made in. */
+  agency: string;
   accountId: string;
   /** The creator and the account (« Nora Vidal, @nora sur Reveal »): two accounts of hers never read the same. */
   where: string;
@@ -806,24 +808,20 @@ function Cell({
     >
       {slots === null
         ? chips.map(chipOf)
-        : slots.map((slot, index) => (
+        : slots.map((slot) => (
             <div key={slot.slot.startMinute} className="sc-slot">
               {slot.chips.map(chipOf)}
-              {openSlot(slot, now) ? (
-                <button
-                  type="button"
-                  className="sc-slot__fill"
-                  aria-label={`À pourvoir : ${clockOf(slot.slot.startMinute)} – ${clockOf(slot.slot.endMinute)}, le ${longDay(day)} sur ${where}`}
-                  onClick={() => {
-                    onAdd({ accountId, day, slot: index });
+              {slot.open !== null ? (
+                <OpenStretch
+                  open={slot.open}
+                  agency={agency}
+                  zone={zone}
+                  where={where}
+                  onAdd={(hours) => {
+                    onAdd({ accountId, ...hours });
                   }}
-                >
-                  <span className="sc-slot__label">À pourvoir</span>
-                  <span className="sc-slot__hours nv-num">
-                    {clockOf(slot.slot.startMinute)} – {clockOf(slot.slot.endMinute)}
-                  </span>
-                </button>
-              ) : slot.chips.length === 0 && !slot.covered ? (
+                />
+              ) : slot.chips.length === 0 && !slot.covered && slot.to.getTime() <= now.getTime() ? (
                 // A créneau gone by with nobody: left grey, nothing to do about it now.
                 <span className="sc-slot__gone" aria-hidden="true" />
               ) : null}
@@ -844,6 +842,42 @@ function Cell({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * « À pourvoir » on what is left of a créneau with nobody: its hours, from now at the minute for the créneau under way,
+ * and the new-shift panel opens on them.
+ */
+function OpenStretch({
+  open,
+  agency,
+  zone,
+  where,
+  onAdd,
+}: {
+  open: { readonly from: Date; readonly to: Date };
+  agency: string;
+  zone: string;
+  where: string;
+  onAdd: (hours: Pick<ShiftStart, 'day' | 'hours'>) => void;
+}): JSX.Element {
+  const hours = rangeAt(open.from.toISOString(), open.to.toISOString(), zone);
+  return (
+    <button
+      type="button"
+      className="sc-slot__fill"
+      aria-label={`À pourvoir : ${hours}, le ${longDay(dayOf(open.from, zone))} sur ${where}`}
+      onClick={() => {
+        onAdd({
+          day: dayOf(open.from, agency),
+          hours: { startMinute: minuteOf(open.from, agency), endMinute: minuteOf(open.to, agency) },
+        });
+      }}
+    >
+      <span className="sc-slot__label">À pourvoir</span>
+      <span className="sc-slot__hours nv-num">{hours}</span>
+    </button>
   );
 }
 

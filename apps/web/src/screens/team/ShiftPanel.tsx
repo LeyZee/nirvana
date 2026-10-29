@@ -40,14 +40,14 @@ function firstSlotOf(
 }
 
 /**
- * Where the panel opens: from « Ajouter un shift », from the + of one day on one account, from an empty créneau
- * (« À pourvoir », its index in the day), or from « Pourvoir » on a shift a template could not place because its
- * member is on leave (its hours, and someone else than that member).
+ * Where the panel opens: from « Ajouter un shift », from the + of one day on one account, from what is left of a
+ * créneau with nobody (« À pourvoir », its hours at the agency's), or from « Pourvoir » on a shift a template could not
+ * place because its member is on leave (its hours, and someone else than that member).
  */
 export interface ShiftStart {
   readonly accountId: string | null;
   readonly day: string;
-  readonly slot?: number;
+  readonly hours?: { readonly startMinute: number; readonly endMinute: number };
   readonly fill?: Fill;
 }
 
@@ -94,24 +94,23 @@ export function ShiftPanel({
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
   const [memberId, setMemberId] = useState('');
   const chosen = eligible.find((member) => member.id === memberId) ?? eligible[0] ?? null;
-  // The first slot still ahead: today's evening rather than a night already gone, else tomorrow's first. A shift to
-  // fill keeps its own day and hours: one of the slots when they match, else the hours typed in.
+  // The first slot still ahead: today's evening rather than a night already gone, else tomorrow's first. A stretch
+  // to fill, or a shift to fill, keeps its own day and hours: one of the slots when they match, else the hours typed.
+  const given = fill ?? start.hours;
   const [first] = useState(() =>
-    fill === undefined
-      ? start.slot === undefined
-        ? firstSlotOf(start.day < today ? today : start.day, today, slots, zone)
-        : { day: start.day, slot: start.slot }
+    given === undefined
+      ? firstSlotOf(start.day < today ? today : start.day, today, slots, zone)
       : {
-          day: fill.day,
+          day: fill?.day ?? start.day,
           slot: slots.findIndex(
-            (one) => one.startMinute === fill.startMinute && one.endMinute === fill.endMinute,
+            (one) => one.startMinute === given.startMinute && one.endMinute === given.endMinute,
           ),
         },
   );
   const [day, setDay] = useState(first.day);
   const [slot, setSlot] = useState<number | 'other'>(first.slot === -1 ? 'other' : first.slot);
-  const [from, setFrom] = useState(inputOf(fill?.startMinute ?? slots[first.slot]?.startMinute ?? 0));
-  const [to, setTo] = useState(inputOf(fill?.endMinute ?? slots[first.slot]?.endMinute ?? 360));
+  const [from, setFrom] = useState(inputOf(given?.startMinute ?? slots[first.slot]?.startMinute ?? 0));
+  const [to, setTo] = useState(inputOf(given?.endMinute ?? slots[first.slot]?.endMinute ?? 360));
   const [weekly, setWeekly] = useState(false);
   const times = useUnreadableTimes();
   const [busy, setBusy] = useState(false);

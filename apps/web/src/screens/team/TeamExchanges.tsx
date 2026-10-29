@@ -19,6 +19,7 @@ import {
   swapViewOf,
 } from '@/scheduling/model';
 import { dayOf } from '@/scheduling/time';
+import { useNow } from '@/scheduling/useNow';
 import { namesOf, SwapBody } from '@/screens/planning/Exchanges';
 
 /**
@@ -151,13 +152,18 @@ function PendingLeave({
   // The planning of the leave's days (a leave lasts up to 31 days): the member's shifts still in it are said before
   // Valider, and when they start once the server named them.
   const located = usePlanning({ from: leave.startsAt, to: leave.endsAt, creatorId: null });
+  const now = useNow();
   const found = (located.data?.shifts ?? [])
     .filter((shift) => inTheWay.includes(shift.id))
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  // Counted as the server refuses them: the member's shifts in the leave that are not over yet (EQ-16).
   const toGive = (located.data?.shifts ?? [])
     .filter(
       (shift) =>
-        shift.memberId === leave.memberId && shift.startsAt < leave.endsAt && shift.endsAt > leave.startsAt,
+        shift.memberId === leave.memberId &&
+        shift.startsAt < leave.endsAt &&
+        shift.endsAt > leave.startsAt &&
+        new Date(shift.endsAt).getTime() > now.getTime(),
     )
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
