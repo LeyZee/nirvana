@@ -67,16 +67,13 @@ describe('lastMessageAgo', () => {
 });
 
 describe('subline, sharedMode and statusClass', () => {
-  it('says when he last wrote, with the mode only when the lines do not share one', () => {
-    expect(subline(conversation('1'), NOW, false)).toEqual({
-      mode: null,
-      text: 'N’a pas encore écrit',
-      band: null,
-    });
+  it('says when he last wrote in a few words, never the mode', () => {
+    expect(subline(conversation('1'), NOW)).toEqual({ text: 'Pas encore écrit', band: null });
     const auto = conversation('2', { mode: 'auto', lastInboundAt: '2026-10-17T20:55:00Z' });
-    expect(subline(auto, NOW, false).text).toBe('A écrit il y a 5 min');
-    // The mode comes apart: a narrow line cuts it first, never when he wrote.
-    expect(subline(auto, NOW, true)).toMatchObject({ mode: 'Automatique', text: 'a écrit il y a 5 min' });
+    expect(subline(auto, NOW)).toEqual({ text: 'Il y a 5 min', band: null });
+    expect(subline(conversation('3', { lastInboundAt: '2026-10-17T20:59:40Z' }), NOW).text).toBe(
+      'À l’instant',
+    );
   });
 
   it('finds the mode all lines share, or none', () => {
@@ -135,19 +132,13 @@ describe('bubblesFromText', () => {
 });
 
 describe('the desire score in the list (P3-12)', () => {
-  it('ends the subline with the band in a word once he has a score', () => {
-    expect(subline(conversation('1', { desire: { score: 45, band: 'playful' } }), NOW, false)).toEqual({
-      mode: null,
-      text: 'N’a pas encore écrit',
+  it('ends the subline with the band in a word when it says something, never « neutre »', () => {
+    expect(subline(conversation('1', { desire: { score: 45, band: 'playful' } }), NOW)).toEqual({
+      text: 'Pas encore écrit',
       band: 'joueur',
     });
-    expect(
-      subline(conversation('1', { mode: 'auto', desire: { score: 82, band: 'hot' } }), NOW, true),
-    ).toEqual({
-      mode: 'Automatique',
-      text: 'n’a pas encore écrit',
-      band: 'chaud',
-    });
+    expect(subline(conversation('1', { desire: { score: 82, band: 'hot' } }), NOW).band).toBe('chaud');
+    expect(subline(conversation('1', { desire: { score: 12, band: 'neutral' } }), NOW).band).toBeNull();
   });
 
   it('orders the hottest first, keeps the order of equal scores, and puts the unscored last', () => {

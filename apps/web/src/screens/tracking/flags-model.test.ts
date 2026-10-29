@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ageLine,
+  ageQuestion,
   ceilingProblem,
   centsOf,
   euros,
   flagError,
   flagsSummary,
   isBlocking,
+  needsAttention,
+  sheetSummary,
   switchDetail,
 } from './flags-model';
 
@@ -45,6 +48,46 @@ describe('the fan’s limits', () => {
   it('says whether his age is confirmed', () => {
     expect(ageLine({})).toBe('Pas encore confirmé : rien d’explicite tant qu’il ne l’est pas.');
     expect(ageLine({ ageConfirmedAt: '2026-10-21T10:00:00.000Z' })).toBe('Majeur, confirmé le 21 octobre.');
+  });
+
+  it('reads a disputed age as a suspected minor, never as an age nobody checked', () => {
+    const byAgent = { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'policy' as const } };
+    const byHuman = { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'human' as const } };
+    expect(ageLine(byAgent)).toBe(
+      'Contesté le 28 octobre : l’agent a relevé un signe de minorité. Rien d’explicite.',
+    );
+    expect(ageLine(byHuman)).toBe('Contesté le 28 octobre par un humain. Rien d’explicite.');
+    expect(flagsSummary({ ...byAgent, doNotContact: true })).toBe('Âge contesté · ne plus lui écrire');
+    expect(needsAttention(byAgent)).toBe(true);
+    expect(needsAttention({ fragile: true })).toBe(false);
+    expect(ageQuestion(byAgent)).toContain('Ça lève la contestation');
+    expect(ageQuestion({})).not.toContain('contestation');
+  });
+
+  it('folds the fan’s sheet to one line: what stops the agent or flags a minor first, then the rest', () => {
+    expect(
+      sheetSummary({
+        flags: {
+          ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'policy' },
+          doNotContact: true,
+          noExplicit: true,
+        },
+        toLearn: 7,
+        band: 'neutre',
+      }),
+    ).toEqual({
+      urgent: 'Âge contesté · Ne plus lui écrire',
+      rest: '1 limite · 7 à apprendre · désir neutre',
+    });
+    expect(sheetSummary({ flags: { spendingLimitMinor: 30000 }, toLearn: 0, band: 'chaud' })).toEqual({
+      urgent: null,
+      rest: '1 limite · désir chaud',
+    });
+    expect(sheetSummary({ flags: {}, toLearn: null, band: null })).toEqual({
+      urgent: null,
+      rest: 'Rien à signaler',
+    });
+    expect(sheetSummary({ flags: 'down', toLearn: null, band: null }).rest).toBe('limites non lues');
   });
 
   it('reads a ceiling typed in euros as cents, and refuses what is not an amount', () => {

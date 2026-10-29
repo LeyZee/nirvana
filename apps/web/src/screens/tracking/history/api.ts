@@ -143,9 +143,12 @@ export function useHistory(creatorIds: readonly string[], filter: HistoryFilter,
     combine: combineHistory,
   });
   const [shown, setShown] = useState<readonly CreatorTriggers[] | null>(null);
+  // A read over no creator (hers not loaded yet) is no history: kept, it would show « no alert yet » until the first
+  // real read answers, or for good while the server fails. Until then the page shows its skeleton.
+  const hasScope = creatorIds.length > 0;
   useEffect(() => {
-    if (!read.pending) setShown(read.lists);
-  }, [read.pending, read.lists]);
+    if (!read.pending && hasScope) setShown(read.lists);
+  }, [read.pending, read.lists, hasScope]);
   if (!read.pending || shown === null) return read;
   return { ...read, lists: shown, pending: false, stale: true };
 }

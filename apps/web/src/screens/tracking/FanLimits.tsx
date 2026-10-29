@@ -1,25 +1,39 @@
 import type { FanFlags, SetFanFlagBody } from '@nirvana/contracts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useState, type JSX } from 'react';
 
 import { FanFlagsRefused, fetchFanFlags, setFanFlag } from './api';
 import {
   ageLine,
+  ageQuestion,
   ceilingProblem,
   centsOf,
   euros,
   flagsSummary,
-  isBlocking,
+  isAgeDisputed,
   isOn,
+  needsAttention,
   SWITCHES,
   switchDetail,
   type SwitchFlag,
 } from './flags-model';
 
+const flagsKey = (creatorId: string, fanId: string): string[] => ['fan-flags', creatorId, fanId];
+
+/** His limits as the server reads them: one read, shared by the fan's sheet and its summary line. */
+export function useFanFlags(creatorId: string, fanId: string): UseQueryResult<FanFlags> {
+  return useQuery({
+    queryKey: flagsKey(creatorId, fanId),
+    queryFn: () => fetchFanFlags(creatorId, fanId),
+    retry: (count, failure) => !(failure instanceof FanFlagsRefused) && count < 3,
+  });
+}
+
 /**
  * The fan's limits (P3-02), read by the policy before any offer: folded to one line, amber when one stops the agent
- * from writing or selling. Owners and chatters set or lift them; a creator reads them. Confirming his age takes two
- * clicks, since it opens explicit content.
+ * from writing or selling, or when his age is disputed. Folded even then: the amber line says enough, and the thread
+ * comes first. Owners and chatters set or lift them; a creator reads them. Confirming his age takes two clicks, since
+ * it opens explicit content.
  */
 export function FanLimits({
   creatorId,
@@ -30,17 +44,11 @@ export function FanLimits({
   fanId: string;
   canDecide: boolean;
 }): JSX.Element {
-  const key = ['fan-flags', creatorId, fanId];
-  const query = useQuery({
-    queryKey: key,
-    queryFn: () => fetchFanFlags(creatorId, fanId),
-    retry: (count, failure) => !(failure instanceof FanFlagsRefused) && count < 3,
-  });
+  const key = flagsKey(creatorId, fanId);
+  const query = useFanFlags(creatorId, fanId);
   const client = useQueryClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Opened at first sight when a limit blocks, then left to the user: lifting the last one must not fold it away. */
-  const [open, setOpen] = useState<boolean | null>(null);
 
   const change = async (body: SetFanFlagBody): Promise<boolean> => {
     setPending(true);
@@ -53,19 +61,12 @@ export function FanLimits({
   };
 
   const flags = query.data;
-  const blocking = flags !== undefined && isBlocking(flags);
-  if (open === null && flags !== undefined) setOpen(blocking);
+  const warn = flags !== undefined && needsAttention(flags);
   return (
-    <details
-      className="tr-limits"
-      open={open ?? false}
-      onToggle={(event) => {
-        setOpen(event.currentTarget.open);
-      }}
-    >
+    <details className="tr-limits">
       <summary>
         <span className="tr-limits__title">Limites du fan</span>
-        <span className={`tr-limits__sum${blocking ? ' tr-warn' : ''}`}>
+        <span className={`tr-limits__sum${warn ? ' tr-warn' : ''}`}>
           {flags !== undefined
             ? flagsSummary(flags)
             : query.error instanceof FanFlagsRefused
@@ -160,12 +161,15 @@ interface RowProps {
 function Age({ flags, canDecide, pending, change }: RowProps): JSX.Element {
   const [asking, setAsking] = useState(false);
   const confirmed = flags.ageConfirmedAt !== undefined;
+  const disputed = isAgeDisputed(flags);
   return (
     <div className="tr-limit">
       <span className="tr-limit__text">
-        <span className="tr-limit__label">Âge confirmé</span>
-        <span className="tr-limit__hint">
-          {asking ? 'Tu as vérifié qu’il est majeur ? L’agent pourra devenir explicite.' : ageLine(flags)}
+        <span className={`tr-limit__label${disputed ? ' tr-warn' : ''}`}>
+          {disputed ? 'Âge contesté' : 'Âge confirmé'}
+        </span>
+        <span className={`tr-limit__hint${disputed && !asking ? ' tr-warn' : ''}`}>
+          {asking ? ageQuestion(flags) : ageLine(flags)}
         </span>
       </span>
       {!canDecide ? null : confirmed ? (
