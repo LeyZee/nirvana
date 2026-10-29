@@ -22,6 +22,9 @@ export type SheetMode =
 
 type Step = 1 | 2 | 3 | 4;
 
+/** The steps as the sheet's progress names them, as Sauvegardes names its own. */
+const STEP_TITLES: Record<Step, string> = { 1: 'Créer', 2: 'Jeton', 3: 'Groupe', 4: 'Messages' };
+
 const SHEET_TOPICS: readonly TelegramTopic[] = [
   'urgent',
   'important',
@@ -65,19 +68,25 @@ export function BotSheet({
         {mode.kind === 'replace' ? (
           <span />
         ) : (
-          <div
-            className="tg-steps"
-            aria-label={`Étape ${String(step - firstStep + 1)} sur ${String(lastStep - firstStep + 1)}`}
-          >
+          <ol className="tg-steps" aria-label="Étapes">
             {([1, 2, 3, 4] as const)
-              .filter((n) => n >= firstStep)
+              .filter((n) => n >= firstStep && n <= lastStep)
               .map((n) => (
-                <i key={n} data-state={n === step ? 'on' : n < step ? 'done' : 'later'} />
+                <li
+                  key={n}
+                  data-state={n === step ? 'now' : n < step ? 'done' : 'later'}
+                  aria-current={n === step ? 'step' : undefined}
+                >
+                  <span className="tg-steps__num">{String(n - firstStep + 1)}</span>
+                  {STEP_TITLES[n]}
+                </li>
               ))}
-          </div>
+          </ol>
         )}
-        <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" onClick={onClose}>
-          Fermer
+        <button type="button" className="tg-close" aria-label="Fermer" onClick={onClose}>
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="m4 4 8 8M12 4l-8 8" />
+          </svg>
         </button>
       </div>
       {step === 1 ? (

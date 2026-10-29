@@ -22,10 +22,10 @@ export interface TopicMeta {
 
 export const TOPICS: Record<TelegramTopic, TopicMeta> = {
   urgent: { label: 'Urgent', sub: 'Mineur, consentement, détresse, rencontre, manipulation' },
-  important: { label: 'Important', sub: 'Plafond IA, session expirée, agent arrêté, mot-clé' },
+  important: { label: 'Important', sub: 'Plafond IA, session expirée, agent arrêté' },
   info: { label: 'Info', sub: 'Bilan du matin, retour à la normale, sans son' },
   sale: { label: 'Ventes', sub: 'Un message sans son à chaque vente' },
-  keyword: { label: 'Mots-clés', sub: 'Un fan a écrit un mot surveillé' },
+  keyword: { label: 'Mots-clés', sub: 'Un fan a écrit un mot surveillé de la Persona' },
   validation: { label: 'Validations', sub: 'Vocaux et brouillons qui attendent' },
   custom: { label: 'Alertes personnalisées', sub: 'Les alertes que tu as écrites, quand elles sonnent' },
 };
@@ -33,6 +33,7 @@ export const TOPICS: Record<TelegramTopic, TopicMeta> = {
 export const ALERT_TOPICS = [
   'urgent',
   'important',
+  'keyword',
   'info',
   'custom',
 ] as const satisfies readonly TelegramTopic[];
@@ -113,8 +114,11 @@ function reachCount(
 }
 
 export interface Health {
+  /** Red is kept for urgent alerts that reach no one; a bot or a group in trouble is a warning (amber). */
   readonly tone: 'ok' | 'warn' | 'bad' | 'empty';
   readonly label: string;
+  /** The tab where the problem is fixed; the strip leads there. `null`: nothing to fix. */
+  readonly fix: 'bots' | 'alerts' | null;
   readonly botCount: number;
   readonly groupCount: number;
   readonly lastSentAt: string | null;
@@ -134,14 +138,23 @@ export function healthOf(overview: TelegramOverview): Health {
     groupCount: choices.filter((c) => c.isReachable).length,
     lastSentAt,
   };
-  if (overview.bots.length === 0) return { ...base, tone: 'empty', label: 'Aucun bot pour l’instant' };
-  if (overview.bots.some((bot) => bot.state !== 'active'))
-    return { ...base, tone: 'bad', label: 'Un bot demande ton attention' };
-  if (overview.coverage.some((c) => !c.urgentReachable))
-    return { ...base, tone: 'bad', label: 'Les urgences n’arrivent nulle part' };
+  if (overview.bots.length === 0)
+    return { ...base, tone: 'empty', label: 'Aucun bot pour l’instant', fix: null };
+  const isBotBroken = overview.bots.some((bot) => bot.state !== 'active');
+  if (overview.coverage.some((c) => !c.urgentReachable)) {
+    // A broken bot, or groups none of which can be written to: the fix is in Bots et groupes, not in the routing.
+    const isBotsFault = isBotBroken || (choices.length > 0 && !choices.some((c) => c.isReachable));
+    return {
+      ...base,
+      tone: 'bad',
+      label: 'Les urgences n’arrivent nulle part',
+      fix: isBotsFault ? 'bots' : 'alerts',
+    };
+  }
+  if (isBotBroken) return { ...base, tone: 'warn', label: 'Un bot demande ton attention', fix: 'bots' };
   if (choices.some((c) => c.chat.lastError !== null || !c.isReachable))
-    return { ...base, tone: 'warn', label: 'Un groupe demande ton attention' };
-  return { ...base, tone: 'ok', label: 'Tout fonctionne' };
+    return { ...base, tone: 'warn', label: 'Un groupe demande ton attention', fix: 'bots' };
+  return { ...base, tone: 'ok', label: 'Tout fonctionne', fix: null };
 }
 
 export interface Cover {
@@ -196,8 +209,13 @@ export function plural(count: number, word: string): string {
 
 const graphemes = new Intl.Segmenter('fr', { granularity: 'grapheme' });
 
-/** Two letters for the round avatar of a group; an emoji counts as one. */
+/** A title that starts with an emoji (« 💰 Ventes ») is drawn by that emoji alone. */
+const LEADING_EMOJI = /^\p{Extended_Pictographic}/u;
+
+/** Two letters for the round avatar of a group, or its leading emoji alone. */
 export function initials(title: string): string {
+  const first = graphemes.segment(title.trim())[Symbol.iterator]().next().value?.segment ?? '';
+  if (LEADING_EMOJI.test(first)) return first;
   const firsts = title
     .split(/\s+/)
     .map((word) => graphemes.segment(word)[Symbol.iterator]().next().value?.segment ?? '')
@@ -247,24 +265,16 @@ export function chatLine(choice: ChatChoice, now: Date): { text: string; isWarni
   return { text: `${kind} · dernier envoi ${whenLabel(choice.chat.lastSentAt, now)}`, isWarning: false };
 }
 
-/** The line under a bot's name. */
-export function botLine(bot: TelegramBot, now: Date): { text: string; isWarning: boolean } {
+/** The line under a bot's name: its @identifier, or what is wrong with it. */
+export function botLine(bot: TelegramBot): { text: string; isWarning: boolean } {
   switch (bot.state) {
     case 'refused':
       return { text: 'Telegram refuse ce jeton : remplace-le', isWarning: true };
     case 'conflict':
       return { text: 'Un autre programme lit ce bot', isWarning: true };
-    case 'active': {
-      if (bot.lastPolledAt === null) return { text: `@${bot.username}`, isWarning: false };
-      const seconds = Math.max(0, Math.round((now.getTime() - new Date(bot.lastPolledAt).getTime()) / 1000));
-      const ago =
-        seconds < 60
-          ? `lu il y a ${String(seconds)} s`
-          : seconds < 3600
-            ? `lu il y a ${String(Math.floor(seconds / 60))} min`
-            : `lu il y a ${String(Math.floor(seconds / 3600))} h`;
-      return { text: `@${bot.username} · ${ago}`, isWarning: false };
-    }
+    case 'active':
+      // Its identifier alone: when Nirvana last asked Telegram for news helps no one (recette du 29/10).
+      return { text: `@${bot.username}`, isWarning: false };
   }
 }
 

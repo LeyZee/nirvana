@@ -54,7 +54,9 @@ describe('Réglages › Telegram when the page cannot load', () => {
   it('says Telegram is off when the server runs without it', async () => {
     vi.mocked(fetchOverview).mockRejectedValue(new TelegramOff());
     renderSection();
-    expect(await screen.findByText('Telegram est éteint')).toBeTruthy();
+    expect(await screen.findByText('Telegram n’est pas activé sur ce serveur')).toBeTruthy();
+    // An installation setting, said without the server's vocabulary.
+    expect(screen.queryByText(/CREDENTIALS_ENCRYPTION_KEYS/)).toBeNull();
     expect(screen.queryByText('Le serveur ne répond pas')).toBeNull();
   });
 
@@ -124,6 +126,37 @@ describe('Réglages › Telegram with a bot Telegram refuses', () => {
     expect(await screen.findByText(/Son groupe ne recevra plus rien\./)).toBeTruthy();
     expect(screen.queryByText(/Ses 1 groupe/)).toBeNull();
   });
+
+  it('lights « Réparer » alone, without a second button that does the same', async () => {
+    renderSection();
+    const [repair] = await screen.findAllByRole('button', { name: 'Réparer le bot' });
+    if (repair === undefined) throw new Error('no « Réparer le bot »');
+    fireEvent.click(repair);
+    const fix = await screen.findByRole('button', { name: 'Réparer' });
+    expect(fix.className).toContain('nv-btn--neon');
+    expect(screen.queryByRole('button', { name: 'Remplacer le jeton' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ajouter un bot' }).className).not.toContain('nv-btn--neon');
+  });
+
+  it('leads from the state strip to the tab where the bot is repaired', async () => {
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: /Les urgences n’arrivent nulle part/ }));
+    expect(await screen.findByRole('tab', { name: /Bots et groupes/, selected: true })).toBeTruthy();
+  });
+});
+
+describe('Réglages › Telegram without a bot', () => {
+  beforeEach(() => {
+    vi.mocked(fetchOverview).mockResolvedValue({ bots: [], routes: [], coverage: [], version: 0 });
+  });
+
+  it('shows one empty state and its one action, no strip and no tabs', async () => {
+    renderSection();
+    expect(await screen.findByText('Personne n’est prévenu la nuit')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Ajouter un bot' })).toHaveLength(1);
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mettre un bot dans un groupe' })).toBeNull();
+  });
 });
 
 describe('Réglages › Telegram with its tab in the address', () => {
@@ -154,7 +187,21 @@ describe('Réglages › Telegram with its tab in the address', () => {
   }
 
   beforeEach(() => {
-    vi.mocked(fetchOverview).mockResolvedValue({ bots: [], routes: [], coverage: [], version: 0 });
+    vi.mocked(fetchOverview).mockResolvedValue({
+      bots: [
+        {
+          id: TelegramBotIdSchema.parse('01900000-0000-7000-8000-0000000000b3'),
+          username: 'demo_bot',
+          displayName: 'Démo',
+          state: 'active',
+          lastPolledAt: null,
+          chats: [],
+        },
+      ],
+      routes: [],
+      coverage: [],
+      version: 0,
+    });
     // jsdom lays nothing out: the chosen tab scrolls into view on a phone, here a no-op.
     Element.prototype.scrollIntoView = vi.fn();
   });
@@ -164,9 +211,20 @@ describe('Réglages › Telegram with its tab in the address', () => {
     expect((await screen.findByRole('tab', { name: /Ventes/ })).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('falls back on Alertes for a tab it does not know, without an error', async () => {
+  it('falls back on « Qui est prévenu » for a tab it does not know, without an error', async () => {
     renderAt('/?onglet=inconnu');
-    expect((await screen.findByRole('tab', { name: /Alertes/ })).getAttribute('aria-selected')).toBe('true');
+    expect((await screen.findByRole('tab', { name: /Qui est prévenu/ })).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('has no Mots-clés tab: the keywords are a line of « Qui est prévenu », where an old link lands', async () => {
+    renderAt('/?onglet=mots-cles');
+    expect((await screen.findByRole('tab', { name: /Qui est prévenu/ })).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(screen.queryByRole('tab', { name: /Mots-clés/ })).toBeNull();
+    expect(screen.getByText('Mots-clés')).toBeTruthy();
   });
 
   it('writes a tab change in the address in place, without one more step back', async () => {
@@ -215,6 +273,19 @@ describe('Réglages › Telegram, her own alerts (P4-01)', () => {
     fireEvent.click(within(row).getByRole('checkbox', { name: /Équipe/ }));
     await waitFor(() => {
       expect(saveRoutes).toHaveBeenCalledWith(3, [{ creatorId: null, topic: 'custom', chatId }]);
+    });
+  });
+
+  it('says under Mots-clés that without a group a keyword warns no one, then stops saying it', async () => {
+    renderSection();
+    const hint = 'Sans groupe choisi ici, un mot-clé ne prévient personne sur Telegram.';
+    expect(await screen.findByText(hint)).toBeTruthy();
+    // The keywords are not « Important »: that line no longer claims them.
+    expect(screen.getByText('Plafond IA, session expirée, agent arrêté')).toBeTruthy();
+    const row = screen.getByRole('group', { name: 'Groupes pour Mots-clés' });
+    fireEvent.click(within(row).getByRole('checkbox', { name: /Équipe/ }));
+    await waitFor(() => {
+      expect(screen.queryByText(hint)).toBeNull();
     });
   });
 });

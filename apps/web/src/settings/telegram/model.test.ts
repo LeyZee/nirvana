@@ -100,9 +100,11 @@ describe('health and coverage', () => {
   it('says all is well, then names what breaks first', () => {
     expect(healthOf(overview())).toMatchObject({ tone: 'ok', botCount: 1, groupCount: 2 });
     expect(healthOf(overview({ bots: [] }))).toMatchObject({ tone: 'empty' });
+    // A refused bot is a warning, not an urgency: red is kept for urgent alerts that reach no one.
     expect(healthOf(overview({ bots: [bot([], { state: 'refused' })] }))).toMatchObject({
-      tone: 'bad',
+      tone: 'warn',
       label: 'Un bot demande ton attention',
+      fix: 'bots',
     });
     expect(
       healthOf(
@@ -112,7 +114,17 @@ describe('health and coverage', () => {
           ],
         }),
       ),
-    ).toMatchObject({ tone: 'bad', label: 'Les urgences n’arrivent nulle part' });
+    ).toMatchObject({ tone: 'bad', label: 'Les urgences n’arrivent nulle part', fix: 'alerts' });
+    expect(
+      healthOf(
+        overview({
+          bots: [bot([chat(groupA, 'Astreinte')], { state: 'refused' })],
+          coverage: [
+            { creatorId: creator, displayName: 'Démo', urgentReachable: false, topicsWithoutGroup: [] },
+          ],
+        }),
+      ),
+    ).toMatchObject({ tone: 'bad', fix: 'bots' });
     expect(
       healthOf(
         overview({ bots: [bot([chat(groupA, 'Astreinte', { lastError: 'Le bot ne peut plus écrire.' })])] }),
@@ -191,10 +203,10 @@ describe('lines', () => {
   });
 
   it('reads a bot’s state in words', () => {
-    expect(botLine(bot([], { lastPolledAt: new Date(now.getTime() - 12_000).toISOString() }), now).text).toBe(
-      '@demo_alertes_bot · lu il y a 12 s',
+    expect(botLine(bot([], { lastPolledAt: new Date(now.getTime() - 12_000).toISOString() })).text).toBe(
+      '@demo_alertes_bot',
     );
-    expect(botLine(bot([], { state: 'refused' }), now)).toEqual({
+    expect(botLine(bot([], { state: 'refused' }))).toEqual({
       text: 'Telegram refuse ce jeton : remplace-le',
       isWarning: true,
     });
@@ -245,7 +257,8 @@ describe('the sheet', () => {
   it('draws two letters for a group, an emoji as one', () => {
     expect(initials('Astreinte nuit')).toBe('AN');
     expect(initials('équipe')).toBe('É');
-    expect(initials('🔥 Ventes')).toBe('🔥V');
+    expect(initials('🔥 Ventes')).toBe('🔥');
+    expect(initials('💰 Ventes')).toBe('💰');
     expect(initials('')).toBe('?');
   });
 });
