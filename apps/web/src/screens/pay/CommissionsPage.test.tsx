@@ -260,7 +260,7 @@ describe('CommissionsPage', () => {
       'Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.',
     );
     const notice = title.closest('.rp-notice');
-    expect(notice?.getAttribute('data-tone')).toBe('danger');
+    expect(notice?.getAttribute('data-tone')).toBe('warn');
     expect(text(notice)).toBe(
       'Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.Il manque un taux de commission dans l’équipe pour cette quinzaine. Le propriétaire est prévenu dans sa paie ; le calcul reprendra seul une fois réglé. Le montant ci-dessous est celui du dernier calcul réussi.',
     );

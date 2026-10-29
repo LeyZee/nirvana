@@ -523,8 +523,8 @@ function leadOf(data: PayrollPeriod | undefined, blocked: boolean, owner: boolea
   if (data === undefined) return undefined;
   if (data.beforeFirstClosing)
     return 'Avant la première clôture de l’équipe : la quinzaine est close sans relevé.';
-  if ((data.blocked ?? null) !== null)
-    return 'Le calcul est bloqué : lève d’abord ce qui le bloque, les relevés se recalculent ensuite.';
+  if (data.blocked !== null)
+    return 'Rien ne se valide pour l’instant : les relevés se recalculeront seuls une fois le blocage levé.';
   if (!data.ended)
     return data.window === null
       ? 'Les relevés se calculent dès qu’un rapport est validé.'
@@ -1076,8 +1076,8 @@ function MemberRow({
 }
 
 /**
- * What stops pay from computing the period (recette du 28/10, Équipe G1), in red above the rows: who or what, the
- * gesture that lifts it, and that the figures below are out of date. The owner opens the member's record to add a rate.
+ * What stops pay from computing the period (recette du 28/10, Équipe G1), in amber above the rows: who or what, what
+ * lifts it, and that the figures below are out of date. No button: no gesture of the screen lifts it (`blockedText`).
  */
 function ComputingNotice({
   block,
@@ -1091,24 +1091,10 @@ function ComputingNotice({
   zone: string | null;
 }): JSX.Element {
   const { title, text } = blockedText(block, { owner, memberName: (id) => names.member(id).name }, zone);
-  const [only, ...others] = block.code === 'commission_rate_missing_conflict' ? block.memberIds : [];
   return (
-    <div className="rp-notice" data-tone="danger" role="alert">
-      <div className="py-notice-row">
-        <div>
-          <p className="rp-notice__title">{title}</p>
-          <p className="rp-notice__text">{text}</p>
-        </div>
-        {!owner || only === undefined ? null : others.length === 0 ? (
-          <Link to="/equipe/membres" search={{ membre: only }} className="nv-btn nv-btn--neon nv-btn--sm">
-            Ouvrir sa fiche
-          </Link>
-        ) : (
-          <Link to="/equipe/membres" className="nv-btn nv-btn--neon nv-btn--sm">
-            Ouvrir les membres
-          </Link>
-        )}
-      </div>
+    <div className="rp-notice" data-tone="warn" role="status">
+      <p className="rp-notice__title">{title}</p>
+      <p className="rp-notice__text">{text}</p>
     </div>
   );
 }

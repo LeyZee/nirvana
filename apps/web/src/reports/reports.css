@@ -33,10 +33,6 @@
   color: var(--nv-warning);
   background: color-mix(in srgb, var(--nv-warning) 12%, transparent);
 }
-.rp-chip--bad {
-  color: var(--nv-danger);
-  background: color-mix(in srgb, var(--nv-danger) 12%, transparent);
-}
 .rp-chip--neutral::before {
   display: none;
 }
@@ -85,16 +81,6 @@
 }
 .rp-notice[data-tone='warn'] .rp-notice__title {
   color: var(--nv-warning);
-}
-/* An urgency: what stops a computation, in red, always with its words (design README § Tons). */
-.rp-notice[data-tone='danger'] {
-  background: color-mix(in srgb, var(--nv-danger) 10%, var(--nv-glass-fill));
-}
-.rp-notice[data-tone='danger']::before {
-  background: var(--nv-danger);
-}
-.rp-notice[data-tone='danger'] .rp-notice__title {
-  color: var(--nv-danger);
 }
 .rp-notice__text {
   margin: 0;

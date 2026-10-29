@@ -305,7 +305,7 @@ function Hero({
     <section
       className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter"
       aria-label={words.label}
-      data-stale={(period.blocked ?? null) === null ? undefined : 'true'}
+      data-stale={period.blocked === null ? undefined : 'true'}
     >
       <div className="py-mehero__top">
         <span className="py-mehero__period nv-num">{periodTitle(period.period, false)}</span>
@@ -493,8 +493,7 @@ function GoalShare({
   );
 }
 
-/** One of the member's past periods: its state, its net and closing beneath, and one amount. */
-/** A period pay could not compute, said to the member in red: their statement is out of date, never whose rate lacks. */
+/** A period pay could not compute, said to the member in amber: their statement is out of date, never whose rate lacks. */
 function MyBlockNotice({
   block,
   hasStatement = true,
@@ -504,13 +503,14 @@ function MyBlockNotice({
 }): JSX.Element {
   const { title, text } = myBlockedText(block, hasStatement);
   return (
-    <div className="rp-notice nv-enter" data-tone="danger" role="alert">
+    <div className="rp-notice nv-enter" data-tone="warn" role="status">
       <p className="rp-notice__title">{title}</p>
       <p className="rp-notice__text">{text}</p>
     </div>
   );
 }
 
+/** One of the member's past periods: its state, its net and closing beneath, and one amount. */
 function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: () => void }): JSX.Element {
   const { window } = summary;
   const chip = memberPhaseChip(summary);

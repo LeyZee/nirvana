@@ -298,7 +298,7 @@
   max-width: 62ch;
 }
 /* Figures of a period pay could not compute: those of its last computation that passed, out of date. Faint, never
-   read as the truth; the red notice says why. */
+   read as the truth; the notice above says why. */
 [data-stale='true'] .py-hero__value,
 [data-stale='true'] .py-fig__value,
 [data-stale='true'] .py-member__amount {

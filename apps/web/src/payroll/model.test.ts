@@ -158,6 +158,7 @@ const summary = (
   ended: true,
   closedAt: null,
   closedBy: null,
+  blocked: null,
   statements: { draft: 0, validated: 0, paid: 0, carried: 0 },
   netMinor: 100_000,
   payableMinor: 30_000,
@@ -300,11 +301,9 @@ describe('a period in the list', () => {
       blocked: { code: 'exchange_rate_missing_conflict', currency: 'USD', since: '2026-11-02T09:41:00.000Z' },
     });
     expect([phaseChip(blocked), periodAmount(blocked)]).toEqual([
-      { label: 'Calcul bloqué', tone: 'bad' },
+      { label: 'Calcul bloqué', tone: 'warn' },
       { minor: 30_000, what: 'au dernier calcul, plus à jour' },
     ]);
-    // An older server does not say it: the period reads as it did.
-    expect(phaseChip(summary({ blocked: undefined }))).toEqual(phaseChip(summary()));
   });
 
   it('sums a period read whole as the list does', () => {
@@ -313,6 +312,7 @@ describe('a period in the list', () => {
       window: WINDOW,
       ended: true,
       beforeFirstClosing: false,
+      blocked: null,
       closing: null,
       statements: [
         statement({
@@ -509,6 +509,7 @@ describe('the export of a period', () => {
       window: WINDOW,
       ended: true,
       beforeFirstClosing: false,
+      blocked: null,
       closing: null,
       statements: [statement()],
       bonusTiers: null,
@@ -534,6 +535,7 @@ describe('the export of a period', () => {
       window: WINDOW,
       ended: true,
       beforeFirstClosing: false,
+      blocked: null,
       closing: null,
       statements: [statement({ penaltiesMinor: 500 })],
       bonusTiers: null,
@@ -628,6 +630,7 @@ describe('the dollar’s rate before a closing', () => {
     window: { ...WINDOW, period: OCT2 },
     ended: true,
     beforeFirstClosing: false,
+    blocked: null,
     closing: null,
     statements: [
       statement({
@@ -1112,21 +1115,24 @@ describe('a blocked period (recette du 28/10, Équipe G1)', () => {
   const since = '2025-05-02T08:30:00.000Z';
   const rate = { code: 'commission_rate_missing_conflict' as const, memberIds: [theo], since };
 
-  it('says who lacks a rate, what to do, and that the figures are out of date', () => {
+  it('says who lacks a rate, that no gesture of the screen lifts it, and that the figures are out of date', () => {
     const owner = blockedText(rate, { owner: true, memberName }, 'Europe/Paris');
     expect(owner.title).toBe('Le calcul est bloqué : Théo n’a pas de taux pour cette quinzaine.');
     expect(plain(owner.text)).toBe(
-      'Ajoute-lui un taux, le calcul reprendra seul. D’ici là, les chiffres ci-dessous sont ceux du dernier calcul réussi : ils ne sont plus à jour. Bloqué depuis le vendredi 2 mai à 10 h 30.',
+      'Un rapport validé de Théo tombe sur une quinzaine où son taux n’a pas encore commencé. C’est une donnée d’avant le correctif du 28/10, qui ne peut plus se produire. Aucun geste de l’écran ne la corrige, puisqu’un rapport validé ne change pas et qu’un taux ne part jamais en arrière : elle se corrige dans la base, puis le calcul reprend seul. D’ici là, les chiffres ci-dessous sont ceux du dernier calcul réussi : ils ne sont plus à jour. Bloqué depuis le vendredi 2 mai à 10 h 30.',
     );
     const two = blockedText({ ...rate, memberIds: [theo, lea] }, { owner: true, memberName }, null);
     expect(two.title).toBe('Le calcul est bloqué : Théo et Léa n’ont pas de taux pour cette quinzaine.');
-    expect(two.text).toMatch(/^Ajoute-leur un taux, le calcul reprendra seul\./u);
+    expect(two.text).toMatch(
+      /^Des rapports validés de Théo et Léa tombent sur une quinzaine où leur taux n’a pas encore commencé\./u,
+    );
+    expect(two.text).not.toMatch(/Ajoute/u);
     expect(two.text).not.toMatch(/Bloqué depuis/u);
   });
 
-  it('tells a manager who sets the rate, and a member nobody’s name', () => {
+  it('tells a manager the owner is told, and a member nobody’s name', () => {
     expect(blockedText(rate, { owner: false, memberName }, null).text).toMatch(
-      /^Le propriétaire doit lui ajouter un taux : le calcul reprendra seul\./u,
+      /^Un rapport validé de Théo tombe .*\. Le propriétaire est prévenu ; le calcul reprendra seul une fois la donnée corrigée\./u,
     );
     expect(blockedText({ ...rate, memberIds: [] }, { owner: false, memberName }, null).title).toBe(
       'Le calcul est bloqué : un membre de l’équipe n’a pas de taux pour cette quinzaine.',
@@ -1154,7 +1160,7 @@ describe('a blocked period, as the member reads it', () => {
     });
     expect(mine.title).toBe('Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.');
     expect(mine.text).toMatch(
-      /^Il te manque un taux de commission pour cette quinzaine\. Le propriétaire est prévenu/u,
+      /^Un de tes rapports validés tombe sur une quinzaine où ton taux n’a pas encore commencé\. Le propriétaire est prévenu/u,
     );
     expect(myBlockedText({ code: 'commission_rate_missing_conflict', memberIds: [], since }).text).toMatch(
       /^Il manque un taux de commission dans l’équipe/u,
@@ -1174,7 +1180,7 @@ describe('a blocked period, as the member reads it', () => {
     const blocked = summary({
       blocked: { code: 'exchange_rate_missing_conflict', currency: 'USD', since },
     });
-    expect(memberPhaseChip(blocked)).toEqual({ label: 'Plus à jour', tone: 'bad' });
+    expect(memberPhaseChip(blocked)).toEqual({ label: 'Plus à jour', tone: 'warn' });
     expect(memberPeriodAmount(blocked)).toEqual({ minor: 30_000, what: 'au dernier calcul' });
   });
 });
