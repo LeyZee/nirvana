@@ -545,6 +545,45 @@ describe('GET /v1/dashboard', () => {
     expect((await read(creatorCookie)).usdSales).toEqual({ seen: false, rate: null });
   });
 
+  it('leaves out a paid message whose price is not positive, without failing (recette 28/10, #296)', async () => {
+    const leo = conversations.get('Leo')!;
+    const sale = (id: string, priceMinor: number, currency: 'EUR' | 'USD') =>
+      test.admin.db.insert(schema.messages).values({
+        id: newId(MessageIdSchema),
+        creatorId,
+        platformAccountId,
+        conversationId: leo,
+        platformMessageId: id,
+        direction: 'outbound',
+        author: 'ai',
+        text: 'Pour toi',
+        priceMinor,
+        currency,
+        isPaid: true,
+        platformCreatedAt: new Date(),
+      });
+    await test.admin.db
+      .insert(schema.exchangeRates)
+      .values({
+        currency: 'USD',
+        day: '2026-10-27',
+        rateMicros: 900_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    // Nothing in the base forbids it: a negative or zero price never counts, and never fails the Dashboard.
+    await sale('paid-leo-eur', 1_000, 'EUR');
+    await sale('paid-leo-usd-negative', -5_000, 'USD');
+    await sale('paid-leo-eur-zero', 0, 'EUR');
+    const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
+    expect(response.statusCode).toBe(200);
+    const dashboard = DashboardSchema.parse(response.json());
+    expect(dashboard.fans.filter((f) => f.name === 'Leo').map((f) => [f.spent, f.byAgent])).toEqual([
+      [10, 10],
+    ]);
+  });
+
   it('says Reveal is read late once three of its polls have gone by without a read (recette 28/10, G8)', async () => {
     const account = (set: Partial<typeof schema.platformAccounts.$inferInsert>) =>
       test.admin.db

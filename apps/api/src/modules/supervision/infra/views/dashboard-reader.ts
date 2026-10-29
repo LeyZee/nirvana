@@ -197,7 +197,8 @@ async function facts(
           and not exists (select 1 from drafts d where d.conversation_id = c.id and d.status = 'pending')`,
   );
   // What she sold him over the period: her paid messages he unlocked, by currency (EUR and USD, the ones Reveal pays
-  // in). The domain converts his dollars and ranks (`rankFans`); then the details of the best ones only.
+  // in). The domain converts his dollars and ranks (`rankFans`); then the details of the best ones only. No `limit`
+  // here: the ranking needs his dollars converted, so the query returns one row per fan who paid over the period.
   const sales = await rows(
     tx,
     z.object({
@@ -218,7 +219,7 @@ async function facts(
                  as by_agent_usd_minor
         from messages m
         join conversations c on c.id = m.conversation_id
-        where m.direction = 'outbound' and m.is_paid and m.price_minor is not null
+        where m.direction = 'outbound' and m.is_paid and m.price_minor > 0
           and m.currency in ('EUR', 'USD')
           and m.platform_created_at >= ${periodStart}::timestamptz
         group by c.fan_id`,

@@ -1,3 +1,5 @@
+import { RATE_MICROS_SCALE } from '@nirvana/contracts';
+
 /**
  * The best fans of the Dashboard in euros (choix de Charles, 28/10): what each fan spent over the period, his sales in
  * dollars converted at the last ECB rate known, the one pay keeps (ADR 0033). A ranking, never a payout: nothing here
@@ -10,8 +12,8 @@ export interface UsdRate {
   readonly rateMicros: number;
 }
 
-/** `rate_micros` for one euro per dollar. */
-const RATE_SCALE = BigInt(1_000_000);
+/** `rate_micros` for one euro per dollar, the scale pay keeps its rates at. */
+const RATE_SCALE = BigInt(RATE_MICROS_SCALE);
 const TWO = BigInt(2);
 
 /**
