@@ -13,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MyPlanningPage } from './MyPlanningPage';
 
+import { ReopenProvider } from '@/reports/reopen';
+
 vi.mock('@/scheduling/time', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/scheduling/time')>()),
   readerZone: () => 'Indian/Antananarivo',
@@ -125,7 +127,35 @@ interface Data {
   candidates: unknown;
   /** The member reads that fail before one answers. */
   membersDown: number;
+  /** Two shifts done earlier this week, Monday's without its report, Tuesday's validated. */
+  earlier: boolean;
 }
+
+const TUESDAY = id(104);
+const EARLIER = [
+  shift(103, '2026-10-26T06:00:00Z', '2026-10-26T12:00:00Z'),
+  shift(104, '2026-10-27T06:00:00Z', '2026-10-27T12:00:00Z'),
+];
+const VALIDATED = {
+  id: id(601),
+  shiftId: TUESDAY,
+  creatorId: NORA,
+  platformAccountId: NORA_REVEAL,
+  memberId: THEO,
+  period: '2026-10-16',
+  correctsId: null,
+  amount: { amountMinor: 12_000, currency: 'EUR' },
+  comment: null,
+  incident: null,
+  status: 'validated',
+  version: 1,
+  byAgency: false,
+  canReview: false,
+  submittedAt: '2026-10-27T12:10:00Z',
+  reviewedAt: '2026-10-27T15:00:00Z',
+  reviewNote: null,
+  createdAt: '2026-10-27T12:10:00Z',
+};
 
 const weeks: string[] = [];
 
@@ -139,6 +169,7 @@ function serve(
     leaves: data.leaves ?? [],
     candidates: data.candidates ?? { candidates: [], accounts: [] },
     membersDown: data.membersDown ?? 0,
+    earlier: data.earlier ?? false,
   };
   const written: Written[] = [];
   vi.stubGlobal(
@@ -167,11 +198,22 @@ function serve(
             members: [people[0]],
             shifts: thisWeek
               ? [
+                  ...(state.earlier ? EARLIER : []),
                   shift(101, '2026-10-27T22:00:00Z', '2026-10-28T04:00:00Z'),
                   shift(102, '2026-10-29T16:00:00Z', '2026-10-29T22:00:00Z'),
                 ]
               : [],
             conflicts: [],
+          },
+        };
+      } else if (url.pathname === '/v1/scheduling/shift-reports') {
+        reply = {
+          status: 200,
+          body: {
+            reports: state.earlier ? [VALIDATED] : [],
+            shifts: state.earlier ? EARLIER : [],
+            accounts: [account],
+            members: [people[0]],
           },
         };
       } else if (url.pathname === '/v1/team/members') {
@@ -219,7 +261,9 @@ function renderPage(): void {
   });
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <RouterProvider router={router} />
+      <ReopenProvider>
+        <RouterProvider router={router} />
+      </ReopenProvider>
     </QueryClientProvider>,
   );
 }
@@ -246,13 +290,38 @@ describe('the chatter’s Planning', () => {
     expect(text(night)).toContain('1 h – 7 h');
     expect(text(night)).toContain('@nora sur Reveal · 23 h – 5 h à Paris');
     expect(text(night)).toContain('En poste');
+    // A shift ahead carries no pill: the day and its place say it (EQ-18).
     // A shift under way is not offered to anyone; one ahead is.
     expect(within(night).queryByRole('button', { name: /^Échanger/u })).toBe(null);
     const thursday = screen.getByRole('region', { name: 'Jeudi 29 octobre' });
     expect(text(thursday)).toContain('19 h – 1 h');
-    expect(text(thursday)).toContain('À venir');
+    expect(text(thursday)).not.toContain('À venir');
     expect(within(thursday).getByRole('button', { name: /^Échanger/u })).toBeTruthy();
     expect(screen.getByText('2 shifts · 12 h')).toBeTruthy();
+  });
+
+  it('opens on today, folds the days gone by with the reports left, and makes a report from its shift', async () => {
+    serve({ earlier: true });
+    renderPage();
+    await screen.findByRole('region', { name: 'Aujourd’hui' });
+    const fold = await screen.findByText('Plus tôt cette semaine (2)');
+    const details = fold.closest('details');
+    expect(details?.open).toBe(false);
+    await waitFor(() => {
+      expect(text(details?.querySelector('summary'))).toContain('1 rapport à faire');
+    });
+    // Today comes before nothing: the folded days sit above it, out of the way.
+    expect(details?.compareDocumentPosition(screen.getByRole('region', { name: 'Aujourd’hui' }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    const monday = within(details ?? document.body).getByRole('region', { name: 'Lundi 26 octobre' });
+    const tuesday = within(details ?? document.body).getByRole('region', { name: 'Mardi 27 octobre' });
+    expect(text(tuesday)).not.toContain('Fini');
+    expect(within(tuesday).getByRole('button', { name: /Rapport du .* : Validé/u }).textContent).toBe(
+      'Rapport validé',
+    );
+    fireEvent.click(within(monday).getByRole('button', { name: /^Faire mon rapport du lundi 26 octobre/u }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
   it('turns to the next week, says when it is empty, and comes back', async () => {
