@@ -5,6 +5,7 @@ import {
   type CommissionStatement,
   type Me,
   type PayPeriod,
+  type PayPeriodBlock,
   type PayPeriodSummary,
   type PayrollPeriod,
   type PlanningAccount,
@@ -27,6 +28,7 @@ import {
   memberPeriodAmount,
   memberPhaseChip,
   momentAt,
+  myBlockedText,
   myStatementWords,
   roundAmountText,
   salesFor,
@@ -176,14 +178,20 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
               </>
             )
           ) : statement === undefined ? (
-            <Panel className="nv-enter">
-              <Empty
-                whisper="Pas encore de relevé sur cette quinzaine."
-                text="Il se calcule dès que l’agence valide un de tes rapports de fin de shift."
-              />
-            </Panel>
+            heroData.blocked ? (
+              // Their own report blocks the period before any statement: why, never an empty period.
+              <MyBlockNotice block={heroData.blocked} hasStatement={false} />
+            ) : (
+              <Panel className="nv-enter">
+                <Empty
+                  whisper="Pas encore de relevé sur cette quinzaine."
+                  text="Il se calcule dès que l’agence valide un de tes rapports de fin de shift."
+                />
+              </Panel>
+            )
           ) : (
             <>
+              {heroData.blocked ? <MyBlockNotice block={heroData.blocked} /> : null}
               <Hero statement={statement} period={heroData} now={now} />
               <Panel className="nv-enter" eyebrow="Le parcours de ton argent">
                 <div className="rp-sec">
@@ -294,7 +302,11 @@ function Hero({
   const words = myStatementWords(statement, period.ended, now);
   const cfa = useCfaFrancs(statement.memberId);
   return (
-    <section className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter" aria-label={words.label}>
+    <section
+      className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter"
+      aria-label={words.label}
+      data-stale={(period.blocked ?? null) === null ? undefined : 'true'}
+    >
       <div className="py-mehero__top">
         <span className="py-mehero__period nv-num">{periodTitle(period.period, false)}</span>
         <Chip chip={memberPhaseChip(summaryOf(period))} />
@@ -482,6 +494,23 @@ function GoalShare({
 }
 
 /** One of the member's past periods: its state, its net and closing beneath, and one amount. */
+/** A period pay could not compute, said to the member in red: their statement is out of date, never whose rate lacks. */
+function MyBlockNotice({
+  block,
+  hasStatement = true,
+}: {
+  block: PayPeriodBlock;
+  hasStatement?: boolean;
+}): JSX.Element {
+  const { title, text } = myBlockedText(block, hasStatement);
+  return (
+    <div className="rp-notice nv-enter" data-tone="danger" role="alert">
+      <p className="rp-notice__title">{title}</p>
+      <p className="rp-notice__text">{text}</p>
+    </div>
+  );
+}
+
 function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: () => void }): JSX.Element {
   const { window } = summary;
   const chip = memberPhaseChip(summary);
@@ -555,10 +584,15 @@ function MyStatementDialog({
             <Loading rows={2} />
           )
         ) : statement === undefined || words === null ? (
-          <p className="py-quiet">Pas de relevé à ton nom sur cette quinzaine.</p>
+          data.blocked ? (
+            <MyBlockNotice block={data.blocked} hasStatement={false} />
+          ) : (
+            <p className="py-quiet">Pas de relevé à ton nom sur cette quinzaine.</p>
+          )
         ) : (
           <>
-            <div className="py-dialog__hero">
+            {data.blocked ? <MyBlockNotice block={data.blocked} /> : null}
+            <div className="py-dialog__hero" data-stale={data.blocked ? 'true' : undefined}>
               <div className="py-hero">
                 <p className="py-hero__label">{words.label}</p>
                 <p className="py-hero__value nv-num">{amountText(statement.payableMinor, 'EUR')}</p>

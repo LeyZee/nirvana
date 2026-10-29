@@ -46,6 +46,7 @@ import {
   memberPhaseChip,
   missedRateDays,
   rateOverdue,
+  myBlockedText,
   myStatementWords,
   parsePaySearch,
   parseTarget,
@@ -1139,5 +1140,41 @@ describe('a blocked period (recette du 28/10, Équipe G1)', () => {
       'Le calcul est bloqué : le taux du dollar de la BCE manque pour cette quinzaine.',
     );
     expect(said.text).toMatch(/le calcul reprendra seul/u);
+  });
+});
+
+describe('a blocked period, as the member reads it', () => {
+  const since = '2025-05-02T08:30:00.000Z';
+
+  it('says their statement is out of date, who is told, and no colleague by name', () => {
+    const mine = myBlockedText({
+      code: 'commission_rate_missing_conflict',
+      memberIds: [newId(TeamMemberIdSchema)],
+      since,
+    });
+    expect(mine.title).toBe('Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.');
+    expect(mine.text).toMatch(
+      /^Il te manque un taux de commission pour cette quinzaine\. Le propriétaire est prévenu/u,
+    );
+    expect(myBlockedText({ code: 'commission_rate_missing_conflict', memberIds: [], since }).text).toMatch(
+      /^Il manque un taux de commission dans l’équipe/u,
+    );
+    expect(myBlockedText({ code: 'exchange_rate_missing_conflict', currency: 'USD', since }).text).toMatch(
+      /^Le taux du dollar de la BCE manque/u,
+    );
+    // Their own report blocks the period before any statement: no amount to call out of date.
+    const none = myBlockedText({ code: 'commission_rate_missing_conflict', memberIds: [], since }, false);
+    expect(none.title).toBe('Ton relevé n’est pas encore calculé : le calcul de la quinzaine est bloqué.');
+    expect(none.text).toBe(
+      'Il manque un taux de commission dans l’équipe pour cette quinzaine. Le propriétaire est prévenu dans sa paie ; le calcul reprendra seul une fois réglé.',
+    );
+  });
+
+  it('marks the period « Plus à jour » in the member’s list, its amount that of the last computation', () => {
+    const blocked = summary({
+      blocked: { code: 'exchange_rate_missing_conflict', currency: 'USD', since },
+    });
+    expect(memberPhaseChip(blocked)).toEqual({ label: 'Plus à jour', tone: 'bad' });
+    expect(memberPeriodAmount(blocked)).toEqual({ minor: 30_000, what: 'au dernier calcul' });
   });
 });

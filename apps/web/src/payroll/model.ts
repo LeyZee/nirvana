@@ -591,6 +591,34 @@ export function blockedText(
   };
 }
 
+/**
+ * What a member reads of a blocked period on Commissions, in the second person: their statement is out of date, the
+ * owner is told, and what lifts it. Never a colleague's name: the server gives a member only themselves among the
+ * members without a rate, so a list that is not empty is theirs.
+ */
+export function myBlockedText(
+  block: PayPeriodBlock,
+  hasStatement = true,
+): { readonly title: string; readonly text: string } {
+  const stale = hasStatement ? 'Le montant ci-dessous est celui du dernier calcul réussi.' : '';
+  const title = hasStatement
+    ? 'Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.'
+    : 'Ton relevé n’est pas encore calculé : le calcul de la quinzaine est bloqué.';
+  if (block.code === 'exchange_rate_missing_conflict')
+    return {
+      title,
+      text: `Le taux ${CURRENCY_OF[block.currency]} de la BCE manque pour cette quinzaine ; le calcul reprendra seul dès qu’il arrive. ${stale}`.trimEnd(),
+    };
+  const who =
+    block.memberIds.length > 0
+      ? 'Il te manque un taux de commission pour cette quinzaine.'
+      : 'Il manque un taux de commission dans l’équipe pour cette quinzaine.';
+  return {
+    title,
+    text: `${who} Le propriétaire est prévenu dans sa paie ; le calcul reprendra seul une fois réglé. ${stale}`.trimEnd(),
+  };
+}
+
 const countOf = (count: number | undefined, one: string, many: string): string =>
   count === undefined ? `Des ${lowerFirst(many)}` : `${String(count)} ${count > 1 ? many : one}`;
 
@@ -1109,6 +1137,7 @@ export const tickAmountText = (minor: number): string =>
 
 /** A period as its member reads it in Commissions: their words, never the agency's « à valider ». */
 export function memberPhaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
+  if ((summary.blocked ?? null) !== null) return { label: 'Plus à jour', tone: 'bad' };
   switch (phaseOf(summary)) {
     case 'running':
       return { label: 'En cours', tone: 'neutral' };
@@ -1130,6 +1159,8 @@ export function memberPeriodAmount(summary: Omit<PayPeriodSummary, 'window'>): {
   minor: number;
   what: string;
 } {
+  if ((summary.blocked ?? null) !== null)
+    return { minor: summary.payableMinor - summary.paidMinor, what: 'au dernier calcul' };
   switch (phaseOf(summary)) {
     case 'running':
       return { minor: summary.payableMinor, what: 'à ce jour' };

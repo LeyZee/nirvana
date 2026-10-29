@@ -43,6 +43,7 @@ const P2 = PayPeriodSchema.parse('2025-03-16');
 const P3 = PayPeriodSchema.parse('2025-04-01');
 const P4 = PayPeriodSchema.parse('2025-04-16');
 const P5 = PayPeriodSchema.parse('2025-05-01');
+const P6 = PayPeriodSchema.parse('2025-05-16');
 
 const quiet = { warn: () => undefined, error: () => undefined };
 
@@ -599,5 +600,29 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     expect(
       await test.admin.db.select().from(schema.payPeriodBlocks).where(eq(schema.payPeriodBlocks.period, P5)),
     ).toEqual([]);
+  });
+
+  it('lists a blocked period without any statement: to the agency, and to the member it is about', async () => {
+    // Iris arrives in August; her only report is of May 16th: nobody has a statement there, the period is blocked.
+    const { member: iris, cookie: irisCookie } = await addMember('iris@example.test', 'Iris', '2025-08-01');
+    await validated(iris, P6, 1_500);
+    expect(await recalculate(P6)).toEqual([{ period: P6, outcome: 'blocked', written: 0 }]);
+    expect(await statementsOf(P6)).toEqual([]);
+
+    const listOf = async (cookie: string) => {
+      const response = await call('GET', '/payroll/periods?limit=50', cookie);
+      expect(response.statusCode, response.body).toBe(200);
+      return PayPeriodPageSchema.parse(response.json()).items.find((item) => item.window.period === P6);
+    };
+    expect(await listOf(owner)).toMatchObject({
+      blocked: { code: 'commission_rate_missing_conflict', memberIds: [iris.id] },
+      statements: { draft: 0, validated: 0, paid: 0, carried: 0 },
+      netMinor: 0,
+      payableMinor: 0,
+      paidMinor: 0,
+    });
+    expect((await listOf(irisCookie))?.blocked).toMatchObject({ memberIds: [iris.id] });
+    // A colleague with nothing there does not get the period in their list.
+    expect(await listOf(theoCookie)).toBeUndefined();
   });
 });

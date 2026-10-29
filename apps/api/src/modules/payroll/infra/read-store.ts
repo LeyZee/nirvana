@@ -266,7 +266,8 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
       }),
 
     // The periods, counts and sums of the statements the policies give back, in one statement: the team's for the
-    // owner and an active manager, a member's own for a member. A member reads of a closing only its date.
+    // owner and an active manager, a member's own for a member. A member reads of a closing only its date. A blocked
+    // period comes too without any statement (recette du 28/10, Équipe G1), its counts and sums at zero.
     periods: (userId, page) =>
       withMember(db, userId, async (tx, scope) => {
         const validatedOrPaid = sql`${commissionStatements.status} in ('validated', 'paid')`;
@@ -292,19 +293,24 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               // Under the minimum the carry-over is positive, below zero it is negative: both are carried, once a
               // validation carried them; a statement still to validate owes and carries nothing yet.
               carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} <> 0 and ${validatedOrPaid})::text`,
-              net: sql`sum(${commissionStatements.netMinor})::text`,
-              payable: sql`sum(${commissionStatements.payableMinor})::text`,
+              net: sql`coalesce(sum(${commissionStatements.netMinor}), 0)::text`,
+              payable: sql`coalesce(sum(${commissionStatements.payableMinor}), 0)::text`,
               validatedPayable: sql`coalesce(sum(${commissionStatements.payableMinor}) filter (where ${validatedOrPaid}), 0)::text`,
               carriedAmount: sql`coalesce(sum(${commissionStatements.carryOverOutMinor}) filter (where ${validatedOrPaid}), 0)::text`,
               sent: sql`coalesce(sum(${commissionStatements.sentMinor}), 0)::text`,
             },
           })
-          .from(commissionStatements)
-          .innerJoin(payPeriods, eq(payPeriods.period, commissionStatements.period))
-          .leftJoin(payPeriodClosings, eq(payPeriodClosings.period, commissionStatements.period))
-          .leftJoin(payPeriodBlocks, eq(payPeriodBlocks.period, commissionStatements.period))
-          .where(before === null ? undefined : sql`${commissionStatements.period} < ${before}`)
+          .from(payPeriods)
+          .leftJoin(commissionStatements, eq(commissionStatements.period, payPeriods.period))
+          .leftJoin(payPeriodClosings, eq(payPeriodClosings.period, payPeriods.period))
+          .leftJoin(payPeriodBlocks, eq(payPeriodBlocks.period, payPeriods.period))
+          .where(before === null ? undefined : sql`${payPeriods.period} < ${before}`)
           .groupBy(payPeriods.period, payPeriodClosings.period, payPeriodBlocks.period)
+          // A period with a statement the reader reads, or blocked: for the agency always, for a member when their
+          // own report blocks it (a member without a rate has no statement there, and must still see why).
+          .having(
+            sql`count(${commissionStatements.id}) > 0 or (${payPeriodBlocks.period} is not null and (${scope} <> 'self' or ${reader.memberId}::uuid = any(${payPeriodBlocks.memberIds})))`,
+          )
           .orderBy(sql`${payPeriods.period} desc`)
           .limit(page.limit + 1);
         const items = rows.slice(0, page.limit).map((row) => {
