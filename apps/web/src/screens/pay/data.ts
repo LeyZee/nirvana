@@ -28,7 +28,6 @@ import { useMembers } from '@/screens/team/api';
  * validated before anyone tries, and the names behind the ids of a statement. The server's refusals stay the rule.
  */
 
-/** The period under way in the agency's zone, `null` until its settings are read. */
 /** Today in the agency's zone, the day the server reads pay's rules against (PAIE-22); null until the zone is read. */
 export function useAgencyToday(): string | null {
   const now = useNow();
@@ -36,6 +35,7 @@ export function useAgencyToday(): string | null {
   return settings.data === undefined ? null : calendarDayAt(now, settings.data.timeZone);
 }
 
+/** The period under way in the agency's zone, `null` until its settings are read. */
 export function useCurrentPeriod(): PayPeriod | null {
   const now = useNow();
   const settings = useSchedulingSettings();

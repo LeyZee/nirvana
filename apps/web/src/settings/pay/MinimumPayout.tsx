@@ -91,6 +91,7 @@ export function MinimumPayout(): JSX.Element {
         <MinimumDialog
           minimum={data.minimumPayoutMinor}
           periods={rulePeriods(today, MINIMUM_PERIODS)}
+          today={today}
           onClose={() => {
             setOpen(false);
           }}
@@ -103,11 +104,14 @@ export function MinimumPayout(): JSX.Element {
 function MinimumDialog({
   minimum,
   periods,
+  today,
   onClose,
 }: {
   minimum: number;
   /** The periods the minimum may start with: not begun yet, in order (PAIE-22). */
   periods: readonly PayPeriod[];
+  /** Today in the agency's zone: on the 1st or the 16th, today's period has not begun and may take the minimum. */
+  today: string;
   onClose: () => void;
 }): JSX.Element {
   const id = useId();
@@ -168,7 +172,9 @@ function MinimumDialog({
               )}
             </p>
             <p className="tm-hint">
-              {`Les quinzaines déjà commencées gardent leur minimum, ${amountText(minimum, 'EUR')} pour celle en cours : une règle de paie ne change pas en cours de route.`}
+              {from === today
+                ? 'La quinzaine du jour commence aujourd’hui : elle prend ce minimum. Celles d’avant gardent le leur : une règle de paie ne change pas en cours de route.'
+                : `Les quinzaines déjà commencées gardent leur minimum, ${amountText(minimum, 'EUR')} pour celle en cours : une règle de paie ne change pas en cours de route.`}
             </p>
             <div className="tm-dialog__foot">
               <button

@@ -8,6 +8,7 @@ import {
   PAY_TARGET_MAX_MINOR,
   PAYMENT_METHODS,
   PAYMENT_REFERENCE_MAX,
+  PAYOUT_DELAY_MAX_BUSINESS_DAYS,
   PENALTY_KINDS,
 } from '@nirvana/contracts';
 import { sql, type SQL } from 'drizzle-orm';
@@ -59,6 +60,7 @@ const periodCheck = (name: string, period: PgColumn): ReturnType<typeof check> =
 const amountMax = sql.raw(String(PAY_AMOUNT_MAX_MINOR));
 const referenceMax = sql.raw(String(PAYMENT_REFERENCE_MAX));
 const targetMax = sql.raw(String(PAY_TARGET_MAX_MINOR));
+const payoutDelayMax = sql.raw(String(PAYOUT_DELAY_MAX_BUSINESS_DAYS));
 
 /**
  * An account's pay rules from `from_period` on (contracts `pay-rules.ts`, EQ-03): one per account and period at most,
@@ -170,7 +172,7 @@ export const payrollSettings = pgTable(
     check('payroll_settings_minimum_check', sql`${t.minimumPayoutMinor} between 0 and ${amountMax}`),
     check(
       'payroll_settings_payout_delay_check',
-      sql`${t.payoutDelayBusinessDays} is null or ${t.payoutDelayBusinessDays} between 1 and 30`,
+      sql`${t.payoutDelayBusinessDays} is null or ${t.payoutDelayBusinessDays} between 1 and ${payoutDelayMax}`,
     ),
     pgPolicy('team_read', { for: 'select', using: anyMember }),
     pgPolicy('owner_insert', {

@@ -143,7 +143,7 @@ function DelayDialog({ delay, onClose }: { delay: number | null; onClose: () => 
         )}
         <div className="tm-dialog__foot">
           {delay === null ? (
-            <button type="button" className="nv-btn nv-btn--plain" onClick={onClose}>
+            <button type="button" className="nv-btn nv-btn--plain" disabled={busy} onClick={onClose}>
               Annuler
             </button>
           ) : (

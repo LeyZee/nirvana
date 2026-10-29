@@ -33,6 +33,8 @@ let answer: { status: number; body: unknown };
 let settings: Record<string, unknown>;
 let accounts: unknown[] | null = null;
 const writes: { path: string; body: unknown }[] = [];
+/** What a write waits for before it is answered: resolved, unless a test holds the answer back. */
+let gate: Promise<void> = Promise.resolve();
 
 function serve(): void {
   vi.stubGlobal(
@@ -46,7 +48,8 @@ function serve(): void {
           path: url.pathname,
           body: typeof init.body === 'string' ? JSON.parse(init.body) : null,
         });
-        return json(answer.body, answer.status);
+        const { body, status } = answer;
+        return gate.then(() => json(body, status));
       }
       if (url.pathname === '/v1/payroll/settings') return json(settings);
       if (url.pathname === '/v1/scheduling/settings') return json(SCHEDULING_SETTINGS);
@@ -79,6 +82,7 @@ const plain = (text: string | null | undefined): string => (text ?? '').replaceA
 
 beforeEach(() => {
   writes.length = 0;
+  gate = Promise.resolve();
   settings = { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null };
   answer = { status: 201, body: rules(9, 2, '2026-10-16') };
   serve();
@@ -207,6 +211,30 @@ describe('Réglages › Règles de paie', () => {
     });
   });
 
+  it('lets the period that starts today take the minimum, and says so, on the 1st', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Sunday 1 November in Paris: today's period has not begun yet (PAIE-22).
+    vi.setSystemTime(new Date('2026-11-01T09:00:00Z'));
+    renderSection();
+    const minimum = (await screen.findByText('Minimum de versement')).closest<HTMLElement>('.rp-account');
+    if (minimum === null) throw new Error('No minimum');
+    fireEvent.click(await within(minimum).findByRole('button', { name: 'Changer' }));
+    const dialog = screen.getByRole('dialog', { name: 'Minimum de versement' });
+    expect(
+      within(dialog).getByRole('radio', { name: '1er – 15 novembre' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    fireEvent.change(within(dialog).getByLabelText('Minimum'), { target: { value: '20' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).queryByText(/pour celle en cours/u)).toBeNull();
+    expect(plain(within(dialog).getByText(/^La quinzaine du jour/u).textContent)).toBe(
+      'La quinzaine du jour commence aujourd’hui : elle prend ce minimum. Celles d’avant gardent le leur : une règle de paie ne change pas en cours de route.',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Modifier' }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: '16 – 30 novembre' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).getByText(/15,00 € pour celle en cours/u)).toBeTruthy();
+  });
+
   it('says the next minimum beside the one in force', async () => {
     settings = {
       minimumPayoutMinor: 1_500,
@@ -236,9 +264,19 @@ describe('Réglages › Règles de paie', () => {
     expect(within(dialog).getByText('Un nombre entier de jours, de 1 à 30.')).toBeTruthy();
     expect(writes).toEqual([]);
     fireEvent.change(days, { target: { value: '3' } });
+    let release = (): void => undefined;
+    gate = new Promise((resolve) => {
+      release = resolve;
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer le délai' }));
     await act(() => Promise.resolve());
     expect(writes).toEqual([{ path: '/v1/payroll/settings', body: { payoutDelayBusinessDays: 3 } }]);
+    // While it is sent, nothing closes the dialog: its refusal would never be seen.
+    expect(within(dialog).getByRole('button', { name: 'Annuler' }).hasAttribute('disabled')).toBe(true);
+    await act(async () => {
+      release();
+      await gate;
+    });
 
     cleanup();
     writes.length = 0;
