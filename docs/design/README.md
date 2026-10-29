@@ -242,7 +242,7 @@ Un seul composant, `nv-chart` : un SVG dessiné avec les aides de `@nirvana/desi
 
 - Raccourcis communs au playground et au copilote : `a` valider, `e` corriger, `r` rejeter. Chaque bouton affiche sa touche (`nv-kbd`).
 - La proposition montre le brief en une ligne, le fil, le brouillon étiqueté, puis les faits utilisés et la latence en `nv-meta`.
-- Cibles ≥ 44px : les contrôles compacts (`nv-btn--sm`, `nv-iconbtn`, `nv-switch`) gardent une zone de clic de 44px autour d'un visuel plus petit.
+- Cibles ≥ 44px : les contrôles compacts (`nv-btn--sm`, `nv-iconbtn`, `nv-close`, `nv-switch`) gardent une zone de clic de 44px autour d'un visuel plus petit.
 
 ## Correspondance avec shadcn/ui
 

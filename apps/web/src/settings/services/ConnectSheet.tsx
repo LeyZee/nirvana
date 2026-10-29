@@ -187,7 +187,7 @@ export function ConnectSheet({
     <button
       ref={closeButton}
       type="button"
-      className="sv-close"
+      className="nv-close"
       aria-label="Fermer"
       disabled={isBusy}
       onClick={close}

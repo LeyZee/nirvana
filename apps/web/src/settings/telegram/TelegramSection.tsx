@@ -6,6 +6,7 @@ import type {
   TelegramRoute,
   TelegramTopic,
 } from '@nirvana/contracts';
+import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState, type JSX, type KeyboardEvent } from 'react';
 
 import { distinctNames } from '../names';
@@ -630,10 +631,21 @@ function RoutingList({
                 {TOPICS[topic].label}
               </b>
               <small>{TOPICS[topic].sub}</small>
-              {topic === 'keyword' && !reachesAGroup(routing, scope, topic) ? (
-                <small className="tg-route__warn">
-                  Sans groupe choisi ici, un mot-clé ne prévient personne sur Telegram.
-                </small>
+              {topic === 'keyword' ? (
+                <>
+                  <small>
+                    Un mot de sa Persona arrête l’agent pour ce fan ; le groupe reçoit le mot trouvé et un
+                    lien, jamais le message.{' '}
+                    <Link className="tg-route__link" to="/creatrices">
+                      Modifier les mots dans la Persona
+                    </Link>
+                  </small>
+                  {!reachesAGroup(routing, scope, topic) ? (
+                    <small className="tg-route__warn">
+                      Sans groupe choisi ici, un mot-clé ne prévient personne sur Telegram.
+                    </small>
+                  ) : null}
+                </>
               ) : null}
             </div>
             <ChatChips {...routing} scope={scope} topic={topic} />

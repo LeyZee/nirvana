@@ -288,4 +288,16 @@ describe('Réglages › Telegram, her own alerts (P4-01)', () => {
       expect(screen.queryByText(hint)).toBeNull();
     });
   });
+
+  it('says under Mots-clés what a keyword does, and links to the Persona where the words are set', async () => {
+    renderSection();
+    expect(
+      await screen.findByText(
+        /Un mot de sa Persona arrête l’agent pour ce fan ; le groupe reçoit le mot trouvé et un lien/,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Modifier les mots dans la Persona' }).getAttribute('href')).toBe(
+      '/creatrices',
+    );
+  });
 });

@@ -311,6 +311,20 @@
 .tg-lvl small.tg-route__warn {
   color: var(--nv-warning);
 }
+.tg-route__link {
+  color: var(--nv-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--nv-ink-faint);
+}
+.tg-route__link:hover {
+  text-decoration-color: currentColor;
+}
+.tg-route__link:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 .tg-dot {
   --_c: var(--nv-ink-faint);
   width: 8px;
@@ -769,46 +783,6 @@
   background: var(--nv-select-strong);
   color: var(--nv-ink);
 }
-.tg-close {
-  appearance: none;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  margin: 0;
-  padding: 0;
-  border-radius: var(--nv-radius-full);
-  background: var(--nv-glass-fill);
-  color: var(--nv-ink-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--nv-dur-base) var(--nv-ease-out),
-    color var(--nv-dur-base) var(--nv-ease-out),
-    transform var(--nv-dur-base) var(--nv-ease-out);
-}
-.tg-close:hover:not(:disabled) {
-  background: var(--nv-select-strong);
-  color: var(--nv-ink);
-  transform: rotate(90deg);
-}
-.tg-close:active:not(:disabled) {
-  transform: scale(0.9);
-  transition-duration: var(--nv-dur-instant);
-}
-.tg-close:focus-visible {
-  outline: 2px solid var(--nv-focus);
-  outline-offset: 2px;
-}
-.tg-close svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
 .tg-sheet__actions {
   display: flex;
   align-items: center;
@@ -1084,13 +1058,10 @@
   .tg-spin {
     animation: none;
   }
-  .tg-health--link,
-  .tg-close {
+  .tg-health--link {
     transition: none;
   }
-  .tg-health--link:active,
-  .tg-close:hover:not(:disabled),
-  .tg-close:active:not(:disabled) {
+  .tg-health--link:active {
     transform: none;
   }
 }

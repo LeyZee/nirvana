@@ -291,52 +291,6 @@
   background: var(--nv-select-strong);
   color: var(--nv-ink);
 }
-/* Closing is quiet: the dialog's one neon stays on its step's action. */
-.bk-close {
-  appearance: none;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  margin: 0;
-  padding: 0;
-  border-radius: var(--nv-radius-full);
-  background: var(--nv-glass-fill);
-  color: var(--nv-ink-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--nv-dur-fast) var(--nv-ease-out),
-    color var(--nv-dur-fast) var(--nv-ease-out),
-    transform var(--nv-dur-slow) var(--nv-ease-spring);
-}
-.bk-close:hover:not(:disabled) {
-  background: var(--nv-select-strong);
-  color: var(--nv-ink);
-  transform: rotate(90deg);
-}
-.bk-close:active:not(:disabled) {
-  transform: scale(0.9);
-  transition-duration: var(--nv-dur-instant);
-}
-.bk-close:focus-visible {
-  outline: 2px solid var(--nv-focus);
-  outline-offset: 2px;
-}
-.bk-close:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.bk-close svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
-
 .bk-field {
   display: flex;
   flex-direction: column;
@@ -439,8 +393,7 @@
     animation: none;
   }
   .bk-strip:hover,
-  .bk-card:hover,
-  .bk-close:hover:not(:disabled) {
+  .bk-card:hover {
     transform: none;
   }
 }

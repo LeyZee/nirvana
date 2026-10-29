@@ -213,7 +213,7 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
               </ol>
             )}
           </div>
-          <button type="button" className="bk-close" aria-label="Fermer" disabled={busy} onClick={close}>
+          <button type="button" className="nv-close" aria-label="Fermer" disabled={busy} onClick={close}>
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="m4 4 8 8M12 4l-8 8" />
             </svg>

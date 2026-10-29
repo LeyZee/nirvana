@@ -283,51 +283,6 @@
   font-size: var(--nv-text-footnote);
   color: var(--nv-ink-muted);
 }
-/* The round close of every Réglages sheet (bk-close, tg-close): one look for the same gesture. */
-.sv-close {
-  appearance: none;
-  width: 36px;
-  height: 36px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border: 0;
-  margin: 0;
-  padding: 0;
-  border-radius: var(--nv-radius-full);
-  background: var(--nv-glass-fill);
-  color: var(--nv-ink-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--nv-dur-base) var(--nv-ease-out),
-    color var(--nv-dur-base) var(--nv-ease-out),
-    transform var(--nv-dur-base) var(--nv-ease-out);
-}
-.sv-close:hover:not(:disabled) {
-  background: var(--nv-select-strong);
-  color: var(--nv-ink);
-  transform: rotate(90deg);
-}
-.sv-close:active:not(:disabled) {
-  transform: scale(0.9);
-  transition-duration: var(--nv-dur-instant);
-}
-.sv-close:focus-visible {
-  outline: 2px solid var(--nv-focus);
-  outline-offset: 2px;
-}
-.sv-close:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.sv-close svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
 .sv-steps {
   list-style: none;
   margin: 4px 0 0;
