@@ -124,6 +124,14 @@ describe('heroState', () => {
     expect(hero.headline).toContain('**arrêté**');
   });
 
+  it('says on Arrêt that the grave lines still wait (choix de Charles, 28/10)', () => {
+    expect(heroState(agent, [todo('a', 'bad')], 'stop').lead).toContain('Une urgence reste à traiter');
+    expect(heroState(agent, [todo('a', 'bad'), todo('b', 'bad')], 'stop').lead).toContain(
+      '2 urgences restent à traiter',
+    );
+    expect(heroState(agent, [], 'stop').lead).toContain('Les chatteurs gardent la main dans Reveal');
+  });
+
   it('is calm when nothing waits', () => {
     expect(heroState(agent, [], 'copilot')).toMatchObject({ tone: 'ok' });
     expect(heroState(agent, [], 'copilot').action).toBeUndefined();

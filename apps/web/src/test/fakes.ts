@@ -75,6 +75,7 @@ export function apiDashboard(patch: Partial<ApiDashboard> = {}): ApiDashboard {
         notes: ['Infirmier de nuit'],
       },
     ],
+    usdSales: { seen: false, rate: null },
     ...patch,
   });
 }

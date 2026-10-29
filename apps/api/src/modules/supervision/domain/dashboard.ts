@@ -99,12 +99,24 @@ export function revealLate(
   return now.getTime() - from > allowedMs;
 }
 
-/** Safety first: a possible minor, consent or distress before everything else. */
+/**
+ * Safety first: a possible minor, consent or distress before everything else. These handoff causes are the grave
+ * ones: red in « À traiter », and the only lines it keeps while the agent is on Arrêt.
+ */
 const GRAVE: ReadonlySet<WaitingConversation['kind']> = new Set(['minor', 'non_consent', 'distress']);
 
-/** « À traiter », the gravest first, then the longest waiting. */
-export function todos(waiting: readonly WaitingConversation[], now: Date): DashboardTodo[] {
-  return [...waiting]
+/**
+ * « À traiter », the gravest first, then the longest waiting. On Arrêt (choix de Charles, 28/10) it keeps the grave
+ * lines only: nothing leaves in her name, the chatters hold the hand in Reveal, but a possible minor, a question of
+ * consent or a fan in distress still waits for a human. The other lines come back with the agent.
+ */
+export function todos(
+  waiting: readonly WaitingConversation[],
+  now: Date,
+  agent: { readonly stopped: boolean } = { stopped: false },
+): DashboardTodo[] {
+  return waiting
+    .filter((w) => !agent.stopped || GRAVE.has(w.kind))
     .sort(
       (a, b) =>
         Number(GRAVE.has(b.kind)) - Number(GRAVE.has(a.kind)) || a.since.getTime() - b.since.getTime(),
@@ -226,7 +238,7 @@ export function assembleDashboard(input: {
       alertAt: input.budget.alertAtEur,
       costPerEuroSold: null,
     },
-    todos: todos(facts.waiting, window.now),
+    todos: todos(facts.waiting, window.now, { stopped: mode(facts) === 'stop' }),
     fans: facts.fans.map((fan) => ({
       id: FanIdSchema.parse(fan.id),
       name: fanNameOf(fan.name),
@@ -237,5 +249,9 @@ export function assembleDashboard(input: {
       notes: [...fan.notes],
       ...(fan.alert !== undefined && { alert: fan.alert }),
     })),
+    usdSales: {
+      seen: facts.usdSales.seen,
+      rate: facts.usdSales.rateDay === null ? null : { day: facts.usdSales.rateDay },
+    },
   };
 }

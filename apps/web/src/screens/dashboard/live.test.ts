@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ago, fromApi, replyDelay } from './live';
+import { ago, fromApi, replyDelay, usdNote } from './live';
 
 import { apiDashboard } from '@/test/fakes';
 
@@ -52,6 +52,21 @@ describe('fromApi', () => {
 
   it('makes no sale up', () => {
     expect(fromApi(apiDashboard()).sales).toBeNull();
+  });
+
+  it('says how the best fans’ dollars were counted, and nothing without a dollar sale (choix de Charles, 28/10)', () => {
+    expect(usdNote({ seen: true, rate: { day: '2026-10-27' } })).toBe(
+      'Dollars convertis en euros au taux BCE du 27 octobre.',
+    );
+    expect(usdNote({ seen: true, rate: { day: '2026-11-01' } })).toBe(
+      'Dollars convertis en euros au taux BCE du 1er novembre.',
+    );
+    expect(usdNote({ seen: true, rate: null })).toBe(
+      'Les ventes en dollars ne sont pas comptées : aucun taux BCE n’est encore connu.',
+    );
+    expect(usdNote({ seen: false, rate: { day: '2026-10-27' } })).toBeUndefined();
+    expect(fromApi(apiDashboard()).usdNote).toBeUndefined();
+    expect(fromApi(apiDashboard({ usdSales: { seen: true, rate: null } })).usdNote).toContain('pas comptées');
   });
 
   it('keeps the best fans only, a waiting fan is read in Suivi', () => {

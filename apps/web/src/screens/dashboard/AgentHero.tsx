@@ -31,10 +31,11 @@ export function AgentHero({
   /** A creator's Dashboard: the agent's state, never the list of conversations waiting for a human (ADR 0023). */
   forCreator?: boolean;
 }): JSX.Element {
-  const hero = heroState(agent, waiting, mode, forCreator);
   const stopped = mode === 'stop';
-  // A stopped agent asks nothing: the list comes back with it.
-  const todos = stopped || forCreator ? [] : waiting;
+  // A stopped agent keeps the grave lines only (minor, consent, distress: choix de Charles, 28/10); the server sends
+  // no other, and the filter holds while the mode has just changed and the list is not read again yet.
+  const todos = forCreator ? [] : stopped ? waiting.filter((todo) => todo.tone === 'bad') : waiting;
+  const hero = heroState(agent, todos, mode, forCreator);
   const first = todos[0];
   return (
     <section
@@ -75,7 +76,7 @@ export function AgentHero({
         )}
       </div>
 
-      {stopped || forCreator ? null : todos.length === 0 ? (
+      {forCreator || (stopped && todos.length === 0) ? null : todos.length === 0 ? (
         <div className="nv-calm nv-swap">
           <span className="nv-dot nv-tone--ok" aria-hidden="true" />
           Rien à traiter pour l’instant.

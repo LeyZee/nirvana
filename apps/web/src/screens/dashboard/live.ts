@@ -10,6 +10,7 @@ import type { AgentCard, AgentState, Dashboard, Fan, Todo } from './model';
 
 import { CAUSE_LABELS } from '@/agent/causes';
 import { percent } from '@/agent/mode';
+import { withFirstOfMonth } from '@/scheduling/time';
 import { telegramNightOf } from '@/settings/telegram/NightBanner';
 
 /*
@@ -327,10 +328,27 @@ function fanOf(fan: DashboardFan, now: Date): Fan {
   };
 }
 
+/** « 27 octobre », « 1er novembre » once `withFirstOfMonth` has read it. */
+const ECB_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+/**
+ * How the best fans' dollars were counted (choix de Charles, 28/10): at the last ECB rate known, the one pay keeps,
+ * or not at all while none is known. Nothing when no dollar sale falls in the period.
+ */
+export function usdNote(usdSales: ApiDashboard['usdSales']): string | undefined {
+  if (!usdSales.seen) return undefined;
+  if (usdSales.rate === null)
+    return 'Les ventes en dollars ne sont pas comptées : aucun taux BCE n’est encore connu.';
+  // An ECB day is a calendar day: read in UTC, it never shifts by a time zone.
+  const day = withFirstOfMonth(ECB_DAY.formatToParts(new Date(`${usdSales.rate.day}T00:00:00Z`)));
+  return `Dollars convertis en euros au taux BCE du ${day}.`;
+}
+
 /** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
 export function fromApi(api: ApiDashboard, forCreator = false): Dashboard {
   const now = new Date(api.creator.now);
   const timeZone = api.creator.timezone;
+  const dollars = usdNote(api.usdSales);
   return {
     creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
     agent: agentState(api, now, forCreator),
@@ -338,5 +356,6 @@ export function fromApi(api: ApiDashboard, forCreator = false): Dashboard {
     sales: null,
     telegram: telegramNightOf(api),
     fans: api.fans.map((fan) => fanOf(fan, now)),
+    ...(dollars === undefined ? {} : { usdNote: dollars }),
   };
 }

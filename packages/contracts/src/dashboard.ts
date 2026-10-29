@@ -159,7 +159,16 @@ export const DashboardSchema = z.object({
     costPerEuroSold: z.number().nonnegative().nullable(),
   }),
   todos: z.array(DashboardTodoSchema),
-  /** Best fans first. */
+  /**
+   * Best fans first, by what they spent over the period in euros: sales in dollars converted at the last ECB rate known,
+   * the one pay keeps (ADR 0033); a ranking, never a payout.
+   */
   fans: z.array(DashboardFanSchema),
+  /**
+   * The dollar sales of the period, for the sentence under the best fans (choix de Charles, 28/10). `seen`: at least one
+   * paid message in dollars falls in the period. `rate`: the ECB day of the rate they were converted at, `null` when no
+   * rate is known yet, and then they are not counted.
+   */
+  usdSales: z.object({ seen: z.boolean(), rate: z.object({ day: z.iso.date() }).nullable() }),
 });
 export type Dashboard = z.infer<typeof DashboardSchema>;

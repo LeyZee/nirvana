@@ -4,7 +4,10 @@ import type {
   DecidedDraft,
   HandoffCause,
   LiveRateReading,
+  UserId,
 } from '@nirvana/contracts';
+
+import type { UsdRate } from './fan-ranking';
 
 /** The voice version whose live rate the Dashboard shows: the one the composition root gives `conversations` too. */
 export interface VoiceVersion {
@@ -29,6 +32,7 @@ interface TopFan {
   readonly name: string;
   readonly conversationId: string;
   readonly firstSeenAt: Date;
+  /** In euro cents, his dollars converted at the last ECB rate known (`rankFans`). */
   readonly spentMinor: number;
   readonly byAgentMinor: number;
   readonly notes: readonly string[];
@@ -63,7 +67,10 @@ export interface DashboardFacts {
   };
   readonly handoffsToday: readonly { readonly cause: HandoffCause; readonly count: number }[];
   readonly waiting: readonly WaitingConversation[];
+  /** Best fans first (`rankFans`). */
   readonly fans: readonly TopFan[];
+  /** Whether a dollar sale falls in the period, and the ECB day of the rate it was converted at (`null`: not counted). */
+  readonly usdSales: { readonly seen: boolean; readonly rateDay: string | null };
 }
 
 export interface DashboardWindow {
@@ -79,7 +86,17 @@ export interface DashboardReader {
   read(
     creatorId: CreatorId,
     window: (timezone: string) => DashboardWindow,
+    /** The last ECB rate known for the dollar, `null` when none is: its sales then do not count. */
+    usdRate: UsdRate | null,
   ): Promise<{ readonly facts: DashboardFacts; readonly window: DashboardWindow } | undefined>;
+}
+
+/**
+ * The last ECB rate known for the dollar (module payroll, ADR 0033, wired by the composition root), read under the
+ * member context of whoever reads the Dashboard; `null` before the first rate.
+ */
+export interface UsdRateView {
+  latest(userId: UserId): Promise<UsdRate | null>;
 }
 
 /**

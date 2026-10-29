@@ -293,7 +293,7 @@ describe('GET /v1/dashboard', () => {
     ]);
   });
 
-  it('shows a message left with nothing under way for 30 minutes, except while she is stopped or Reveal unread (P3-11)', async () => {
+  it('shows a message left with nothing under way for 30 minutes, except while Reveal is unread (P3-11)', async () => {
     const longAgo = new Date(Date.now() - 40 * 60_000);
     const seed = async (name: string, at: Date): Promise<ConversationId> => {
       const { conversationId } = await app.modules.conversations.ingestMessage({
@@ -389,7 +389,7 @@ describe('GET /v1/dashboard', () => {
     expect(fromOpening[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
     await hoursAre(null);
 
-    // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.
+    // An expired Reveal session says it all: the net stays quiet, the rest still waits.
     const sessionIs = (state: 'valid' | 'expired') =>
       test.admin.db
         .update(schema.platformAccounts)
@@ -398,16 +398,38 @@ describe('GET /v1/dashboard', () => {
     await sessionIs('expired');
     expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
     await sessionIs('valid');
-    await test.admin.db.insert(schema.killSwitches).values({
-      id: newId(KillSwitchIdSchema),
-      scope: 'creator',
-      scopeId: creatorId,
-      creatorId,
-      active: true,
-      reason: 'test',
-      setBy: 'test',
-    });
-    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+  });
+
+  it('keeps the grave lines only while she is stopped (choix de Charles, 28/10)', async () => {
+    const read = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json());
+    const running = await read();
+    expect(running.todos.map((t) => t.kind)).toEqual(
+      expect.arrayContaining(['minor', 'unanswered', 'send_failed']),
+    );
+    const stopIs = (active: boolean) =>
+      test.admin.db.insert(schema.killSwitches).values({
+        id: newId(KillSwitchIdSchema),
+        scope: 'creator',
+        scopeId: creatorId,
+        creatorId,
+        active,
+        reason: 'test',
+        setBy: 'test',
+        // The latest row of her scope wins: one millisecond apart is enough.
+        setAt: new Date(),
+      });
+
+    // Arrêt: Leo, who may be a minor, still waits for a human; the draft, the failed send and the net leave.
+    await stopIs(true);
+    const stopped = await read();
+    expect(stopped.mode).toBe('stop');
+    expect(stopped.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
+
+    // Back on: every line comes back.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await stopIs(false);
+    expect((await read()).todos.map((t) => t.kind)).toEqual(running.todos.map((t) => t.kind));
   });
 
   it('lists a handoff until the hand is given back, never a takeover a person chose (recette 28/10)', async () => {
@@ -461,6 +483,105 @@ describe('GET /v1/dashboard', () => {
     expect(listed).toContain('Leo');
     expect(listed).not.toContain('Nina');
     expect(listed).not.toContain('Paul');
+  });
+
+  it('ranks the best fans on their sales in euros, dollars at the last ECB rate known (choix de Charles, 28/10)', async () => {
+    const marc = conversations.get('Marc')!;
+    const sale = (id: string, author: 'ai' | 'human', priceMinor: number, currency: 'EUR' | 'USD') =>
+      test.admin.db.insert(schema.messages).values({
+        id: newId(MessageIdSchema),
+        creatorId,
+        platformAccountId,
+        conversationId: marc,
+        platformMessageId: id,
+        direction: 'outbound',
+        author,
+        text: 'Pour toi',
+        priceMinor,
+        currency,
+        isPaid: true,
+        platformCreatedAt: new Date(),
+      });
+    // Marc: 10 € sold by a chatter, 30 $ by the agent. Julien: 25 € by the agent.
+    await sale('paid-marc-eur', 'human', 1_000, 'EUR');
+    await sale('paid-marc-usd', 'ai', 3_000, 'USD');
+    const read = async (cookie = ownerCookie) =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, cookie)).json());
+
+    // No rate yet: his dollars do not count, and the screen is told so.
+    const without = await read();
+    expect(without.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([
+      ['Julien', 25, 25],
+      ['Marc', 10, 0],
+    ]);
+    expect(without.usdSales).toEqual({ seen: true, rate: null });
+
+    // Pay's job wrote two days; the latest counts: 30 $ × 0.9 = 27 €, 37 € in all, ahead of Julien.
+    await test.admin.db.insert(schema.exchangeRates).values([
+      {
+        currency: 'USD',
+        day: '2026-10-26',
+        rateMicros: 800_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      },
+      {
+        currency: 'USD',
+        day: '2026-10-27',
+        rateMicros: 900_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      },
+    ]);
+    const converted = await read();
+    expect(converted.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([
+      ['Marc', 37, 27],
+      ['Julien', 25, 25],
+    ]);
+    expect(converted.fans[0]?.conversationId).toBe(marc);
+    expect(converted.usdSales).toEqual({ seen: true, rate: { day: '2026-10-27' } });
+
+    // Her own Dashboard keeps no fan, and says nothing of them.
+    expect((await read(creatorCookie)).usdSales).toEqual({ seen: false, rate: null });
+  });
+
+  it('leaves out a paid message whose price is not positive, without failing (recette 28/10, #296)', async () => {
+    const leo = conversations.get('Leo')!;
+    const sale = (id: string, priceMinor: number, currency: 'EUR' | 'USD') =>
+      test.admin.db.insert(schema.messages).values({
+        id: newId(MessageIdSchema),
+        creatorId,
+        platformAccountId,
+        conversationId: leo,
+        platformMessageId: id,
+        direction: 'outbound',
+        author: 'ai',
+        text: 'Pour toi',
+        priceMinor,
+        currency,
+        isPaid: true,
+        platformCreatedAt: new Date(),
+      });
+    await test.admin.db
+      .insert(schema.exchangeRates)
+      .values({
+        currency: 'USD',
+        day: '2026-10-27',
+        rateMicros: 900_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    // Nothing in the base forbids it: a negative or zero price never counts, and never fails the Dashboard.
+    await sale('paid-leo-eur', 1_000, 'EUR');
+    await sale('paid-leo-usd-negative', -5_000, 'USD');
+    await sale('paid-leo-eur-zero', 0, 'EUR');
+    const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
+    expect(response.statusCode).toBe(200);
+    const dashboard = DashboardSchema.parse(response.json());
+    expect(dashboard.fans.filter((f) => f.name === 'Leo').map((f) => [f.spent, f.byAgent])).toEqual([
+      [10, 10],
+    ]);
   });
 
   it('says Reveal is read late once three of its polls have gone by without a read (recette 28/10, G8)', async () => {
