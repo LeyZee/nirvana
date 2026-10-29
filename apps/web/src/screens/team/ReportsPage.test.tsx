@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReportsPage } from './ReportsPage';
@@ -37,6 +37,29 @@ const MEMBERS = [
   { id: THEO, displayName: 'Théo', color: null },
   { id: BASILE, displayName: 'Basile', color: null },
 ];
+
+/** The team as `/v1/team/members` reads it: each member's own zone and status, for « Relancer ». */
+const teamMember = (memberId: string, name: string, status = 'active'): Record<string, unknown> => ({
+  id: memberId,
+  userId: id(Number(memberId.slice(-3)) + 50),
+  email: `member${memberId.slice(-3)}@example.test`,
+  firstName: name,
+  lastName: 'Martin',
+  displayName: name,
+  teamRole: 'chatter',
+  status,
+  country: 'FR',
+  timeZone: 'Europe/Paris',
+  color: null,
+  joinedOn: '2026-09-01',
+  creatorIds: [id(1)],
+  commission: null,
+  invitationPending: false,
+  invitationExpiresAt: null,
+});
+let team: { status: number; body: unknown };
+/** A period whose list the server does not answer. */
+let downPeriod: string | null;
 
 const text = (element: Element | null | undefined): string =>
   (element?.textContent ?? '').replaceAll('\u00a0', ' ');
@@ -113,7 +136,10 @@ function serve(): void {
             slotLengthMinutes: 360,
             accessMarginMinutes: 15,
           });
+        case '/v1/team/members':
+          return json(team.body, team.status);
         case '/v1/scheduling/shift-reports':
+          if (downPeriod !== null && url.searchParams.get('period') === downPeriod) return json(null, 500);
           return json(
             url.searchParams.has('period')
               ? url.searchParams.get('period') === '2026-10-16'
@@ -200,6 +226,8 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date('2026-10-28T00:00:00Z'));
   writes.length = 0;
+  team = { status: 200, body: { members: [teamMember(THEO, 'Théo'), teamMember(BASILE, 'Basile')] } };
+  downPeriod = null;
   open = [
     report(1, 0, { comment: 'Un pack a bien plu' }),
     report(2, 1, { incident: 'Le compte a été déconnecté une heure' }),
@@ -259,7 +287,7 @@ describe('Équipe › Rapports', () => {
     fireEvent.click(await screen.findByLabelText('Tout sélectionner'));
     fireEvent.click(screen.getByRole('button', { name: 'Valider (2)' }));
 
-    expect((await screen.findByRole('status')).textContent).toContain('Validation de 2 rapports dans 5 s');
+    expect(await screen.findByText(/Validation de 2 rapports dans 5\ss/u)).toBeTruthy();
     // Held in place, out of the selection, until they are sent.
     expect(screen.getAllByText('En validation')).toHaveLength(2);
     // Nothing chosen any more: no greyed « Valider » left in the header (EQ-26).
@@ -317,7 +345,7 @@ describe('Équipe › Rapports', () => {
     ).toBe(true);
     // Its refusal has its own island, above the second one counting down.
     expect((await screen.findByRole('alert')).textContent).toContain('Le rapport de Théo (');
-    expect(screen.getByRole('status').textContent).toContain('Validation du rapport dans');
+    expect(screen.getByText(/Validation du rapport dans/u)).toBeTruthy();
   });
 
   it('validates more than a batch holds in batches of 100, under one hold', async () => {
@@ -408,16 +436,83 @@ describe('Équipe › Rapports', () => {
     renderPage();
     const late = (await screen.findByText('3 shifts sans rapport')).closest('details');
     if (!(late instanceof HTMLDetailsElement)) throw new Error('no late fold');
-    expect(text(late.querySelector('summary'))).toContain('le plus ancien depuis 3 jours');
+    // The fold says its window: older shifts without a report exist, pay carries a late one (ADR 0023).
+    expect(text(late.querySelector('summary'))).toContain(
+      'le plus ancien depuis 3 jours · cette quinzaine et la précédente',
+    );
     const rows = [...late.querySelectorAll('.rp-late__one')].map((row) => text(row));
     expect(rows[0]).toMatch(/^Basilesam\. 24 oct\./u);
     expect(rows[1]).toMatch(/^Théodim\. 25 oct\./u);
     expect(rows[2]).toMatch(/^Basilelun\. 26 oct\./u);
     fireEvent.click(within(late).getAllByRole('button', { name: 'Relancer Basile' })[0] ?? late);
     await within(late).findByRole('button', { name: 'Message copié pour Basile' });
+    // Said once for the page, in a zone that was there and empty before.
+    expect(screen.getAllByRole('status').map((zone) => zone.textContent)).toContain(
+      'Message pour Basile copié',
+    );
     expect(copied[0]).toMatch(
       /^Basile, ton rapport du sam\. 24 oct\. · 18\sh – 0\sh \(Nora Vidal\) n’est pas encore fait\. Fais-le dans Nirvana dès que tu peux\.$/u,
     );
+  });
+
+  it('shows the word to copy by hand, selected, when there is no clipboard', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+    });
+    renderPage();
+    const late = (await screen.findByText('3 shifts sans rapport')).closest('details');
+    if (!(late instanceof HTMLDetailsElement)) throw new Error('no late fold');
+    late.open = true;
+    fireEvent.click(within(late).getAllByRole('button', { name: 'Relancer Basile' })[0] ?? late);
+    const word = await within(late).findByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Message pour Basile, à copier',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(word);
+    });
+    expect(word.selectionEnd - word.selectionStart).toBe(word.value.length);
+  });
+
+  it('says « Parti » for a member who left, and keeps « Relancer » until the team is read', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    team = {
+      status: 200,
+      body: { members: [teamMember(THEO, 'Théo'), teamMember(BASILE, 'Basile', 'left')] },
+    };
+    renderPage();
+    const late = (await screen.findByText('3 shifts sans rapport')).closest('details') ?? document.body;
+    await within(late).findAllByText('Parti');
+    expect(within(late).queryByRole('button', { name: 'Relancer Basile' })).toBeNull();
+    expect(within(late).getByRole('button', { name: 'Relancer Théo' })).toBeTruthy();
+  });
+
+  it('says why « Relancer » waits when the team cannot be read, and when the late shifts cannot be', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    team = { status: 503, body: null };
+    downPeriod = '2026-10-01';
+    renderPage();
+    expect(
+      await screen.findByText(
+        'Les fiches des membres n’ont pas pu être lues : « Relancer » attend leurs heures.',
+        {},
+        { timeout: 4_000 },
+      ),
+    ).toBeTruthy();
+    expect(await screen.findByText('Les shifts sans rapport n’ont pas pu être lus.')).toBeTruthy();
+    expect(screen.queryByText('3 shifts sans rapport')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Relancer/u })).toBeNull();
+  });
+
+  it('says so when the member asked has no shift on the period', async () => {
+    const lou = id(23);
+    team = {
+      status: 200,
+      body: { members: [teamMember(THEO, 'Théo'), teamMember(BASILE, 'Basile'), teamMember(lou, 'Lou')] },
+    };
+    renderPage(lou);
+    expect(await screen.findByText('Pas de shift de Lou sur cette quinzaine.')).toBeTruthy();
   });
 
   it('opens the fold of the member asked from his record or a shift (EQ-11, EQ-13)', async () => {

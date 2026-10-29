@@ -912,6 +912,22 @@ describe('Équipe › Planning', () => {
       expect(document.querySelector('.sc-focus')).toBe(null);
     });
     expect(router.state.location.search).toEqual({});
+    // The button went with the band: the focus lands on the week, which stays.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Semaine précédente' }));
+  });
+
+  it('names the member put forward from the team, even with no shift in the week', async () => {
+    serve({
+      members: [
+        member({}),
+        member({ id: BASILE, userId: id(72), firstName: 'Basile', displayName: 'Basile', color: null }),
+      ],
+    });
+    renderPage(`/equipe/planning?membre=${BASILE}`);
+    const band = await screen.findByText('Basile', { selector: '.sc-focus b' }, { timeout: 4_000 });
+    expect(text(band.closest('.sc-focus'))).toContain('Basile · aucun shift cette semaine');
+    // A landmark, not an announcement.
+    expect(band.closest('.sc-focus')?.getAttribute('role')).toBe(null);
   });
 
   it('says how long a single shift really lasts the night the clocks go forward', async () => {

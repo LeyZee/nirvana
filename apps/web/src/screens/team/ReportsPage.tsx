@@ -18,7 +18,6 @@ import {
   rejectReport,
   useRefreshReports,
   useReports,
-  useReportsOf,
   useSchedulingSettings,
   validateInBatches,
   type ReportRefusal,
@@ -27,6 +26,7 @@ import {
   AGENCY_STATUS,
   amountText,
   linesOf,
+  mergeLists,
   periodAt,
   periodSums,
   periodTitle,
@@ -54,6 +54,16 @@ interface Correcting {
   readonly shiftId: string;
   readonly memberName: string;
   readonly draft: ReportDraft;
+}
+
+/** Who « Relancer » can reach: a member at his own hour, one who left (he can no longer sign in), or one not read. */
+type NudgeTo =
+  { readonly kind: 'home'; readonly zone: string } | { readonly kind: 'gone' } | { readonly kind: 'unknown' };
+
+/** What « Relancer » needs, the same everywhere on the page: who it reaches, and the one zone that says « copié ». */
+interface Nudging {
+  readonly to: (memberId: string) => NudgeTo;
+  readonly onCopied: (name: string) => void;
 }
 
 const emptyCorrection = (): ReportDraft => ({
@@ -90,11 +100,26 @@ export function ReportsPage({
   const open = useReports(null);
   const current = settings.data === undefined ? null : periodAt(now, settings.data.timeZone);
   const period = asked ?? current;
-  // The late reports, of this period and the one before (still open until its closing): at a glance (EQ-14).
-  const recent = useReportsOf(current === null ? [] : [previousPeriod(current), current]);
+  // The shifts without a report at a glance (EQ-14), read on this period and the one before. A late report is never
+  // refused, pay carries it to the first open period (ADR 0023), so older ones exist too: the fold says its window.
+  const previousList = useReports(current === null ? null : previousPeriod(current), current !== null);
+  const currentList = useReports(current, current !== null);
+  const recent =
+    previousList.data === undefined || currentList.data === undefined
+      ? null
+      : mergeLists([previousList.data, currentList.data]);
   const members = useMembers();
-  const homeOf = (memberId: string): string =>
-    members.data?.find((one) => one.id === memberId)?.timeZone ?? zone;
+  const [copied, setCopied] = useState('');
+  const nudging: Nudging = {
+    to: (memberId) => {
+      const one = members.data?.find((member) => member.id === memberId);
+      if (one === undefined) return { kind: 'unknown' };
+      return one.status === 'left' ? { kind: 'gone' } : { kind: 'home', zone: one.timeZone };
+    },
+    onCopied: (name) => {
+      setCopied(`Message pour ${name} copié`);
+    },
+  };
   const ofPeriod = useReports(period, period !== null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [held, setHeld] = useState<ReadonlySet<string>>(new Set());
@@ -198,9 +223,18 @@ export function ReportsPage({
           chosen={chosen.length}
           late={recent === null ? null : lateLines(recent, now)}
           lateNames={recent}
+          lateError={previousList.isError || currentList.isError}
+          onLateRetry={() => {
+            void previousList.refetch();
+            void currentList.refetch();
+          }}
+          membersError={members.isError}
+          onMembersRetry={() => {
+            void members.refetch();
+          }}
           now={now}
           zone={zone}
-          homeOf={homeOf}
+          nudging={nudging}
           onSelect={setSelected}
           onValidate={validate}
         />
@@ -215,7 +249,10 @@ export function ReportsPage({
           }}
           zone={zone}
           focus={member}
-          homeOf={homeOf}
+          focusName={
+            member === null ? null : (members.data?.find((one) => one.id === member)?.displayName ?? null)
+          }
+          nudging={nudging}
           onPeriod={onPeriod}
           onCorrect={(line, memberName) => {
             setCorrecting({ shiftId: line.shift.id, memberName, draft: emptyCorrection() });
@@ -235,6 +272,10 @@ export function ReportsPage({
           }}
         />
       )}
+      {/* One zone for the whole page, always there and empty until a word is copied (EQ-15). */}
+      <p className="sr-only" role="status">
+        {copied}
+      </p>
     </Page>
   );
 }
@@ -297,9 +338,13 @@ function ToValidate({
   chosen,
   late,
   lateNames,
+  lateError,
+  onLateRetry,
+  membersError,
+  onMembersRetry,
   now,
   zone,
-  homeOf,
+  nudging,
   onSelect,
   onValidate,
 }: {
@@ -316,10 +361,15 @@ function ToValidate({
   late: readonly ShiftLine[] | null;
   /** The list the late shifts come from, for their names. */
   lateNames: ShiftReportList | null;
+  /** The late shifts could not be read: said, never a fold that is simply gone. */
+  lateError: boolean;
+  onLateRetry: () => void;
+  /** The team could not be read: « Relancer » waits for the members' hours rather than give the reader's. */
+  membersError: boolean;
+  onMembersRetry: () => void;
   now: Date;
   zone: string;
-  /** A member's own zone, for the hours of the word « Relancer » copies. */
-  homeOf: (memberId: string) => string;
+  nudging: Nudging;
   onSelect: (next: ReadonlySet<string>) => void;
   onValidate: () => void;
 }): JSX.Element {
@@ -379,9 +429,26 @@ function ToValidate({
           )}
         </div>
 
-        {late === null || lateNames === null || late.length === 0 ? null : (
-          <Late lines={late} list={lateNames} now={now} zone={zone} homeOf={homeOf} />
+        {lateError ? (
+          <div className="sc-inline-warn nv-swap">
+            <p className="tm-warn">Les shifts sans rapport n’ont pas pu être lus.</p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onLateRetry}>
+              Réessayer
+            </button>
+          </div>
+        ) : late === null || lateNames === null || late.length === 0 ? null : (
+          <Late lines={late} list={lateNames} now={now} zone={zone} nudging={nudging} />
         )}
+        {membersError ? (
+          <div className="sc-inline-warn nv-swap">
+            <p className="tm-warn">
+              Les fiches des membres n’ont pas pu être lues : « Relancer » attend leurs heures.
+            </p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onMembersRetry}>
+              Réessayer
+            </button>
+          </div>
+        ) : null}
 
         {waiting.length === 0 ? (
           <p className="rp-mine__empty">
@@ -679,7 +746,8 @@ function PeriodPanel({
   onRetry,
   zone,
   focus,
-  homeOf,
+  focusName,
+  nudging,
   onPeriod,
   onCorrect,
 }: {
@@ -691,7 +759,9 @@ function PeriodPanel({
   zone: string;
   /** The member whose fold opens, `null` for none. */
   focus: string | null;
-  homeOf: (memberId: string) => string;
+  /** His name from the team, to say he has no shift here rather than nothing. */
+  focusName: string | null;
+  nudging: Nudging;
   onPeriod: (period: PayPeriod | null) => void;
   onCorrect: (line: ShiftLine, memberName: string) => void;
 }): JSX.Element {
@@ -779,8 +849,13 @@ function PeriodPanel({
   return (
     <Panel className="rp-period nv-enter" eyebrow="Quinzaine" actions={nav}>
       <div className="rp-sec">
+        {focus !== null && !byMember.has(focus) ? (
+          <p className="rp-mine__empty">Pas de shift de {focusName ?? 'ce membre'} sur cette quinzaine.</p>
+        ) : null}
         {members.length === 0 ? (
-          <p className="rp-mine__empty">Aucun shift fini sur cette quinzaine pour l’instant.</p>
+          focus !== null && !byMember.has(focus) ? null : (
+            <p className="rp-mine__empty">Aucun shift fini sur cette quinzaine pour l’instant.</p>
+          )
         ) : (
           <div className="rp-members">
             {members.map((memberId, index) => (
@@ -792,7 +867,7 @@ function PeriodPanel({
                 reports={list.reports.filter((one) => one.memberId === memberId)}
                 accounts={names.accounts}
                 zone={zone}
-                home={homeOf(memberId)}
+                nudging={nudging}
                 focused={memberId === focus}
                 onCorrect={onCorrect}
               />
@@ -811,7 +886,7 @@ function MemberPeriod({
   reports,
   accounts,
   zone,
-  home,
+  nudging,
   focused,
   onCorrect,
 }: {
@@ -821,8 +896,7 @@ function MemberPeriod({
   reports: readonly ShiftReport[];
   accounts: ReadonlyMap<string, PlanningAccount>;
   zone: string;
-  /** The member's own zone: « Relancer » says his hours. */
-  home: string;
+  nudging: Nudging;
   /** Opened from his record or a shift's report: the fold opens, in sight (EQ-11, EQ-13). */
   focused: boolean;
   onCorrect: (line: ShiftLine, memberName: string) => void;
@@ -876,7 +950,12 @@ function MemberPeriod({
               {report === null ? (
                 <>
                   <span className="rp-chip rp-chip--warn">Sans rapport</span>
-                  <Nudge text={nudgeText(name, line.shift, account?.creatorName, home)} name={name} />
+                  <Nudge
+                    to={nudging.to(line.shift.memberId)}
+                    text={(home) => nudgeText(name, line.shift, account?.creatorName, home)}
+                    name={name}
+                    onCopied={nudging.onCopied}
+                  />
                 </>
               ) : (
                 <>
@@ -925,13 +1004,13 @@ function Late({
   list,
   now,
   zone,
-  homeOf,
+  nudging,
 }: {
   lines: readonly ShiftLine[];
   list: ShiftReportList;
   now: Date;
   zone: string;
-  homeOf: (memberId: string) => string;
+  nudging: Nudging;
 }): JSX.Element {
   const names = namesOf(list);
   const [oldest] = lines;
@@ -944,7 +1023,7 @@ function Late({
         {oldest === undefined ? null : (
           <span className="nv-disclosure__sum nv-num">
             {lines.length === 1 ? '' : 'le plus ancien '}
-            {lateFor(oldest.shift.endsAt, now)}
+            {lateFor(oldest.shift.endsAt, now)} · cette quinzaine et la précédente
           </span>
         )}
       </summary>
@@ -963,7 +1042,12 @@ function Late({
                 {swapShiftLine(line.shift.startsAt, line.shift.endsAt, creator, zone)}
               </span>
               <span className="rp-late__since nv-num">{lateFor(line.shift.endsAt, now)}</span>
-              <Nudge text={nudgeText(name, line.shift, creator, homeOf(line.shift.memberId))} name={name} />
+              <Nudge
+                to={nudging.to(line.shift.memberId)}
+                text={(home) => nudgeText(name, line.shift, creator, home)}
+                name={name}
+                onCopied={nudging.onCopied}
+              />
             </li>
           );
         })}
@@ -973,15 +1057,36 @@ function Late({
 }
 
 /**
- * « Relancer » (EQ-15): copies a word ready for WhatsApp; Nirvana sends nothing, and only the member makes his report.
- * Without a clipboard the word shows, to copy by hand.
+ * « Relancer » (EQ-15): copies a word ready for WhatsApp, at the member's hours; Nirvana sends nothing, and only the
+ * member makes his report. Without a clipboard the word shows, selected, to copy by hand. A member who left cannot
+ * sign in any more: « Parti », no word. A member not read: nothing, the page says why.
  */
-function Nudge({ text, name }: { text: string; name: string }): JSX.Element {
+function Nudge({
+  to,
+  text: textAt,
+  name,
+  onCopied,
+}: {
+  to: NudgeTo;
+  text: (zone: string) => string;
+  name: string;
+  onCopied: (name: string) => void;
+}): JSX.Element | null {
   const [state, setState] = useState<'idle' | 'copied' | 'shown'>('idle');
+  const shown = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (state !== 'shown') return;
+    shown.current?.focus();
+    shown.current?.select();
+  }, [state]);
+  if (to.kind === 'gone') return <span className="rp-chip rp-chip--neutral">Parti</span>;
+  if (to.kind === 'unknown') return null;
+  const text = textAt(to.zone);
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text);
       setState('copied');
+      onCopied(name);
     } catch {
       setState('shown');
     }
@@ -998,7 +1103,16 @@ function Nudge({ text, name }: { text: string; name: string }): JSX.Element {
       >
         {state === 'copied' ? 'Message copié' : 'Relancer'}
       </button>
-      {state === 'shown' ? <p className="rp-nudge__text">{text}</p> : null}
+      {state === 'shown' ? (
+        <textarea
+          ref={shown}
+          className="rp-nudge__text"
+          readOnly
+          rows={3}
+          aria-label={`Message pour ${name}, à copier`}
+          value={text}
+        />
+      ) : null}
     </>
   );
 }

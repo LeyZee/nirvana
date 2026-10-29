@@ -427,9 +427,7 @@ function PeriodView({
               </div>
             ) : null}
             {absent === null ? null : (
-              <p className="py-quiet" role="status">
-                Pas de relevé de {names.member(absent).name} sur cette quinzaine.
-              </p>
+              <p className="py-quiet">Pas de relevé de {names.member(absent).name} sur cette quinzaine.</p>
             )}
             {pickable.length === 0 ? null : (
               <SelectAll

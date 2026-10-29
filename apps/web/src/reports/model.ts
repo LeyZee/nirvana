@@ -207,7 +207,7 @@ export function lateFor(endsAt: string, now: Date): string {
 }
 
 /**
- * The word « Relancer » copies for a member whose report is late (EQ-15), at his own hour: « Romaric, ton rapport du
+ * The word « Relancer » copies for a member whose report is late (EQ-15), at his own hour: « Kofi, ton rapport du
  * mer. 28 oct. · 11 h – 17 h (Léa) n’est pas encore fait. Fais-le dans Nirvana dès que tu peux. » Nirvana sends
  * nothing: the agency pastes it where it talks to him.
  */

@@ -630,10 +630,16 @@
 }
 .rp-nudge__text {
   grid-column: 1 / -1;
+  width: 100%;
   margin: 0 0 var(--nv-space-2);
-  color: var(--nv-ink-muted);
+  padding: var(--nv-space-2) var(--nv-space-3);
+  border: 0;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-fill-track);
+  color: var(--nv-ink);
+  font: inherit;
   font-size: var(--nv-text-footnote);
-  user-select: all;
+  resize: none;
 }
 /* « Valider (N) » at the foot of its list, kept in sight while the list scrolls (EQ-26). */
 .rp-validate__bar {

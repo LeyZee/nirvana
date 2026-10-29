@@ -12,7 +12,15 @@ Décisions :
 - Les trois liens de la fiche sont sous ses faits, au-dessus de l'accès et des notes, et non tout en bas, où les notes qui s'allongent les pousseraient hors de vue.
 - « Relancer » copie toujours, sans passer par la feuille de partage : le geste est le même sur ordinateur et sur téléphone.
 
-Découvertes : aucune.
+Relecture (Extension, Équipe) :
+- Le bandeau « Ses shifts » prend le nom dans l'équipe : le planning ne nomme que les membres qui ont un shift ou un modèle dans la semaine. « Toute l'équipe » rend le focus au sélecteur de semaine. Le bandeau est un repère, sans `role="status"`.
+- Le pli des shifts sans rapport dit sa fenêtre, « cette quinzaine et la précédente ». Un rapport tardif n'est jamais refusé, puisque la paie le porte sur la première quinzaine ouverte (ADR 0023). Si une des deux lectures échoue, une ligne ambre avec « Réessayer » prend la place du pli.
+- « Relancer » prend les heures du membre, lues dans l'équipe. Si l'équipe ne se lit pas, une ligne ambre le dit et le bouton attend. Un membre parti ne peut plus se connecter : sa ligne dit « Parti », sans mot à copier.
+- « Message copié » s'annonce dans une seule zone de statut pour la page, toujours montée. Sans presse-papiers, le mot s'affiche dans un champ en lecture seule, déjà sélectionné.
+- Rapports avec `?membre=` dit « Pas de shift de … sur cette quinzaine » pour un membre sans shift. « Pas de relevé de … » (Paie) n'est plus une zone de statut.
+- Le prénom d'exemple du glossaire vient des fixtures (Kofi).
+
+Découvertes : une lecture serveur de tous les shifts finis sans rapport, toutes quinzaines confondues, est côté API. Le pli d'EQ-14 lit aujourd'hui deux quinzaines.
 Candidats à suppression : aucun.
 Vérifié :
 - `pnpm check` ✓, tests web ✓ : liens et adresses, focus du planning, pli ouvert, shifts sans rapport et mot copié, relevé ouvert ou absent, barre de validation.

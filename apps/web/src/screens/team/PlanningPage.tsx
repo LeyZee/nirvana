@@ -1,5 +1,5 @@
 import type { OnDuty, Planning, ShiftReportList, ShiftTemplate, TeamMember } from '@nirvana/contracts';
-import { useMemo, useState, type JSX } from 'react';
+import { useMemo, useRef, useState, type JSX } from 'react';
 
 import { ShiftPanel, type ShiftStart } from './ShiftPanel';
 import { ShiftSheet } from './ShiftSheet';
@@ -110,6 +110,7 @@ export function PlanningPage({
   const days = weekOf(monday);
   const shown = usePlanning(rangeOf(monday, zone));
   const members = useMembers();
+  const toolbar = useRef<HTMLDivElement>(null);
   const templates = useTemplates(true);
   const onDuty = useOnDuty(true);
   const leaves = useLeaves(leaveRangeOf(monday, thisMonday, zone));
@@ -195,7 +196,7 @@ export function PlanningPage({
         </Panel>
       ) : (
         <div className="sc-board">
-          <div className="sc-toolbar">
+          <div className="sc-toolbar" ref={toolbar}>
             <WeekNav
               monday={monday}
               thisMonday={thisMonday}
@@ -208,8 +209,11 @@ export function PlanningPage({
               <Focus
                 planning={data}
                 memberId={member}
+                name={members.data?.find((one) => one.id === member)?.displayName ?? null}
                 onClear={() => {
                   onMember(null);
+                  // The button goes with the band: the focus lands on the week, which stays.
+                  toolbar.current?.querySelector<HTMLElement>('.sc-arrow')?.focus();
                 }}
               />
             )}
@@ -373,16 +377,22 @@ function Opened({
  * « Ses shifts », from a member's record (EQ-11): his shifts of the week stand out, the others are dimmed, and the
  * whole team comes back in one tap.
  */
+/**
+ * « Ses shifts »: the member put forward, named from the team (the planning names only those with a shift or a
+ * template in the week read). A landmark, not an announcement.
+ */
 function Focus({
   planning,
   memberId,
+  name: teamName,
   onClear,
 }: {
   planning: Planning;
   memberId: string;
+  name: string | null;
   onClear: () => void;
 }): JSX.Element {
-  const name = planning.members.find((one) => one.id === memberId)?.displayName ?? 'Ce membre';
+  const name = teamName ?? planning.members.find((one) => one.id === memberId)?.displayName ?? 'Ce membre';
   const his = planning.shifts.filter((shift) => shift.memberId === memberId);
   const total = his.reduce(
     (sum, shift) => sum + new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime(),
@@ -390,7 +400,7 @@ function Focus({
   );
   const count = his.length === 1 ? '1 shift' : `${String(his.length)} shifts`;
   return (
-    <p className="sc-focus nv-swap" role="status">
+    <p className="sc-focus nv-swap">
       <span className="sc-focus__text">
         <b>{name}</b>
         <span className="nv-num">
