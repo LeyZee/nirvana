@@ -310,10 +310,9 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
   // activates it as her version (ADR 0010, 0022).
   const composer =
     options.composer ??
-    (await startDraftComposer({
+    startDraftComposer({
       gateway: llm.gateway,
       activePersona,
-      trainingDir,
       fans,
       onDroppedNotes: (event) => {
         logger.warn(event, 'fan notes shaped like an order kept out of the prompt');
@@ -336,16 +335,10 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
         const [creator] = await persona.creators.list([CreatorIdSchema.parse(creatorId)]);
         return creator?.timezone ?? DEFAULT_LLM_CONFIG.dailyBudget.timeZone;
       },
-    }).catch((error: unknown) => {
-      logger.warn({ err: error }, 'draft composer not started: voice examples unreadable');
-      return undefined;
-    }));
+    });
   // Her follow-up delays only beside the agent's own composer, the one that writes what `conversation.follow_up`
   // asks for (P3-10): a composer plugged by a test would answer his last message again.
-  const followUps =
-    composer === undefined || options.composer !== undefined
-      ? undefined
-      : startFollowUpPlan({ activePersona });
+  const followUps = options.composer !== undefined ? undefined : startFollowUpPlan({ activePersona });
   // Every approval passes the hard guards again (revue 09, G5), her active persona's limits included, read before
   // each approval (recette 28/10, G4). Without an active version nothing is approved: fail closed.
   const agentGuard = startBubbleGuard({ activePersona });
@@ -373,7 +366,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
     recentLogin: createRequireRecentLogin(auth),
     voice: activeVoice,
     guard,
-    ...(composer !== undefined && { composer }),
+    composer,
     ...(followUps !== undefined && { followUps }),
     replyHours: {
       of: async (creatorId) => {

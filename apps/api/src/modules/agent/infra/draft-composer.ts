@@ -178,8 +178,11 @@ export interface ComposerPersonaFields {
 
 export interface DraftComposerDeps {
   readonly gateway: LlmGateway;
-  /** The persona fields below when nothing reads hers per creator (`personaOf`): tests and the terminal. */
-  readonly persona: ComposerPersona;
+  /**
+   * A fixed persona, with the fields below, when nothing reads hers per creator (`personaOf`): tests and the terminal.
+   * Absent beside `personaOf`: a composer that reads hers has no other persona to fall back on.
+   */
+  readonly persona?: ComposerPersona;
   /**
    * Her active persona version for this draft (ADR 0010, 0022), read at each message: it replaces `persona` and the
    * fields her persona gives. `null` (she has none) or a failed read: nothing is written, a human answers him.
@@ -380,9 +383,14 @@ async function herPersona(
   deps: DraftComposerDeps,
   input: AgentComposeInput,
 ): Promise<
-  { readonly deps: DraftComposerDeps } | { readonly missing: 'persona_inactive' | 'persona_unreadable' }
+  | { readonly deps: DraftComposerDeps & { readonly persona: ComposerPersona } }
+  | { readonly missing: 'persona_inactive' | 'persona_unreadable' }
 > {
-  if (deps.personaOf === undefined) return { deps };
+  if (deps.personaOf === undefined) {
+    return deps.persona === undefined
+      ? { missing: 'persona_inactive' }
+      : { deps: { ...deps, persona: deps.persona } };
+  }
   try {
     const fields = await deps.personaOf(input.creatorId, input.now);
     return fields === null ? { missing: 'persona_inactive' } : { deps: { ...deps, ...fields } };

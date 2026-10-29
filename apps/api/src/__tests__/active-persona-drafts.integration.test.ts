@@ -1,6 +1,3 @@
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import {
   CreatorIdSchema,
   DraftIdSchema,
@@ -258,10 +255,9 @@ describe('drafts written with her active persona version, and what an activation
     // Read from the base at each call, as the composition root wires it: nothing kept in memory (ADR 0022).
     const activePersona: ActivePersonaSource = (creatorId) =>
       app.modules.persona.versions.active(CreatorIdSchema.parse(creatorId));
-    real = await startDraftComposer({
+    real = startDraftComposer({
       gateway: GATEWAY,
       activePersona,
-      trainingDir: join(tmpdir(), `nirvana-no-ratings-${newId(CreatorIdSchema)}`),
       fans: app.modules.fans,
       timeZoneOf: () => Promise.resolve('Europe/Paris'),
     });

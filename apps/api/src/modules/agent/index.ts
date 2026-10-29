@@ -1,15 +1,10 @@
-import { join } from 'node:path';
-
 import type { KycSlot } from '@nirvana/contracts';
 import { loadPrompt, type LlmGateway } from '@nirvana/llm';
 
 import type { FansModule } from '../fans';
 
-import { DEFAULT_GUARD_SETTINGS as SHARED_GUARD_SETTINGS } from './domain/guards';
 import { activePersonaForModels, type ActivePersonaSource } from './infra/active-persona';
 import { createBubbleGuard, type AgentBubbleGuard } from './infra/bubble-guard';
-import { voiceExamples } from './infra/calibration-record';
-import { withExamples } from './infra/compose';
 import {
   createDraftComposer,
   type AgentDraftComposer,
@@ -18,7 +13,6 @@ import {
   type MediaSight,
 } from './infra/draft-composer';
 import { createFanLimits } from './infra/fan-limits';
-import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
 import { guardSettingsOf, type PersonaForModels } from './infra/persona-file';
 
 /** Public entry point of the `agent` module (ADR 0002). Other modules import this file only. */
@@ -82,8 +76,6 @@ export interface DraftComposerStartOptions {
    * one the owner activated in Créatrices › Persona. Without one, nothing is written and a human answers (ADR 0022).
    */
   readonly activePersona: ActivePersonaSource;
-  /** The playground's ratings: her corrected answers become the voice's examples here too. */
-  readonly trainingDir: string;
   /** Her clock, read for each draft: the creator's time zone. */
   readonly timeZoneOf: (creatorId: string) => Promise<string>;
   /** His media seen before she answers; without it, any media goes to a human. */
@@ -103,12 +95,15 @@ export interface DraftComposerStartOptions {
   readonly chatterOnShift?: DraftComposerDeps['chatterOnShift'];
 }
 
-/** Her fields for the composer, from her persona: the sheet with the corrected answers as voice examples. */
-function composerFields(persona: PersonaForModels, examples: readonly string[]): ComposerPersonaFields {
+/**
+ * Her fields for the composer, from her persona: her sheet as it is, her own sample replies in it (P5-01). The
+ * playground's corrected answers never join it: they were written on its fictional persona, not hers (M13).
+ */
+function composerFields(persona: PersonaForModels): ComposerPersonaFields {
   return {
     persona: {
       creatorName: persona.creatorName,
-      personaSheet: withExamples(persona.personaSheet, examples),
+      personaSheet: persona.personaSheet,
       guardSettings: guardSettingsOf(persona),
       splitMessages: persona.splitMessages,
     },
@@ -120,22 +115,16 @@ function composerFields(persona: PersonaForModels, examples: readonly string[]):
   };
 }
 
-/** No persona until hers is read: every draft reads her active version (`personaOf`), this one is never used. */
-const UNREAD_PERSONA = { creatorName: '', personaSheet: '', guardSettings: SHARED_GUARD_SETTINGS };
-
 /**
- * Reads the corrected answers, then builds the composer behind `conversation.respond`. Her persona is not read here:
- * each draft reads her active version (ADR 0022: nothing kept in memory can be stale).
+ * The composer behind `conversation.respond`. Her persona is not read here, and there is no other: each draft reads
+ * her active version (ADR 0022: nothing kept in memory can be stale), without one nothing is written.
  */
-export async function startDraftComposer(options: DraftComposerStartOptions): Promise<AgentDraftComposer> {
-  const records = await createJsonlCalibrationStore(join(options.trainingDir, 'ratings.jsonl')).list();
-  const examples = voiceExamples(records);
+export function startDraftComposer(options: DraftComposerStartOptions): AgentDraftComposer {
   return createDraftComposer({
     gateway: options.gateway,
-    persona: UNREAD_PERSONA,
     personaOf: async (creatorId, now) => {
       const persona = await activePersonaForModels(options.activePersona, creatorId, now);
-      return persona === null ? null : composerFields(persona, examples);
+      return persona === null ? null : composerFields(persona);
     },
     timeZoneOf: options.timeZoneOf,
     voicePrompt: loadPrompt('voice').header.version,

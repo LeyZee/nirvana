@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,9 +23,14 @@ import { createLogger } from '../logger';
 import {
   activePersonaForModels,
   createAlertTester,
+  createJsonlCalibrationStore,
+  guardSettingsOf,
   startDraftComposer,
+  voiceExamples,
   type ActivePersonaSource,
+  type CalibrationRecord,
 } from '../modules/agent';
+import { createPlaygroundSession } from '../modules/playground';
 
 import { testConfig } from './support/config';
 
@@ -105,6 +111,26 @@ function recordingGateway() {
   return { gateway, brain, voice };
 }
 
+/** A Playground rating corrected into a voice example, as the training screen keeps it. */
+function correctedOnTheDemo(text: string): CalibrationRecord {
+  const at = new Date('2026-10-28T21:30:00Z');
+  return {
+    id: 'rating-1',
+    sessionId: 'playground-1',
+    at: at.toISOString(),
+    version: { voicePrompt: '1.4.0', voiceModel: 'grok-4.7' },
+    verdict: { kind: 'corrected', text },
+    destination: 'voice_example',
+    fanMessage: 'Salut toi',
+    bubbles: ['Coucou toi'],
+    moment: {
+      history: [{ from: 'fan', text: 'Salut toi' }],
+      fanNotes: '',
+      situation: { now: at, timeZone: 'Europe/Paris', relationshipStartedAt: at, spentCents: 0 },
+    },
+  };
+}
+
 describe('the agent writes with her active persona version (recette G4, M13; ADR 0010, 0022)', () => {
   let test: TestDb;
   let app: App;
@@ -142,10 +168,9 @@ describe('the agent writes with her active persona version (recette G4, M13; ADR
 
   it('writes the prompts with the second version, the active one, and nothing for a creator without one', async () => {
     const { gateway, brain, voice } = recordingGateway();
-    const composer = await startDraftComposer({
+    const composer = startDraftComposer({
       gateway,
       activePersona,
-      trainingDir: join(tmpdir(), `nirvana-no-ratings-${newId(CreatorIdSchema)}`),
       timeZoneOf: () => Promise.resolve('Europe/Paris'),
     });
     const input = (creatorId: CreatorId) => ({
@@ -173,6 +198,49 @@ describe('the agent writes with her active persona version (recette G4, M13; ADR
       costUsd: 0,
     });
     expect(brain).toHaveLength(1);
+  });
+
+  it('keeps the Playground’s corrected answers out of her sheet: they were written on its fictional persona', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'nirvana-training-'));
+    try {
+      const store = createJsonlCalibrationStore(join(dir, 'ratings.jsonl'));
+      await store.append(correctedOnTheDemo('Okidoki, réponse corrigée sur la persona fictive'));
+      const examples = voiceExamples(await store.list());
+      const { gateway, brain, voice } = recordingGateway();
+
+      // The Playground gives them back to its voice, on its persona.
+      const demo = await activePersonaForModels(activePersona, anna, new Date());
+      if (demo === null) throw new Error('Anna has an active version');
+      await createPlaygroundSession({
+        gateway,
+        creatorName: demo.creatorName,
+        personaSheet: demo.personaSheet,
+        guardSettings: guardSettingsOf(demo),
+        voiceExamples: examples,
+      }).handleFanMessage('Salut');
+      expect(voice[0]?.personaSheet).toContain('Okidoki, réponse corrigée sur la persona fictive');
+
+      // Her drafts read her version as it is, her own sample replies only.
+      await startDraftComposer({
+        gateway,
+        activePersona,
+        timeZoneOf: () => Promise.resolve('Europe/Paris'),
+      }).compose({
+        creatorId: anna,
+        conversationId: 'conversation-2',
+        fanId: 'fan-2',
+        draftId: 'draft-2',
+        correlationId: 'correlation-2',
+        now: new Date('2026-10-29T10:00:00Z'),
+        history: [{ direction: 'inbound', text: 'Salut', at: new Date('2026-10-29T09:59:00Z') }],
+        fan: { notes: [], spentMinor: 0, firstMessageAt: new Date('2026-10-29T09:59:00Z') },
+      });
+      expect(brain.at(-1)?.personaSheet).not.toContain('réponse corrigée');
+      expect(voice.at(-1)?.personaSheet).not.toContain('réponse corrigée');
+      expect(voice.at(-1)?.personaSheet).toBe(demo.personaSheet);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('« Tester » reads the phrase with the active version of the creator it names', async () => {

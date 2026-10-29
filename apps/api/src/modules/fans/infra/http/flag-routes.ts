@@ -101,8 +101,8 @@ export function createFlagRoutes(
 
 /**
  * `GET /v1/fans/:id/kyc` (P5-01): what she has still to learn about him, among the canvas lines `slotsOf` gives (her
- * active persona's, in her order, read at each request), for the line « À apprendre » of the Suivi. Read like his limits, by the owner and the
- * chatters only; a fan unknown to this creator is 404 `fan_not_found`.
+ * active persona's, in her order, read at each request), for the line « À apprendre » of the Suivi. Read like his
+ * limits, by the owner and the chatters only; a fan unknown to this creator is 404 `fan_not_found`.
  */
 export function createKycRoutes(
   fans: FansService,
