@@ -16,15 +16,26 @@ export function percent(rate: number | null): string {
   return rate === null ? '—' : `${String(Math.round(rate * 100))} %`;
 }
 
-/** « 6 min », « 3 h », « 3 j 2 h » */
+/** Past a month, a relationship is counted in months: « 299 j 13 h » reads badly. */
+const DAYS_PER_MONTH = 30.44;
+
+/** « 6 min », « 3 h », « 3 j 2 h », « 10 mois » */
 export function duration(ms: number): string {
   const minutes = Math.max(0, Math.round(ms / 60_000));
   if (minutes < 60) return `${String(Math.max(1, minutes))} min`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${String(hours)} h`;
   const days = Math.floor(hours / 24);
+  if (days > 30) return `${String(Math.max(1, Math.round(days / DAYS_PER_MONTH)))} mois`;
   const rest = hours % 24;
   return rest === 0 ? `${String(days)} j` : `${String(days)} j ${String(rest)} h`;
+}
+
+/** What the time of day lets her send, said without « Nuit … scripts Jour » reading as a contradiction. */
+export function scriptsHint(isNight: boolean): string {
+  return isNight
+    ? 'Il fait nuit chez elle : seuls les scripts Nuit partent (Nuit de 22 h à 7 h).'
+    : 'Il fait jour chez elle : seuls les scripts Jour partent (Nuit de 22 h à 7 h).';
 }
 
 export function clockAt(iso: string, timeZone: string): string {
