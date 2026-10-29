@@ -554,6 +554,27 @@ describe('the shell while a screen loads (review of #313)', () => {
     expect(router.state.location.pathname).toBe('/');
   });
 
+  it('says it once: neither « Précédent » nor a reload says it again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
+    const router = renderApp(operator, '/reglages/alertes');
+    expect(await screen.findByText('Cette page n’est pas dans ton espace.')).toBeDefined();
+    await waitFor(() => {
+      expect(router.state.location.state.notice).toBeUndefined();
+    });
+    vi.advanceTimersByTime(6_000);
+    await waitFor(() => {
+      expect(screen.queryByText('Cette page n’est pas dans ton espace.')).toBeNull();
+    });
+    await router.navigate({ to: '/suivi' });
+    router.history.back();
+    await waitFor(() => {
+      expect(router.state.resolvedLocation?.pathname).toBe('/');
+    });
+    expect(screen.queryByText('Cette page n’est pas dans ton espace.')).toBeNull();
+    vi.useRealTimers();
+  });
+
   it('says it under StrictMode too, as in the app', async () => {
     const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
     const router = createAppRouter(

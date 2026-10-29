@@ -1,6 +1,6 @@
 import type { Me } from '@nirvana/contracts';
 import { playLiquid, playOnce } from '@nirvana/design-system';
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -67,21 +67,26 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
     title.focus({ preventScroll: true });
   }, [current]);
 
-  // What the route guard said on the way here (NAV-21), carried by the arrival's own history entry: shown a few
-  // seconds, once per arrival.
+  // What the route guard said on the way here (NAV-21), carried by the arrival's own history entry. Read once: the
+  // entry is then rewritten without it, so that « Précédent » or a reload does not say it again. Shown a few seconds.
+  const router = useRouter();
   const notice = useRouterState({ select: (state) => state.resolvedLocation?.state.notice ?? null });
-  const arrival = useRouterState({ select: (state) => state.resolvedLocation?.state.__TSR_key ?? null });
-  const [closed, setClosed] = useState<string | null>(null);
+  const [said, setSaid] = useState<{ readonly text: string; readonly at: number } | null>(null);
   useEffect(() => {
-    if (notice === null) return undefined;
+    const arrived = router.state.resolvedLocation;
+    if (notice === null || arrived === undefined) return;
+    setSaid({ text: notice, at: Date.now() });
+    router.history.replace(arrived.href, { ...arrived.state, notice: undefined });
+  }, [notice, router]);
+  useEffect(() => {
+    if (said === null) return undefined;
     const timer = setTimeout(() => {
-      setClosed(arrival);
+      setSaid(null);
     }, 6_000);
     return () => {
       clearTimeout(timer);
     };
-  }, [notice, arrival]);
-  const said = notice !== null && closed !== arrival ? notice : null;
+  }, [said]);
 
   // The hold outlives the screens: a report sent on leaving Aujourd'hui says its refusal in Suivi, and « Rouvrir »
   // takes the reader back to it (EQ-03).
@@ -106,8 +111,8 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
           {/* Always there, empty when silent: a screen reader announces what comes into a region it already knows. */}
           <p className="nv-notice-region" role="status">
             {said === null ? null : (
-              <span className="nv-notice nv-glass nv-glass--thick" key={arrival}>
-                {said}
+              <span className="nv-notice nv-glass nv-glass--thick" key={said.at}>
+                {said.text}
               </span>
             )}
           </p>

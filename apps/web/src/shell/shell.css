@@ -645,17 +645,20 @@
 }
 
 /* A word the route guard left (NAV-21): above everything, a few seconds, then gone. */
+/* Out of the app's grid: an empty region must not make a row of its own under the rail and the stage. */
 .nv-notice-region {
-  margin: 0;
-}
-.nv-notice.nv-glass {
-  --_radius: 16px;
-  display: block;
   position: fixed;
   z-index: 50;
   top: calc(16px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
+  margin: 0;
+  pointer-events: none;
+}
+.nv-notice.nv-glass {
+  --_radius: 16px;
+  display: block;
+  pointer-events: auto;
   width: max-content;
   max-width: calc(100vw - 32px);
   box-sizing: border-box;
