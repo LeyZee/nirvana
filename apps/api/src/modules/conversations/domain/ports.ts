@@ -505,10 +505,18 @@ export interface ConversationReader {
   /** Whether the conversation is routed to that account: the only way a member whose scope is `self` reaches it. */
   isRoutedTo(creatorId: CreatorId, id: ConversationId, userId: UserId): Promise<boolean>;
   get(creatorId: CreatorId, id: ConversationId): Promise<ConversationDetail | null>;
-  messages(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<MessageView>>;
-  events(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<ConversationEventView>>;
-  /** Its `desire_scored` events as the reader's curve: the most recent `DESIRE_POINTS_MAX`, oldest first. */
-  desireCurve(creatorId: CreatorId, id: ConversationId): Promise<DesireCurve>;
+  /** `null` when the creator has no such conversation, as for `get`: never an empty page that hides it. */
+  messages(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<MessageView> | null>;
+  events(
+    creatorId: CreatorId,
+    id: ConversationId,
+    page: PageRequest,
+  ): Promise<Page<ConversationEventView> | null>;
+  /**
+   * Its `desire_scored` events as the reader's curve: the most recent `DESIRE_POINTS_MAX`, oldest first; `null`
+   * without such a conversation.
+   */
+  desireCurve(creatorId: CreatorId, id: ConversationId): Promise<DesireCurve | null>;
 }
 
 /** Her own alerts' names, archived ones too (`alerts` module's adapter): the history names an alert as it was. */

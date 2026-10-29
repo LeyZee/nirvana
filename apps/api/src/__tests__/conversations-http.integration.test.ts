@@ -475,6 +475,26 @@ describe('/v1/conversations', () => {
       ownerCookie,
     );
     expect(missing.statusCode).toBe(404);
+    // Its messages, events and curve too, never an empty page (recette 28/10): an id that does not exist, or one of
+    // another creator, which her RLS does not show.
+    const other = newId(CreatorIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: other, nameKey: other, displayName: 'Autre', timezone: 'Europe/Paris' });
+    const ours = conversationIds[0]!;
+    for (const [id, creator] of [
+      [newId(ConversationIdSchema), creatorId],
+      [ours, other],
+    ] as const) {
+      for (const read of ['messages', 'events', 'desire']) {
+        const answer = await call('GET', `/v1/conversations/${id}/${read}?creatorId=${creator}`, ownerCookie);
+        expect([read, answer.statusCode, answer.json<{ error: { code: string } }>().error.code]).toEqual([
+          read,
+          404,
+          'conversation_not_found',
+        ]);
+      }
+    }
     const badCursor = await call('GET', `/v1/conversations?creatorId=${creatorId}&cursor=nope`, ownerCookie);
     expect(badCursor.statusCode).toBe(400);
   });
