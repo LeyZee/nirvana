@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  type AlertTrigger,
   GuardCodeSchema,
   type ConnectorErrorCode,
   type ConversationDetail,
@@ -77,11 +78,29 @@ const SEND_FAILURES: Readonly<Record<SendFailureCode, string>> = {
 
 const isSendFailureCode = (code: string): code is SendFailureCode => Object.hasOwn(SEND_FAILURES, code);
 
+/** A system alert that lets a human know without pausing the agent, in the words of Réglages › Alertes. */
+const SYSTEM_ALERT_NAMES = {
+  keyword: 'Mot d’alerte',
+  service_request: 'Demande de service',
+  identity_doubt: 'Doute sur la personne',
+} as const;
+
+/** An alert that went off and let the agent go on: which one, and her word when a word set it off. */
+function alertNote(trigger: AlertTrigger): string {
+  const name =
+    trigger.alert.kind === 'custom'
+      ? 'Alerte personnalisée'
+      : `Alerte « ${SYSTEM_ALERT_NAMES[trigger.alert.code]} »`;
+  const word = trigger.keyword === undefined ? '' : ` (mot « ${trigger.keyword} »)`;
+  return `${name}${word} : l’agent continue`;
+}
+
 /** The note an event leaves in the thread, or null for the events the messages already show. */
 function noteOf(event: ConversationEventView, timeZone: string): string | null {
   if (event.type === 'handoff_requested')
     return withReason(`L’agent passe la main (${CAUSE_LABELS[event.payload.cause]})`, event.payload.reason);
   if (event.type === 'takeover_started') return withReason('Un humain reprend la main', event.payload.reason);
+  if (event.type === 'alert_triggered') return alertNote(event.payload.trigger);
   if (event.type === 'takeover_ended') return 'La main revient à l’agent';
   if (event.type === 'draft_rejected') return withReason('Brouillon refusé', event.payload.reason);
   if (event.type === 'draft_expired') return withReason('Brouillon abandonné', event.payload.reason);
