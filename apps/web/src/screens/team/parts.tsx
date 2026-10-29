@@ -1,8 +1,9 @@
 import type { TeamMember } from '@nirvana/contracts';
 import type { JSX, ReactNode } from 'react';
 
-import { initialOf, STATUS_LABELS, STATUS_TONES } from './model';
+import { STATUS_LABELS, STATUS_TONES } from './model';
 
+import { initialOf } from '@/lib/utils';
 import { Panel } from '@/shell/layout';
 
 /** The pieces the list, the sheet and the add panel share. */
