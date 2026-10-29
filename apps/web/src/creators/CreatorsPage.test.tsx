@@ -64,6 +64,14 @@ function renderAt(user: Me, path: string): AppRouter {
 
 const chip = (name: string): HTMLElement => screen.getByRole('radio', { name });
 
+/** The creator on screen: her chip is the one checked; no eyebrow repeats it over the switch (CREA-24). */
+const picked = (name: string): Promise<void> =>
+  waitFor(() => {
+    expect(chip(name).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Persona' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByText(`${name} · Persona`)).toBeNull();
+  });
+
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
@@ -90,11 +98,11 @@ describe('Créatrices, the creator in the address (recette 28/10)', () => {
   it('opens the creator the address names, and writes the one picked into it', async () => {
     await serve([ANNA, BEA]);
     const router = renderAt(owner, `/creatrices?creatrice=${BEA.id}`);
-    await screen.findByText('Bea · Persona');
+    await picked('Bea');
     expect(chip('Bea').getAttribute('aria-checked')).toBe('true');
 
     fireEvent.click(chip('Anna'));
-    await screen.findByText('Anna · Persona');
+    await picked('Anna');
     expect(router.state.location.search).toEqual({ creatrice: ANNA.id });
   });
 
@@ -118,8 +126,22 @@ describe('Créatrices, the creator in the address (recette 28/10)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Rester' }));
     fireEvent.click(chip('Bea'));
     fireEvent.click(await screen.findByRole('button', { name: 'Les abandonner' }));
-    await screen.findByText('Bea · Persona');
+    await picked('Bea');
     expect(router.state.location.search).toEqual({ creatrice: BEA.id });
+  });
+
+  it('takes the owner to Réglages › Alertes inside the app, asking first when changes wait (CREA-25)', async () => {
+    await serve([ANNA]);
+    const router = renderAt(owner, `/creatrices?creatrice=${ANNA.id}`);
+    fireEvent.change(await screen.findByLabelText('Prénom'), { target: { value: 'Elenaa' } });
+    expect(screen.getByText(/à changer dans Heures d’activité/u)).toBeDefined();
+    fireEvent.click(screen.getByRole('tab', { name: /Notifications/u }));
+    fireEvent.click(await screen.findByRole('link', { name: 'Réglages › Alertes' }));
+    await screen.findByText('Tes modifications ne sont pas enregistrées.');
+    fireEvent.click(screen.getByRole('button', { name: 'Les abandonner' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/reglages/alertes');
+    });
   });
 
   it('asks once on « Ajouter une créatrice », never again once the new creator is created', async () => {
@@ -145,6 +167,15 @@ describe('Créatrices, what a member without the list reads', () => {
     renderAt(operator, '/creatrices');
     expect(await screen.findByText('Aucune créatrice ne t’est confiée')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Enregistrer une version' })).toBeNull();
+  });
+
+  it('tells the owner, before the form, where her first creator leads (CREA-28)', async () => {
+    await serve([]);
+    renderAt(owner, '/creatrices');
+    expect(
+      await screen.findByText('Commence par ta première créatrice : son nom, puis sa persona juste après.'),
+    ).toBeDefined();
+    expect(screen.getByLabelText('Prénom ou pseudo')).toBeDefined();
   });
 
   it('says the list does not load, with a way to try again', async () => {

@@ -58,10 +58,13 @@ export function Field({
   path,
   children,
   id,
+  labelHidden = false,
 }: {
   label: string;
   hint?: ReactNode;
   code?: boolean;
+  /** The block's title already says it (« Infos en plus », « Mots-clés »): read aloud, not shown twice (CREA-17). */
+  labelHidden?: boolean;
   /** Where the field sits in the persona (`strategies.kyc.max_messages`): its errors and changes come from there. */
   path?: string;
   children: ReactNode;
@@ -78,7 +81,7 @@ export function Field({
       data-invalid={first === undefined ? undefined : 'true'}
       data-changed={changed ? 'true' : undefined}
     >
-      <div className="ps-field__head">
+      <div className={labelHidden ? 'sr-only' : 'ps-field__head'}>
         <span className="ps-changed" aria-hidden="true" />
         {id === undefined ? (
           <span className="nv-field__label">{label}</span>

@@ -1,10 +1,4 @@
-import {
-  DESIRE_BANDS,
-  desireBandOf,
-  type DesireBand,
-  type DesirePoint,
-  type DesireSignal,
-} from '@nirvana/contracts';
+import { type DesireBand, type DesirePoint, type DesireSignal } from '@nirvana/contracts';
 
 /*
  * The desire score in words (P3-12, glossary « Note de désir »): its bands, the signals that moved it, and what a
@@ -63,18 +57,4 @@ export function movementOf(point: Pick<DesirePoint, 'before' | 'score'>): string
   const moved = point.score - point.before;
   if (moved === 0) return '0';
   return moved > 0 ? `+${String(moved)}` : `−${String(-moved)}`;
-}
-
-/**
- * Under a threshold of the persona (P3-12): the band its value falls in, since the tracking screens speak in bands,
- * and, set under the band of its default, that Suivi will still say that lower band when it lets the agent go. An
- * empty field takes the default and says it. Allowed values all: never a warning, a sentence.
- */
-export function thresholdHint(value: number | undefined, fallback: number, when: string): string {
-  const shown = value ?? fallback;
-  const band = desireBandOf(shown);
-  const line = `À partir de ${String(shown)} : bande ${DESIRE_BAND_LABELS[band]}.`;
-  const lower = DESIRE_BANDS.indexOf(band) < DESIRE_BANDS.indexOf(desireBandOf(fallback));
-  const still = lower ? ` Le Suivi dira encore « ${DESIRE_BAND_LABELS[band]} » ${when}.` : '';
-  return value === undefined ? `Par défaut : ${String(fallback)}. ${line}` : `${line}${still}`;
 }

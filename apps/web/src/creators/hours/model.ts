@@ -31,9 +31,18 @@ export const rangeOf = (range: MinuteRange): string =>
  * 0 h closes with her day: nothing of it falls on the next one.
  */
 export function slotWords(slot: Pick<AgentSlot, 'startMinute' | 'endMinute'>): string {
+  const note = slotNote(slot);
+  if (slot.startMinute === slot.endMinute || note === null) return note ?? rangeOf(slot);
+  return `${rangeOf(slot)}, ${note}`;
+}
+
+/**
+ * What a line of the planner adds to its two hours (CREA-21): only what the fields do not say, « jusqu'au
+ * lendemain » or « toute la journée »; nothing for an ordinary slot.
+ */
+export function slotNote(slot: Pick<AgentSlot, 'startMinute' | 'endMinute'>): string | null {
   if (slot.startMinute === slot.endMinute) return 'toute la journée';
-  const overnight = slot.endMinute !== 0 && slot.endMinute < slot.startMinute;
-  return `${rangeOf(slot)}${overnight ? ', jusqu’au lendemain' : ''}`;
+  return slot.endMinute !== 0 && slot.endMinute < slot.startMinute ? 'jusqu’au lendemain' : null;
 }
 
 /** « Paris » from « Europe/Paris », « Sao Paulo » from « America/Sao_Paulo ». */
@@ -85,6 +94,24 @@ export const orderedSlots = (
     .map((slot, index) => ({ slot, index }))
     .sort((a, b) => a.slot.day - b.slot.day || a.slot.startMinute - b.slot.startMinute || a.index - b.index);
 
+/**
+ * Her setting with its slots in the order of the week. Done when it arrives and when it is saved, never while she
+ * types: a line stays where it is under the cursor (CREA-22). The order means nothing to the agent.
+ */
+export const sortedHours = (hours: AgentHours): AgentHours =>
+  hours.reply.mode === 'slots'
+    ? { ...hours, reply: { mode: 'slots', slots: orderedSlots(hours.reply.slots).map(({ slot }) => slot) } }
+    : hours;
+
+/** The lines of each day of the week, Monday first, each slot with its index in the setting, in the setting's order. */
+export const slotsByDay = (
+  slots: readonly AgentSlot[],
+): { readonly day: number; readonly lines: { readonly slot: AgentSlot; readonly index: number }[] }[] =>
+  DAY_NAMES.map((_, i) => ({
+    day: i + 1,
+    lines: slots.map((slot, index) => ({ slot, index })).filter(({ slot }) => slot.day === i + 1),
+  }));
+
 const WEEK_MINUTES = 7 * MINUTES_PER_DAY;
 
 /** Where a slot sits in the week, in minutes from Monday 0 h, cut in two when it runs past Sunday night. */
@@ -106,23 +133,33 @@ const NEW_SLOT_MAX = 16 * 60;
 const NEW_SLOT_MIN = 60;
 
 /**
- * The slot « Ajouter un créneau » adds, never over another one: 9 h – 1 h on the first day with none; when every day
- * has one, the first free stretch of the week (an hour at least, 16 h at most). Null when no hour is free.
+ * The slot « Ajouter » of one day adds (CREA-21): 9 h – 1 h when that day has none and it is free, otherwise the
+ * first free stretch that starts on that day (an hour at least, 16 h at most). Null when that day has no free hour.
  */
-export function newSlot(slots: readonly AgentSlot[]): AgentSlot | null {
+export const newSlotOn = (slots: readonly AgentSlot[], day: number): AgentSlot | null =>
+  freeSlot(slots, slots.some((slot) => slot.day === day) ? null : day, day);
+
+/** `suggestOn`: the day to try 9 h – 1 h on first; `startOn`: the one day the stretch must start on, or any. */
+function freeSlot(
+  slots: readonly AgentSlot[],
+  suggestOn: number | null,
+  startOn: number | null,
+): AgentSlot | null {
   const spans = slots.flatMap(weekSpans).sort((a, b) => a.from - b.from);
   const free = (from: number, to: number): boolean =>
     [-WEEK_MINUTES, 0, WEEK_MINUTES].every((shift) =>
       spans.every((span) => !(span.from < to + shift && from + shift < span.to)),
     );
-  const taken = new Set(slots.map((slot) => slot.day));
-  const day = [1, 2, 3, 4, 5, 6, 7].find((d) => !taken.has(d));
-  if (day !== undefined) {
-    const suggested: AgentSlot = { day, startMinute: 9 * 60, endMinute: 60, enabled: true };
+  if (suggestOn !== null) {
+    const suggested: AgentSlot = { day: suggestOn, startMinute: 9 * 60, endMinute: 60, enabled: true };
     if (weekSpans(suggested).every((span) => free(span.from, span.to))) return suggested;
   }
+  const dayStart = startOn === null ? 0 : (startOn - 1) * MINUTES_PER_DAY;
+  const starts = [dayStart, ...spans.map((span) => span.to % WEEK_MINUTES)].filter(
+    (start) => startOn === null || (start >= dayStart && start < dayStart + MINUTES_PER_DAY),
+  );
   // Each stretch starts where a slot ends; the week is a circle, Sunday night runs into Monday.
-  for (const start of [0, ...spans.map((span) => span.to % WEEK_MINUTES)].sort((a, b) => a - b)) {
+  for (const start of starts.sort((a, b) => a - b)) {
     if (!free(start, start + NEW_SLOT_MIN)) continue;
     let length = NEW_SLOT_MIN;
     while (length < NEW_SLOT_MAX && free(start, start + length + 15)) length += 15;
@@ -138,6 +175,20 @@ export function newSlot(slots: readonly AgentSlot[]): AgentSlot | null {
 }
 
 export const canAddSlot = (slots: readonly AgentSlot[]): boolean => slots.length < AGENT_SLOTS_MAX;
+
+/** Said once under the days when the week holds all the slots it may. */
+export const WEEK_FULL = `${String(AGENT_SLOTS_MAX)} créneaux au plus dans la semaine : retires-en un d’abord.`;
+
+/**
+ * Why « Ajouter » adds nothing that day, said in the day's line rather than in a tooltip; null when it adds one, and
+ * null too when the week is full, which `WEEK_FULL` says once for all the days.
+ */
+export function noSlotWhy(slots: readonly AgentSlot[], day: number): string | null {
+  if (!canAddSlot(slots)) return null;
+  return newSlotOn(slots, day) === null
+    ? 'Plus une heure de libre ce jour-là : raccourcis un créneau d’abord.'
+    : null;
+}
 
 /** The slots offered when the owner switches to slots: the ones she had, or 9 h – 1 h every day. */
 export const slotsToOffer = (kept: readonly AgentSlot[] | null): AgentSlot[] =>

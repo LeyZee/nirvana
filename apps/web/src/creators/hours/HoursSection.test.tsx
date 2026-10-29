@@ -106,17 +106,18 @@ describe('Créatrices › Heures (P3-14)', () => {
     const puts = serve({ put: (body) => ({ status: 200, body: echo(body) }) });
     renderSection();
     fireEvent.click(await screen.findByRole('radio', { name: 'Par créneaux' }));
+    // A line a day, each with its slot; the words say only what the two hours do not (CREA-21).
     const list = screen.getByRole('list', { name: 'Créneaux' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(7);
-    expect(
-      within(list).getAllByText(`9${SPACE}h${SPACE}–${SPACE}1${SPACE}h, jusqu’au lendemain`),
-    ).toHaveLength(7);
+    expect(within(list).getAllByRole('group', { name: /^Créneau du /u })).toHaveLength(7);
+    expect(within(list).getAllByText('jusqu’au lendemain')).toHaveLength(7);
+    expect(within(list).queryByText('Actif')).toBeNull();
 
     // Sunday off: it stays in the list, switched off, never removed.
     fireEvent.click(screen.getByRole('switch', { name: /Activer le créneau du dimanche/u }));
-    const sunday = within(list).getAllByRole('listitem').at(-1);
-    expect(sunday?.dataset['off']).toBe('true');
-    expect(within(sunday ?? list).getByText('Coupé')).toBeDefined();
+    const sunday = within(list).getByRole('group', { name: /^Créneau du dimanche/u });
+    expect(sunday.dataset['off']).toBe('true');
+    expect(within(sunday).getByText('Coupé')).toBeDefined();
 
     fireEvent.click(save());
     await waitFor(() => {
@@ -141,6 +142,44 @@ describe('Créatrices › Heures (P3-14)', () => {
     ).toBeDefined();
     expect(screen.getByText('Une ligne à corriger')).toBeDefined();
     expect(save()).toHaveProperty('disabled', true);
+  });
+
+  it('keeps a line where it is while she types, adds a slot on its own day, and sorts at the save', async () => {
+    const puts = serve({ put: (body) => ({ status: 200, body: echo(body) }) });
+    renderSection();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Par créneaux' }));
+    // Monday holds 9 h – 1 h: « Ajouter » gives the free stretch before it, after it in the list.
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un créneau le lundi' }));
+    const monday = (): string[] =>
+      within(screen.getByRole('list', { name: 'Créneaux' }))
+        .getAllByRole('group', { name: /^Créneau du lundi/u })
+        .map((group) => (group.getAttribute('aria-label') ?? '').replace(/\s/gu, ' '));
+    expect(monday()).toEqual([
+      'Créneau du lundi, 9 h – 1 h, jusqu’au lendemain',
+      'Créneau du lundi, 1 h – 9 h',
+    ]);
+    fireEvent.click(save());
+    await waitFor(() => {
+      expect(puts).toHaveLength(1);
+    });
+    const sent = SetAgentHoursBodySchema.parse(puts[0]);
+    // Saved in the order of the week: the early slot first.
+    expect(sent.hours?.reply.mode === 'slots' && sent.hours.reply.slots.slice(0, 2)).toEqual([
+      { day: 1, startMinute: 60, endMinute: 540, enabled: true },
+      { day: 1, startMinute: 540, endMinute: 60, enabled: true },
+    ]);
+    await waitFor(() => {
+      expect(monday()[0]).toBe('Créneau du lundi, 1 h – 9 h');
+    });
+  });
+
+  it('says « Hors de ses créneaux » only by the slots', async () => {
+    serve({});
+    renderSection();
+    await screen.findByText('À l’heure de Nora (Paris)');
+    expect(screen.queryByText(/Hors de ses créneaux/u)).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Par créneaux' }));
+    expect(screen.getByText(/Hors de ses créneaux/u)).toBeDefined();
   });
 
   it('writes its hours on 24 hours in a text field, whatever the browser’s language (recette 28/10, M15)', async () => {
