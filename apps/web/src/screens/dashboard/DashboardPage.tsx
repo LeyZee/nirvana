@@ -9,7 +9,7 @@ import { ModeControl } from './ModeControl';
 import { Reader } from './Reader';
 import { PeriodControl, SalesPanel, salesSub } from './Sales';
 import { TopFans } from './TopFans';
-import { litParts } from './logic';
+import { agentRuns, litParts } from './logic';
 import type { Fan, Period, Todo } from './model';
 import { Section, TONE_COLOR, useFloatingTip } from './parts';
 import { useDashboard, type DashboardView } from './useDashboard';
@@ -191,6 +191,7 @@ function Loaded({
           readOnly={
             status === 'sample' ? SAMPLE_NOTE : forCreator ? CREATOR_NOTE : globalStop ? GLOBAL_NOTE : null
           }
+          running={status === 'live' && agentRuns(data.agent)}
           onChange={setMode}
         />
         {writer.pending ? (

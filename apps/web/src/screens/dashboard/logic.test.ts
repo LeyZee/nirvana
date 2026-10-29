@@ -5,6 +5,7 @@ import {
   changePercent,
   eur,
   gaugeClass,
+  agentRuns,
   heroState,
   hoursMinutes,
   leverView,
@@ -114,6 +115,16 @@ describe('gaugeClass', () => {
     expect(gaugeClass('spend', 75, 'ok')).toBe('nv-gauge--amber');
     expect(gaugeClass('spend', 95, 'ok')).toBe('nv-gauge--neon');
     expect(gaugeClass('rate', 64, 'warn')).toBe('nv-gauge--amber');
+  });
+});
+
+describe('agentRuns', () => {
+  it('says the agent acts only when nothing stalls it, whatever the mode', () => {
+    expect(agentRuns({ tone: 'ok' })).toBe(true);
+    expect(agentRuns({ tone: 'warn' })).toBe(true);
+    expect(agentRuns({ tone: 'warn', stalled: true })).toBe(false);
+    expect(agentRuns({ tone: 'idle' })).toBe(false);
+    expect(agentRuns({ tone: 'bad' })).toBe(false);
   });
 });
 

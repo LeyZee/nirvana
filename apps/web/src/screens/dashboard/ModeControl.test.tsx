@@ -18,6 +18,7 @@ function Harness(props: {
   mode: AgentMode;
   automatic: AutomaticGate;
   readOnly?: string | null;
+  running?: boolean;
   onChange: (mode: AgentMode) => void;
 }): JSX.Element {
   const tip = useFloatingTip();
@@ -65,6 +66,17 @@ describe('ModeControl', () => {
     render(<Harness mode="stop" automatic={OPEN} onChange={vi.fn()} />);
     expect(dot('Arrêt')?.classList.contains('nv-tone--bad')).toBe(true);
     expect(dot('Copilote')?.classList.contains('db-mode__dot--rest')).toBe(true);
+  });
+
+  it('lets the dot of Copilote breathe only while the agent acts', () => {
+    const dot = (): Element | null =>
+      screen.getByRole('radio', { name: 'Copilote' }).querySelector('.db-mode__dot');
+    render(<Harness mode="copilot" automatic={OPEN} onChange={vi.fn()} />);
+    expect(dot()?.classList.contains('nv-tone--ok')).toBe(true);
+    expect(dot()?.classList.contains('nv-dot--live')).toBe(false);
+    cleanup();
+    render(<Harness mode="copilot" automatic={OPEN} running onChange={vi.fn()} />);
+    expect(dot()?.classList.contains('nv-dot--live')).toBe(true);
   });
 
   it('opens Automatique when the server says so', () => {

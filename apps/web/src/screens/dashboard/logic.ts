@@ -153,6 +153,13 @@ export function heroState(
   return hero;
 }
 
+/**
+ * The agent acts: Reveal is read and a voice answers. Not linked yet, disconnected, no longer read, its key missing or
+ * its voice down: whatever the mode, nothing runs.
+ */
+export const agentRuns = (agent: Pick<AgentState, 'tone' | 'stalled'>): boolean =>
+  agent.tone !== 'bad' && agent.tone !== 'idle' && agent.stalled !== true;
+
 const modeLead = (mode: AgentMode): string =>
   mode === 'auto' ? 'L’agent écrit seul' : 'L’agent propose, les chatteurs valident dans Reveal';
 
@@ -171,7 +178,7 @@ function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): H
     };
   }
   // An agent that writes nothing says so before what waits (Reveal, the voice, its key): its own sentence leads.
-  if (agent.tone === 'bad' || agent.tone === 'idle' || agent.stalled === true) return agent;
+  if (!agentRuns(agent)) return agent;
   if (todos.length === 0) {
     return {
       tone: 'ok',
