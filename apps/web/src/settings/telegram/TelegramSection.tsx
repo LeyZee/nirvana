@@ -18,7 +18,6 @@ import { Reauth } from './Reauth';
 import {
   TelegramForbidden,
   TelegramOff,
-  fetchAlertKeywords,
   fetchDeliveries,
   fetchOverview,
   removeBot,
@@ -63,9 +62,9 @@ type Load =
 type Tab = TelegramTab;
 
 const TABS: readonly { key: Tab; label: string }[] = [
-  { key: 'alerts', label: 'Alertes' },
+  // Not « Alertes »: Réglages › Alertes is where an alert is written; this tab says who gets which level.
+  { key: 'alerts', label: 'Qui est prévenu' },
   { key: 'sales', label: 'Ventes' },
-  { key: 'keywords', label: 'Mots-clés' },
   { key: 'validations', label: 'Validations' },
   { key: 'bots', label: 'Bots et groupes' },
 ];
@@ -200,11 +199,9 @@ export function TelegramSection({
         {load.kind === 'off' ? (
           <div className="nv-plate tg-cover" data-state="warn">
             <div>
-              <p className="tg-cover__title">Telegram est éteint</p>
+              <p className="tg-cover__title">Telegram n’est pas activé sur ce serveur</p>
               <p className="tg-cover__sub">
-                Il manque au serveur sa clé de chiffrement (CREDENTIALS_ENCRYPTION_KEYS), celle qui garde
-                aussi les clés des services IA. Une fois posée et Nirvana redémarré, tu pourras ajouter un bot
-                ici.
+                C’est un réglage d’installation, fait une seule fois par la personne qui héberge Nirvana.
               </p>
             </div>
           </div>
@@ -224,20 +221,45 @@ export function TelegramSection({
   const openBots = (): void => {
     setTab('bots');
   };
+  const lede = (
+    <p className="tg-lede">
+      Ce qui mérite ton attention arrive dans tes groupes Telegram. Les messages des fans ne quittent jamais
+      Nirvana.
+    </p>
+  );
+  const sheetView =
+    sheet === null ? null : <BotSheet mode={sheet} onChanged={() => void refresh()} onClose={closeSheet} />;
+  // Until a group has received something, each tab opens its example of what the group will read.
+  const isExampleOpen = choices.every((c) => c.chat.lastSentAt === null);
+
+  // No bot yet: one empty state and its one action, no strip, no tabs, no table of empty rows (recette du 29/10).
+  if (overview.bots.length === 0) {
+    return (
+      <section className="tg-page">
+        {lede}
+        <section className="nv-plate tg-empty">
+          <div className="tg-bot__icon" aria-hidden="true">
+            <TelegramGlyph />
+          </div>
+          <p className="tg-cover__title">{coverOf(overview).title}</p>
+          <p className="tg-cover__sub">
+            Un bot Telegram se crée en une minute avec @BotFather, puis tu le mets dans un groupe : les
+            urgences y arriveront, même à 3 h du matin. Nirvana te guide pas à pas.
+          </p>
+          <button type="button" className="nv-btn nv-btn--neon" onClick={openAdd}>
+            Ajouter un bot
+          </button>
+        </section>
+        {sheetView}
+      </section>
+    );
+  }
 
   return (
     <section className="tg-page">
-      <div className="tg-head">
-        <p className="tg-lede">
-          Ce qui mérite ton attention arrive dans tes groupes Telegram. Les messages des fans ne quittent
-          jamais Nirvana.
-        </p>
-        <button type="button" className="nv-btn nv-btn--neon" onClick={openAdd}>
-          Ajouter un bot
-        </button>
-      </div>
+      {lede}
 
-      <HealthStrip overview={overview} />
+      <HealthStrip overview={overview} onFix={setTab} />
 
       <TabBar tab={tab} onTab={setTab} />
 
@@ -258,6 +280,7 @@ export function TelegramSection({
             onToggle={toggle}
             onAdd={openAdd}
             onRepair={openBots}
+            isExampleOpen={isExampleOpen}
           />
         ) : tab === 'sales' ? (
           <SalesTab
@@ -268,14 +291,7 @@ export function TelegramSection({
             onToggle={toggle}
             onAdd={openAdd}
             onRepair={openBots}
-          />
-        ) : tab === 'keywords' ? (
-          <KeywordsTab
-            overview={overview}
-            choices={choices}
-            onToggle={toggle}
-            onAdd={openAdd}
-            onRepair={openBots}
+            isExampleOpen={isExampleOpen}
           />
         ) : tab === 'validations' ? (
           <ValidationsTab
@@ -286,6 +302,7 @@ export function TelegramSection({
             onToggle={toggle}
             onAdd={openAdd}
             onRepair={openBots}
+            isExampleOpen={isExampleOpen}
           />
         ) : (
           <BotsTab
@@ -304,26 +321,39 @@ export function TelegramSection({
         </p>
       )}
 
-      {sheet === null ? null : (
-        <BotSheet mode={sheet} onChanged={() => void refresh()} onClose={closeSheet} />
-      )}
+      {sheetView}
     </section>
   );
 }
 
-function HealthStrip({ overview }: { overview: TelegramOverview }): JSX.Element {
+/** The tab named on the strip when something is to fix there. */
+const FIX_TAB_LABEL: Record<'bots' | 'alerts', string> = {
+  bots: 'Bots et groupes',
+  alerts: 'Qui est prévenu',
+};
+
+/** The state of Telegram in one line; when something is broken, the whole strip leads to where it is fixed. */
+function HealthStrip({
+  overview,
+  onFix,
+}: {
+  overview: TelegramOverview;
+  onFix: (tab: Tab) => void;
+}): JSX.Element {
   const health = healthOf(overview);
-  return (
-    <div className="nv-plate tg-health" aria-label="État de Telegram">
+  const fix = health.fix;
+  const content = (
+    <>
       <span className="tg-health__item">
         <span className="tg-state-dot" data-tone={health.tone} />
         <b>{health.label}</b>
       </span>
-      <span className="tg-health__sep" />
-      <span className="tg-health__item">
+      {/* The counts stay on a wide screen; a phone keeps the state and the last send (telegram.css). */}
+      <span className="tg-health__sep tg-health__count" />
+      <span className="tg-health__item tg-health__count">
         <b>{health.botCount}</b> {health.botCount > 1 ? 'bots' : 'bot'}
       </span>
-      <span className="tg-health__item">
+      <span className="tg-health__item tg-health__count">
         <b>{health.groupCount}</b> {health.groupCount > 1 ? 'groupes' : 'groupe'}
       </span>
       {health.lastSentAt === null ? null : (
@@ -334,7 +364,27 @@ function HealthStrip({ overview }: { overview: TelegramOverview }): JSX.Element 
           </span>
         </>
       )}
-    </div>
+      {fix === null ? null : <span className="tg-health__go">{FIX_TAB_LABEL[fix]} →</span>}
+    </>
+  );
+  if (fix === null) {
+    return (
+      <div className="nv-plate tg-health" aria-label="État de Telegram">
+        {content}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="nv-plate tg-health tg-health--link"
+      data-tone={health.tone}
+      onClick={() => {
+        onFix(fix);
+      }}
+    >
+      {content}
+    </button>
   );
 }
 
@@ -408,14 +458,6 @@ function TabIcon({ tab }: { tab: Tab }): JSX.Element {
           <path d="M14.8 9.2c-.5-.9-1.6-1.4-2.8-1.4-1.6 0-2.7.8-2.7 2 0 2.9 5.7 1.6 5.7 4.4 0 1.2-1.2 2-2.9 2-1.3 0-2.4-.5-2.9-1.5M12 6v1.8M12 16.2V18" />
         </svg>
       );
-    case 'keywords':
-      return (
-        <svg {...common}>
-          <path d="M4 7h10M4 12h7M4 17h9" />
-          <circle cx="17.5" cy="14.5" r="3" />
-          <path d="M19.6 16.6 22 19" />
-        </svg>
-      );
     case 'validations':
       return (
         <svg {...common}>
@@ -459,6 +501,8 @@ interface RoutingProps {
   readonly onAdd: () => void;
   /** Opens Bots et groupes, where a refused bot is repaired. */
   readonly onRepair: () => void;
+  /** The example of a message starts open while no group has received anything yet. */
+  readonly isExampleOpen: boolean;
 }
 
 interface ScopedProps extends RoutingProps {
@@ -564,6 +608,13 @@ function ChatChips({
   );
 }
 
+/** The topic goes to at least one group someone can read, for this scope. */
+function reachesAGroup(routing: RoutingProps, scope: Scope, topic: TelegramTopic): boolean {
+  return routing.choices.some(
+    (c) => c.isReachable && routeState(routing.overview.routes, scope, topic, c.chat.id) !== 'off',
+  );
+}
+
 function RoutingList({
   topics,
   scope,
@@ -580,6 +631,22 @@ function RoutingList({
                 {TOPICS[topic].label}
               </b>
               <small>{TOPICS[topic].sub}</small>
+              {topic === 'keyword' ? (
+                <>
+                  <small>
+                    Un mot de sa Persona arrête l’agent pour ce fan ; le groupe reçoit le mot trouvé et un
+                    lien, jamais le message.{' '}
+                    <Link className="tg-route__link" to="/creatrices">
+                      Modifier les mots dans la Persona
+                    </Link>
+                  </small>
+                  {!reachesAGroup(routing, scope, topic) ? (
+                    <small className="tg-route__warn">
+                      Sans groupe choisi ici, un mot-clé ne prévient personne sur Telegram.
+                    </small>
+                  ) : null}
+                </>
+              ) : null}
             </div>
             <ChatChips {...routing} scope={scope} topic={topic} />
           </div>
@@ -624,40 +691,9 @@ function AlertsTab({
         </div>
       </section>
 
-      <section>
-        <p className="tg-eyebrow">
-          Qui reçoit quoi{' '}
-          <span>{name === null ? 'Pour toutes les créatrices' : `Pour ${name}, en plus de « toutes »`}</span>
-        </p>
-        <ScopePicker overview={overview} scope={scope} onScope={onScope} />
-        <RoutingList {...routing} topics={ALERT_TOPICS} scope={scope} />
-      </section>
-
-      <GroupPreview
-        group="Astreinte"
-        heading="Pensé pour être lu à 3 h du matin"
-        points={[
-          'Le niveau, la créatrice, la raison, et un seul lien.',
-          'Quand quelqu’un prend la main, le message se met à jour pour tout le groupe.',
-          'Le retour à la normale arrive en réponse, sans sonner.',
-          'Plusieurs alertes d’un coup sont regroupées en un message.',
-        ]}
-      >
-        <PreviewMessage from="Nirvana Alertes" time="02:38" edit="✓ Pris en main par Théo">
-          🔴 <b>URGENT · Créatrice</b>
-          <br />
-          Possible mineur sur une photo envoyée par un fan. L’agent n’écrit plus à ce fan et attend un humain.
-          <br />
-          <span className="tg-msg__link">Ouvrir la conversation</span>
-        </PreviewMessage>
-        <PreviewMessage from="Nirvana Alertes" time="07:52" isSilent quote="La session Reveal a expiré">
-          ✓ Résolu : la session est revenue.
-        </PreviewMessage>
-      </GroupPreview>
-
       {shown.length === 0 ? null : (
         <section>
-          <details className="nv-disclosure nv-plate">
+          <details className="nv-disclosure nv-plate" open={failed > 0}>
             <summary>
               <span className="nv-disclosure__title">Dernières alertes</span>
               <span className="nv-disclosure__sum">
@@ -687,6 +723,38 @@ function AlertsTab({
           </details>
         </section>
       )}
+
+      <section>
+        <p className="tg-eyebrow">
+          Qui reçoit quoi{' '}
+          <span>{name === null ? 'Pour toutes les créatrices' : `Pour ${name}, en plus de « toutes »`}</span>
+        </p>
+        <ScopePicker overview={overview} scope={scope} onScope={onScope} />
+        <RoutingList {...routing} topics={ALERT_TOPICS} scope={scope} />
+      </section>
+
+      <GroupPreview
+        isOpen={routing.isExampleOpen}
+        group="Astreinte"
+        heading="Pensé pour être lu à 3 h du matin"
+        points={[
+          'Le niveau, la créatrice, la raison, et un seul lien.',
+          'Quand quelqu’un prend la main, le message se met à jour pour tout le groupe.',
+          'Le retour à la normale arrive en réponse, sans sonner.',
+          'Plusieurs alertes d’un coup sont regroupées en un message.',
+        ]}
+      >
+        <PreviewMessage from="Nirvana Alertes" time="02:38" edit="✓ Pris en main par Théo">
+          🔴 <b>URGENT · Créatrice</b>
+          <br />
+          Possible mineur sur une photo envoyée par un fan. L’agent n’écrit plus à ce fan et attend un humain.
+          <br />
+          <span className="tg-msg__link">Ouvrir la conversation</span>
+        </PreviewMessage>
+        <PreviewMessage from="Nirvana Alertes" time="07:52" isSilent quote="La session Reveal a expiré">
+          ✓ Résolu : la session est revenue.
+        </PreviewMessage>
+      </GroupPreview>
     </>
   );
 }
@@ -714,6 +782,7 @@ function SalesTab({ scope, onScope, ...routing }: ScopedProps): JSX.Element {
         <RoutingList {...routing} topics={['sale']} scope={scope} />
       </section>
       <GroupPreview
+        isOpen={routing.isExampleOpen}
         group="Ventes"
         heading="Sans son, sans le fan"
         points={[
@@ -735,113 +804,6 @@ function SalesTab({ scope, onScope, ...routing }: ScopedProps): JSX.Element {
   );
 }
 
-function KeywordsTab(routing: RoutingProps): JSX.Element {
-  const { overview } = routing;
-  const creators = overview.coverage;
-  return (
-    <>
-      <div className="tg-callout">
-        <InfoGlyph />
-        <span>
-          Quand un fan écrit un de ces mots, l’agent s’arrête pour ce fan et le groupe reçoit{' '}
-          <b>le mot trouvé et un lien</b>, jamais le message. Les mots se règlent dans la fiche Persona de
-          chaque créatrice.
-        </span>
-      </div>
-      {creators.map((creator) => (
-        <CreatorKeywords key={creator.creatorId} creatorId={creator.creatorId} name={creator.displayName} />
-      ))}
-      <section>
-        <p className="tg-eyebrow">
-          Où prévenir <span>Pour toutes les créatrices</span>
-        </p>
-        <RoutingList {...routing} topics={['keyword']} scope="all" />
-        <p className="tg-hint tg-pad">
-          L’arrêt de l’agent part déjà dans le groupe Important. Le message « mot-clé » dédié arrive avec la
-          prochaine version de l’agent.
-        </p>
-      </section>
-      <GroupPreview
-        group="Astreinte"
-        heading="Le mot, jamais le message"
-        points={[
-          'L’agent n’écrit plus à ce fan tant qu’un humain n’a pas repris.',
-          'Majuscules et accents sont ignorés.',
-          'Les urgences (mineur, détresse…) sont déjà détectées sans mot-clé.',
-        ]}
-      >
-        <PreviewMessage from="Nirvana Alertes" time="01:48">
-          🔎 <b>Mot-clé · Créatrice</b>
-          <br />
-          « remboursement » dans un message de fan. L’agent s’est arrêté pour ce fan.
-          <br />
-          <span className="tg-msg__link">Ouvrir la conversation</span>
-        </PreviewMessage>
-      </GroupPreview>
-    </>
-  );
-}
-
-type Words =
-  { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; words: readonly string[]; isActive: boolean };
-
-/** Read-only: her `alert_keywords`, from her newest persona version. */
-function CreatorKeywords({
-  creatorId,
-  name,
-}: {
-  creatorId: TelegramOverview['coverage'][number]['creatorId'];
-  name: string;
-}): JSX.Element {
-  const [words, setWords] = useState<Words>({ kind: 'loading' });
-  useEffect(() => {
-    let live = true;
-    fetchAlertKeywords(creatorId).then(
-      (list) => {
-        if (live) setWords({ kind: 'ready', words: list.words, isActive: list.isActive });
-      },
-      () => {
-        if (live) setWords({ kind: 'failed' });
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [creatorId]);
-  return (
-    <section>
-      <p className="tg-eyebrow">
-        Mots surveillés · {name}
-        <span>{words.kind === 'ready' ? plural(words.words.length, 'mot') : ''}</span>
-      </p>
-      <div className="nv-plate tg-words" aria-busy={words.kind === 'loading'}>
-        {words.kind === 'failed' ? (
-          <p className="tg-hint">Les mots n’ont pas pu être lus. Réessaie dans un instant.</p>
-        ) : words.kind === 'ready' && words.words.length === 0 ? (
-          <p className="tg-hint">Aucun mot pour l’instant.</p>
-        ) : words.kind === 'ready' ? (
-          <div className="nv-tags">
-            {words.words.map((word) => (
-              <span className="nv-tag nv-tag--declared" key={word}>
-                {word}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {words.kind === 'ready' && !words.isActive && words.words.length > 0 ? (
-          <p className="tg-hint">
-            Ces mots viennent de sa dernière version, pas encore activée : l’agent les appliquera quand elle
-            le sera.
-          </p>
-        ) : null}
-        <Link className="nv-btn nv-btn--plain nv-btn--sm tg-self-start" to="/creatrices">
-          Modifier dans sa fiche Persona
-        </Link>
-      </div>
-    </section>
-  );
-}
-
 function ValidationsTab({ scope, onScope, ...routing }: ScopedProps): JSX.Element {
   return (
     <>
@@ -855,6 +817,7 @@ function ValidationsTab({ scope, onScope, ...routing }: ScopedProps): JSX.Elemen
         <RoutingList {...routing} topics={['validation']} scope={scope} />
       </section>
       <GroupPreview
+        isOpen={routing.isExampleOpen}
         group="Astreinte"
         heading="On valide là où on écoute"
         points={[
@@ -863,7 +826,7 @@ function ValidationsTab({ scope, onScope, ...routing }: ScopedProps): JSX.Elemen
           'Une fois traité, le message se met à jour pour que personne ne le fasse deux fois.',
         ]}
       >
-        <PreviewMessage from="Nirvana Alertes" time="21:16" edit="✓ Validé par Charles">
+        <PreviewMessage from="Nirvana Alertes" time="21:16" edit="✓ Validé par Hugo">
           🎙️ <b>Vocal à valider · Créatrice</b>
           <br />
           Vocal de 14 s prêt pour un fan. Il ne part pas sans toi.
@@ -924,22 +887,8 @@ function BotsTab({
     );
   };
 
-  if (overview.bots.length === 0) {
-    return (
-      <section className="nv-plate tg-empty">
-        <div className="tg-bot__icon" aria-hidden="true">
-          <TelegramGlyph />
-        </div>
-        <p className="tg-cover__title">Aucun bot pour l’instant</p>
-        <p className="tg-cover__sub">
-          Un bot Telegram se crée en une minute avec @BotFather. Nirvana te guide pas à pas.
-        </p>
-        <button type="button" className="nv-btn nv-btn--neon" onClick={onAdd}>
-          Ajouter un bot
-        </button>
-      </section>
-    );
-  }
+  // The page's one neon goes to the first bot to repair; with none, nothing here is lit (the page has no neon).
+  const firstBroken = overview.bots.find((bot) => bot.state !== 'active')?.id ?? null;
 
   return (
     <>
@@ -951,7 +900,7 @@ function BotsTab({
         <div className="nv-plate">
           <div className="nv-list">
             {overview.bots.map((bot) => {
-              const line = botLine(bot, now);
+              const line = botLine(bot);
               const botChoices = choices.filter((c) => c.bot.id === bot.id);
               return (
                 <div className="tg-bot" key={bot.id}>
@@ -974,7 +923,7 @@ function BotsTab({
                       ) : (
                         <button
                           type="button"
-                          className="nv-btn nv-btn--soft nv-btn--sm"
+                          className={`nv-btn nv-btn--sm ${bot.id === firstBroken ? 'nv-btn--neon' : 'nv-btn--soft'}`}
                           onClick={() => {
                             onSheet({ kind: 'replace', bot });
                           }}
@@ -1046,15 +995,18 @@ function BotsTab({
                     >
                       Ajouter à un groupe
                     </button>
-                    <button
-                      type="button"
-                      className="nv-btn nv-btn--plain nv-btn--sm"
-                      onClick={() => {
-                        onSheet({ kind: 'replace', bot });
-                      }}
-                    >
-                      Remplacer le jeton
-                    </button>
+                    {/* « Réparer » above already replaces the token of a broken bot. */}
+                    {bot.state === 'active' ? (
+                      <button
+                        type="button"
+                        className="nv-btn nv-btn--plain nv-btn--sm"
+                        onClick={() => {
+                          onSheet({ kind: 'replace', bot });
+                        }}
+                      >
+                        Remplacer le jeton
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="nv-btn nv-btn--plain nv-btn--sm nv-btn--destructive"
@@ -1125,6 +1077,9 @@ function BotsTab({
           {error}
         </p>
       )}
+      <button type="button" className="nv-btn nv-btn--soft nv-btn--sm tg-self-start" onClick={onAdd}>
+        Ajouter un bot
+      </button>
       <div className="tg-callout">
         <InfoGlyph />
         <span>

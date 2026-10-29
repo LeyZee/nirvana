@@ -48,7 +48,8 @@ export function AppearancePage(): JSX.Element {
     pick(next.value);
   };
   return (
-    <Panel title="Apparence" className="ap">
+    // No title repeating the tab's name (REG-22): the tab says where you are.
+    <Panel className="ap">
       <PanelSection>
         <div
           ref={group}

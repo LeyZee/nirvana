@@ -43,7 +43,7 @@ const ERROR_MESSAGES: Record<ServicesErrorKind, string> = {
   session_expired: 'Ta session a expiré. Reconnecte-toi.',
   forbidden: 'Seul le compte propriétaire peut gérer les clés.',
   rate_limited: 'Trop d’essais. Attends une minute avant de réessayer.',
-  unavailable: 'Nirvana ne répond pas. Réessaie dans un instant.',
+  unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
 };
 
 export class ServicesError extends Error {
@@ -111,7 +111,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
   throw new ServicesError('unavailable', detail);
 }
 
-/** An answer the contract refuses reads as « Nirvana ne répond pas », like any answer the page cannot use. */
+/** An answer the contract refuses reads as « Le serveur ne répond pas », like any answer the page cannot use. */
 async function parsed<T>(response: Response, parse: (body: unknown) => T): Promise<T> {
   try {
     return parse(await response.json());

@@ -62,6 +62,7 @@ Branche : task/<id>-<slug>
 | P5-01 | Persona par blocs, compteur de complétion et infos à collecter | 5 | todo | P0-08, P3-02 |
 | H-01 | Première session d'hygiène | 0 | todo | P0-07b |
 | D-01 | Design system « Liquid Glass » | 4 | in_progress | P0-01 |
+| D-02 | Recette design et navigation de l'interface web | 4 | in_progress | D-01 |
 | EQ-01 | Équipe : membres, pays, commission, paramètres de paie des plateformes | équipe | todo | ADR 0023, ADR 0024 ; écrans : EQ-11 |
 | EQ-02 | Planning des shifts et « qui est en poste » | équipe | todo | EQ-01 |
 | EQ-03 | Rapport de fin de shift dans Nirvana | équipe | todo | EQ-02 |

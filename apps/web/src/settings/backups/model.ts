@@ -97,7 +97,8 @@ export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string)
   return {
     tone: 'ok',
     title: `Sauvegardée le ${dayOf(status.lastSucceededAt, now, timeZone)} à ${clockOf(status.lastSucceededAt, timeZone)}`,
-    text: `Chaque nuit, la base est chiffrée et copiée hors de chez son hébergeur, gardée 30${NBSP}jours. Après ${String(status.overdueAfterHours)}${NBSP}h sans copie réussie, le Dashboard et Telegram te préviennent.`,
+    // « Chaque nuit… » is the page's lede, just above: the block says only what it adds (REG-25).
+    text: `Chaque copie est gardée 30${NBSP}jours. Après ${String(status.overdueAfterHours)}${NBSP}h sans copie réussie, le Dashboard et Telegram te préviennent.`,
     lastRun,
   };
 }
@@ -141,7 +142,7 @@ export function restoreViewOf(status: BackupStatus, now: Date, timeZone?: string
     return {
       tone: 'warn',
       title: `Le dernier essai date du ${dayOf(test.testedAt, now, timeZone)}`,
-      text: `${restored}, toutes les lignes retrouvées. Il a plus de ${String(RESTORE_TEST_FRESH_DAYS)}${NBSP}jours : ${PAY_RULE.charAt(0).toLowerCase()}${PAY_RULE.slice(1)}`,
+      text: `${restored}, toutes les lignes retrouvées. Il a plus de ${String(RESTORE_TEST_FRESH_DAYS)}${NBSP}jours : la paie attend un nouvel essai réussi.`,
       validity: null,
     };
   }

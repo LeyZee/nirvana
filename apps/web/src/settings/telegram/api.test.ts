@@ -1,17 +1,9 @@
-import { CreatorIdSchema, REAUTHENTICATION_ERROR_CODE, TelegramBotIdSchema, newId } from '@nirvana/contracts';
+import { REAUTHENTICATION_ERROR_CODE, TelegramBotIdSchema, newId } from '@nirvana/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReauthRequired } from '../services/api';
 
-import {
-  TelegramForbidden,
-  TelegramOff,
-  addBot,
-  fetchAlertKeywords,
-  fetchOverview,
-  removeBot,
-  saveRoutes,
-} from './api';
+import { TelegramForbidden, TelegramOff, addBot, fetchOverview, removeBot, saveRoutes } from './api';
 
 const bot = {
   id: newId(TelegramBotIdSchema),
@@ -89,10 +81,5 @@ describe('Telegram API client', () => {
     await expect(fetchOverview()).rejects.toThrow();
     answer(500, { error: 'boom' });
     await expect(fetchOverview()).rejects.toThrow('GET : 500');
-  });
-
-  it('reads the alert words of a creator, none before her first version', async () => {
-    answer(200, { creatorId: newId(CreatorIdSchema), latest: null, versions: [] });
-    expect(await fetchAlertKeywords(newId(CreatorIdSchema))).toEqual({ words: [], isActive: true });
   });
 });

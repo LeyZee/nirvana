@@ -1,6 +1,5 @@
 import {
   ApiErrorSchema,
-  PersonaOverviewSchema,
   REAUTHENTICATION_ERROR_CODE,
   TelegramBotSchema,
   TelegramDeliveriesSchema,
@@ -8,7 +7,6 @@ import {
   TelegramRefusalSchema,
   TelegramRoutesSchema,
   TelegramTestResultSchema,
-  type CreatorId,
   type TelegramBot,
   type TelegramBotId,
   type TelegramChatId,
@@ -111,25 +109,4 @@ export async function sendTest(chatId: TelegramChatId): Promise<Outcome<{ sentAt
 export async function fetchDeliveries(limit = 50): Promise<TelegramDelivery[]> {
   const response = await call(`/deliveries?limit=${String(limit)}`);
   return TelegramDeliveriesSchema.parse(await response.json()).deliveries;
-}
-
-export interface AlertKeywords {
-  readonly words: string[];
-  /** False while her newest version is not the one the agent applies yet. */
-  readonly isActive: boolean;
-}
-
-/**
- * The alert words of a creator, from her newest persona version (`notifications.alert_keywords`). Edited on her
- * Persona page, never here: one place per piece of data.
- */
-export async function fetchAlertKeywords(creatorId: CreatorId): Promise<AlertKeywords> {
-  const response = await fetch(`/v1/creators/${encodeURIComponent(creatorId)}/persona`, {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error(`GET persona: ${String(response.status)}`);
-  const { latest } = PersonaOverviewSchema.parse(await response.json());
-  return latest === null
-    ? { words: [], isActive: true }
-    : { words: latest.persona.notifications.alert_keywords, isActive: latest.summary.isActive };
 }
