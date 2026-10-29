@@ -33,6 +33,8 @@ import {
   tierSetOf,
 } from '@/test/pay';
 
+const DEC1 = '2026-12-01';
+
 vi.mock('@/scheduling/time', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/scheduling/time')>()),
   readerZone: () => 'Europe/Paris',
@@ -217,11 +219,16 @@ describe('Paie › Objectifs', () => {
     );
   });
 
-  it('lets the owner change the goal in two steps, its tiers in order', async () => {
+  it('lets the owner change the goal in two steps until its 3rd day, and warns that the period has begun', async () => {
+    // Monday 2 November in Paris: the period has begun, its goal may still change (PAIE-22).
+    vi.setSystemTime(new Date('2026-11-02T08:00:00Z'));
     answer = () => ({ status: 201, body: goalOf(NOV1, { targetMinor: 160_000 }) });
     renderPage(OWNER);
     fireEvent.click(await screen.findByRole('button', { name: 'Changer' }));
     const dialog = await screen.findByRole('dialog');
+    expect(text(dialog.querySelector('.tm-warn'))).toBe(
+      'La quinzaine a commencé : l’équipe y travaille déjà. Son objectif change encore jusqu’au mardi 3 novembre, puis plus du tout ; préviens l’équipe de ce qui change.',
+    );
     const target = within(dialog).getByLabelText('Net de l’équipe à atteindre');
     expect(valueOf(target)).toBe('1500,00');
     expect(
@@ -254,41 +261,41 @@ describe('Paie › Objectifs', () => {
     ]);
   });
 
-  it('sets new tiers from a period still open, and says why a period that was just validated refuses them', async () => {
+  it('sets new tiers from a period that has not begun, and says why one that just began refuses them', async () => {
     let refuse = true;
     answer = () => {
       if (refuse) {
         refuse = false;
-        return { status: 409, body: refusal('pay_period_closed_conflict', { period: NOV1 }) };
+        return { status: 400, body: refusal('pay_rule_started_invalid', { period: NOV2 }) };
       }
-      return { status: 201, body: tierSetOf(3, NOV2) };
+      return { status: 201, body: tierSetOf(3, DEC1) };
     };
     renderPage(OWNER);
     fireEvent.click(await screen.findByRole('button', { name: 'Nouveaux paliers' }));
     const dialog = await screen.findByRole('dialog');
-    // October's second half is validated: the tiers may start with the period under way, or a later one.
+    // The period under way has begun: the tiers start with the next one at the earliest (PAIE-22).
     expect(
       within(dialog)
         .getAllByRole('radio')
         .map((one) => [text(one), one.getAttribute('aria-checked')]),
     ).toEqual([
-      ['1er – 15 novembre', 'true'],
-      ['16 – 30 novembre', 'false'],
+      ['16 – 30 novembre', 'true'],
       ['1er – 15 décembre', 'false'],
       ['16 – 31 décembre', 'false'],
+      ['1er – 15 janvier', 'false'],
     ]);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Retirer le palier 2' }));
     fireEvent.change(within(dialog).getByLabelText('Prime, palier 1'), { target: { value: '12' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
     expect(text(await within(dialog).findByText(/^À partir de la quinzaine/u))).toBe(
-      'À partir de la quinzaine du 1er au 15 novembre : Bronze à 500,00 € de net, +12,00 €.',
+      'À partir de la quinzaine du 16 au 30 novembre : Bronze à 500,00 € de net, +12,00 €.',
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer les paliers' }));
     expect(text(await within(dialog).findByRole('alert'))).toBe(
-      'La quinzaine du 1er au 15 novembre est déjà validée.',
+      'La quinzaine du 16 au 30 novembre a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.',
     );
 
-    fireEvent.click(within(dialog).getByRole('radio', { name: '16 – 30 novembre' }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: '1er – 15 décembre' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Enregistrer les paliers' }));
     await waitFor(() => {
@@ -297,12 +304,12 @@ describe('Paie › Objectifs', () => {
     expect(writes.map(({ body }) => body)).toEqual([
       {
         id: AN_ID,
-        fromPeriod: NOV1,
+        fromPeriod: NOV2,
         tiers: [{ label: 'Bronze', thresholdMinor: 50_000, bonusMinor: 1_200 }],
       },
       {
         id: AN_ID,
-        fromPeriod: NOV2,
+        fromPeriod: DEC1,
         tiers: [{ label: 'Bronze', thresholdMinor: 50_000, bonusMinor: 1_200 }],
       },
     ]);
@@ -312,10 +319,21 @@ describe('Paie › Objectifs', () => {
     periods[NOV1] = periodOf(NOV1, [statementOf(THEO, NOV1)], { bonusTiers: TIERS });
     renderPage(IRIS_ME);
     expect(await screen.findByText('Pas d’objectif sur la quinzaine du 1er au 15 novembre.')).toBeTruthy();
-    expect(screen.getByText('Le propriétaire pose l’objectif d’une quinzaine.')).toBeTruthy();
+    // Its 3rd day is gone: no goal any more this period, whoever reads.
+    expect(
+      screen.getByText(
+        'L’objectif d’une quinzaine se pose au plus tard son 3e jour : celle-ci n’en aura pas.',
+      ),
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Poser|Changer|Nouveaux paliers/u })).toBeNull();
     // Nothing set for the next period: nothing to read there.
     expect(screen.queryByText('Quinzaine du 16 au 30 novembre')).toBeNull();
+  });
+
+  it('lets the owner set a goal no more once its period’s 3rd day is gone', async () => {
+    renderPage(OWNER);
+    expect(await screen.findByRole('heading', { name: /de net pour l’équipe$/u })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Changer' })).toBeNull();
   });
 
   it('freezes a closed period’s goal as the statements reached it, and says so', async () => {

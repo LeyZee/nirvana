@@ -9,6 +9,7 @@ import {
   CommissionStatementIdSchema,
   PayAdjustmentIdSchema,
   PenaltyIdSchema,
+  PayoutMinimumIdSchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
   TeamMemberIdSchema,
@@ -51,6 +52,9 @@ export const PAY_TARGET_MAX_MINOR = 100_000_000;
 
 /** The payout minimum until the owner sets one: 15 €, Imperium's `paie_report_seuil`. */
 export const DEFAULT_MINIMUM_PAYOUT_MINOR = 1_500;
+
+/** The longest payout delay the owner may announce to the team (PAIE-32), in business days. */
+export const PAYOUT_DELAY_MAX_BUSINESS_DAYS = 30;
 
 /** Exchange rates in millionths of a euro for one unit of the currency: 1 000 000 is one euro. */
 export const RATE_MICROS_SCALE = 1_000_000;
@@ -122,11 +126,85 @@ export function canonicalExchangeRates<R extends { readonly currency: string }>(
 export const ExchangeRatesSchema = z.object({ usd: ExchangeRateSchema.nullable() });
 export type ExchangeRates = z.infer<typeof ExchangeRatesSchema>;
 
-/** `GET` and `PUT /v1/payroll/settings` (owner writes): below the minimum, a statement's total is carried over. */
+const MinimumPayoutMinorSchema = z.number().int().min(0).max(PAY_AMOUNT_MAX_MINOR);
+
+/** Business days between a statement's validation and its payout, as the owner announces it (PAIE-32). */
+const PayoutDelaySchema = z.number().int().min(1).max(PAYOUT_DELAY_MAX_BUSINESS_DAYS);
+
+/**
+ * `GET /v1/payroll/settings` (the whole team reads it), and `settings` of a period's view. `minimumPayoutMinor`: the
+ * minimum in force for the period read (today's for `GET /settings`): below it, a statement's total is carried over.
+ * `nextMinimum`: the first change set after that period, `null` without one (PAIE-22: a minimum changes only from a
+ * period that has not begun). `payoutDelayBusinessDays`: the usual delay between validation and payout that Commissions
+ * shows each member (PAIE-32), `null` while the owner announces none; never written in the code.
+ */
 export const PayrollSettingsSchema = z.object({
-  minimumPayoutMinor: z.number().int().min(0).max(PAY_AMOUNT_MAX_MINOR),
+  minimumPayoutMinor: MinimumPayoutMinorSchema,
+  nextMinimum: z
+    .object({ fromPeriod: PayPeriodSchema, minimumPayoutMinor: MinimumPayoutMinorSchema })
+    .nullable(),
+  payoutDelayBusinessDays: PayoutDelaySchema.nullable(),
 });
 export type PayrollSettings = z.infer<typeof PayrollSettingsSchema>;
+
+/** `PUT /v1/payroll/settings` (owner): the payout delay announced to the team (PAIE-32); `null` announces none. */
+export const UpdatePayrollSettingsBodySchema = z.object({
+  payoutDelayBusinessDays: PayoutDelaySchema.nullable(),
+});
+export type UpdatePayrollSettingsBody = z.infer<typeof UpdatePayrollSettingsBodySchema>;
+
+/**
+ * The payout minimum from `fromPeriod` on (PAIE-22), for the whole team. Added only, from a period that has not begun
+ * (`pay_rule_started_invalid`): the drafts of a period already worked keep theirs. Before any, the minimum of
+ * `payroll_settings` (or `DEFAULT_MINIMUM_PAYOUT_MINOR`) is in force.
+ */
+export const PayoutMinimumSchema = z.object({
+  id: PayoutMinimumIdSchema,
+  fromPeriod: PayPeriodSchema,
+  minimumPayoutMinor: MinimumPayoutMinorSchema,
+  createdBy: UserIdSchema,
+  createdAt: z.iso.datetime(),
+});
+export type PayoutMinimum = z.infer<typeof PayoutMinimumSchema>;
+
+/** `POST /v1/payroll/payout-minimums` (owner) → 201 `PayoutMinimumSchema`, 200 for the same `id` and values. */
+export const CreatePayoutMinimumBodySchema = z.object({
+  id: PayoutMinimumIdSchema,
+  fromPeriod: PayPeriodSchema,
+  minimumPayoutMinor: MinimumPayoutMinorSchema,
+});
+export type CreatePayoutMinimumBody = z.infer<typeof CreatePayoutMinimumBodySchema>;
+
+/** The minimum in force for `period`: the latest `fromPeriod` at or before it, the newest of that period; `null` before. */
+export function payoutMinimumFor<M extends Pick<PayoutMinimum, 'id' | 'fromPeriod' | 'createdAt'>>(
+  minimums: readonly M[],
+  period: PayPeriod,
+): M | null {
+  let found: M | null = null;
+  for (const one of minimums) {
+    if (one.fromPeriod > period) continue;
+    if (found === null || newer(one, found, (minimum) => minimum.fromPeriod)) found = one;
+  }
+  return found;
+}
+
+/** The first change of minimum after `period`: the earliest `fromPeriod` after it, the newest of that period. */
+export function nextPayoutMinimum<M extends Pick<PayoutMinimum, 'id' | 'fromPeriod' | 'createdAt'>>(
+  minimums: readonly M[],
+  period: PayPeriod,
+): M | null {
+  let found: M | null = null;
+  for (const one of minimums) {
+    if (one.fromPeriod <= period) continue;
+    if (
+      found === null ||
+      one.fromPeriod < found.fromPeriod ||
+      (one.fromPeriod === found.fromPeriod && newer(one, found, (minimum) => minimum.fromPeriod))
+    )
+      found = one;
+  }
+  return found;
+}
 
 /**
  * One individual tier: a member's net of `thresholdMinor` or more in the period brings `bonusMinor`. Never at 0: a
@@ -795,7 +873,9 @@ export function mayValidateStatement(
  * member before they joined (`details.period`) ;
  * `penalty_cancel_conflict` 409, every period of the penalty is closed ;
  * `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`,
- * `collective_goal_conflict` 409, the same `id` with other values ;
+ * `collective_goal_conflict`, `payout_minimum_conflict` 409, the same `id` with other values ;
+ * `pay_rule_started_invalid` 400, tiers or a payout minimum from a period that has begun (PAIE-22, `details.period`) ;
+ * `collective_goal_late_invalid` 400, a goal for a period past its 3rd day (PAIE-22, `details.period`) ;
  * `exchange_rate_missing_conflict` 409, a currency without a rate read ;
  * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
  * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
@@ -827,6 +907,9 @@ export const PAYROLL_ERROR_CODES = [
   'pay_adjustment_conflict',
   'bonus_tier_set_conflict',
   'collective_goal_conflict',
+  'payout_minimum_conflict',
+  'pay_rule_started_invalid',
+  'collective_goal_late_invalid',
   'exchange_rate_missing_conflict',
   'commission_rate_missing_conflict',
   'payment_in_future_unprocessable',

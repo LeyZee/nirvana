@@ -20,6 +20,9 @@ import {
   PayrollEntriesSchema,
   PayrollPeriodSchema,
   PayrollSettingsSchema,
+  PayoutMinimumSchema,
+  CreatePayoutMinimumBodySchema,
+  UpdatePayrollSettingsBodySchema,
   PenaltyIdSchema,
   PenaltySchema,
   UserIdSchema,
@@ -204,6 +207,21 @@ export function createPayrollRoutes(
       },
     );
 
+    app.post(
+      '/payroll/payout-minimums',
+      {
+        preValidation: ownerOrMember,
+        schema: {
+          body: CreatePayoutMinimumBodySchema,
+          response: { 200: PayoutMinimumSchema, 201: PayoutMinimumSchema },
+        },
+      },
+      async (request, reply) => {
+        const { value, created } = await rules.createPayoutMinimum(actorOf(request), request.body);
+        return reply.code(created ? 201 : 200).send(value);
+      },
+    );
+
     app.get(
       '/payroll/settings',
       { preValidation: ownerOrMember, schema: { response: { 200: PayrollSettingsSchema } } },
@@ -214,7 +232,7 @@ export function createPayrollRoutes(
       '/payroll/settings',
       {
         preValidation: ownerOrMember,
-        schema: { body: PayrollSettingsSchema, response: { 200: PayrollSettingsSchema } },
+        schema: { body: UpdatePayrollSettingsBodySchema, response: { 200: PayrollSettingsSchema } },
       },
       (request) => rules.setSettings(actorOf(request), request.body),
     );

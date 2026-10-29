@@ -3,6 +3,7 @@ import {
   BonusTierSetIdSchema,
   CarryOverIdSchema,
   CollectiveGoalIdSchema,
+  PayoutMinimumIdSchema,
   CommissionStatementIdSchema,
   CreatorIdSchema,
   newId,
@@ -619,6 +620,48 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
         KEPT,
       );
       expect(await as(theo, (tx) => tx.select().from(s.bonusTierSets))).toHaveLength(1);
+    });
+
+    it('the owner alone dates a payout minimum, never on a period validated, and it never changes (PAIE-22)', async () => {
+      const minimum = (fromPeriod: string, by = owner) => ({
+        id: newId(PayoutMinimumIdSchema),
+        fromPeriod,
+        minimumPayoutMinor: 2_000,
+        createdBy: by,
+      });
+      expect(
+        await failure(
+          as(manager, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-12-01', manager))),
+        ),
+      ).toMatch(RLS);
+      expect(
+        await failure(as(owner, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-11-01')))),
+      ).toMatch(KEPT);
+      await as(owner, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-12-16')));
+      expect(
+        await failure(as(owner, (tx) => tx.update(s.payoutMinimums).set({ minimumPayoutMinor: 0 }))),
+      ).toMatch(/permission denied/u);
+      expect(
+        await failure(admin((tx) => tx.update(s.payoutMinimums).set({ minimumPayoutMinor: 0 }))),
+      ).toMatch(KEPT);
+      // The single minimum no longer changes from the application; the delay does.
+      await admin((tx) =>
+        tx
+          .insert(s.payrollSettings)
+          .values({ id: 1, minimumPayoutMinor: 1_500, updatedBy: owner })
+          .onConflictDoNothing(),
+      );
+      expect(
+        await failure(
+          as(owner, (tx) => tx.update(s.payrollSettings).set({ minimumPayoutMinor: 0, updatedBy: owner })),
+        ),
+      ).toMatch(/permission denied/u);
+      await as(owner, (tx) =>
+        tx
+          .update(s.payrollSettings)
+          .set({ payoutDelayBusinessDays: 3, updatedBy: owner, updatedAt: new Date() }),
+      );
+      expect(await as(theo, (tx) => tx.select().from(s.payoutMinimums))).toHaveLength(1);
     });
 
     it('rates are read by every member, written by the job alone, and never change', async () => {

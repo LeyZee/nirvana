@@ -1,4 +1,5 @@
 import {
+  collectiveGoalLastDay,
   BonusTierSetIdSchema,
   CollectiveGoalIdSchema,
   newId,
@@ -22,6 +23,7 @@ import {
   periodTitle,
   signedAmountText,
 } from '@/reports/model';
+import { longDay } from '@/scheduling/time';
 import { Dialog } from '@/screens/team/Dialog';
 
 /** The most tiers a goal and a set keep (`CollectiveTiersSchema`, `BonusTiersSchema`). */
@@ -122,10 +124,13 @@ function goalTiersOf(rows: readonly GoalRow[]): (CollectiveTier | null)[] {
  */
 export function GoalDialog({
   period,
+  started,
   goal,
   onClose,
 }: {
   period: PayPeriod;
+  /** PAIE-22: the period has begun (its first three days): the goal may still change, with a warning. */
+  started: boolean;
   /** The goal in force, to change or withdraw. */
   goal: CollectiveGoal | null;
   onClose: () => void;
@@ -186,6 +191,11 @@ export function GoalDialog({
     >
       <div className="tm-dialog__body">
         <Steps step={step === 'fill' ? 0 : 1} />
+        {started ? (
+          <p className="tm-warn nv-swap">
+            {`La quinzaine a commencé : l’équipe y travaille déjà. Son objectif change encore jusqu’au ${longDay(collectiveGoalLastDay(period))}, puis plus du tout ; préviens l’équipe de ce qui change.`}
+          </p>
+        ) : null}
         {step === 'withdraw' && goal !== null ? (
           <>
             <p className="py-recap nv-enter">
@@ -219,7 +229,7 @@ export function GoalDialog({
             </p>
             <p className="tm-hint">
               La prime du plus haut palier atteint va à chaque chatteur, ventes ou pas, jamais à un manager.
-              Elle se fige à la première validation de la quinzaine.
+              L’objectif d’une quinzaine se pose au plus tard son 3e jour.
             </p>
             <CheckFoot
               busy={busy}
@@ -373,8 +383,8 @@ function bonusTiersOf(rows: readonly BonusRow[]): (BonusTier | null)[] {
 
 /**
  * New individual tiers from a period on (owner, EQ-05): for each threshold of a member's net, a bonus; the highest
- * reached counts, managers aside. Added only: they replace the set in force from their period, which must still be
- * open. With no tier, none from then on.
+ * reached counts, managers aside. Added only: they replace the set in force from their period, which must not have
+ * begun (PAIE-22). With no tier, none from then on.
  */
 export function TiersDialog({
   periods,
@@ -382,7 +392,7 @@ export function TiersDialog({
   set,
   onClose,
 }: {
-  /** The periods the set may start with: not validated yet, the first open one first. */
+  /** The periods the set may start with: not begun yet (PAIE-22), in order. */
   periods: readonly PayPeriod[];
   /** The one chosen at first. */
   first: PayPeriod;
@@ -460,8 +470,8 @@ export function TiersDialog({
               )}
             </p>
             <p className="tm-hint">
-              Les relevés pas encore validés à partir de cette quinzaine sont recalculés ; les quinzaines
-              validées gardent leurs paliers.
+              Les paliers partent d’une quinzaine qui n’a pas commencé : celles déjà commencées gardent les
+              leurs, une règle de paie ne change pas en cours de route.
             </p>
             <CheckFoot
               busy={busy}

@@ -40,6 +40,7 @@ const text = (element: Element | null | undefined): string => (element?.textCont
 
 let periods: Record<string, PayrollPeriod>;
 let down: boolean;
+let delay: number | null;
 /** The member's own line of the team, all `/v1/team/members` gives a chatter (scope `self`). */
 let mine: TeamMember;
 const asked: string[] = [];
@@ -84,6 +85,8 @@ function serve(): void {
           });
         case '/v1/team/members':
           return json({ members: [mine] });
+        case '/v1/payroll/settings':
+          return json({ minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: delay });
         case '/v1/scheduling/settings':
           return json(SCHEDULING_SETTINGS);
         case '/v1/scheduling/shift-reports':
@@ -141,6 +144,7 @@ beforeEach(() => {
   // Friday 6 November at midnight in Paris: five days of fifteen gone.
   vi.setSystemTime(new Date('2026-11-05T23:00:00Z'));
   down = false;
+  delay = null;
   mine = THEO;
   asked.length = 0;
   periods = {
@@ -233,6 +237,17 @@ describe('CommissionsPage', () => {
     ]);
     // A chatter reads their own line of the team, for their country, and never its rules.
     expect(asked).not.toContain('/v1/team/pay-rules');
+  });
+
+  it('says the payout delay the owner announced (PAIE-32)', async () => {
+    delay = 3;
+    renderPage();
+    const hero = await screen.findByRole('region', { name: 'Ce que tu vas toucher' });
+    await waitFor(() => {
+      expect(text(hero)).toContain(
+        'L’agence valide, puis le versement suit, en général 3 jours ouvrés après la validation.',
+      );
+    });
   });
 
   it('gives the amount in CFA francs only to a member of the CFA franc zone', async () => {

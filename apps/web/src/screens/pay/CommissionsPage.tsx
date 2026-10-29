@@ -17,7 +17,13 @@ import { useEffect, useState, type JSX } from 'react';
 import { useCfaFrancs, useCurrentPeriod, usePayNames } from './data';
 import { Chip, Empty, Gauge, GoalTicks, Loading, MoneyPath, Unreachable } from './parts';
 
-import { PAYROLL_KEY, PeriodCursorInvalid, usePayPeriod, usePayPeriods } from '@/payroll/api';
+import {
+  PAYROLL_KEY,
+  PeriodCursorInvalid,
+  usePayPeriod,
+  usePayPeriods,
+  usePayrollSettings,
+} from '@/payroll/api';
 import {
   fcfaText,
   forecastNet,
@@ -63,6 +69,8 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
   const now = useNow();
   const current = useCurrentPeriod();
   const periods = usePayPeriods();
+  // PAIE-32: the usual payout delay the owner announced, read by every member; never a figure of the code.
+  const delay = usePayrollSettings().data?.payoutDelayBusinessDays ?? null;
   const client = useQueryClient();
   const [opened, setOpened] = useState<PayPeriod | null>(null);
 
@@ -199,7 +207,7 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
                     statement={statement}
                     names={heroNames}
                     you
-                    payLabel={myStatementWords(statement, heroData.ended, now).label}
+                    payLabel={myStatementWords(statement, heroData.ended, now, delay).label}
                   />
                 </div>
               </Panel>
@@ -299,7 +307,8 @@ function Hero({
   period: PayrollPeriod;
   now: Date;
 }): JSX.Element {
-  const words = myStatementWords(statement, period.ended, now);
+  const delay = usePayrollSettings().data?.payoutDelayBusinessDays ?? null;
+  const words = myStatementWords(statement, period.ended, now, delay);
   const cfa = useCfaFrancs(statement.memberId);
   return (
     <section
@@ -557,8 +566,11 @@ function MyStatementDialog({
   const data = read.data?.period === period ? read.data : undefined;
   const statement = data?.statements[0];
   const cfa = useCfaFrancs(statement?.memberId);
+  const delay = usePayrollSettings().data?.payoutDelayBusinessDays ?? null;
   const words =
-    data === undefined || statement === undefined ? null : myStatementWords(statement, data.ended, now);
+    data === undefined || statement === undefined
+      ? null
+      : myStatementWords(statement, data.ended, now, delay);
   return (
     <Dialog
       className="py-dialog"

@@ -11,6 +11,7 @@ import {
   PayrollEntriesSchema,
   PayrollPeriodSchema,
   PayrollSettingsSchema,
+  PayoutMinimumSchema,
   PenaltySchema,
   type Bonus,
   type BonusTierSet,
@@ -20,6 +21,7 @@ import {
   type CreateBonusTierSetBody,
   type CreateCollectiveGoalBody,
   type CreatePayAdjustmentBody,
+  type CreatePayoutMinimumBody,
   type CreatePenaltyBody,
   type ExchangeRates,
   type PayAdjustment,
@@ -30,7 +32,9 @@ import {
   type PayrollErrorCode,
   type PayrollPeriod,
   type PayrollSettings,
+  type PayoutMinimum,
   type Penalty,
+  type UpdatePayrollSettingsBody,
 } from '@nirvana/contracts';
 import {
   useInfiniteQuery,
@@ -259,8 +263,13 @@ export const addBonusTiers = (body: CreateBonusTierSetBody): Promise<PayOutcome<
 export const addCollectiveGoal = (body: CreateCollectiveGoalBody): Promise<PayOutcome<CollectiveGoal>> =>
   send('POST', '/v1/payroll/collective-goals', body, (json) => CollectiveGoalSchema.parse(json));
 
-export const setPayrollSettings = (body: PayrollSettings): Promise<PayOutcome<PayrollSettings>> =>
+/** PAIE-32: the payout delay announced to the team, `null` for none. */
+export const setPayrollSettings = (body: UpdatePayrollSettingsBody): Promise<PayOutcome<PayrollSettings>> =>
   send('PUT', '/v1/payroll/settings', body, (json) => PayrollSettingsSchema.parse(json));
+
+/** PAIE-22: a payout minimum from a period that has not begun; the same `id` sent twice is one. */
+export const addPayoutMinimum = (body: CreatePayoutMinimumBody): Promise<PayOutcome<PayoutMinimum>> =>
+  send('POST', '/v1/payroll/payout-minimums', body, (json) => PayoutMinimumSchema.parse(json));
 
 /** After a write, and after a refusal that says the period changed: everything pay shows reads again. */
 export function useRefreshPayroll(): () => Promise<void> {

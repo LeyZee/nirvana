@@ -225,7 +225,7 @@ export function periodOf(
     statements,
     bonusTiers: null,
     collectiveGoal: null,
-    settings: { minimumPayoutMinor: 1_500 },
+    settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     ...patch,
   });
 }

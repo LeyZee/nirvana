@@ -281,6 +281,13 @@
       "when": 1793296979350,
       "tag": "0039_backup_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793297812988,
+      "tag": "0040_payout_rules",
+      "breakpoints": true
     }
   ]
 }

@@ -8,9 +8,12 @@ import {
   CommissionStatementStatusSchema,
   DEFAULT_MINIMUM_PAYOUT_MINOR,
   ExchangeRateSchema,
+  nextPayoutMinimum,
   PayAdjustmentSchema,
   payPeriodLastDay,
   PayPeriodSchema,
+  payoutMinimumFor,
+  PayoutMinimumSchema,
   PenaltySchema,
   ShiftReportIdSchema,
   TeamMemberIdSchema,
@@ -20,6 +23,7 @@ import {
   type ExchangeRate,
   type PayAdjustment,
   type PayPeriod,
+  type PayoutMinimum,
   type PayrollSettings,
   type Penalty,
   type ShiftReportId,
@@ -40,6 +44,7 @@ const {
   payAdjustments,
   payPeriodClosings,
   payPeriodReports,
+  payoutMinimums,
   payrollSettings,
   penalties,
 } = schema;
@@ -106,10 +111,28 @@ export const collectiveGoalOfRow = (row: typeof collectiveGoals.$inferSelect): C
 export const exchangeRateOfRow = (row: typeof exchangeRates.$inferSelect): ExchangeRate =>
   ExchangeRateSchema.parse({ ...row, fetchedAt: iso(row.fetchedAt) });
 
-/** The minimum payout as the owner set it, the default before they do. */
-export const settingsOf = (row: typeof payrollSettings.$inferSelect | undefined): PayrollSettings => ({
-  minimumPayoutMinor: row?.minimumPayoutMinor ?? DEFAULT_MINIMUM_PAYOUT_MINOR,
-});
+export const payoutMinimumOfRow = (row: typeof payoutMinimums.$inferSelect): PayoutMinimum =>
+  PayoutMinimumSchema.parse({ ...row, createdAt: iso(row.createdAt) });
+
+/**
+ * The settings as they stand for `period` (PAIE-22, PAIE-32): the dated minimum in force, else the single one of
+ * `payroll_settings`, else the default; the first change set after `period`; the payout delay announced. Read under
+ * the reader's policies: every member reads them.
+ */
+export async function settingsFor(tx: Transaction, period: PayPeriod): Promise<PayrollSettings> {
+  const [row] = await tx.select().from(payrollSettings);
+  const dated = (await tx.select().from(payoutMinimums)).map(payoutMinimumOfRow);
+  const next = nextPayoutMinimum(dated, period);
+  return {
+    minimumPayoutMinor:
+      payoutMinimumFor(dated, period)?.minimumPayoutMinor ??
+      row?.minimumPayoutMinor ??
+      DEFAULT_MINIMUM_PAYOUT_MINOR,
+    nextMinimum:
+      next === null ? null : { fromPeriod: next.fromPeriod, minimumPayoutMinor: next.minimumPayoutMinor },
+    payoutDelayBusinessDays: row?.payoutDelayBusinessDays ?? null,
+  };
+}
 
 /**
  * The penalties whose periods span `period`, as the engine and the list of entries read them: which of them count
@@ -173,7 +196,7 @@ export async function readSnapshot(
     .from(bonusTierSets)
     .where(sql`${bonusTierSets.fromPeriod} <= ${period}`);
   const goalRows = await tx.select().from(collectiveGoals).where(eq(collectiveGoals.period, period));
-  const [settings] = await tx.select().from(payrollSettings);
+  const settings = await settingsFor(tx, period);
   const rateRows = await tx
     .selectDistinctOn([exchangeRates.currency])
     .from(exchangeRates)
@@ -211,7 +234,7 @@ export async function readSnapshot(
     adjustments: adjustmentRows.map(adjustmentOfRow),
     bonusTierSets: tierRows.map(bonusTierSetOfRow),
     collectiveGoals: goalRows.map(collectiveGoalOfRow),
-    minimumPayoutMinor: settingsOf(settings).minimumPayoutMinor,
+    minimumPayoutMinor: settings.minimumPayoutMinor,
     latestRates: rateRows.map(exchangeRateOfRow),
     statements: statementRows.map((row) => ({
       id: CommissionStatementIdSchema.parse(row.id),

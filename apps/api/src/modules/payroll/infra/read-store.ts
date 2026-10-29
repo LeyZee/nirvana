@@ -12,6 +12,7 @@ import {
   PayAdjustmentSchema,
   PayEngineVersionSchema,
   PayPeriodClosingSchema,
+  payPeriodAt,
   PayPeriodSchema,
   PayPeriodWindowSchema,
   PenaltySchema,
@@ -42,7 +43,8 @@ import {
   exchangeRateOfRow,
   penaltiesSpanning,
   penaltyOfRow,
-  settingsOf,
+  settingsFor,
+  type PayInputReads,
 } from './snapshot';
 
 const {
@@ -56,7 +58,6 @@ const {
   payPeriodBlocks,
   payPeriodClosings,
   payPeriods,
-  payrollSettings,
   penalties,
   teamMembers,
 } = schema;
@@ -105,7 +106,11 @@ function decodePeriodCursor(cursor: string | undefined): PayPeriod | null {
  * Pay as its reader may see it (EQ-04), through `withMember`: the policies decide which statements come back (one's
  * own for a member, all of them for the owner and an active manager), never the code.
  */
-export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
+export function createDrizzlePayrollReadStore(
+  db: Database,
+  reads: Pick<PayInputReads, 'agencyTimeZone'>,
+  now: () => Date,
+): PayrollReadStore {
   return {
     period: (userId, period: PayPeriod) =>
       withMember(db, userId, async (tx, scope) => {
@@ -166,7 +171,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
           .from(bonusTierSets)
           .where(sql`${bonusTierSets.fromPeriod} <= ${period}`);
         const goalRows = await tx.select().from(collectiveGoals).where(eq(collectiveGoals.period, period));
-        const [settings] = await tx.select().from(payrollSettings);
+        const settings = await settingsFor(tx, period);
 
         const statements: StoredStatement[] = statementRows.map((row) => {
           if (window === null) throw new Error(`Statement ${row.id} without its period`);
@@ -261,7 +266,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
           statements,
           bonusTierSets: tierRows.map(bonusTierSetOfRow),
           collectiveGoals: goalRows.map(collectiveGoalOfRow),
-          settings: settingsOf(settings),
+          settings,
         };
       }),
 
@@ -347,7 +352,9 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
       }),
 
     settings: (userId) =>
-      withMember(db, userId, async (tx) => settingsOf((await tx.select().from(payrollSettings))[0])),
+      withMember(db, userId, async (tx) =>
+        settingsFor(tx, payPeriodAt(now(), await reads.agencyTimeZone(tx))),
+      ),
 
     // The period's entries as the policies give them back, cancelled ones included: the team's for the owner and an
     // active manager, one's own for anyone else, who reads no author (`redactAuthors`). Each list is read one past its
