@@ -219,12 +219,21 @@ button.sc-duty__one:active {
   color: var(--nv-ink-faint);
 }
 
+/* Who is on shift and who is on leave, on one row of names above the grid (EQ-02). */
+.sc-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nv-space-2) var(--nv-space-6);
+  min-width: 0;
+}
+
 /* The weekly shifts that could not be placed: amber, never red (ADR 0011: red is for the urgent). */
 .sc-conflicts {
   display: flex;
   flex-direction: column;
-  gap: var(--nv-space-3);
-  padding: var(--nv-space-4) var(--nv-space-5);
+  gap: var(--nv-space-1);
+  padding: var(--nv-space-3) var(--nv-space-5);
   border-radius: var(--nv-radius-xl);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-warning) 38%, transparent);
   background: color-mix(in srgb, var(--nv-warning) 7%, var(--nv-plate));
@@ -248,7 +257,7 @@ button.sc-duty__one:active {
   align-items: center;
   justify-content: space-between;
   gap: var(--nv-space-3);
-  padding: var(--nv-space-2) 0;
+  padding: var(--nv-space-1) 0;
   border-top: 1px solid var(--nv-hairline);
 }
 .sc-conflicts__one:first-child {
@@ -256,9 +265,6 @@ button.sc-duty__one:active {
 }
 .sc-conflicts__text {
   min-width: 0;
-}
-.sc-conflicts__when,
-.sc-conflicts__what {
   margin: 0;
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
@@ -441,6 +447,20 @@ button.sc-duty__one:active {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.sc-chip__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-chip__who > svg,
+.sc-chip__who > .nv-dot {
+  flex: none;
+}
+/* Room on the right for the weekly mark, so a long name never runs under it (EQ-24). */
+.sc-chip[data-repeat='true'] .sc-chip__who {
+  padding-right: 12px;
+}
 .sc-chip__hours {
   font-size: var(--nv-text-caption);
   line-height: var(--nv-text-caption-leading);
@@ -454,6 +474,103 @@ button.sc-duty__one:active {
   position: absolute;
   top: 7px;
   right: 6px;
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: var(--nv-ink-faint);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The day cut into the agency's créneaux (EQ-01): one créneau at the same height all week, the + under them. */
+.sc-grid__row--slots {
+  grid-template-rows: repeat(var(--sc-slots), auto) auto;
+}
+.sc-grid__row--slots > .sc-grid__account {
+  grid-row: 1 / -1;
+}
+.sc-grid__row--slots > .sc-grid__cell {
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-rows: subgrid;
+  row-gap: 4px;
+}
+.sc-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 40px;
+}
+/* An empty créneau ahead: dashed amber, a thing to do and no damage done yet. */
+.sc-slot__fill {
+  appearance: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px dashed color-mix(in srgb, var(--nv-warning) 60%, transparent);
+  border-radius: var(--nv-radius-sm);
+  background: color-mix(in srgb, var(--nv-warning) 6%, transparent);
+  color: var(--nv-warning);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.sc-slot__fill:hover {
+  background: color-mix(in srgb, var(--nv-warning) 14%, transparent);
+}
+.sc-slot__fill:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+}
+.sc-slot__label {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 650;
+}
+.sc-slot__hours {
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-muted);
+  white-space: nowrap;
+}
+/* An empty créneau gone by: grey, nothing to do about it now. */
+.sc-slot__gone {
+  flex: 1;
+  min-height: 40px;
+  border: 1px dashed var(--nv-hairline);
+  border-radius: var(--nv-radius-sm);
+}
+.sc-grid__tofill {
+  color: var(--nv-warning);
+}
+/* The marks of a shift, said once under the grid (EQ-24). */
+.sc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nv-space-2) var(--nv-space-5);
+  margin: 0;
+  padding: var(--nv-space-3) var(--nv-space-5);
+  border-top: 1px solid var(--nv-hairline);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-muted);
+}
+.sc-legend__one {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sc-legend__icon {
   width: 11px;
   height: 11px;
   fill: none;
@@ -635,27 +752,6 @@ button.sc-duty__one:active {
 }
 .sc-hours__one input {
   width: 128px;
-}
-.sc-repeat {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nv-space-4);
-  padding: var(--nv-space-3) var(--nv-space-4);
-  border-radius: var(--nv-radius-md);
-  background: var(--nv-plate);
-  box-shadow: inset 0 0 0 1px var(--nv-plate-edge);
-}
-.sc-repeat__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  cursor: pointer;
-}
-.sc-repeat__title {
-  font-size: var(--nv-text-callout);
-  font-weight: 650;
 }
 .sc-refusal {
   display: flex;

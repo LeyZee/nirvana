@@ -844,3 +844,9 @@
     transform: none;
   }
 }
+
+/* What could not be read: one amber line and « Réessayer », on Planning, Membres and Rapports alike (EQ-22). */
+.tm-unread {
+  align-self: start;
+  padding: var(--nv-space-4) var(--nv-space-5);
+}

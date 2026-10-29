@@ -46,7 +46,8 @@ export const MEMBERS_KEY = ['team', 'members'] as const;
 
 /** The team as the agency reads it; `enabled` false for a member, who does not read it. */
 export function useMembers(enabled = true): UseQueryResult<TeamMember[]> {
-  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers, enabled });
+  // One retry: a silent server is said in about a second (EQ-22).
+  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers, enabled, retry: 1 });
 }
 
 /** The presets are the owner's settings: a manager who cannot read them sees the figures alone. */

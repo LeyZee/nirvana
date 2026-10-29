@@ -904,6 +904,11 @@
   text-align: center;
 }
 
+.nv-subnav__count[data-tone='quiet'] {
+  background: color-mix(in srgb, var(--nv-ink) 16%, transparent);
+  color: var(--nv-ink);
+}
+
 /* ── A screen not built yet ── */
 .nv-coming {
   justify-content: center;

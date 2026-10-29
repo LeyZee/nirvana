@@ -135,6 +135,15 @@ const swap = (patch: Record<string, unknown> = {}): Record<string, unknown> => (
 const text = (element: Element | null | undefined): string =>
   (element?.textContent ?? '').replaceAll('\u00a0', ' ');
 
+/** « N congés à valider », folded above the grid (EQ-02): opened, as the owner would. */
+async function decideFold(): Promise<HTMLElement> {
+  const title = await screen.findByText(/^\d+ congés? à valider$/u);
+  const fold = title.closest('details');
+  if (fold === null) throw new Error('no fold of the leaves to decide');
+  fireEvent.click(title);
+  return fold;
+}
+
 interface Reply {
   readonly status: number;
   readonly body?: unknown;
@@ -303,6 +312,55 @@ describe('Équipe › Planning', () => {
     expect(screen.getByText('1 shift · 6 h')).toBeTruthy();
   });
 
+  it('lines the agency’s créneaux up and says an empty one ahead « À pourvoir » (EQ-01)', async () => {
+    serve();
+    renderPage();
+    const row = await screen.findByRole('row', { name: /Nora Vidal/u }, { timeout: 4_000 });
+    // Wednesday 28, 1 h in Paris: Théo's night ends at 5 h, so Wednesday's night is left to fill from 5 h to 6 h;
+    // 4 + 4 × 4 are ahead.
+    expect(text(document.querySelector('.sc-grid__corner'))).toBe('1 shift · 6 h · 20 créneaux à pourvoir');
+    const cells = within(row).getAllByRole('cell');
+    const fills = (index: number): HTMLElement[] =>
+      within(cells[index] ?? row).queryAllByRole('button', { name: /^À pourvoir/u });
+    expect([0, 1, 2, 3, 4, 5, 6].map((index) => fills(index).length)).toEqual([0, 0, 4, 4, 4, 4, 4]);
+    // A créneau covered in part says the part with nobody (Équipe's review of #317).
+    expect(fills(2)[0]?.getAttribute('aria-label')).toMatch(/^À pourvoir : 5\sh – 6\sh, le mercredi 28/u);
+    // A créneau gone by with nobody is grey, with nothing to press.
+    expect(cells[0]?.querySelectorAll('.sc-slot__gone')).toHaveLength(4);
+    // Every day holds its four créneaux in the same order, the shift in the evening one.
+    expect(cells[1]?.querySelectorAll('.sc-slot')[3]?.textContent).toContain('Théo');
+    fireEvent.click(
+      within(cells[3] ?? row).getByRole('button', { name: /^À pourvoir : 6\sh – 12\sh, le jeudi 29/u }),
+    );
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    expect(
+      within(panel)
+        .getByRole('radio', { name: /^6\sh – 12\sh$/u })
+        .getAttribute('aria-checked'),
+    ).toBe('true');
+    const day = within(panel).getByLabelText('Jour');
+    if (!(day instanceof HTMLInputElement)) throw new Error('no day field');
+    expect(day.value).toBe('2026-10-29');
+  });
+
+  it('stacks the shifts at another hour than the agency’s: its créneaux would not line up', async () => {
+    reader.zone = 'Indian/Antananarivo';
+    serve();
+    renderPage();
+    await screen.findByRole('button', { name: /^Théo, 23\u00a0h – 5\u00a0h/u });
+    expect(screen.getAllByRole('button', { name: /^À pourvoir/u }).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('radio', { name: 'Mon heure (Antananarivo)' }));
+    await screen.findByRole('button', { name: /^Théo, 1\u00a0h – 7\u00a0h/u });
+    expect(screen.queryAllByRole('button', { name: /^À pourvoir/u })).toEqual([]);
+  });
+
+  it('says the marks of a shift under the grid (EQ-24)', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('row', { name: /Nora Vidal/u }, { timeout: 4_000 });
+    expect(text(document.querySelector('.sc-legend'))).toBe('Revient chaque semaine');
+  });
+
   it('reads the week at the reader’s own hour on demand', async () => {
     reader.zone = 'Indian/Antananarivo';
     serve();
@@ -325,11 +383,9 @@ describe('Équipe › Planning', () => {
       ]),
     });
     renderPage();
-    const amber = await screen.findByRole('status', {
-      name: 'Un modèle de shift n’a pas pu poser son shift',
-    });
-    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
-    expect(amber.textContent).toContain('Théo est déjà sur un autre shift.');
+    const amber = await screen.findByRole('status', { name: '1 shift à pourvoir' });
+    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h · Nora Vidal — ');
+    expect(amber.textContent).toContain('— Théo est déjà sur un autre shift');
     fireEvent.click(within(amber).getByRole('button', { name: 'Voir le shift' }));
     expect((await screen.findByRole('dialog', { name: 'Théo' })).textContent).toContain(
       'Chaque mardi, 23 h – 5 h',
@@ -357,11 +413,9 @@ describe('Équipe › Planning', () => {
       }),
     });
     renderPage();
-    const amber = await screen.findByRole('status', {
-      name: 'Un modèle de shift n’a pas pu poser son shift',
-    });
-    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h sur Nora Vidal');
-    expect(amber.textContent).toContain('Théo est en congé : ce shift est à pourvoir.');
+    const amber = await screen.findByRole('status', { name: '1 shift à pourvoir' });
+    expect(amber.textContent).toContain('jeu. 29 · 23 h – 5 h · Nora Vidal — ');
+    expect(amber.textContent).toContain('— Théo est en congé');
     expect(within(amber).queryByRole('button', { name: 'Voir le shift' })).toBe(null);
     fireEvent.click(within(amber).getByRole('button', { name: 'Pourvoir' }));
     const panel = await screen.findByRole('dialog', { name: 'Pourvoir un shift' });
@@ -371,7 +425,7 @@ describe('Équipe › Planning', () => {
     if (!(who instanceof HTMLSelectElement)) throw new Error('no member list');
     expect([...who.options].map((option) => option.text)).toEqual(['Basile']);
     // One occurrence, never a template of its own.
-    expect(within(panel).queryByRole('switch', { name: /Chaque semaine/u })).toBe(null);
+    expect(within(panel).queryByRole('radiogroup', { name: 'Fréquence' })).toBe(null);
     expect(within(panel).getByRole('radio', { name: 'Autres heures' }).getAttribute('aria-checked')).toBe(
       'true',
     );
@@ -411,8 +465,12 @@ describe('Équipe › Planning', () => {
       }),
     });
     renderPage();
-    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
-    expect(text(decide)).toContain('Théo · Du mer. 28 oct. au ven. 30 oct., 3 jours');
+    const decide = await decideFold();
+    expect(text(decide)).toContain('ThéoDu mer. 28 oct. au ven. 30 oct., 3 jours');
+    // Said before Valider, from the planning of the leave's days (EQ-16).
+    await waitFor(() => {
+      expect(text(decide)).toContain('1 shift à donner avant de valider');
+    });
     expect(text(decide)).toContain('« Examens »');
     fireEvent.click(within(decide).getByRole('button', { name: 'Valider' }));
     // Said at once, then with its day once the planning of the leave is read.
@@ -433,6 +491,25 @@ describe('Équipe › Planning', () => {
     fireEvent.click(within(decide).getByRole('button', { name: 'Voir le shift' }));
     const flagged = await screen.findAllByRole('button', { name: /pendant un congé à valider$/u });
     expect(flagged.map((chip) => chip.getAttribute('data-flagged'))).toEqual(flagged.map(() => 'true'));
+  });
+
+  it('counts the shifts to give as the server does: a shift of the leave already over is not one (EQ-16)', async () => {
+    // A leave from Monday 26, still to decide on Wednesday: Monday's shift is done, Tuesday's night is under way.
+    const monday = {
+      ...night,
+      id: id(106),
+      startsAt: '2026-10-26T05:00:00Z',
+      endsAt: '2026-10-26T11:00:00Z',
+    };
+    serve({
+      planning: planning([], [monday, night]),
+      leaves: [leave({ firstDay: '2026-10-26', startsAt: '2026-10-25T23:00:00Z' })],
+    });
+    renderPage();
+    const decide = await decideFold();
+    await waitFor(() => {
+      expect(text(decide)).toContain('1 shift à donner avant de valider');
+    });
   });
 
   it('takes « Voir le shift » to the first shift in the way, whatever its week and filter, while the leave waits', async () => {
@@ -473,7 +550,7 @@ describe('Équipe › Planning', () => {
     renderPage();
     // The reader looks at Léa's accounts only.
     fireEvent.click(await screen.findByRole('radio', { name: 'Léa Roux' }));
-    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    const decide = await decideFold();
     fireEvent.click(within(decide).getByRole('button', { name: 'Valider' }));
     await waitFor(() => {
       expect(text(within(decide).getByRole('alert'))).toContain(
@@ -512,7 +589,7 @@ describe('Équipe › Planning', () => {
       write: () => ({ status: 200, body: leave({ status: 'refused', decisionNote: 'Semaine chargée' }) }),
     });
     renderPage();
-    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    const decide = await decideFold();
     fireEvent.click(within(decide).getByRole('button', { name: 'Refuser' }));
     fireEvent.change(within(decide).getByLabelText(/Un mot pour Théo/u), {
       target: { value: 'Semaine chargée' },
@@ -532,7 +609,7 @@ describe('Équipe › Planning', () => {
   it('leaves a manager’s own leave to the owner', async () => {
     serve({ leaves: [leave()], members: [member({ userId: OWNER_USER, teamRole: 'manager' })] });
     renderPage();
-    const decide = await screen.findByRole('region', { name: 'Un congé à valider' });
+    const decide = await decideFold();
     await waitFor(() => {
       expect(text(decide)).toContain('Le propriétaire décide de ton congé.');
     });
@@ -546,7 +623,7 @@ describe('Équipe › Planning', () => {
     });
     renderPage();
     const away = await screen.findByRole('region', { name: 'En congé cette semaine' });
-    expect(screen.queryByRole('region', { name: 'Un congé à valider' })).toBe(null);
+    expect(screen.queryByText(/congés? à valider/u)).toBe(null);
     fireEvent.click(within(away).getByRole('button', { name: /^Théo/u }));
     const confirm = within(away).getByRole('alertdialog', { name: 'Congé de Théo' });
     expect(text(confirm)).toContain('L’annuler rend Théo planifiable dès maintenant');
@@ -739,7 +816,7 @@ describe('Équipe › Planning', () => {
     fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '07:30' } });
     // 23 h 30 is a shift, not a template: a change of time would stretch it past a day.
     expect(panel.textContent).toContain('23 h 30, jusqu’au lendemain.');
-    fireEvent.click(within(panel).getByRole('switch', { name: /Chaque semaine/u }));
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Chaque semaine' }));
     expect(await screen.findByRole('dialog', { name: 'Nouveau modèle de shift' })).toBe(panel);
     expect(panel.textContent).toContain('Un modèle de shift dure 23 heures au plus.');
     const place = within(panel).getByRole('button', { name: 'Placer Théo' });
@@ -813,7 +890,7 @@ describe('Équipe › Planning', () => {
     fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '06:00' } });
     // 2 h becomes 3 h in Paris: the night shift lasts 5 h; a template keeps its wall-clock 6 h.
     expect(panel.textContent).toContain('5 h.');
-    fireEvent.click(within(panel).getByRole('switch', { name: /Chaque semaine/u }));
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Chaque semaine' }));
     expect(panel.textContent).toContain('6 h.');
   });
 

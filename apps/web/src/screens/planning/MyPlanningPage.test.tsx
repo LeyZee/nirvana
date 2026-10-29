@@ -430,9 +430,10 @@ describe('the chatter’s Planning', () => {
   });
 
   it('says why a leave cannot be asked yet when his record does not come, and tries again', async () => {
-    serve({ membersDown: 1 });
+    // The first read and its one retry fail (EQ-22).
+    serve({ membersDown: 2 });
     renderPage();
-    const warning = await screen.findByRole('alert');
+    const warning = await screen.findByRole('alert', {}, { timeout: 4_000 });
     expect(text(warning)).toContain('Le serveur ne répond pas : ta fiche n’a pas pu être lue');
     expect(screen.getByRole('button', { name: 'Demander un congé' }).hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(warning).getByRole('button', { name: 'Réessayer' }));
