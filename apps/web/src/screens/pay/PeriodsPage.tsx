@@ -7,18 +7,26 @@ import { useCurrentPeriod } from './data';
 import { Chip, Empty, Loading } from './parts';
 
 import { PAYROLL_KEY, PeriodCursorInvalid, usePayPeriods } from '@/payroll/api';
-import { countsLine, dayAt, opensOn, periodAmount, phaseChip, whoName } from '@/payroll/model';
+import {
+  countsLine,
+  dayAt,
+  dayMonthText,
+  opensOn,
+  periodAmount,
+  phaseChip,
+  phaseOf,
+  whoName,
+} from '@/payroll/model';
 import '@/payroll/pay.css';
 import '@/reports/reports.css';
 import { amountText, periodTitle } from '@/reports/model';
 import '@/scheduling/scheduling.css';
-import { dayMonth } from '@/scheduling/time';
 import { useMembers } from '@/screens/team/api';
 import '@/screens/team/team.css';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 /**
- * Paie › Relevés (EQ-05): the periods, the most recent first, each with its state and one amount — what was paid, or
+ * Paie › Historique (EQ-05; « Relevés » until 29/10, a statement being one member's computation): the periods, the most recent first, each with its state and one amount — what was paid, or
  * what is left to pay — and its net, closing and statements beneath. One opens in Quinzaine.
  */
 export function PeriodsPage({
@@ -45,8 +53,8 @@ export function PeriodsPage({
   return (
     <Page>
       <PageHeader
-        eyebrow="Relevés"
-        title="Paie"
+        eyebrow="Paie"
+        title="Historique"
         lead="Chaque quinzaine, ce qui a été validé et versé."
         actions={<PayNav />}
       />
@@ -142,7 +150,7 @@ function PeriodRow({
     ? [
         window.period === current ? 'En cours' : 'Pas finie',
         `${net} à ce jour`,
-        `se valide à partir du ${dayMonth(opensOn(window))}`,
+        `se valide à partir du ${dayMonthText(opensOn(window))}`,
       ]
     : [
         summary.closedAt === null
@@ -150,6 +158,10 @@ function PeriodRow({
           : `Close le ${dayAt(summary.closedAt, window.timeZone)}${closedBy === null ? '' : ` par ${closedBy}`}`,
         net,
         counts,
+        // What is left to pay is said apart from what already went: never one sum of both.
+        summary.paidMinor > 0 && phaseOf(summary) !== 'paid'
+          ? `déjà versé ${amountText(summary.paidMinor, 'EUR')}`
+          : '',
       ];
   return (
     <button type="button" className="py-period nv-tap" onClick={onOpen}>

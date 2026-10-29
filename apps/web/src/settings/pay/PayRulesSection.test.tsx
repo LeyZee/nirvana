@@ -96,6 +96,10 @@ describe('Réglages › Règles de paie', () => {
   it('puts the account without rules first, then each account’s rules in force and to come', async () => {
     renderSection();
     expect(await screen.findByText('Un compte sans règles de paie')).toBeTruthy();
+    // One account: its reports, in the singular.
+    expect(plain(screen.getByText(/rapports de fin de shift sont refusés/u).textContent)).toMatch(
+      /^Ses rapports/u,
+    );
     const cards = screen.getAllByRole('listitem').filter((item) => item.classList.contains('rp-account'));
     expect(cards.map((card) => within(card).getByText(/Anna Lys|Inès Moreau/u).textContent)).toEqual([
       'Inès Moreau',

@@ -4,7 +4,6 @@ import {
   type CommissionStatement,
   type Me,
   type PayPeriod,
-  type PayPeriodSummary,
   type PayrollPeriod,
 } from '@nirvana/contracts';
 import { Link } from '@tanstack/react-router';
@@ -22,7 +21,18 @@ import {
   type PayNames,
   type PeriodBlock,
 } from './data';
-import { Chip, Delta, Empty, Gauge, Loading, LockIcon, PeriodArrows, Swatch, Unreachable } from './parts';
+import {
+  Chip,
+  Delta,
+  Empty,
+  Gauge,
+  Loading,
+  LockIcon,
+  PeriodArrows,
+  PeriodHeading,
+  Swatch,
+  Unreachable,
+} from './parts';
 
 import {
   useLatestPayPeriod,
@@ -32,25 +42,31 @@ import {
   type PayRefusal,
 } from '@/payroll/api';
 import {
+  amountWhat,
   carryLine,
+  carryWhat,
   changeBps,
+  computedText,
+  dayMonthText,
   daysLeft,
   forecastNet,
   gaugePercent,
   goalReachedBps,
   goalSpanBps,
   lateNetOf,
+  rateOverdue,
   memberFacts,
   momentAt,
   opensOn,
   payRefusalText,
-  periodAmount,
   phaseChip,
   phaseOf,
+  rateText,
   reachedBpsOf,
+  roundAmountText,
+  rowChips,
   salesSplit,
-  signedPercentText,
-  statementChips,
+  sameStageOf,
   statementsCsv,
   stopsThePeriod,
   summaryOf,
@@ -75,7 +91,7 @@ import {
 } from '@/reports/model';
 import { accountLine, platformName } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
-import { clockAt, dayMonth, dayOf, longDay } from '@/scheduling/time';
+import { dayOf, longDay } from '@/scheduling/time';
 import { useNow } from '@/scheduling/useNow';
 import '@/screens/team/team.css';
 import { Page, PageHeader, Panel } from '@/shell/layout';
@@ -259,11 +275,12 @@ function PeriodView({
 
   const head = (
     <PageHeader
-      eyebrow="Quinzaine"
-      title="Paie"
+      eyebrow="Paie"
+      title={period === null ? 'Quinzaine' : <PeriodHeading period={period} />}
       lead={leadOf(data, block !== null || stop !== null, owner)}
       actions={
         <>
+          {period === null ? null : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
           <PayNav />
           {reread !== undefined ? (
             <button
@@ -312,10 +329,7 @@ function PeriodView({
       <Page>
         {head}
         <div className="py-board">
-          <Panel
-            eyebrow="Quinzaine"
-            actions={<PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
-          >
+          <Panel>
             <Unreachable
               what="la quinzaine"
               onRetry={() => {
@@ -329,6 +343,7 @@ function PeriodView({
   }
 
   const ended = data.ended;
+  const sameStage = sameStageOf(rows, ended);
   const allChecked =
     pickable.length > 0 && chosen.length === pickable.filter((one) => !sending.has(one.id)).length;
 
@@ -342,8 +357,7 @@ function PeriodView({
           names={names}
           me={me}
           now={now}
-          current={current}
-          onPeriod={onPeriod}
+          rate={block?.kind === 'rate_missing'}
         />
         <Panel
           className="nv-enter"
@@ -366,7 +380,7 @@ function PeriodView({
         >
           <div className="rp-sec">
             {block !== null ? (
-              <BlockNotice block={block} zone={data.window?.timeZone ?? null} />
+              <BlockNotice block={block} zone={data.window?.timeZone ?? null} now={now} owner={owner} />
             ) : stop !== null ? (
               <StopNotice
                 refusal={stop}
@@ -422,14 +436,12 @@ function PeriodView({
                       statement={statement}
                       member={member}
                       ended={ended}
+                      sameStage={sameStage}
                       own={member.userId === me.id}
                       column={pickable.length > 0}
                       pick={pick}
                       checked={pick && !unchecked.has(statement.id)}
                       sending={sending.has(statement.id)}
-                      previousNet={
-                        ended && previous !== undefined ? previousNet(statement.memberId) : undefined
-                      }
                       who={(userId) => whoName(userId, me, names.members)}
                       refusal={
                         refusal === null
@@ -453,7 +465,7 @@ function PeriodView({
                 })}
               </ul>
             )}
-            {rows.length === 0 ? null : <p className="py-quiet">{quietOf(data)}</p>}
+            {rows.length === 0 ? null : <p className="py-quiet">{quietOf(data, now)}</p>}
           </div>
         </Panel>
       </div>
@@ -517,13 +529,13 @@ function leadOf(data: PayrollPeriod | undefined, blocked: boolean, owner: boolea
 }
 
 /** The quiet line under the rows: when the statements were computed, and what a click does. */
-function quietOf(data: PayrollPeriod): string {
+function quietOf(data: PayrollPeriod, now: Date): string {
   const zone = data.window?.timeZone ?? null;
   const computed = data.statements.reduce<string | null>(
     (latest, one) => (latest === null || one.computedAt > latest ? one.computedAt : latest),
     null,
   );
-  const at = computed === null || zone === null ? '' : `Calculé à ${clockAt(computed, zone)}. `;
+  const at = computed === null || zone === null ? '' : `Calculé ${computedText(computed, zone, now)}. `;
   if (!data.ended) return `${at}Rien ne se valide avant la fin de la quinzaine.`;
   if (data.closing !== null)
     return `${at}Close : un rapport validé maintenant va sur la quinzaine ${periodLine(followingPeriod(data.period))}.`;
@@ -537,29 +549,28 @@ function Summary({
   names,
   me,
   now,
-  current,
-  onPeriod,
+  rate,
 }: {
   data: PayrollPeriod;
   previous: PayrollPeriod | undefined;
   names: PayNames;
   me: { readonly id: string; readonly name: string };
   now: Date;
-  current: PayPeriod | null;
-  onPeriod: (period: PayPeriod | null) => void;
+  /** The dollar's rate is missing to close it: what the dollar sales bring is provisional. */
+  rate: boolean;
 }): JSX.Element {
   const { window, statements } = data;
   const summary = summaryOf(data);
   const phase = phaseOf(summary);
   const net = teamNetOf(statements);
   const lastDay = payPeriodLastDay(data.period);
-  const forecast = window === null ? null : forecastNet(net, lateNetOf(statements), window, now);
+  const forecast =
+    window === null || statements.length === 0 ? null : forecastNet(net, lateNetOf(statements), window, now);
   const previousNet =
     previous === undefined || previous.statements.length === 0 ? null : teamNetOf(previous.statements);
-  const previousName = periodTitle(previousPeriod(data.period));
+  const versus = periodTitle(previousPeriod(data.period), false);
   const goal = data.collectiveGoal;
   const reached = goal === null ? 0 : goalReachedBps(data, goal);
-  const amount = periodAmount(summary);
   const zone = window?.timeZone ?? null;
 
   const state: ReactNode = data.beforeFirstClosing ? (
@@ -590,35 +601,31 @@ function Summary({
     </>
   );
 
+  /** « +12 % vs 16 – 30 septembre »: a change, and what it is against, written beside it. */
+  const against = (now: number): ReactNode =>
+    previous === undefined ? null : previousNet === null ? (
+      'pas de quinzaine avant pour comparer'
+    ) : (
+      <>
+        <Delta bps={changeBps(now, previousNet)} title={`${amountText(previousNet, 'EUR')} de net`} /> vs{' '}
+        {versus}
+      </>
+    );
+
   const figures: JSX.Element[] = [];
   if (data.ended)
     figures.push(
+      <Figure key="net" label="Net de l’équipe" value={amountText(net, 'EUR')} note={against(net)} />,
+    );
+  else if (forecast !== null && net > 0)
+    figures.push(
       <Figure
-        key="net"
-        label="Net de l’équipe"
-        value={
-          <>
-            {amountText(net, 'EUR')}
-            {previous === undefined ? null : (
-              <Delta bps={changeBps(net, previousNet)} title={`Net comparé au ${previousName}`} />
-            )}
-          </>
-        }
-        note={previousNet === null ? 'pas de quinzaine avant pour comparer' : `comparé au ${previousName}`}
+        key="forecast"
+        label="Prévision de fin"
+        value={roundAmountText(Math.round(forecast / 100) * 100, 'EUR')}
+        note={previousNet === null ? `à ce rythme, le ${longDay(lastDay)}` : against(forecast)}
       />,
     );
-  else if (forecast !== null && previousNet !== null) {
-    const change = changeBps(forecast, previousNet);
-    if (change !== null)
-      figures.push(
-        <Figure
-          key="gap"
-          label="Fin prévue"
-          value={signedPercentText(Math.round(change / 100) * 100)}
-          note={`comparée au ${previousName} (${amountText(previousNet, 'EUR')})`}
-        />,
-      );
-  }
   if (goal !== null) {
     const span = goalSpanBps(goal);
     const forecastBps = !data.ended && forecast !== null ? reachedBpsOf(forecast, goal.targetMinor) : null;
@@ -661,33 +668,20 @@ function Summary({
     <section className="nv-plate nv-panel py-sum nv-enter">
       <div className="py-sum__head">
         <p className="py-sum__state">{state}</p>
-        <PeriodArrows period={data.period} current={current} onPeriod={onPeriod} />
       </div>
       {/* Before the team's first closing there is nothing to sum: no statement, ever. */}
       {data.beforeFirstClosing ? null : (
         <div className="py-sum__body">
           {data.ended ? (
-            <div className="py-hero">
-              <p className="py-hero__label">
-                {phase === 'paid' ? 'Versé pour la quinzaine' : 'À verser pour la quinzaine'}
-              </p>
-              <p className="py-hero__value nv-num">{amountText(amount.minor, 'EUR')}</p>
-              <p className="py-hero__note">{countsNote(summary.statements)}</p>
-            </div>
+            <EndedHero statements={statements} paid={phase === 'paid'} rate={rate} />
           ) : (
             <div className="py-hero">
               <p className="py-hero__label">Net de l’équipe à ce jour</p>
-              <p className="py-hero__value nv-num">{amountText(net, 'EUR')}</p>
-              <p className="py-hero__note">
-                {forecast === null ? (
-                  'La prévision vient après un premier jour entier.'
-                ) : (
-                  <>
-                    À ce rythme, <b className="nv-num">{amountText(forecast, 'EUR')}</b> le {longDay(lastDay)}
-                    .
-                  </>
-                )}
-              </p>
+              <HeroValue minor={net} />
+              {/* No forecast without a first full day, and none of a net of nothing. */}
+              {forecast === null && statements.length > 0 ? (
+                <p className="py-hero__note">La prévision vient après un premier jour entier.</p>
+              ) : null}
             </div>
           )}
           {figures.length === 0 ? null : <div className="py-figs">{figures}</div>}
@@ -713,27 +707,85 @@ function Summary({
   );
 }
 
+/** The hero's amount, smaller when it is long, so that it never overflows its block. */
+function HeroValue({ minor }: { minor: number }): JSX.Element {
+  const text = amountText(minor, 'EUR');
+  return (
+    <p className="py-hero__value nv-num" data-long={text.length > 11 ? 'true' : undefined}>
+      {text}
+    </p>
+  );
+}
+
+const sumOf = (statements: readonly CommissionStatement[]): number =>
+  statements.reduce((total, one) => total + one.payableMinor, 0);
+
+const statementsWord = (count: number): string => `${String(count)} relevé${count > 1 ? 's' : ''}`;
+
+/**
+ * An ended period's one amount, never what is not validated counted as owed: what is paid once all is paid; what is
+ * left to send of the validated statements once one is; before, what the drafts would pay once validated.
+ */
+function EndedHero({
+  statements,
+  paid,
+  rate,
+}: {
+  statements: readonly CommissionStatement[];
+  paid: boolean;
+  rate: boolean;
+}): JSX.Element {
+  const drafts = statements.filter((one) => one.status === 'draft');
+  const validated = statements.filter((one) => one.status === 'validated');
+  const payments = statements.filter((one) => one.status === 'paid');
+  const sent = payments.reduce((total, one) => total + (one.payment?.sentMinor ?? 0), 0);
+  const carried = statements.filter((one) => one.carryOverOutMinor !== 0 && one.status !== 'draft').length;
+  // Counted with the words of the rows' chips (carryChip): under the minimum, or under zero.
+  const carryingDrafts = statements.filter((one) => one.carryOverOutMinor !== 0 && one.status === 'draft');
+  const under = carryingDrafts.filter((one) => one.totalMinor >= 0).length;
+  const belowZero = carryingDrafts.length - under;
+  const [label, minor] = paid
+    ? ['Versé pour la quinzaine', sent]
+    : validated.length + payments.length === 0
+      ? ['À verser une fois validé', sumOf(drafts)]
+      : ['Reste à envoyer', sumOf(validated)];
+  const notes = [
+    !paid && sent > 0 ? `déjà versé ${amountText(sent, 'EUR')}` : null,
+    drafts.length === 0
+      ? null
+      : validated.length + payments.length === 0
+        ? `${statementsWord(drafts.length)} à valider`
+        : `${amountText(sumOf(drafts), 'EUR')} pas encore validé${drafts.length > 1 ? 's' : ''} (${statementsWord(drafts.length)})`,
+    paid && statements.length > 0
+      ? `${statementsWord(payments.length)} payé${payments.length > 1 ? 's' : ''}`
+      : null,
+    carried > 0 ? `${String(carried)} reporté${carried > 1 ? 's' : ''}` : null,
+    under > 0 ? `${String(under)} sous le minimum` : null,
+    belowZero > 0 ? `${String(belowZero)} sous zéro` : null,
+  ].filter((note) => note !== null);
+  return (
+    <div className="py-hero">
+      <p className="py-hero__label">{label}</p>
+      <HeroValue minor={minor} />
+      {notes.length === 0 ? null : (
+        <p className="py-hero__note">
+          {notes.map((note, index) => (index === 0 ? capital(note) : note)).join(' · ')}
+        </p>
+      )}
+      {rate ? (
+        <p className="py-hero__note">
+          Provisoire : les ventes en dollars seront converties au taux de la BCE de la fin de la quinzaine.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
 const roundedPercent = (share: Share): number => Math.round(share.bps / 100) * 100;
 
 const daysLeftText = (days: number): string => (days <= 1 ? 'dernier jour' : `encore ${String(days)} jours`);
-
-/** « 4 relevés à valider · 1 sous le minimum, reporté ». */
-function countsNote(counts: PayPeriodSummary['statements']): ReactNode {
-  const total = counts.draft + counts.validated + counts.paid;
-  const done = counts.validated + counts.paid;
-  const first =
-    total === 0
-      ? 'Aucun relevé'
-      : counts.draft > 0
-        ? `${String(counts.draft)} relevé${counts.draft > 1 ? 's' : ''} à valider`
-        : `${String(done)} relevé${done > 1 ? 's' : ''} validé${done > 1 ? 's' : ''} sur ${String(total)}`;
-  if (counts.carried === 0) return first;
-  return (
-    <>
-      {first} · <b>{counts.carried} sous le minimum</b>, reporté{counts.carried > 1 ? 's' : ''}
-    </>
-  );
-}
 
 function Figure({
   label,
@@ -743,7 +795,7 @@ function Figure({
 }: {
   label: string;
   value: ReactNode;
-  note: string;
+  note: ReactNode;
   extra?: ReactNode;
 }): JSX.Element {
   return (
@@ -751,7 +803,7 @@ function Figure({
       <p className="py-fig__label">{label}</p>
       <p className="py-fig__value nv-num">{value}</p>
       {extra}
-      <p className="py-fig__note">{note}</p>
+      {note === null ? null : <p className="py-fig__note nv-num">{note}</p>}
     </div>
   );
 }
@@ -838,12 +890,12 @@ function MemberRow({
   statement,
   member,
   ended,
+  sameStage,
   own,
   column,
   pick,
   checked,
   sending,
-  previousNet,
   who,
   refusal,
   canPay,
@@ -854,14 +906,14 @@ function MemberRow({
   statement: CommissionStatement;
   member: PayMember;
   ended: boolean;
+  /** Every row of the period is at the same stage: a row does not repeat it. */
+  sameStage: boolean;
   own: boolean;
   /** The list has a column of boxes: a row without one keeps its place. */
   column: boolean;
   pick: boolean;
   checked: boolean;
   sending: boolean;
-  /** The member's net the period before; `undefined` when not compared, `null` without a statement then. */
-  previousNet: number | null | undefined;
   who: (userId: string) => string;
   refusal: { readonly refusal: PayRefusal; readonly text: string } | null;
   canPay: boolean;
@@ -870,8 +922,9 @@ function MemberRow({
 }): JSX.Element {
   const id = useId();
   const zone = statement.window.timeZone;
-  const carry = carryLine(statement);
-  const chips = statementChips(statement, ended);
+  const carry = carryLine(statement, ended);
+  const chips = rowChips(statement, ended, sameStage);
+  const carried = carryWhat(statement);
   const hover = (label: string): string | undefined => {
     if (label === 'Validé' && statement.validatedAt !== null)
       return `Validé le ${momentAt(statement.validatedAt, zone)}${statement.validatedBy === null ? '' : ` par ${who(statement.validatedBy)}`}`;
@@ -929,16 +982,6 @@ function MemberRow({
             {member.name}
           </button>
           {member.manager ? <span className="py-member__role">Manager</span> : null}
-          {previousNet === undefined ? null : (
-            <Delta
-              bps={changeBps(statement.netMinor, previousNet)}
-              title={
-                previousNet === null
-                  ? 'Pas de relevé la quinzaine d’avant'
-                  : `Net comparé à la quinzaine d’avant (${amountText(previousNet, 'EUR')})`
-              }
-            />
-          )}
         </p>
         <p className="py-member__line nv-num">
           net <b>{amountText(statement.netMinor, 'EUR')}</b>
@@ -950,21 +993,20 @@ function MemberRow({
         ) : null}
       </div>
       <div className="rp-review__side">
-        {statement.carryOverOutMinor === 0 ? (
+        <span className="py-member__amount">
           <span className="rp-review__amount nv-num">{amountText(statement.payableMinor, 'EUR')}</span>
-        ) : (
-          <span className="py-member__amount">
-            <span className="py-member__was nv-num">{amountText(statement.totalMinor, 'EUR')}</span>
-            <span className="rp-review__amount nv-num">{amountText(statement.payableMinor, 'EUR')}</span>
-          </span>
+          <small className="nv-num">{amountWhat(statement, ended, sameStage)}</small>
+          {carried === null ? null : <small className="nv-num">{carried}</small>}
+        </span>
+        {!sending && chips.length === 0 ? null : (
+          <div className="py-chips">
+            {sending ? (
+              <span className="rp-review__held">En validation</span>
+            ) : (
+              chips.map((chip) => <Chip key={chip.label} chip={chip} title={hover(chip.label)} />)
+            )}
+          </div>
         )}
-        <div className="py-chips">
-          {sending ? (
-            <span className="rp-review__held">En validation</span>
-          ) : (
-            chips.map((chip) => <Chip key={chip.label} chip={chip} title={hover(chip.label)} />)
-          )}
-        </div>
         {canPay ? (
           <button
             type="button"
@@ -1008,21 +1050,40 @@ function MemberRow({
 }
 
 /** What blocks the period before anyone tries, in amber above the rows, with the gesture that lifts it. */
-function BlockNotice({ block, zone }: { block: PeriodBlock; zone: string | null }): JSX.Element {
-  if (block.kind === 'rate_missing')
+function BlockNotice({
+  block,
+  zone,
+  now,
+  owner,
+}: {
+  block: PeriodBlock;
+  zone: string | null;
+  now: Date;
+  owner: boolean;
+}): JSX.Element {
+  if (block.kind === 'rate_missing') {
+    const { latest } = block;
+    const read =
+      latest === null
+        ? 'Aucun taux lu pour l’instant.'
+        : `Dernier lu : ${rateText(latest.rateMicros, latest.currency)} le ${dayMonthText(latest.day).replace(/\.$/u, '')}.`;
+    const stale = latest !== null && zone !== null && rateOverdue(latest.day, dayOf(now, zone));
     return (
       <div className="rp-notice" data-tone="warn">
         <p className="rp-notice__title">Le taux du dollar de la BCE manque pour la fin de la quinzaine</p>
-        <p className="rp-notice__text">
-          Il arrive chaque jour ouvré vers 16 h : la quinzaine se valide dès qu’il est là. Rien à faire de ton
-          côté.
+        <p className="rp-notice__text nv-num">
+          {read}{' '}
+          {stale
+            ? `Le taux n’arrive plus depuis plus de deux jours ouvrés : la lecture des taux de la BCE est en panne.${owner ? '' : ' Préviens le propriétaire.'}`
+            : 'Il arrive chaque jour ouvré vers 16 h : la quinzaine se valide dès qu’il est là. Rien à faire de ton côté.'}
         </p>
       </div>
     );
+  }
   const count = block.reports.length;
   const named = block.reports.slice(0, 3).map((report) => {
     const { name, startsAt } = block.whose(report);
-    return startsAt === null || zone === null ? name : `${name}, ${dayMonth(dayOf(startsAt, zone))}`;
+    return startsAt === null || zone === null ? name : `${name}, ${dayMonthText(dayOf(startsAt, zone))}`;
   });
   const more = count - named.length;
   const list =

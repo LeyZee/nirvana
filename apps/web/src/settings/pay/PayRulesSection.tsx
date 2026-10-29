@@ -106,8 +106,8 @@ export function PayRulesSection(): JSX.Element {
               : `${String(missing.length)} comptes sans règles de paie`}
           </p>
           <p className="rp-notice__text">
-            Leurs rapports de fin de shift sont refusés tant qu’elles ne sont pas posées pour la quinzaine{' '}
-            {periodLine(currentPeriod)}.
+            {missing.length === 1 ? 'Ses' : 'Leurs'} rapports de fin de shift sont refusés tant qu’elles ne
+            sont pas posées pour la quinzaine {periodLine(currentPeriod)}.
           </p>
         </div>
       )}

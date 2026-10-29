@@ -228,6 +228,34 @@ describe('Paie › Primes et malus', () => {
     expect(screen.getAllByRole('button', { name: /^Ajouter$/u })).toHaveLength(1);
   });
 
+  it('says what a penalty really takes, read in the statement: a percent in euros, a capped one what is kept', async () => {
+    const capped = penaltyOf(1, BASILE, NOV1, { amount: { kind: 'fixed', amountMinor: 6_000 } });
+    const percent = penaltyOf(3, THEO, NOV1, { amount: { kind: 'percent', bps: 1_000 } });
+    entries = { [NOV1]: entriesOf(NOV1, { penalties: [capped, percent] }) };
+    periods[NOV1] = periodOf(NOV1, [
+      statementOf(BASILE, NOV1, {
+        penalties: [capped],
+        penaltiesRequestedMinor: 6_000,
+        penaltiesMinor: 2_334,
+      }),
+      statementOf(THEO, NOV1, {
+        penalties: [percent],
+        penaltiesRequestedMinor: 10_000,
+        penaltiesMinor: 10_000,
+      }),
+    ]);
+    renderPage(OWNER);
+    await waitFor(() => {
+      expect(text(entry('Basile', 'Malus'))).toContain('−60,00 €retenu −23,34 € (plafonné)');
+    });
+    expect(text(entry('Théo', 'Malus en pourcentage'))).toContain('−10 %de son net, soit −100,00 €');
+    // The cap is on the share plus bonuses, not on the total: a negative carry-over may still leave it under zero.
+    expect(
+      screen.getByText(/^Un malus est plafonné à la part du membre plus ses primes de la quinzaine/u),
+    ).toBeTruthy();
+    expect(screen.queryByText(/jamais passer un relevé sous zéro/u)).toBeNull();
+  });
+
   it('cancels a bonus only once confirmed, and keeps it struck through', async () => {
     answer = () => ({
       status: 200,
