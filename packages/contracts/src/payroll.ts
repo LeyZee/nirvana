@@ -657,7 +657,9 @@ const StatementCountSchema = z.number().int().min(0);
  * included (what the period would pay); `validatedPayableMinor` sums the validated and paid ones only (what is owed),
  * so that « reste à envoyer » is `validatedPayableMinor − paidMinor` on every screen. `carried` counts the validated
  * and paid statements whose total was carried over (below the minimum payout, or below zero), never a statement still
- * to validate, and `carriedMinor` sums what they carried. `paidMinor` is what was sent.
+ * to validate, and `carriedMinor` sums what they carried with its sign: positive under the minimum, negative below
+ * zero. For one member it is what goes over to the next period; over the team it is a net of both kinds, never an
+ * amount to show as owed or taken back. `paidMinor` is what was sent.
  */
 export const PayPeriodSummarySchema = z.object({
   window: PayPeriodWindowSchema,

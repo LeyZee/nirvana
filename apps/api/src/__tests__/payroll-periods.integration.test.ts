@@ -203,7 +203,21 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
       carriedMinor: theosQ2.carryOverOutMinor,
     });
     expect(theosQ2.carryOverOutMinor).toBeGreaterThan(0);
+
+    // Léa's total below zero is carried too, negative: over the team, the sum is a net of both kinds.
+    expect((await team.validate(team.owner, lea, Q2)).statusCode).toBe(200);
+    const leasQ2 = await team.statementOf(lea, Q2);
+    expect(leasQ2.carryOverOutMinor).toBeLessThan(0);
+    const after = (await list(team.owner)).items[0];
+    expect(after).toMatchObject({ ...(await expected(Q2, [theo, lea, mona])) });
+    expect(after).toMatchObject({
+      statements: { draft: 0, validated: 2, paid: 0, carried: 2 },
+      carriedMinor: theosQ2.carryOverOutMinor + leasQ2.carryOverOutMinor,
+    });
+    // Each member reads their own carry-over with its sign.
+    expect(q2Of(await list(leaCookie))?.carriedMinor).toBe(leasQ2.carryOverOutMinor);
   });
 });
 
 const q1Of = (page: PayPeriodPage) => page.items.find((item) => item.window.period === Q1);
+const q2Of = (page: PayPeriodPage) => page.items.find((item) => item.window.period === Q2);
