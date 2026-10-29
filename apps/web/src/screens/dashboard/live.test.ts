@@ -58,6 +58,9 @@ describe('fromApi', () => {
     expect(usdNote({ seen: true, rate: { day: '2026-10-27' } })).toBe(
       'Dollars convertis en euros au taux BCE du 27 octobre.',
     );
+    expect(usdNote({ seen: true, rate: { day: '2026-11-01' } })).toBe(
+      'Dollars convertis en euros au taux BCE du 1er novembre.',
+    );
     expect(usdNote({ seen: true, rate: null })).toBe(
       'Les ventes en dollars ne sont pas comptées : aucun taux BCE n’est encore connu.',
     );

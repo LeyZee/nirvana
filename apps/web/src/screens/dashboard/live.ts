@@ -10,6 +10,7 @@ import type { AgentCard, AgentState, Dashboard, Fan, Todo } from './model';
 
 import { CAUSE_LABELS } from '@/agent/causes';
 import { percent } from '@/agent/mode';
+import { withFirstOfMonth } from '@/scheduling/time';
 import { telegramNightOf } from '@/settings/telegram/NightBanner';
 
 /*
@@ -327,6 +328,9 @@ function fanOf(fan: DashboardFan, now: Date): Fan {
   };
 }
 
+/** « 27 octobre », « 1er novembre » once `withFirstOfMonth` has read it. */
+const ECB_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
 /**
  * How the best fans' dollars were counted (choix de Charles, 28/10): at the last ECB rate known, the one pay keeps,
  * or not at all while none is known. Nothing when no dollar sale falls in the period.
@@ -336,11 +340,7 @@ export function usdNote(usdSales: ApiDashboard['usdSales']): string | undefined 
   if (usdSales.rate === null)
     return 'Les ventes en dollars ne sont pas comptées : aucun taux BCE n’est encore connu.';
   // An ECB day is a calendar day: read in UTC, it never shifts by a time zone.
-  const day = new Date(`${usdSales.rate.day}T00:00:00Z`).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
+  const day = withFirstOfMonth(ECB_DAY.formatToParts(new Date(`${usdSales.rate.day}T00:00:00Z`)));
   return `Dollars convertis en euros au taux BCE du ${day}.`;
 }
 
