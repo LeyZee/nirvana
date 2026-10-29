@@ -85,11 +85,12 @@ export function CreatorPicker(): JSX.Element | null {
           );
         })}
       </div>
-      {unread ? (
-        <p className="db-creators__unread" role="status">
-          Les urgences des autres créatrices n’ont pas pu être lues : regarde-les dans Suivi.
-        </p>
-      ) : null}
+      {/* Mounted before it speaks, empty while the queue reads: a live region added with its text is not announced. */}
+      <p className="db-creators__unread" role="status">
+        {unread
+          ? 'Les urgences des autres créatrices n’ont pas pu être lues : regarde-les dans Suivi.'
+          : null}
+      </p>
     </>
   );
 }

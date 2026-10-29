@@ -747,6 +747,10 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
     // Ana is followed: her own urgencies are on the page; Léa's are on her chip.
     expect(await screen.findByRole('radio', { name: 'Léa, 2 urgences' })).toBeDefined();
     expect(screen.getByRole('radio', { name: 'Ana' })).toBeDefined();
+    // The live region is there before it has anything to say, so that its text is announced when it comes.
+    const quiet = document.querySelector('.db-creators__unread');
+    expect(quiet?.getAttribute('role')).toBe('status');
+    expect(quiet?.textContent).toBe('');
     cleanup();
     queue = false;
     renderDashboard();

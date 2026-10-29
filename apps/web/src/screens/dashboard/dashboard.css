@@ -664,3 +664,7 @@ div.db-fan {
   line-height: var(--nv-text-footnote-leading);
   color: var(--nv-warning);
 }
+/* Empty, it stays out of the wrapped row: no gap where nothing is said. */
+.db-creators__unread:empty {
+  position: absolute;
+}

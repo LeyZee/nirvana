@@ -413,13 +413,13 @@ export function usdNote(usdSales: ApiDashboard['usdSales']): string | undefined 
   return `Dollars convertis en euros au taux BCE du ${day}.`;
 }
 
-/** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
 /**
  * Who reads the Dashboard: the owner, who holds Réglages; the rest of the team; or the creator, who reads her agent's
  * state only (ADR 0023).
  */
 export type DashboardReader = 'owner' | 'team' | 'creator';
 
+/** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
 export function fromApi(
   api: ApiDashboard,
   reader: DashboardReader = 'owner',
