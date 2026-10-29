@@ -6,14 +6,23 @@ import { RateBar } from './playground/RateBar';
 import { SetupPanel } from './playground/SetupPanel';
 import { WhyPanel } from './playground/WhyPanel';
 import { COMPARE_MODEL, PlaygroundError, type PlaygroundErrorCode } from './playground/client';
-import { fanMessageCount, needsAttention, stepOf } from './playground/logic';
-import { isHandoff, suggestedDestination } from './playground/model';
+import { fanMessageCount, needsAttention, percent, stepOf } from './playground/logic';
+import { DESTINATION_ACKS, isHandoff, suggestedDestination } from './playground/model';
 import { usePlayground } from './playground/usePlayground';
 
 import { initialOf } from '@/lib/utils';
 
-/** The fan's name while the scenario gives none. */
-const FALLBACK_NAME = 'Le fan';
+/** The fan's name while his notes give none: the fan type is already on the « Le fan » card. */
+const FALLBACK_NAME = 'Fan fictif';
+
+/** His first name from the notes (« Prénom : Théo »), or « Fan fictif ». */
+function fanName(notes: readonly string[]): string {
+  const given = notes
+    .find((n) => /^prénom\s*:/i.test(n))
+    ?.split(':')[1]
+    ?.trim();
+  return given === undefined || given === '' ? FALLBACK_NAME : given;
+}
 
 const ERRORS: Readonly<Record<PlaygroundErrorCode, string>> = {
   llm_unavailable: 'Grok ne répond pas : ajoute ou vérifie sa clé dans Réglages, Modèles IA.',
@@ -35,6 +44,10 @@ export function PlaygroundPage(): JSX.Element {
   const [comparison, setComparison] = useState<PlaygroundComparison | undefined>(undefined);
   const [writing, setWriting] = useState(false);
   const [whyManual, setWhyManual] = useState<boolean | undefined>(undefined);
+  /** Where the last lesson went, said until the next message. */
+  const [filed, setFiled] = useState<Destination | undefined>(undefined);
+  /** On a phone the situation is a sheet over the conversation. */
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const pending = state?.pending ?? null;
   const step = stepOf(state, mode, pg.busy);
@@ -54,6 +67,7 @@ export function PlaygroundPage(): JSX.Element {
   const rate = async (verdict: Verdict, destination?: Destination): Promise<void> => {
     if (!(await pg.run((c) => c.rate(verdict, destination)))) return;
     reset();
+    setFiled(destination);
     // A rejected answer gets a new draw for the same moment, as a trainer would ask « again ».
     if (verdict.kind === 'rejected' && state !== undefined && !isHandoff(state.pending)) {
       replay(fanMessageCount(state));
@@ -73,8 +87,10 @@ export function PlaygroundPage(): JSX.Element {
     return done;
   };
 
-  const send = (text: string, media: PlaygroundMedia[]): Promise<boolean> =>
-    answerTo(() => pg.run((c) => c.send(text, media)));
+  const send = (text: string, media: PlaygroundMedia[]): Promise<boolean> => {
+    setFiled(undefined);
+    return answerTo(() => pg.run((c) => c.send(text, media)));
+  };
   const replay = (n: number): void => {
     void answerTo(() => pg.run((c) => c.branch(n)));
   };
@@ -112,16 +128,23 @@ export function PlaygroundPage(): JSX.Element {
   });
 
   if (state === undefined) {
+    const refused = pg.error === 'forbidden';
     return (
       <div className="pg-loading nv-plate" aria-busy={pg.isLoading}>
         {pg.isLoading ? null : (
-          <div className="pg-loading__in">
+          <div className="pg-loading__in nv-enter">
+            {refused ? null : <p className="pg-loading__t">Le serveur ne répond pas</p>}
             <p>{ERRORS[pg.error ?? 'failed']}</p>
-            {/* Refused, the demo would only hide the reason: nothing to try. */}
-            {pg.error === 'forbidden' ? null : (
-              <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={pg.switchToDemo}>
-                Essayer avec des réponses écrites à l’avance
-              </button>
+            {/* Refused, a retry or the demo would only hide the reason: nothing to try. */}
+            {refused ? null : (
+              <>
+                <button type="button" className="nv-btn nv-btn--soft" onClick={pg.retry}>
+                  Réessayer
+                </button>
+                <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" onClick={pg.switchToDemo}>
+                  Essayer avec des réponses écrites à l’avance
+                </button>
+              </>
             )}
           </div>
         )}
@@ -129,48 +152,77 @@ export function PlaygroundPage(): JSX.Element {
     );
   }
 
-  const preset = state.presets.find((p) => p.id === state.presetId);
-  const name =
-    state.fanNotes
-      .find((n) => /^prénom\s*:/i.test(n))
-      ?.split(':')[1]
-      ?.trim() ??
-    preset?.label ??
-    FALLBACK_NAME;
+  const name = fanName(state.fanNotes);
   const fans = fanMessageCount(state);
+  const ratePill = pg.client.isDemo ? 'Démo' : percent(state.rate.rate);
 
   return (
     <div className="pg">
       <RateBar state={state} isDemo={pg.client.isDemo} />
-      <SetupPanel state={state} pg={pg} />
+      <SetupPanel
+        state={state}
+        pg={pg}
+        sheetOpen={sheetOpen}
+        onCloseSheet={() => {
+          setSheetOpen(false);
+        }}
+      />
       {/* A section, not a <main>: the shell already holds the page's one landmark (recette R-C5). */}
       <section className="pg-main nv-plate" aria-label="Conversation">
         <div className="pg-top">
           <span className="nv-avatar nv-avatar--sm">{initialOf(name)}</span>
           <span className="pg-top__t">
             <b>{name}</b>
-            <span>Fan fictif · {preset?.label.toLowerCase() ?? 'libre'}</span>
+          </span>
+          {/* Phone only: the rate in short, and the situation as a sheet (the column no longer hides them). */}
+          <span
+            className="pg-top__rate"
+            title={pg.client.isDemo ? 'Démo : rien n’est noté pour de vrai' : 'Validées sans retouche'}
+          >
+            {ratePill}
           </span>
           <button
             type="button"
-            className="nv-btn nv-btn--sm"
-            title="La même réponse par un autre modèle, côte à côte"
-            disabled={step !== 'rate'}
-            onClick={() => void compare()}
+            className="nv-btn nv-btn--soft nv-btn--sm pg-top__fan"
+            aria-expanded={sheetOpen}
+            aria-controls="pg-setup"
+            onClick={() => {
+              setSheetOpen(!sheetOpen);
+            }}
           >
-            Comparer
+            Fan
           </button>
           <button
             type="button"
-            className="nv-btn nv-btn--sm"
+            className="nv-btn nv-btn--sm pg-top__btn"
+            title="La même réponse par un autre modèle, côte à côte"
+            aria-label="Comparer"
+            disabled={step !== 'rate'}
+            onClick={() => void compare()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="7" height="16" rx="2" />
+              <rect x="14" y="4" width="7" height="16" rx="2" />
+            </svg>
+            <span>Comparer</span>
+          </button>
+          <button
+            type="button"
+            className="nv-btn nv-btn--sm pg-top__btn"
             title="Même fan, conversation remise à zéro"
+            aria-label="Recommencer"
             disabled={pg.busy}
             onClick={() => {
               reset();
+              setFiled(undefined);
               void pg.run((c) => c.reset());
             }}
           >
-            Recommencer
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <path d="M3 4v5h5" />
+            </svg>
+            <span>Recommencer</span>
           </button>
         </div>
         <Conversation
@@ -179,6 +231,8 @@ export function PlaygroundPage(): JSX.Element {
           busy={pg.busy}
           writing={writing}
           error={pg.error === undefined ? undefined : ERRORS[pg.error]}
+          errorTone={pg.error === 'llm_unavailable' ? 'warn' : 'bad'}
+          lesson={lesson?.verdict}
           comparison={comparison}
           onValidate={() => void rate({ kind: 'validated' })}
           onEdit={() => {
@@ -209,6 +263,11 @@ export function PlaygroundPage(): JSX.Element {
           onSend={send}
         />
         <div className="pg-dock">
+          {filed === undefined || mode === 'lesson' ? null : (
+            <p className="pg-ack" role="status">
+              {DESTINATION_ACKS[filed]}
+            </p>
+          )}
           {mode === 'lesson' && lesson !== undefined ? (
             <LessonCard
               destination={lesson.destination}
@@ -221,11 +280,13 @@ export function PlaygroundPage(): JSX.Element {
             />
           ) : null}
           <Composer
-            disabled={pg.busy || pending !== null}
+            disabled={pg.busy || pending !== null || !state.voice.reachable}
             placeholder={
-              pending === null
-                ? `Écris comme ${name === FALLBACK_NAME ? 'le fan' : name}…`
-                : 'Note d’abord la réponse'
+              !state.voice.reachable
+                ? 'Ajoute d’abord une clé'
+                : pending === null
+                  ? `Écris comme ${name === FALLBACK_NAME ? 'le fan' : name}…`
+                  : 'Note d’abord la réponse'
             }
             onSend={send}
           />
