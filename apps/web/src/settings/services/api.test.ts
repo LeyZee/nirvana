@@ -61,11 +61,11 @@ describe('Services API client', () => {
     });
   });
 
-  it('reads an answer it does not expect as « Nirvana ne répond pas »', async () => {
+  it('reads an answer it does not expect as « Le serveur ne répond pas »', async () => {
     answer(200, { services: 'nope' });
     const error = await failure(fetchOverview);
     expect(error).toBeInstanceOf(ServicesError);
-    expect(describeError(error)).toBe('Nirvana ne répond pas. Réessaie dans un instant.');
+    expect(describeError(error)).toBe('Le serveur ne répond pas. Réessaie dans un instant.');
   });
 
   it('asks for the password when the sign-in is too old for a key, and only then', async () => {
@@ -82,11 +82,11 @@ describe('Services API client', () => {
     const cases: [number | 'network', unknown, string][] = [
       [401, apiError('session_unauthenticated'), 'Ta session a expiré. Reconnecte-toi.'],
       [403, apiError('role_forbidden'), 'Seul le compte propriétaire peut gérer les clés.'],
-      [403, { error: 'forbidden' }, 'Nirvana ne répond pas. Réessaie dans un instant.'],
+      [403, { error: 'forbidden' }, 'Le serveur ne répond pas. Réessaie dans un instant.'],
       [429, apiError('rate_limited'), 'Trop d’essais. Attends une minute avant de réessayer.'],
-      [500, apiError('internal_error'), 'Nirvana ne répond pas. Réessaie dans un instant.'],
-      [503, 'Bad gateway', 'Nirvana ne répond pas. Réessaie dans un instant.'],
-      ['network', null, 'Nirvana ne répond pas. Réessaie dans un instant.'],
+      [500, apiError('internal_error'), 'Le serveur ne répond pas. Réessaie dans un instant.'],
+      [503, 'Bad gateway', 'Le serveur ne répond pas. Réessaie dans un instant.'],
+      ['network', null, 'Le serveur ne répond pas. Réessaie dans un instant.'],
     ];
     for (const [code, body, sentence] of cases) {
       if (code === 'network')
@@ -106,7 +106,7 @@ describe('Services API client', () => {
     expect(isSessionExpired(await failure(fetchOverview))).toBe(true);
     answer(500, apiError('internal_error'));
     expect(isSessionExpired(await failure(fetchOverview))).toBe(false);
-    expect(describeError(new Error('anything'))).toBe('Nirvana ne répond pas. Réessaie dans un instant.');
+    expect(describeError(new Error('anything'))).toBe('Le serveur ne répond pas. Réessaie dans un instant.');
   });
 
   it('puts what did not happen before the reason', async () => {
@@ -116,7 +116,7 @@ describe('Services API client', () => {
       isSessionExpired: true,
     });
     expect(showError(new TypeError('x'))).toEqual({
-      message: 'Nirvana ne répond pas. Réessaie dans un instant.',
+      message: 'Le serveur ne répond pas. Réessaie dans un instant.',
       isSessionExpired: false,
     });
   });
