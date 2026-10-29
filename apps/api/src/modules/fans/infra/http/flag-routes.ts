@@ -90,11 +90,11 @@ export function createFlagRoutes(
           correlationId: request.id,
           ...(body.reason !== undefined && { reason: body.reason }),
         };
-        const flags = body.set
+        // His limits and the author's right, both from the transaction that wrote them.
+        const written = body.set
           ? await fans.setFlag(creatorId, fanId, requestedChange(body, now()), command)
           : await fans.clearFlag(creatorId, fanId, body.flag, command);
-        const { mayConfirmDisputedAge } = await fans.flagsFor(creatorId, fanId, actor);
-        return { fanId, flags, mayConfirmDisputedAge };
+        return { fanId, ...written };
       },
     );
     return Promise.resolve();

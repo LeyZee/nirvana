@@ -196,6 +196,8 @@ function Age({
         </span>
         {asking && disputed ? (
           <textarea
+            // « Confirmer son âge » is gone once clicked: the keyboard lands where the next step is.
+            autoFocus
             className="nv-field__control tr-limit__reason"
             aria-label="Pourquoi tu confirmes son âge"
             placeholder="Pièce d’identité vue, appel vidéo…"
@@ -222,6 +224,8 @@ function Age({
         <span className="tr-limit__actions">
           <button
             type="button"
+            // Without a reason to write, the answer itself takes the keyboard.
+            autoFocus={!disputed}
             className="nv-btn nv-btn--soft nv-btn--sm"
             disabled={pending || reasonMissing}
             onClick={() =>

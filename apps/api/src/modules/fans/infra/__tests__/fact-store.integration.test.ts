@@ -145,13 +145,14 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     expect(await fans.flags(her.creatorId, fanId)).toEqual({});
     expect(await fans.setFlag(her.creatorId, fanId, { flag: 'salesFrozen', value: frozen }, command)).toEqual(
       {
-        salesFrozen: frozen,
+        flags: { salesFrozen: frozen },
+        mayConfirmDisputedAge: false,
       },
     );
     await fans.setFlag(her.creatorId, fanId, { flag: 'salesFrozen', value: frozen }, command);
     expect(
       await fans.clearFlag(her.creatorId, fanId, 'salesFrozen', { ...command, correlationId: 'flags-2' }),
-    ).toEqual({});
+    ).toEqual({ flags: {}, mayConfirmDisputedAge: false });
     await fans.clearFlag(her.creatorId, fanId, 'salesFrozen', command);
 
     const events = await withAdmin(test.admin.db, (tx) =>

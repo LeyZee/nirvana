@@ -85,8 +85,12 @@ export function withDeclaredAge(flags: FanFlags, at: Date): FanFlags | null {
   return FanFlagsSchema.parse({ ...flags, ageConfirmedAt: at.toISOString() });
 }
 
-/** His limits without this one, or `null` when it was not set. */
+/**
+ * His limits without this one, or `null` when it was not set. Never `ageDisputed`: only a confirmation by the owner or
+ * a manager ends a dispute (`withHumanConfirmation`).
+ */
 export function withoutFlag(flags: FanFlags, flag: FanFlagName): FanFlags | null {
+  if (flag === 'ageDisputed') throw new AgeDisputeForbidden();
   if (flags[flag] === undefined) return null;
   return FanFlagsSchema.parse(Object.fromEntries(Object.entries(flags).filter(([name]) => name !== flag)));
 }

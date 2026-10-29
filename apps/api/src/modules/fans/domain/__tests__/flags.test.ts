@@ -72,6 +72,12 @@ describe('withoutFlag', () => {
     expect(withoutFlag({ fragile: true, noExplicit: true }, 'fragile')).toEqual({ noExplicit: true });
     expect(withoutFlag({ noExplicit: true }, 'fragile')).toBeNull();
   });
+
+  it('never lifts a disputed age alone: only a confirmation by the owner or a manager ends it (SUIVI-04)', () => {
+    const ageDisputed = { since: '2026-10-22T10:00:00.000Z', by: 'policy' } as const;
+    expect(() => withoutFlag({ ageDisputed }, 'ageDisputed')).toThrow(AgeDisputeForbidden);
+    expect(() => withoutFlag({}, 'ageDisputed')).toThrow(AgeDisputeForbidden);
+  });
 });
 
 describe('withFlagIfUnset', () => {

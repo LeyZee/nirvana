@@ -2,7 +2,7 @@ import {
   FanIdSchema,
   newId,
   type CreatorId,
-  type FanFlagName,
+  type ClearableFanFlagName,
   type FanFlags,
   type FanId,
   type KycSlot,
@@ -37,6 +37,18 @@ interface FlagCommand {
   readonly correlationId: string;
 }
 
+/** His limits after a change, and whether its author may confirm a disputed age (SUIVI-04). */
+interface FlagsAfter {
+  readonly flags: FanFlags;
+  readonly mayConfirmDisputedAge: boolean;
+}
+
+/** What a written change returns, from the store's one transaction. */
+const after = ({ flags, scope }: { flags: FanFlags; scope: TeamScope | null }): FlagsAfter => ({
+  flags,
+  mayConfirmDisputedAge: mayConfirmDisputedAge(scope),
+});
+
 export interface FansService {
   upsertFanByPlatformId(sighting: FanSighting): Promise<Fan>;
   getFan(creatorId: CreatorId, id: FanId): Promise<Fan | null>;
@@ -57,8 +69,11 @@ export interface FansService {
     fanId: FanId,
     userId: UserId,
   ): Promise<{ flags: FanFlags; mayConfirmDisputedAge: boolean }>;
-  /** Sets one limit; writes `fan_flag_set` only when it changed. Returns his limits after. */
-  setFlag(creatorId: CreatorId, fanId: FanId, change: FlagChange, command: FlagCommand): Promise<FanFlags>;
+  /**
+   * Sets one limit; writes `fan_flag_set` only when it changed. Returns his limits after, and whether the author may
+   * confirm a disputed age, read in the same transaction.
+   */
+  setFlag(creatorId: CreatorId, fanId: FanId, change: FlagChange, command: FlagCommand): Promise<FlagsAfter>;
   /** Sets one limit only where none of that name is set (a human's freeze keeps its reason). Returns his limits after. */
   setFlagIfUnset(
     creatorId: CreatorId,
@@ -78,9 +93,15 @@ export interface FansService {
   ): Promise<FanFlags>;
   /**
    * Lifts one limit; writes `fan_flag_cleared` only when it was set. Returns his limits after. Taking back his age
-   * also disputes it, so that his own statement no longer confirms it.
+   * also disputes it, so that his own statement no longer confirms it. A dispute itself is never lifted here: only a
+   * confirmation by the owner or a manager ends it (SUIVI-04).
    */
-  clearFlag(creatorId: CreatorId, fanId: FanId, flag: FanFlagName, command: FlagCommand): Promise<FanFlags>;
+  clearFlag(
+    creatorId: CreatorId,
+    fanId: FanId,
+    flag: ClearableFanFlagName,
+    command: FlagCommand,
+  ): Promise<FlagsAfter>;
 }
 
 export function createFansService(
@@ -112,36 +133,36 @@ export function createFansService(
               ...(command.reason !== undefined && { reason: command.reason }),
             })
           : withFlag(flags, change);
-      return flagStore.change(creatorId, fanId, apply, {
-        type: 'fan_flag_set',
-        flag: change.flag,
-        ...command,
-      });
+      return flagStore
+        .change(creatorId, fanId, apply, { type: 'fan_flag_set', flag: change.flag, ...command })
+        .then(after);
     },
     setFlagIfUnset: (creatorId, fanId, change, command) => {
-      return flagStore.change(creatorId, fanId, (flags) => withFlagIfUnset(flags, change), {
-        type: 'fan_flag_set',
-        flag: change.flag,
-        ...command,
-      });
+      return flagStore
+        .change(creatorId, fanId, (flags) => withFlagIfUnset(flags, change), {
+          type: 'fan_flag_set',
+          flag: change.flag,
+          ...command,
+        })
+        .then(({ flags }) => flags);
     },
     confirmDeclaredAge: (creatorId, fanId, at, command) => {
-      return flagStore.change(creatorId, fanId, (flags) => withDeclaredAge(flags, at), {
-        type: 'fan_flag_set',
-        flag: 'ageConfirmedAt',
-        author: 'system',
-        ...command,
-      });
+      return flagStore
+        .change(creatorId, fanId, (flags) => withDeclaredAge(flags, at), {
+          type: 'fan_flag_set',
+          flag: 'ageConfirmedAt',
+          author: 'system',
+          ...command,
+        })
+        .then(({ flags }) => flags);
     },
     clearFlag: (creatorId, fanId, flag, command) => {
       const by = command.author === 'system' ? 'policy' : 'human';
       const apply = (flags: FanFlags) =>
         flag === 'ageConfirmedAt' ? withAgeDisputed(flags, by, now()) : withoutFlag(flags, flag);
-      return flagStore.change(creatorId, fanId, apply, {
-        type: 'fan_flag_cleared',
-        flag,
-        ...command,
-      });
+      return flagStore
+        .change(creatorId, fanId, apply, { type: 'fan_flag_cleared', flag, ...command })
+        .then(after);
     },
   };
 }

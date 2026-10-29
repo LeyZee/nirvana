@@ -308,6 +308,12 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
     const refused = await put(operator, { flag: 'ageConfirmedAt', set: true, reason });
     expect(refused.statusCode).toBe(403);
     expect(refused.json()).toMatchObject({ error: { code: 'age_dispute_forbidden' } });
+    // Nor lift the dispute alone to confirm him after: the request is refused, nothing is written.
+    const clearedBefore = (await eventsOf('fan_flag_cleared')).length;
+    const lifted = await put(operator, { flag: 'ageDisputed', set: false, reason });
+    expect(lifted.statusCode).toBe(400);
+    expect(await eventsOf('fan_flag_cleared')).toHaveLength(clearedBefore);
+    expect((await get(operator)).json<{ flags: object }>().flags).toHaveProperty('ageDisputed');
     // The owner must write why.
     const bare = await put(owner, { flag: 'ageConfirmedAt', set: true });
     expect(bare.statusCode).toBe(400);

@@ -72,6 +72,13 @@ export const FanFlagNameSchema = FanFlagsSchema.keyof();
 export type FanFlagName = z.infer<typeof FanFlagNameSchema>;
 
 /**
+ * The limits a person or the policy lifts directly. Not `ageDisputed`: a dispute ends only when the owner or an active
+ * manager confirms his age, with a reason (SUIVI-04); lifting it alone would let anyone confirm him after.
+ */
+export const ClearableFanFlagNameSchema = FanFlagNameSchema.exclude(['ageDisputed']);
+export type ClearableFanFlagName = z.infer<typeof ClearableFanFlagNameSchema>;
+
+/**
  * `GET /v1/fans/:id/flags`, and the answer of `PUT`: his limits now, and whether the reader may confirm his age once
  * it is disputed (a sign of a minor): the owner and an active manager only, with a written reason (SUIVI-04).
  */
@@ -119,6 +126,6 @@ export const SetFanFlagBodySchema = z.union([
     limitMinor: z.number().int().positive().max(SPENDING_LIMIT_MAX_MINOR),
     reason: flagReason,
   }),
-  z.object({ flag: FanFlagNameSchema, set: z.literal(false), reason: flagReason }),
+  z.object({ flag: ClearableFanFlagNameSchema, set: z.literal(false), reason: flagReason }),
 ]);
 export type SetFanFlagBody = z.infer<typeof SetFanFlagBodySchema>;

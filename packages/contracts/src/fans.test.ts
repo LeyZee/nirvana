@@ -51,6 +51,13 @@ describe('fans', () => {
     expect(ceiling(SPENDING_LIMIT_MAX_MINOR + 1)).toBe(false);
   });
 
+  it('lifts any limit but a disputed age, which only a confirmation ends (SUIVI-04)', () => {
+    const lift = (flag: string) => SetFanFlagBodySchema.safeParse({ flag, set: false, reason: 'x' }).success;
+    expect(lift('ageConfirmedAt')).toBe(true);
+    expect(lift('salesFrozen')).toBe(true);
+    expect(lift('ageDisputed')).toBe(false);
+  });
+
   it('says the lines left to learn of a fan as canvas slots only', () => {
     const fanId = '0192a0e4-7b1c-7cc0-8a4e-3f5d9b2c1a02';
     expect(FanKycViewSchema.safeParse({ fanId, toLearn: ['location', 'job'] }).success).toBe(true);

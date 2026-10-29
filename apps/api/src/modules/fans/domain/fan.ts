@@ -75,13 +75,14 @@ export interface FlagStore {
   readAs(creatorId: CreatorId, fanId: FanId, userId: UserId): Promise<{ flags: FanFlags; scope: TeamScope }>;
   /**
    * Locks the fan, applies `change` to his flags and, when they changed, writes them and the event in the same
-   * transaction. Returns his flags after the call. `change` gets the author's team scope when the author is a person
-   * (`human:<userId>`), `null` for the policy; a domain error it throws writes nothing.
+   * transaction. Returns his flags after the call and the author's team scope, read in that same transaction: `change`
+   * gets it when the author is a person (`human:<userId>`), `null` for the policy; a domain error it throws writes
+   * nothing.
    */
   change(
     creatorId: CreatorId,
     fanId: FanId,
     change: (flags: FanFlags, scope: TeamScope | null) => FanFlags | null,
     event: FlagWrite,
-  ): Promise<FanFlags>;
+  ): Promise<{ flags: FanFlags; scope: TeamScope | null }>;
 }

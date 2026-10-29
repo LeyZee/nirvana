@@ -649,6 +649,8 @@ describe('the reader of Suivi', () => {
     renderPage(OPEN);
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
     expect(posted).toEqual([]);
+    // The button clicked is gone: the keyboard lands on the answer.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Oui, il est majeur' }));
     fireEvent.click(screen.getByRole('button', { name: 'Oui, il est majeur' }));
     expect(await screen.findByText('Majeur, confirmé le 23 octobre.')).toBeDefined();
     expect(posted).toEqual([{ action: 'flags', body: { flag: 'ageConfirmedAt', set: true } }]);
@@ -848,6 +850,8 @@ describe('the reader of Suivi', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
     const yes = screen.getByRole('button', { name: 'Oui, il est majeur' });
     expect(yes).toHaveProperty('disabled', true);
+    // The button clicked is gone: the keyboard lands on the reason to write.
+    expect(document.activeElement).toBe(screen.getByLabelText('Pourquoi tu confirmes son âge'));
     fireEvent.change(screen.getByLabelText('Pourquoi tu confirmes son âge'), {
       target: { value: ' Pièce d’identité vue en appel vidéo ' },
     });

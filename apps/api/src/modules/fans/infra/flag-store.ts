@@ -56,7 +56,7 @@ export function createDrizzleFlagStore(db: Database): FlagStore {
       inScope(creatorId, personOf(event.author), async (tx, scope) => {
         const before = await readFlags(tx, creatorId, fanId, true);
         const after = change(before, scope);
-        if (after === null) return before;
+        if (after === null) return { flags: before, scope };
         await tx.update(schema.fans).set({ flags: after }).where(eq(schema.fans.id, fanId));
         const payload: EventPayload<'fan_flag_set'> = {
           fanId,
@@ -72,7 +72,7 @@ export function createDrizzleFlagStore(db: Database): FlagStore {
           actor: event.author,
           correlationId: event.correlationId,
         });
-        return after;
+        return { flags: after, scope };
       }),
   };
 }
