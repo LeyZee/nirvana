@@ -305,6 +305,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
           },
           personaPath,
           trainingDir,
+          activePersona,
         }).catch((error: unknown) => {
           logger.warn({ err: error }, 'playground not started: persona unreadable');
           return null;
