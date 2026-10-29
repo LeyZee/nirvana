@@ -306,7 +306,7 @@ describe('a blocked period', () => {
     for (const code of PAY_PERIOD_BLOCK_CODES) expect(PAYROLL_ERROR_CODES).toContain(code);
   });
 
-  it('reads as not blocked from a server that does not say it', () => {
+  it('always says whether a period is blocked: a read without it is refused', () => {
     const window = {
       period: '2026-11-01',
       startsAt: '2026-10-31T23:00:00.000Z',
@@ -325,7 +325,8 @@ describe('a blocked period', () => {
       carriedMinor: 0,
       paidMinor: 0,
     };
-    expect(PayPeriodSummarySchema.parse(summary).blocked ?? null).toBeNull();
+    expect(PayPeriodSummarySchema.safeParse(summary).success).toBe(false);
+    expect(PayPeriodSummarySchema.parse({ ...summary, blocked: null }).blocked).toBeNull();
     const block = { code: 'exchange_rate_missing_conflict', currency: 'USD', since };
     expect(PayPeriodSummarySchema.parse({ ...summary, blocked: block }).blocked).toEqual(block);
     const periodRead = {
@@ -339,6 +340,7 @@ describe('a blocked period', () => {
       collectiveGoal: null,
       settings: { minimumPayoutMinor: 1_500 },
     };
-    expect(PayrollPeriodSchema.parse(periodRead).blocked ?? null).toBeNull();
+    expect(PayrollPeriodSchema.safeParse(periodRead).success).toBe(false);
+    expect(PayrollPeriodSchema.parse({ ...periodRead, blocked: null }).blocked).toBeNull();
   });
 });

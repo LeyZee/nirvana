@@ -220,6 +220,7 @@ export function periodOf(
     window: windowOf(period),
     ended: period < NOV1,
     beforeFirstClosing: false,
+    blocked: null,
     closing: null,
     statements,
     bonusTiers: null,
@@ -240,7 +241,7 @@ export function summaryFor(period: PayrollPeriod): PayPeriodSummary {
     ended: period.ended,
     closedAt: period.closing?.closedAt ?? null,
     closedBy: period.closing?.closedBy ?? null,
-    blocked: period.blocked ?? null,
+    blocked: period.blocked,
     statements: {
       draft: count('draft'),
       validated: count('validated'),

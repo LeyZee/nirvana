@@ -94,7 +94,7 @@ export function useValidateCount(): number {
   const read = usePayPeriod(target);
   const block = usePeriodBlock(read.data);
   // A period pay could not compute validates nothing: its drafts are out of date.
-  return read.data === undefined || block !== null || (read.data.blocked ?? null) !== null
+  return read.data === undefined || block !== null || read.data.blocked !== null
     ? 0
     : validatable(read.data).length;
 }

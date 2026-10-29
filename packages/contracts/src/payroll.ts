@@ -634,7 +634,8 @@ export type PayPeriodBlockCode = (typeof PAY_PERIOD_BLOCK_CODES)[number];
  * of the last computation that passed, out of date. `commission_rate_missing_conflict`: members it pays have no
  * commission rate in force on the period's last day (`memberIds`, all of them; for a member, only themselves, so
  * possibly none). `exchange_rate_missing_conflict`: no usable rate for `currency`. Gone at the next computation that
- * passes: a rate added, the recalculation that follows lifts it.
+ * passes: the ECB rate read, or the data corrected for a member without a rate. Only what is shown: a validation computes
+ * the period again under `payroll.close` and refuses with the same code.
  */
 export const PayPeriodBlockSchema = z.discriminatedUnion('code', [
   z.object({
@@ -665,7 +666,7 @@ export const PayrollPeriodSchema = z.object({
   ended: z.boolean(),
   closing: PayPeriodClosingSchema.nullable(),
   beforeFirstClosing: z.boolean(),
-  blocked: PayPeriodBlockSchema.nullable().optional(),
+  blocked: PayPeriodBlockSchema.nullable(),
   statements: z.array(CommissionStatementSchema),
   bonusTiers: BonusTierSetSchema.nullable(),
   collectiveGoal: CollectiveGoalSchema.nullable(),
@@ -697,7 +698,7 @@ export const PayPeriodSummarySchema = z.object({
   ended: z.boolean(),
   closedAt: z.iso.datetime().nullable(),
   closedBy: UserIdSchema.nullable(),
-  blocked: PayPeriodBlockSchema.nullable().optional(),
+  blocked: PayPeriodBlockSchema.nullable(),
   statements: z.object({
     draft: StatementCountSchema,
     validated: StatementCountSchema,
