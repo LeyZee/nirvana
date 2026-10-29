@@ -16,7 +16,12 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { TelegramApi } from '../application/api';
-import { TelegramBotNotFound, TelegramChatInvalid, TelegramChatNotFound } from '../domain/errors';
+import {
+  TelegramBotNotFound,
+  TelegramChatInvalid,
+  TelegramChatMemberConflict,
+  TelegramChatNotFound,
+} from '../domain/errors';
 
 export interface TelegramRoutesOptions {
   /** `requireRole('owner')`: bots and routing are agency settings. */
@@ -108,6 +113,20 @@ export function createTelegramRoutes(
         const result = await telegram.sendTest(request.params.id);
         if (result === null) throw new TelegramChatNotFound();
         return result.ok ? reply.send(result.value) : reply.code(422).send(result.error);
+      },
+    );
+
+    // REG-28: « Retirer de la liste », only a group the bot left or was banned from. No token is touched: the owner's
+    // guard is enough, without the password asked again.
+    app.delete(
+      '/settings/telegram/chats/:id',
+      { schema: { params: ChatParamsSchema, response: { 204: z.null() } } },
+      async (request, reply) => {
+        if (request.user === null) throw new Error('requireRole ran without a user');
+        const result = await telegram.removeChat(request.params.id, request.user.id);
+        if (result === 'missing') throw new TelegramChatNotFound();
+        if (result === 'refused') throw new TelegramChatMemberConflict();
+        return reply.code(204).send(null);
       },
     );
 

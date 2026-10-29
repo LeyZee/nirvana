@@ -15,6 +15,9 @@ import {
   chatLine,
   coverOf,
   deliveryLabel,
+  goneChats,
+  knownChatIds,
+  goneLine,
   healthOf,
   initials,
   looksLikeToken,
@@ -182,6 +185,51 @@ describe('health and coverage', () => {
       bot([chat(groupB, 'Ouvert')], { state: 'conflict' }),
     ]);
     expect(choices.map((c) => c.isReachable)).toEqual([false, false]);
+  });
+});
+
+describe('a group the bot is out of (REG-28)', () => {
+  it('is no routing choice nor a new group, but listed to remove, with why', () => {
+    const left = chat(groupA, 'Ancien', { membership: 'left', canPost: false });
+    const kicked = chat(groupB, 'Banni', { membership: 'kicked', canPost: false, kind: 'supergroup' });
+    const owner = bot([left, kicked, chat(newId(TelegramChatIdSchema), 'Vivant')]);
+    expect(chatChoices([owner]).map((c) => c.chat.title)).toEqual(['Vivant']);
+    expect(newChats(owner, new Set()).map((c) => c.title)).toEqual(['Vivant']);
+    // Added back while the sheet waits, a group it was out of counts as found.
+    expect([...knownChatIds(owner)]).toEqual([owner.chats[2]?.id]);
+    const back = bot([{ ...left, membership: 'member', canPost: true }], { id: owner.id });
+    expect(newChats(back, knownChatIds(owner)).map((c) => c.title)).toEqual(['Ancien']);
+    expect(goneChats(owner)).toEqual([left, kicked]);
+    expect(goneLine(left)).toBe('Groupe · le bot n’est plus dans ce groupe');
+    expect(goneLine(kicked)).toBe('Supergroupe · le bot a été exclu de ce groupe');
+  });
+
+  it('keeps the strip amber while one waits to be removed', () => {
+    const kicked = chat(groupB, 'Banni', { membership: 'kicked', canPost: false });
+    expect(healthOf(overview({ bots: [bot([chat(groupA, 'Astreinte'), kicked])] }))).toMatchObject({
+      tone: 'warn',
+      label: 'Un groupe demande ton attention',
+      fix: 'bots',
+    });
+  });
+
+  it('sends to Bots et groupes, not to a choice of group, when the bot is out of its only group', () => {
+    const missing = [
+      { creatorId: creator, displayName: 'Démo', urgentReachable: false, topicsWithoutGroup: [] },
+    ];
+    const out = coverOf(
+      overview({
+        bots: [bot([chat(groupA, 'Astreinte', { membership: 'kicked', canPost: false })])],
+        coverage: missing,
+      }),
+    );
+    expect(out).toMatchObject({ isOk: false, title: 'Les alertes ne partent plus' });
+    expect(out.sub).toBe(
+      'Le bot n’est plus dans aucun de ses groupes : rajoute-le à un groupe dans Bots et groupes.',
+    );
+    expect(out.sub).not.toContain('Choisis');
+    const none = coverOf(overview({ bots: [bot([])], coverage: missing }));
+    expect(none.sub).toBe('Le bot n’est dans aucun groupe : ajoute-le à un groupe dans Bots et groupes.');
   });
 });
 

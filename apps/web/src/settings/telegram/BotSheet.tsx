@@ -8,6 +8,7 @@ import { Reauth } from './Reauth';
 import { addBot, fetchOverview, listen, replaceToken, saveRoutes, sendTest } from './api';
 import {
   initials,
+  knownChatIds,
   looksLikeToken,
   newChats,
   setTopicsOfChat,
@@ -56,8 +57,8 @@ export function BotSheet({
   const [bot, setBot] = useState<TelegramBot | null>(mode.kind === 'add' ? null : mode.bot);
   const [found, setFound] = useState<TelegramChat[]>([]);
   /** The groups the bot sat in before step 3: only a new one counts as found. */
-  const [known] = useState<ReadonlySet<string>>(
-    () => new Set(mode.kind === 'add' ? [] : mode.bot.chats.map((chat) => chat.id)),
+  const [known] = useState<ReadonlySet<string>>(() =>
+    mode.kind === 'add' ? new Set() : knownChatIds(mode.bot),
   );
   const lastStep: Step = mode.kind === 'replace' ? 2 : 4;
   const firstStep: Step = mode.kind === 'add' ? 1 : mode.kind === 'listen' ? 3 : 2;

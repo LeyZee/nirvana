@@ -1,4 +1,4 @@
-import { DomainError } from '@nirvana/contracts';
+import { DomainError, TELEGRAM_CHAT_MEMBER_CONFLICT } from '@nirvana/contracts';
 
 /** Refusals of `/v1/settings/telegram` in the common error body (api.md § Erreurs): the suffix gives the HTTP status. */
 
@@ -13,6 +13,13 @@ export class TelegramBotNotFound extends DomainError {
 export class TelegramChatNotFound extends DomainError {
   constructor() {
     super('telegram_chat_not_found', 'Groupe Telegram introuvable');
+  }
+}
+
+/** REG-28: the bot still sits in this group (409); only a group it left or was banned from leaves the list. */
+export class TelegramChatMemberConflict extends DomainError {
+  constructor() {
+    super(TELEGRAM_CHAT_MEMBER_CONFLICT, 'Le bot est encore dans ce groupe');
   }
 }
 

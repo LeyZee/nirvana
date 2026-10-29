@@ -1,9 +1,22 @@
-import { REAUTHENTICATION_ERROR_CODE, TelegramBotIdSchema, newId } from '@nirvana/contracts';
+import {
+  REAUTHENTICATION_ERROR_CODE,
+  TelegramBotIdSchema,
+  TelegramChatIdSchema,
+  newId,
+} from '@nirvana/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReauthRequired } from '../services/api';
 
-import { TelegramForbidden, TelegramOff, addBot, fetchOverview, removeBot, saveRoutes } from './api';
+import {
+  TelegramForbidden,
+  TelegramOff,
+  addBot,
+  fetchOverview,
+  removeBot,
+  removeChat,
+  saveRoutes,
+} from './api';
 
 const bot = {
   id: newId(TelegramBotIdSchema),
@@ -81,5 +94,20 @@ describe('Telegram API client', () => {
     await expect(fetchOverview()).rejects.toThrow();
     answer(500, { error: 'boom' });
     await expect(fetchOverview()).rejects.toThrow('GET : 500');
+  });
+
+  it('removes a group the bot is out of, already gone counts, the bot back in keeps it (REG-28)', async () => {
+    const id = newId(TelegramChatIdSchema);
+    answer(204, null);
+    expect(await removeChat(id)).toBe('removed');
+    expect(calls[0]).toMatchObject({ url: `/v1/settings/telegram/chats/${id}`, init: { method: 'DELETE' } });
+    answer(404, { error: { code: 'telegram_chat_not_found', message: 'x', details: {}, requestId: 'r' } });
+    expect(await removeChat(id)).toBe('removed');
+    answer(409, {
+      error: { code: 'telegram_chat_member_conflict', message: 'x', details: {}, requestId: 'r' },
+    });
+    expect(await removeChat(id)).toBe('still_member');
+    answer(500, null);
+    await expect(removeChat(id)).rejects.toThrow();
   });
 });

@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   REAUTHENTICATION_ERROR_CODE,
+  TELEGRAM_CHAT_MEMBER_CONFLICT,
   TelegramBotSchema,
   TelegramDeliveriesSchema,
   TelegramOverviewSchema,
@@ -81,6 +82,18 @@ export async function replaceToken(id: TelegramBotId, token: string): Promise<Ou
 export async function removeBot(id: TelegramBotId): Promise<void> {
   const response = await call(`/bots/${id}`, { method: 'DELETE' });
   if (!response.ok) throw new Error(`DELETE /bots: ${String(response.status)}`);
+}
+
+/**
+ * « Retirer de la liste » (REG-28): a group the bot left or was banned from goes, with its routes. 404 is already gone,
+ * the same end; 409 `telegram_chat_member_conflict`: the bot came back in meanwhile, the group stays.
+ */
+export async function removeChat(id: TelegramChatId): Promise<'removed' | 'still_member'> {
+  const response = await fetch(`${BASE}/chats/${id}`, { method: 'DELETE', credentials: 'include' });
+  if (response.ok || response.status === 404) return 'removed';
+  const body = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+  if (body.success && body.data.error.code === TELEGRAM_CHAT_MEMBER_CONFLICT) return 'still_member';
+  throw new Error(`DELETE /chats: ${String(response.status)}`);
 }
 
 /** Asks the server to watch the bot's updates closely while the sheet waits for a group. */

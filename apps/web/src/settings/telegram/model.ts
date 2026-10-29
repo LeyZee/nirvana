@@ -45,11 +45,13 @@ export interface ChatChoice {
   readonly isReachable: boolean;
 }
 
-/** Every group a bot sits in, the reachable ones first. */
+/** Every group a bot sits in, the reachable ones first. A group it left or was banned from is not a choice. */
 export function chatChoices(bots: readonly TelegramBot[]): ChatChoice[] {
   return bots
     .flatMap((bot) =>
-      bot.chats.map((chat) => ({ chat, bot, isReachable: chat.canPost && bot.state === 'active' })),
+      bot.chats
+        .filter((chat) => chat.membership === 'member')
+        .map((chat) => ({ chat, bot, isReachable: chat.canPost && bot.state === 'active' })),
     )
     .sort((a, b) => Number(b.isReachable) - Number(a.isReachable));
 }
@@ -152,7 +154,11 @@ export function healthOf(overview: TelegramOverview): Health {
     };
   }
   if (isBotBroken) return { ...base, tone: 'warn', label: 'Un bot demande ton attention', fix: 'bots' };
-  if (choices.some((c) => c.chat.lastError !== null || !c.isReachable))
+  // A group the bot left or was banned from waits to be removed (REG-28): its line is amber, so is the strip.
+  if (
+    choices.some((c) => c.chat.lastError !== null || !c.isReachable) ||
+    overview.bots.some((bot) => goneChats(bot).length > 0)
+  )
     return { ...base, tone: 'warn', label: 'Un groupe demande ton attention', fix: 'bots' };
   return { ...base, tone: 'ok', label: 'Tout fonctionne', fix: null };
 }
@@ -185,6 +191,17 @@ export function coverOf(overview: TelegramOverview): Cover {
           ? 'Telegram refuse le jeton d’un bot : remplace-le dans Bots et groupes.'
           : 'Un autre programme lit le bot : arrête-le, ou remplace le jeton dans Bots et groupes.'
         : 'Le bot n’a le droit d’écrire dans aucun de ses groupes : fais-le administrateur du groupe.',
+    };
+  }
+  // No group at all to choose: the fix is to put a bot in one, not to pick one (REG-28, a bot out of its only group).
+  if (missing.length > 0 && choices.length === 0) {
+    const isOut = overview.bots.some((bot) => goneChats(bot).length > 0);
+    return {
+      isOk: false,
+      title: 'Les alertes ne partent plus',
+      sub: isOut
+        ? 'Le bot n’est plus dans aucun de ses groupes : rajoute-le à un groupe dans Bots et groupes.'
+        : 'Le bot n’est dans aucun groupe : ajoute-le à un groupe dans Bots et groupes.',
     };
   }
   if (missing.length > 0) {
@@ -265,6 +282,19 @@ export function chatLine(choice: ChatChoice, now: Date): { text: string; isWarni
   return { text: `${kind} · dernier envoi ${whenLabel(choice.chat.lastSentAt, now)}`, isWarning: false };
 }
 
+/** The groups a bot left or was banned from: listed under its groups, to remove (REG-28). */
+export function goneChats(bot: TelegramBot): TelegramChat[] {
+  return bot.chats.filter((chat) => chat.membership !== 'member');
+}
+
+/** The second line of a group the bot is out of. */
+export function goneLine(chat: TelegramChat): string {
+  const kind = KIND_LABEL[chat.kind];
+  return chat.membership === 'kicked'
+    ? `${kind} · le bot a été exclu de ce groupe`
+    : `${kind} · le bot n’est plus dans ce groupe`;
+}
+
 /** The line under a bot's name: its @identifier, or what is wrong with it. */
 export function botLine(bot: TelegramBot): { text: string; isWarning: boolean } {
   switch (bot.state) {
@@ -294,9 +324,17 @@ export function deliveryLabel(delivery: TelegramDelivery): { text: string; isOk:
   }
 }
 
+/**
+ * The groups a bot sits in when the sheet starts waiting for a new one. A group it left or was banned from is not one
+ * of them: added back, it is found again (REG-28).
+ */
+export function knownChatIds(bot: TelegramBot): ReadonlySet<string> {
+  return new Set(bot.chats.filter((chat) => chat.membership === 'member').map((chat) => chat.id));
+}
+
 /** The groups a bot entered while the sheet was waiting for one. */
 export function newChats(bot: TelegramBot | undefined, knownIds: ReadonlySet<string>): TelegramChat[] {
-  return bot?.chats.filter((chat) => !knownIds.has(chat.id)) ?? [];
+  return bot?.chats.filter((chat) => chat.membership === 'member' && !knownIds.has(chat.id)) ?? [];
 }
 
 /** A bot token, as @BotFather gives it; the server checks it again (`token_shape`). */
