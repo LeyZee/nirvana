@@ -178,9 +178,7 @@ describe('Réglages › Sauvegardes', () => {
       'Telegram',
       'Règles de paie',
       'Sauvegardes',
-      'Appareils',
       'Apparence',
-      'Mode de l’agent',
     ]);
     expect(router.state.location.pathname).toBe('/reglages/sauvegardes');
   });
