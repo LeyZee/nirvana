@@ -15,6 +15,7 @@ import {
 } from '@nirvana/contracts';
 
 import { redactAuthors } from '../domain/authors';
+import { blockFor } from '../domain/period-blocks';
 import type { PayReader, PayrollReadStore, StoredStatement } from '../domain/ports';
 
 /**
@@ -63,6 +64,7 @@ export function createPayrollReads(store: PayrollReadStore, now: () => Date): Pa
         ended: view.window !== null && hasEnded(view.window),
         closing: closingFor(view.closing, view.reader),
         beforeFirstClosing: view.firstClosed !== null && period < view.firstClosed,
+        blocked: blockFor(view.blocked, view.reader),
         statements: view.statements.map((statement) => toStatement(statement, view.reader)),
         bonusTiers: bonusTiersFor(view.bonusTierSets, period),
         collectiveGoal: collectiveGoalFor(view.collectiveGoals, period),

@@ -50,11 +50,12 @@ export interface PayrollTeam {
     payload?: object,
     via?: Server,
   ): Promise<LightMyRequestResponse>;
-  /** A member on both creators at 20 % since 2025-01-01, signed in. */
+  /** A member on both creators at 20 % from their arrival (2025-01-01 unless said), signed in. */
   addMember(
     email: string,
     displayName: string,
     teamRole?: TeamRole,
+    joinedOn?: string,
   ): Promise<{ readonly member: TeamMember; readonly cookie: string }>;
   /** A report of `member` for `period`, as the planning leaves it: validated unless said otherwise. */
   report(
@@ -170,7 +171,7 @@ export async function startPayrollTeam(superuserUrl: string): Promise<PayrollTea
     beas,
     call,
 
-    async addMember(email, displayName, teamRole = 'chatter') {
+    async addMember(email, displayName, teamRole = 'chatter', joinedOn = '2025-01-01') {
       const response = await call('POST', '/team/members', owner, {
         email,
         displayName,
@@ -180,7 +181,7 @@ export async function startPayrollTeam(superuserUrl: string): Promise<PayrollTea
         lastName: 'Inventé',
         country: 'FR',
         timeZone: 'Europe/Paris',
-        joinedOn: '2025-01-01',
+        joinedOn,
         commission: { rateBps: 2_000 },
         teamShareBps: null,
       });

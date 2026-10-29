@@ -30,8 +30,10 @@ import { z } from 'zod';
 
 import { redactAuthors } from '../domain/authors';
 import { PayPeriodCursorInvalid, PayrollEntriesTooMany, PayrollForbidden } from '../domain/errors';
+import { blockFor } from '../domain/period-blocks';
 import type { PayrollReadStore, StoredStatement } from '../domain/ports';
 
+import { blockOfRow } from './period-blocks';
 import {
   adjustmentOfRow,
   bonusOfRow,
@@ -51,6 +53,7 @@ const {
   commissionStatements,
   exchangeRates,
   payAdjustments,
+  payPeriodBlocks,
   payPeriodClosings,
   payPeriods,
   payrollSettings,
@@ -127,6 +130,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
         const [first] = await tx
           .select({ period: sql`min(${payPeriodClosings.period})::text` })
           .from(payPeriodClosings);
+        const [blockRow] = await tx.select().from(payPeriodBlocks).where(eq(payPeriodBlocks.period, period));
         const statementRows = await tx
           .select()
           .from(commissionStatements)
@@ -253,6 +257,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
                   closedBy: closingRow.closedBy,
                   closedAt: closingRow.closedAt.toISOString(),
                 }),
+          blocked: blockRow === undefined ? null : blockOfRow(blockRow),
           statements,
           bonusTierSets: tierRows.map(bonusTierSetOfRow),
           collectiveGoals: goalRows.map(collectiveGoalOfRow),
@@ -261,11 +266,17 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
       }),
 
     // The periods, counts and sums of the statements the policies give back, in one statement: the team's for the
-    // owner and an active manager, a member's own for a member. A member reads of a closing only its date.
+    // owner and an active manager, a member's own for a member. A member reads of a closing only its date. A blocked
+    // period comes too without any statement (recette du 28/10, Équipe G1), its counts and sums at zero.
     periods: (userId, page) =>
       withMember(db, userId, async (tx, scope) => {
         const validatedOrPaid = sql`${commissionStatements.status} in ('validated', 'paid')`;
         const before = decodePeriodCursor(page.cursor);
+        const [own] = await tx
+          .select({ id: teamMembers.id })
+          .from(teamMembers)
+          .where(eq(teamMembers.userId, userId));
+        const reader = { scope, memberId: own === undefined ? null : TeamMemberIdSchema.parse(own.id) };
         const rows = await tx
           .select({
             period: payPeriods.period,
@@ -274,6 +285,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
             timeZone: payPeriods.timeZone,
             closedAt: payPeriodClosings.closedAt,
             closedBy: payPeriodClosings.closedBy,
+            block: payPeriodBlocks,
             totals: {
               draft: sql`count(*) filter (where ${commissionStatements.status} = 'draft')::text`,
               validated: sql`count(*) filter (where ${commissionStatements.status} = 'validated')::text`,
@@ -281,18 +293,24 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               // Under the minimum the carry-over is positive, below zero it is negative: both are carried, once a
               // validation carried them; a statement still to validate owes and carries nothing yet.
               carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} <> 0 and ${validatedOrPaid})::text`,
-              net: sql`sum(${commissionStatements.netMinor})::text`,
-              payable: sql`sum(${commissionStatements.payableMinor})::text`,
+              net: sql`coalesce(sum(${commissionStatements.netMinor}), 0)::text`,
+              payable: sql`coalesce(sum(${commissionStatements.payableMinor}), 0)::text`,
               validatedPayable: sql`coalesce(sum(${commissionStatements.payableMinor}) filter (where ${validatedOrPaid}), 0)::text`,
               carriedAmount: sql`coalesce(sum(${commissionStatements.carryOverOutMinor}) filter (where ${validatedOrPaid}), 0)::text`,
               sent: sql`coalesce(sum(${commissionStatements.sentMinor}), 0)::text`,
             },
           })
-          .from(commissionStatements)
-          .innerJoin(payPeriods, eq(payPeriods.period, commissionStatements.period))
-          .leftJoin(payPeriodClosings, eq(payPeriodClosings.period, commissionStatements.period))
-          .where(before === null ? undefined : sql`${commissionStatements.period} < ${before}`)
-          .groupBy(payPeriods.period, payPeriodClosings.period)
+          .from(payPeriods)
+          .leftJoin(commissionStatements, eq(commissionStatements.period, payPeriods.period))
+          .leftJoin(payPeriodClosings, eq(payPeriodClosings.period, payPeriods.period))
+          .leftJoin(payPeriodBlocks, eq(payPeriodBlocks.period, payPeriods.period))
+          .where(before === null ? undefined : sql`${payPeriods.period} < ${before}`)
+          .groupBy(payPeriods.period, payPeriodClosings.period, payPeriodBlocks.period)
+          // A period with a statement the reader reads, or blocked: for the agency always, for a member when their
+          // own report blocks it (a member without a rate has no statement there, and must still see why).
+          .having(
+            sql`count(${commissionStatements.id}) > 0 or (${payPeriodBlocks.period} is not null and (${scope} <> 'self' or ${reader.memberId}::uuid = any(${payPeriodBlocks.memberIds})))`,
+          )
           .orderBy(sql`${payPeriods.period} desc`)
           .limit(page.limit + 1);
         const items = rows.slice(0, page.limit).map((row) => {
@@ -306,6 +324,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
             }),
             closedAt: iso(row.closedAt),
             closedBy: scope === 'self' || row.closedBy === null ? null : UserIdSchema.parse(row.closedBy),
+            blocked: blockFor(row.block === null ? null : blockOfRow(row.block), reader),
             statements: {
               draft: totals.draft,
               validated: totals.validated,

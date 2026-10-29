@@ -88,7 +88,7 @@ const read = (
   reader: PayReader,
   goal: boolean,
   at = '2025-03-20T00:00:00Z',
-  view: Partial<Pick<PeriodView, 'closing' | 'firstClosed'>> = {},
+  view: Partial<Pick<PeriodView, 'closing' | 'firstClosed' | 'blocked'>> = {},
 ) =>
   createPayrollReads(
     {
@@ -98,6 +98,7 @@ const read = (
           window,
           firstClosed: null,
           closing: null,
+          blocked: null,
           ...view,
           statements: [stored(goal)],
           bonusTierSets: [],
@@ -140,6 +141,28 @@ describe('a period as its reader sees it (EQ-04)', () => {
     expect((await read(owner, false, undefined, { firstClosed: P1 })).beforeFirstClosing).toBe(false);
   });
 
+  it('says the period is blocked, and to a member only whether they lack a rate themselves', async () => {
+    const LEA = newId(TeamMemberIdSchema);
+    const blocked = {
+      code: 'commission_rate_missing_conflict' as const,
+      memberIds: [THEO, LEA],
+      since: '2025-03-16T10:00:00.000Z',
+    };
+    const owner = await read({ scope: 'owner', memberId: null }, false, undefined, { blocked });
+    expect(owner.blocked).toEqual(blocked);
+    // The figures stay those of the last computation that passed: the block says they are out of date.
+    expect(owner.statements).toHaveLength(1);
+    expect((await read({ scope: 'self', memberId: THEO }, false, undefined, { blocked })).blocked).toEqual({
+      ...blocked,
+      memberIds: [THEO],
+    });
+    expect((await read({ scope: 'self', memberId: LEA }, false, undefined, { blocked })).blocked).toEqual({
+      ...blocked,
+      memberIds: [LEA],
+    });
+    expect((await read({ scope: 'owner', memberId: null }, false)).blocked).toBeNull();
+  });
+
   it('lets the agency validate a draft, never its own member, and says whether the period has ended', async () => {
     const own = await read({ scope: 'self', memberId: THEO }, false);
     const agency = await read({ scope: 'owner', memberId: null }, false);
@@ -156,6 +179,7 @@ describe('the periods’ list (EQ-05)', () => {
       window,
       closedAt: null,
       closedBy: null,
+      blocked: null,
       statements: { draft: 1, validated: 0, paid: 0, carried: 0 },
       netMinor: 6_400,
       payableMinor: 1_600,

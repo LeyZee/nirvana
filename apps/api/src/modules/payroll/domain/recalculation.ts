@@ -347,10 +347,11 @@ function computePeriod(snapshot: PeriodSnapshot): {
     minimumPayoutMinor: snapshot.minimumPayoutMinor,
     members: input,
   });
-  for (const statement of computed.statements) {
-    const member = members.find((one) => one.member.id === statement.memberId)?.member;
-    if (member?.rate === null) throw new CommissionRateMissing(statement.memberId);
-  }
+  const missing = computed.statements
+    .filter((statement) => members.find((one) => one.member.id === statement.memberId)?.member.rate === null)
+    .map((statement) => statement.memberId);
+  const [first, ...others] = missing;
+  if (first !== undefined) throw new CommissionRateMissing(first, ...others);
 
   const contentOf = (memberId: TeamMemberId): StatementContent => {
     const found = members.find((one) => one.member.id === memberId);

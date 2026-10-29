@@ -267,6 +267,13 @@
       "when": 1793291281391,
       "tag": "0037_telegram_deliveries_keep",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793293271775,
+      "tag": "0038_pay_period_blocks",
+      "breakpoints": true
     }
   ]
 }

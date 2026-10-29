@@ -247,6 +247,29 @@ describe('CommissionsPage', () => {
     expect(text(hero)).not.toContain('FCFA');
   });
 
+  it('says the statement is out of date when pay could not compute the period, never whose rate lacks', async () => {
+    // A colleague lacks a rate: the server gives a member none of the others' ids.
+    const october = periods[OCT2];
+    if (october === undefined) throw new Error('no period');
+    periods[OCT2] = {
+      ...october,
+      blocked: { code: 'commission_rate_missing_conflict', memberIds: [], since: '2026-11-02T09:00:00.000Z' },
+    };
+    renderPage();
+    const title = await screen.findByText(
+      'Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.',
+    );
+    const notice = title.closest('.rp-notice');
+    expect(notice?.getAttribute('data-tone')).toBe('warn');
+    expect(text(notice)).toBe(
+      'Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.Il manque un taux de commission dans l’équipe pour cette quinzaine. Le propriétaire est prévenu dans sa paie ; le calcul reprendra seul une fois réglé. Le montant ci-dessous est celui du dernier calcul réussi.',
+    );
+    const hero = screen.getByRole('region', { name: 'Ce que tu vas toucher' });
+    expect(hero.getAttribute('data-stale')).toBe('true');
+    expect(text(hero)).toContain('Plus à jour');
+    expect(text(hero)).not.toContain('En validation');
+  });
+
   it('opens a past statement in the second person, paid in the past tense', async () => {
     renderPage();
     const past = await within(await waitFor(() => panel('Mes relevés'))).findByRole('button', {
