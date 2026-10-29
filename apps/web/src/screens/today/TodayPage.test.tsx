@@ -120,8 +120,24 @@ describe('Aujourd’hui', () => {
     const hero = (await screen.findByRole('heading', { name: 'Nora Vidal', level: 2 })).closest('section');
     expect(hero?.textContent).toContain('Shift fini');
     // The corner says how long Suivi stays open, the hours below say when it ended.
-    expect(hero?.textContent).toContain('Suivi encore 10 min');
+    expect(hero?.textContent).toMatch(/Suivi ouvert encore 10\smin/u);
     expect(screen.getByRole('link', { name: 'Ouvrir Suivi' })).toBeTruthy();
+  });
+
+  it('says the server does not answer as the Dashboard does, with « Réessayer » (DASH-22)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('null', { status: 500 }))),
+    );
+    renderPage();
+    // One retry first, a second later: then the page says it.
+    const silent = await screen.findByRole(
+      'heading',
+      { name: 'Le serveur ne répond pas', level: 2 },
+      { timeout: 4000 },
+    );
+    expect(silent.closest('.nv-silent')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Réessayer' })).toBeTruthy();
   });
 
   it('says plainly when nothing is planned', async () => {

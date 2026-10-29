@@ -97,6 +97,8 @@ export function useMyShifts(): UseQueryResult<MyShifts> {
     queryKey: [...SCHEDULING_KEY, 'mine'],
     queryFn: () => read('/v1/scheduling/my-shifts', (body) => MyShiftsSchema.parse(body)),
     refetchInterval: 60_000,
+    // One retry, then Aujourd'hui says the server does not answer, as the Dashboard does: not 8 s of skeleton (DASH-22).
+    retry: 1,
   });
 }
 
