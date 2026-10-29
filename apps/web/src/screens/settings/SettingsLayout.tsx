@@ -36,9 +36,7 @@ export function SettingsLayout(): JSX.Element {
               label="Réglages"
               items={[
                 ...(user.role === 'owner' ? OWNER_TABS : []),
-                { to: '/reglages/appareils', label: 'Appareils' },
                 { to: '/reglages/apparence', label: 'Apparence' },
-                { to: '/reglages/mode', label: 'Mode de l’agent' },
               ]}
             />
             <button type="button" className="nv-btn nv-btn--plain nv-btn--sm st-signout" onClick={onSignOut}>
@@ -83,6 +81,11 @@ export function BackupsPage(): JSX.Element {
   return <BackupsSection />;
 }
 
+/*
+ * Appareils and Mode de l'agent keep their routes but no tab (ADR 0024, « zéro bruit »): a tab that only says
+ * « à venir » reads as a broken feature, and the mode already changes at the top of the Dashboard. Each tab comes
+ * back with its screen (Appareils with the extension).
+ */
 export function DevicesPage(): JSX.Element {
   return (
     <ComingSoon

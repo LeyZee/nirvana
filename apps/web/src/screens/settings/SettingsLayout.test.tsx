@@ -65,6 +65,12 @@ describe('Réglages tabs', () => {
     expect(tabs).toContain('Apparence');
   });
 
+  it('gives no tab to Appareils nor Mode de l’agent while their screens only say « à venir »', async () => {
+    const tabs = await settingsTabs(owner);
+    expect(tabs).not.toContain('Appareils');
+    expect(tabs).not.toContain('Mode de l’agent');
+  });
+
   it('puts « Se déconnecter » under a class of its own, hidden on a wide screen by settings.css', async () => {
     await settingsTabs(owner);
     expect(screen.getByRole('button', { name: 'Se déconnecter' }).className).toContain('st-signout');
