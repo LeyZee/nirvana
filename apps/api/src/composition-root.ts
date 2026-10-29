@@ -2,11 +2,11 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { FastifyRateLimitStoreCtor } from '@fastify/rate-limit';
-import { CreatorIdSchema, JOB_PAYLOADS } from '@nirvana/contracts';
+import { CreatorIdSchema, JOB_PAYLOADS, type JobName } from '@nirvana/contracts';
 import { createDbClient, parseEncryptionKeys, type Database, type DbClient } from '@nirvana/db';
 import { createPersistentCallLog, DEFAULT_LLM_CONFIG, loadPrompt, type LlmCallStore } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import type { TaskList } from 'graphile-worker';
+import type { Task, TaskList } from 'graphile-worker';
 import type { Pool } from 'pg';
 
 import {
@@ -58,6 +58,14 @@ import { createTeamModule, type TeamModule } from './modules/team';
 import { startTelegramModule, type TelegramModule } from './modules/telegram';
 import { postgresRateLimitStore, purgeRateLimitCounters, RATE_LIMIT_POOL_OPTIONS } from './rate-limit-store';
 import { checkReadiness, countDeadJobs, type Readiness } from './readiness';
+
+/**
+ * Jobs of the contracts that no worker task takes yet (operations.md: Graphile keeps them queued, the Dashboard counts
+ * them as stuck). Every other job must have its task: `tasks` is typed on the rest, so a task forgotten for a job
+ * added to `JOB_NAMES` does not compile.
+ */
+type JobWithoutTask = Extract<JobName, 'fans.refresh_summary' | 'media.describe'>;
+type JobWithTask = Exclude<JobName, JobWithoutTask>;
 
 /** Every business module, wired. */
 interface Modules {
@@ -462,7 +470,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       await run(modules.telegram);
     };
 
-  const tasks: TaskList = {
+  const tasks: Record<JobWithTask, Task> = {
     'conversation.respond': defineTask(
       'conversation.respond',
       JOB_PAYLOADS['conversation.respond'],

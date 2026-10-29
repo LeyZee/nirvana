@@ -262,6 +262,67 @@ describe('dashboard authentication (P0-07a)', () => {
     expect((await server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } })).statusCode).toBe(401);
   });
 
+  it("answers Better Auth's own refusals in the common format, in French (recette 28/10)", async () => {
+    // From an address of its own: the other tests of this file already spend most of the per-IP limit on `/auth`.
+    const post = (url: string, payload: object) =>
+      server.inject({
+        method: 'POST',
+        url,
+        payload,
+        headers: { origin: DASHBOARD_ORIGIN },
+        remoteAddress: '192.0.2.10',
+      });
+    for (const response of [
+      await post('/v1/auth/sign-in/email', { email: 'not-an-email', password: 'whatever it is' }),
+      await post('/v1/auth/sign-in/email', { email: 'nobody-else@example.test' }),
+      await post('/v1/auth/sign-out', { disableRedirect: 'yes' }),
+    ]) {
+      expect(response.statusCode).toBe(400);
+      expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({
+        code: 'request_invalid',
+        message: 'Requête invalide',
+      });
+    }
+    // Signing out without a session closes nothing and says so plainly.
+    expect((await post('/v1/auth/sign-out', {})).statusCode).toBe(200);
+  });
+
+  it("closes the session a new sign-in of the same account replaces, never another account's", async () => {
+    const SECOND = { email: 'second@example.test', name: 'Second', password: 'battery staple correct' };
+    const { userId } = await createOwner(app.auth, app.db.db, SECOND);
+    const sessions = async () =>
+      (
+        await test.admin.db
+          .select({ id: schema.session.id })
+          .from(schema.session)
+          .where(eq(schema.session.userId, userId))
+      ).length;
+    const me = (cookie: string) => server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } });
+    const signInFrom = async (cookie: string, account: { email: string; password: string }) => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email: account.email, password: account.password },
+        headers: { cookie, origin: DASHBOARD_ORIGIN },
+        // An address of its own, like above: the per-IP limit on `/auth` is shared by the whole file.
+        remoteAddress: '192.0.2.11',
+      });
+      expect(response.statusCode).toBe(200);
+      return String(response.headers['set-cookie']).split(';')[0] ?? '';
+    };
+
+    const first = await signInFrom('', SECOND);
+    expect(await sessions()).toBe(1);
+    // The password confirmed again before a sensitive action (ADR 0016): one session still, the new one.
+    const confirmed = await signInFrom(first, SECOND);
+    expect(await sessions()).toBe(1);
+    expect((await me(first)).statusCode).toBe(401);
+    expect((await me(confirmed)).statusCode).toBe(200);
+    // Another account signing in from that browser leaves this one's session to its own sign-out.
+    await signInFrom(confirmed, OPERATOR);
+    expect(await sessions()).toBe(1);
+  });
+
   it('asks for the password again before touching an AI key with a session older than 10 minutes', async () => {
     const cookie = await signIn(server, OWNER.email, OWNER.password);
     const headers = { cookie, origin: DASHBOARD_ORIGIN };
