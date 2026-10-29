@@ -145,7 +145,7 @@ calibration_ratings   id, creator_id, session_id, rated_at, voice_prompt, voice_
                       (voice_example|rule|test, nullable), fan_message, bubbles jsonb, moment jsonb (RatedMoment,
                       opaque, nullable une fois purgé), moment_purged_at, created_at
   Append-only (trigger) : seule la purge de `moment` après 90 jours est permise, le verdict et la version restent.
-  Lu pour le taux de validation (50 derniers par version), les exemples de voix (corrected + voice_example, 12 max)
+  Lu pour le taux de validation (50 derniers par version), les exemples de voix du playground seulement (corrected + voice_example, 12 max ; jamais dans la fiche d'une créatrice)
   et les tests rejouables (tout sauf validated). Contenu intime : jamais copié dans les logs.
 ```
 

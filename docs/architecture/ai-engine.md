@@ -69,7 +69,7 @@ Des fans tentent de prouver qu'ils parlent à une machine : recette de la tarte 
 
 `assembleContext` construit l'entrée du cerveau et de la voix avec un budget explicite (`CreatorSettings.llm.contextBudgetTokens`, défaut 12 000) :
 
-1. Persona (sections pertinentes : détails, infos en plus, comportement, stratégie en cours, limites ; `docs/reference/persona-schema.md`) et exemples de voix validés — toujours. C'est la version active de la créatrice (`persona_versions`, ADR 0010, 0022), lue à chaque brouillon ; sans version active, l'agent n'écrit rien et passe la main (`persona_inactive`).
+1. Persona (sections pertinentes : détails, infos en plus, comportement, stratégie en cours, limites ; `docs/reference/persona-schema.md`) et ses exemples de voix (`sample_replies`) — toujours. Les réponses corrigées du playground n'y entrent pas : elles sont écrites sur sa persona fictive et ne servent qu'au playground. C'est la version active de la créatrice (`persona_versions`, ADR 0010, 0022), lue à chaque brouillon ; sans version active, l'agent n'écrit rien et passe la main (`persona_inactive`).
 2. Résumé fan (dernière version) — toujours.
 3. Faits actifs, triés catégorie puis confiance — jusqu'à 40.
 4. Derniers messages, du plus récent au plus ancien, jusqu'au budget — jamais l'historique entier.
