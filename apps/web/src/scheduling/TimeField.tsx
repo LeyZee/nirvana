@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useId, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useId, useState, type JSX } from 'react';
 
 import { inputOf, minuteOfInput } from './time';
 
 /**
  * An hour on 24 hours, typed as text (« 09:00 », « 21h30 », « 22 », « 930 » from the phone's number pad, which has
- * neither « : » nor « h » on iOS): never `<input type="time">`, which Chromium writes in the system's language (« 09:00 AM ») whatever the page's `lang` (recette 28/10). While it is typed, the field keeps
- * what is written; a full hour goes to the form at once, and leaving the field writes it back as `HH:MM`. What is not an
- * hour stays as typed, marked, and is told to the form through `onUnreadable`, which then refuses to save: the form never
- * keeps an hour other than the one on screen (relecture Équipe, #301). Créatrices' hours and Équipe's shifts use it alike.
+ * neither « : » nor « h » on iOS): never `<input type="time">`, which Chromium writes in the system's language
+ * (« 09:00 AM ») whatever the page's `lang` (recette 28/10). While it is typed, the field keeps what is written; a full
+ * hour goes to the form at once, and leaving the field writes it back as `HH:MM`. What is not an hour stays as typed,
+ * marked, and is told to the form through `onUnreadable`, which then refuses to save: the form never keeps an hour
+ * other than the one on screen (relecture Équipe, #301). Créatrices' hours and Équipe's shifts use it alike.
  */
 export function TimeField({
   value,
@@ -21,7 +22,7 @@ export function TimeField({
   label: string;
   className?: string;
   onChange: (minute: number) => void;
-  /** From `useUnreadableTimes`: told when the field holds what is not an hour, and when it no longer does. */
+  /** From `useUnreadableTimes` (stable): told when the field holds what is not an hour, and when it no longer does. */
   onUnreadable: (field: string, unreadable: boolean) => void;
 }): JSX.Element {
   const field = useId();
@@ -33,17 +34,15 @@ export function TimeField({
     setSeen(value);
     if (unreadable) setDraft(null);
   }
-  const told = useRef(onUnreadable);
-  told.current = onUnreadable;
   useEffect(() => {
-    told.current(field, unreadable);
-  }, [field, unreadable]);
+    onUnreadable(field, unreadable);
+  }, [field, unreadable, onUnreadable]);
   // A field taken away (a slot removed) no longer holds the form back.
   useEffect(
     () => () => {
-      told.current(field, false);
+      onUnreadable(field, false);
     },
-    [field],
+    [field, onUnreadable],
   );
   return (
     <input
