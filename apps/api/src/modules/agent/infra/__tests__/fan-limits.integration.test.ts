@@ -24,7 +24,7 @@ describe('fan limits set by the policy, through the fans module', () => {
     await withAdmin(test.admin.db, async (tx) => {
       await tx
         .insert(schema.creators)
-        .values({ id: creatorId, displayName: 'Anna', timezone: 'Europe/Paris' });
+        .values({ id: creatorId, nameKey: creatorId, displayName: 'Anna', timezone: 'Europe/Paris' });
       await tx
         .insert(schema.platformAccounts)
         .values({ id: accountId, creatorId, platform: 'reveal', handle: 'anna-demo' });

@@ -8,6 +8,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState, type JSX } from 'react';
 
+import { ZoneEditor } from '../ZoneEditor';
 import { Segment } from '../persona/fields';
 
 import { HOURS_ERRORS, hoursErrorKind, hoursQueryKey, saveAgentHours, useAgentHours } from './api';
@@ -247,6 +248,17 @@ function HoursForm({
             {state.text}
           </span>
         </div>
+        <ZoneEditor
+          creatorId={creatorId}
+          timeZone={stored.timeZone}
+          onMoved={(creator) => {
+            // Her hours stay as they are, read on her new clock: the header and the warnings follow it.
+            setStored((before) => ({ ...before, timeZone: creator.timezone }));
+            queryClient.setQueryData<AgentHoursView>(hoursQueryKey(creatorId), (before) =>
+              before === undefined ? before : { ...before, timeZone: creator.timezone },
+            );
+          }}
+        />
         {problem?.expired === true ? <SignInAgain /> : null}
         {reauth ? (
           <PasswordPrompt

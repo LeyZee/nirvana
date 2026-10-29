@@ -2,6 +2,8 @@ import {
   ApiErrorSchema,
   CreatorListSchema,
   CreatorSummarySchema,
+  REAUTHENTICATION_ERROR_CODE,
+  type CreatorErrorCode,
   type CreatorId,
   type CreatorSummary,
 } from '@nirvana/contracts';
@@ -26,8 +28,10 @@ export type CreateResult =
   | { readonly kind: 'unknown_zone' }
   /** Any other 400: what was typed is not taken as it is. */
   | { readonly kind: 'invalid' }
-  /** 409: this form's id already made a creator under another name. */
+  /** 409 `creator_conflict`: this form's id already made a creator under another name. */
   | { readonly kind: 'conflict' }
+  /** 409 `creator_name_conflict`: another creator has this name, case, accents and spaces aside. */
+  | { readonly kind: 'name_taken' }
   /** 401: the session ended, signing in again is the way out. */
   | { readonly kind: 'expired' }
   | { readonly kind: 'failed' };
@@ -54,11 +58,59 @@ export async function createCreator(
     return { kind: 'created', creator: CreatorSummarySchema.parse(await response.json()) };
   }
   if (response.status === 401) return { kind: 'expired' };
-  if (response.status === 409) return { kind: 'conflict' };
-  if (response.status !== 400) return { kind: 'failed' };
-  // `request_invalid` names each refused field by its path (`/timezone`).
+  if (response.status !== 400 && response.status !== 409) return { kind: 'failed' };
   const error = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+  if (response.status === 409) {
+    return error.data?.error.code === ('creator_name_conflict' satisfies CreatorErrorCode)
+      ? { kind: 'name_taken' }
+      : { kind: 'conflict' };
+  }
+  // `request_invalid` names each refused field by its path (`/timezone`).
   const fields = RefusedFieldsSchema.safeParse(error.data?.error.details);
   const onZone = fields.success && fields.data.fields.some((field) => field.path === '/timezone');
   return onZone ? { kind: 'unknown_zone' } : { kind: 'invalid' };
+}
+
+export type MoveResult =
+  | { readonly kind: 'moved'; readonly creator: CreatorSummary }
+  /** 400: the server does not know this zone. */
+  | { readonly kind: 'unknown_zone' }
+  /** 403 `reauthentication_forbidden`: the sign-in is over 10 minutes old, the password is asked again. */
+  | { readonly kind: 'reauth' }
+  /** Any other 403: only the owner moves a creator. */
+  | { readonly kind: 'forbidden' }
+  | { readonly kind: 'not_found' }
+  | { readonly kind: 'expired' }
+  | { readonly kind: 'failed' };
+
+/**
+ * `PATCH /v1/creators/:creatorId` (owner only, a recent sign-in): her zone, nothing else. Answers her as stored, the
+ * zone spelled as the runtime spells it. Nothing behind her is computed again.
+ */
+export async function moveCreator(creatorId: string, timezone: string): Promise<MoveResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/v1/creators/${encodeURIComponent(creatorId)}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ timezone }),
+    });
+  } catch {
+    return { kind: 'failed' };
+  }
+  if (response.ok) {
+    const creator = CreatorSummarySchema.safeParse(await response.json().catch(() => null));
+    return creator.success ? { kind: 'moved', creator: creator.data } : { kind: 'failed' };
+  }
+  if (response.status === 400) return { kind: 'unknown_zone' };
+  if (response.status === 401) return { kind: 'expired' };
+  if (response.status === 404) return { kind: 'not_found' };
+  if (response.status === 403) {
+    const error = ApiErrorSchema.safeParse(await response.json().catch(() => null));
+    return error.data?.error.code === REAUTHENTICATION_ERROR_CODE
+      ? { kind: 'reauth' }
+      : { kind: 'forbidden' };
+  }
+  return { kind: 'failed' };
 }

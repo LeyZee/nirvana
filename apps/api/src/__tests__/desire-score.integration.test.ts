@@ -169,7 +169,7 @@ describe('conversation.respond with a desire score', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Nora Vidal', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Nora Vidal', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'desire-score' });

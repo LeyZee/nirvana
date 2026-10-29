@@ -7,6 +7,12 @@ export interface CreatorDirectory {
   /** Audited with `userId`, the owner who added her from the dashboard; none from `pnpm creator:create`. */
   create(input: NewCreator, userId?: string): Promise<CreatorSummary>;
   /**
+   * Moves her to another zone, written as the runtime spells it, audited with the owner (`creator.timezone`, the zone
+   * before and after), and moves her `conversation.reopen` to her next opening on the new clock in the same
+   * transaction; nothing behind her is computed again. Unchanged, nothing is written. `null` when she does not exist.
+   */
+  setTimezone(id: CreatorId, timezone: string, userId: string): Promise<CreatorSummary | null>;
+  /**
    * Her hours (P3-14) on her clock; `null` when she does not exist. No setting, or one that no longer reads as
    * `AgentHours` (`invalidStored`), reads as the defaults: today's behaviour, never a silent stop.
    */

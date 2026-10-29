@@ -45,9 +45,12 @@ async function seedCreator(admin: Database, label: string) {
   const personaId = newId(PersonaVersionIdSchema);
   const mediaId = newId(MediaAssetIdSchema);
   await withAdmin(admin, async (tx) => {
-    await tx
-      .insert(s.creators)
-      .values({ id: creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+    await tx.insert(s.creators).values({
+      id: creatorId,
+      nameKey: creatorId,
+      displayName: `Créatrice ${label}`,
+      timezone: 'Europe/Paris',
+    });
     await tx
       .insert(s.platformAccounts)
       .values({ id: accountId, creatorId, platform: 'reveal', handle: `handle-${label}` });

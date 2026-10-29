@@ -109,7 +109,7 @@ describe('the server lock of Automatique (ADR 0019)', () => {
     const platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Lina', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Lina', timezone: 'Europe/Paris' });
     await test.admin.db.insert(schema.platformAccounts).values({
       id: platformAccountId,
       creatorId,

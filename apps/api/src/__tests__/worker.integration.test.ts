@@ -87,7 +87,7 @@ describe('worker (Graphile, ADR 0006)', () => {
     const platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test-corr' });

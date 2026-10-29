@@ -142,7 +142,7 @@ describe('telegram module on Postgres', () => {
     creatorId = newId(CreatorIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
   });
 
   afterAll(async () => {
@@ -363,7 +363,7 @@ describe('telegram module on Postgres', () => {
     const other = newId(CreatorIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: other, displayName: 'Autre', timezone: 'Europe/Paris' });
+      .values({ id: other, nameKey: other, displayName: 'Autre', timezone: 'Europe/Paris' });
     const { routes, version } = await module.overview();
     const saved = await module.saveRoutes(version, [
       ...routes,

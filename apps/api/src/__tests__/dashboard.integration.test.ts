@@ -92,7 +92,7 @@ describe('GET /v1/dashboard', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Lina', timezone: 'America/Montreal' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Lina', timezone: 'America/Montreal' });
     await test.admin.db.insert(schema.platformAccounts).values({
       id: platformAccountId,
       creatorId,

@@ -197,7 +197,7 @@ describe('conversation.respond and her hours', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Nora Vidal', timezone: PARIS });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Nora Vidal', timezone: PARIS });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: `hours-${creatorId}` });

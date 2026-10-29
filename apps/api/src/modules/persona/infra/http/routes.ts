@@ -6,6 +6,8 @@ import {
   DomainError,
   NewCreatorSchema,
   SetAgentHoursBodySchema,
+  UpdateCreatorBodySchema,
+  type CreatorErrorCode,
   type UserRole,
 } from '@nirvana/contracts';
 import type { preValidationAsyncHookHandler } from 'fastify';
@@ -15,10 +17,11 @@ import { z } from 'zod';
 import type { CreatorDirectory } from '../../domain/ports';
 
 const CreatorParamsSchema = z.object({ id: CreatorIdSchema });
+const CreatorIdParamsSchema = z.object({ creatorId: CreatorIdSchema });
 
 class CreatorNotFound extends DomainError {
   constructor() {
-    super('creator_not_found', 'Créatrice introuvable');
+    super('creator_not_found' satisfies CreatorErrorCode, 'Créatrice introuvable');
   }
 }
 
@@ -26,7 +29,8 @@ class CreatorNotFound extends DomainError {
 export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 /**
- * `GET /v1/creators`: the creators the signed-in user may open, an owner sees them all; `POST`: the owner adds one.
+ * `GET /v1/creators`: the creators the signed-in user may open, an owner sees them all; `POST`: the owner adds one;
+ * `PATCH /creators/:creatorId`: the owner moves her to another zone, with a recent sign-in.
  * `/creators/:id/agent-hours`: her hours (P3-14), the owner's alone, a change with a recent sign-in.
  */
 export function createCreatorRoutes(
@@ -60,6 +64,26 @@ export function createCreatorRoutes(
         const { user } = request;
         if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
         return reply.code(201).send(await directory.create(request.body, user.id));
+      },
+    );
+
+    app.patch(
+      '/creators/:creatorId',
+      {
+        // Her zone moves her day, her night and her hours: the owner's call, with a recent sign-in, like her hours.
+        preValidation: [requireRole('owner'), recentLogin],
+        schema: {
+          params: CreatorIdParamsSchema,
+          body: UpdateCreatorBodySchema,
+          response: { 200: CreatorSummarySchema },
+        },
+      },
+      async (request) => {
+        const { user } = request;
+        if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
+        const creator = await directory.setTimezone(request.params.creatorId, request.body.timezone, user.id);
+        if (creator === null) throw new CreatorNotFound();
+        return creator;
       },
     );
 

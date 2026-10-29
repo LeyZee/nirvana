@@ -36,9 +36,12 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     const accountId = newId(PlatformAccountIdSchema);
     const fanIds = Array.from({ length: fanCount }, () => newId(FanIdSchema));
     await withAdmin(test.admin.db, async (tx) => {
-      await tx
-        .insert(schema.creators)
-        .values({ id: creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+      await tx.insert(schema.creators).values({
+        id: creatorId,
+        nameKey: creatorId,
+        displayName: `Créatrice ${label}`,
+        timezone: 'Europe/Paris',
+      });
       await tx
         .insert(schema.platformAccounts)
         .values({ id: accountId, creatorId, platform: 'reveal', handle: `handle-${label}` });

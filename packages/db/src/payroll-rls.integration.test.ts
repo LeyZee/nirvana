@@ -223,9 +223,12 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
     await admin(async (tx) => {
-      await tx
-        .insert(s.creators)
-        .values({ id: nora.creatorId, displayName: 'Créatrice Nora', timezone: 'Europe/Paris' });
+      await tx.insert(s.creators).values({
+        id: nora.creatorId,
+        nameKey: nora.creatorId,
+        displayName: 'Créatrice Nora',
+        timezone: 'Europe/Paris',
+      });
       await tx
         .insert(s.platformAccounts)
         .values({ id: nora.accountId, creatorId: nora.creatorId, platform: 'reveal', handle: 'handle-nora' });
