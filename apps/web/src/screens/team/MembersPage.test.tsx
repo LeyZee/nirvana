@@ -245,6 +245,28 @@ describe('Équipe › Membres', () => {
     await screen.findByRole('region', { name: 'Théo' });
     expect(screen.queryByRole('button', { name: 'Ajouter un membre' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Lien de nouveau mot de passe' })).toBeNull();
+    // Nothing promises him a gesture he does not have.
+    expect(screen.getByText(/le propriétaire peut lui créer un lien/u)).toBeDefined();
+  });
+
+  it('shows a share of the team’s net on a manager only, never one a former manager kept', async () => {
+    const share = { rateBps: 1500, teamShareBps: 300, presetId: null, effectiveFrom: '2026-09-01' };
+    const demoted = member(15, { displayName: 'Maël', firstName: 'Maël', commission: share });
+    const manager = member(16, {
+      displayName: 'Rose',
+      firstName: 'Rose',
+      teamRole: 'manager',
+      commission: share,
+    });
+    serve({ members: { status: 200, body: { members: [demoted, manager] } } });
+    renderPage(`/equipe/membres?membre=${demoted.id}`);
+    await screen.findByRole('region', { name: 'Maël' });
+    expect(screen.queryByText('Part de l’équipe')).toBeNull();
+    cleanup();
+    serve({ members: { status: 200, body: { members: [demoted, manager] } } });
+    renderPage(`/equipe/membres?onglet=managers&membre=${manager.id}`);
+    await screen.findByRole('region', { name: 'Rose' });
+    expect(screen.getByText('Part de l’équipe')).toBeDefined();
   });
 
   it('offers the first member to an empty team, and says when the server does not answer', async () => {
@@ -409,7 +431,7 @@ describe('a link from the sheet', () => {
     renderPage(`/equipe/membres?membre=${THEO.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Lien de nouveau mot de passe' }));
     // The list re-read says a link is out; the one just made is still there to send.
-    expect(await screen.findByText(/Un lien pour en choisir un nouveau lui a été envoyé/u)).toBeDefined();
+    expect(await screen.findByText(/Un lien pour en choisir un nouveau a été créé/u)).toBeDefined();
     expect(screen.getByLabelText('Lien à envoyer')).toBeDefined();
   });
 

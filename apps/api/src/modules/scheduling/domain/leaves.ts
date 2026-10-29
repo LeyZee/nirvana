@@ -68,7 +68,8 @@ export function assertDecides(
 
 /**
  * What a `DELETE` does: the member withdraws their own pending request; the owner or an active manager cancels an
- * approved leave that has not ended. A pending request of someone else is refused, not withdrawn.
+ * approved leave that has not ended. A pending request of someone else is refused, not withdrawn; a member's own
+ * request already answered is `leave_decided_conflict`.
  */
 export function leaveEnding(
   scope: TeamScope,
@@ -80,7 +81,8 @@ export function leaveEnding(
     if (leave.own) return 'withdraw';
     throw plans ? new LeaveNotWithdrawable() : new PlanningForbidden();
   }
-  if (!plans) throw new PlanningForbidden();
+  // Their own request already answered: that is what the member is told, not a lack of rights.
+  if (!plans) throw leave.own ? new LeaveDecided() : new PlanningForbidden();
   if (leave.status === 'approved' && leave.endsAt.getTime() > now.getTime()) return 'cancel';
   throw new LeaveDecided();
 }

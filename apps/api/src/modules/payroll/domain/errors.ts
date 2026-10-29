@@ -145,12 +145,20 @@ export class PayPeriodReportsUnread extends DomainError {
  * for a period some statement is validated for, or an earlier one (EQ-04).
  */
 export class PayPeriodClosed extends DomainError {
-  constructor(period: PayPeriod, { forTeam = false }: { readonly forTeam?: boolean } = {}) {
+  constructor(
+    period: PayPeriod,
+    {
+      forTeam = false,
+      beforeJoining = false,
+    }: { readonly forTeam?: boolean; readonly beforeJoining?: boolean } = {},
+  ) {
     super(
       'pay_period_closed_conflict',
       forTeam
         ? 'Un relevé de cette quinzaine, ou d’une plus récente, est déjà validé'
-        : 'Cette quinzaine est déjà validée pour ce membre',
+        : beforeJoining
+          ? 'Cette quinzaine est d’avant l’arrivée de ce membre'
+          : 'Cette quinzaine est déjà validée pour ce membre',
       { details: { period } },
     );
   }
@@ -216,6 +224,15 @@ export class PayrollEntriesTooMany extends DomainError {
   constructor(max: number) {
     super('payroll_entries_too_many_unprocessable', 'Trop de saisies sur cette quinzaine pour les lister', {
       details: { max },
+    });
+  }
+}
+
+/** A bonus for a period after the next one: a slip of the year, refused as the body it is (400). */
+export class PayPeriodTooFar extends DomainError {
+  constructor(period: PayPeriod) {
+    super('request_invalid', 'Une prime vise la quinzaine en cours, une passée ou la suivante', {
+      details: { period },
     });
   }
 }

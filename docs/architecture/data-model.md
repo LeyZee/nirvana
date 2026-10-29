@@ -179,6 +179,9 @@ team_member_notes        id, member_id, body (1 à 2 000 car.), author_user_id, 
 commission_presets       id, name, rate_bps (0 à 10 000), effective_from, created_by, created_at   (ajout seul, unique name + effective_from)
 member_commission_rates  id, member_id, rate_bps, team_share_bps (manager), preset_id, effective_from, created_by, created_at
                          (ajout seul, unique member_id + effective_from : le taux d'un jour est la dernière ligne en vigueur ce jour-là)
+member_roles             id, member_id, team_role (chatter|manager), effective_from, created_by, created_at
+                         (ajout seul, unique member_id + effective_from : le rôle d'un jour est la dernière ligne en vigueur ;
+                         la première part de l'arrivée, une autre du 1er ou du 16 ; team_members.team_role = le rôle d'aujourd'hui)
 invitation_links         id, member_id, purpose (invitation|reset), token_hash (SHA-256, unique), created_by, expires_at,
                          used_at, revoked_at, created_at      (EQ-10 ; hors RLS et hors de portée de nirvana_app : withAdmin seul)
 ```

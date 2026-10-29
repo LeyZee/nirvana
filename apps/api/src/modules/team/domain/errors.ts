@@ -43,6 +43,32 @@ export class CommissionDateInvalid extends DomainError {
   }
 }
 
+/** A new rate starts a period (Charles, 28/10): no period is paid at two rates, nothing is computed again backwards. */
+export class CommissionStartInvalid extends DomainError {
+  constructor() {
+    super(
+      'commission_date_invalid',
+      'Un nouveau taux commence le 1er ou le 16 d’un mois, aujourd’hui au plus tôt',
+    );
+  }
+}
+
+/** A change of role starts a period, like a rate (Charles, 28/10): no period is paid under two roles. */
+export class RoleDateInvalid extends DomainError {
+  constructor() {
+    super(
+      'role_date_invalid',
+      'Un changement de rôle commence le 1er ou le 16 d’un mois, aujourd’hui au plus tôt',
+    );
+  }
+}
+
+export class RoleChangeConflict extends DomainError {
+  constructor() {
+    super('role_change_conflict', 'Ce membre a déjà un rôle qui commence ce jour-là');
+  }
+}
+
 export class TeamShareInvalid extends DomainError {
   constructor() {
     super('team_share_invalid', 'Seul un manager a une part du net de l’équipe');
@@ -62,6 +88,13 @@ export class CreatorNotFound extends DomainError {
 export class TeamScopeForbidden extends DomainError {
   constructor() {
     super('role_forbidden', 'Réservé au propriétaire et aux managers actifs');
+  }
+}
+
+/** The notes about a member are never his to read or write (ADR 0024), whatever his scope. */
+export class OwnNotesForbidden extends DomainError {
+  constructor() {
+    super('role_forbidden', 'Les notes sur toi ne te sont pas lisibles');
   }
 }
 

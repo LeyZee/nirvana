@@ -2,6 +2,7 @@
 import { TeamMemberSchema, type TeamMember } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  type AnyRouter,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -12,6 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PlanningPage } from './PlanningPage';
+import { parsePlanningSearch } from './model';
 
 const reader = vi.hoisted(() => ({ zone: 'Europe/Paris' }));
 vi.mock('@/scheduling/time', async (importOriginal) => ({
@@ -230,23 +232,35 @@ function serve(
   return written;
 }
 
-function renderPage(): void {
+function renderPage(at = '/equipe/planning'): AnyRouter {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute();
   const page = createRoute({
     getParentRoute: () => root,
     path: '/equipe/planning',
-    component: () => <PlanningPage userId={OWNER_USER} />,
+    validateSearch: parsePlanningSearch,
+    component: function Page() {
+      const { semaine } = page.useSearch();
+      const navigate = page.useNavigate();
+      return (
+        <PlanningPage
+          userId={OWNER_USER}
+          week={semaine ?? null}
+          onWeek={(monday) => void navigate({ search: monday === null ? {} : { semaine: monday } })}
+        />
+      );
+    },
   });
   const router = createRouter({
     routeTree: root.addChildren([page]),
-    history: createMemoryHistory({ initialEntries: ['/equipe/planning'] }),
+    history: createMemoryHistory({ initialEntries: [at] }),
   });
   render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return router;
 }
 
 beforeEach(() => {
@@ -748,5 +762,102 @@ describe('Équipe › Planning', () => {
     expect(panel.textContent).toContain('5 h.');
     fireEvent.click(within(panel).getByRole('switch', { name: /Chaque semaine/u }));
     expect(panel.textContent).toContain('6 h.');
+  });
+
+  it('refuses a single shift of more than 24 h the night the clocks go back', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('row', { name: /Nora Vidal/u });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    fireEvent.change(within(panel).getByLabelText('Jour'), { target: { value: '2027-10-31' } });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Autres heures' }));
+    fireEvent.change(within(panel).getByLabelText('Début'), { target: { value: '02:30' } });
+    fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '02:00' } });
+    const place = within(panel).getByRole('button', { name: 'Placer Théo' });
+    // 3 h comes back to 2 h that night: 23 h 30 on the clock is 24 h 30 of shift.
+    expect(text(panel)).toContain(
+      '24 h 30 cette nuit-là, à cause du changement d’heure : un shift dure 24 h au plus.',
+    );
+    expect(place.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(panel).getByLabelText('Fin'), { target: { value: '01:30' } });
+    expect(place.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('places no member before the day he joins', async () => {
+    serve({ members: [member({ joinedOn: '2026-11-05' })] });
+    renderPage();
+    await screen.findByRole('row', { name: /Nora Vidal/u });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    fireEvent.change(within(panel).getByLabelText('Jour'), { target: { value: '2026-11-04' } });
+    const place = within(panel).getByRole('button', { name: 'Placer Théo' });
+    expect(text(panel)).toContain('Théo arrive le jeudi 5 novembre : un jour à partir de son arrivée.');
+    expect(place.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(panel).getByLabelText('Jour'), { target: { value: '2026-11-05' } });
+    expect(place.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('hands a shift only to a member who has joined by its day', async () => {
+    const later = { ...night, id: id(105), startsAt: '2026-10-29T22:00:00Z', endsAt: '2026-10-30T04:00:00Z' };
+    serve({
+      planning: planning([], [{ ...later, templateId: null }]),
+      members: [
+        member({}),
+        member({ id: BASILE, userId: id(72), firstName: 'Basile', displayName: 'Basile', color: null }),
+        member({
+          id: id(23),
+          userId: id(73),
+          firstName: 'Iris',
+          displayName: 'Iris',
+          color: null,
+          joinedOn: '2026-11-05',
+        }),
+      ],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23\sh\s–\s5\sh/u }));
+    const who = within(screen.getByRole('dialog')).getByLabelText('Membre');
+    if (!(who instanceof HTMLSelectElement)) throw new Error('no member list');
+    expect([...who.options].map((option) => option.text)).toEqual(['Basile', 'Théo']);
+  });
+
+  it('keeps the week shown in the address, so that a reload or a back finds it', async () => {
+    const asked: string[] = [];
+    serve({
+      planningOf: (from) => {
+        asked.push(from);
+        return planning();
+      },
+    });
+    const router = renderPage('/equipe/planning?semaine=2026-10-14');
+    await screen.findByRole('row', { name: /Nora Vidal/u });
+    // The 14th is said as its week's Monday, the 12th.
+    expect(router.state.location.search).toEqual({ semaine: '2026-10-12' });
+    expect(asked.at(-1)?.startsWith('2026-10-1')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }));
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ semaine: '2026-10-19' });
+    });
+    // Back on this week, the address says nothing more.
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }));
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({});
+    });
+  });
+
+  it('names each + by its account, two accounts of a creator never the same', async () => {
+    const second = { ...ACCOUNTS[0], id: id(12), handle: 'nora-2' };
+    serve({ planning: planning([], [night], [...ACCOUNTS, second]) });
+    renderPage();
+    await screen.findAllByRole('row', { name: /Nora Vidal/u });
+    expect(
+      screen
+        .getAllByRole('button', { name: /^Ajouter un shift le mercredi 28 octobre sur Nora Vidal/u })
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual([
+      'Ajouter un shift le mercredi 28 octobre sur Nora Vidal, @nora sur Reveal',
+      'Ajouter un shift le mercredi 28 octobre sur Nora Vidal, @nora-2 sur Reveal',
+    ]);
   });
 });

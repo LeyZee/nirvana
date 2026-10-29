@@ -194,6 +194,8 @@ export function linesOf(list: ShiftReportList): ShiftLine[] {
 export interface PeriodSum {
   readonly currency: Currency;
   readonly validatedMinor: number;
+  /** Reports and corrections validated, one validated at zero among them. */
+  readonly validated: number;
   readonly waitingMinor: number;
   readonly waiting: number;
   readonly sentBackMinor: number;
@@ -205,6 +207,7 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
   for (const report of reports) {
     const sum = sums.get(report.amount.currency) ?? {
       validatedMinor: 0,
+      validated: 0,
       waitingMinor: 0,
       waiting: 0,
       sentBackMinor: 0,
@@ -214,7 +217,7 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
     sums.set(
       report.amount.currency,
       report.status === 'validated'
-        ? { ...sum, validatedMinor: sum.validatedMinor + minor }
+        ? { ...sum, validatedMinor: sum.validatedMinor + minor, validated: sum.validated + 1 }
         : report.status === 'submitted'
           ? { ...sum, waitingMinor: sum.waitingMinor + minor, waiting: sum.waiting + 1 }
           : { ...sum, sentBackMinor: sum.sentBackMinor + minor, sentBack: sum.sentBack + 1 },
@@ -305,3 +308,16 @@ export const READ_AGAIN: ReadonlySet<ReportRefusalCode> = new Set<ReportRefusalC
   'pay_rules_conflict',
   'pay_rules_period_conflict',
 ]);
+
+/**
+ * The currency a typed amount names, by its symbol or its code (« 50 € », « $50 », « 50 USD »), `null` when it names
+ * none: `parseAmount` drops them, so a « 50 € » on an account in dollars is caught here rather than read as $50.
+ */
+export function currencyTyped(text: string): Currency | null {
+  if (/€|EUR/iu.test(text)) return 'EUR';
+  if (/\$|USD/iu.test(text)) return 'USD';
+  return null;
+}
+
+/** « en euros », « en dollars »: the currency an account declares in, in a sentence. */
+export const CURRENCY_WORDS: Readonly<Record<Currency, string>> = { EUR: 'en euros', USD: 'en dollars' };

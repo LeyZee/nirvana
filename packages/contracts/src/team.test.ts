@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { BasisPointsSchema, CountryCodeSchema, MeSchema, teamScopeFor } from './team';
+import {
+  BasisPointsSchema,
+  COUNTRY_CODES,
+  CountryCodeSchema,
+  KnownCountryCodeSchema,
+  MeSchema,
+  teamScopeFor,
+} from './team';
 
 describe('teamScopeFor', () => {
   it('gives the owner every row, an active manager the team, anyone else his own rows', () => {
@@ -25,6 +32,13 @@ describe('team values', () => {
     expect(BasisPointsSchema.safeParse(12.5).success).toBe(false);
     expect(CountryCodeSchema.safeParse('BJ').success).toBe(true);
     expect(CountryCodeSchema.safeParse('bj').success).toBe(false);
+  });
+
+  it('refuses a country that does not exist in what is written', () => {
+    expect(KnownCountryCodeSchema.safeParse('BJ').success).toBe(true);
+    expect(KnownCountryCodeSchema.safeParse('ZZ').success).toBe(false);
+    expect(KnownCountryCodeSchema.safeParse('bj').success).toBe(false);
+    expect(COUNTRY_CODES).toHaveLength(249);
   });
 });
 

@@ -14,6 +14,8 @@ import {
   amountInput,
   amountText,
   CURRENCY_SIGNS,
+  CURRENCY_WORDS,
+  currencyTyped,
   MEMBER_STATUS,
   parseAmount,
   periodLine,
@@ -381,18 +383,21 @@ function Form({
     target?.focus({ preventScroll: true });
   }, [tries]);
 
-  const minor = parseAmount(amount, correcting);
+  const typed = currencyTyped(amount);
+  const minor = typed === null || typed === currency ? parseAmount(amount, correcting) : null;
   const total = validatedTotal(data.reports, data.shift.id);
   const amountProblem =
-    minor === null
-      ? correcting
-        ? 'Un montant à ajouter ou retirer, comme 20 ou −15,50.'
-        : 'Un montant comme 120 ou 85,50, 0 si le shift n’a rien vendu.'
-      : correcting && minor === 0
-        ? 'Une correction ajoute ou retire : 0 ne change rien.'
-        : correcting && total + minor < 0
-          ? `Le total validé du shift (${amountText(total, currency)}) passerait sous zéro.`
-          : null;
+    typed !== null && typed !== currency
+      ? `Ce compte se déclare ${CURRENCY_WORDS[currency]} : tape le montant seul, sans devise.`
+      : minor === null
+        ? correcting
+          ? 'Un montant à ajouter ou retirer, comme 20 ou −15,50.'
+          : 'Un montant comme 120 ou 85,50, 0 si le shift n’a rien vendu.'
+        : correcting && minor === 0
+          ? 'Une correction ajoute ou retire : 0 ne change rien.'
+          : correcting && total + minor < 0
+            ? `Le total validé du shift (${amountText(total, currency)}) passerait sous zéro.`
+            : null;
   const incidentProblem =
     incidentOn && incident.trim() === '' ? 'Dis en une phrase ce qui s’est passé.' : null;
   const ready = amountProblem === null && incidentProblem === null && minor !== null;

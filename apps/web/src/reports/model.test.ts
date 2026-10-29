@@ -11,6 +11,7 @@ import {
   amountInput,
   amountText,
   incidentsOf,
+  currencyTyped,
   parseAmount,
   parsePercent,
   percentText,
@@ -69,6 +70,16 @@ const report = (
     reviewNote: status === 'rejected' ? 'Le pourboire' : null,
     createdAt: '2026-10-20T10:00:00.000Z',
   });
+
+describe('the currency typed with an amount', () => {
+  it('reads a symbol or a code, and nothing in a bare figure', () => {
+    expect(currencyTyped('50 €')).toBe('EUR');
+    expect(currencyTyped('50 eur')).toBe('EUR');
+    expect(currencyTyped('$50')).toBe('USD');
+    expect(currencyTyped('50 USD')).toBe('USD');
+    expect(currencyTyped('50,25')).toBeNull();
+  });
+});
 
 describe('an amount typed in a report', () => {
   it('reads French and plain figures, in minor units', () => {
@@ -180,6 +191,7 @@ describe('what a period’s list says', () => {
       {
         currency: 'EUR',
         validatedMinor: 8_000,
+        validated: 2,
         waitingMinor: 500,
         waiting: 1,
         sentBackMinor: 4_000,

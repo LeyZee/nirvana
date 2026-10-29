@@ -37,6 +37,7 @@ export const JOB_NAMES = [
   'backups.check',
   'scheduling.make_shifts',
   'scheduling.lapse_swaps',
+  'team.apply_roles',
   'payroll.recalculate',
   'payroll.recalculate_open',
   'payroll.fetch_exchange_rates',
@@ -105,6 +106,8 @@ export const JOB_PAYLOADS = {
   'backups.check': z.object({}),
   'scheduling.make_shifts': z.object({}),
   'scheduling.lapse_swaps': z.object({}),
+  /** Each member's record takes the role in force today (`member_roles`), a role dated for today taking effect. */
+  'team.apply_roles': z.object({}),
   /**
    * The drafts of `period` computed again (EQ-04, ADR 0032), and those of the team's first open period when `period`
    * is closed: a report validated after its period's closing counts there. Enqueued by what changes a period's inputs,
@@ -150,6 +153,7 @@ export const JOB_MAX_ATTEMPTS = {
   'backups.check': 1,
   'scheduling.make_shifts': 1,
   'scheduling.lapse_swaps': 1,
+  'team.apply_roles': 1,
   // A recalculation is replayable and writes nothing when nothing changed; the hourly one catches up anyway.
   'payroll.recalculate': 5,
   'payroll.recalculate_open': 1,

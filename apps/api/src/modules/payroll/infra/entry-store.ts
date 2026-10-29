@@ -23,6 +23,8 @@ import {
 
 import {
   adjustmentPeriod,
+  assertJoinedBy,
+  assertNotTooFar,
   assertOpenBeforeLocks,
   assertPayment,
   assertWritesPayOf,
@@ -76,8 +78,8 @@ async function memberOn(
 }
 
 /**
- * A member who gets an entry in `period` has a rate in force there: without one, their statement could not be
- * computed, and the whole period with it.
+ * A member who gets an entry in `period` had joined by then, and has a rate in force there: without one, their
+ * statement could not be computed, and the whole period with it. Before they joined, that is what is said.
  */
 async function paidMemberOn(
   tx: Transaction,
@@ -86,6 +88,7 @@ async function paidMemberOn(
   period: PayPeriod,
 ): Promise<MemberForPay> {
   const member = await memberOn(tx, reads, memberId, period);
+  assertJoinedBy(member.joinedOn, period);
   if (member.rate === null) throw new CommissionRateMissing(memberId);
   return member;
 }
@@ -196,8 +199,9 @@ export function createDrizzlePayrollEntryStore(
         const sent = await replay();
         if (sent !== null) return sent;
 
-        const member = await paidMemberOn(tx, reads, body.memberId, body.period);
         const current = await currentIn(tx);
+        assertNotTooFar(body.period, current);
+        const member = await paidMemberOn(tx, reads, body.memberId, body.period);
         assertOpenBeforeLocks(await factsOf(tx, member, current), body.period);
         await lockFrom(tx, member.id, body.period, current);
         if (!isOpenFor(await factsOf(tx, member, current), body.period))

@@ -70,7 +70,17 @@ function leaveRangeOf(monday: string, thisMonday: string, zone: string): { from:
  * stop shifts; the server checks every write. The leaves and the chatters' swaps sit around it (ADR 0031): requests to
  * decide first, who is away this week, a shift to fill when its member is on leave, the swaps folded below.
  */
-export function PlanningPage({ userId }: { userId: string }): JSX.Element {
+export function PlanningPage({
+  userId,
+  week,
+  onWeek,
+}: {
+  userId: string;
+  /** The Monday of the week in the address (`?semaine=`), `null` for this week. */
+  week: string | null;
+  /** Writes the week shown into the address, `null` for this week. */
+  onWeek: (monday: string | null) => void;
+}): JSX.Element {
   const now = useNow();
   const mine = readerZone();
   const [own, setOwn] = useState(false);
@@ -82,7 +92,10 @@ export function PlanningPage({ userId }: { userId: string }): JSX.Element {
   const zone = own || agency === null ? mine : agency;
   const today = dayOf(now, zone);
   const thisMonday = mondayOf(today);
-  const [monday, setMonday] = useState(thisMonday);
+  const monday = week ?? thisMonday;
+  const setMonday = (next: string): void => {
+    onWeek(next === thisMonday ? null : next);
+  };
   const days = weekOf(monday);
   const shown = usePlanning(rangeOf(monday, zone));
   const members = useMembers();
@@ -670,7 +683,7 @@ function Grid({
                 day={day}
                 chips={row.days.get(day) ?? []}
                 accountId={row.account.id}
-                creatorName={row.account.creatorName}
+                where={`${row.account.creatorName}, ${accountLine(row.account)}`}
                 today={day === today}
                 picked={index === picked}
                 past={day < today}
@@ -693,7 +706,7 @@ function Cell({
   day,
   chips,
   accountId,
-  creatorName,
+  where,
   today,
   picked,
   past,
@@ -707,7 +720,8 @@ function Cell({
   day: string;
   chips: readonly Chip[];
   accountId: string;
-  creatorName: string;
+  /** The creator and the account (« Nora Vidal, @nora sur Reveal »): two accounts of hers never read the same. */
+  where: string;
   today: boolean;
   picked: boolean;
   past: boolean;
@@ -741,7 +755,7 @@ function Cell({
         <button
           type="button"
           className="sc-add"
-          aria-label={`Ajouter un shift le ${longDay(day)} sur ${creatorName}`}
+          aria-label={`Ajouter un shift le ${longDay(day)} sur ${where}`}
           onClick={() => {
             onAdd({ accountId, day });
           }}

@@ -1,7 +1,9 @@
 import {
   CommissionPresetIdSchema,
   CommissionRateIdSchema,
+  MemberRoleIdSchema,
   newId,
+  payPeriodOfDay,
   TeamMemberIdSchema,
   TeamMemberNoteIdSchema,
   UserIdSchema,
@@ -11,10 +13,12 @@ import {
   type CreateTeamMemberBody,
   type CreatorId,
   type SetCommissionRateBody,
+  type SetTeamRoleBody,
   type TeamMember,
   type TeamMemberId,
   type TeamMemberNote,
   type TeamMemberStatus,
+  type TeamRoleChange,
   type UpdateTeamMemberBody,
   type UserId,
 } from '@nirvana/contracts';
@@ -22,6 +26,8 @@ import {
 import { CommissionPresetNotFound, MemberNotFound } from '../domain/errors';
 import {
   assertCreatorsExist,
+  assertRoleStartsAPeriod,
+  assertStartsAPeriod,
   assertStartsFromToday,
   calendarDayIn,
   normalizeEmail,
@@ -39,6 +45,9 @@ export interface TeamService {
   changeStatus(actor: Actor, id: TeamMemberId, status: TeamMemberStatus): Promise<TeamMember>;
   setCommission(actor: Actor, id: TeamMemberId, body: SetCommissionRateBody): Promise<CommissionRate>;
   commissionHistory(actor: UserId, id: TeamMemberId): Promise<CommissionRate[]>;
+  /** A change of role from the 1st or the 16th, today at the earliest (Charles, 28/10). */
+  setRole(actor: Actor, id: TeamMemberId, body: SetTeamRoleBody): Promise<TeamRoleChange>;
+  roleHistory(actor: UserId, id: TeamMemberId): Promise<TeamRoleChange[]>;
   /** The presets in force today, one per name. */
   presets(actor: UserId): Promise<CommissionPreset[]>;
   addPreset(actor: Actor, body: CreateCommissionPresetBody): Promise<CommissionPreset>;
@@ -122,6 +131,8 @@ export function createTeamService(
         creatorIds,
         // The first rate starts the day he joins: no day of his was worked before it.
         rate: await resolveRate(actor.userId, body.commission, body.teamShareBps, body.joinedOn),
+        // His first role too: whatever day he joins, a later change waits for the 1st or the 16th.
+        roleId: newId(MemberRoleIdSchema),
       });
       return read(actor.userId, id);
     },
@@ -141,11 +152,15 @@ export function createTeamService(
     },
 
     setCommission: async (actor, id, body) => {
-      assertStartsFromToday(body.effectiveFrom, today());
+      const day = today();
+      assertStartsAPeriod(body.effectiveFrom, day);
+      // A rate from a later period changes nothing computed yet: only one from today, the 1st or the 16th, does.
+      const running = payPeriodOfDay(day);
       return store.addRate(
         actor,
         id,
         await resolveRate(actor.userId, body.commission, body.teamShareBps, body.effectiveFrom),
+        payPeriodOfDay(body.effectiveFrom) === running ? running : null,
       );
     },
 
@@ -153,6 +168,23 @@ export function createTeamService(
       const rates = await store.rates(actor, id);
       if (rates === null) throw new MemberNotFound();
       return rates;
+    },
+
+    setRole: async (actor, id, body) => {
+      const day = today();
+      assertRoleStartsAPeriod(body.effectiveFrom, day);
+      return store.addRole(
+        actor,
+        id,
+        { id: newId(MemberRoleIdSchema), ...body },
+        { today: day, running: payPeriodOfDay(day) },
+      );
+    },
+
+    roleHistory: async (actor, id) => {
+      const roles = await store.roles(actor, id);
+      if (roles === null) throw new MemberNotFound();
+      return roles;
     },
 
     presets: async (actor) => presetsInForce(await store.presets(actor), today()),

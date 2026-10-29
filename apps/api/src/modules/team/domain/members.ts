@@ -2,9 +2,11 @@ import type { CreatorId, TeamMemberStatus, TeamRole, TeamScope } from '@nirvana/
 
 import {
   CommissionDateInvalid,
+  CommissionStartInvalid,
   CreatorNotFound,
   MemberLeftConflict,
   OwnerOnly,
+  RoleDateInvalid,
   TeamScopeForbidden,
   TeamShareInvalid,
 } from './errors';
@@ -36,6 +38,38 @@ export function assertStartsFromToday(effectiveFrom: string, today: string): voi
   if (effectiveFrom < today) throw new CommissionDateInvalid();
 }
 
+/**
+ * A member's new rate starts on the first day of a period, the 1st or the 16th (Charles, 28/10), today at the earliest:
+ * pay reads one rate per period, so no period is paid at two rates. The first rate starts the day he joins instead.
+ */
+export function assertStartsAPeriod(effectiveFrom: string, today: string): void {
+  assertStartsFromToday(effectiveFrom, today);
+  if (!startsAPeriod(effectiveFrom)) throw new CommissionStartInvalid();
+}
+
+/** The first day of a pay period: the 1st or the 16th of a month. */
+function startsAPeriod(day: string): boolean {
+  return day.endsWith('-01') || day.endsWith('-16');
+}
+
+/**
+ * A change of role starts like a new rate (Charles, 28/10): on the 1st or the 16th, today at the earliest. Pay reads
+ * the role of a period's last day, so a period is paid under one role: a chatter made a manager on the 16th has the
+ * team share from that period on, never for the days before. The first role starts the day he joins instead.
+ */
+export function assertRoleStartsAPeriod(effectiveFrom: string, today: string): void {
+  if (effectiveFrom < today || !startsAPeriod(effectiveFrom)) throw new RoleDateInvalid();
+}
+
+/** The role of a day: the latest one effective on that day, else the record's own (a member with no dated role). */
+export function roleOn(
+  roles: readonly { readonly teamRole: TeamRole; readonly effectiveFrom: string }[],
+  day: string,
+  recorded: TeamRole,
+): TeamRole {
+  return rateInForce(roles, day)?.teamRole ?? recorded;
+}
+
 /** A share of the team's net is a manager's; a chatter has none. */
 export function assertTeamShareFits(teamRole: TeamRole, teamShareBps: number | null): void {
   if (teamShareBps !== null && teamRole !== 'manager') throw new TeamShareInvalid();
@@ -56,7 +90,7 @@ export function assertOwnerScope(scope: TeamScope): void {
   if (scope !== 'owner') throw new OwnerOnly();
 }
 
-/** The rate of a day: the latest one effective on that day, or `null` before the first one starts. */
+/** The rate (or the role) of a day: the latest one effective on that day, or `null` before the first one starts. */
 export function rateInForce<T extends { readonly effectiveFrom: string }>(
   rates: readonly T[],
   day: string,

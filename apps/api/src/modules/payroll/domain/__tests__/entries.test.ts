@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   adjustmentPeriod,
+  assertJoinedBy,
+  assertNotTooFar,
   assertOpenBeforeLocks,
   assertPayment,
   assertWritesPayOf,
@@ -172,5 +174,47 @@ describe('a payment (ADR 0023 § Factures)', () => {
 
   it('pays nothing for a statement that pays nothing: it stays validated', () => {
     expect(paying({ sentMinor: 1 }, 0)).toBe('payment_amount_unprocessable');
+  });
+});
+
+describe('how far an entry may go', () => {
+  it('takes a bonus up to the next period, never one a slip of the year makes', () => {
+    expect(
+      codeOf(() => {
+        assertNotTooFar(P1, P2);
+      }),
+    ).toBe('no error');
+    expect(
+      codeOf(() => {
+        assertNotTooFar(P3, P2);
+      }),
+    ).toBe('no error');
+    expect(
+      codeOf(() => {
+        assertNotTooFar(P4, P2);
+      }),
+    ).toBe('request_invalid');
+    expect(
+      codeOf(() => {
+        assertNotTooFar(PayPeriodSchema.parse('2026-06-01'), P2);
+      }),
+    ).toBe('request_invalid');
+  });
+
+  it('says a period before the member joined as such', () => {
+    expect(
+      codeOf(() => {
+        assertJoinedBy('2025-03-20', P2);
+      }),
+    ).toBe('no error');
+    try {
+      assertJoinedBy('2025-03-20', P1);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'pay_period_closed_conflict',
+        message: 'Cette quinzaine est d’avant l’arrivée de ce membre',
+      });
+    }
   });
 });

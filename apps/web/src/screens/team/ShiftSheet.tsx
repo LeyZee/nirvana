@@ -78,10 +78,14 @@ export function ShiftSheet({
   const report = reports === null ? null : reportOf(reports, shift.id);
   const corrected = reports?.some((one) => one.correctsId !== null && one.status === 'validated') ?? false;
   const startDay = dayOf(shift.startsAt, agency);
+  // Who may take it: active, on its creator, and already joined that day (`member_not_joined_conflict`).
   const eligible = members
     .filter(
       (member) =>
-        member.status === 'active' && account !== null && member.creatorIds.includes(account.creatorId),
+        member.status === 'active' &&
+        account !== null &&
+        member.creatorIds.includes(account.creatorId) &&
+        member.joinedOn <= startDay,
     )
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
 

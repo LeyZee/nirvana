@@ -1,4 +1,5 @@
 import {
+  SHIFT_MAX_MINUTES,
   SHIFT_TEMPLATE_MAX_MINUTES,
   shiftSlotsOf,
   templateLengthMinutes,
@@ -127,7 +128,12 @@ export function ShiftPanel({
       ? zonedInstant(crosses ? addDays(day, 1) : day, endMinute, zone).getTime() -
         zonedInstant(day, startMinute, zone).getTime()
       : minutes * 60_000;
-  const ready = account !== null && chosen !== null && hoursFit && dayOk && !busy;
+  // The night the clocks go back, 2 h 30 – 2 h spans 24 h 30: more than a shift may last.
+  const tooLongOnce = !weekly && lasts > SHIFT_MAX_MINUTES * 60_000;
+  // No shift before the member's first day (the server reads it in their zone, the panel in the agency's).
+  const notJoined = chosen !== null && dayOk && day < chosen.joinedOn;
+  const ready =
+    account !== null && chosen !== null && hoursFit && !tooLongOnce && dayOk && !notJoined && !busy;
 
   const submit = async (): Promise<void> => {
     if (!ready) return;
@@ -226,12 +232,12 @@ export function ShiftPanel({
           ) : eligible.length === 0 ? (
             <span className="tm-hint tm-hint--error">
               {fill === undefined ? 'Aucun membre actif' : 'Aucun autre membre actif'} ne travaille sur{' '}
-              {account?.creatorName ?? 'cette créatrice'} : ajoute-la à sa fiche dans Membres.
+              {account?.creatorName ?? 'cette créatrice'}.
             </span>
           ) : null}
         </div>
 
-        <div className="nv-field tm-field" data-invalid={dayOk ? undefined : 'true'}>
+        <div className="nv-field tm-field" data-invalid={dayOk && !notJoined ? undefined : 'true'}>
           <label className="nv-field__label" htmlFor={`${id}-day`}>
             {weekly ? 'À partir du' : 'Jour'}
           </label>
@@ -241,15 +247,17 @@ export function ShiftPanel({
             className="nv-field__control nv-glass tm-date"
             value={day}
             min={today}
-            aria-invalid={!dayOk}
+            aria-invalid={!dayOk || notJoined}
             onChange={(event) => {
               setDay(event.target.value);
             }}
           />
-          <span className={dayOk ? 'tm-hint' : 'tm-hint tm-hint--error'}>
-            {dayOk
-              ? longDay(day).replace(/^./u, (letter) => letter.toUpperCase())
-              : 'Un jour, aujourd’hui au plus tôt.'}
+          <span className={dayOk && !notJoined ? 'tm-hint' : 'tm-hint tm-hint--error'}>
+            {!dayOk
+              ? 'Un jour, aujourd’hui au plus tôt.'
+              : notJoined
+                ? `${chosen.displayName} arrive le ${longDay(chosen.joinedOn)} : un jour à partir de son arrivée.`
+                : longDay(day).replace(/^./u, (letter) => letter.toUpperCase())}
           </span>
         </div>
 
@@ -312,12 +320,14 @@ export function ShiftPanel({
               </label>
             </div>
           ) : null}
-          <span className={hoursFit ? 'tm-hint' : 'tm-hint tm-hint--error'}>
+          <span className={hoursFit && !tooLongOnce ? 'tm-hint' : 'tm-hint tm-hint--error'}>
             {!hoursOk
               ? 'Un début et une fin différents.'
               : tooLong
                 ? 'Un modèle de shift dure 23 heures au plus.'
-                : `${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
+                : tooLongOnce
+                  ? `${lengthOf(lasts)} cette nuit-là, à cause du changement d’heure : un shift dure 24 h au plus.`
+                  : `${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
           </span>
         </fieldset>
 

@@ -8,6 +8,7 @@ import {
 
 import {
   PayPeriodClosed,
+  PayPeriodTooFar,
   PaymentAmountMismatch,
   PaymentBeforePeriod,
   PaymentInFuture,
@@ -66,7 +67,18 @@ export function assertOpenBeforeLocks(
   facts: Pick<MemberPayFacts, 'lastValidated' | 'firstClosed' | 'joinedOn'>,
   period: PayPeriod,
 ): void {
-  if (!isOpenFor(facts, period) || period < payPeriodOfDay(facts.joinedOn)) throw new PayPeriodClosed(period);
+  assertJoinedBy(facts.joinedOn, period);
+  if (!isOpenFor(facts, period)) throw new PayPeriodClosed(period);
+}
+
+/** A bonus goes to today's period, an earlier one or the next one: never further, where a slip of the year lands. */
+export function assertNotTooFar(period: PayPeriod, current: PayPeriod): void {
+  if (period > nextPayPeriod(current)) throw new PayPeriodTooFar(period);
+}
+
+/** Nothing is owed for a period that ended before the member joined. */
+export function assertJoinedBy(joinedOn: string, period: PayPeriod): void {
+  if (period < payPeriodOfDay(joinedOn)) throw new PayPeriodClosed(period, { beforeJoining: true });
 }
 
 /** Only the owner or an active manager writes a member's pay, never their own (the policies say the same). */

@@ -31,7 +31,7 @@ import {
 import { MembersPage } from './screens/team/MembersPage';
 import { PlanningPage } from './screens/team/PlanningPage';
 import { ReportsPage } from './screens/team/ReportsPage';
-import { parseTeamSearch } from './screens/team/model';
+import { parsePlanningSearch, parseTeamSearch } from './screens/team/model';
 import { TodayPage } from './screens/today/TodayPage';
 import { ChatterTrackingPage } from './screens/tracking/ChatterTrackingPage';
 import { SuiviNav } from './screens/tracking/SuiviNav';
@@ -188,9 +188,18 @@ const teamIndex = createRoute({
 const teamPlanning = createRoute({
   getParentRoute: () => team,
   path: '/planning',
+  validateSearch: parsePlanningSearch,
   component: function TeamPlanning() {
+    const { semaine } = teamPlanning.useSearch();
+    const navigate = teamPlanning.useNavigate();
     const { user } = rootRoute.useRouteContext();
-    return <PlanningPage userId={user.id} />;
+    return (
+      <PlanningPage
+        userId={user.id}
+        week={semaine ?? null}
+        onWeek={(monday) => void navigate({ search: monday === null ? {} : { semaine: monday } })}
+      />
+    );
   },
 });
 const teamReports = createRoute({

@@ -611,6 +611,7 @@ export type AnswerShiftSwapRequestBody = z.infer<typeof AnswerShiftSwapRequestBo
  * `shift_not_found` 404 ; `shift_template_not_found` 404 ; `member_not_found` 404 ; `creator_not_found` 404 ;
  * `platform_account_not_found` 404, an account that is not this creator's ; `member_left_conflict` 409, a member who
  * is not `active` gets no shift ; `member_creator_conflict` 409, the member does not work on this creator ;
+ * `member_not_joined_conflict` 409, a shift that starts before the member's `joinedOn`, in their zone (`details.joinedOn`) ;
  * `shift_member_conflict` 409, the member already has a shift then ; `shift_account_conflict` 409, the account already
  * has a member then (both with `details.shiftId`, the shift in the way) ; `shift_ended_conflict` 409, a shift that
  * has ended, or a new one that would end at or before now ; `shift_started_conflict` 409, a change other than an
@@ -637,6 +638,7 @@ export const SCHEDULING_ERROR_CODES = [
   'platform_account_not_found',
   'member_left_conflict',
   'member_creator_conflict',
+  'member_not_joined_conflict',
   'shift_member_conflict',
   'shift_account_conflict',
   'shift_ended_conflict',

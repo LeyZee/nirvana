@@ -85,6 +85,7 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
     displayName: string;
     teamRole: 'chatter' | 'manager';
     creatorIds: CreatorId[];
+    joinedOn?: string;
   }): Promise<{ member: TeamMember; cookie: string }> => {
     const response = await call('POST', '/team/members', owner, {
       ...body,
@@ -93,6 +94,7 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
       country: 'BJ',
       timeZone: 'Africa/Porto-Novo',
       joinedOn: parisDay(-30),
+      ...body,
       commission: { rateBps: 1000 },
       teamShareBps: body.teamRole === 'manager' ? 500 : null,
     });
@@ -400,7 +402,7 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
       );
 
       const byMember = await call('DELETE', `/scheduling/leave-requests/${theoLeave.id}`, theoCookie);
-      expect([byMember.statusCode, codeOf(byMember)]).toEqual([403, 'role_forbidden']);
+      expect([byMember.statusCode, codeOf(byMember)]).toEqual([409, 'leave_decided_conflict']);
       expect(
         (await call('DELETE', `/scheduling/leave-requests/${theoLeave.id}`, noraCookie)).statusCode,
       ).toBe(204);
@@ -521,6 +523,16 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
     });
 
     it('names the colleagues who could take a shift, by name and colour only, never one on leave', async () => {
+      // Jade joins after the shift: never listed, and a proposal to her is refused.
+      const { member: jade } = await addMember({
+        email: 'jade@example.test',
+        displayName: 'Jade',
+        teamRole: 'chatter',
+        creatorIds: [anna],
+        joinedOn: parisDay(10),
+      });
+      const early = await propose(theoCookie, theoA, jade);
+      expect([early.statusCode, codeOf(early)]).toEqual([409, 'member_not_joined_conflict']);
       const away = leaveOf(await askLeave(irisCookie, 3));
       expect((await decide(owner, away, 'approve')).statusCode).toBe(200);
       // Nora is on Inès at those hours, a creator Théo does not work on.
@@ -532,7 +544,7 @@ describe('Équipe › Congés et échanges (/v1/scheduling, EQ-02, ADR 0031)', (
         return { response, found: SwapCandidatesSchema.parse(response.json()) };
       };
       const { response, found } = await read();
-      // Lou does not work on Anna, Iris is on leave that day, Théo is the one asking.
+      // Lou does not work on Anna, Iris is on leave that day, Jade has not joined, Théo is the one asking.
       expect(found.candidates.map((candidate) => [candidate.member.displayName, candidate.freeThen])).toEqual(
         [
           ['Basile', false],

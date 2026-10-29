@@ -183,8 +183,12 @@ export const daysFrom = (from: string, to: string): number =>
 /** « mar. 28 ». */
 export const shortDay = (day: string): string => SHORT_DAY.format(utcMidnight(day));
 
-/** « mardi 28 octobre ». */
-export const longDay = (day: string): string => LONG_DAY.format(utcMidnight(day));
+/** A formatted date as French writes it: the first of a month is « 1er ». */
+export const withFirstOfMonth = (parts: readonly Intl.DateTimeFormatPart[]): string =>
+  parts.map((part) => (part.type === 'day' && part.value === '1' ? '1er' : part.value)).join('');
+
+/** « mardi 28 octobre », « dimanche 1er novembre ». */
+export const longDay = (day: string): string => withFirstOfMonth(LONG_DAY.formatToParts(utcMidnight(day)));
 
 /** « 26 oct. – 1 nov. », the week that starts on `monday`. */
 export const weekLabel = (monday: string): string =>

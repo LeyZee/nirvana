@@ -260,7 +260,8 @@ export type Bonus = z.infer<typeof BonusSchema>;
 
 /**
  * `POST /v1/payroll/bonuses` (owner, active manager, never for themselves) → 201 `BonusSchema`, 200 for the same `id`
- * and values. `POST /v1/payroll/bonuses/:id/cancel` → 200 `BonusSchema`, the same answer when already cancelled.
+ * and values. `period` is today's, an earlier one or the next one: further on answers 400 `request_invalid` (a slip of
+ * the year). `POST /v1/payroll/bonuses/:id/cancel` → 200 `BonusSchema`, the same answer when already cancelled.
  */
 export const CreateBonusBodySchema = z.object({
   id: BonusIdSchema,
