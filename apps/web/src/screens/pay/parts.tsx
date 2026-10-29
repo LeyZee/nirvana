@@ -137,7 +137,7 @@ export function PeriodArrows({
   onPeriod: (period: PayPeriod) => void;
 }): JSX.Element {
   return (
-    <span className="sc-week py-arrows" role="group" aria-label="Quinzaine">
+    <span className="sc-week" role="group" aria-label="Quinzaine">
       <button
         type="button"
         className="sc-arrow"
