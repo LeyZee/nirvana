@@ -16,6 +16,7 @@ export function TrainLayout(): JSX.Element {
     <Page className={pathname.startsWith('/entrainer/playground') ? 'nv-page--fill' : undefined}>
       <PageHeader
         title="Entraîner"
+        lead="Parle à la persona comme un fan, avant qu’un vrai fan ne la lise : rien n’est envoyé."
         // One screen is no choice: no tab bar until there is a second one.
         {...(TRAIN_TABS.length > 1 && { actions: <SubNav label="Entraîner" items={TRAIN_TABS} /> })}
       />

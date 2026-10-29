@@ -4,11 +4,6 @@
  * switched off stays in place in pale ink, never red; what needs fixing is amber, like every warning.
  */
 
-/* Persona · Heures d'activité: the switch keeps its own width, above the sheet. */
-.hr-tabs {
-  display: flex;
-}
-
 /* ── The week: a line a day, 0 h to 24 h on her clock ── */
 .hr-week {
   display: flex;

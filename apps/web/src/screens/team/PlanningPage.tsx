@@ -152,7 +152,6 @@ export function PlanningPage({
   return (
     <Page>
       <PageHeader
-        eyebrow="Planning"
         title="Équipe"
         lead={
           agency === null

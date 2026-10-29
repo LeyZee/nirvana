@@ -37,7 +37,11 @@ export function TodayPage(): JSX.Element {
 
   return (
     <Page>
-      <PageHeader eyebrow={longDay(today)} title="Aujourd’hui" />
+      <PageHeader
+        eyebrow={longDay(today)}
+        title="Aujourd’hui"
+        lead="Ton shift, où aller et jusqu’à quand, puis tes rapports à faire."
+      />
       {mine.isError ? (
         <Panel className="nv-coming">
           <div className="nv-coming__in sc-notice">

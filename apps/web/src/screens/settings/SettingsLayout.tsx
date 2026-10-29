@@ -29,7 +29,11 @@ export function SettingsLayout(): JSX.Element {
   // « Se déconnecter » lives in the account's menu, on the phone too (NAV-02, NAV-04).
   return (
     <Page>
-      <PageHeader title="Réglages" actions={<SubNav label="Réglages" items={TABS} />} />
+      <PageHeader
+        title="Réglages"
+        lead="Ce qui règle le CRM pour toute l’agence."
+        actions={<SubNav label="Réglages" items={TABS} />}
+      />
       <Outlet />
     </Page>
   );

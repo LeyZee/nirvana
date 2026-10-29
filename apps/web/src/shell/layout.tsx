@@ -96,6 +96,9 @@ export function PanelSection({
 
 export interface SubNavItem {
   readonly to: NonNullable<LinkProps['to']>;
+  /** A view of one screen chosen by the address's query (Créatrices' `?onglet=`), lit by `current`. */
+  readonly search?: LinkProps['search'];
+  readonly current?: boolean;
   readonly label: string;
   /** A count that asks for action (corrections to sort), shown as a badge. */
   readonly count?: number;
@@ -109,6 +112,13 @@ function placeStill(nav: HTMLElement, active: HTMLElement, thumb: HTMLElement | 
   thumb?.style.removeProperty('transition');
 }
 
+/**
+ * The tab each sub-nav left lit as it went, and when. A sub-tab's screen draws its own header, so choosing one makes
+ * the sub-nav anew: the new one starts its glass where the last one left it, and slides (NAV-08).
+ */
+const leftAt = new Map<string, { readonly href: string; readonly at: number }>();
+const SAME_GESTURE_MS = 1_000;
+
 /** The screens of a section, as tabs. The active one follows the URL; its glass slides from tab to tab. */
 export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: string }): JSX.Element {
   const pathname = useRouterState({ select: (router) => router.location.pathname });
@@ -116,6 +126,7 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
   const thumbRef = useRef<HTMLSpanElement>(null);
   const placed = useRef(false);
   const counts = items.map((item) => item.count ?? 0).join(',');
+  const lit = items.findIndex((item) => item.current === true);
 
   useLayoutEffect(() => {
     const nav = navRef.current;
@@ -126,10 +137,31 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
       placeTabBarLens(nav, active, thumb);
       return;
     }
-    // First paint: the thumb appears in place, without sliding in from the left or squashing.
-    placeStill(nav, active, thumb);
+    // First paint: the thumb appears in place, without sliding in from the left or squashing; unless the same
+    // sub-nav was just left on another tab, the gesture that made this one.
     placed.current = true;
-  }, [pathname]);
+    const left = leftAt.get(label);
+    const from =
+      left === undefined || performance.now() - left.at > SAME_GESTURE_MS
+        ? null
+        : [...nav.querySelectorAll('a')].find((link) => link.getAttribute('href') === left.href);
+    if (from === undefined || from === null || from === active) {
+      placeStill(nav, active, thumb);
+      return;
+    }
+    placeStill(nav, from, thumb);
+    placeTabBarLens(nav, active, thumb);
+  }, [pathname, lit, label]);
+
+  // Leaving: say where the glass was, for the sub-nav the next screen draws. A layout effect: its cleanup runs before
+  // the new sub-nav's first placing, where a passive one would run after it and leave nothing to slide from.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    return () => {
+      const href = nav?.querySelector('[aria-current="page"]')?.getAttribute('href');
+      if (href !== null && href !== undefined) leftAt.set(label, { href, at: performance.now() });
+    };
+  }, [label]);
 
   // A count that arrives after the tabs (Paie's « Quinzaine 4 ») widens its tab and moves the others: the thumb
   // follows them where they are, without sliding.
@@ -173,13 +205,21 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
         <span className="nv-subnav__thumb" ref={thumbRef} aria-hidden="true" />
         {items.map((item) => (
           <Link
-            key={item.to}
+            key={`${item.to}${item.label}`}
             to={item.to}
+            {...(item.search === undefined ? {} : { search: item.search })}
             className="nv-subnav__item"
             // A tab is its own address alone: « Conversations » (/suivi) is not lit on /suivi/alertes, and a tab's
-            // query (?onglet=, ?conversation=) never turns it off.
-            activeOptions={{ exact: true, includeSearch: false }}
-            activeProps={{ 'aria-current': 'page' }}
+            // query (?onglet=, ?conversation=) never turns it off. A view of one screen is lit by its `current`.
+            {...(item.current === undefined
+              ? {
+                  activeOptions: { exact: true, includeSearch: false },
+                  activeProps: { 'aria-current': 'page' },
+                }
+              : {
+                  activeOptions: { exact: true, includeSearch: true },
+                  'aria-current': item.current ? 'page' : undefined,
+                })}
           >
             {item.label}
             {item.count === undefined || item.count === 0 ? null : (

@@ -116,7 +116,6 @@ const creators = createRoute({
       <CreatorsPage
         tab={tab}
         creatorId={creatrice ?? null}
-        onTab={(next) => void navigate({ search: creatorsSearch(next, creatrice ?? null) })}
         onCreator={(id) => void navigate({ search: creatorsSearch(tab, id) })}
       />
     );

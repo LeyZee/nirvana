@@ -1,7 +1,16 @@
 import type { Me } from '@nirvana/contracts';
 import { playLiquid, playOnce } from '@nirvana/design-system';
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+  type RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import { AgentPill } from './AgentPill';
@@ -105,9 +114,7 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
           <RailNav rail={rail} current={current} onSignOut={onSignOut} account={account}>
             <UserMenu account={account} onSignOut={onSignOut} />
           </RailNav>
-          <main className="nv-stage" id="contenu" tabIndex={-1} ref={main} key={current ?? 'none'}>
-            <Outlet />
-          </main>
+          <Stage key={current ?? 'none'} pathname={pathname} stage={main} />
           {/* Always there, empty when silent: a screen reader announces what comes into a region it already knows. */}
           <p className="nv-notice-region" role="status">
             {said === null ? null : (
@@ -119,6 +126,21 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
         </div>
       </ReopenProvider>
     </HoldProvider>
+  );
+}
+
+/**
+ * The stage of one section, made anew when the section changes. Once a sub-tab of the same section is chosen, the
+ * page's header no longer plays its entrance: the title stays where it is and the sub-tabs' glass slides (NAV-08).
+ */
+function Stage({ pathname, stage }: { pathname: string; stage: RefObject<HTMLElement | null> }): JSX.Element {
+  const [first] = useState(pathname);
+  const [within, setWithin] = useState(false);
+  if (!within && pathname !== first) setWithin(true);
+  return (
+    <main className="nv-stage" id="contenu" tabIndex={-1} ref={stage} data-within={within ? '' : undefined}>
+      <Outlet />
+    </main>
   );
 }
 
