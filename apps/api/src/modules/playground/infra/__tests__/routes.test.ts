@@ -132,6 +132,8 @@ async function server(
       forbiddenEmojis: [],
       kycSlots: [],
     },
+    // « Tester » reads her active persona; none here: the words are read, the phrase needs no persona to be refused.
+    activePersona: () => Promise.resolve(null),
     store,
     records,
     gateway: gateway(options.voice ?? { bubbles: ['Coucou toi ✨'] }, options.control),
@@ -329,13 +331,14 @@ describe('/v1/playground', () => {
 
 describe('POST /v1/alerts/test (P4-01)', () => {
   const alert = { phrase: 'Il demande une vidéo rien que pour lui', keywords: ['vidéo perso'] };
+  const creatorId = '7f0c8a52-3a35-4c5e-9a1e-2d8f6f0e1a01';
 
   it('is closed to anyone without the owner session', async () => {
     const { app } = await server();
     const response = await app.inject({
       method: 'POST',
       url: '/v1/alerts/test',
-      payload: { alert, message: 'une vidéo perso ?' },
+      payload: { creatorId, alert, message: 'une vidéo perso ?' },
     });
     expect(response.statusCode).toBe(403);
   });
@@ -346,7 +349,7 @@ describe('POST /v1/alerts/test (P4-01)', () => {
       method: 'POST',
       url: '/v1/alerts/test',
       headers,
-      payload: { alert, message: 'Tu me fais une Video-Perso ?' },
+      payload: { creatorId, alert, message: 'Tu me fais une Video-Perso ?' },
     });
     expect(response.statusCode).toBe(200);
     const result = AlertTestResultSchema.parse(response.json());
@@ -360,7 +363,18 @@ describe('POST /v1/alerts/test (P4-01)', () => {
       method: 'POST',
       url: '/v1/alerts/test',
       headers,
-      payload: { alert: { phrase: null, keywords: [] }, message: 'coucou' },
+      payload: { creatorId, alert: { phrase: null, keywords: [] }, message: 'coucou' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('refuses a test that names no creator: the phrase is read with her persona (recette M13)', async () => {
+    const { app, headers } = await server();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/alerts/test',
+      headers,
+      payload: { alert, message: 'coucou' },
     });
     expect(response.statusCode).toBe(400);
   });

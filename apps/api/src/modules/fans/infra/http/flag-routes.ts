@@ -100,14 +100,14 @@ export function createFlagRoutes(
 }
 
 /**
- * `GET /v1/fans/:id/kyc` (P5-01): what she has still to learn about him, among the canvas lines `slots` (her
- * persona's, in her order), for the line « À apprendre » of the Suivi. Read like his limits, by the owner and the
- * chatters only; a fan unknown to this creator is 404 `fan_not_found`.
+ * `GET /v1/fans/:id/kyc` (P5-01): what she has still to learn about him, among the canvas lines `slotsOf` gives (her
+ * active persona's, in her order, read at each request), for the line « À apprendre » of the Suivi. Read like his
+ * limits, by the owner and the chatters only; a fan unknown to this creator is 404 `fan_not_found`.
  */
 export function createKycRoutes(
   fans: FansService,
   requireRole: RequireRole,
-  slots: readonly KycSlot[],
+  slotsOf: (creatorId: CreatorId) => Promise<readonly KycSlot[]>,
 ): FastifyPluginAsyncZod {
   return (app) => {
     app.get(
@@ -126,7 +126,7 @@ export function createKycRoutes(
         actorFor(request, creatorId);
         const fanId = request.params.id;
         if ((await fans.getFan(creatorId, fanId)) === null) throw new FanNotFound();
-        return { fanId, toLearn: await fans.kycToLearn(creatorId, fanId, slots) };
+        return { fanId, toLearn: await fans.kycToLearn(creatorId, fanId, await slotsOf(creatorId)) };
       },
     );
     return Promise.resolve();

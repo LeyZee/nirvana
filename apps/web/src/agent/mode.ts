@@ -33,6 +33,8 @@ export const percent = (value: number): string =>
 export function missingRows(gate: AutomaticGate): [label: string, value: string][] {
   return gate.missing.map((condition): [string, string] => {
     switch (condition.kind) {
+      case 'active_persona':
+        return ['Persona', 'aucune version active'];
       case 'live_rate':
         return [
           'Taux en réel',

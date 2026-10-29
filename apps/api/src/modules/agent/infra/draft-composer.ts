@@ -126,6 +126,11 @@ type AgentComposeResult = (
       readonly costUsd: number;
       /** Absent when no model is known: no voice is better than a false one on the live rate (ADR 0019). */
       readonly voice?: { readonly voicePrompt: string; readonly voiceModel: string };
+      /**
+       * The persona version it was written with, read with her persona for this draft: a version activated while it
+       * was written never takes its place (ADR 0019, the live rate and the lock of Automatique per version).
+       */
+      readonly personaVersionId?: string;
       /** What the brief read about the fan; `conversations` keeps the categories it knows (P3-02). */
       readonly factsProposed: readonly {
         readonly category: string;
@@ -160,9 +165,31 @@ export interface AgentDraftComposer {
   compose(input: AgentComposeInput): Promise<AgentComposeResult>;
 }
 
+/** What her persona gives the composer: who she is for the models, and the limits code applies (CLAUDE.md rule 3). */
+export interface ComposerPersonaFields {
+  readonly persona: ComposerPersona;
+  readonly followUpSpirit: string | null;
+  readonly offerLimits: OfferLimits;
+  readonly sexualizationLimits: SexualizationLimits;
+  readonly alertKeywords: readonly string[];
+  /** The version these fields were read from: the draft carries it, never the one active when it is saved. */
+  readonly personaVersionId?: string;
+}
+
 export interface DraftComposerDeps {
   readonly gateway: LlmGateway;
-  readonly persona: ComposerPersona;
+  /**
+   * A fixed persona, with the fields below, when nothing reads hers per creator (`personaOf`): tests and the terminal.
+   * Absent beside `personaOf`: a composer that reads hers has no other persona to fall back on.
+   */
+  readonly persona?: ComposerPersona;
+  /**
+   * Her active persona version for this draft (ADR 0010, 0022), read at each message: it replaces `persona` and the
+   * fields her persona gives. `null` (she has none) or a failed read: nothing is written, a human answers him.
+   */
+  readonly personaOf?: (creatorId: string, now: Date) => Promise<ComposerPersonaFields | null>;
+  /** Set from `personaOf`: the persona version this draft was written with. */
+  readonly personaVersionId?: string;
   /** The spirit of her follow-ups (`PersonaForModels.followUps.spirit`), for the voice. */
   readonly followUpSpirit?: string | null;
   /** Her clock (day and night, the time she answers at), from the creator of the conversation. */
@@ -347,6 +374,31 @@ async function keepWhileAnswering(
   }
 }
 
+/**
+ * Her persona for this message: her active version when the composer reads it per creator, the fixed one
+ * otherwise. Without an active version, or unreadable, the code says which (`persona_inactive`,
+ * `persona_unreadable`): never another persona, never the demo one.
+ */
+async function herPersona(
+  deps: DraftComposerDeps,
+  input: AgentComposeInput,
+): Promise<
+  | { readonly deps: DraftComposerDeps & { readonly persona: ComposerPersona } }
+  | { readonly missing: 'persona_inactive' | 'persona_unreadable' }
+> {
+  if (deps.personaOf === undefined) {
+    return deps.persona === undefined
+      ? { missing: 'persona_inactive' }
+      : { deps: { ...deps, persona: deps.persona } };
+  }
+  try {
+    const fields = await deps.personaOf(input.creatorId, input.now);
+    return fields === null ? { missing: 'persona_inactive' } : { deps: { ...deps, ...fields } };
+  } catch {
+    return { missing: 'persona_unreadable' };
+  }
+}
+
 const NOT_FOLLOWED_UP = (detail: string, costUsd = 0): Held => ({
   kind: 'held',
   reason: 'no_reply',
@@ -383,8 +435,11 @@ async function followUp(
   });
   if (decision.kind === 'skip') return NOT_FOLLOWED_UP(decision.reason);
   if (decision.kind === 'later') return { ...NOT_FOLLOWED_UP(decision.reason), retryAt: decision.at };
+  // Without her active persona, nothing is written to a silent fan: no alert either, he is no emergency.
+  const her = await herPersona(deps, input);
+  if ('missing' in her) return NOT_FOLLOWED_UP(`follow_up_${her.missing}`);
   if (voiceUnavailable(deps.gateway)) return NOT_FOLLOWED_UP('follow_up_no_voice');
-  const composed = await composeTurn(deps.gateway, deps.persona, {
+  const composed = await composeTurn(deps.gateway, her.deps.persona, {
     history: input.history.map((m) => ({
       from: m.direction === 'inbound' ? 'fan' : 'creator',
       text: m.text,
@@ -402,7 +457,7 @@ async function followUp(
     trace: { creatorId: input.creatorId, conversationId: input.conversationId, draftId: input.draftId },
     followUp: {
       silentHours: (input.now.getTime() - asked.silentSince.getTime()) / 3_600_000,
-      spirit: deps.followUpSpirit ?? null,
+      spirit: her.deps.followUpSpirit ?? null,
     },
   });
   const { costUsd } = composed;
@@ -426,6 +481,7 @@ async function followUp(
     ...(composed.model !== undefined && {
       voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
     }),
+    ...(her.deps.personaVersionId !== undefined && { personaVersionId: her.deps.personaVersionId }),
   };
 }
 
@@ -544,6 +600,7 @@ async function settle(
     ...(composed.model !== undefined && {
       voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
     }),
+    ...(deps.personaVersionId !== undefined && { personaVersionId: deps.personaVersionId }),
   };
 }
 
@@ -564,6 +621,10 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         const held: Held = { ...HANDOFF, cause: handoffCauseOf(flags), detail: flags };
         return protect(deps.limits, input, flags, held);
       }
+      // Her active persona, after what safety reads without it (his limits, his media): none, a human answers him.
+      const her = await herPersona(deps, input);
+      if ('missing' in her) return { ...HANDOFF, cause: 'persona_inactive', detail: [her.missing] };
+      const withHer = her.deps;
       // What he wrote since her last answer: her alerts and the traps read it as one message.
       const fanText = sinceAnswer.map((m) => m.text).join('\n');
       const read = await alertSettings(deps, input);
@@ -571,7 +632,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       const { settings } = read;
       // Her words, in code and at no cost (P4-01): one that pauses hands him over before any model. The journal names
       // the word she declared, never his.
-      const coded = keywordAlerts(fanText, deps.alertKeywords ?? [], settings);
+      const coded = keywordAlerts(fanText, withHer.alertKeywords ?? [], settings);
       const early = settleAlerts(coded);
       if (early.pause !== null)
         return withNotices(
@@ -591,17 +652,17 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
           ...(described.length > 0 && { media: described.map((description) => ({ description })) }),
         };
       });
-      const offer = await offerInput(deps, input, stop.flags);
+      const offer = await offerInput(withHer, input, stop.flags);
       const waited = (input.waited ?? 0) >= 1;
-      const composed = await composeTurn(deps.gateway, deps.persona, {
+      const composed = await composeTurn(deps.gateway, withHer.persona, {
         history,
         fanText,
         media,
         fanNotes: input.fan.notes.join('\n'),
         ...(offer !== undefined && { offer }),
-        ...(deps.sexualizationLimits !== undefined && {
+        ...(withHer.sexualizationLimits !== undefined && {
           sexualization: {
-            limits: deps.sexualizationLimits,
+            limits: withHer.sexualizationLimits,
             ageConfirmed: stop.flags?.ageConfirmedAt !== undefined,
             noExplicit: stop.flags?.noExplicit === true,
           },
@@ -640,7 +701,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         composed.brief !== undefined && holdDecision(composed.brief, waited).kind === 'handoff';
       const pause = composed.handoff !== undefined || riskFirst ? null : alerts.pause;
       const notices = pause === null ? fired.map(noticeOf) : alerts.notices;
-      const settled = withNotices(await settle(deps, input, composed, stop.flags, waited, pause), notices);
+      const settled = withNotices(await settle(withHer, input, composed, stop.flags, waited, pause), notices);
       if (composed.desire === undefined) return settled;
       const { before, score, signals, weightsVersion } = composed.desire;
       return { ...settled, desire: { before, score, signals, weightsVersion } };

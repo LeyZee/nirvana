@@ -27,6 +27,7 @@ import type { DraftComposer } from '../modules/conversations';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { activateDemoPersona } from './support/persona';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 const NO_LOG = { info: () => undefined, warn: () => undefined };
@@ -93,6 +94,7 @@ describe('GET /v1/dashboard', () => {
     await test.admin.db
       .insert(schema.creators)
       .values({ id: creatorId, nameKey: creatorId, displayName: 'Lina', timezone: 'America/Montreal' });
+    await activateDemoPersona(app, creatorId);
     await test.admin.db.insert(schema.platformAccounts).values({
       id: platformAccountId,
       creatorId,

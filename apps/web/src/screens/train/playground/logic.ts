@@ -101,3 +101,7 @@ export function stepOf(
 export function fanMessageCount(state: PlaygroundState): number {
   return state.history.filter((turn) => turn.from === 'fan').length;
 }
+
+/** What the playground's rate says, and what it does not (ADR 0010, 0019). */
+export const FICTIONAL =
+  'Ce taux calibre la voix sur la persona fictive du Playground, pas sur celle d’une créatrice.';

@@ -203,11 +203,20 @@ describe('Créatrices › Persona, recette 28/10', () => {
     expect(panel.querySelectorAll('details[open]')).toHaveLength(0);
   });
 
-  it('never claims the agent writes with the active version: it still reads the persona set on the server', async () => {
+  it('says the agent writes with her active version, and nothing without one (recette G4)', async () => {
     await serveVersions([SUMMARY], () => [500, {}]);
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
-    const note = await screen.findByText(/L’agent n’écrit pas encore avec ces versions/u);
-    expect(note.textContent).not.toMatch(/l’agent écrit avec la version active/u);
+    const note = await screen.findByText(/C’est avec elle que l’agent écrit ses brouillons/u);
+    expect(note.textContent).toContain('Version active : 0.2.0.');
+    expect(note.textContent).not.toMatch(/persona fixée sur le serveur/u);
+  });
+
+  it('says the agent writes nothing for her while no version is active', async () => {
+    await serveVersions([{ ...SUMMARY, isActive: false }], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    expect(
+      await screen.findByText(/aucun message ne peut partir avant l’activation d’une version/u),
+    ).toBeDefined();
   });
 
   it('shows a chatter her persona read-only, never « prête à enregistrer »', async () => {
