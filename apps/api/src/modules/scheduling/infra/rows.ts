@@ -383,14 +383,14 @@ export async function assertNotReported(tx: Transaction, shiftId: string): Promi
   if (report !== undefined) throw new ShiftReportExists(report.id);
 }
 
+/** The agency's zone as a column, for a read that also takes a member's row (`WorkingMember`). */
+export const agencyZone = sql<string>`coalesce((select ${schedulingSettings.timeZone} from ${schedulingSettings} limit 1), ${DEFAULT_SCHEDULING_SETTINGS.timeZone})`;
+
 /**
  * The agency's zone, which the pay periods follow (ADR 0023): the planning's, or its default until the owner sets it.
  * Every team scope reads the settings.
  */
-/** The agency's zone as a column, for a read that also takes a member's row (`WorkingMember`). */
-export const agencyZone = sql<string>`coalesce((select ${schedulingSettings.timeZone} from ${schedulingSettings} limit 1), ${DEFAULT_SCHEDULING_SETTINGS.timeZone})`;
-
 export async function agencyTimeZone(tx: Transaction): Promise<string> {
-  const [row] = await tx.select({ timeZone: schedulingSettings.timeZone }).from(schedulingSettings);
-  return row?.timeZone ?? DEFAULT_SCHEDULING_SETTINGS.timeZone;
+  const result = await tx.execute<{ zone: string }>(sql`select ${agencyZone} as zone`);
+  return result.rows[0]?.zone ?? DEFAULT_SCHEDULING_SETTINGS.timeZone;
 }
