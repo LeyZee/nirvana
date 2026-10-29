@@ -3,6 +3,7 @@ import {
   ConversationIdSchema,
   DesireCurveSchema,
   EventIdSchema,
+  MediaAssetIdSchema,
   MeSchema,
   CreatorIdSchema,
   MessageViewSchema,
@@ -144,6 +145,7 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations/${id}/messages?creatorId=${creatorId}`, ownerCookie)).json(),
     );
     expect(messages.items.map((message) => message.text)).toEqual(["Salut, c'est Julien"]);
+    expect(messages.items[0]?.media).toEqual([]);
   });
 
   it('refuses bubbles a hard guard blocks, then approves an edited draft once; a second decision is a conflict', async () => {
@@ -602,5 +604,87 @@ describe('/v1/conversations', () => {
     const conversations = await walk('/v1/conversations');
     expect(conversations).toHaveLength(3);
     expect(new Set(conversations).size).toBe(3);
+  });
+
+  it('says which media a message carries, and what it shows once the media module described it (SUIVI-26)', async () => {
+    const platformAccountId = (
+      await test.admin.db
+        .select({ id: schema.platformAccounts.id })
+        .from(schema.platformAccounts)
+        .where(eq(schema.platformAccounts.creatorId, creatorId))
+    )[0]!.id;
+    const { conversationId } = await app.modules.conversations.ingestMessage({
+      creatorId,
+      platformAccountId: PlatformAccountIdSchema.parse(platformAccountId),
+      platformConversationId: 'c-Leo',
+      platformFanId: 'f-Leo',
+      fanDisplayName: 'Léo',
+      message: {
+        ref: { platform: 'reveal', id: 'm-Leo' },
+        conversationRef: { platform: 'reveal', id: 'c-Leo' },
+        direction: 'inbound',
+        text: '',
+        media: [
+          { ref: { platform: 'reveal', id: 'media-1' }, kind: 'image', isLocked: false },
+          { ref: { platform: 'reveal', id: 'media-2' }, kind: 'video', isLocked: true },
+        ],
+        priceMinor: null,
+        currency: null,
+        isPaid: false,
+        createdAt: new Date().toISOString(),
+      },
+      correlationId: 'media',
+    });
+    const read = async () =>
+      pageOf(MessageViewSchema).parse(
+        (
+          await call(
+            'GET',
+            `/v1/conversations/${conversationId}/messages?creatorId=${creatorId}`,
+            ownerCookie,
+          )
+        ).json(),
+      ).items[0]?.media;
+    // Listed by the platform, not described yet: the kind and the lock only.
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: null },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
+    // Stored and described by the media module (invented content, ADR 0010): the latest description is shown.
+    const [photo, video] = [newId(MediaAssetIdSchema), newId(MediaAssetIdSchema)];
+    await test.admin.db.insert(schema.mediaAssets).values(
+      [photo, video].map((id, index) => ({
+        id,
+        creatorId,
+        kind: index === 0 ? 'image' : 'video',
+        origin: 'fan',
+        storageKey: `test/${id}`,
+        mime: index === 0 ? 'image/jpeg' : 'video/mp4',
+        bytes: 1000,
+        sha256: id,
+      })),
+    );
+    const description = (factualDescription: string) => ({
+      id: newId(MediaAssetIdSchema),
+      creatorId,
+      mediaAssetId: photo,
+      vocabularyVersion: '1',
+      content: { factualDescription },
+      model: 'test',
+      promptHash: 'test',
+    });
+    await test.admin.db.insert(schema.mediaDescriptions).values({
+      ...description('Une ancienne description.'),
+      createdAt: new Date(Date.now() - 60_000),
+    });
+    await test.admin.db.insert(schema.mediaDescriptions).values(description('Un chat sur un canapé.'));
+    await test.admin.db
+      .update(schema.messages)
+      .set({ mediaIds: [photo, video] })
+      .where(eq(schema.messages.conversationId, conversationId));
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: 'Un chat sur un canapé.' },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
   });
 });

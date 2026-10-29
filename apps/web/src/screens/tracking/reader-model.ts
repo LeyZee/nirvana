@@ -39,10 +39,19 @@ export type ThreadItem =
       /** Outbound only: written by a person (in Reveal), not by the agent. */
       readonly byHuman: boolean;
       readonly text: string;
+      /** Its media: what kind, and what it shows once the media module described it (SUIVI-26). */
+      readonly media: readonly { readonly label: string; readonly description: string | null }[];
       /** A paid media: its price, and whether he bought it. */
       readonly ppv: { readonly price: string; readonly isPaid: boolean } | null;
     }
   | { readonly kind: 'note'; readonly id: string; readonly text: string };
+
+/** A media named by its kind in the thread: « Photo », not « Média ». */
+const MEDIA_LABELS: Readonly<Record<MessageView['media'][number]['kind'], string>> = {
+  image: 'Photo',
+  video: 'Vidéo',
+  audio: 'Audio',
+};
 
 const withReason = (text: string, reason: string | undefined): string =>
   reason === undefined ? text : `${text} : ${reason}`;
@@ -141,6 +150,7 @@ export function threadOf(
         from: message.direction === 'inbound' ? 'fan' : 'creator',
         byHuman: message.direction === 'outbound' && message.author === 'human',
         text: message.text,
+        media: message.media.map((m) => ({ label: MEDIA_LABELS[m.kind], description: m.description })),
         ppv:
           message.priceMinor === null ? null : { price: euros(message.priceMinor), isPaid: message.isPaid },
       },

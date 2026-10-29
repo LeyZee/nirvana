@@ -70,6 +70,7 @@ const FAN_MESSAGE = MessageViewSchema.parse({
   direction: 'inbound',
   author: 'fan',
   text: 'Salut, ça va ?',
+  media: [],
   priceMinor: null,
   currency: null,
   isPaid: false,
@@ -108,6 +109,8 @@ function serve(routes: {
   events?: unknown[];
   /** `GET` of his limits answers 403: the server will not show them to this person. */
   flagsRefused?: boolean;
+  /** The thread's messages, newest first; one message of his when not given. */
+  messages?: unknown[];
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -140,7 +143,7 @@ function serve(routes: {
       } else if (path === '/v1/dashboard') {
         reply = routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) };
       } else if (path.endsWith('/messages')) {
-        reply = { status: 200, body: { items: [FAN_MESSAGE], nextCursor: null } };
+        reply = { status: 200, body: { items: routes.messages ?? [FAN_MESSAGE], nextCursor: null } };
       } else if (path.endsWith('/events')) {
         reply = { status: 200, body: { items: routes.events ?? [], nextCursor: null } };
       } else if (path.endsWith('/desire')) {
@@ -777,6 +780,33 @@ describe('the reader of Suivi', () => {
     expect(screen.getByText(/^Au plus 100/u)).toBeDefined();
     expect(screen.getByRole('button', { name: 'Enregistrer' })).toHaveProperty('disabled', true);
     expect(posted).toEqual([]);
+  });
+
+  it('says which media was sent and what it shows, under its price (SUIVI-26)', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      messages: [
+        {
+          ...FAN_MESSAGE,
+          id: '0192f3a0-0000-7000-8000-000000000102',
+          direction: 'outbound',
+          author: 'human',
+          text: '',
+          media: [{ kind: 'video', isLocked: true, description: 'Elle danse, lumière tamisée.' }],
+          priceMinor: 4990,
+          currency: 'EUR',
+        },
+      ],
+    });
+    renderPage(OPEN);
+    expect(
+      await screen.findByText(
+        (_, element) => element?.textContent === 'Vidéo · Elle danse, lumière tamisée.',
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText('Média')).toBeNull();
+    expect(screen.getByText(/Média payant · 49,90/u)).toBeDefined();
   });
 
   it('says the limits are not for this person, without blaming the server nor asking again', async () => {

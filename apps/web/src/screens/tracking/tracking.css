@@ -422,6 +422,14 @@
   color: var(--nv-ink-faint);
   text-align: center;
 }
+/* A media of the thread (SUIVI-26): its kind, and what it shows once described. */
+.tr-media {
+  display: block;
+}
+.tr-media + .tr-media,
+.nv-bubble > :not(.tr-media) + .tr-media {
+  margin-top: 4px;
+}
 .tr-ppv {
   display: block;
   margin-top: 4px;

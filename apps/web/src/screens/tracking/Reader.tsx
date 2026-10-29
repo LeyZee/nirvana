@@ -266,7 +266,13 @@ function Loaded({
               </p>
             ) : (
               <div key={item.id} className={`nv-bubble nv-bubble--${item.from}`}>
-                {item.text === '' ? <em>Média</em> : item.text}
+                {item.text === '' && item.media.length === 0 ? <em>Média</em> : item.text}
+                {item.media.map((media, index) => (
+                  <span key={index} className="tr-media">
+                    <em>{media.label}</em>
+                    {media.description === null ? null : ` · ${media.description}`}
+                  </span>
+                ))}
                 {item.ppv === null ? null : (
                   <span className="tr-ppv">
                     Média payant · {item.ppv.price} · {item.ppv.isPaid ? 'acheté' : 'pas encore acheté'}
