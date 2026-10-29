@@ -18,9 +18,9 @@ const PROBLEMS: Record<Exclude<MoveResult['kind'], 'moved' | 'reauth'>, string> 
 };
 
 /**
- * Her zone, changed by the owner alone (the screen is the owner's): a mistake at her creation is no longer final. Her hours,
- * her quiet hours and her night are read on the new clock from the moment it is saved; nothing past is computed
- * again. A sign-in over 10 minutes old asks for the password first.
+ * Her zone, changed by the owner alone (the screen is the owner's): a mistake at her creation is no longer final.
+ * Her hours, her quiet hours and her night are read on the new clock from the moment it is saved; nothing past is
+ * computed again. A sign-in over 10 minutes old asks for the password first.
  */
 export function ZoneEditor({
   creatorId,
