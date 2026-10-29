@@ -23,7 +23,12 @@ export function createDrizzleDescriptionReader(db: Database): DescriptionReader 
           })
           .from(schema.mediaDescriptions)
           .where(inArray(schema.mediaDescriptions.mediaAssetId, [...mediaAssetIds]))
-          .orderBy(schema.mediaDescriptions.mediaAssetId, sql`${schema.mediaDescriptions.createdAt} desc`);
+          // Two descriptions kept by one transaction share their date: the id breaks the tie, never chance.
+          .orderBy(
+            schema.mediaDescriptions.mediaAssetId,
+            sql`${schema.mediaDescriptions.createdAt} desc`,
+            sql`${schema.mediaDescriptions.id} desc`,
+          );
         for (const row of rows) {
           const content = ShownSchema.safeParse(row.content);
           if (content.success) shown.set(row.mediaAssetId, content.data.factualDescription);

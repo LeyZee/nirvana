@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ExternalMediaSchema } from './connector';
 import { DesireBandSchema, DesireScoreSchema, DesireSignalSchema, DESIRE_SIGNALS_MAX } from './desire';
 import {
   ConversationModeSchema,
@@ -73,10 +74,8 @@ export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
  * (`MediaDescription.factualDescription`) once the `media` module described and kept it, `null` before. No thumbnail:
  * Nirvana keeps no picture of a message's media.
  */
-export const MessageMediaViewSchema = z.object({
-  kind: z.enum(['image', 'video', 'audio']),
-  isLocked: z.boolean(),
-  description: z.string().nullable(),
+export const MessageMediaViewSchema = ExternalMediaSchema.pick({ kind: true, isLocked: true }).extend({
+  description: z.string().min(1).nullable(),
 });
 export type MessageMediaView = z.infer<typeof MessageMediaViewSchema>;
 

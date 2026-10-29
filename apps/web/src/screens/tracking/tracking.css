@@ -422,12 +422,12 @@
   color: var(--nv-ink-faint);
   text-align: center;
 }
-/* A media of the thread (SUIVI-26): its kind, and what it shows once described. */
+/* A media of the thread (SUIVI-26): its kind, and what it shows once described. The text is wrapped in
+   .tr-text so that a media after it is not the bubble's first element and keeps its gap. */
 .tr-media {
   display: block;
 }
-.tr-media + .tr-media,
-.nv-bubble > :not(.tr-media) + .tr-media {
+.tr-media:not(:first-child) {
   margin-top: 4px;
 }
 .tr-ppv {

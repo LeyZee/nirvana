@@ -266,7 +266,13 @@ function Loaded({
               </p>
             ) : (
               <div key={item.id} className={`nv-bubble nv-bubble--${item.from}`}>
-                {item.text === '' && item.media.length === 0 ? <em>Média</em> : item.text}
+                {item.text === '' ? (
+                  item.media.length === 0 ? (
+                    <em>Média</em>
+                  ) : null
+                ) : (
+                  <span className="tr-text">{item.text}</span>
+                )}
                 {item.media.map((media, index) => (
                   <span key={index} className="tr-media">
                     <em>{media.label}</em>

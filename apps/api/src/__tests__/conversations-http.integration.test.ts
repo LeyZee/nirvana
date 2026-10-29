@@ -664,10 +664,10 @@ describe('/v1/conversations', () => {
         sha256: id,
       })),
     );
-    const description = (factualDescription: string) => ({
-      id: newId(MediaAssetIdSchema),
-      creatorId,
-      mediaAssetId: photo,
+    const description = (factualDescription: string, owner = creatorId, mediaAssetId = photo) => ({
+      id: newId(z.uuid()),
+      creatorId: owner,
+      mediaAssetId,
       vocabularyVersion: '1',
       content: { factualDescription },
       model: 'test',
@@ -681,6 +681,42 @@ describe('/v1/conversations', () => {
     await test.admin.db
       .update(schema.messages)
       .set({ mediaIds: [photo, video] })
+      .where(eq(schema.messages.conversationId, conversationId));
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: 'Un chat sur un canapé.' },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
+    // Lists that do not match one to one: no description rather than a wrong one.
+    await test.admin.db
+      .update(schema.messages)
+      .set({ mediaIds: [photo] })
+      .where(eq(schema.messages.conversationId, conversationId));
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: null },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
+    // Another creator's described media, even if cited, never shows: the reader reads under her RLS.
+    const other = newId(CreatorIdSchema);
+    const foreign = newId(MediaAssetIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: other, nameKey: other, displayName: 'Autre', timezone: 'Europe/Paris' });
+    await test.admin.db.insert(schema.mediaAssets).values({
+      id: foreign,
+      creatorId: other,
+      kind: 'video',
+      origin: 'fan',
+      storageKey: `test/${foreign}`,
+      mime: 'video/mp4',
+      bytes: 1000,
+      sha256: foreign,
+    });
+    await test.admin.db
+      .insert(schema.mediaDescriptions)
+      .values(description('Une vidéo d’une autre créatrice.', other, foreign));
+    await test.admin.db
+      .update(schema.messages)
+      .set({ mediaIds: [photo, foreign] })
       .where(eq(schema.messages.conversationId, conversationId));
     expect(await read()).toEqual([
       { kind: 'image', isLocked: false, description: 'Un chat sur un canapé.' },

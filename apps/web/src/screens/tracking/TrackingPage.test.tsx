@@ -809,6 +809,27 @@ describe('the reader of Suivi', () => {
     expect(screen.getByText(/Média payant · 49,90/u)).toBeDefined();
   });
 
+  it('keeps the gap between a text and the media sent with it (SUIVI-26)', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      messages: [
+        {
+          ...FAN_MESSAGE,
+          id: '0192f3a0-0000-7000-8000-000000000103',
+          text: 'Regarde ça',
+          media: [{ kind: 'image', isLocked: false, description: null }],
+        },
+      ],
+    });
+    renderPage(OPEN);
+    const text = await screen.findByText('Regarde ça');
+    const media = screen.getByText('Photo').closest('.tr-media');
+    // The text is an element, so the media after it is not the bubble's first one: `:not(:first-child)` spaces it.
+    expect(text.matches('.nv-bubble > .tr-text:first-child')).toBe(true);
+    expect(media?.matches('.tr-media:not(:first-child)')).toBe(true);
+  });
+
   it('says the limits are not for this person, without blaming the server nor asking again', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), flagsRefused: true });
     renderPage(OPEN);
