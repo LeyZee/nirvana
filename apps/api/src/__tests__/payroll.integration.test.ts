@@ -550,7 +550,7 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     expect((await periodAs(owner, P2)).beforeFirstClosing).toBe(false);
   });
 
-  it('records a period blocked by a member without a rate, shows it, and lifts it once a rate is added', async () => {
+  it('records a period blocked by a member without a rate, shows it, and lifts it once the data is corrected', async () => {
     // Théo's draft is computed; then Basile, whose first rate starts at his arrival in June, has a report of May
     // (Équipe B2: an old report from before his arrival). The whole period stops computing, Théo's draft with it.
     await validated(theo, P5, 3_000);
@@ -584,7 +584,8 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     expect(await recalculate(P5)).toEqual([{ period: P5, outcome: 'blocked', written: 0 }]);
     expect((await periodAs(owner, P5)).blocked?.since).toBe(since);
 
-    // A rate for Basile from May 1st: the next computation passes and lifts the block.
+    // A data correction the product refuses (a rate never goes back, ADR 0031 and the card of 28/10), only possible on
+    // rows written before #290: a rate for Basile from May 1st. The next computation passes and lifts the block.
     await test.admin.db.insert(schema.memberCommissionRates).values({
       id: newId(CommissionRateIdSchema),
       memberId: basile.id,
