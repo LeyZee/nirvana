@@ -22,6 +22,7 @@ const STATE: PlaygroundState = {
   rejectReasons: [],
   sessionCostEur: 0,
   voice: { reachable: true },
+  persona: { name: 'Elena' },
   pending: null,
 };
 

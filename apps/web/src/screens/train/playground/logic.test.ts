@@ -142,6 +142,7 @@ describe('handoffReasons', () => {
 
 describe('stepOf', () => {
   const state = (pending: Answer | null = null): PlaygroundState => ({
+    persona: { name: 'Elena' },
     presets: [],
     presetId: null,
     situation: {

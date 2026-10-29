@@ -9,7 +9,7 @@ import { ModeControl } from './ModeControl';
 import { Reader } from './Reader';
 import { PeriodControl, SalesPanel, salesSub } from './Sales';
 import { TopFans } from './TopFans';
-import { litParts } from './logic';
+import { agentRuns, litParts } from './logic';
 import type { Fan, Period, Todo } from './model';
 import { Section, TONE_COLOR, useFloatingTip } from './parts';
 import { useDashboard, type DashboardView } from './useDashboard';
@@ -82,17 +82,21 @@ function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
  * read only, its health, the sales; no « À traiter », no best fans, no way into Suivi. The server sends her neither.
  */
 export function DashboardPage({
+  period,
+  onPeriod,
   forCreator = false,
   forOwner = false,
   opensTracking = false,
 }: {
+  /** The period of the sales, the fans' path, the best fans and the reply delay: from the address (`?periode=`). */
+  period: Period;
+  onPeriod: (period: Period) => void;
   forCreator?: boolean;
   /** The owner also reads the state of the daily export (OPS-02), the one figure that is the owner's alone. */
   forOwner?: boolean;
   /** The account's rail holds Suivi: the fan reader offers to open his conversation there. */
   opensTracking?: boolean;
 }): JSX.Element {
-  const [period, setPeriod] = useState<Period>('day');
   const view = useDashboard(period, forCreator);
   if (view.status === 'loading') {
     return (
@@ -106,7 +110,7 @@ export function DashboardPage({
     <Loaded
       view={view}
       period={period}
-      onPeriod={setPeriod}
+      onPeriod={onPeriod}
       forCreator={forCreator}
       forOwner={forOwner}
       opensTracking={opensTracking}
@@ -191,6 +195,7 @@ function Loaded({
           readOnly={
             status === 'sample' ? SAMPLE_NOTE : forCreator ? CREATOR_NOTE : globalStop ? GLOBAL_NOTE : null
           }
+          running={status === 'live' && agentRuns(data.agent)}
           onChange={setMode}
         />
         {writer.pending ? (

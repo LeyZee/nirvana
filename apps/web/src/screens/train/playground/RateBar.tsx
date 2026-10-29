@@ -72,6 +72,13 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
         </span>
       </div>
       <span className="pg-bar__sp" />
+      {/* Whom the answers speak as: the playground's own persona, not the creator chosen elsewhere (M13). */}
+      <span
+        className="pg-bar__meta"
+        title="La persona que joue le Playground, quelle que soit la créatrice choisie"
+      >
+        Persona {state.persona.name}
+      </span>
       {isDemo ? (
         <span
           className="pg-demo"

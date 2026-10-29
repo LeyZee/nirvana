@@ -205,6 +205,8 @@ export function PlaygroundPage(): JSX.Element {
           <span className="nv-avatar nv-avatar--sm">{initialOf(name)}</span>
           <span className="pg-top__t">
             <b>{name}</b>
+            {/* Phone only: the bar that names the persona is hidden there (M13). */}
+            <span className="pg-top__persona">Persona {state.persona.name}</span>
           </span>
           {/* Phone only: the rate in short, and the situation as a sheet (the column no longer hides them). */}
           <span

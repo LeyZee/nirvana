@@ -1,6 +1,8 @@
 import {
   ApiErrorSchema,
+  type AlertTrigger,
   GuardCodeSchema,
+  SYSTEM_ALERT_LABELS,
   type ConnectorErrorCode,
   type ConversationDetail,
   type ConversationEventView,
@@ -77,11 +79,25 @@ const SEND_FAILURES: Readonly<Record<SendFailureCode, string>> = {
 
 const isSendFailureCode = (code: string): code is SendFailureCode => Object.hasOwn(SEND_FAILURES, code);
 
+/**
+ * An alert that went off and let the agent go on: which one, and her word when a word set it off. The event names her
+ * own alert by its id only: the thread calls it « Alerte personnalisée », the history gives its name.
+ */
+function alertNote(trigger: AlertTrigger): string {
+  const name =
+    trigger.alert.kind === 'custom'
+      ? 'Alerte personnalisée'
+      : `Alerte « ${SYSTEM_ALERT_LABELS[trigger.alert.code]} »`;
+  const word = trigger.keyword === undefined ? '' : ` (mot « ${trigger.keyword} »)`;
+  return `${name}${word} : l’agent continue`;
+}
+
 /** The note an event leaves in the thread, or null for the events the messages already show. */
 function noteOf(event: ConversationEventView, timeZone: string): string | null {
   if (event.type === 'handoff_requested')
     return withReason(`L’agent passe la main (${CAUSE_LABELS[event.payload.cause]})`, event.payload.reason);
   if (event.type === 'takeover_started') return withReason('Un humain reprend la main', event.payload.reason);
+  if (event.type === 'alert_triggered') return alertNote(event.payload.trigger);
   if (event.type === 'takeover_ended') return 'La main revient à l’agent';
   if (event.type === 'draft_rejected') return withReason('Brouillon refusé', event.payload.reason);
   if (event.type === 'draft_expired') return withReason('Brouillon abandonné', event.payload.reason);

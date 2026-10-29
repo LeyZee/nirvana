@@ -10,7 +10,7 @@ import type { AgentCard, AgentState, Dashboard, Fan, Todo } from './model';
 
 import { CAUSE_LABELS } from '@/agent/causes';
 import { percent } from '@/agent/mode';
-import { withFirstOfMonth } from '@/scheduling/time';
+import { cityOf, readerZone, withFirstOfMonth } from '@/scheduling/time';
 import { telegramNightOf } from '@/settings/telegram/NightBanner';
 
 /*
@@ -79,16 +79,31 @@ function clock(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone });
 }
 
-/** « lundi 19 octobre, 14:02 », in her time zone. */
-function today(iso: string, timeZone: string): string {
-  const date = new Date(iso).toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone,
-  });
-  return `${date}, ${clock(iso, timeZone)}`;
+/**
+ * « lundi 19 octobre, 14:02 », in her time zone. When the reader's clock reads another time, the city of hers follows
+ * (« …, heure de Tokyo »): every time of the page is hers (recette 28/10, M15).
+ */
+function today(iso: string, timeZone: string, viewerZone: string): string {
+  const at = (zone: string): string =>
+    `${new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone })}, ${clock(iso, zone)}`;
+  const hers = at(timeZone);
+  return hers === at(viewerZone) ? hers : `${hers}, heure de ${cityOf(timeZone)}`;
 }
+
+/**
+ * The handoffs a guard set off: what the fan wrote or what the agent was about to write. A ceiling of spend reached, a
+ * voice that does not answer or a hand given for no named reason are relays, not guards: their own cards say them.
+ */
+const GUARD_CAUSES = HANDOFF_CAUSES.filter(
+  (cause) => cause !== 'budget' && cause !== 'llm_unavailable' && cause !== 'other',
+);
+
+/** Over which span the reply delay is measured: the period of the page. */
+const REPLY_SPAN: Readonly<Record<ApiDashboard['period'], string>> = {
+  day: 'aujourd’hui',
+  week: 'sur 7 jours',
+  month: 'sur 30 jours',
+};
 
 function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentState {
   const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
@@ -96,7 +111,7 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
   const unlinked = !reveal.connected && reveal.lastReadAt === null;
   // The session holds but nobody reads it any more: never green, the last read says since when.
   const late = reveal.connected && reveal.late;
-  const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
+  const guardCount = GUARD_CAUSES.reduce((sum, cause) => sum + guards.today[cause], 0);
   const rateText = liveRate.rate === null ? 'pas encore mesuré' : `${percent(liveRate.rate)} sans retouche`;
   const rateOk = liveRate.rate !== null && liveRate.rate >= liveRate.target;
   // Null for a creator: the agency's spend is not hers (ADR 0023), and her fold leaves the card out.
@@ -163,7 +178,8 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       id: 'activity',
       // A job the worker gave up on is work that will not happen until someone looks: amber.
       tone: replies.fansWaitingOver10Min > 0 || (jobs.dead ?? 0) > 0 ? 'warn' : 'ok',
-      title: 'Délai de réponse habituel',
+      // Measured over the period chosen for the sales: the title says which (recette 28/10, M11).
+      title: `Délai de réponse habituel ${REPLY_SPAN[api.period]}`,
       value:
         replies.medianReplyMinutes === null ? 'pas encore mesuré' : replyDelay(replies.medianReplyMinutes),
       rows: [
@@ -190,7 +206,7 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       title: 'Gardes déclenchées',
       value: guardCount === 0 ? 'aucune aujourd’hui' : `${String(guardCount)} aujourd’hui`,
       rows: [
-        ...HANDOFF_CAUSES.filter((cause) => guards.today[cause] > 0).map((cause): [string, string] => [
+        ...GUARD_CAUSES.filter((cause) => guards.today[cause] > 0).map((cause): [string, string] => [
           KIND_LABEL[cause],
           String(guards.today[cause]),
         ]),
@@ -345,12 +361,16 @@ export function usdNote(usdSales: ApiDashboard['usdSales']): string | undefined 
 }
 
 /** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
-export function fromApi(api: ApiDashboard, forCreator = false): Dashboard {
+export function fromApi(api: ApiDashboard, forCreator = false, viewerZone = readerZone()): Dashboard {
   const now = new Date(api.creator.now);
   const timeZone = api.creator.timezone;
   const dollars = usdNote(api.usdSales);
   return {
-    creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
+    creator: {
+      name: api.creator.name,
+      platform: 'Reveal',
+      now: today(api.creator.now, timeZone, viewerZone),
+    },
     agent: agentState(api, now, forCreator),
     todos: api.todos.map((todo) => todoOf(todo, timeZone)),
     sales: null,

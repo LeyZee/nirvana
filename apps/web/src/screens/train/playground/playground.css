@@ -440,6 +440,7 @@
 }
 .pg-top__rate,
 .pg-top__fan,
+.pg-top__persona,
 .pg-top__btn svg {
   display: none;
 }
@@ -1032,6 +1033,10 @@
   }
   .pg-top__fan {
     display: inline-flex;
+  }
+  /* The bar is hidden on a phone: the header names the persona the answers speak as. */
+  .pg-top__t .pg-top__persona {
+    display: block;
   }
   .pg-top .pg-top__btn {
     width: 44px;

@@ -17,6 +17,8 @@ import { draftsOf, threadOf, whyHuman } from './reader-model';
 import { bringIntoView, useEndInView } from './scroll';
 import { bubblesFromText, bubblesProblem, MODE_LABELS, STATE_LABELS, statusClass } from './view';
 
+import { initialOf } from '@/lib/utils';
+
 /** The reader follows the conversation more closely than the list: a draft or a fan's message shows up quickly. */
 const REFRESH_MS = 10_000;
 
@@ -191,7 +193,7 @@ function Loaded({
         {back}
         <header className="tr-reader__head">
           <span className="nv-avatar" aria-hidden="true">
-            {name.slice(0, 1).toUpperCase()}
+            {initialOf(name)}
           </span>
           <span className="tr-reader__who">
             <h2>{name}</h2>

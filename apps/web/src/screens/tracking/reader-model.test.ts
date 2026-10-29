@@ -80,6 +80,36 @@ describe('threadOf', () => {
     expect(items[3]).toMatchObject({ byHuman: true });
   });
 
+  it('notes an alert that let the agent go on, as calmly as the other notes', () => {
+    const alert = '0192f3a0-0000-7000-8000-0000000000a1';
+    const items = threadOf({
+      messages: [message(1)],
+      events: [
+        event(2, 2, {
+          type: 'alert_triggered',
+          payload: {
+            conversationId: CONVERSATION,
+            trigger: { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'rule' },
+            notify: true,
+          },
+        }),
+        event(1, 1, {
+          type: 'alert_triggered',
+          payload: {
+            conversationId: CONVERSATION,
+            trigger: { alert: { kind: 'custom', id: alert }, matchedBy: 'keyword', keyword: 'anniversaire' },
+            notify: false,
+          },
+        }),
+      ],
+    });
+    expect(items.map((i) => (i.kind === 'note' ? `note: ${i.text}` : `${i.from}: ${i.text}`))).toEqual([
+      'fan: Message 1',
+      'note: Alerte personnalisée (mot « anniversaire ») : l’agent continue',
+      'note: Alerte « Demande de service » : l’agent continue',
+    ]);
+  });
+
   it('gives the latest handoff, for the line above the thread', () => {
     const events = [
       event(5, 9, { type: 'handoff_requested', payload: { conversationId: CONVERSATION, cause: 'meeting' } }),

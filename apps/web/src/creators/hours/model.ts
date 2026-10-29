@@ -47,18 +47,6 @@ export const zoneCity = (timeZone: string): string =>
 export const clockHeader = (name: string, timeZone: string): string =>
   `À l’heure de ${name.trim().split(/\s+/u)[0] ?? name} (${zoneCity(timeZone)})`;
 
-/** `HH:MM` for an `<input type="time">`. */
-export const inputOf = (minute: number): string =>
-  `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-
-/** The minute of the day an `<input type="time">` holds, or null while it is empty or half typed. */
-export function minuteOfInput(value: string): number | null {
-  const match = /^(\d{2}):(\d{2})$/u.exec(value);
-  if (match === null) return null;
-  const minute = Number(match[1]) * 60 + Number(match[2]);
-  return minute < MINUTES_PER_DAY && Number(match[2]) < 60 ? minute : null;
-}
-
 /** A slot drawn on one day of the week: an overnight slot is two bars, the second one « continued » the next day. */
 export interface Bar {
   /** 1 Monday … 7 Sunday. */

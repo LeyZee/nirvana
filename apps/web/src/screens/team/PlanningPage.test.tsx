@@ -656,6 +656,59 @@ describe('Équipe › Planning', () => {
     ]);
   });
 
+  it('types the hours of a shift on 24 hours, in the sheet and the panel, whatever the browser’s language', async () => {
+    serve({});
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23\u00a0h – 5\u00a0h/u }));
+    const sheet = await screen.findByRole('dialog', { name: 'Théo' });
+    const end = within(sheet).getByLabelText('Fin');
+    expect(end).toHaveProperty('type', 'text');
+    expect(end).toHaveProperty('value', '05:00');
+    fireEvent.change(end, { target: { value: '4h30' } });
+    fireEvent.blur(end);
+    expect(end).toHaveProperty('value', '04:30');
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Autres heures' }));
+    const start = within(panel).getByLabelText('Début');
+    expect(start).toHaveProperty('type', 'text');
+    fireEvent.change(start, { target: { value: '21h30' } });
+    fireEvent.blur(start);
+    expect(start).toHaveProperty('value', '21:30');
+  });
+
+  it('never saves another hour than the one typed: « 22h7 » stays, marked, and Enter sends nothing', async () => {
+    const written = serve({ write: () => ({ status: 200, body: night }) });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /^Théo, 23\u00a0h – 5\u00a0h/u }));
+    const sheet = await screen.findByRole('dialog', { name: 'Théo' });
+    const end = within(sheet).getByLabelText('Fin');
+    fireEvent.change(end, { target: { value: '22h7' } });
+    fireEvent.blur(end);
+    expect(end).toHaveProperty('value', '22h7');
+    expect(end.getAttribute('aria-invalid')).toBe('true');
+    expect(within(sheet).getByRole('button', { name: 'Enregistrer' })).toHaveProperty('disabled', true);
+    // Enter submits the form even while « Enregistrer » is off.
+    fireEvent.submit(end.closest('form') ?? sheet);
+    expect(sheet.isConnected).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un shift' }));
+    const panel = await screen.findByRole('dialog', { name: 'Nouveau shift' });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Autres heures' }));
+    const start = within(panel).getByLabelText('Début');
+    fireEvent.change(start, { target: { value: '22h7' } });
+    fireEvent.blur(start);
+    expect(start).toHaveProperty('value', '22h7');
+    expect(within(panel).getByText('Une heure sur 24 heures : 22, 2230 ou 22:30.')).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Placer Théo' })).toHaveProperty('disabled', true);
+    fireEvent.submit(start.closest('form') ?? panel);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(written).toEqual([]);
+  });
+
   it('closes the sheet when a stop in the first minute cancels the shift (204)', async () => {
     const written = serve({ write: () => ({ status: 204 }) });
     renderPage();

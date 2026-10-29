@@ -43,7 +43,7 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
             <i />
             <i />
           </div>
-          <RailNav rail={rail} current={current}>
+          <RailNav rail={rail} current={current} onSignOut={onSignOut}>
             <UserMenu name={user.name} role={roleLabel(user)} onSignOut={onSignOut} />
           </RailNav>
           <main className="nv-stage" key={current ?? 'none'}>
@@ -62,11 +62,17 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
 export function RailNav({
   rail,
   current,
+  onSignOut,
   children,
 }: {
   rail: Rail;
   /** The section on screen, or null outside every section (an unknown address): no tab is lit. */
   current: string | null;
+  /**
+   * On the phone the account's menu is hidden: « Plus » offers to sign out, and shows on every rail for it, even one
+   * whose tabs all fit on the bar (recette 28/10, M14).
+   */
+  onSignOut?: () => void;
   children?: JSX.Element;
 }): JSX.Element {
   const railRef = useRef<HTMLElement>(null);
@@ -156,7 +162,7 @@ export function RailNav({
       <span className="nv-rail__sp" />
       {rail.items.some(({ to }) => to === '/') ? <AgentPill /> : null}
       {rail.settings === null ? null : link(rail.settings)}
-      {more.length === 0 ? null : (
+      {more.length === 0 && onSignOut === undefined ? null : (
         <button
           ref={moreRef}
           type="button"
@@ -177,6 +183,7 @@ export function RailNav({
         <MoreSheet
           items={more}
           current={current}
+          onSignOut={onSignOut}
           onClose={() => {
             setIsMoreOpen(false);
             moreRef.current?.focus({ preventScroll: true });
@@ -194,10 +201,12 @@ export function RailNav({
 export function MoreSheet({
   items,
   current,
+  onSignOut,
   onClose,
 }: {
   items: readonly NavItem[];
   current: string | null;
+  onSignOut?: (() => void) | undefined;
   onClose: () => void;
 }): JSX.Element {
   const sheet = useRef<HTMLDivElement>(null);
@@ -209,7 +218,7 @@ export function MoreSheet({
   useEffect(() => {
     const target =
       sheet.current?.querySelector<HTMLElement>('[aria-current="page"]') ??
-      sheet.current?.querySelector<HTMLElement>('a[href]');
+      sheet.current?.querySelector<HTMLElement>('a[href], button');
     target?.focus({ preventScroll: true });
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close.current();
@@ -248,6 +257,16 @@ export function MoreSheet({
             {item.label}
           </Link>
         ))}
+        {onSignOut === undefined ? null : (
+          <button
+            type="button"
+            className="nv-more__item nv-more__out nv-enter"
+            style={{ '--nv-i': items.length + 1 }}
+            onClick={onSignOut}
+          >
+            Se déconnecter
+          </button>
+        )}
       </div>
     </>,
     document.body,

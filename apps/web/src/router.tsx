@@ -11,6 +11,7 @@ import { CreatorsPage } from './creators/CreatorsPage';
 import { creatorsSearch, parseCreatorsSearch } from './creators/search';
 import { parsePaySearch } from './payroll/model';
 import { DashboardPage } from './screens/dashboard/DashboardPage';
+import { dashboardSearch, parseDashboardSearch, periodOf } from './screens/dashboard/logic';
 import { CommissionsPage } from './screens/pay/CommissionsPage';
 import { EntriesPage } from './screens/pay/EntriesPage';
 import { GoalsPage } from './screens/pay/GoalsPage';
@@ -72,10 +73,15 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const dashboard = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  validateSearch: parseDashboardSearch,
   component: function Dashboard() {
     const { user } = rootRoute.useRouteContext();
+    const search = dashboard.useSearch();
+    const navigate = dashboard.useNavigate();
     return (
       <DashboardPage
+        period={periodOf(search)}
+        onPeriod={(next) => void navigate({ search: dashboardSearch(next), replace: true })}
         forCreator={user.role === 'creator'}
         forOwner={user.role === 'owner'}
         opensTracking={canOpen(railOf(user), '/suivi')}

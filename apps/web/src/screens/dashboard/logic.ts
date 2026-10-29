@@ -4,6 +4,25 @@ import type { AgentMode } from '@/agent/mode';
 
 /* Pure helpers of the Dashboard: formatting and the few decisions the screen makes on its data. */
 
+/** The period in the address (`/?periode=7j`): a reload or a shared link keeps it; today is the address with none. */
+export interface DashboardSearch {
+  readonly periode?: '7j' | '30j';
+}
+
+const PERIOD_PARAMS = { week: '7j', month: '30j' } as const satisfies Partial<Record<Period, string>>;
+
+/** Anything else in the address than a known period reads as today. */
+export function parseDashboardSearch(search: Record<string, unknown>): DashboardSearch {
+  const { periode } = search;
+  return periode === '7j' || periode === '30j' ? { periode } : {};
+}
+
+export const periodOf = (search: DashboardSearch): Period =>
+  search.periode === '7j' ? 'week' : search.periode === '30j' ? 'month' : 'day';
+
+export const dashboardSearch = (period: Period): DashboardSearch =>
+  period === 'day' ? {} : { periode: PERIOD_PARAMS[period] };
+
 /** « 1 846 € », « 10,50 € »: the cents only when there are some, never rounded away (ADR 0011: exact money). */
 export function eur(value: number): string {
   const cents = Math.round(value * 100);
@@ -153,6 +172,13 @@ export function heroState(
   return hero;
 }
 
+/**
+ * The agent acts: Reveal is read and a voice answers. Not linked yet, disconnected, no longer read, its key missing or
+ * its voice down: whatever the mode, nothing runs.
+ */
+export const agentRuns = (agent: Pick<AgentState, 'tone' | 'stalled'>): boolean =>
+  agent.tone !== 'bad' && agent.tone !== 'idle' && agent.stalled !== true;
+
 const modeLead = (mode: AgentMode): string =>
   mode === 'auto' ? 'L’agent écrit seul' : 'L’agent propose, les chatteurs valident dans Reveal';
 
@@ -171,7 +197,7 @@ function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): H
     };
   }
   // An agent that writes nothing says so before what waits (Reveal, the voice, its key): its own sentence leads.
-  if (agent.tone === 'bad' || agent.tone === 'idle' || agent.stalled === true) return agent;
+  if (!agentRuns(agent)) return agent;
   if (todos.length === 0) {
     return {
       tone: 'ok',

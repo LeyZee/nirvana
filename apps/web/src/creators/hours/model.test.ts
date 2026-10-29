@@ -5,10 +5,8 @@ import {
   barsOf,
   canAddSlot,
   clockHeader,
-  inputOf,
   isDefaultHours,
   issuesOf,
-  minuteOfInput,
   newSlot,
   noFollowUpEver,
   orderedSlots,
@@ -40,14 +38,6 @@ describe('her hours in words (P3-14)', () => {
   it('names whose clock the page reads, by her first name and her city', () => {
     expect(clockHeader('Nora Vidal', 'Europe/Paris')).toBe('À l’heure de Nora (Paris)');
     expect(clockHeader('Nora', 'America/Sao_Paulo')).toBe('À l’heure de Nora (Sao Paulo)');
-  });
-
-  it('reads and writes the hours of a time field, and ignores one half typed', () => {
-    expect(inputOf(65)).toBe('01:05');
-    expect(minuteOfInput('23:45')).toBe(1425);
-    expect(minuteOfInput('')).toBeNull();
-    expect(minuteOfInput('24:00')).toBeNull();
-    expect(minuteOfInput('9:00')).toBeNull();
   });
 });
 
@@ -129,7 +119,7 @@ describe('what the contract refuses, on its line', () => {
       night: { startMinute: 600, endMinute: 600 },
     });
     expect(issues.get('reply.slots')).toBe('Au moins un créneau actif ; pour tout couper, c’est l’arrêt');
-    expect(rangeIssue(issues, 'night')).toBe('Une plage commence et finit à des heures différentes');
+    expect(rangeIssue(issues, 'night')).toBe('Une plage doit commencer et finir à des heures différentes');
     expect(rangeIssue(issues, 'followUpQuiet')).toBeNull();
   });
 

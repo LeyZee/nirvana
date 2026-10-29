@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RateBar } from './RateBar';
 
 const STATE: PlaygroundState = {
+  persona: { name: 'Elena' },
   presets: [],
   presetId: null,
   situation: {
@@ -72,6 +73,14 @@ describe('RateBar', () => {
       await screen.findByText((_, element) => element?.textContent === '1,50\u00a0€ cette session'),
     ).toBeTruthy();
     expect(screen.queryByText('Clé manquante')).toBeNull();
+  });
+
+  it('names the persona it plays, with or without a key', async () => {
+    renderBar(STATE);
+    expect(await screen.findByText('Persona Elena')).toBeTruthy();
+    cleanup();
+    renderBar({ ...STATE, voice: { reachable: false } });
+    expect(await screen.findByText('Persona Elena')).toBeTruthy();
   });
 
   it('says how the rate starts before the first rating', async () => {

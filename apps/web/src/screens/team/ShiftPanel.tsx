@@ -11,6 +11,7 @@ import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
 
+import { TimeField, useUnreadableTimes } from '@/scheduling/TimeField';
 import { createShift, createTemplate, useRefreshPlanning, type Refusal } from '@/scheduling/api';
 import { accountLine, ERROR_MESSAGES, type Fill } from '@/scheduling/model';
 import {
@@ -108,13 +109,16 @@ export function ShiftPanel({
   const [from, setFrom] = useState(inputOf(fill?.startMinute ?? slots[first.slot]?.startMinute ?? 0));
   const [to, setTo] = useState(inputOf(fill?.endMinute ?? slots[first.slot]?.endMinute ?? 360));
   const [weekly, setWeekly] = useState(false);
+  const times = useUnreadableTimes();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
   const picked = slot === 'other' ? null : (slots[slot] ?? null);
   const startMinute = picked === null ? minuteOfInput(from) : picked.startMinute;
   const endMinute = picked === null ? minuteOfInput(to) : picked.endMinute;
-  const hoursOk = startMinute !== null && endMinute !== null && startMinute !== endMinute;
+  // A field holding what is not an hour keeps the panel from saving: never another hour than the one on screen.
+  const unreadable = picked === null && times.unreadable;
+  const hoursOk = !unreadable && startMinute !== null && endMinute !== null && startMinute !== endMinute;
   const crosses = hoursOk && endMinute <= startMinute;
   const minutes = hoursOk ? templateLengthMinutes({ startMinute, endMinute }) : 0;
   // A template keeps an hour aside, so a change of time never stretches its shifts past a day (contracts).
@@ -294,40 +298,38 @@ export function ShiftPanel({
             <div className="sc-hours nv-swap">
               <label className="sc-hours__one">
                 <span className="tm-hint">De</span>
-                <input
-                  type="time"
-                  step={900}
-                  className="nv-field__control nv-glass nv-num"
-                  value={from}
-                  aria-label="Début"
-                  onChange={(event) => {
-                    setFrom(event.target.value);
+                <TimeField
+                  value={minuteOfInput(from) ?? 0}
+                  label="Début"
+                  onChange={(minute) => {
+                    setFrom(inputOf(minute));
                   }}
+                  onUnreadable={times.onUnreadable}
                 />
               </label>
               <label className="sc-hours__one">
                 <span className="tm-hint">à</span>
-                <input
-                  type="time"
-                  step={900}
-                  className="nv-field__control nv-glass nv-num"
-                  value={to}
-                  aria-label="Fin"
-                  onChange={(event) => {
-                    setTo(event.target.value);
+                <TimeField
+                  value={minuteOfInput(to) ?? 0}
+                  label="Fin"
+                  onChange={(minute) => {
+                    setTo(inputOf(minute));
                   }}
+                  onUnreadable={times.onUnreadable}
                 />
               </label>
             </div>
           ) : null}
           <span className={hoursFit && !tooLongOnce ? 'tm-hint' : 'tm-hint tm-hint--error'}>
-            {!hoursOk
-              ? 'Un début et une fin différents.'
-              : tooLong
-                ? 'Un modèle de shift dure 23 heures au plus.'
-                : tooLongOnce
-                  ? `${lengthOf(lasts)} cette nuit-là, à cause du changement d’heure : un shift dure 24 h au plus.`
-                  : `${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
+            {unreadable
+              ? 'Une heure sur 24 heures : 22, 2230 ou 22:30.'
+              : !hoursOk
+                ? 'Un début et une fin différents.'
+                : tooLong
+                  ? 'Un modèle de shift dure 23 heures au plus.'
+                  : tooLongOnce
+                    ? `${lengthOf(lasts)} cette nuit-là, à cause du changement d’heure : un shift dure 24 h au plus.`
+                    : `${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
           </span>
         </fieldset>
 

@@ -38,4 +38,12 @@ describe('playground layout on a phone (390 px)', () => {
     expect(phone).toContain('grid-row: auto');
     expect(phone).toContain('position: static');
   });
+
+  it('names the persona in the header, the bar that names it being hidden (M13)', () => {
+    // Wider, the bar says it: the header does not repeat it.
+    expect(css).toMatch(/\.pg-top__persona,\s*\.pg-top__btn svg \{\s*display: none;/u);
+    const phone = mediaBlock(820);
+    expect(phone).toMatch(/\.pg-setup,\s*\.pg-bar \{\s*display: none;/u);
+    expect(rule(phone, '.pg-top__t .pg-top__persona')).toContain('display: block');
+  });
 });

@@ -43,6 +43,7 @@ const BASE: PlaygroundState = {
   rejectReasons: [{ id: 'sounds_ai', label: 'sonne IA' }],
   sessionCostEur: 0,
   voice: { reachable: true },
+  persona: { name: 'Elena' },
   pending: null,
 };
 
@@ -167,6 +168,13 @@ describe('Playground', () => {
     answer = serve({ ...BASE, rate: { ...BASE.rate, rate: 0.5, rated: 2, validated: 1 } });
     open();
     expect(await screen.findByText('50 % sur 2')).toBeTruthy();
+  });
+
+  it('names the persona it plays in the header too, where a phone hides the bar (M13)', async () => {
+    answer = serve(BASE);
+    open();
+    const header = await screen.findByText('Persona Elena', { selector: '.pg-top__persona' });
+    expect(header.closest('.pg-top')).toBeTruthy();
   });
 
   it('says « Fan fictif » with no first name, and the composer writes as « le fan »', async () => {

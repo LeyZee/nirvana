@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AgentHoursSchema,
   DEFAULT_AGENT_HOURS,
+  MinuteRangeSchema,
   nextFollowUpAllowed,
   nextReplyOpening,
   nightAt,
@@ -99,6 +100,17 @@ describe('agent hours (P3-14)', () => {
       new Date('2026-10-25T08:00:00Z'),
     );
     expect(replyOpenAt(autumn, PARIS, new Date('2026-10-25T08:00:00Z'))).toBe(true);
+  });
+
+  it('says the rule of a range that starts where it ends, not a fact', () => {
+    const range = MinuteRangeSchema.safeParse({ startMinute: 600, endMinute: 600 });
+    expect(range.success).toBe(false);
+    expect(range.error?.issues).toEqual([
+      expect.objectContaining({
+        path: ['endMinute'],
+        message: 'Une plage doit commencer et finir à des heures différentes',
+      }),
+    ]);
   });
 
   it('refuses a whole-day quiet range, slots all off, and two active slots that overlap', () => {

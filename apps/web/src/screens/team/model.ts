@@ -254,9 +254,6 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long
 export const longDay = (day: string): string =>
   withFirstOfMonth(LONG_DAY.formatToParts(new Date(`${day}T12:00:00`)));
 
-/** The initial of a name, for the avatar. */
-export const initialOf = (name: string): string => name.trim().slice(0, 1).toUpperCase() || '?';
-
 /** The creators of a member, by name, in the order of the list. */
 export const creatorNames = (member: TeamMember, creators: readonly CreatorSummary[]): string[] =>
   creators.filter((creator) => member.creatorIds.includes(creator.id)).map((creator) => creator.displayName);

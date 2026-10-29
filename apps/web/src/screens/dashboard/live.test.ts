@@ -44,6 +44,49 @@ describe('fromApi', () => {
     ]);
   });
 
+  it('counts only the guards, never a relay for the AI budget, a voice down or no named reason', () => {
+    const base = apiDashboard();
+    const data = fromApi(
+      apiDashboard({
+        guards: {
+          ...base.guards,
+          today: { ...base.guards.today, minor: 1, budget: 3, llm_unavailable: 5, other: 2, custom_alert: 1 },
+        },
+      }),
+    );
+    expect(card('guards', data)?.value).toBe('2 aujourd’hui');
+    expect(card('guards', data)?.rows.map(([label]) => label)).toEqual([
+      'Mineur possible',
+      'Alerte personnalisée',
+      'Alertes Telegram cette nuit',
+    ]);
+    expect(data.agent.foldSummary).toContain('2 gardes');
+  });
+
+  it('says over which period the reply delay is measured, the one chosen for the sales', () => {
+    expect(card('activity')?.title).toBe('Délai de réponse habituel aujourd’hui');
+    expect(card('activity', fromApi(apiDashboard({ period: 'week' })))?.title).toBe(
+      'Délai de réponse habituel sur 7 jours',
+    );
+    expect(card('activity', fromApi(apiDashboard({ period: 'month' })))?.title).toBe(
+      'Délai de réponse habituel sur 30 jours',
+    );
+  });
+
+  it('names the city of her clock only when the reader’s reads another time', () => {
+    const at = (timezone: string, viewer: string): string =>
+      fromApi(
+        apiDashboard({ creator: { ...apiDashboard().creator, now: '2026-10-28T20:00:00Z', timezone } }),
+        false,
+        viewer,
+      ).creator.now;
+    expect(at('Europe/Paris', 'Europe/Paris')).toBe('mercredi 28 octobre, 21:00');
+    // Another name, the same time: nothing to say.
+    expect(at('Europe/Paris', 'Europe/Brussels')).toBe('mercredi 28 octobre, 21:00');
+    expect(at('Pacific/Kiritimati', 'Europe/Paris')).toBe('jeudi 29 octobre, 10:00, heure de Kiritimati');
+    expect(at('America/New_York', 'Europe/Paris')).toBe('mercredi 28 octobre, 16:00, heure de New York');
+  });
+
   it('hands Telegram’s night coverage to the banner, off included', () => {
     expect(fromApi(apiDashboard()).telegram).toEqual({ coverage: null });
     const uncovered = apiDashboard({ telegramCoverage: { urgentReachable: false } });
