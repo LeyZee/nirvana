@@ -1,5 +1,5 @@
 import {
-  HANDOFF_CAUSES,
+  type HandoffCause,
   type Dashboard as ApiDashboard,
   type DashboardFan,
   type DashboardTodo,
@@ -91,12 +91,21 @@ function today(iso: string, timeZone: string, viewerZone: string): string {
 }
 
 /**
- * The handoffs a guard set off: what the fan wrote or what the agent was about to write. A ceiling of spend reached, a
- * voice that does not answer or a hand given for no named reason are relays, not guards: their own cards say them.
+ * The handoffs a guard set off: what the fan wrote or what the agent was about to write. Named one by one, so that a new
+ * cause counts only once it is put here: a ceiling of spend reached, a voice that does not answer, no active persona or
+ * a hand given for no named reason are relays, not guards, and their own cards say them.
  */
-const GUARD_CAUSES = HANDOFF_CAUSES.filter(
-  (cause) => cause !== 'budget' && cause !== 'llm_unavailable' && cause !== 'other',
-);
+const GUARD_CAUSES = [
+  'minor',
+  'non_consent',
+  'distress',
+  'meeting',
+  'manipulation',
+  'guard',
+  'keyword',
+  'custom_alert',
+  'identity_doubt',
+] as const satisfies readonly HandoffCause[];
 
 /** Over which span the reply delay is measured: the period of the page. */
 const REPLY_SPAN: Readonly<Record<ApiDashboard['period'], string>> = {
