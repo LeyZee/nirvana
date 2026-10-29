@@ -44,6 +44,25 @@ describe('fromApi', () => {
     ]);
   });
 
+  it('counts only the guards, never a relay for the AI budget, a voice down or no named reason', () => {
+    const base = apiDashboard();
+    const data = fromApi(
+      apiDashboard({
+        guards: {
+          ...base.guards,
+          today: { ...base.guards.today, minor: 1, budget: 3, llm_unavailable: 5, other: 2, custom_alert: 1 },
+        },
+      }),
+    );
+    expect(card('guards', data)?.value).toBe('2 aujourd’hui');
+    expect(card('guards', data)?.rows.map(([label]) => label)).toEqual([
+      'Mineur possible',
+      'Alerte personnalisée',
+      'Alertes Telegram cette nuit',
+    ]);
+    expect(data.agent.foldSummary).toContain('2 gardes');
+  });
+
   it('hands Telegram’s night coverage to the banner, off included', () => {
     expect(fromApi(apiDashboard()).telegram).toEqual({ coverage: null });
     const uncovered = apiDashboard({ telegramCoverage: { urgentReachable: false } });

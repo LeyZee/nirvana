@@ -90,13 +90,21 @@ function today(iso: string, timeZone: string): string {
   return `${date}, ${clock(iso, timeZone)}`;
 }
 
+/**
+ * The handoffs a guard set off: what the fan wrote or what the agent was about to write. A ceiling of spend reached, a
+ * voice that does not answer or a hand given for no named reason are relays, not guards: their own cards say them.
+ */
+const GUARD_CAUSES = HANDOFF_CAUSES.filter(
+  (cause) => cause !== 'budget' && cause !== 'llm_unavailable' && cause !== 'other',
+);
+
 function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentState {
   const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
   // Never read once and not connected: no account was ever linked. A step to come, not an outage.
   const unlinked = !reveal.connected && reveal.lastReadAt === null;
   // The session holds but nobody reads it any more: never green, the last read says since when.
   const late = reveal.connected && reveal.late;
-  const guardCount = Object.values(guards.today).reduce((a, b) => a + b, 0);
+  const guardCount = GUARD_CAUSES.reduce((sum, cause) => sum + guards.today[cause], 0);
   const rateText = liveRate.rate === null ? 'pas encore mesuré' : `${percent(liveRate.rate)} sans retouche`;
   const rateOk = liveRate.rate !== null && liveRate.rate >= liveRate.target;
   // Null for a creator: the agency's spend is not hers (ADR 0023), and her fold leaves the card out.
@@ -190,7 +198,7 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       title: 'Gardes déclenchées',
       value: guardCount === 0 ? 'aucune aujourd’hui' : `${String(guardCount)} aujourd’hui`,
       rows: [
-        ...HANDOFF_CAUSES.filter((cause) => guards.today[cause] > 0).map((cause): [string, string] => [
+        ...GUARD_CAUSES.filter((cause) => guards.today[cause] > 0).map((cause): [string, string] => [
           KIND_LABEL[cause],
           String(guards.today[cause]),
         ]),
