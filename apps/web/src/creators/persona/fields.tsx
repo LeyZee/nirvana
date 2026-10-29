@@ -111,6 +111,7 @@ export function TextInput({
   placeholder,
   type = 'text',
   list,
+  invalid = false,
 }: {
   id: string;
   value: string;
@@ -119,11 +120,14 @@ export function TextInput({
   placeholder?: string;
   type?: 'text' | 'date';
   list?: string;
+  /** Refused as it stands, so that a screen reader says so on the control itself. */
+  invalid?: boolean;
 }): JSX.Element {
   return (
     <input
       id={id}
       type={type}
+      aria-invalid={invalid ? true : undefined}
       className="nv-glass nv-field__control ps-input"
       value={isPlaceholder(value) ? '' : value}
       maxLength={maxLength}

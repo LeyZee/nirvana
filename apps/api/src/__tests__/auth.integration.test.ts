@@ -142,6 +142,67 @@ describe('dashboard authentication (P0-07a)', () => {
     await test.admin.db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, operatorId));
   });
 
+  it('closes the door to a member who left: no sign-in, and a session still open is refused at once (ADR 0023)', async () => {
+    // Invented member (ADR 0010).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: operatorId,
+      teamRole: 'chatter',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Chatteur',
+      country: 'BJ',
+      timeZone: 'Africa/Porto-Novo',
+      joinedOn: '2026-10-01',
+    });
+    const owner = await signIn(server, OWNER.email, OWNER.password);
+    const operator = await signIn(server, OPERATOR.email, OPERATOR.password);
+    const me = (cookie: string) => server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } });
+    expect((await me(operator)).statusCode).toBe(200);
+
+    // Marked left without going through the route (a job, another instance): his session is not revoked yet.
+    await test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'left' })
+      .where(eq(schema.teamMembers.userId, operatorId));
+    const refused = await me(operator);
+    expect(refused.statusCode).toBe(401);
+    expect(refused.json<{ error: { code: string } }>().error.code).toBe('session_unauthenticated');
+    await expect(signIn(server, OPERATOR.email, OPERATOR.password)).rejects.toThrow(
+      /401.*sign_in_unauthenticated.*E-mail ou mot de passe incorrect/,
+    );
+    // The owner has no team row and is never cut off.
+    expect((await me(owner)).statusCode).toBe(200);
+
+    // Back to active (as an untouched member): signing in works again.
+    await test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'active' })
+      .where(eq(schema.teamMembers.userId, operatorId));
+    expect((await me(await signIn(server, OPERATOR.email, OPERATOR.password))).statusCode).toBe(200);
+    await test.admin.db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, operatorId));
+  });
+
+  it('refuses a wrong password and an unknown e-mail with one French answer', async () => {
+    for (const [email, password] of [
+      // On the operator: the owner's account already counts many sign-ins against its limit in this file.
+      [OPERATOR.email, 'not the password at all'],
+      ['nobody@example.test', 'not the password at all'],
+    ] as const) {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email, password },
+        headers: { origin: DASHBOARD_ORIGIN },
+      });
+      expect(response.statusCode).toBe(401);
+      expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({
+        code: 'sign_in_unauthenticated',
+        message: 'E-mail ou mot de passe incorrect',
+      });
+    }
+  });
+
   it('sets the session cookie HttpOnly and SameSite=Lax, and keeps the token out of the body', async () => {
     const response = await server.inject({
       method: 'POST',

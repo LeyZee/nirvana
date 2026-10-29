@@ -71,12 +71,19 @@ describe('ZoneEditor', () => {
   it('puts the focus in the field when it opens, and back on its button when it closes', async () => {
     serve({ status: 200, body: { ...NORA, timezone: 'Asia/Tokyo' } });
     fireEvent.click(screen.getByRole('button', { name: 'Changer de fuseau' }));
-    expect(document.activeElement).toBe(screen.getByLabelText('Fuseau'));
+    // The focus moves in an effect after the render: waited for, not read at once.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByLabelText('Fuseau'));
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    });
     move('Asia/Tokyo');
     await screen.findByRole('status');
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    });
   });
 
   it('cannot save her own zone again, nor an empty one', () => {

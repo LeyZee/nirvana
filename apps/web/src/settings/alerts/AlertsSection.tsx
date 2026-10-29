@@ -459,6 +459,8 @@ function AlertEditor({
   const tried = tries > 0;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The name the server refused as another active alert's: refused on the field while it is still the one typed. */
+  const [takenName, setTakenName] = useState<string | null>(null);
   const form = useRef<HTMLFormElement>(null);
 
   // Opened: the name first. Refused: the first field to fix, in view.
@@ -473,7 +475,14 @@ function AlertEditor({
     target?.focus({ preventScroll: true });
   }, [tries]);
 
-  const formState = { issues: tried ? issueList(draftIssues(draft)) : [], changed: [] };
+  const nameTaken = takenName !== null && draft.name === takenName;
+  const formState = {
+    issues: [
+      ...(nameTaken ? [{ field: 'name', message: ALERTS_ERRORS.name_taken }] : []),
+      ...(tried ? issueList(draftIssues(draft)) : []),
+    ],
+    changed: [],
+  };
   const edit = (patch: Partial<AlertDraft>): void => {
     setDraft((current) => ({ ...current, ...patch }));
     setError(null);
@@ -492,7 +501,14 @@ function AlertEditor({
       await queryClient.invalidateQueries({ queryKey: ALERTS_QUERY_KEY });
       onDone();
     } catch (reason) {
-      setError(ALERTS_ERRORS[alertsErrorKind(reason)]);
+      const kind = alertsErrorKind(reason);
+      if (kind === 'name_taken') {
+        // On the field itself, in view and focused, like any other field to fix.
+        setTakenName(draft.name);
+        setTries((count) => count + 1);
+      } else {
+        setError(ALERTS_ERRORS[kind]);
+      }
       setBusy(false);
     }
   };
@@ -531,6 +547,7 @@ function AlertEditor({
             value={draft.name}
             maxLength={CUSTOM_ALERT_NAME_MAX}
             placeholder="Vidéo perso"
+            invalid={formState.issues.some((issue) => issue.field === 'name')}
             onChange={(name) => {
               edit({ name });
             }}

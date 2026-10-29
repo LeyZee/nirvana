@@ -258,6 +258,35 @@ describe('her own alerts', () => {
     });
   });
 
+  it('says another active alert already has the name, and keeps the form open to rename it', async () => {
+    serve({
+      ...BASE,
+      'POST /v1/alerts': () => ({ status: 409, body: apiError('custom_alert_name_conflict') }),
+    });
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Nouvelle alerte' }));
+    const form = screen.getByRole('form', { name: 'Nouvelle alerte' });
+    fireEvent.change(within(form).getByLabelText('Nom'), { target: { value: 'vidéo PERSO' } });
+    const words = within(form).getByLabelText('Mots-clés');
+    fireEvent.change(words, { target: { value: 'custom' } });
+    fireEvent.keyDown(words, { key: 'Enter' });
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Nora Vidal' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Créer l’alerte' }));
+    expect(await within(form).findByText('Une alerte active porte déjà ce nom.')).toBeTruthy();
+    expect(screen.getByRole('form', { name: 'Nouvelle alerte' })).toBeTruthy();
+    const name = within(form).getByLabelText('Nom');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(name);
+    });
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.closest('[data-invalid="true"]')).not.toBeNull();
+
+    // Renamed: the field is no longer refused.
+    fireEvent.change(name, { target: { value: 'Vidéo perso 2' } });
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+    expect(within(form).queryByText('Une alerte active porte déjà ce nom.')).toBeNull();
+  });
+
   it('edits one in place and sends it whole', async () => {
     const calls = serve({
       ...BASE,
