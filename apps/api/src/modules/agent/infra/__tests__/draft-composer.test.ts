@@ -1440,6 +1440,7 @@ describe('createDraftComposer, her active persona (recette G4, ADR 0022)', () =>
     expect(await none.draftComposer.compose(INPUT)).toEqual({
       kind: 'held',
       reason: 'handoff',
+      cause: 'persona_inactive',
       detail: ['persona_inactive'],
       costUsd: 0,
     });
@@ -1450,6 +1451,7 @@ describe('createDraftComposer, her active persona (recette G4, ADR 0022)', () =>
     expect(await broken.draftComposer.compose(INPUT)).toEqual({
       kind: 'held',
       reason: 'handoff',
+      cause: 'persona_inactive',
       detail: ['persona_unreadable'],
       costUsd: 0,
     });
