@@ -574,7 +574,10 @@ describe('GET /v1/dashboard', () => {
       .onConflictDoNothing();
     // A negative price is refused by the base (migration 0036); a zero price is allowed and never counts.
     await sale('paid-leo-eur', 1_000, 'EUR');
-    await expect(sale('paid-leo-usd-negative', -5_000, 'USD')).rejects.toThrow();
+    await expect(sale('paid-leo-usd-negative', -5_000, 'USD')).rejects.toHaveProperty(
+      'cause.constraint',
+      'messages_price_minor_check',
+    );
     await sale('paid-leo-eur-zero', 0, 'EUR');
     const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
     expect(response.statusCode).toBe(200);
