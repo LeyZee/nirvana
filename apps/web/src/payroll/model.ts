@@ -32,7 +32,7 @@ import {
   signedAmountText,
 } from '@/reports/model';
 import { platformName } from '@/scheduling/model';
-import { clockAt, dayMonth, dayOf, daysFrom, longDay } from '@/scheduling/time';
+import { clockAt, dayOf, daysFrom, longDay, withFirstOfMonth } from '@/scheduling/time';
 
 /**
  * Pay without React (EQ-05): what a statement and a period say, how the money runs from the sales to what is paid,
@@ -47,6 +47,12 @@ export const signedPercentText = (bps: number): string =>
   `${bps > 0 ? '+' : bps < 0 ? '−' : ''}${percentText(Math.abs(bps))}`;
 
 const DAY_SHORT_MONTH = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const WEEKDAY_DAY_SHORT_MONTH = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
 const RATE = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const CURRENCY_UNITS: Readonly<Record<Currency, string>> = { EUR: '€', USD: '$' };
 
@@ -208,7 +214,8 @@ export function countsLine(statements: PayPeriodSummary['statements']): string {
 export const opensOn = (window: PayPeriodWindow): string => dayOf(window.endsAt, window.timeZone);
 
 /** « dim. 1er nov. », « lun. 2 nov. »: a day, short, the first of the month written as French writes it. */
-export const dayMonthText = (day: string): string => dayMonth(day).replace(/(^|\s)1(?=\s)/u, '$11er');
+export const dayMonthText = (day: string): string =>
+  withFirstOfMonth(WEEKDAY_DAY_SHORT_MONTH.formatToParts(new Date(`${day}T12:00:00Z`)));
 
 /** « lun. 2 nov. », the day of an instant in the agency's zone, short. */
 export const dayAt = (instant: string, timeZone: string): string => dayMonthText(dayOf(instant, timeZone));
@@ -224,7 +231,7 @@ const FCFA_PER_EURO = 655.957;
 const WHOLE = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 
 /**
- * « ≈ 705 170 FCFA, avant frais WorldRemit »: an amount in euros at the CFA franc's fixed parity. A guide for whoever is
+ * « ≈ 705 173 FCFA, avant frais WorldRemit »: an amount in euros at the CFA franc's fixed parity. A guide for whoever is
  * paid in Benin, never an amount to pay: the euro stays the one currency pay computes in (ADR 0011).
  */
 export const fcfaText = (minor: number): string =>
@@ -913,8 +920,7 @@ export function penaltyTaken(
 
 /** « 1er nov. », « 15 déc. »: a day of a span of periods. */
 export function dayShortMonth(day: string): string {
-  const text = DAY_SHORT_MONTH.format(new Date(`${day}T12:00:00Z`));
-  return day.endsWith('-01') ? text.replace(/^1(?=\s)/u, '1er') : text;
+  return withFirstOfMonth(DAY_SHORT_MONTH.formatToParts(new Date(`${day}T12:00:00Z`)));
 }
 
 /** The periods from `from` to `to`, both included. */

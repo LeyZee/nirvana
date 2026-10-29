@@ -11,7 +11,7 @@ import { useState, type JSX } from 'react';
 import { GoalDialog, TiersDialog } from './GoalForms';
 import { PayNav } from './PayNav';
 import { useCurrentPeriod, usePayNames } from './data';
-import { Gauge, GoalTicks, Loading, LockIcon, PeriodHeading, Unreachable } from './parts';
+import { Gauge, GoalTicks, Loading, LockIcon, PeriodArrows, PeriodHeading, Unreachable } from './parts';
 
 import { usePayPeriod, usePayPeriods } from '@/payroll/api';
 import {
@@ -84,15 +84,14 @@ export function GoalsPage({
   const head = (
     <PageHeader
       eyebrow="Paie"
-      title={
-        period === null ? (
-          'Objectifs'
-        ) : (
-          <PeriodHeading period={period} current={current} onPeriod={onPeriod} />
-        )
-      }
+      title={period === null ? 'Objectifs' : <PeriodHeading period={period} />}
       lead="Ce que l’équipe vise ensemble, et ce que chacun débloque seul."
-      actions={<PayNav />}
+      actions={
+        <>
+          {period === null ? null : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
+          <PayNav />
+        </>
+      }
     />
   );
 

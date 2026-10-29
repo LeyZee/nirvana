@@ -116,29 +116,18 @@ export function LockIcon(): JSX.Element {
 
 /**
  * A page's title when it shows one period (Quinzaine, Primes et malus, Objectifs): the period itself, the screen's main
- * fact, with its arrows beside it.
+ * fact. Its arrows go in the page's actions, out of the heading, so the heading's name is the period alone.
  */
-export function PeriodHeading({
-  period,
-  current,
-  onPeriod,
-}: {
-  period: PayPeriod;
-  current: PayPeriod | null;
-  onPeriod: (period: PayPeriod) => void;
-}): JSX.Element {
+export function PeriodHeading({ period }: { period: PayPeriod }): JSX.Element {
   return (
-    <span className="py-title">
-      <span className="nv-swap nv-num" key={period} aria-live="polite">
-        {periodTitle(period)}
-      </span>
-      <PeriodArrows period={period} current={current} onPeriod={onPeriod} />
+    <span className="nv-swap nv-num" key={period} aria-live="polite">
+      {periodTitle(period)}
     </span>
   );
 }
 
 /** The previous and next period around `period`; never past the one under way. */
-function PeriodArrows({
+export function PeriodArrows({
   period,
   current,
   onPeriod,

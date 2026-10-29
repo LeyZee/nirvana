@@ -226,8 +226,10 @@ describe('Paie › Quinzaine', () => {
     renderPage(OWNER);
     // Nothing validated yet: the amount says it is owed only once validated, never as owed already.
     expect(text(await screen.findByText('À verser une fois validé')).length).toBeGreaterThan(0);
-    // The period is the page's title, its arrows beside it.
-    expect(text(screen.getByRole('heading', { level: 1 }))).toBe('16 – 31 octobre 2026');
+    // The period is the page's title, alone in its name: the arrows sit in the page's actions.
+    expect(screen.getByRole('heading', { level: 1, name: '16 – 31 octobre 2026' })).toBeTruthy();
+    expect(within(screen.getByRole('heading', { level: 1 })).queryByRole('button')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Quinzaine précédente' })).toBeTruthy();
     expect(text(screen.getByText('À verser une fois validé').nextElementSibling)).toBe('342,50 €');
     expect(screen.getByRole('button', { name: 'Valider (4)' })).toBeTruthy();
     expect(text(row('Lou'))).toContain(

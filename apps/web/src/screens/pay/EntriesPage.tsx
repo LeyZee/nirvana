@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import { EntryForm, type EntryAdded } from './EntryForm';
 import { PayNav } from './PayNav';
 import { useCurrentPeriod, usePayNames, type PayMember } from './data';
-import { Chip, Empty, Loading, PeriodHeading, Swatch, Unreachable } from './parts';
+import { Chip, Empty, Loading, PeriodArrows, PeriodHeading, Swatch, Unreachable } from './parts';
 
 import {
   cancelBonus,
@@ -96,16 +96,11 @@ export function EntriesPage({
   const head = (
     <PageHeader
       eyebrow="Paie"
-      title={
-        period === null ? (
-          'Primes et malus'
-        ) : (
-          <PeriodHeading period={period} current={current} onPeriod={onPeriod} />
-        )
-      }
+      title={period === null ? 'Primes et malus' : <PeriodHeading period={period} />}
       lead="Une prime, un malus ou un ajustement, toujours avec son motif."
       actions={
         <>
+          {period === null ? null : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
           <PayNav />
           <button
             type="button"

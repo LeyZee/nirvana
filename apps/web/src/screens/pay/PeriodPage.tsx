@@ -21,7 +21,18 @@ import {
   type PayNames,
   type PeriodBlock,
 } from './data';
-import { Chip, Delta, Empty, Gauge, Loading, LockIcon, PeriodHeading, Swatch, Unreachable } from './parts';
+import {
+  Chip,
+  Delta,
+  Empty,
+  Gauge,
+  Loading,
+  LockIcon,
+  PeriodArrows,
+  PeriodHeading,
+  Swatch,
+  Unreachable,
+} from './parts';
 
 import {
   useLatestPayPeriod,
@@ -265,16 +276,11 @@ function PeriodView({
   const head = (
     <PageHeader
       eyebrow="Paie"
-      title={
-        period === null ? (
-          'Quinzaine'
-        ) : (
-          <PeriodHeading period={period} current={current} onPeriod={onPeriod} />
-        )
-      }
+      title={period === null ? 'Quinzaine' : <PeriodHeading period={period} />}
       lead={leadOf(data, block !== null || stop !== null, owner)}
       actions={
         <>
+          {period === null ? null : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
           <PayNav />
           {reread !== undefined ? (
             <button

@@ -26,6 +26,7 @@ import {
   computedText,
   countsLine,
   dayMonthText,
+  dayShortMonth,
   draftPeriodsBefore,
   entryByText,
   entryRows,
@@ -1033,6 +1034,8 @@ describe('the words of pay', () => {
   it('writes the first of the month « 1er », and a computation’s day when it is not today', () => {
     expect(plain(dayMonthText('2026-11-01'))).toBe('dim. 1er nov.');
     expect(plain(dayMonthText('2026-11-11'))).toBe('mer. 11 nov.');
+    expect(plain(dayShortMonth('2026-11-01'))).toBe('1er nov.');
+    expect(plain(dayShortMonth('2026-11-15'))).toBe('15 nov.');
     const at = '2026-10-16T06:12:00.000Z';
     expect(plain(computedText(at, 'Europe/Paris', new Date('2026-10-16T15:00:00Z')))).toBe('à 8 h 12');
     expect(plain(computedText(at, 'Europe/Paris', new Date('2026-10-29T15:00:00Z')))).toBe(

@@ -1094,19 +1094,6 @@
   border-radius: var(--nv-radius-xs);
 }
 
-/* The title of a page that shows one period: the period, its arrows beside it. */
-.py-title {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nv-space-2) var(--nv-space-3);
-}
-.py-title .py-arrows {
-  font-size: var(--nv-text-body);
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
 /* A statement opened: its name and amount on top, its gestures at the bottom, only the path of the money scrolls in
    between, and the glass behind the whole height. */
 .py-dialog:has(.py-read) {
