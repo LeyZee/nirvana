@@ -230,6 +230,8 @@ export function decisionError(status: number, body: unknown): string {
       ? 'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.'
       : `Ce message ne peut pas partir : ${[...new Set(found)].join(', ')}. Retouche-le ou refuse-le.`;
   }
+  if (code === 'persona_inactive_unprocessable')
+    return 'Ce message ne peut pas partir : cette créatrice n’a pas de persona active. Active une version dans Créatrices › Persona.';
   if (code === 'kill_switch_conflict')
     return 'L’arrêt est actif : rien ne part tant qu’il n’est pas levé sur le Dashboard.';
   if (code === 'session_expired_conflict')

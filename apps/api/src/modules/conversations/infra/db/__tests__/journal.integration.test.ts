@@ -16,7 +16,9 @@ import { appendEvent, lockConversation } from '../../../application/journal';
 import { createConversationsModule } from '../../../index';
 import { createDrizzleUnitOfWork } from '../unit-of-work';
 
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 
 /** What the journal copies to the outbox (`domain_events`), where the other modules read it (ADR 0007, ADR 0020). */
 describe('the journal’s outbox', () => {

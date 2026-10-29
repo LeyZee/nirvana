@@ -26,6 +26,7 @@ import { buildServer, type Server } from '../server';
 
 import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
+import { activateDemoPersona } from './support/persona';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 const NO_LOG = { info: () => undefined, warn: () => undefined };
@@ -64,6 +65,7 @@ describe('/v1/conversations', () => {
     await test.admin.db
       .insert(schema.creators)
       .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+    await activateDemoPersona(app, creatorId);
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test-http' });

@@ -190,7 +190,9 @@ describe('Créatrices › Persona, recette 28/10', () => {
   it('says the agent writes nothing for her while no version is active', async () => {
     await serveVersions([{ ...SUMMARY, isActive: false }], () => [500, {}]);
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
-    expect(await screen.findByText(/l’agent n’écrit rien pour elle, un chatteur répond/u)).toBeDefined();
+    expect(
+      await screen.findByText(/aucun message ne peut partir avant l’activation d’une version/u),
+    ).toBeDefined();
   });
 
   it('shows a chatter her persona read-only, never « prête à enregistrer »', async () => {

@@ -19,6 +19,7 @@ import { createFansModule } from '../modules/fans';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { activateDemoPersona } from './support/persona';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 const OWNER = { email: 'owner@example.test', name: 'Owner', password: 'correct horse battery' };
@@ -66,6 +67,8 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
     await createOwner(app.auth, app.db.db, OWNER);
     anna = (await app.modules.persona.creators.create({ displayName: 'Anna' })).id;
     bea = (await app.modules.persona.creators.create({ displayName: 'Bea' })).id;
+    // Her lines to learn come from her active version (recette 28/10, G4): the demo persona, for Anna only.
+    await activateDemoPersona(app, anna);
     // An invented fan of Anna (ADR 0010).
     const accountId = newId(PlatformAccountIdSchema);
     fan = newId(FanIdSchema);
@@ -271,5 +274,19 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
     } finally {
       await bare.close();
     }
+    // The app's own route: Bea has no active persona version, so every line (recette 28/10, G4).
+    const viaApp = await server.inject({
+      method: 'GET',
+      url: `/v1/fans/${theo}/kyc?creatorId=${bea}`,
+      headers: { cookie: owner },
+    });
+    expect(FanKycViewSchema.parse(viaApp.json()).toLearn).toEqual([
+      'first_name',
+      'age',
+      'job',
+      'hobbies',
+      'desires',
+      'situation',
+    ]);
   });
 });

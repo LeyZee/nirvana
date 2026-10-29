@@ -5,7 +5,7 @@ import { PersonaSchema, type Persona } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-import { startFollowUpPlan } from '../../index';
+import { startBubbleGuard, startFollowUpPlan, startKycSlots } from '../../index';
 import { activePersonaForModels, type ActivePersonaSource } from '../active-persona';
 
 /** The fictional demo persona of the repository (ADR 0010: never a real one in a test). */
@@ -51,5 +51,35 @@ describe('startFollowUpPlan', () => {
     expect(await plan.delaysHours('creator-1')).toEqual([]);
     active = null;
     expect(await plan.delaysHours('creator-1')).toEqual([]);
+  });
+});
+
+describe('startBubbleGuard, at approval (recette G4)', () => {
+  it('reads her active version’s limits, and gives no guard without one: nothing is approved', async () => {
+    const withDisgust = { ...DEMO, limits: { ...DEMO.limits, disgusts: ['brocoli'] } };
+    const guard = startBubbleGuard({ activePersona: sourceOf(withDisgust), now: () => NOW });
+    const hers = await guard.forCreator('creator-1');
+    expect(hers?.check(['J’adore le brocoli'])).toMatchObject({ isBlocked: true, codes: ['forbidden_term'] });
+    expect(hers?.check(['Coucou toi'])).toEqual({ isBlocked: false, codes: [] });
+    expect(await startBubbleGuard({ activePersona: sourceOf(null) }).forCreator('creator-1')).toBeNull();
+    await expect(
+      startBubbleGuard({ activePersona: () => Promise.reject(new Error('unreadable')) }).forCreator(
+        'creator-1',
+      ),
+    ).rejects.toThrow('unreadable');
+  });
+});
+
+describe('startKycSlots (recette G4)', () => {
+  it('gives the lines her active version collects, none read without one', async () => {
+    expect(await startKycSlots({ activePersona: sourceOf(DEMO), now: () => NOW })('creator-1')).toEqual([
+      'first_name',
+      'age',
+      'location',
+      'job',
+      'situation',
+      'hobbies',
+    ]);
+    expect(await startKycSlots({ activePersona: sourceOf(null) })('creator-1')).toBeNull();
   });
 });

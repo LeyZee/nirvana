@@ -30,7 +30,9 @@ import { createTelegramModule, type TelegramModule } from '../modules/telegram';
 import { FAKE_TOKEN, FakeTelegram, joined } from '../modules/telegram/__tests__/support/fake-telegram';
 import { createPostgresTelegramStore } from '../modules/telegram/infra/postgres.store';
 
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-0000000000e2');
 const VOICE = { voicePrompt: 'voice@e2e', voiceModel: 'model-e2e' };
