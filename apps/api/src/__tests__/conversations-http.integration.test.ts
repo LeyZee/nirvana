@@ -372,6 +372,25 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
     );
     expect(all.items).toHaveLength(2);
+
+    // A suspended manager keeps his sign-in but drops to `self` (ADR 0024): no conversation is routed to him.
+    await test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'suspended' })
+      .where(eq(schema.teamMembers.displayName, 'manager'));
+    expect(MeSchema.parse((await call('GET', '/v1/me', manager)).json())).toMatchObject({
+      creatorIds: [],
+      routedCreatorIds: [creatorId],
+      teamScope: 'self',
+    });
+    const suspended = pageOf(ConversationSummarySchema).parse(
+      (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
+    );
+    expect(suspended.items).toEqual([]);
+    for (const id of [routed, other]) {
+      const refused = await call('GET', `/v1/conversations/${id}/messages?creatorId=${creatorId}`, manager);
+      expect(refused.statusCode).toBe(403);
+    }
   });
 
   it('shows his desire score cooled to now with the band of that score, and none before a first score (P3-12)', async () => {

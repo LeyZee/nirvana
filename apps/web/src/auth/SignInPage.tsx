@@ -77,7 +77,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
           {isSubmitting ? 'Connexion…' : 'Se connecter'}
         </button>
         <p className="text-center text-sm text-[var(--nv-ink-faint)]">
-          Mot de passe oublié ? Demande un nouveau lien à ton responsable.
+          Mot de passe oublié ? Demande un nouveau lien à la personne qui gère ton accès.
         </p>
       </form>
     </main>

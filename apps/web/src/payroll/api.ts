@@ -70,6 +70,13 @@ const codeOf = async (response: Response): Promise<string | null> => {
 };
 
 export const PAYROLL_KEY = ['payroll'] as const;
+
+/**
+ * A read of pay tries once more, not three times: a server that does not answer is said within a second or two, never
+ * behind a skeleton that looks like loading.
+ */
+const READ_RETRY = 1;
+const READ_RETRY_DELAY_MS = 400;
 const periodKey = (period: PayPeriod) => [...PAYROLL_KEY, 'period', period] as const;
 
 const readPeriod = (period: PayPeriod): Promise<PayrollPeriod> =>
@@ -84,6 +91,8 @@ export function usePayPeriod(period: PayPeriod | null): UseQueryResult<PayrollPe
     // A recalculation lands without a write here (a report validated, the hourly run): read again every minute.
     refetchInterval: 60_000,
     placeholderData: (before) => before,
+    retry: READ_RETRY,
+    retryDelay: READ_RETRY_DELAY_MS,
   });
 }
 
@@ -96,6 +105,8 @@ export function usePayPeriodReads(
       queryKey: periodKey(period),
       queryFn: () => readPeriod(period),
       refetchInterval: 60_000,
+      retry: READ_RETRY,
+      retryDelay: READ_RETRY_DELAY_MS,
     })),
   });
   return (period) => reads[periods.indexOf(period)]?.data;
@@ -114,7 +125,8 @@ export function usePayPeriods(): UseInfiniteQueryResult<InfiniteData<PayPeriodPa
       ),
     initialPageParam: FIRST_PAGE,
     getNextPageParam: (last) => last.nextCursor,
-    retry: (count, error) => !(error instanceof PeriodCursorInvalid) && count < 2,
+    retry: (count, error) => !(error instanceof PeriodCursorInvalid) && count < READ_RETRY,
+    retryDelay: READ_RETRY_DELAY_MS,
   });
 }
 
@@ -126,6 +138,8 @@ export function usePayEntries(period: PayPeriod | null): UseQueryResult<PayrollE
       read(`/v1/payroll/entries?period=${period ?? ''}`, (body) => PayrollEntriesSchema.parse(body)),
     enabled: period !== null,
     placeholderData: (before) => before,
+    retry: READ_RETRY,
+    retryDelay: READ_RETRY_DELAY_MS,
   });
 }
 
@@ -134,6 +148,8 @@ export function usePayrollSettings(): UseQueryResult<PayrollSettings> {
     queryKey: [...PAYROLL_KEY, 'settings'],
     queryFn: () => read('/v1/payroll/settings', (body) => PayrollSettingsSchema.parse(body)),
     staleTime: 5 * 60_000,
+    retry: READ_RETRY,
+    retryDelay: READ_RETRY_DELAY_MS,
   });
 }
 
@@ -144,6 +160,8 @@ export function useExchangeRates(enabled: boolean): UseQueryResult<ExchangeRates
     queryFn: () => read('/v1/payroll/exchange-rates', (body) => ExchangeRatesSchema.parse(body)),
     enabled,
     staleTime: 10 * 60_000,
+    retry: READ_RETRY,
+    retryDelay: READ_RETRY_DELAY_MS,
   });
 }
 

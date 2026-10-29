@@ -32,6 +32,15 @@ class CustomAlertConflict extends DomainError {
   }
 }
 
+/** Another active alert of one of its creators has the same name (case, accents and spaces around set aside). */
+class CustomAlertNameConflict extends DomainError {
+  constructor(creatorIds: readonly string[]) {
+    super('custom_alert_name_conflict' satisfies AlertErrorCode, 'Une alerte active porte déjà ce nom', {
+      details: { creatorIds },
+    });
+  }
+}
+
 class AlertCreatorInvalid extends DomainError {
   constructor() {
     super('alert_creator_invalid' satisfies AlertErrorCode, 'Une des créatrices de l’alerte n’existe pas');
@@ -81,6 +90,7 @@ export function createAlertRoutes(store: AlertStore, requireRole: RequireRole): 
         const written = await store.create(request.body, signedIn(request.user));
         if (written.kind === 'unknown_creator') throw new AlertCreatorInvalid();
         if (written.kind === 'conflict') throw new CustomAlertConflict();
+        if (written.kind === 'name_conflict') throw new CustomAlertNameConflict(written.creatorIds);
         return reply.code(written.kind === 'created' ? 201 : 200).send(written.alert);
       },
     );
@@ -99,6 +109,7 @@ export function createAlertRoutes(store: AlertStore, requireRole: RequireRole): 
         const written = await store.replace(request.params.groupId, request.body, signedIn(request.user));
         if (written === 'not_found') throw new CustomAlertNotFound();
         if (written === 'unknown_creator') throw new AlertCreatorInvalid();
+        if ('kind' in written) throw new CustomAlertNameConflict(written.creatorIds);
         return written;
       },
     );

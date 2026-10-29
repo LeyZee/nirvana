@@ -25,8 +25,9 @@ import {
 
 /*
  * Pay's fakes, shared by Paie's and Commissions' tests (EQ-05): an invented team (ADR 0010) — Théo, Basile and Lou
- * chat, Iris manages — on Nora Vidal's Reveal account in euros and Léa's OnlyFans account in dollars. Each fake is
- * parsed with its contract, so a test never feeds a screen what the server could not send.
+ * chat, Iris manages — on Nora Vidal's Reveal account in euros and Léa's OnlyFans account in dollars. Théo lives in
+ * Benin (CFA franc zone), Lou in Madagascar, the others in France. Each fake is parsed with its contract, so a test
+ * never feeds a screen what the server could not send.
  */
 
 export const payId = (n: number): string => `0199f2a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -59,7 +60,13 @@ export const THEO_ME: Me = {
   teamScope: 'self',
 };
 
-function member(n: number, displayName: string, teamRole: 'chatter' | 'manager', color: string): TeamMember {
+function member(
+  n: number,
+  displayName: string,
+  teamRole: 'chatter' | 'manager',
+  color: string,
+  country = 'FR',
+): TeamMember {
   return TeamMemberSchema.parse({
     id: payId(20 + n),
     userId: payId(30 + n),
@@ -69,7 +76,7 @@ function member(n: number, displayName: string, teamRole: 'chatter' | 'manager',
     displayName,
     teamRole,
     status: 'active',
-    country: 'FR',
+    country,
     timeZone: 'Europe/Paris',
     color,
     joinedOn: '2026-09-01',
@@ -80,9 +87,9 @@ function member(n: number, displayName: string, teamRole: 'chatter' | 'manager',
   });
 }
 
-export const THEO = member(1, 'Théo', 'chatter', '#5b8def');
+export const THEO = member(1, 'Théo', 'chatter', '#5b8def', 'BJ');
 export const BASILE = member(2, 'Basile', 'chatter', '#e0a142');
-export const LOU = member(3, 'Lou', 'chatter', '#8bc34a');
+export const LOU = member(3, 'Lou', 'chatter', '#8bc34a', 'MG');
 export const IRIS = member(4, 'Iris', 'manager', '#c86dd7');
 export const MEMBERS = [THEO, BASILE, LOU, IRIS];
 

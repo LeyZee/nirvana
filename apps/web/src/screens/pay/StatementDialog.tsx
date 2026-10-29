@@ -9,12 +9,15 @@ import {
 import { useId, useState, type JSX } from 'react';
 
 import { EntryForm, type EntryAdded } from './EntryForm';
-import type { PayNames } from './data';
+import { useCfaFrancs, type PayNames } from './data';
 import { Chip, Delta, MoneyPath, Swatch } from './parts';
 
 import { payStatement, useLatestPayPeriod, useRefreshPayroll, type PayRefusal } from '@/payroll/api';
 import {
   changeBps,
+  computedText,
+  dayMonthText,
+  fcfaText,
   momentAt,
   PAID_BY,
   payRefusalText,
@@ -30,16 +33,18 @@ import {
   percentText,
   periodLine,
   periodTitle,
+  previousPeriod,
   signedAmountText,
 } from '@/reports/model';
-import { clockAt, dayMonth, dayOf, longDay } from '@/scheduling/time';
+import { dayOf, longDay } from '@/scheduling/time';
+import { useNow } from '@/scheduling/useNow';
 import { Dialog } from '@/screens/team/Dialog';
 
 type Mode = 'read' | 'pay' | 'check' | 'adjust';
 
 /**
  * A statement opened from its row (EQ-05): the path of the money account by account, then what adds up to what is
- * paid; folded, the rules it copied and its revision. Its one gesture: « Valider la révision n », or for the owner
+ * paid; folded, the rules it copied and its revision. Its one gesture: « Valider ce relevé », or for the owner
  * « Marquer payé » in two steps (fill, read again). A validated or paid statement no longer changes: « Ajuster » adds
  * an adjustment on the member's next period to validate.
  */
@@ -76,6 +81,7 @@ export function StatementDialog({
   const own = member.userId === me.id;
   const zone = statement.window.timeZone;
   const status = statementChips(statement, period.ended).map((chip) => chip.label);
+  const now = useNow();
   const who = (userId: string | null): string =>
     userId === null ? 'le propriétaire' : whoName(userId, me, names.members);
 
@@ -91,19 +97,14 @@ export function StatementDialog({
       lead={
         <>
           Relevé de commissions · {periodTitle(statement.window.period)}
-          <Chip
-            chip={{
-              label: `${status.join(' · ')} · révision ${String(statement.revision)}`,
-              tone: 'neutral',
-            }}
-          />
+          <Chip chip={{ label: status.join(' · '), tone: 'neutral' }} />
         </>
       }
       busy={busy}
       onClose={onClose}
     >
       {mode === 'read' ? (
-        <div className="tm-dialog__body">
+        <div className="tm-dialog__body py-read">
           <div className="py-dialog__hero">
             <div className="py-hero">
               <p className="py-hero__label">{statement.status === 'paid' ? 'Versé' : 'À verser'}</p>
@@ -116,69 +117,72 @@ export function StatementDialog({
                 title={
                   previousNet === null
                     ? 'Pas de relevé la quinzaine d’avant'
-                    : `Net comparé à la quinzaine d’avant (${amountText(previousNet, 'EUR')})`
+                    : `${amountText(previousNet, 'EUR')} de net la quinzaine d’avant`
                 }
-              />
+              />{' '}
+              vs {periodTitle(previousPeriod(statement.window.period), false)}
             </p>
           </div>
-          <MoneyPath statement={statement} names={names} you={false} />
-          <details className="nv-disclosure py-fold">
-            <summary>
-              <span className="nv-disclosure__title">Règles et calcul</span>
-              <span className="nv-disclosure__sum nv-num">
-                révision {statement.revision} · calculé à {clockAt(statement.computedAt, zone)}
-              </span>
-            </summary>
-            <dl className="nv-disclosure__body py-rules nv-num">
-              <dt>Taux de {member.name}</dt>
-              <dd>
-                {percentText(statement.rules.commissionRateBps)}
-                {statement.rules.teamShareBps === null
-                  ? ''
-                  : `, part d’équipe ${percentText(statement.rules.teamShareBps)}`}
-              </dd>
-              <dt>Paliers</dt>
-              <dd>
-                {statement.rules.bonusTiers.length === 0
-                  ? 'aucun'
-                  : statement.rules.bonusTiers
-                      .map(
-                        (tier) =>
-                          `${tier.label} ${amountText(tier.thresholdMinor, 'EUR')} → ${signedAmountText(tier.bonusMinor, 'EUR')}`,
-                      )
-                      .join(' · ')}
-              </dd>
-              <dt>Objectif</dt>
-              <dd>
-                {statement.rules.collectiveGoal === null
-                  ? 'aucun'
-                  : `${amountText(statement.rules.collectiveGoal.targetMinor, 'EUR')} : ${statement.rules.collectiveGoal.tiers
-                      .map(
-                        (tier) =>
-                          `${percentText(tier.reachedBps)} → ${signedAmountText(tier.bonusMinor, 'EUR')}`,
-                      )
-                      .join(' · ')} par chatteur`}
-              </dd>
-              {statement.rules.exchangeRates.map((rate) => (
-                <RateRule key={rate.currency} rate={rate} />
-              ))}
-              <dt>Minimum</dt>
-              <dd>
-                {statement.rules.final
-                  ? 'aucun : dernier relevé, tout est versé'
-                  : amountText(statement.rules.minimumPayoutMinor, 'EUR')}
-              </dd>
-              <dt>Moteur</dt>
-              <dd>
-                {statement.engineVersion} · empreinte {shortHash(statement.inputsHash)}
-              </dd>
-            </dl>
-          </details>
-          {adjusted === null ? null : (
-            <p className="py-quiet nv-swap" role="status">
-              {adjusted.text}
-            </p>
-          )}
+          <div className="py-read__scroll">
+            <MoneyPath statement={statement} names={names} you={false} />
+            <details className="nv-disclosure py-fold">
+              <summary>
+                <span className="nv-disclosure__title">Règles et calcul</span>
+                <span className="nv-disclosure__sum nv-num">
+                  révision {statement.revision} · calculé {computedText(statement.computedAt, zone, now)}
+                </span>
+              </summary>
+              <dl className="nv-disclosure__body py-rules nv-num">
+                <dt>Taux de {member.name}</dt>
+                <dd>
+                  {percentText(statement.rules.commissionRateBps)}
+                  {statement.rules.teamShareBps === null
+                    ? ''
+                    : `, part d’équipe ${percentText(statement.rules.teamShareBps)}`}
+                </dd>
+                <dt>Paliers</dt>
+                <dd>
+                  {statement.rules.bonusTiers.length === 0
+                    ? 'aucun'
+                    : statement.rules.bonusTiers
+                        .map(
+                          (tier) =>
+                            `${tier.label} ${amountText(tier.thresholdMinor, 'EUR')} → ${signedAmountText(tier.bonusMinor, 'EUR')}`,
+                        )
+                        .join(' · ')}
+                </dd>
+                <dt>Objectif</dt>
+                <dd>
+                  {statement.rules.collectiveGoal === null
+                    ? 'aucun'
+                    : `${amountText(statement.rules.collectiveGoal.targetMinor, 'EUR')} : ${statement.rules.collectiveGoal.tiers
+                        .map(
+                          (tier) =>
+                            `${percentText(tier.reachedBps)} → ${signedAmountText(tier.bonusMinor, 'EUR')}`,
+                        )
+                        .join(' · ')} par chatteur`}
+                </dd>
+                {statement.rules.exchangeRates.map((rate) => (
+                  <RateRule key={rate.currency} rate={rate} />
+                ))}
+                <dt>Minimum</dt>
+                <dd>
+                  {statement.rules.final
+                    ? 'aucun : dernier relevé, tout est versé'
+                    : amountText(statement.rules.minimumPayoutMinor, 'EUR')}
+                </dd>
+                <dt>Moteur</dt>
+                <dd>
+                  {statement.engineVersion} · empreinte {shortHash(statement.inputsHash)}
+                </dd>
+              </dl>
+            </details>
+            {adjusted === null ? null : (
+              <p className="py-quiet nv-swap" role="status">
+                {adjusted.text}
+              </p>
+            )}
+          </div>
           <Foot
             statement={statement}
             own={own}
@@ -244,7 +248,7 @@ function RateRule({ rate }: { rate: ExchangeRate }): JSX.Element {
     <>
       <dt>Taux du dollar</dt>
       <dd>
-        {rateText(rate.rateMicros, rate.currency)}, BCE, {dayMonth(rate.day)}
+        {rateText(rate.rateMicros, rate.currency)}, BCE, {dayMonthText(rate.day)}
       </dd>
     </>
   );
@@ -288,7 +292,7 @@ function Foot({
         : own
           ? 'Ton relevé : un autre membre de l’agence le valide.'
           : statement.status === 'draft'
-            ? 'Brouillon : il suit chaque rapport validé jusqu’à sa validation.'
+            ? 'À valider : il suit chaque rapport validé jusqu’à sa validation.'
             : 'Validé, il ne change plus : une erreur se corrige par un ajustement.';
   return (
     <div className="py-dialog__foot">
@@ -303,7 +307,7 @@ function Foot({
       )}
       {validate ? (
         <button type="button" className="nv-btn nv-btn--neon" data-autofocus onClick={onValidate}>
-          Valider la révision {statement.revision}
+          Valider ce relevé
         </button>
       ) : pay ? (
         <button type="button" className="nv-btn nv-btn--neon" data-autofocus onClick={onPay}>
@@ -342,6 +346,7 @@ function PayForm({
   onCancel: () => void;
 }): JSX.Element {
   const id = useId();
+  const cfa = useCfaFrancs(statement.memberId);
   const refresh = useRefreshPayroll();
   const latest = useLatestPayPeriod();
   const today = dayOf(new Date(), statement.window.timeZone);
@@ -411,6 +416,12 @@ function PayForm({
             {reference.trim() === '' ? '' : `, référence ${reference.trim()}`}, pour la quinzaine{' '}
             {periodLine(statement.window.period)}.
           </p>
+          {cfa ? (
+            <p className="tm-hint nv-num">
+              {fcfaText(statement.payableMinor)} (1 € = 655,957 FCFA, parité fixe). Indicatif : le montant
+              envoyé reste en euros.
+            </p>
+          ) : null}
           <p className="tm-hint">Payé, le relevé ne change plus. Une erreur se corrige par un ajustement.</p>
           <div className="tm-dialog__foot">
             <button
@@ -471,19 +482,24 @@ function PayForm({
             </div>
             <div className="nv-field tm-field" data-invalid={touched && !amountValid ? 'true' : undefined}>
               <label className="nv-field__label" htmlFor={`${id}-amount`}>
-                Montant envoyé
+                Montant envoyé, en euros
               </label>
-              <input
-                id={`${id}-amount`}
-                className="nv-field__control nv-glass nv-num"
-                inputMode="decimal"
-                autoComplete="off"
-                value={amount}
-                aria-invalid={touched && !amountValid}
-                onChange={(event) => {
-                  setAmount(event.target.value);
-                }}
-              />
+              <div className="py-money">
+                <input
+                  id={`${id}-amount`}
+                  className="nv-field__control nv-glass nv-num"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={amount}
+                  aria-invalid={touched && !amountValid}
+                  onChange={(event) => {
+                    setAmount(event.target.value);
+                  }}
+                />
+                <span className="py-money__sign" aria-hidden="true">
+                  €
+                </span>
+              </div>
               <p className={touched && !amountValid ? 'tm-hint tm-hint--error' : 'tm-hint'}>
                 Celui à verser : {amountText(statement.payableMinor, 'EUR')}. Un autre montant est refusé.
               </p>

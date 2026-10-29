@@ -31,6 +31,7 @@ export type AlertsErrorKind =
   | 'forbidden'
   | 'not_found'
   | 'conflict'
+  | 'name_taken'
   | 'creator_invalid'
   | 'locked'
   | 'refused'
@@ -41,6 +42,7 @@ export const ALERTS_ERRORS: Readonly<Record<AlertsErrorKind, string>> = {
   forbidden: 'Seul le compte propriétaire règle les alertes.',
   not_found: 'Cette alerte n’existe plus : quelqu’un l’a archivée entre-temps.',
   conflict: 'Cette alerte a déjà été créée autrement. Recharge la page.',
+  name_taken: 'Une alerte active porte déjà ce nom.',
   creator_invalid: 'Une des créatrices choisies n’existe plus. Recharge la page.',
   locked: 'Les mots-clés de la persona restent toujours actifs : un mot se retire dans sa persona.',
   refused: 'Cette alerte ne passe pas : un champ est à corriger.',
@@ -65,6 +67,7 @@ export const alertsErrorKind = (error: unknown): AlertsErrorKind =>
 const KIND_OF_CODE: Readonly<Record<AlertErrorCode, AlertsErrorKind>> = {
   custom_alert_not_found: 'not_found',
   custom_alert_conflict: 'conflict',
+  custom_alert_name_conflict: 'name_taken',
   alert_creator_invalid: 'creator_invalid',
   system_alert_locked_unprocessable: 'locked',
 };

@@ -10,6 +10,14 @@ afterEach(() => {
 });
 
 describe('SignInPage', () => {
+  it('points a forgotten password to whoever manages the access, a wording the owner can read too', () => {
+    render(<SignInPage onSignedIn={() => undefined} />);
+    expect(
+      screen.getByText('Mot de passe oublié ? Demande un nouveau lien à la personne qui gère ton accès.'),
+    ).toBeDefined();
+    expect(screen.queryByText(/ton responsable/u)).toBeNull();
+  });
+
   it('says how long to wait after too many attempts: the window lasts 15 minutes', async () => {
     vi.stubGlobal(
       'fetch',

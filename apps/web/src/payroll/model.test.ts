@@ -19,12 +19,18 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  amountWhat,
   carryLine,
+  carryWhat,
   changeBps,
+  computedText,
   countsLine,
+  dayMonthText,
+  dayShortMonth,
   draftPeriodsBefore,
   entryByText,
   entryRows,
+  fcfaText,
   firstOpenPeriod,
   flowOf,
   forecastNet,
@@ -37,10 +43,13 @@ import {
   memberFacts,
   memberPeriodAmount,
   memberPhaseChip,
+  missedRateDays,
+  rateOverdue,
   myStatementWords,
   parsePaySearch,
   parseTarget,
   payRefusalText,
+  penaltyTaken,
   periodAmount,
   periodToOpen,
   phaseChip,
@@ -48,8 +57,10 @@ import {
   rateText,
   reachedBpsOf,
   roundAmountText,
+  rowChips,
   salesFor,
   salesSplit,
+  sameStageOf,
   signedPercentText,
   spanText,
   statementChips,
@@ -198,15 +209,57 @@ describe('the forecast of a period', () => {
 describe('a statement’s marks', () => {
   it('says its stage, and a carry-over as the one amber mark', () => {
     expect(statementChips(statement(), false)).toEqual([{ label: 'En cours', tone: 'neutral' }]);
-    expect(statementChips(statement(), true)).toEqual([{ label: 'Brouillon', tone: 'neutral' }]);
-    expect(statementChips(statement({ carryOverOutMinor: 1_200 }), true)).toEqual([
-      { label: 'Reporté', tone: 'warn' },
+    // Never « Brouillon », the word of the agent's replies.
+    expect(statementChips(statement(), true)).toEqual([{ label: 'À valider', tone: 'neutral' }]);
+    // Not carried before it is validated: only under the minimum, or under zero, so far.
+    expect(statementChips(statement({ carryOverOutMinor: 1_200, totalMinor: 1_200 }), true)).toEqual([
+      { label: 'À valider', tone: 'neutral' },
+      { label: 'Sous le minimum', tone: 'warn' },
     ]);
-    expect(statementChips(statement({ status: 'validated', carryOverOutMinor: 1_200 }), true)).toEqual([
+    expect(statementChips(statement({ carryOverOutMinor: -800, totalMinor: -800 }), false)).toEqual([
+      { label: 'En cours', tone: 'neutral' },
+      { label: 'Sous zéro', tone: 'warn' },
+    ]);
+    expect(
+      statementChips(statement({ status: 'validated', carryOverOutMinor: 1_200, payableMinor: 0 }), true),
+    ).toEqual([
       { label: 'Validé', tone: 'ok' },
       { label: 'Reporté', tone: 'warn' },
     ]);
+    // Validated with money to send waits; paid is done: two tones.
+    expect(statementChips(statement({ status: 'validated' }), true)).toEqual([
+      { label: 'Validé', tone: 'wait' },
+    ]);
     expect(statementChips(statement({ status: 'paid' }), true)).toEqual([{ label: 'Payé', tone: 'ok' }]);
+  });
+
+  it('leaves out of a row the stage every row shares, and says what its amount is', () => {
+    const draft = statement();
+    expect(sameStageOf([draft, statement()], true)).toBe(true);
+    expect(sameStageOf([draft, statement({ status: 'validated' })], true)).toBe(false);
+    expect(rowChips(draft, true, true)).toEqual([]);
+    expect(rowChips(draft, true, false)).toEqual([{ label: 'À valider', tone: 'neutral' }]);
+    expect(rowChips(statement({ status: 'paid' }), true, true)).toEqual([{ label: 'Payé', tone: 'ok' }]);
+    expect(amountWhat(draft, false)).toBe('à ce jour');
+    expect(amountWhat(draft, true)).toBe('à verser, une fois validé');
+    expect(amountWhat(draft, true, true)).toBe('à verser');
+    expect(amountWhat(statement({ status: 'validated' }), true)).toBe('à verser');
+    expect(amountWhat(statement({ status: 'validated', payableMinor: 0 }), true)).toBe('rien à verser');
+    expect(
+      amountWhat(
+        statement({
+          status: 'paid',
+          payment: { paidOn: '2026-11-01', method: 'worldremit', reference: null, sentMinor: 2_125 },
+        }),
+        true,
+      ),
+    ).toBe('versé le 1er nov.');
+    const under = { totalMinor: 900, carryOverOutMinor: 900, payableMinor: 0 };
+    expect(plain(carryWhat(statement(under)) ?? '')).toBe('total 9,00 € → irait en report');
+    expect(plain(carryWhat(statement({ ...under, status: 'validated' })) ?? '')).toBe(
+      'total 9,00 € → reporté',
+    );
+    expect(carryWhat(draft)).toBeNull();
   });
 });
 
@@ -226,8 +279,11 @@ describe('a period in the list', () => {
     });
     expect([phaseChip(closed).label, periodAmount(closed)]).toEqual([
       'Close : à valider',
-      { minor: 20_000, what: 'à verser' },
+      { minor: 20_000, what: 'à verser, validation en cours' },
     ]);
+    expect(periodAmount(ended).what).toBe('à verser une fois validé');
+    const toPay = summary({ statements: { draft: 0, validated: 2, paid: 1, carried: 0 }, paidMinor: 10_000 });
+    expect(periodAmount(toPay)).toEqual({ minor: 20_000, what: 'reste à envoyer' });
     const paid = summary({ statements: { draft: 0, validated: 1, paid: 3, carried: 1 }, paidMinor: 30_000 });
     expect([phaseChip(paid), periodAmount(paid)]).toEqual([
       { label: 'Payée', tone: 'ok' },
@@ -318,7 +374,7 @@ describe('the money of a statement', () => {
       totalsOf(carried, true).map((row) => plain(`${row.label} | ${row.note ?? ''} | ${row.amount}`)),
     ).toEqual([
       'Commission |  | 21,25 €',
-      'Malus | « Retard. » · 30,00 € demandés, plafonnés à ta part plus tes primes | −21,25 €',
+      'Malus | « Retard. » · 30,00 € demandés, plafonnés à ta part plus tes primes : le reste (8,75 €) est abandonné, il n’est pas reporté | −21,25 €',
       'Ce que tu touches |  | 0,00 €',
     ]);
 
@@ -337,6 +393,14 @@ describe('the money of a statement', () => {
       'À verser |  | pay',
     ]);
     expect(totalsOf(statement({ status: 'paid' }), true).at(-1)?.label).toBe('Ce que tu as touché');
+    // Before its validation, a carry-over is only what would go on the next period.
+    expect(
+      totalsOf(statement({ totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 }), false).find(
+        (row) => row.kind === 'carry',
+      )?.label,
+    ).toBe('Irait sur la quinzaine suivante');
+    // The screen's own name for what is paid, so that one amount has one name.
+    expect(totalsOf(statement(), true, 'Ce que tu vas toucher').at(-1)?.label).toBe('Ce que tu vas toucher');
   });
 });
 
@@ -445,7 +509,7 @@ describe('the export of a period', () => {
     expect(head?.split(';').slice(0, 3)).toEqual(['Membre', 'Compte', 'Devise']);
     expect(account).toBe('Théo;"Nora Vidal; @nora";EUR;120,00;120,00;100,00;85,00;21,25;;;;;;;;');
     expect(total).toBe(
-      'Théo;Total du relevé;EUR;;;;85,00;21,25;0,00;0,00;0,00;0,00;21,25;0,00;21,25;Brouillon',
+      'Théo;Total du relevé;EUR;;;;85,00;21,25;0,00;0,00;0,00;0,00;21,25;0,00;21,25;À valider',
     );
   });
 
@@ -606,17 +670,29 @@ describe('a member’s row', () => {
       memberFacts(statement({ teamShare: { baseNetMinor: 100_000, bps: 1_000, amountMinor: 10_000 } })).map(
         plain,
       ),
-    ).toEqual(['part d’équipe 10 %']);
+    ).toEqual(['commission 25 %', 'part d’équipe 10 %']);
   });
 
   it('says a carry-over in one sentence, under the minimum or under zero', () => {
-    expect(carryLine(statement())).toBeNull();
-    expect(
-      plain(carryLine(statement({ totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 })) ?? ''),
-    ).toBe('Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.');
-    expect(
-      plain(carryLine(statement({ totalMinor: -800, carryOverOutMinor: -800, payableMinor: 0 })) ?? ''),
-    ).toBe('Total sous zéro : −8,00 € reportés sur la quinzaine suivante.');
+    expect(carryLine(statement(), true)).toBeNull();
+    const under = { totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 };
+    const negative = { totalMinor: -800, carryOverOutMinor: -800, payableMinor: 0 };
+    expect(plain(carryLine(statement({ ...under, status: 'validated' }), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.',
+    );
+    expect(plain(carryLine(statement({ ...negative, status: 'validated' }), true) ?? '')).toBe(
+      'Total sous zéro : −8,00 € reportés sur la quinzaine suivante.',
+    );
+    // Not carried yet before its validation: what would be, so far while it runs.
+    expect(plain(carryLine(statement(under), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 € : 12,00 € iront sur la quinzaine suivante une fois le relevé validé.',
+    );
+    expect(plain(carryLine(statement(under), false) ?? '')).toBe(
+      'Sous le minimum de 15,00 € à ce jour : 12,00 € iraient sur la quinzaine suivante, si la quinzaine finit ainsi.',
+    );
+    expect(plain(carryLine(statement(negative), false) ?? '')).toBe(
+      'Total sous zéro à ce jour : −8,00 € iraient sur la quinzaine suivante, si la quinzaine finit ainsi.',
+    );
   });
 });
 
@@ -832,7 +908,7 @@ describe('Commissions, as the member reads them', () => {
     });
     expect(chip({ statements: counts(0, 1, 0), payableMinor: 2_125 })).toEqual({
       label: 'Validé',
-      tone: 'ok',
+      tone: 'wait',
     });
     expect(chip({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })).toEqual({
       label: 'Payé',
@@ -878,7 +954,7 @@ describe('Commissions, as the member reads them', () => {
       return { since: plain(said.since), label: said.label, notes: said.notes.map(plain) };
     };
     expect(words(statement(), false)).toEqual({
-      since: 'se valide à partir du lun. 16 nov.',
+      since: 'validation par l’agence à partir du lun. 16 nov.',
       label: 'Ce que tu touches à ce jour',
       notes: ['Calculé à 10 h 07 sur tes rapports validés. Le versement suit la validation de la quinzaine.'],
     });
@@ -958,5 +1034,59 @@ describe('Commissions, as the member reads them', () => {
     expect(plain(roundAmountText(123_400, 'EUR'))).toBe('1 234 €');
     expect(plain(roundAmountText(21_250, 'EUR'))).toBe('212,50 €');
     expect(plain(roundAmountText(23_100, 'USD'))).toMatch(/^231 \$|^\$231$/u);
+  });
+});
+
+describe('the words of pay', () => {
+  it('writes the first of the month « 1er », and a computation’s day when it is not today', () => {
+    expect(plain(dayMonthText('2026-11-01'))).toBe('dim. 1er nov.');
+    expect(plain(dayMonthText('2026-11-11'))).toBe('mer. 11 nov.');
+    expect(plain(dayShortMonth('2026-11-01'))).toBe('1er nov.');
+    expect(plain(dayShortMonth('2026-11-15'))).toBe('15 nov.');
+    const at = '2026-10-16T06:12:00.000Z';
+    expect(plain(computedText(at, 'Europe/Paris', new Date('2026-10-16T15:00:00Z')))).toBe('à 8 h 12');
+    expect(plain(computedText(at, 'Europe/Paris', new Date('2026-10-29T15:00:00Z')))).toBe(
+      'le ven. 16 oct. à 8 h 12',
+    );
+  });
+
+  it('says an amount in CFA francs at the fixed parity, as a guide only', () => {
+    expect(plain(fcfaText(107_503))).toBe('≈ 705 173 FCFA, avant frais WorldRemit');
+  });
+
+  it('counts the working days a rate should have come since the last one read', () => {
+    // Thursday 8 October, today Thursday 29: the 14 working days in between.
+    expect(missedRateDays('2026-10-08', '2026-10-29')).toBe(14);
+    // Friday's rate, today Monday: the weekend has none, and Monday's may still come.
+    expect(missedRateDays('2026-10-23', '2026-10-26')).toBe(0);
+    expect(missedRateDays('2026-10-27', '2026-10-29')).toBe(1);
+  });
+
+  it('calls a rate overdue only past two working days without one, as the server does', () => {
+    // Thursday 25 March 2027, today Tuesday 30: Good Friday and Easter Monday shut the ECB, nothing is broken.
+    expect(rateOverdue('2027-03-25', '2027-03-30')).toBe(false);
+    // Today Wednesday 31: three working days without a rate.
+    expect(rateOverdue('2027-03-25', '2027-03-31')).toBe(true);
+  });
+
+  it('says what a penalty really takes, read in the member’s statement', () => {
+    const id = newId(PenaltyIdSchema);
+    const percent = { id, kind: 'percent', struck: false } as const;
+    const fixed = { ...percent, kind: 'fixed' } as const;
+    const taken = (requested: number, kept: number, ids: readonly string[] = [id]) => ({
+      penalties: ids.map((one) => ({ id: one })),
+      penaltiesRequestedMinor: requested,
+      penaltiesMinor: kept,
+    });
+    expect(plain(penaltyTaken(percent, taken(10_000, 10_000)) ?? '')).toBe('de son net, soit −100,00 €');
+    expect(plain(penaltyTaken(fixed, taken(6_000, 2_334)) ?? '')).toBe('retenu −23,34 € (plafonné)');
+    expect(penaltyTaken(fixed, taken(6_000, 6_000))).toBeNull();
+    // Two penalties in one statement: the amount of each is not known apart.
+    expect(plain(penaltyTaken(fixed, taken(6_000, 2_334, [id, newId(PenaltyIdSchema)])) ?? '')).toBe(
+      'malus plafonnés : −23,34 € retenus en tout',
+    );
+    expect(penaltyTaken(percent, undefined)).toBe('de son net');
+    expect(penaltyTaken({ ...percent, struck: true }, taken(10_000, 10_000))).toBeNull();
+    expect(penaltyTaken({ ...percent, kind: 'bonus' }, taken(10_000, 10_000))).toBeNull();
   });
 });

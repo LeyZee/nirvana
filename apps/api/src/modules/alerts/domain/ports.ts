@@ -22,6 +22,7 @@ export interface AlertStore {
   /**
    * Writes a new alert on each of its creators under the client's group id, audited with the owner. The same alert
    * sent again gives what is stored (`replayed`); the same id with other values, or archived, is a `conflict`.
+   * `name_conflict` names the creators where another active alert already has its name (`customAlertNameKey`).
    */
   create(
     body: CreateCustomAlertBody,
@@ -30,17 +31,23 @@ export interface AlertStore {
     | { readonly kind: 'created' | 'replayed'; readonly alert: CustomAlertGroup }
     | { readonly kind: 'unknown_creator' }
     | { readonly kind: 'conflict' }
+    | { readonly kind: 'name_conflict'; readonly creatorIds: readonly CreatorId[] }
   >;
   /**
    * Replaces the alert on all its creators: the rows kept are updated, the creators added get one (a creator removed
    * then added back gets her row again), the creators left out are archived. `not_found` when the group has no row
-   * that is not archived.
+   * that is not archived; `name_conflict` as for `create`.
    */
   replace(
     groupId: CustomAlertGroupId,
     body: CustomAlertBody,
     userId: string,
-  ): Promise<CustomAlertGroup | 'unknown_creator' | 'not_found'>;
+  ): Promise<
+    | CustomAlertGroup
+    | 'unknown_creator'
+    | 'not_found'
+    | { readonly kind: 'name_conflict'; readonly creatorIds: readonly CreatorId[] }
+  >;
   /** Archives every row of the alert, never deletes: the history keeps its name. `false` when none was left. */
   archive(groupId: CustomAlertGroupId, userId: string): Promise<boolean>;
   /** Switches a system alert on or off for the creators named; `keyword` is `locked`. */
