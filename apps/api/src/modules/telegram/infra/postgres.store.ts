@@ -116,28 +116,36 @@ async function insertDeliveries(
 ): Promise<readonly TelegramChatId[]> {
   if (rows.length === 0) return [];
   // Each delivery keeps its group's title: the log still names it once the group is removed (REG-28).
+  // KEY SHARE orders this against removeChat's FOR UPDATE: either these rows exist before the removal
+  // (which then closes them as chat_removed) or the group is already gone and its rows are skipped.
   const titles = new Map(
     (
       await tx
         .select({ id: chats.id, title: chats.title })
         .from(chats)
         .where(inArray(chats.id, [...new Set(rows.map((row) => row.chatId))]))
+        .for('key share')
     ).map((chat) => [chat.id, chat.title]),
   );
-  const known = rows.filter((row) => titles.has(row.chatId));
-  if (known.length === 0) return [];
+  const values = rows.flatMap((row) => {
+    const chatTitle = titles.get(row.chatId);
+    return chatTitle === undefined
+      ? []
+      : [
+          {
+            id: newId(z.uuid()),
+            ...row,
+            chatTitle,
+            status: 'pending' as const,
+            runAfter: now,
+            createdAt: now,
+          },
+        ];
+  });
+  if (values.length === 0) return [];
   const inserted = await tx
     .insert(deliveries)
-    .values(
-      known.map((row) => ({
-        id: newId(z.uuid()),
-        ...row,
-        chatTitle: titles.get(row.chatId) ?? '',
-        status: 'pending',
-        runAfter: now,
-        createdAt: now,
-      })),
-    )
+    .values(values)
     .onConflictDoNothing({ target: [deliveries.sourceKey, deliveries.chatId] })
     .returning({ chatId: deliveries.chatId });
   return [

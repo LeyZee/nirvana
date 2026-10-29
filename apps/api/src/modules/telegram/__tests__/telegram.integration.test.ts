@@ -463,11 +463,18 @@ describe('telegram module on Postgres', () => {
   it('keeps a group the bot was banned from in the list, and removes it with its routes on request (REG-28)', async () => {
     const { bot, chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
     expect(await module.removeChat(chatId, 'owner-telegram')).toBe('refused');
-    // Last night, one alert went out to the group and another still waits when it is removed in the morning.
+    // Last night, one alert went out to the group, one was cut off mid-call and one still waits when it is
+    // removed in the morning.
     await publish('handoff_requested', { conversationId: newId(ConversationIdSchema), cause: 'minor' });
     await module.jobs.scan();
     await module.jobs.flushChat(chatId);
     await publish('handoff_requested', { conversationId: newId(ConversationIdSchema), cause: 'distress' });
+    await module.jobs.scan();
+    await test.admin.db
+      .update(schema.telegramDeliveries)
+      .set({ status: 'sending' })
+      .where(eq(schema.telegramDeliveries.status, 'pending'));
+    await publish('handoff_requested', { conversationId: newId(ConversationIdSchema), cause: 'non_consent' });
     await module.jobs.scan();
     const { from, to } = nightOf('Europe/Paris', new Date());
     await test.admin.db
@@ -475,7 +482,7 @@ describe('telegram module on Postgres', () => {
       .set({ createdAt: new Date((from.getTime() + to.getTime()) / 2) })
       .where(eq(schema.telegramDeliveries.chatId, chatId));
     const night = await module.nightCounts(creatorId);
-    expect(night.urgent).toBe(2);
+    expect(night.urgent).toBe(3);
 
     telegram.updates.push({
       kind: 'membership',
@@ -498,15 +505,17 @@ describe('telegram module on Postgres', () => {
     expect(after.version).toBeGreaterThan(before.version);
     // Its alerts stay, without a group and with its name: the night still counts them, the log still names it.
     expect(await module.nightCounts(creatorId)).toEqual(night);
-    // Both were moved to the same instant of the night: read by status, not by date.
+    // All were moved to the same instant of the night: read by status, not by date.
     const kept = (await deliveryRows())
       .map(({ chatId: chat, chatTitle, status, errorKind }) => ({ chat, chatTitle, status, errorKind }))
       .sort((a, b) => a.status.localeCompare(b.status));
     expect(kept).toEqual([
       { chat: null, chatTitle: 'Groupe demo_bot', status: 'failed', errorKind: 'chat_removed' },
       { chat: null, chatTitle: 'Groupe demo_bot', status: 'sent', errorKind: null },
+      { chat: null, chatTitle: 'Groupe demo_bot', status: 'unknown', errorKind: 'chat_removed' },
     ]);
     expect((await module.listDeliveries('urgent', 10)).map((row) => row.chatTitle)).toEqual([
+      'Groupe demo_bot',
       'Groupe demo_bot',
       'Groupe demo_bot',
     ]);
