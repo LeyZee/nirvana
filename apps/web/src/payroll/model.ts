@@ -11,7 +11,9 @@ import {
   type CommissionStatementLine,
   type Currency,
   type ExchangeRate,
+  type ForeignCurrency,
   type PaymentMethod,
+  type PayPeriodBlock,
   type PayPeriod,
   type PayPeriodSummary,
   type PayPeriodWindow,
@@ -66,8 +68,8 @@ export function changeBps(now: number, before: number | null): number | null {
   return Math.round(((now - before) * 10_000) / before);
 }
 
-/** A statement's marks: what stage it is at, and a carry-over, the one amber mark. */
-export type PayTone = 'neutral' | 'wait' | 'ok' | 'warn';
+/** A statement's marks: what stage it is at, and a carry-over, the one amber mark; red for a period pay cannot compute. */
+export type PayTone = 'neutral' | 'wait' | 'ok' | 'warn' | 'bad';
 export interface PayChip {
   readonly label: string;
   readonly tone: PayTone;
@@ -142,6 +144,7 @@ export function summaryOf(period: PayrollPeriod): Omit<PayPeriodSummary, 'window
     ended: period.ended,
     closedAt: period.closing?.closedAt ?? null,
     closedBy: period.closing?.closedBy ?? null,
+    blocked: period.blocked ?? null,
     statements: {
       draft: count((one) => one.status === 'draft'),
       validated: count((one) => one.status === 'validated'),
@@ -166,6 +169,8 @@ export function phaseOf(summary: Omit<PayPeriodSummary, 'window'>): PeriodPhase 
 }
 
 export function phaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
+  // Whatever its stage, a period pay could not compute says that first: its figures are out of date.
+  if ((summary.blocked ?? null) !== null) return { label: 'Calcul bloqué', tone: 'bad' };
   switch (phaseOf(summary)) {
     case 'running':
       return { label: 'En cours', tone: 'neutral' };
@@ -180,6 +185,8 @@ export function phaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
 
 /** The one amount a period shows in the list: what is paid, or what is left to pay. */
 export function periodAmount(summary: Omit<PayPeriodSummary, 'window'>): { minor: number; what: string } {
+  if ((summary.blocked ?? null) !== null)
+    return { minor: summary.payableMinor - summary.paidMinor, what: 'au dernier calcul, plus à jour' };
   switch (phaseOf(summary)) {
     case 'running':
       return { minor: summary.payableMinor, what: 'à verser à ce jour' };
@@ -543,6 +550,45 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
     case 'request_invalid':
       return 'Ces valeurs ne conviennent pas : vérifie le formulaire.';
   }
+}
+
+const CURRENCY_OF: Readonly<Record<ForeignCurrency, string>> = { USD: 'du dollar' };
+
+/** « Théo », « Théo et Léa », « Théo, Léa et Iris ». */
+const namesText = (names: readonly string[]): string =>
+  names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} et ${names.at(-1) ?? ''}`;
+
+/**
+ * What a blocked period says (recette du 28/10, Équipe G1): what stops pay from computing it, what lifts it, and that
+ * the figures shown are those of its last computation that passed, out of date. Only the owner sets a rate: anyone
+ * else is told who does. `since` in the agency's zone, when it is known.
+ */
+export function blockedText(
+  block: PayPeriodBlock,
+  reader: { readonly owner: boolean; readonly memberName: (memberId: string) => string },
+  zone: string | null,
+): { readonly title: string; readonly text: string } {
+  const since = zone === null ? '' : ` Bloqué depuis le ${momentAt(block.since, zone)}.`;
+  const stale =
+    'D’ici là, les chiffres ci-dessous sont ceux du dernier calcul réussi : ils ne sont plus à jour.';
+  if (block.code === 'exchange_rate_missing_conflict')
+    return {
+      title: `Le calcul est bloqué : le taux ${CURRENCY_OF[block.currency]} de la BCE manque pour cette quinzaine.`,
+      text: `Il arrive chaque jour ouvré vers 16 h, et le calcul reprendra seul ; s’il tarde plus de deux jours ouvrés, une alerte le dit. ${stale}${since}`,
+    };
+  const names = block.memberIds.map((id) => reader.memberName(id));
+  const many = names.length > 1;
+  const who =
+    names.length === 0 ? 'un membre de l’équipe n’a' : `${namesText(names)} ${many ? 'n’ont' : 'n’a'}`;
+  const them = many ? 'leur' : 'lui';
+  return {
+    title: `Le calcul est bloqué : ${who} pas de taux pour cette quinzaine.`,
+    text: `${
+      reader.owner
+        ? `Ajoute-${them} un taux, le calcul reprendra seul.`
+        : `Le propriétaire doit ${them} ajouter un taux : le calcul reprendra seul.`
+    } ${stale}${since}`,
+  };
 }
 
 const countOf = (count: number | undefined, one: string, many: string): string =>

@@ -240,6 +240,7 @@ export function summaryFor(period: PayrollPeriod): PayPeriodSummary {
     ended: period.ended,
     closedAt: period.closing?.closedAt ?? null,
     closedBy: period.closing?.closedBy ?? null,
+    blocked: period.blocked ?? null,
     statements: {
       draft: count('draft'),
       validated: count('validated'),

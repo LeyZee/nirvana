@@ -4,6 +4,7 @@ import {
   type CommissionStatement,
   type Me,
   type PayPeriod,
+  type PayPeriodBlock,
   type PayrollPeriod,
 } from '@nirvana/contracts';
 import { Link } from '@tanstack/react-router';
@@ -43,6 +44,7 @@ import {
 } from '@/payroll/api';
 import {
   amountWhat,
+  blockedText,
   carryLine,
   carryWhat,
   changeBps,
@@ -166,7 +168,9 @@ function PeriodView({
     ) ?? [];
   const stop =
     stopped !== null && data !== undefined && stopped.seen === stateOf(data) ? stopped.refusal : null;
-  const blocked = block !== null || stop !== null;
+  // Pay could not compute the period at its last try: its figures are out of date, nothing validates on them.
+  const computing = data?.blocked ?? null;
+  const blocked = computing !== null || block !== null || stop !== null;
   const pickable = data === undefined || blocked ? [] : validatable({ ended: data.ended, statements: rows });
   const chosen = pickable.filter((one) => !unchecked.has(one.id) && !sending.has(one.id));
   const reread = rows.find((one) => {
@@ -277,7 +281,7 @@ function PeriodView({
     <PageHeader
       eyebrow="Paie"
       title={period === null ? 'Quinzaine' : <PeriodHeading period={period} />}
-      lead={leadOf(data, block !== null || stop !== null, owner)}
+      lead={leadOf(data, blocked, owner)}
       actions={
         <>
           {period === null ? null : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
@@ -353,6 +357,7 @@ function PeriodView({
       <div className="py-board">
         <Summary
           data={data}
+          stale={computing !== null}
           previous={previous}
           names={names}
           me={me}
@@ -379,7 +384,14 @@ function PeriodView({
           }
         >
           <div className="rp-sec">
-            {block !== null ? (
+            {computing !== null ? (
+              <ComputingNotice
+                block={computing}
+                owner={owner}
+                names={names}
+                zone={data.window?.timeZone ?? null}
+              />
+            ) : block !== null ? (
               <BlockNotice block={block} zone={data.window?.timeZone ?? null} now={now} owner={owner} />
             ) : stop !== null ? (
               <StopNotice
@@ -424,7 +436,7 @@ function PeriodView({
                 />
               )
             ) : (
-              <ul className="py-rows">
+              <ul className="py-rows" data-stale={computing === null ? undefined : 'true'}>
                 {rows.map((statement, index) => {
                   const member = names.member(statement.memberId);
                   const pick = pickable.some((one) => one.id === statement.id);
@@ -511,6 +523,8 @@ function leadOf(data: PayrollPeriod | undefined, blocked: boolean, owner: boolea
   if (data === undefined) return undefined;
   if (data.beforeFirstClosing)
     return 'Avant la première clôture de l’équipe : la quinzaine est close sans relevé.';
+  if ((data.blocked ?? null) !== null)
+    return 'Le calcul est bloqué : lève d’abord ce qui le bloque, les relevés se recalculent ensuite.';
   if (!data.ended)
     return data.window === null
       ? 'Les relevés se calculent dès qu’un rapport est validé.'
@@ -545,6 +559,7 @@ function quietOf(data: PayrollPeriod, now: Date): string {
 /** The period's head: its state, the one figure that leads, at most three beside it, and the split of its sales. */
 function Summary({
   data,
+  stale,
   previous,
   names,
   me,
@@ -552,6 +567,8 @@ function Summary({
   rate,
 }: {
   data: PayrollPeriod;
+  /** The figures are those of the last computation that passed: said so, never shown as the truth. */
+  stale: boolean;
   previous: PayrollPeriod | undefined;
   names: PayNames;
   me: { readonly id: string; readonly name: string };
@@ -665,7 +682,7 @@ function Summary({
   });
 
   return (
-    <section className="nv-plate nv-panel py-sum nv-enter">
+    <section className="nv-plate nv-panel py-sum nv-enter" data-stale={stale ? 'true' : undefined}>
       <div className="py-sum__head">
         <p className="py-sum__state">{state}</p>
       </div>
@@ -673,13 +690,17 @@ function Summary({
       {data.beforeFirstClosing ? null : (
         <div className="py-sum__body">
           {data.ended ? (
-            <EndedHero statements={statements} paid={phase === 'paid'} rate={rate} />
+            <EndedHero statements={statements} paid={phase === 'paid'} rate={rate} stale={stale} />
           ) : (
             <div className="py-hero">
-              <p className="py-hero__label">Net de l’équipe à ce jour</p>
+              <p className="py-hero__label">
+                {stale ? 'Net de l’équipe au dernier calcul réussi' : 'Net de l’équipe à ce jour'}
+              </p>
               <HeroValue minor={net} />
-              {/* No forecast without a first full day, and none of a net of nothing. */}
-              {forecast === null && statements.length > 0 ? (
+              {stale ? (
+                <p className="py-hero__note">Plus à jour : le calcul est bloqué.</p>
+              ) : /* No forecast without a first full day, and none of a net of nothing. */
+              forecast === null && statements.length > 0 ? (
                 <p className="py-hero__note">La prévision vient après un premier jour entier.</p>
               ) : null}
             </div>
@@ -730,10 +751,13 @@ function EndedHero({
   statements,
   paid,
   rate,
+  stale,
 }: {
   statements: readonly CommissionStatement[];
   paid: boolean;
   rate: boolean;
+  /** The figures are those of the last computation that passed: said so, never shown as the truth. */
+  stale: boolean;
 }): JSX.Element {
   const drafts = statements.filter((one) => one.status === 'draft');
   const validated = statements.filter((one) => one.status === 'validated');
@@ -749,23 +773,25 @@ function EndedHero({
     : validated.length + payments.length === 0
       ? ['À verser une fois validé', sumOf(drafts)]
       : ['Reste à envoyer', sumOf(validated)];
-  const notes = [
-    !paid && sent > 0 ? `déjà versé ${amountText(sent, 'EUR')}` : null,
-    drafts.length === 0
-      ? null
-      : validated.length + payments.length === 0
-        ? `${statementsWord(drafts.length)} à valider`
-        : `${amountText(sumOf(drafts), 'EUR')} pas encore validé${drafts.length > 1 ? 's' : ''} (${statementsWord(drafts.length)})`,
-    paid && statements.length > 0
-      ? `${statementsWord(payments.length)} payé${payments.length > 1 ? 's' : ''}`
-      : null,
-    carried > 0 ? `${String(carried)} reporté${carried > 1 ? 's' : ''}` : null,
-    under > 0 ? `${String(under)} sous le minimum` : null,
-    belowZero > 0 ? `${String(belowZero)} sous zéro` : null,
-  ].filter((note) => note !== null);
+  const notes = stale
+    ? ['Plus à jour : le calcul est bloqué.']
+    : [
+        !paid && sent > 0 ? `déjà versé ${amountText(sent, 'EUR')}` : null,
+        drafts.length === 0
+          ? null
+          : validated.length + payments.length === 0
+            ? `${statementsWord(drafts.length)} à valider`
+            : `${amountText(sumOf(drafts), 'EUR')} pas encore validé${drafts.length > 1 ? 's' : ''} (${statementsWord(drafts.length)})`,
+        paid && statements.length > 0
+          ? `${statementsWord(payments.length)} payé${payments.length > 1 ? 's' : ''}`
+          : null,
+        carried > 0 ? `${String(carried)} reporté${carried > 1 ? 's' : ''}` : null,
+        under > 0 ? `${String(under)} sous le minimum` : null,
+        belowZero > 0 ? `${String(belowZero)} sous zéro` : null,
+      ].filter((note) => note !== null);
   return (
     <div className="py-hero">
-      <p className="py-hero__label">{label}</p>
+      <p className="py-hero__label">{stale ? `${label}, au dernier calcul réussi` : label}</p>
       <HeroValue minor={minor} />
       {notes.length === 0 ? null : (
         <p className="py-hero__note">
@@ -1046,6 +1072,44 @@ function MemberRow({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * What stops pay from computing the period (recette du 28/10, Équipe G1), in red above the rows: who or what, the
+ * gesture that lifts it, and that the figures below are out of date. The owner opens the member's record to add a rate.
+ */
+function ComputingNotice({
+  block,
+  owner,
+  names,
+  zone,
+}: {
+  block: PayPeriodBlock;
+  owner: boolean;
+  names: PayNames;
+  zone: string | null;
+}): JSX.Element {
+  const { title, text } = blockedText(block, { owner, memberName: (id) => names.member(id).name }, zone);
+  const [only, ...others] = block.code === 'commission_rate_missing_conflict' ? block.memberIds : [];
+  return (
+    <div className="rp-notice" data-tone="danger" role="alert">
+      <div className="py-notice-row">
+        <div>
+          <p className="rp-notice__title">{title}</p>
+          <p className="rp-notice__text">{text}</p>
+        </div>
+        {!owner || only === undefined ? null : others.length === 0 ? (
+          <Link to="/equipe/membres" search={{ membre: only }} className="nv-btn nv-btn--neon nv-btn--sm">
+            Ouvrir sa fiche
+          </Link>
+        ) : (
+          <Link to="/equipe/membres" className="nv-btn nv-btn--neon nv-btn--sm">
+            Ouvrir les membres
+          </Link>
+        )}
+      </div>
+    </div>
   );
 }
 

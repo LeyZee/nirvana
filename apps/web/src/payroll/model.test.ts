@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   amountWhat,
+  blockedText,
   carryLine,
   carryWhat,
   changeBps,
@@ -290,6 +291,19 @@ describe('a period in the list', () => {
       { minor: 30_000, what: 'versé' },
     ]);
     expect(countsLine(paid.statements)).toBe('3 payés, 1 validé · 1 reporté');
+  });
+
+  it('says first that pay could not compute it, and that its amount is out of date', () => {
+    const blocked = summary({
+      statements: { draft: 4, validated: 0, paid: 0, carried: 0 },
+      blocked: { code: 'exchange_rate_missing_conflict', currency: 'USD', since: '2026-11-02T09:41:00.000Z' },
+    });
+    expect([phaseChip(blocked), periodAmount(blocked)]).toEqual([
+      { label: 'Calcul bloqué', tone: 'bad' },
+      { minor: 30_000, what: 'au dernier calcul, plus à jour' },
+    ]);
+    // An older server does not say it: the period reads as it did.
+    expect(phaseChip(summary({ blocked: undefined }))).toEqual(phaseChip(summary()));
   });
 
   it('sums a period read whole as the list does', () => {
@@ -1088,5 +1102,42 @@ describe('the words of pay', () => {
     expect(penaltyTaken(percent, undefined)).toBe('de son net');
     expect(penaltyTaken({ ...percent, struck: true }, taken(10_000, 10_000))).toBeNull();
     expect(penaltyTaken({ ...percent, kind: 'bonus' }, taken(10_000, 10_000))).toBeNull();
+  });
+});
+
+describe('a blocked period (recette du 28/10, Équipe G1)', () => {
+  const [theo, lea] = [newId(TeamMemberIdSchema), newId(TeamMemberIdSchema)];
+  const memberName = (id: string): string => (id === theo ? 'Théo' : id === lea ? 'Léa' : 'Un membre');
+  const since = '2025-05-02T08:30:00.000Z';
+  const rate = { code: 'commission_rate_missing_conflict' as const, memberIds: [theo], since };
+
+  it('says who lacks a rate, what to do, and that the figures are out of date', () => {
+    const owner = blockedText(rate, { owner: true, memberName }, 'Europe/Paris');
+    expect(owner.title).toBe('Le calcul est bloqué : Théo n’a pas de taux pour cette quinzaine.');
+    expect(plain(owner.text)).toBe(
+      'Ajoute-lui un taux, le calcul reprendra seul. D’ici là, les chiffres ci-dessous sont ceux du dernier calcul réussi : ils ne sont plus à jour. Bloqué depuis le vendredi 2 mai à 10 h 30.',
+    );
+    const two = blockedText({ ...rate, memberIds: [theo, lea] }, { owner: true, memberName }, null);
+    expect(two.title).toBe('Le calcul est bloqué : Théo et Léa n’ont pas de taux pour cette quinzaine.');
+    expect(two.text).toMatch(/^Ajoute-leur un taux, le calcul reprendra seul\./u);
+    expect(two.text).not.toMatch(/Bloqué depuis/u);
+  });
+
+  it('tells a manager who sets the rate, and a member nobody’s name', () => {
+    expect(blockedText(rate, { owner: false, memberName }, null).text).toMatch(
+      /^Le propriétaire doit lui ajouter un taux : le calcul reprendra seul\./u,
+    );
+    expect(blockedText({ ...rate, memberIds: [] }, { owner: false, memberName }, null).title).toBe(
+      'Le calcul est bloqué : un membre de l’équipe n’a pas de taux pour cette quinzaine.',
+    );
+  });
+
+  it('says which rate of the ECB is missing', () => {
+    const block = { code: 'exchange_rate_missing_conflict' as const, currency: 'USD' as const, since };
+    const said = blockedText(block, { owner: true, memberName }, null);
+    expect(said.title).toBe(
+      'Le calcul est bloqué : le taux du dollar de la BCE manque pour cette quinzaine.',
+    );
+    expect(said.text).toMatch(/le calcul reprendra seul/u);
   });
 });
