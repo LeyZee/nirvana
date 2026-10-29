@@ -1,4 +1,4 @@
-import type { FanFlags, SetFanFlagBody } from '@nirvana/contracts';
+import type { FanFlags, FanFlagsView, SetFanFlagBody } from '@nirvana/contracts';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useState, type JSX } from 'react';
 
@@ -21,7 +21,7 @@ import {
 const flagsKey = (creatorId: string, fanId: string): string[] => ['fan-flags', creatorId, fanId];
 
 /** His limits as the server reads them: one read, shared by the fan's sheet and its summary line. */
-export function useFanFlags(creatorId: string, fanId: string): UseQueryResult<FanFlags> {
+export function useFanFlags(creatorId: string, fanId: string): UseQueryResult<FanFlagsView> {
   return useQuery({
     queryKey: flagsKey(creatorId, fanId),
     queryFn: () => fetchFanFlags(creatorId, fanId),
@@ -33,7 +33,8 @@ export function useFanFlags(creatorId: string, fanId: string): UseQueryResult<Fa
  * The fan's limits (P3-02), read by the policy before any offer: folded to one line, amber when one stops the agent
  * from writing or selling, or when his age is disputed. Folded even then: the amber line says enough, and the thread
  * comes first. Owners and chatters set or lift them; a creator reads them. Confirming his age takes two clicks, since
- * it opens explicit content.
+ * it opens explicit content; once disputed (a sign of a minor), only the owner or a manager confirms it, with a
+ * written reason the server keeps (SUIVI-04).
  */
 export function FanLimits({
   creatorId,
@@ -54,13 +55,14 @@ export function FanLimits({
     setPending(true);
     setError(null);
     const result = await setFanFlag(creatorId, fanId, body);
-    if (result.ok) client.setQueryData(key, result.flags);
+    if (result.ok) client.setQueryData(key, result.view);
     else setError(result.message);
     setPending(false);
     return result.ok;
   };
 
-  const flags = query.data;
+  const view: FanFlagsView | undefined = query.data;
+  const flags = view?.flags;
   const warn = flags !== undefined && needsAttention(flags);
   return (
     <details className="tr-limits">
@@ -90,7 +92,13 @@ export function FanLimits({
               onChange={(set) => void change(switchBody(s.flag, set))}
             />
           ))}
-          <Age flags={flags} canDecide={canDecide} pending={pending} change={change} />
+          <Age
+            flags={flags}
+            mayConfirmDisputed={view?.mayConfirmDisputedAge ?? false}
+            canDecide={canDecide}
+            pending={pending}
+            change={change}
+          />
           <Ceiling flags={flags} canDecide={canDecide} pending={pending} change={change} />
           {error === null ? null : (
             <p className="tr-warn tr-line" role="alert">
@@ -157,11 +165,26 @@ interface RowProps {
   change: (body: SetFanFlagBody) => Promise<boolean>;
 }
 
-/** Confirming opens explicit content: a first click asks, a second one confirms. Withdrawing is one click. */
-function Age({ flags, canDecide, pending, change }: RowProps): JSX.Element {
+/**
+ * Confirming opens explicit content: a first click asks, a second one confirms. Withdrawing is one click. A disputed
+ * age (a sign of a minor) is confirmed by the owner or a manager only, who write why before the second click.
+ */
+function Age({
+  flags,
+  mayConfirmDisputed,
+  canDecide,
+  pending,
+  change,
+}: RowProps & { mayConfirmDisputed: boolean }): JSX.Element {
   const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState('');
   const confirmed = flags.ageConfirmedAt !== undefined;
   const disputed = isAgeDisputed(flags);
+  const reasonMissing = disputed && reason.trim() === '';
+  const stop = (): void => {
+    setAsking(false);
+    setReason('');
+  };
   return (
     <div className="tr-limit">
       <span className="tr-limit__text">
@@ -169,10 +192,26 @@ function Age({ flags, canDecide, pending, change }: RowProps): JSX.Element {
           {disputed ? 'Âge contesté' : 'Âge confirmé'}
         </span>
         <span className={`tr-limit__hint${disputed && !asking ? ' tr-warn' : ''}`}>
-          {asking ? ageQuestion(flags) : ageLine(flags)}
+          {asking ? ageQuestion(flags) : ageLine(flags, mayConfirmDisputed)}
         </span>
+        {asking && disputed ? (
+          <textarea
+            // « Confirmer son âge » is gone once clicked: the keyboard lands where the next step is.
+            autoFocus
+            className="nv-field__control tr-limit__reason"
+            aria-label="Pourquoi tu confirmes son âge"
+            placeholder="Pièce d’identité vue, appel vidéo…"
+            rows={2}
+            maxLength={500}
+            value={reason}
+            disabled={pending}
+            onChange={(event) => {
+              setReason(event.target.value);
+            }}
+          />
+        ) : null}
       </span>
-      {!canDecide ? null : confirmed ? (
+      {!canDecide || (disputed && !mayConfirmDisputed) ? null : confirmed ? (
         <button
           type="button"
           className="nv-btn nv-btn--plain nv-btn--sm"
@@ -185,24 +224,23 @@ function Age({ flags, canDecide, pending, change }: RowProps): JSX.Element {
         <span className="tr-limit__actions">
           <button
             type="button"
+            // Without a reason to write, the answer itself takes the keyboard.
+            autoFocus={!disputed}
             className="nv-btn nv-btn--soft nv-btn--sm"
-            disabled={pending}
+            disabled={pending || reasonMissing}
             onClick={() =>
-              void change({ flag: 'ageConfirmedAt', set: true }).then((ok) => {
-                if (ok) setAsking(false);
+              void change({
+                flag: 'ageConfirmedAt',
+                set: true,
+                ...(disputed && { reason: reason.trim() }),
+              }).then((ok) => {
+                if (ok) stop();
               })
             }
           >
             Oui, il est majeur
           </button>
-          <button
-            type="button"
-            className="nv-btn nv-btn--plain nv-btn--sm"
-            disabled={pending}
-            onClick={() => {
-              setAsking(false);
-            }}
-          >
+          <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" disabled={pending} onClick={stop}>
             Annuler
           </button>
         </span>

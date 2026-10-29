@@ -62,8 +62,8 @@ export function createFlagRoutes(
       },
       async (request) => {
         const { creatorId } = request.query;
-        actorFor(request, creatorId);
-        return { fanId: request.params.id, flags: await fans.flags(creatorId, request.params.id) };
+        const actor = actorFor(request, creatorId);
+        return { fanId: request.params.id, ...(await fans.flagsFor(creatorId, request.params.id, actor)) };
       },
     );
 
@@ -83,16 +83,18 @@ export function createFlagRoutes(
         const { creatorId } = request.query;
         const fanId = request.params.id;
         const { body } = request;
-        const author: FlagAuthor = `human:${actorFor(request, creatorId)}`;
+        const actor = actorFor(request, creatorId);
+        const author: FlagAuthor = `human:${actor}`;
         const command = {
           author,
           correlationId: request.id,
           ...(body.reason !== undefined && { reason: body.reason }),
         };
-        const flags = body.set
+        // His limits and the author's right, both from the transaction that wrote them.
+        const written = body.set
           ? await fans.setFlag(creatorId, fanId, requestedChange(body, now()), command)
           : await fans.clearFlag(creatorId, fanId, body.flag, command);
-        return { fanId, flags };
+        return { fanId, ...written };
       },
     );
     return Promise.resolve();

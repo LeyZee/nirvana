@@ -31,7 +31,8 @@ export function FanSheet({
   const kyc = useFanKyc(creatorId, fanId, canDecide);
   const facts: SheetFacts = {
     flags:
-      flags.data ?? (flags.error instanceof FanFlagsRefused ? 'refused' : flags.isError ? 'down' : 'loading'),
+      flags.data?.flags ??
+      (flags.error instanceof FanFlagsRefused ? 'refused' : flags.isError ? 'down' : 'loading'),
     toLearn: canDecide ? (kyc.data?.length ?? null) : null,
     band: desire === null ? null : DESIRE_BAND_LABELS[desire.band],
   };

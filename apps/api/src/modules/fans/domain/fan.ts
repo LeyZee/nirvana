@@ -1,4 +1,12 @@
-import type { CreatorId, FanFlagName, FanFlags, FanId, PlatformAccountId } from '@nirvana/contracts';
+import type {
+  CreatorId,
+  FanFlagName,
+  FanFlags,
+  FanId,
+  PlatformAccountId,
+  TeamScope,
+  UserId,
+} from '@nirvana/contracts';
 
 import type { FactWrite, StoredFact } from './facts';
 import type { FlagAuthor } from './flags';
@@ -57,17 +65,24 @@ interface FlagWrite {
   readonly correlationId: string;
 }
 
-/** His limits (`fans.flags`), implemented in `infra/` with `withTenant`. */
+/**
+ * His limits (`fans.flags`), implemented in `infra/` with `withTenant`, or `withTenantMember` when a person reads or
+ * writes them: the team scope comes from the database in the same transaction, never from the caller.
+ */
 export interface FlagStore {
   read(creatorId: CreatorId, fanId: FanId): Promise<FanFlags>;
+  /** His limits and the reader's team scope (`owner` | `agency` | `self`), read in one transaction. */
+  readAs(creatorId: CreatorId, fanId: FanId, userId: UserId): Promise<{ flags: FanFlags; scope: TeamScope }>;
   /**
    * Locks the fan, applies `change` to his flags and, when they changed, writes them and the event in the same
-   * transaction. Returns his flags after the call.
+   * transaction. Returns his flags after the call and the author's team scope, read in that same transaction: `change`
+   * gets it when the author is a person (`human:<userId>`), `null` for the policy; a domain error it throws writes
+   * nothing.
    */
   change(
     creatorId: CreatorId,
     fanId: FanId,
-    change: (flags: FanFlags) => FanFlags | null,
+    change: (flags: FanFlags, scope: TeamScope | null) => FanFlags | null,
     event: FlagWrite,
-  ): Promise<FanFlags>;
+  ): Promise<{ flags: FanFlags; scope: TeamScope | null }>;
 }

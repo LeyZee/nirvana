@@ -412,6 +412,11 @@
 .tr-limit__amount {
   width: 6.5rem;
 }
+/* Why a disputed age is confirmed (SUIVI-04): written before the second click, kept with the event. */
+.tr-limit__reason {
+  width: 100%;
+  resize: vertical;
+}
 /* The agent's notes in the thread: where it stopped, who took the hand, a draft refused. */
 .tr-note {
   align-self: center;

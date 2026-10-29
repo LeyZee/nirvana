@@ -48,15 +48,23 @@ describe('the fan’s limits', () => {
   it('says whether his age is confirmed', () => {
     expect(ageLine({})).toBe('Pas encore confirmé : rien d’explicite tant qu’il ne l’est pas.');
     expect(ageLine({ ageConfirmedAt: '2026-10-21T10:00:00.000Z' })).toBe('Majeur, confirmé le 21 octobre.');
+    // Disputed (a sign of a minor): who may lift it is said to anyone who may not (SUIVI-04).
+    const disputed = { ageDisputed: { since: '2026-10-22T10:00:00.000Z', by: 'policy' } } as const;
+    expect(ageLine(disputed)).toBe(
+      'Contesté le 22 octobre : l’agent a relevé un signe de minorité. Rien d’explicite. Seuls le propriétaire et les managers peuvent le confirmer.',
+    );
+    expect(ageLine(disputed, true)).toBe(
+      'Contesté le 22 octobre : l’agent a relevé un signe de minorité. Rien d’explicite.',
+    );
   });
 
   it('reads a disputed age as a suspected minor, never as an age nobody checked', () => {
     const byAgent = { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'policy' as const } };
     const byHuman = { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'human' as const } };
-    expect(ageLine(byAgent)).toBe(
+    expect(ageLine(byAgent, true)).toBe(
       'Contesté le 28 octobre : l’agent a relevé un signe de minorité. Rien d’explicite.',
     );
-    expect(ageLine(byHuman)).toBe('Contesté le 28 octobre par un humain. Rien d’explicite.');
+    expect(ageLine(byHuman, true)).toBe('Contesté le 28 octobre par un humain. Rien d’explicite.');
     expect(flagsSummary({ ...byAgent, doNotContact: true })).toBe('Âge contesté · ne plus lui écrire');
     expect(needsAttention(byAgent)).toBe(true);
     expect(needsAttention({ fragile: true })).toBe(false);
@@ -110,8 +118,15 @@ describe('the fan’s limits', () => {
   });
 
   it('says why a change was refused', () => {
-    expect(flagError(404)).toBe('Ce fan n’existe plus.');
-    expect(flagError(403)).toBe('Tu ne peux pas changer les limites de ce fan : rien n’a changé.');
-    expect(flagError(0)).toBe('Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.');
+    expect(flagError(404, null)).toBe('Ce fan n’existe plus.');
+    expect(flagError(403, null)).toBe('Tu ne peux pas changer les limites de ce fan : rien n’a changé.');
+    expect(flagError(0, null)).toBe('Le serveur ne répond pas : rien n’a changé. Réessaie dans un instant.');
+    const refusal = (code: string) => ({ error: { code, message: 'x', details: {}, requestId: 'r' } });
+    expect(flagError(403, refusal('age_dispute_forbidden'))).toBe(
+      'Seuls le propriétaire et les managers confirment un âge contesté : rien n’a changé.',
+    );
+    expect(flagError(400, refusal('age_dispute_reason_invalid'))).toBe(
+      'Écris pourquoi tu confirmes son âge : rien n’a changé.',
+    );
   });
 });

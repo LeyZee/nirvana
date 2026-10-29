@@ -4,6 +4,7 @@ import {
   FanIdSchema,
   newId,
   PlatformAccountIdSchema,
+  TeamMemberIdSchema,
   type CreatorId,
   type FanId,
 } from '@nirvana/contracts';
@@ -109,7 +110,8 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
     expect((await server.inject({ method: 'GET', url: url(fan, anna) })).statusCode).toBe(401);
     const read = await get(operator);
     expect(read.statusCode).toBe(200);
-    expect(read.json()).toEqual({ fanId: fan, flags: {} });
+    expect(read.json()).toEqual({ fanId: fan, flags: {}, mayConfirmDisputedAge: false });
+    expect((await get(owner)).json()).toMatchObject({ mayConfirmDisputedAge: true });
   });
 
   it('lets a chatter set and lift a limit, authored by the session, once per change', async () => {
@@ -121,13 +123,18 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
     });
     expect(frozen.statusCode).toBe(200);
     const since = frozen.json<{ flags: { salesFrozen: { since: string } } }>().flags.salesFrozen.since;
-    expect(frozen.json()).toEqual({ fanId: fan, flags: { salesFrozen: { reason: 'distress', since } } });
+    expect(frozen.json()).toEqual({
+      fanId: fan,
+      flags: { salesFrozen: { reason: 'distress', since } },
+      mayConfirmDisputedAge: false,
+    });
     // The same freeze again keeps its start and writes nothing.
     expect(
       (await put(operator, { flag: 'salesFrozen', set: true, freezeReason: 'distress' })).json(),
     ).toEqual({
       fanId: fan,
       flags: { salesFrozen: { reason: 'distress', since } },
+      mayConfirmDisputedAge: false,
     });
     expect((await put(owner, { flag: 'spendingLimitMinor', set: true, limitMinor: 5000 })).statusCode).toBe(
       200,
@@ -288,5 +295,53 @@ describe('fan flags (GET and PUT /v1/fans/:id/flags) and lines to learn (GET /v1
       'desires',
       'situation',
     ]);
+  });
+
+  it('keeps a disputed age to the owner or an active manager, with a written reason kept in the event (SUIVI-04)', async () => {
+    // Taken back by a person: disputed, his own statement no longer confirms it.
+    await put(owner, { flag: 'ageConfirmedAt', set: true });
+    const disputed = await put(operator, { flag: 'ageConfirmedAt', set: false });
+    expect(disputed.json<{ flags: object }>().flags).toHaveProperty('ageDisputed');
+    const reason = 'Pièce d’identité vue en appel vidéo';
+
+    // A chatter cannot lift it, even with a reason; nothing is written.
+    const refused = await put(operator, { flag: 'ageConfirmedAt', set: true, reason });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: { code: 'age_dispute_forbidden' } });
+    // Nor lift the dispute alone to confirm him after: the request is refused, nothing is written.
+    const clearedBefore = (await eventsOf('fan_flag_cleared')).length;
+    const lifted = await put(operator, { flag: 'ageDisputed', set: false, reason });
+    expect(lifted.statusCode).toBe(400);
+    expect(await eventsOf('fan_flag_cleared')).toHaveLength(clearedBefore);
+    expect((await get(operator)).json<{ flags: object }>().flags).toHaveProperty('ageDisputed');
+    // The owner must write why.
+    const bare = await put(owner, { flag: 'ageConfirmedAt', set: true });
+    expect(bare.statusCode).toBe(400);
+    expect(bare.json()).toMatchObject({ error: { code: 'age_dispute_reason_invalid' } });
+    expect((await get(owner)).json<{ flags: object }>().flags).toHaveProperty('ageDisputed');
+
+    // An active manager may, with a reason (the database says, never the caller).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: operatorId,
+      teamRole: 'manager',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Manager',
+      country: 'MG',
+      timeZone: 'Indian/Antananarivo',
+      joinedOn: '2026-10-01',
+    });
+    expect((await get(operator)).json()).toMatchObject({ mayConfirmDisputedAge: true });
+    const confirmed = await put(operator, { flag: 'ageConfirmedAt', set: true, reason });
+    expect(confirmed.statusCode).toBe(200);
+    const flags = confirmed.json<{ flags: object }>().flags;
+    expect(flags).toHaveProperty('ageConfirmedAt');
+    expect(flags).not.toHaveProperty('ageDisputed');
+    const byManager = (await eventsOf('fan_flag_set')).filter((e) => e.actor === `human:${operatorId}`);
+    expect(byManager.map((e) => e.payload)).toContainEqual(
+      expect.objectContaining({ flag: 'ageConfirmedAt', reason }),
+    );
+    await test.admin.db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, operatorId));
   });
 });

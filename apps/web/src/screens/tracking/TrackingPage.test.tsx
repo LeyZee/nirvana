@@ -101,6 +101,8 @@ function serve(routes: {
   command?: (action: string) => Reply;
   /** The fan's limits read first, and after a `PUT` (the same when not given). */
   flags?: { before?: FanFlags; after?: FanFlags };
+  /** Whether this person may confirm a disputed age (the owner or a manager); not by default. */
+  mayConfirmDisputedAge?: boolean;
   /** His desire curve (`/desire`), no point when not given. */
   desire?: Reply;
   /** The canvas lines left to learn about him (`/kyc`), none when not given; `down` answers 500. */
@@ -121,7 +123,11 @@ function serve(routes: {
       let reply: Reply;
       const flagsView = (flags: FanFlags = {}): Reply => ({
         status: 200,
-        body: { fanId: path.split('/')[3], flags },
+        body: {
+          fanId: path.split('/')[3],
+          flags,
+          mayConfirmDisputedAge: routes.mayConfirmDisputedAge ?? false,
+        },
       });
       if (init?.method === 'POST' || init?.method === 'PUT') {
         const action = path.split('/').at(-1) ?? '';
@@ -643,6 +649,8 @@ describe('the reader of Suivi', () => {
     renderPage(OPEN);
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
     expect(posted).toEqual([]);
+    // The button clicked is gone: the keyboard lands on the answer.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Oui, il est majeur' }));
     fireEvent.click(screen.getByRole('button', { name: 'Oui, il est majeur' }));
     expect(await screen.findByText('Majeur, confirmé le 23 octobre.')).toBeDefined();
     expect(posted).toEqual([{ action: 'flags', body: { flag: 'ageConfirmedAt', set: true } }]);
@@ -830,6 +838,47 @@ describe('the reader of Suivi', () => {
     expect(media?.matches('.tr-media:not(:first-child)')).toBe(true);
   });
 
+  it('keeps a disputed age to the owner or a manager, who writes why before confirming (SUIVI-04)', async () => {
+    const ageDisputed = { since: '2026-10-22T10:00:00.000Z', by: 'policy' } as const;
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { ageDisputed }, after: { ageConfirmedAt: '2026-10-23T10:00:00.000Z' } },
+      mayConfirmDisputedAge: true,
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
+    const yes = screen.getByRole('button', { name: 'Oui, il est majeur' });
+    expect(yes).toHaveProperty('disabled', true);
+    // The button clicked is gone: the keyboard lands on the reason to write.
+    expect(document.activeElement).toBe(screen.getByLabelText('Pourquoi tu confirmes son âge'));
+    fireEvent.change(screen.getByLabelText('Pourquoi tu confirmes son âge'), {
+      target: { value: ' Pièce d’identité vue en appel vidéo ' },
+    });
+    expect(yes).toHaveProperty('disabled', false);
+    fireEvent.click(yes);
+    expect(await screen.findByText('Majeur, confirmé le 23 octobre.')).toBeDefined();
+    expect(posted).toEqual([
+      {
+        action: 'flags',
+        body: { flag: 'ageConfirmedAt', set: true, reason: 'Pièce d’identité vue en appel vidéo' },
+      },
+    ]);
+  });
+
+  it('tells a chatter who may confirm a disputed age, with nothing to click', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { ageDisputed: { since: '2026-10-22T10:00:00.000Z', by: 'policy' } } },
+    });
+    renderPage(OPEN);
+    expect(
+      await screen.findByText(/Seuls le propriétaire et les managers peuvent le confirmer/u),
+    ).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Confirmer son âge' })).toBeNull();
+  });
+
   it('says the limits are not for this person, without blaming the server nor asking again', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), flagsRefused: true });
     renderPage(OPEN);
@@ -846,6 +895,7 @@ describe('the reader of Suivi', () => {
       ...withDraft,
       detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
       flags: { before: { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'policy' } } },
+      mayConfirmDisputedAge: true,
     });
     renderPage(OPEN);
     expect(await screen.findByText('Âge contesté', { selector: '.tr-sheet__sum .tr-warn' })).toBeDefined();
