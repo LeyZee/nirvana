@@ -1,6 +1,6 @@
 import type { CreatorSummary } from '@nirvana/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState, type JSX } from 'react';
+import { useEffect, useId, useRef, useState, type JSX } from 'react';
 
 import { UNKNOWN_ZONE, ZoneInput } from './ZoneInput';
 import { moveCreator, type MoveResult } from './api';
@@ -18,7 +18,7 @@ const PROBLEMS: Record<Exclude<MoveResult['kind'], 'moved' | 'reauth'>, string> 
 };
 
 /**
- * Her zone, changed by the owner alone (the screen is his): a mistake at her creation is no longer final. Her hours,
+ * Her zone, changed by the owner alone (the screen is the owner's): a mistake at her creation is no longer final. Her hours,
  * her quiet hours and her night are read on the new clock from the moment it is saved; nothing past is computed
  * again. A sign-in over 10 minutes old asks for the password first.
  */
@@ -40,6 +40,14 @@ export function ZoneEditor({
   const [reauth, setReauth] = useState(false);
   const [problem, setProblem] = useState<keyof typeof PROBLEMS | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Focus follows the editor: into the field when it opens, back to « Changer de fuseau » when it closes.
+  const opener = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open) document.getElementById(`${id}-zone`)?.focus();
+    else if (wasOpen.current) opener.current?.focus();
+    wasOpen.current = open;
+  }, [open, id]);
 
   const typed = zone.trim();
   const unchanged = typed === '' || typed === timeZone;
@@ -55,8 +63,8 @@ export function ZoneEditor({
     if (result.kind === 'moved') {
       setOpen(false);
       setNotice(`Fuseau changé : ${result.creator.timezone}. Ses heures suivent ce fuseau dès maintenant.`);
-      await client.invalidateQueries({ queryKey: ['creators'] });
       onMoved(result.creator);
+      await client.invalidateQueries({ queryKey: ['creators'] });
     } else if (result.kind === 'reauth') {
       setReauth(true);
     } else {
@@ -72,6 +80,7 @@ export function ZoneEditor({
             Fuseau : <span className="nv-num">{timeZone}</span>
           </p>
           <button
+            ref={opener}
             type="button"
             className="nv-btn nv-btn--plain nv-btn--sm"
             onClick={() => {
@@ -149,7 +158,7 @@ export function ZoneEditor({
         <button
           type="submit"
           className="nv-btn nv-btn--soft nv-btn--sm"
-          disabled={unchanged || busy}
+          disabled={unchanged || busy || reauth}
           aria-busy={busy}
         >
           {busy ? 'Enregistrement…' : 'Enregistrer le fuseau'}

@@ -1,4 +1,4 @@
-import { CreatorIdSchema, newId, type CreatorSummary } from '@nirvana/contracts';
+import { CreatorDisplayNameSchema, CreatorIdSchema, newId, type CreatorSummary } from '@nirvana/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState, type SyntheticEvent, type JSX } from 'react';
 
@@ -41,7 +41,8 @@ export function NewCreatorForm({
   const [problem, setProblem] = useState<keyof typeof PROBLEMS | null>(null);
 
   // The server refuses a name without a letter (an invisible character or punctuation alone): said before sending.
-  const noLetter = name.trim() !== '' && !/\p{L}/u.test(name);
+  const noLetter = name.trim() !== '' && !CreatorDisplayNameSchema.safeParse(name).success;
+  const nameRefused = problem === 'name_taken' || problem === 'invalid';
 
   const submit = async (event: SyntheticEvent): Promise<void> => {
     event.preventDefault();
@@ -79,20 +80,25 @@ export function NewCreatorForm({
           value={name}
           maxLength={80}
           autoFocus
-          aria-invalid={noLetter || problem === 'name_taken'}
+          aria-invalid={noLetter || nameRefused}
+          aria-describedby={noLetter ? `${id}-name-error` : nameRefused ? `${id}-problem` : undefined}
           onChange={(event) => {
             setName(event.target.value);
             // The refusal was about the name: typing another one answers it.
             if (problem === 'name_taken' || problem === 'invalid') setProblem(null);
           }}
         />
-        {noLetter ? <p className="ps-error">Le nom doit contenir au moins une lettre.</p> : null}
+        {noLetter ? (
+          <p className="ps-error" id={`${id}-name-error`}>
+            Le nom doit contenir au moins une lettre.
+          </p>
+        ) : null}
       </Field>
       <Field label="Fuseau horaire" id={`${id}-zone`} hint="Sa journée et sa nuit suivent ce fuseau.">
         <ZoneInput id={`${id}-zone`} value={zone} onChange={setZone} invalid={problem === 'unknown_zone'} />
       </Field>
       {problem === null ? null : (
-        <p className="ps-error" role="alert">
+        <p className="ps-error" role="alert" id={`${id}-problem`}>
           {PROBLEMS[problem]}
         </p>
       )}

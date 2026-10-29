@@ -68,6 +68,17 @@ describe('ZoneEditor', () => {
     expect(onMoved).toHaveBeenCalledWith({ ...NORA, timezone: 'America/New_York' });
   });
 
+  it('puts the focus in the field when it opens, and back on its button when it closes', async () => {
+    serve({ status: 200, body: { ...NORA, timezone: 'Asia/Tokyo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    expect(document.activeElement).toBe(screen.getByLabelText('Fuseau'));
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Changer de fuseau' }));
+    move('Asia/Tokyo');
+    await screen.findByRole('status');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Changer de fuseau' }));
+  });
+
   it('cannot save her own zone again, nor an empty one', () => {
     serve();
     fireEvent.click(screen.getByRole('button', { name: 'Changer de fuseau' }));
@@ -86,6 +97,8 @@ describe('ZoneEditor', () => {
     move('Asia/Tokyo');
     expect(await screen.findByText('Pour changer son fuseau, confirme ton mot de passe.')).toBeDefined();
     expect(onMoved).not.toHaveBeenCalled();
+    // Saving again waits for the password, never a second request behind it.
+    expect(screen.getByRole('button', { name: 'Enregistrer le fuseau' })).toHaveProperty('disabled', true);
     fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'staple battery horse' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
     await waitFor(() => {

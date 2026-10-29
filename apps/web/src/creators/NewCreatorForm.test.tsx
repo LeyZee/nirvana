@@ -109,6 +109,7 @@ describe('NewCreatorForm', () => {
     expect(onCreated).not.toHaveBeenCalled();
     const field = screen.getByLabelText('Prénom ou pseudo');
     expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id);
     fireEvent.change(field, { target: { value: 'Léa B.' } });
     expect(screen.queryByRole('alert')).toBeNull();
     // Nothing was created: the same form's id goes again with the new name.
@@ -132,7 +133,10 @@ describe('NewCreatorForm', () => {
     for (const value of ['...', '\u200B', '2024']) {
       fireEvent.change(screen.getByLabelText('Prénom ou pseudo'), { target: { value } });
       expect(screen.getByRole('button', { name: 'Créer' })).toHaveProperty('disabled', true);
-      expect(screen.getByText('Le nom doit contenir au moins une lettre.')).toBeDefined();
+      const message = screen.getByText('Le nom doit contenir au moins une lettre.');
+      const field = screen.getByLabelText('Prénom ou pseudo');
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      expect(field.getAttribute('aria-describedby')).toBe(message.id);
     }
   });
 
@@ -142,6 +146,9 @@ describe('NewCreatorForm', () => {
       'textContent',
       'Ce nom n’est pas accepté : il lui faut au moins une lettre.',
     );
+    const field = screen.getByLabelText('Prénom ou pseudo');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id);
     cleanup();
     show(401, { error: { code: 'session_unauthenticated', message: 'x', details: {}, requestId: 'r' } });
     expect(await screen.findByRole('alert')).toHaveProperty(
