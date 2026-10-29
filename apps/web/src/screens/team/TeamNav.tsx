@@ -21,7 +21,7 @@ export function TeamNav(): JSX.Element {
         {
           to: '/equipe/rapports',
           label: screenLabel('/equipe/rapports'),
-          ...(toValidate === 0 ? {} : { count: toValidate, quiet: true }),
+          ...(toValidate === 0 ? {} : { count: toValidate }),
         },
         { to: '/equipe/membres', label: screenLabel('/equipe/membres') },
       ]}

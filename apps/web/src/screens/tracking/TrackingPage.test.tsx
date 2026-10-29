@@ -295,9 +295,10 @@ describe('TrackingPage', () => {
   });
 
   it('says the server does not answer, and Réessayer reads again', async () => {
+    // The read and its one retry fail (CREA-30); « Réessayer » reads again.
     let calls = 0;
     serve({
-      creators: () => (++calls === 1 ? { status: 500 } : { status: 200, body: { creators: [LEA] } }),
+      creators: () => (++calls <= 2 ? { status: 500 } : { status: 200, body: { creators: [LEA] } }),
       conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
     });
     renderPage();

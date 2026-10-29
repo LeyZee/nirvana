@@ -100,10 +100,11 @@ export interface SubNavItem {
   readonly search?: LinkProps['search'];
   readonly current?: boolean;
   readonly label: string;
-  /** A count that asks for action (corrections to sort), shown as a badge. */
+  /**
+   * What waits behind the tab, said as a number in ink on glass: never an alarm, the neon is left to the screen's own
+   * action (EQ-04, PAIE-09).
+   */
   readonly count?: number;
-  /** The count says what waits, not what is urgent: in a quiet tone, the neon left to the screen's action (EQ-04). */
-  readonly quiet?: boolean;
 }
 
 /** The thumb put under the active tab at once, with no slide. */
@@ -225,9 +226,7 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
           >
             {item.label}
             {item.count === undefined || item.count === 0 ? null : (
-              <span className="nv-subnav__count" data-tone={item.quiet === true ? 'quiet' : undefined}>
-                {item.count}
-              </span>
+              <span className="nv-subnav__count">{item.count}</span>
             )}
           </Link>
         ))}

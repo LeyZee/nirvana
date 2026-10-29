@@ -1062,3 +1062,8 @@
     transition: none;
   }
 }
+
+/* A zone chosen by city (CREA-27). */
+.ps-select {
+  cursor: pointer;
+}

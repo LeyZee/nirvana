@@ -51,6 +51,15 @@ describe('NewCreatorForm', () => {
     expect(body).toMatchObject({ displayName: 'Léa', timezone: 'Europe/Paris' });
   });
 
+  it('offers her zone by city, the zone kept behind it (CREA-27)', () => {
+    show(201, LEA);
+    const zone = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Fuseau horaire' });
+    expect(zone.selectedOptions[0]?.textContent).toBe('Paris');
+    const montreal = screen.getByRole<HTMLOptionElement>('option', { name: 'Montréal' });
+    expect(montreal.value).toBe('America/Toronto');
+    expect(screen.getByRole('option', { name: 'Tokyo · Asia' })).toBeDefined();
+  });
+
   it('sends once when the form is submitted again before the answer', async () => {
     const { fetch, onCreated } = show(201, LEA);
     // Submitting the form itself skips the disabled button: only the guard stops a second request.
@@ -84,7 +93,7 @@ describe('NewCreatorForm', () => {
     const { onCreated } = show(400, refused([{ path: '/timezone', message: 'Fuseau horaire IANA inconnu' }]));
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
+      'Ce fuseau n’existe pas. Choisis une ville dans la liste.',
     );
     expect(onCreated).not.toHaveBeenCalled();
   });

@@ -19,7 +19,8 @@ export async function fetchCreators(): Promise<CreatorSummary[]> {
 
 /** The creators, read once and shared by every screen that lists them (Créatrices, Suivi). */
 export function useCreators(): UseQueryResult<CreatorSummary[]> {
-  return useQuery({ queryKey: ['creators'], queryFn: fetchCreators });
+  // One retry, not three: « Le serveur ne répond pas » comes in under two seconds instead of a long skeleton (CREA-30).
+  return useQuery({ queryKey: ['creators'], queryFn: fetchCreators, retry: 1, retryDelay: 400 });
 }
 
 export type CreateResult =

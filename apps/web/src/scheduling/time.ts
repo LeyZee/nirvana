@@ -173,8 +173,8 @@ const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
   timeZone: 'UTC',
 });
 
-/** « mar. 28 oct. »: a day further than this week. */
-export const dayMonth = (day: string): string => DAY_MONTH.format(utcMidnight(day));
+/** « mar. 28 oct. », « dim. 1er nov. »: a day further than this week. */
+export const dayMonth = (day: string): string => withFirstOfMonth(DAY_MONTH.formatToParts(utcMidnight(day)));
 
 /** Calendar days from `from` to `to`, `to` excluded. */
 export const daysFrom = (from: string, to: string): number =>
@@ -190,9 +190,11 @@ export const withFirstOfMonth = (parts: readonly Intl.DateTimeFormatPart[]): str
 /** « mardi 28 octobre », « dimanche 1er novembre ». */
 export const longDay = (day: string): string => withFirstOfMonth(LONG_DAY.formatToParts(utcMidnight(day)));
 
-/** « 26 oct. – 1 nov. », the week that starts on `monday`. */
+/** « 26 oct. – 1er nov. », the week that starts on `monday` (PAIE-19: the first of a month is « 1er » everywhere). */
 export const weekLabel = (monday: string): string =>
-  `${MONTH_DAY.format(utcMidnight(monday))} – ${MONTH_DAY.format(utcMidnight(addDays(monday, 6)))}`;
+  `${withFirstOfMonth(MONTH_DAY.formatToParts(utcMidnight(monday)))} – ${withFirstOfMonth(
+    MONTH_DAY.formatToParts(utcMidnight(addDays(monday, 6))),
+  )}`;
 
 /** The zone the browser reads in: the reader's own time. */
 export const readerZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
