@@ -162,6 +162,14 @@ describe('Suivi › Historique des alertes (P4-01)', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('leads to « À traiter » from its intro, and says where a conversation opens', async () => {
+    serve(history);
+    renderPage();
+    await lines();
+    expect(screen.getByRole('link', { name: '«\u00a0À traiter\u00a0»' }).getAttribute('href')).toBe('/suivi');
+    expect(screen.getByText(/Choisis une alerte à gauche/u)).toBeDefined();
+  });
+
   it('opens the conversation of a line beside the list', async () => {
     serve(history);
     const onSelect = vi.fn();

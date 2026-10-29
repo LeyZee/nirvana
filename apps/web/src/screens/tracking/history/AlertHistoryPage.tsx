@@ -1,4 +1,5 @@
 import type { AlertTriggerItem, CreatorSummary } from '@nirvana/contracts';
+import { Link } from '@tanstack/react-router';
 import { useId, useRef, useState, type JSX, type ReactNode } from 'react';
 
 import { Reader } from '../Reader';
@@ -91,7 +92,15 @@ export function AlertHistoryPage({
       <PageHeader
         eyebrow={creators.length === 1 ? creators[0]?.displayName : undefined}
         title="Suivi"
-        lead="Chaque alerte qui a sonné, la plus récente d’abord. Ce qui demande une main est dans « À traiter »."
+        lead={
+          <>
+            Chaque alerte qui a sonné, la plus récente d’abord. Ce qui demande une main est dans{' '}
+            <Link to="/suivi" className="hi-lead-link">
+              «&nbsp;À traiter&nbsp;»
+            </Link>
+            .
+          </>
+        }
         actions={nav}
       />
       {creatorsQuery.isError ? (
@@ -156,7 +165,11 @@ export function AlertHistoryPage({
               }}
             />
           </div>
-          {selected === null ? null : open === null ? (
+          {selected === null ? (
+            <section className="nv-plate tr-reader tr-reader--idle" aria-label="Conversation">
+              <p className="tr-reader__empty">Choisis une alerte à gauche : sa conversation s’ouvre ici.</p>
+            </section>
+          ) : open === null ? (
             <section className="nv-plate tr-reader" aria-label="Conversation">
               <p className="tr-reader__empty">Cette conversation n’est pas dans la liste.</p>
             </section>
@@ -273,7 +286,6 @@ function History({
   return (
     <Panel
       className="tr-panel hi-panel"
-      eyebrow="Alertes"
       actions={
         anyUnseen ? (
           <button
