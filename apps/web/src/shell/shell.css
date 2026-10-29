@@ -580,6 +580,8 @@
   padding: 6px;
   transform-origin: 50% 100%;
   animation: nv-shell-pop var(--nv-dur-slow) var(--nv-ease-spring) both;
+  /* Over the rail's own glass a backdrop blurs nothing: an opaque ground, or the pill and Réglages read through. */
+  background: linear-gradient(180deg, var(--nv-glass-fill) 0%, transparent 40%), var(--nv-surface-raised);
 }
 .nv-user__menu .nv-btn {
   justify-content: flex-start;
@@ -1101,4 +1103,9 @@
   .nav-needle {
     transition: none;
   }
+}
+
+/* A sub-tab of the same section: the header stays put, only the content arrives (NAV-08). */
+.nv-stage[data-within] .nv-page > .nv-page__head {
+  animation: none;
 }

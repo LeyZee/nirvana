@@ -591,3 +591,58 @@ describe('the shell while a screen loads (review of #313)', () => {
     expect(await screen.findByText('Cette page n’est pas dans ton espace.')).toBeDefined();
   });
 });
+
+describe('the header of a section with sub-tabs (NAV-08)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('stays put when a sub-tab is chosen, and plays again in another section', async () => {
+    const router = renderApp(owner, '/equipe/planning');
+    await screen.findByRole('navigation', { name: 'Équipe' });
+    const stage = (): HTMLElement | null => document.getElementById('contenu');
+    expect(stage()?.hasAttribute('data-within')).toBe(false);
+    await router.navigate({ to: '/equipe/membres' });
+    await waitFor(() => {
+      expect(stage()?.hasAttribute('data-within')).toBe(true);
+    });
+    await router.navigate({ to: '/paie/releves' });
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/paie/releves');
+    });
+    expect(stage()?.hasAttribute('data-within')).toBe(false);
+  });
+
+  it('says under each section’s title what the screen is for (NAV-11)', async () => {
+    // The Playground listens to the phone's width.
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    );
+    for (const [path, lead] of [
+      [
+        '/entrainer/playground',
+        'Parle à la persona comme un fan, avant qu’un vrai fan ne la lise : rien n’est envoyé.',
+      ],
+      ['/reglages/modeles-ia', 'Ce qui règle le CRM pour toute l’agence.'],
+      ['/creatrices', 'La fiche de chaque créatrice : sa persona et ses heures d’activité.'],
+    ] as const) {
+      renderApp(owner, path);
+      const title = await screen.findByRole('heading', { level: 1 });
+      expect(title.parentElement?.querySelector('.nv-page__lead')?.textContent).toBe(lead);
+      cleanup();
+    }
+  });
+
+  it('says no sub-tab’s name above the title: the lit sub-tab says it (NAV-09)', async () => {
+    renderApp(owner, '/equipe/rapports');
+    const title = await screen.findByRole('heading', { level: 1, name: 'Équipe' });
+    expect(title.parentElement?.querySelector('.nv-eyebrow')).toBeNull();
+  });
+});

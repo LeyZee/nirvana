@@ -6,9 +6,9 @@ import { NewCreatorForm } from './NewCreatorForm';
 import { useCreators } from './api';
 import { HoursSection } from './hours/HoursSection';
 import { PersonaSection } from './persona/PersonaSection';
-import { Segment } from './persona/fields';
+import { creatorsSearch } from './search';
 
-import { Page, PageHeader } from '@/shell/layout';
+import { Page, PageHeader, SubNav } from '@/shell/layout';
 
 export type CreatorTab = 'persona' | 'hours';
 
@@ -21,13 +21,11 @@ export type CreatorTab = 'persona' | 'hours';
 export function CreatorsPage({
   tab,
   creatorId,
-  onTab,
   onCreator,
 }: {
   tab: CreatorTab;
   /** The creator in the address; one the list does not hold reads as the first of the list. */
   creatorId: CreatorId | null;
-  onTab: (tab: CreatorTab) => void;
   onCreator: (id: CreatorId) => void;
 }): JSX.Element {
   const { user } = useRouteContext({ from: '__root__' });
@@ -147,16 +145,45 @@ export function CreatorsPage({
       />
     );
   };
-  // The switch Persona · Heures says where one is: the eyebrow then says nothing more (CREA-24).
+  // Persona · Heures d'activité are the views of the sheet, in the header like every section's sub-tabs (NAV-10);
+  // they say where one is: the eyebrow then says nothing more (CREA-24).
   const switchShown = isOwner && current !== undefined && !showForm && query.isSuccess;
+  // A creator reads her own sheet, her tab named « Persona » (NAV-18).
+  const own = user.role === 'creator';
 
   return (
     <Page>
       <PageHeader
-        eyebrow={current === undefined || showForm || switchShown ? undefined : current.displayName}
-        title="Créatrices"
+        eyebrow={current === undefined || showForm || switchShown || own ? undefined : current.displayName}
+        title={own ? 'Persona' : 'Créatrices'}
+        lead={
+          own
+            ? 'Ta fiche : ce que l’agent sait de toi et la façon dont il parle.'
+            : isOwner
+              ? 'La fiche de chaque créatrice : sa persona et ses heures d’activité.'
+              : 'La persona de chaque créatrice : ce que l’agent sait d’elle et la façon dont il parle.'
+        }
         actions={
           <>
+            {switchShown ? (
+              <SubNav
+                label="Fiche de la créatrice"
+                items={[
+                  {
+                    to: '/creatrices',
+                    search: creatorsSearch('persona', selected),
+                    current: shown === 'persona',
+                    label: 'Persona',
+                  },
+                  {
+                    to: '/creatrices',
+                    search: creatorsSearch('hours', selected),
+                    current: shown === 'hours',
+                    label: 'Heures d’activité',
+                  },
+                ]}
+              />
+            ) : null}
             {/* While a creator is added, only « Annuler » leads back: a chip would change nothing on screen. */}
             {creators.length > 1 && !showForm ? (
               <div className="ps-chips cr-creators" role="radiogroup" aria-label="Créatrice">
@@ -196,19 +223,6 @@ export function CreatorsPage({
       />
       {/* One child of the page: the sheet follows the switch, never pushed to the foot of the screen (CREA-03). */}
       <div className="ps-sheet">
-        {switchShown ? (
-          <div className="hr-tabs">
-            <Segment
-              label="Fiche de la créatrice"
-              options={[
-                { value: 'persona', label: 'Persona' },
-                { value: 'hours', label: 'Heures d’activité' },
-              ]}
-              value={shown}
-              onChange={onTab}
-            />
-          </div>
-        ) : null}
         {leaving ? <LeaveConfirm onLeave={leave} onStay={stay} /> : null}
         {body()}
       </div>

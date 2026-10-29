@@ -156,7 +156,6 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
   return (
     <Page>
       <PageHeader
-        eyebrow="Rapports"
         title="Équipe"
         lead="Les rapports de fin de shift : valide-les en lot, renvoie-en un avec un mot."
         actions={

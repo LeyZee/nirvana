@@ -69,7 +69,6 @@ export function MembersPage({
   return (
     <Page className={open === null ? '' : 'tm-is-reading'}>
       <PageHeader
-        eyebrow="Membres"
         title="Équipe"
         lead={summary ?? 'Les chatteurs et les managers de l’agence, leurs créatrices et leur taux.'}
         actions={

@@ -2,7 +2,7 @@
 import type { Me } from '@nirvana/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, RouterProvider } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import blocksYaml from '../../../../personas/demo/v0.2.0.yaml?raw';
@@ -64,11 +64,12 @@ function renderAt(user: Me, path: string): AppRouter {
 
 const chip = (name: string): HTMLElement => screen.getByRole('radio', { name });
 
-/** The creator on screen: her chip is the one checked; no eyebrow repeats it over the switch (CREA-24). */
+/** The creator on screen: her chip is the one checked; no eyebrow repeats it over the header's views (CREA-24, NAV-10). */
 const picked = (name: string): Promise<void> =>
   waitFor(() => {
     expect(chip(name).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('radio', { name: 'Persona' }).getAttribute('aria-checked')).toBe('true');
+    const views = screen.getByRole('navigation', { name: 'Fiche de la créatrice' });
+    expect(within(views).getByRole('link', { name: 'Persona' }).getAttribute('aria-current')).toBe('page');
     expect(screen.queryByText(`${name} · Persona`)).toBeNull();
   });
 

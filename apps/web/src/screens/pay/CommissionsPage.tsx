@@ -94,6 +94,7 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
     <PageHeader
       eyebrow={period === null ? 'Quinzaine' : `Quinzaine ${periodLine(period)}`}
       title="Commissions"
+      lead="Ce que tu as gagné sur la quinzaine, et ce qui te sépare du prochain palier."
     />
   );
 
