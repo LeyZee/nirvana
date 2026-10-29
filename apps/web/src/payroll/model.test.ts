@@ -148,6 +148,8 @@ const summary = (
   statements: { draft: 0, validated: 0, paid: 0, carried: 0 },
   netMinor: 100_000,
   payableMinor: 30_000,
+  validatedPayableMinor: 0,
+  carriedMinor: 0,
   paidMinor: 0,
   ...patch,
 });
@@ -247,15 +249,18 @@ describe('a period in the list', () => {
           payment: { paidOn: '2026-11-02', method: 'worldremit', reference: null, sentMinor: 2_125 },
         }),
         statement({ carryOverOutMinor: 900, payableMinor: 0 }),
+        statement({ status: 'validated', carryOverOutMinor: 700, payableMinor: 0 }),
       ],
       bonusTiers: null,
       collectiveGoal: null,
       settings: { minimumPayoutMinor: 1_500 },
     };
+    // The draft under the minimum would carry its total, but only the validated one did.
     expect(summaryOf(period)).toMatchObject({
-      statements: { draft: 1, validated: 0, paid: 1, carried: 1 },
-      netMinor: 17_000,
+      statements: { draft: 1, validated: 1, paid: 1, carried: 1 },
       payableMinor: 2_125,
+      validatedPayableMinor: 2_125,
+      carriedMinor: 700,
       paidMinor: 2_125,
     });
   });

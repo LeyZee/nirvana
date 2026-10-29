@@ -237,10 +237,13 @@ export function summaryFor(period: PayrollPeriod): PayPeriodSummary {
       draft: count('draft'),
       validated: count('validated'),
       paid: count('paid'),
-      carried: period.statements.filter((one) => one.carryOverOutMinor !== 0).length,
+      carried: period.statements.filter((one) => one.carryOverOutMinor !== 0 && one.status !== 'draft')
+        .length,
     },
     netMinor: sum((one) => one.netMinor),
     payableMinor: sum((one) => one.payableMinor),
+    validatedPayableMinor: sum((one) => (one.status === 'draft' ? 0 : one.payableMinor)),
+    carriedMinor: sum((one) => (one.status === 'draft' ? 0 : one.carryOverOutMinor)),
     paidMinor: sum((one) => one.payment?.sentMinor ?? 0),
   };
 }

@@ -46,10 +46,12 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
         draft: count((row) => row.status === 'draft'),
         validated: count((row) => row.status === 'validated'),
         paid: count((row) => row.status === 'paid'),
-        carried: count((row) => row.carryOverOutMinor !== 0),
+        carried: count((row) => row.carryOverOutMinor !== 0 && row.status !== 'draft'),
       },
       netMinor: sum((row) => row.netMinor),
       payableMinor: sum((row) => row.payableMinor),
+      validatedPayableMinor: sum((row) => (row.status === 'draft' ? 0 : row.payableMinor)),
+      carriedMinor: sum((row) => (row.status === 'draft' ? 0 : row.carryOverOutMinor)),
       paidMinor: sum((row) => row.sentMinor),
     };
   };
@@ -127,7 +129,13 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
     for (const item of owners.items)
       expect(item).toMatchObject({ ended: true, ...(await expected(item.window.period, everyone)) });
     expect(owners.items[1]?.statements).toEqual({ draft: 0, validated: 2, paid: 1, carried: 0 });
-    expect(owners.items[0]?.statements.carried).toBe(2);
+    // Théo and Léa would carry their Q2 totals over, but nothing is owed nor carried before a validation.
+    expect(owners.items[0]).toMatchObject({
+      statements: { draft: 2, validated: 0, paid: 0, carried: 0 },
+      validatedPayableMinor: 0,
+      carriedMinor: 0,
+    });
+    expect(q1Of(owners)?.validatedPayableMinor).toBe(q1Of(owners)?.payableMinor);
 
     // An active manager reads the team, as the owner does; each chatter reads their own, never the team's.
     expect(await list(monaCookie)).toEqual(owners);
@@ -178,6 +186,23 @@ describe('Paie › Relevés : la liste des quinzaines (EQ-05)', () => {
       const refused = await team.call('GET', `/payroll/periods?cursor=${cursor}`, team.owner);
       expect([refused.statusCode, team.refusal(refused).code]).toEqual([400, 'cursor_invalid']);
     }
+  });
+
+  it('counts a carry-over and owes an amount once the statement is validated, as the period itself does', async () => {
+    expect((await team.validate(team.owner, theo, Q2)).statusCode).toBe(200);
+    const theosQ2 = await team.statementOf(theo, Q2);
+    const owners = await list(team.owner);
+    expect(owners.items[0]).toMatchObject({
+      window: { period: Q2 },
+      ...(await expected(Q2, [theo, lea, mona])),
+    });
+    // Théo's validated total went over to the next period; Léa's, still to validate, is neither owed nor carried.
+    expect(owners.items[0]).toMatchObject({
+      statements: { draft: 1, validated: 1, paid: 0, carried: 1 },
+      validatedPayableMinor: theosQ2.payableMinor,
+      carriedMinor: theosQ2.carryOverOutMinor,
+    });
+    expect(theosQ2.carryOverOutMinor).toBeGreaterThan(0);
   });
 });
 

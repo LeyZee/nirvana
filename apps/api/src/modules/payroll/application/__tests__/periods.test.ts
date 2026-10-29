@@ -159,6 +159,8 @@ describe('the periods’ list (EQ-05)', () => {
       statements: { draft: 1, validated: 0, paid: 0, carried: 0 },
       netMinor: 6_400,
       payableMinor: 1_600,
+      validatedPayableMinor: 0,
+      carriedMinor: 0,
       paidMinor: 0,
     };
     const list = (at: string) =>
