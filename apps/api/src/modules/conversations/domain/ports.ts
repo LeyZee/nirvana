@@ -26,6 +26,7 @@ import type {
   FactKind,
   FanId,
   GuardCode,
+  MediaAssetId,
   HandoffCause,
   JobName,
   JobPayload,
@@ -515,6 +516,14 @@ interface Page<T> {
 export interface PageRequest {
   readonly limit: number;
   readonly cursor?: string | undefined;
+}
+
+/**
+ * What her media show, as the `media` module described and kept them (SUIVI-26; the composition root's adapter): the
+ * latest description of each of these media that has one. Without it, a message's media are shown undescribed.
+ */
+export interface MediaDescriptions {
+  of(creatorId: CreatorId, mediaAssetIds: readonly MediaAssetId[]): Promise<ReadonlyMap<string, string>>;
 }
 
 /** Read side of the dashboard (no lock, no event): implemented in `infra/db`. */
