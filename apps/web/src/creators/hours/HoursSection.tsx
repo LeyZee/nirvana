@@ -18,10 +18,8 @@ import {
   clockHeader,
   DAY_NAMES,
   DAY_SHORT,
-  inputOf,
   isDefaultHours,
   issuesOf,
-  minuteOfInput,
   newSlot,
   noFollowUpEver,
   orderedSlots,
@@ -34,6 +32,7 @@ import {
 } from './model';
 import './hours.css';
 
+import { TimeField } from '@/scheduling/TimeField';
 import { MINUTES_PER_DAY } from '@/scheduling/time';
 import { PasswordPrompt, SignInAgain } from '@/settings/services/PasswordPrompt';
 import { ReauthRequired } from '@/settings/services/api';
@@ -458,46 +457,6 @@ function Week({ slots, quiet }: { slots: readonly AgentSlot[]; quiet: MinuteRang
   );
 }
 
-/**
- * An hour on 24 hours, typed as text (« 09:00 », « 21h30 »): never `<input type="time">`, which Chromium writes in the
- * system's language (« 09:00 AM ») whatever the page's `lang` (recette 28/10, M15). While it is typed, the field keeps
- * what is written; a full hour goes to the form at once, and leaving the field writes it back as `HH:MM`.
- */
-function TimeInput({
-  value,
-  label,
-  onChange,
-}: {
-  value: number;
-  label: string;
-  onChange: (minute: number) => void;
-}): JSX.Element {
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      spellCheck={false}
-      maxLength={6}
-      placeholder="HH:MM"
-      className="nv-field__control nv-glass nv-num hr-time"
-      value={draft ?? inputOf(value)}
-      aria-label={label}
-      aria-invalid={draft !== null && minuteOfInput(draft) === null ? true : undefined}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        // Empty or half typed: the form keeps its last full hour.
-        const minute = minuteOfInput(event.target.value);
-        if (minute !== null) onChange(minute);
-      }}
-      onBlur={() => {
-        setDraft(null);
-      }}
-    />
-  );
-}
-
 function SlotLine({
   slot,
   issue,
@@ -535,7 +494,8 @@ function SlotLine({
           ))}
         </select>
         <span className="hr-slot__hours">
-          <TimeInput
+          <TimeField
+            className="hr-time"
             value={slot.startMinute}
             label={`Début du créneau du ${day}`}
             onChange={(startMinute) => {
@@ -543,7 +503,8 @@ function SlotLine({
             }}
           />
           <span className="ps-hint">à</span>
-          <TimeInput
+          <TimeField
+            className="hr-time"
             value={slot.endMinute}
             label={`Fin du créneau du ${day}`}
             onChange={(endMinute) => {
@@ -602,7 +563,8 @@ function RangeLine({
         <span className="hr-range__label">{label}</span>
         <span className="hr-slot__hours">
           <span className="ps-hint">de</span>
-          <TimeInput
+          <TimeField
+            className="hr-time"
             value={range.startMinute}
             label={`${label} : début`}
             onChange={(startMinute) => {
@@ -610,7 +572,8 @@ function RangeLine({
             }}
           />
           <span className="ps-hint">à</span>
-          <TimeInput
+          <TimeField
+            className="hr-time"
             value={range.endMinute}
             label={`${label} : fin`}
             onChange={(endMinute) => {

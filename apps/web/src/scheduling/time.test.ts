@@ -5,9 +5,11 @@ import {
   clockAt,
   clockOf,
   dayOf,
+  inputOf,
   lengthOf,
   longDay,
   minuteOf,
+  minuteOfInput,
   mondayOf,
   rangeAt,
   untilOf,
@@ -69,5 +71,22 @@ describe('words for time', () => {
     expect(lengthOf(330 * 60_000)).toBe('5 h 30');
     expect(untilOf(12 * 60_000)).toBe('dans 12 min');
     expect(untilOf(3 * 86_400_000)).toBe('dans 3 jours');
+  });
+});
+
+describe('time fields', () => {
+  it('reads and writes the hours of a time field, and ignores one half typed', () => {
+    expect(inputOf(65)).toBe('01:05');
+    expect(minuteOfInput('23:45')).toBe(1425);
+    expect(minuteOfInput('')).toBeNull();
+    expect(minuteOfInput('24:00')).toBeNull();
+    // Typed by hand, on 24 hours: the field is text, never the browser's clock.
+    expect(minuteOfInput('9:00')).toBe(540);
+    expect(minuteOfInput(' 21h30 ')).toBe(1290);
+    expect(minuteOfInput('21 h')).toBe(1260);
+    expect(minuteOfInput('9:')).toBeNull();
+    expect(minuteOfInput('9:0')).toBeNull();
+    expect(minuteOfInput('12:60')).toBeNull();
+    expect(minuteOfInput('09:00 AM')).toBeNull();
   });
 });

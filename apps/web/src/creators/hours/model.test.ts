@@ -5,10 +5,8 @@ import {
   barsOf,
   canAddSlot,
   clockHeader,
-  inputOf,
   isDefaultHours,
   issuesOf,
-  minuteOfInput,
   newSlot,
   noFollowUpEver,
   orderedSlots,
@@ -40,21 +38,6 @@ describe('her hours in words (P3-14)', () => {
   it('names whose clock the page reads, by her first name and her city', () => {
     expect(clockHeader('Nora Vidal', 'Europe/Paris')).toBe('À l’heure de Nora (Paris)');
     expect(clockHeader('Nora', 'America/Sao_Paulo')).toBe('À l’heure de Nora (Sao Paulo)');
-  });
-
-  it('reads and writes the hours of a time field, and ignores one half typed', () => {
-    expect(inputOf(65)).toBe('01:05');
-    expect(minuteOfInput('23:45')).toBe(1425);
-    expect(minuteOfInput('')).toBeNull();
-    expect(minuteOfInput('24:00')).toBeNull();
-    // Typed by hand, on 24 hours: the field is text, never the browser's clock.
-    expect(minuteOfInput('9:00')).toBe(540);
-    expect(minuteOfInput(' 21h30 ')).toBe(1290);
-    expect(minuteOfInput('21 h')).toBe(1260);
-    expect(minuteOfInput('9:')).toBeNull();
-    expect(minuteOfInput('9:0')).toBeNull();
-    expect(minuteOfInput('12:60')).toBeNull();
-    expect(minuteOfInput('09:00 AM')).toBeNull();
   });
 });
 

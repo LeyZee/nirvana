@@ -12,6 +12,7 @@ import { Dialog } from './Dialog';
 
 import { AGENCY_STATUS, amountText, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
 import '@/reports/reports.css';
+import { TimeField } from '@/scheduling/TimeField';
 import {
   cancelShift,
   endTemplate,
@@ -297,28 +298,22 @@ export function ShiftSheet({
                 {phase === 'later' ? (
                   <label className="sc-hours__one">
                     <span className="tm-hint">De</span>
-                    <input
-                      type="time"
-                      step={900}
-                      className="nv-field__control nv-glass nv-num"
-                      value={from}
-                      aria-label="Début"
-                      onChange={(event) => {
-                        setFrom(event.target.value);
+                    <TimeField
+                      value={minuteOfInput(from) ?? 0}
+                      label="Début"
+                      onChange={(minute) => {
+                        setFrom(inputOf(minute));
                       }}
                     />
                   </label>
                 ) : null}
                 <label className="sc-hours__one">
                   <span className="tm-hint">{phase === 'later' ? 'à' : 'Fin à'}</span>
-                  <input
-                    type="time"
-                    step={900}
-                    className="nv-field__control nv-glass nv-num"
-                    value={to}
-                    aria-label="Fin"
-                    onChange={(event) => {
-                      setTo(event.target.value);
+                  <TimeField
+                    value={minuteOfInput(to) ?? 0}
+                    label="Fin"
+                    onChange={(minute) => {
+                      setTo(inputOf(minute));
                     }}
                   />
                 </label>

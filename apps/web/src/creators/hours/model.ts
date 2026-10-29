@@ -47,24 +47,6 @@ export const zoneCity = (timeZone: string): string =>
 export const clockHeader = (name: string, timeZone: string): string =>
   `À l’heure de ${name.trim().split(/\s+/u)[0] ?? name} (${zoneCity(timeZone)})`;
 
-/** `HH:MM`, on 24 hours, for a time field. */
-export const inputOf = (minute: number): string =>
-  `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-
-/**
- * The minute of the day a time field holds, on 24 hours: « 09:00 », « 9:00 », « 21h30 », « 21 h », or null while it
- * is empty, half typed or not an hour. A text field, not `<input type="time">`: Chromium writes that one in the
- * language of the system, « 09:00 AM » on a machine in English, whatever the page's `lang` (recette 28/10, M15).
- */
-export function minuteOfInput(value: string): number | null {
-  const match = /^(\d{1,2})\s*(?::|h)\s*(\d{2})?$/iu.exec(value.trim());
-  if (match === null) return null;
-  const minutes = match[2] === undefined ? 0 : Number(match[2]);
-  if (match[2] === undefined && !/h\s*$/iu.test(value.trim())) return null;
-  const minute = Number(match[1]) * 60 + minutes;
-  return minute < MINUTES_PER_DAY && minutes < 60 ? minute : null;
-}
-
 /** A slot drawn on one day of the week: an overnight slot is two bars, the second one « continued » the next day. */
 export interface Bar {
   /** 1 Monday … 7 Sunday. */

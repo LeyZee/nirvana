@@ -11,6 +11,7 @@ import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
 
+import { TimeField } from '@/scheduling/TimeField';
 import { createShift, createTemplate, useRefreshPlanning, type Refusal } from '@/scheduling/api';
 import { accountLine, ERROR_MESSAGES, type Fill } from '@/scheduling/model';
 import {
@@ -294,27 +295,21 @@ export function ShiftPanel({
             <div className="sc-hours nv-swap">
               <label className="sc-hours__one">
                 <span className="tm-hint">De</span>
-                <input
-                  type="time"
-                  step={900}
-                  className="nv-field__control nv-glass nv-num"
-                  value={from}
-                  aria-label="Début"
-                  onChange={(event) => {
-                    setFrom(event.target.value);
+                <TimeField
+                  value={minuteOfInput(from) ?? 0}
+                  label="Début"
+                  onChange={(minute) => {
+                    setFrom(inputOf(minute));
                   }}
                 />
               </label>
               <label className="sc-hours__one">
                 <span className="tm-hint">à</span>
-                <input
-                  type="time"
-                  step={900}
-                  className="nv-field__control nv-glass nv-num"
-                  value={to}
-                  aria-label="Fin"
-                  onChange={(event) => {
-                    setTo(event.target.value);
+                <TimeField
+                  value={minuteOfInput(to) ?? 0}
+                  label="Fin"
+                  onChange={(minute) => {
+                    setTo(inputOf(minute));
                   }}
                 />
               </label>
