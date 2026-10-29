@@ -156,10 +156,23 @@ describe('Créatrices › Heures (P3-14)', () => {
     expect(start.getAttribute('aria-invalid')).toBeNull();
     fireEvent.blur(start);
     expect(start).toHaveProperty('value', '21:00');
+    // An hour alone is an hour.
+    fireEvent.change(start, { target: { value: '22' } });
+    fireEvent.blur(start);
+    expect(start).toHaveProperty('value', '22:00');
+    expect(save()).toHaveProperty('disabled', false);
+    // What is not an hour stays as typed, marked, and the save stays shut: never another hour than the one on screen.
     fireEvent.change(start, { target: { value: '25:00' } });
     expect(start.getAttribute('aria-invalid')).toBe('true');
     fireEvent.blur(start);
-    expect(start).toHaveProperty('value', '21:00');
+    expect(start).toHaveProperty('value', '25:00');
+    expect(start.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('Une heure à corriger, sur 24 heures : 22, 2230 ou 22:30')).toBeDefined();
+    expect(save()).toHaveProperty('disabled', true);
+    fireEvent.change(start, { target: { value: '23:00' } });
+    fireEvent.blur(start);
+    expect(start).toHaveProperty('value', '23:00');
+    expect(save()).toHaveProperty('disabled', false);
   });
 
   it('warns when no follow-up could ever go out, in amber, without blocking', async () => {

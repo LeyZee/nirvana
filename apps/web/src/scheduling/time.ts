@@ -202,13 +202,14 @@ export const cityOf = (timeZone: string): string =>
   (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
 
 /**
- * The minute of the day a time field holds, on 24 hours: « 23:30 », « 9:00 », « 21h30 », « 21 h », or null while it
- * is empty, half typed or not an hour. The fields are text (`TimeField`), never `<input type="time">`, which Chromium
+ * The minute of the day a time field holds, on 24 hours: « 23:30 », « 9:00 », « 21h30 », « 21 h », « 22 », « 2230 », or
+ * null while it is empty, half typed or not an hour. The fields are text (`TimeField`), never `<input type="time">`, which Chromium
  * writes in the system's language, « 09:00 AM » on a machine in English, whatever the page's `lang` (recette 28/10).
  */
 export function minuteOfInput(text: string): number | null {
   const typed = text.trim();
-  const match = /^(\d{1,2})\s*(?::(\d{2})|h\s*(\d{2})?)$/iu.exec(typed);
+  // Digits alone, as the phone's number pad types them: « 22 » is 22 h, « 930 » 9 h 30, « 2230 » 22 h 30.
+  const match = /^(\d{1,2})(\d{2})$/u.exec(typed) ?? /^(\d{1,2})\s*(?::(\d{2})|h\s*(\d{2})?)?$/iu.exec(typed);
   if (match === null) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2] ?? match[3] ?? '0');

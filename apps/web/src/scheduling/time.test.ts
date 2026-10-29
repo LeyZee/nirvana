@@ -84,6 +84,16 @@ describe('time fields', () => {
     expect(minuteOfInput('9:00')).toBe(540);
     expect(minuteOfInput(' 21h30 ')).toBe(1290);
     expect(minuteOfInput('21 h')).toBe(1260);
+    expect(minuteOfInput('22')).toBe(1320);
+    expect(minuteOfInput('7')).toBe(420);
+    expect(minuteOfInput('24')).toBeNull();
+    // The phone's number pad has neither « : » nor « h » (iOS): digits alone, the last two the minutes.
+    expect(minuteOfInput('930')).toBe(570);
+    expect(minuteOfInput('0930')).toBe(570);
+    expect(minuteOfInput('2230')).toBe(1350);
+    expect(minuteOfInput('2460')).toBeNull();
+    expect(minuteOfInput('960')).toBeNull();
+    expect(minuteOfInput('12345')).toBeNull();
     expect(minuteOfInput('9:')).toBeNull();
     expect(minuteOfInput('9:0')).toBeNull();
     expect(minuteOfInput('12:60')).toBeNull();

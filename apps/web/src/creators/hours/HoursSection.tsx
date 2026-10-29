@@ -32,7 +32,7 @@ import {
 } from './model';
 import './hours.css';
 
-import { TimeField } from '@/scheduling/TimeField';
+import { TimeField, useUnreadableTimes } from '@/scheduling/TimeField';
 import { MINUTES_PER_DAY } from '@/scheduling/time';
 import { PasswordPrompt, SignInAgain } from '@/settings/services/PasswordPrompt';
 import { ReauthRequired } from '@/settings/services/api';
@@ -126,10 +126,12 @@ function HoursForm({
   const [notice, setNotice] = useState<string | null>(null);
 
   const issues = issuesOf(draft);
+  // An hour typed that is not one (« 25:00 ») stays on screen and holds the form back: it never saves another hour.
+  const times = useUnreadableTimes();
   // A stored setting that no longer reads is replaced by saving, even unchanged: the defaults then go in its place.
   const changed = !sameHours(draft, stored.hours) || stored.invalidStored;
-  const blocked = issues.size > 0;
-  const dirty = !sameHours(draft, stored.hours);
+  const blocked = issues.size > 0 || times.unreadable;
+  const dirty = !sameHours(draft, stored.hours) || times.unreadable;
   useEffect(() => {
     onDirty(dirty);
   }, [dirty, onDirty]);
@@ -178,7 +180,12 @@ function HoursForm({
       : blocked
         ? {
             dot: 'warn',
-            text: issues.size > 1 ? `${String(issues.size)} lignes à corriger` : 'Une ligne à corriger',
+            text:
+              issues.size > 1
+                ? `${String(issues.size)} lignes à corriger`
+                : issues.size === 1
+                  ? 'Une ligne à corriger'
+                  : 'Une heure à corriger, sur 24 heures : 22, 2230 ou 22:30',
           }
         : stored.invalidStored && sameHours(draft, stored.hours)
           ? {
@@ -306,6 +313,7 @@ function HoursForm({
                     key={index}
                     slot={slot}
                     issue={slotIssue(issues, index)}
+                    onUnreadable={times.onUnreadable}
                     onChange={(next) => {
                       editSlots(slots.map((one, i) => (i === index ? next : one)));
                     }}
@@ -358,6 +366,7 @@ function HoursForm({
             label="Heures calmes"
             range={draft.followUpQuiet}
             issue={rangeIssue(issues, 'followUpQuiet')}
+            onUnreadable={times.onUnreadable}
             onChange={(followUpQuiet) => {
               edit({ ...draft, followUpQuiet });
             }}
@@ -380,6 +389,7 @@ function HoursForm({
             label="Nuit"
             range={draft.night}
             issue={rangeIssue(issues, 'night')}
+            onUnreadable={times.onUnreadable}
             onChange={(night) => {
               edit({ ...draft, night });
             }}
@@ -461,11 +471,13 @@ function SlotLine({
   slot,
   issue,
   onChange,
+  onUnreadable,
   onRemove,
 }: {
   slot: AgentSlot;
   issue: string | null;
   onChange: (slot: AgentSlot) => void;
+  onUnreadable: (field: string, unreadable: boolean) => void;
   /** Null for the last slot: « À toute heure » or the Arrêt say « never », not an empty list. */
   onRemove: (() => void) | null;
 }): JSX.Element {
@@ -501,6 +513,7 @@ function SlotLine({
             onChange={(startMinute) => {
               onChange({ ...slot, startMinute });
             }}
+            onUnreadable={onUnreadable}
           />
           <span className="ps-hint">à</span>
           <TimeField
@@ -510,6 +523,7 @@ function SlotLine({
             onChange={(endMinute) => {
               onChange({ ...slot, endMinute });
             }}
+            onUnreadable={onUnreadable}
           />
         </span>
         <span className="ps-hint hr-slot__words">{slotWords(slot)}</span>
@@ -550,11 +564,13 @@ function RangeLine({
   range,
   issue,
   onChange,
+  onUnreadable,
 }: {
   label: string;
   range: MinuteRange;
   issue: string | null;
   onChange: (range: MinuteRange) => void;
+  onUnreadable: (field: string, unreadable: boolean) => void;
 }): JSX.Element {
   const overnight = range.endMinute < range.startMinute;
   return (
@@ -570,6 +586,7 @@ function RangeLine({
             onChange={(startMinute) => {
               onChange({ ...range, startMinute });
             }}
+            onUnreadable={onUnreadable}
           />
           <span className="ps-hint">à</span>
           <TimeField
@@ -579,6 +596,7 @@ function RangeLine({
             onChange={(endMinute) => {
               onChange({ ...range, endMinute });
             }}
+            onUnreadable={onUnreadable}
           />
         </span>
         {issue === null ? (

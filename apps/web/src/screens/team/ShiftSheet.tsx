@@ -12,7 +12,7 @@ import { Dialog } from './Dialog';
 
 import { AGENCY_STATUS, amountText, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
 import '@/reports/reports.css';
-import { TimeField } from '@/scheduling/TimeField';
+import { TimeField, useUnreadableTimes } from '@/scheduling/TimeField';
 import {
   cancelShift,
   endTemplate,
@@ -94,6 +94,7 @@ export function ShiftSheet({
   const [from, setFrom] = useState(inputOf(minuteOf(shift.startsAt, agency)));
   const [to, setTo] = useState(inputOf(minuteOf(shift.endsAt, agency)));
   const [arming, setArming] = useState<Arming>(null);
+  const times = useUnreadableTimes();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
@@ -112,8 +113,12 @@ export function ShiftSheet({
     if (outcome.kind === 'refused' && outcome.code.endsWith('_not_found')) void refresh();
   };
 
-  /** The hours typed, on the shift's day in the agency's time; the end the next day when it comes before the start. */
+  /**
+   * The hours typed, on the shift's day in the agency's time; the end the next day when it comes before the start. Null
+   * while a field holds what is not an hour: the sheet never saves an hour other than the one on screen.
+   */
   const typed = (): { startsAt: string; endsAt: string } | null => {
+    if (times.unreadable) return null;
     const start = minuteOfInput(from);
     const end = minuteOfInput(to);
     if (start === null || end === null || start === end) return null;
@@ -125,13 +130,15 @@ export function ShiftSheet({
 
   const save = (): void => {
     const hours = typed();
+    // Enter submits the form even while « Enregistrer » is off.
+    if (hours === null) return;
     const body: UpdateShiftBody = {};
     if (memberId !== shift.memberId) body.memberId = memberId;
-    if (phase === 'later' && hours !== null) {
+    if (phase === 'later') {
       if (hours.startsAt !== shift.startsAt) body.startsAt = hours.startsAt;
       if (hours.endsAt !== shift.endsAt) body.endsAt = hours.endsAt;
     }
-    if (phase === 'live' && hours !== null && hours.endsAt !== shift.endsAt) body.endsAt = hours.endsAt;
+    if (phase === 'live' && hours.endsAt !== shift.endsAt) body.endsAt = hours.endsAt;
     if (Object.keys(body).length === 0) {
       onClose();
       return;
@@ -304,6 +311,7 @@ export function ShiftSheet({
                       onChange={(minute) => {
                         setFrom(inputOf(minute));
                       }}
+                      onUnreadable={times.onUnreadable}
                     />
                   </label>
                 ) : null}
@@ -315,11 +323,16 @@ export function ShiftSheet({
                     onChange={(minute) => {
                       setTo(inputOf(minute));
                     }}
+                    onUnreadable={times.onUnreadable}
                   />
                 </label>
               </div>
               {hours === null ? (
-                <span className="tm-hint tm-hint--error">Un début et une fin différents.</span>
+                <span className="tm-hint tm-hint--error">
+                  {times.unreadable
+                    ? 'Une heure sur 24 heures : 22, 2230 ou 22:30.'
+                    : 'Un début et une fin différents.'}
+                </span>
               ) : null}
             </fieldset>
             <div className="tm-dialog__foot sc-sheet__foot">

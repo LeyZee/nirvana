@@ -4,7 +4,6 @@ import type { AgentMode } from '@/agent/mode';
 
 /* Pure helpers of the Dashboard: formatting and the few decisions the screen makes on its data. */
 
-/** « 1 846 € », « 10,50 € »: the cents only when there are some, never rounded away (ADR 0011: exact money). */
 /** The period in the address (`/?periode=7j`): a reload or a shared link keeps it; today is the address with none. */
 export interface DashboardSearch {
   readonly periode?: '7j' | '30j';
@@ -24,6 +23,7 @@ export const periodOf = (search: DashboardSearch): Period =>
 export const dashboardSearch = (period: Period): DashboardSearch =>
   period === 'day' ? {} : { periode: PERIOD_PARAMS[period] };
 
+/** « 1 846 € », « 10,50 € »: the cents only when there are some, never rounded away (ADR 0011: exact money). */
 export function eur(value: number): string {
   const cents = Math.round(value * 100);
   const digits = cents % 100 === 0 ? 0 : 2;
