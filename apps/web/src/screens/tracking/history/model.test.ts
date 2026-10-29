@@ -15,6 +15,7 @@ import {
   markAllTargets,
   markedLine,
   mergeTriggers,
+  reasonAddsSomething,
   whenLine,
 } from './model';
 
@@ -196,5 +197,26 @@ describe('the alert filter', () => {
     expect(custom(NORA)).toEqual(['Vidéo perso']);
     expect(custom(LEA)).toEqual(['Appel', 'Vidéo perso']);
     expect(custom(NORA, other)).toEqual(['Appel', 'Vidéo perso']);
+  });
+  it('keeps the server’s line only when it says more than the alert’s name', () => {
+    const at = '2026-10-28T10:00:00.000Z';
+    expect(reasonAddsSomething(item(1, NORA, at))).toBe(false);
+    expect(
+      reasonAddsSomething(
+        item(2, NORA, at, {
+          trigger: { alert: { kind: 'system', code: 'keyword' }, matchedBy: 'keyword', keyword: 'adresse' },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      reasonAddsSomething(
+        item(3, NORA, at, {
+          trigger: {
+            alert: { kind: 'custom', id: CustomAlertIdSchema.parse('0192f3a0-0000-7000-8000-0000000000b1') },
+            matchedBy: 'model',
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 });

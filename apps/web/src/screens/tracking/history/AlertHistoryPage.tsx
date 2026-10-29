@@ -23,6 +23,7 @@ import {
   markAllTargets,
   markedLine,
   mergeTriggers,
+  reasonAddsSomething,
   whenLine,
   type AlertChoice,
 } from './model';
@@ -86,7 +87,7 @@ export function AlertHistoryPage({
   };
 
   return (
-    <Page className={selected === null ? '' : 'tr-is-reading'}>
+    <Page className={selected === null ? 'tr-page' : 'tr-page tr-is-reading'}>
       <PageHeader
         eyebrow={creators.length === 1 ? creators[0]?.displayName : undefined}
         title="Suivi"
@@ -168,6 +169,7 @@ export function AlertHistoryPage({
               onClose={() => {
                 onSelect(null);
               }}
+              backLabel="Toutes les alertes"
             />
           )}
         </div>
@@ -451,7 +453,7 @@ function Line({
             {item.alertName}
             {item.pausedAgent ? <span className="nv-tag hi-line__tag">Agent en pause</span> : null}
           </span>
-          <span className="hi-line__reason">{item.reason}</span>
+          {reasonAddsSomething(item) ? <span className="hi-line__reason">{item.reason}</span> : null}
           <span className="nv-convo__preview">
             {creatorName === undefined ? fan : `${fan} · ${creatorName}`}
           </span>

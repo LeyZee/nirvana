@@ -28,6 +28,13 @@ export interface CreatorTriggers {
   readonly nextCursor: string | null;
 }
 
+/**
+ * Whether the server's line says more than the alert's name: the word that rang, or her own alert. A system alert
+ * matched without a word only paraphrases its name (« Demande de service »), and its line is left out.
+ */
+export const reasonAddsSomething = (item: AlertTriggerItem): boolean =>
+  item.trigger.keyword !== undefined || item.trigger.alert.kind === 'custom';
+
 /** The newest first, then by id: two triggers of the same millisecond keep one order from read to read. */
 const newestFirst = (a: AlertTriggerItem, b: AlertTriggerItem): number =>
   b.at.localeCompare(a.at) || b.id.localeCompare(a.id);
