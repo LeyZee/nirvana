@@ -77,10 +77,14 @@ describe('RateBar', () => {
 
   it('names the persona it plays, with or without a key', async () => {
     renderBar(STATE);
-    expect(await screen.findByText('Persona Elena')).toBeTruthy();
+    const named = await screen.findByText('Persona fictive : Elena');
+    // Its rate calibrates the voice on this fictional persona, never on a creator's (ADR 0010).
+    expect(named.getAttribute('title')).toBe(
+      'Ce taux calibre la voix sur la persona fictive du Playground, pas sur celle d’une créatrice.',
+    );
     cleanup();
     renderBar({ ...STATE, voice: { reachable: false } });
-    expect(await screen.findByText('Persona Elena')).toBeTruthy();
+    expect(await screen.findByText('Persona fictive : Elena')).toBeTruthy();
   });
 
   it('says how the rate starts before the first rating', async () => {
