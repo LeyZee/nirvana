@@ -605,6 +605,10 @@ describe('what Quinzaine opens on, and what it lets validate', () => {
     expect(periodToOpen(unpaid, current, false)).toBe(current);
     expect(parsePaySearch({ quinzaine: '2026-10-16', autre: 1 })).toEqual({ quinzaine: '2026-10-16' });
     expect(parsePaySearch({ quinzaine: '2026-10-17' })).toEqual({});
+    // « Son relevé » from a member's record (EQ-11).
+    const theo = '0199f2a0-0000-7000-8000-0000000000a1';
+    expect(parsePaySearch({ membre: theo })).toEqual({ membre: theo });
+    expect(parsePaySearch({ membre: 'Théo' })).toEqual({});
   });
 
   it('lets the reader validate the drafts of an ended period that are not theirs', () => {

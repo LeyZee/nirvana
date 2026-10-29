@@ -249,13 +249,17 @@ function renderPage(at = '/equipe/planning'): AnyRouter {
     path: '/equipe/planning',
     validateSearch: parsePlanningSearch,
     component: function Page() {
-      const { semaine } = page.useSearch();
+      const { semaine, membre } = page.useSearch();
       const navigate = page.useNavigate();
       return (
         <PlanningPage
           userId={OWNER_USER}
           week={semaine ?? null}
-          onWeek={(monday) => void navigate({ search: monday === null ? {} : { semaine: monday } })}
+          member={membre ?? null}
+          onWeek={(monday) =>
+            void navigate({ search: (before) => ({ ...before, semaine: monday ?? undefined }) })
+          }
+          onMember={(id) => void navigate({ search: (before) => ({ ...before, membre: id ?? undefined }) })}
         />
       );
     },
@@ -875,7 +879,55 @@ describe('Équipe › Planning', () => {
     fireEvent.click(within(sheet).getByRole('button', { name: 'Fermer' }));
 
     fireEvent.click(screen.getByRole('button', { name: /^Théo, 16\sh\s–\s22\sh$/u }));
-    expect(within(screen.getByRole('dialog')).getByText('Sans rapport')).toBeTruthy();
+    const over = screen.getByRole('dialog');
+    // « Sans rapport » leads to his fold of the period in Rapports, his name to his record (EQ-11, EQ-13).
+    expect(within(over).getByRole('link', { name: 'Sans rapport' }).getAttribute('href')).toBe(
+      `/equipe/rapports?quinzaine=2026-10-16&membre=${THEO}`,
+    );
+    expect(within(over).getByRole('link', { name: 'Théo' }).getAttribute('href')).toBe(
+      `/equipe/membres?membre=${THEO}`,
+    );
+    expect(text(over)).not.toContain('Ce shift est fini');
+  });
+
+  it('makes one member’s shifts stand out from his record, and gives the whole team back (EQ-11)', async () => {
+    // Another member's night on Thursday: not in the planning's names, so said « Un membre ».
+    const other = {
+      ...night,
+      id: id(107),
+      memberId: BASILE,
+      startsAt: '2026-10-29T22:00:00Z',
+      endsAt: '2026-10-30T04:00:00Z',
+    };
+    serve({ planning: planning([], [night, other]) });
+    const router = renderPage(`/equipe/planning?membre=${THEO}`);
+    const name = await screen.findByText('Théo', { selector: '.sc-focus b' }, { timeout: 4_000 });
+    expect(text(name.closest('.sc-focus'))).toContain('Théo · 1 shift · 6 h');
+    expect(screen.getByRole('button', { name: /^Théo, 23\sh/u }).getAttribute('data-muted')).toBe(null);
+    expect(screen.getByRole('button', { name: /^Un membre, 23\sh/u }).getAttribute('data-muted')).toBe(
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Toute l’équipe' }));
+    await waitFor(() => {
+      expect(document.querySelector('.sc-focus')).toBe(null);
+    });
+    expect(router.state.location.search).toEqual({});
+    // The button went with the band: the focus lands on the week, which stays.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Semaine précédente' }));
+  });
+
+  it('names the member put forward from the team, even with no shift in the week', async () => {
+    serve({
+      members: [
+        member({}),
+        member({ id: BASILE, userId: id(72), firstName: 'Basile', displayName: 'Basile', color: null }),
+      ],
+    });
+    renderPage(`/equipe/planning?membre=${BASILE}`);
+    const band = await screen.findByText('Basile', { selector: '.sc-focus b' }, { timeout: 4_000 });
+    expect(text(band.closest('.sc-focus'))).toContain('Basile · aucun shift cette semaine');
+    // A landmark, not an announcement.
+    expect(band.closest('.sc-focus')?.getAttribute('role')).toBe(null);
   });
 
   it('says how long a single shift really lasts the night the clocks go forward', async () => {

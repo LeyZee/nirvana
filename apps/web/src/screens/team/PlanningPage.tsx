@@ -1,5 +1,5 @@
 import type { OnDuty, Planning, ShiftReportList, ShiftTemplate, TeamMember } from '@nirvana/contracts';
-import { useMemo, useState, type JSX } from 'react';
+import { useMemo, useRef, useState, type JSX } from 'react';
 
 import { ShiftPanel, type ShiftStart } from './ShiftPanel';
 import { ShiftSheet } from './ShiftSheet';
@@ -79,13 +79,18 @@ function leaveRangeOf(monday: string, thisMonday: string, zone: string): { from:
 export function PlanningPage({
   userId,
   week,
+  member = null,
   onWeek,
+  onMember = () => undefined,
 }: {
   userId: string;
   /** The Monday of the week in the address (`?semaine=`), `null` for this week. */
   week: string | null;
+  /** The member whose shifts stand out (`?membre=`), from « Ses shifts » on his record (EQ-11). */
+  member?: string | null;
   /** Writes the week shown into the address, `null` for this week. */
   onWeek: (monday: string | null) => void;
+  onMember?: (memberId: string | null) => void;
 }): JSX.Element {
   const now = useNow();
   const mine = readerZone();
@@ -105,6 +110,7 @@ export function PlanningPage({
   const days = weekOf(monday);
   const shown = usePlanning(rangeOf(monday, zone));
   const members = useMembers();
+  const toolbar = useRef<HTMLDivElement>(null);
   const templates = useTemplates(true);
   const onDuty = useOnDuty(true);
   const leaves = useLeaves(leaveRangeOf(monday, thisMonday, zone));
@@ -190,7 +196,7 @@ export function PlanningPage({
         </Panel>
       ) : (
         <div className="sc-board">
-          <div className="sc-toolbar">
+          <div className="sc-toolbar" ref={toolbar}>
             <WeekNav
               monday={monday}
               thisMonday={thisMonday}
@@ -199,6 +205,18 @@ export function PlanningPage({
                 setPicked(next === thisMonday ? null : 0);
               }}
             />
+            {member === null ? null : (
+              <Focus
+                planning={data}
+                memberId={member}
+                name={members.data?.find((one) => one.id === member)?.displayName ?? null}
+                onClear={() => {
+                  onMember(null);
+                  // The button goes with the band: the focus lands on the week, which stays.
+                  toolbar.current?.querySelector<HTMLElement>('.sc-arrow')?.focus();
+                }}
+              />
+            )}
             <Filters
               planning={data}
               creatorId={creatorId}
@@ -262,6 +280,7 @@ export function PlanningPage({
             now={now}
             zone={zone}
             loading={shown.isFetching && shown.isPlaceholderData}
+            focus={member}
             flagged={flagged}
             incidents={incidents}
             onAdd={(start) => {
@@ -351,6 +370,45 @@ function Opened({
       reports={reports === null ? null : reports.reports.filter((one) => one.shiftId === shift.id)}
       onClose={close}
     />
+  );
+}
+
+/**
+ * « Ses shifts », from a member's record (EQ-11): his shifts of the week stand out, the others are dimmed, and the
+ * whole team comes back in one tap. He is named from the team, since the planning names only those with a shift or a
+ * template in the week read. A landmark, not an announcement.
+ */
+function Focus({
+  planning,
+  memberId,
+  name: teamName,
+  onClear,
+}: {
+  planning: Planning;
+  memberId: string;
+  name: string | null;
+  onClear: () => void;
+}): JSX.Element {
+  const name = teamName ?? planning.members.find((one) => one.id === memberId)?.displayName ?? 'Ce membre';
+  const his = planning.shifts.filter((shift) => shift.memberId === memberId);
+  const total = his.reduce(
+    (sum, shift) => sum + new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime(),
+    0,
+  );
+  const count = his.length === 1 ? '1 shift' : `${String(his.length)} shifts`;
+  return (
+    <p className="sc-focus nv-swap">
+      <span className="sc-focus__text">
+        <b>{name}</b>
+        <span className="nv-num">
+          {' '}
+          · {his.length === 0 ? 'aucun shift cette semaine' : `${count} · ${lengthOf(total)}`}
+        </span>
+      </span>
+      <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" onClick={onClear}>
+        Toute l’équipe
+      </button>
+    </p>
   );
 }
 
@@ -574,6 +632,7 @@ function Grid({
   now,
   zone,
   loading,
+  focus,
   flagged,
   incidents,
   onAdd,
@@ -589,6 +648,8 @@ function Grid({
   now: Date;
   zone: string;
   loading: boolean;
+  /** The member whose shifts stand out, the others dimmed; `null` for all. */
+  focus: string | null;
   /** Shifts to point at: those a leave's approval found in its way. */
   flagged: ReadonlySet<string>;
   /** What the shifts' reports said went wrong, by shift. */
@@ -718,6 +779,7 @@ function Grid({
                 past={day < today}
                 now={now}
                 zone={zone}
+                focus={focus}
                 flagged={flagged}
                 incidents={incidents}
                 onAdd={onAdd}
@@ -763,6 +825,7 @@ function Cell({
   past,
   now,
   zone,
+  focus,
   flagged,
   incidents,
   onAdd,
@@ -782,6 +845,7 @@ function Cell({
   past: boolean;
   now: Date;
   zone: string;
+  focus: string | null;
   flagged: ReadonlySet<string>;
   incidents: ReadonlyMap<string, readonly string[]>;
   onAdd: (start: ShiftStart) => void;
@@ -793,6 +857,7 @@ function Cell({
       chip={chip}
       now={now}
       zone={zone}
+      muted={focus !== null && chip.shift.memberId !== focus}
       flagged={flagged.has(chip.shift.id)}
       incident={incidents.has(chip.shift.id)}
       onShow={onShow}
@@ -905,6 +970,7 @@ function ShiftChip({
   chip,
   now,
   zone,
+  muted,
   flagged,
   incident,
   onShow,
@@ -912,6 +978,8 @@ function ShiftChip({
   chip: Chip;
   now: Date;
   zone: string;
+  /** Another member's, while one member's shifts stand out. */
+  muted: boolean;
   flagged: boolean;
   /** Its report says something went wrong. */
   incident: boolean;
@@ -925,6 +993,7 @@ function ShiftChip({
       type="button"
       className="sc-chip"
       data-phase={phase}
+      data-muted={muted ? 'true' : undefined}
       data-flagged={flagged ? 'true' : undefined}
       data-incident={incident ? 'true' : undefined}
       data-repeat={shift.templateId === null ? undefined : 'true'}

@@ -430,7 +430,10 @@ function ShiftsLeft({ member }: { member: TeamMember }): JSX.Element | null {
   if (planning.isError) {
     return (
       <p className="tm-warn nv-swap">
-        Ses shifts à venir n’ont pas pu être lus. <Link to="/equipe/planning">Vérifier au planning</Link>
+        Ses shifts à venir n’ont pas pu être lus.{' '}
+        <Link to="/equipe/planning" search={{ membre: member.id }}>
+          Vérifier au planning
+        </Link>
       </p>
     );
   }
@@ -442,7 +445,10 @@ function ShiftsLeft({ member }: { member: TeamMember }): JSX.Element | null {
     <p className="tm-warn nv-swap">
       {count} shift{count > 1 ? 's' : ''} à venir {count > 1 ? 'restent' : 'reste'} au planning : personne ne{' '}
       {count > 1 ? 'les' : 'le'} tiendra et {count > 1 ? 'ils comptent' : 'il compte'} comme pourvu
-      {count > 1 ? 's' : ''}. <Link to="/equipe/planning">Voir le planning</Link>
+      {count > 1 ? 's' : ''}.{' '}
+      <Link to="/equipe/planning" search={{ membre: member.id }}>
+        Voir ses shifts
+      </Link>
     </p>
   );
 }

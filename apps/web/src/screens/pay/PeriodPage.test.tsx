@@ -123,12 +123,13 @@ function renderPage(user: Me, initial = '/paie/quinzaine'): void {
     path: '/paie/quinzaine',
     validateSearch: parsePaySearch,
     component: function Page() {
-      const { quinzaine } = page.useSearch();
+      const { quinzaine, membre } = page.useSearch();
       const navigate = page.useNavigate();
       return (
         <PeriodPage
           user={user}
           chosen={quinzaine ?? null}
+          member={membre ?? null}
           onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
         />
       );
@@ -633,6 +634,18 @@ describe('Paie › Quinzaine', () => {
     expect(text(within(dialog).getByText(/^Payé le/u))).toBe(
       'Payé le samedi 17 octobre par WorldRemit, référence WR-1, marqué par Charles.',
     );
+  });
+
+  it('opens a member’s statement from his record in Équipe, or says he has none on the period (EQ-11)', async () => {
+    renderPage(OWNER, `/paie/quinzaine?membre=${BASILE.id}`);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('heading').textContent).toContain('Basile');
+    cleanup();
+    renderPage(OWNER, `/paie/quinzaine?quinzaine=${OCT1}&membre=${BASILE.id}`);
+    expect(text(await screen.findByText(/^Pas de relevé de/u))).toBe(
+      'Pas de relevé de Basile sur cette quinzaine.',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('adjusts a validated statement on the member’s next period to validate, which it says before sending', async () => {

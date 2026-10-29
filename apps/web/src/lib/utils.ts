@@ -16,3 +16,9 @@ export function initialOf(name: string): string {
   const [first] = graphemes.segment(name.trim());
   return first === undefined ? '?' : first.segment.toUpperCase();
 }
+
+/** `?membre=<id>` of an address when it holds a member's id, nothing otherwise: a broken link opens the page as is. */
+export function memberOf(search: Record<string, unknown>): { membre?: string } {
+  const { membre } = search;
+  return typeof membre === 'string' && /^[0-9a-f-]{36}$/iu.test(membre) ? { membre } : {};
+}

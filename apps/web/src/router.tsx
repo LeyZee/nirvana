@@ -31,7 +31,7 @@ import {
 import { MembersPage } from './screens/team/MembersPage';
 import { PlanningPage } from './screens/team/PlanningPage';
 import { ReportsPage } from './screens/team/ReportsPage';
-import { parsePlanningSearch, parseTeamSearch } from './screens/team/model';
+import { parsePlanningSearch, parseReportsSearch, parseTeamSearch } from './screens/team/model';
 import { TodayPage } from './screens/today/TodayPage';
 import { ChatterTrackingPage } from './screens/tracking/ChatterTrackingPage';
 import { SuiviNav } from './screens/tracking/SuiviNav';
@@ -200,14 +200,18 @@ const teamPlanning = createRoute({
   path: '/planning',
   validateSearch: parsePlanningSearch,
   component: function TeamPlanning() {
-    const { semaine } = teamPlanning.useSearch();
+    const { semaine, membre } = teamPlanning.useSearch();
     const navigate = teamPlanning.useNavigate();
     const { user } = rootRoute.useRouteContext();
     return (
       <PlanningPage
         userId={user.id}
         week={semaine ?? null}
-        onWeek={(monday) => void navigate({ search: monday === null ? {} : { semaine: monday } })}
+        member={membre ?? null}
+        onWeek={(monday) =>
+          void navigate({ search: (before) => ({ ...before, semaine: monday ?? undefined }) })
+        }
+        onMember={(id) => void navigate({ search: (before) => ({ ...before, membre: id ?? undefined }) })}
       />
     );
   },
@@ -215,9 +219,21 @@ const teamPlanning = createRoute({
 const teamReports = createRoute({
   getParentRoute: () => team,
   path: '/rapports',
+  validateSearch: parseReportsSearch,
   component: function TeamReports() {
+    const { quinzaine, membre } = teamReports.useSearch();
+    const navigate = teamReports.useNavigate();
     const { user } = rootRoute.useRouteContext();
-    return <ReportsPage owner={user.role === 'owner'} />;
+    return (
+      <ReportsPage
+        owner={user.role === 'owner'}
+        period={quinzaine ?? null}
+        member={membre ?? null}
+        onPeriod={(period) =>
+          void navigate({ search: (before) => ({ ...before, quinzaine: period ?? undefined }) })
+        }
+      />
+    );
   },
 });
 const teamMembers = createRoute({
@@ -259,13 +275,14 @@ const payPeriod = createRoute({
   path: '/quinzaine',
   validateSearch: parsePaySearch,
   component: function PayPeriod() {
-    const { quinzaine } = payPeriod.useSearch();
+    const { quinzaine, membre } = payPeriod.useSearch();
     const navigate = payPeriod.useNavigate();
     const { user } = rootRoute.useRouteContext();
     return (
       <PeriodPage
         user={user}
         chosen={quinzaine ?? null}
+        member={membre ?? null}
         onPeriod={(period) => void navigate({ search: period === null ? {} : { quinzaine: period } })}
       />
     );
