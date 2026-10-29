@@ -73,7 +73,7 @@ export const MessageViewSchema = z.object({
   direction: MessageDirectionSchema,
   author: MessageAuthorSchema,
   text: z.string(),
-  priceMinor: z.number().int().nullable(),
+  priceMinor: z.number().int().min(0).nullable(),
   currency: CurrencySchema.nullable(),
   isPaid: z.boolean(),
   draftId: DraftIdSchema.nullable(),
