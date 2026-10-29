@@ -22,6 +22,11 @@ afterEach(() => {
 });
 
 describe('Réglages › Apparence', () => {
+  it('does not repeat the tab’s name as a title', () => {
+    render(<AppearancePage />);
+    expect(screen.queryByRole('heading', { name: 'Apparence' })).toBeNull();
+  });
+
   it('is one stop in the Tab order, and the arrows move and pick, as a radio group does', () => {
     render(<AppearancePage />);
     const radio = (name: string): HTMLElement => screen.getByRole('radio', { name });
