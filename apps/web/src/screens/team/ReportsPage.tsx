@@ -161,14 +161,12 @@ export function ReportsPage({ owner }: { owner: boolean }): JSX.Element {
         actions={
           <>
             <TeamNav />
-            <button
-              type="button"
-              className="nv-btn nv-btn--neon"
-              disabled={chosen.length === 0}
-              onClick={validate}
-            >
-              {chosen.length === 0 ? 'Valider' : `Valider (${String(chosen.length)})`}
-            </button>
+            {/* Only with a choice: never a greyed neon above a list that may not be there (EQ-22, EQ-26). */}
+            {chosen.length === 0 ? null : (
+              <button type="button" className="nv-btn nv-btn--neon nv-swap" onClick={validate}>
+                Valider ({chosen.length})
+              </button>
+            )}
           </>
         }
       />

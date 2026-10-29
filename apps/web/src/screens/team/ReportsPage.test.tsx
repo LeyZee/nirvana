@@ -256,7 +256,8 @@ describe('Équipe › Rapports', () => {
     expect((await screen.findByRole('status')).textContent).toContain('Validation de 2 rapports dans 5 s');
     // Held in place, out of the selection, until they are sent.
     expect(screen.getAllByText('En validation')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Valider' }).matches(':disabled')).toBe(true);
+    // Nothing chosen any more: no greyed « Valider » left in the header (EQ-26).
+    expect(screen.queryByRole('button', { name: /^Valider/u })).toBeNull();
     expect(writes).toEqual([]);
     await act(() => vi.advanceTimersByTimeAsync(5_000));
 

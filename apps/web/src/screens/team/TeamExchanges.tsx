@@ -76,8 +76,9 @@ export interface InTheWay {
 }
 
 /**
- * « Congés à valider »: each pending request with Valider and Refuser. A manager never decides their own (the owner
- * does); while shifts of the member still fall in the leave, the approval is refused and the page shows them.
+ * « Congés à valider », one line folded above the grid (EQ-02): each pending request with Valider and Refuser. A
+ * manager never decides their own (the owner does). The shifts of the member still in the leave are said before
+ * Valider (EQ-16); the server refuses the approval while they are there, and the page shows them.
  */
 export function PendingLeaves({
   list,
@@ -96,11 +97,18 @@ export function PendingLeaves({
   if (pending.length === 0) return null;
   const members = new Map(list.members.map((member) => [member.id, member]));
   return (
-    <section className="nv-plate sc-decide nv-swap" aria-labelledby="sc-decide-title">
-      <h2 id="sc-decide-title" className="sc-section__title">
-        {pending.length === 1 ? 'Un congé à valider' : `${String(pending.length)} congés à valider`}
-      </h2>
-      <ul className="sc-rows">
+    <details className="nv-disclosure nv-plate sc-fold sc-decide nv-swap">
+      <summary>
+        <span className="nv-disclosure__title">
+          {pending.length === 1 ? '1 congé à valider' : `${String(pending.length)} congés à valider`}
+        </span>
+        <span className="nv-disclosure__sum">
+          {[...new Set(pending.map((leave) => members.get(leave.memberId)?.displayName ?? 'Un membre'))].join(
+            ', ',
+          )}
+        </span>
+      </summary>
+      <ul className="sc-rows nv-disclosure__body">
         {pending.map((leave, index) => (
           <PendingLeave
             key={leave.id}
@@ -114,7 +122,7 @@ export function PendingLeaves({
           />
         ))}
       </ul>
-    </section>
+    </details>
   );
 }
 
@@ -140,13 +148,17 @@ function PendingLeave({
   const [refusing, setRefusing] = useState(false);
   const [note, setNote] = useState('');
   const [inTheWay, setInTheWay] = useState<readonly string[]>([]);
-  // The planning of the leave's days says when the shifts in its way start (a leave lasts up to 31 days).
-  const located = usePlanning(
-    { from: leave.startsAt, to: leave.endsAt, creatorId: null },
-    inTheWay.length > 0,
-  );
+  // The planning of the leave's days (a leave lasts up to 31 days): the member's shifts still in it are said before
+  // Valider, and when they start once the server named them.
+  const located = usePlanning({ from: leave.startsAt, to: leave.endsAt, creatorId: null });
   const found = (located.data?.shifts ?? [])
     .filter((shift) => inTheWay.includes(shift.id))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const toGive = (located.data?.shifts ?? [])
+    .filter(
+      (shift) =>
+        shift.memberId === leave.memberId && shift.startsAt < leave.endsAt && shift.endsAt > leave.startsAt,
+    )
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
   const approve = async (): Promise<void> => {
@@ -161,12 +173,34 @@ function PendingLeave({
         <p className="sc-row__title">
           <Swatch color={color} />
           {name}
-          <span className="sc-row__aside">
-            {' '}
-            · {leaveDaysLine(leave)}, {leaveLength(leave)}
-          </span>
+        </p>
+        {/* The dates on their own line: never a line that starts with a separator on a phone (EQ-27). */}
+        <p className="sc-row__sub nv-num">
+          {leaveDaysLine(leave)}, {leaveLength(leave)}
         </p>
         {leave.note === null ? null : <p className="sc-row__sub">« {leave.note} »</p>}
+        {inTheWay.length === 0 && toGive.length > 0 && !own ? (
+          <div className="sc-inline-warn">
+            <p className="tm-warn">
+              {toGive.length === 1
+                ? '1 shift à donner avant de valider'
+                : `${String(toGive.length)} shifts à donner avant de valider`}
+            </p>
+            <button
+              type="button"
+              className="nv-btn nv-btn--plain nv-btn--sm"
+              onClick={() => {
+                onShowShifts({
+                  leaveId: leave.id,
+                  shiftIds: toGive.map((shift) => shift.id),
+                  at: toGive[0]?.startsAt ?? leave.startsAt,
+                });
+              }}
+            >
+              Voir
+            </button>
+          </div>
+        ) : null}
         {inTheWay.length > 0 ? (
           <div className="sc-inline-warn nv-swap" role="alert">
             <p className="tm-warn">

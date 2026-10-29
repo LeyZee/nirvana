@@ -7,7 +7,7 @@ import { MemberSheet } from './MemberSheet';
 import { TeamNav } from './TeamNav';
 import { useMembers, usePresets } from './api';
 import { creatorNames, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
-import { Avatar, Notice, StatusPill } from './parts';
+import { Avatar, Notice, StatusPill, Unread } from './parts';
 import './team.css';
 
 import { useCreators } from '@/creators/api';
@@ -79,20 +79,12 @@ export function MembersPage({
         }
       />
       {members.isError ? (
-        <Notice
-          title="Le serveur ne répond pas"
-          text="L’équipe n’a pas pu être lue. Réessaie dans un instant."
-        >
-          <button
-            type="button"
-            className="nv-btn nv-btn--soft nv-btn--sm"
-            onClick={() => {
-              void members.refetch();
-            }}
-          >
-            Réessayer
-          </button>
-        </Notice>
+        <Unread
+          text="Le serveur ne répond pas : l’équipe n’a pas pu être lue."
+          onRetry={() => {
+            void members.refetch();
+          }}
+        />
       ) : members.isPending ? (
         <Panel className="tm-panel">
           <div className="tm-skeleton" aria-hidden="true">

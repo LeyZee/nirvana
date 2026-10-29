@@ -6,7 +6,7 @@ import { screenLabel } from '@/shell/nav';
 
 /**
  * Équipe's screens (ADR 0024 : Planning, Rapports, Membres, Annonces), those that exist today. Rapports carries the
- * count of reports the reader may validate now.
+ * count of reports the reader may validate now, in a quiet tone: waiting reports are no emergency (EQ-04).
  */
 export function TeamNav(): JSX.Element {
   const open = useReports(null);
@@ -21,7 +21,7 @@ export function TeamNav(): JSX.Element {
         {
           to: '/equipe/rapports',
           label: screenLabel('/equipe/rapports'),
-          ...(toValidate === 0 ? {} : { count: toValidate }),
+          ...(toValidate === 0 ? {} : { count: toValidate, quiet: true }),
         },
         { to: '/equipe/membres', label: screenLabel('/equipe/membres') },
       ]}

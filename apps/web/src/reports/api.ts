@@ -57,6 +57,7 @@ export function useSchedulingSettings(): UseQueryResult<SchedulingSettings> {
     queryKey: [...SCHEDULING_KEY, 'settings'],
     queryFn: () => read('/v1/scheduling/settings', (body) => SchedulingSettingsSchema.parse(body)),
     staleTime: 5 * 60_000,
+    retry: 1,
   });
 }
 
@@ -82,7 +83,8 @@ const listQuery = (period: PayPeriod | null) => ({
 });
 
 export function useReports(period: PayPeriod | null, enabled = true): UseQueryResult<ShiftReportList> {
-  return useQuery({ ...listQuery(period), enabled, placeholderData: (before) => before });
+  // One retry: a silent server is said in about a second (EQ-22).
+  return useQuery({ ...listQuery(period), enabled, retry: 1, placeholderData: (before) => before });
 }
 
 /** The reports of some periods as one list, `null` until each is read: a planning week spans one or two. */

@@ -135,7 +135,7 @@ describe('conflicts', () => {
     expect(lines).toEqual([
       {
         key: `${id(31)}-2026-10-27T22:00:00Z`,
-        when: 'mar. 27 · 23 h – 5 h sur Nora Vidal',
+        when: 'mar. 27 · 23 h – 5 h · Nora Vidal',
         what: 'Théo est déjà sur un autre shift',
         shiftId: id(101),
         fill: null,
@@ -157,7 +157,7 @@ describe('conflicts', () => {
       ],
     );
     const [line] = conflictLines(week.conflicts, [template], week, PARIS);
-    expect(line?.what).toBe('Théo est en congé : ce shift est à pourvoir');
+    expect(line?.what).toBe('Théo est en congé');
     expect(line?.shiftId).toBe(null);
     const fill = {
       accountId: NORA_REVEAL,
@@ -170,7 +170,7 @@ describe('conflicts', () => {
     expect(line?.fill).toEqual(fill);
     // Read from Antananarivo, the line says its hours; the shift to fill keeps the agency's.
     const [far] = conflictLines(week.conflicts, [template], week, 'Indian/Antananarivo');
-    expect(far?.when.replaceAll('\u00a0', ' ')).toBe('mer. 28 · 1 h – 7 h sur Nora Vidal');
+    expect(far?.when.replaceAll('\u00a0', ' ')).toBe('mer. 28 · 1 h – 7 h · Nora Vidal');
     expect(far?.fill).toEqual(fill);
   });
 });

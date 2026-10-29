@@ -4,6 +4,7 @@ import type { JSX, ReactNode } from 'react';
 import { STATUS_LABELS, STATUS_TONES } from './model';
 
 import { initialOf } from '@/lib/utils';
+import '@/scheduling/exchanges.css';
 import { Panel } from '@/shell/layout';
 
 /** The pieces the list, the sheet and the add panel share. */
@@ -46,6 +47,23 @@ export function Notice({
         <h2>{title}</h2>
         <p>{text}</p>
         {children}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * What could not be read, said as Rapports says it (EQ-22): one amber line and « Réessayer », the same on Planning,
+ * Membres and Rapports.
+ */
+export function Unread({ text, onRetry }: { text: string; onRetry: () => void }): JSX.Element {
+  return (
+    <Panel className="tm-unread">
+      <div className="sc-empty">
+        <p className="tm-warn">{text}</p>
+        <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={onRetry}>
+          Réessayer
+        </button>
       </div>
     </Panel>
   );

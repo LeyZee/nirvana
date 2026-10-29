@@ -277,7 +277,13 @@ describe('Équipe › Membres', () => {
     cleanup();
     serve({ members: { status: 503 } });
     renderPage();
-    expect(await screen.findByText('Le serveur ne répond pas')).toBeDefined();
+    expect(
+      await screen.findByText('Le serveur ne répond pas : l’équipe n’a pas pu être lue.', undefined, {
+        timeout: 4000,
+      }),
+    ).toBeDefined();
+    // No « Ajouter un membre » above a team that could not be read (EQ-22).
+    expect(screen.queryByRole('button', { name: 'Ajouter un membre' })).toBeNull();
   });
 });
 

@@ -6,6 +6,7 @@ import { ShiftSheet } from './ShiftSheet';
 import { OnLeave, PendingLeaves, TeamSwaps, type InTheWay } from './TeamExchanges';
 import { TeamNav } from './TeamNav';
 import { useMembers } from './api';
+import { Unread } from './parts';
 import './team.css';
 
 import { useReportsOf } from '@/reports/api';
@@ -18,15 +19,18 @@ import {
   conflictLines,
   gridOf,
   phaseOf,
+  slotCellsOf,
   type Chip,
   type Fill,
   type GridRow,
+  type SlotCell,
 } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
 import {
   addDays,
   cityOf,
   clockAt,
+  clockOf,
   dayOf,
   lengthOf,
   longDay,
@@ -65,7 +69,8 @@ function leaveRangeOf(monday: string, thisMonday: string, zone: string): { from:
 
 /**
  * Équipe › Planning (EQ-02, ADR 0024): the week as rows of accounts and columns of days, each shift on its member's
- * colour; who is on shift right now above it, and the weekly shifts the server could not place in amber. Read at the
+ * colour, each day cut into the agency's créneaux so that an empty one ahead reads « À pourvoir » (EQ-01); who is on
+ * shift right now and who is away on one row above it, and the weekly shifts the server could not place in amber. Read at the
  * agency's hour, the one the team speaks in, or at the reader's own. The owner and an active manager place, move and
  * stop shifts; the server checks every write. The leaves and the chatters' swaps sit around it (ADR 0031): requests to
  * decide first, who is away this week, a shift to fill when its member is on leave, the swaps folded below.
@@ -140,7 +145,7 @@ export function PlanningPage({
     <button
       type="button"
       className="nv-btn nv-btn--neon"
-      disabled={data === undefined || data.accounts.length === 0}
+      disabled={data?.accounts.length === 0}
       onClick={() => {
         setOpen({ kind: 'add', start: { accountId: null, day: days[pickedIndex] ?? today } });
       }}
@@ -161,26 +166,18 @@ export function PlanningPage({
         actions={
           <>
             <TeamNav />
-            {add}
+            {/* No button above a page that could not be read: it would only be greyed out (EQ-22). */}
+            {data === undefined ? null : add}
           </>
         }
       />
       {shown.isError && data === undefined ? (
-        <Panel className="nv-coming">
-          <div className="nv-coming__in sc-notice">
-            <h2>Le serveur ne répond pas</h2>
-            <p>Le planning n’a pas pu être lu. Réessaie dans un instant.</p>
-            <button
-              type="button"
-              className="nv-btn nv-btn--soft nv-btn--sm"
-              onClick={() => {
-                void shown.refetch();
-              }}
-            >
-              Réessayer
-            </button>
-          </div>
-        </Panel>
+        <Unread
+          text="Le serveur ne répond pas : le planning n’a pas pu être lu."
+          onRetry={() => {
+            void shown.refetch();
+          }}
+        />
       ) : data === undefined ? (
         <Panel>
           <div className="sc-skeleton sc-skeleton--grid" aria-hidden="true">
@@ -227,17 +224,20 @@ export function PlanningPage({
               }}
             />
           )}
-          <OnDutyStrip
-            list={onDuty.data ?? null}
-            planning={data}
-            zone={zone}
-            onShow={(id) => {
-              setOpen({ kind: 'shift', id });
-            }}
-          />
-          {leaves.data === undefined ? null : (
-            <OnLeave list={leaves.data} from={days[0] ?? monday} to={days[6] ?? monday} now={now} />
-          )}
+          {/* Who is on shift and who is away, one row of names: the grid comes up the page (EQ-02). */}
+          <div className="sc-people">
+            <OnDutyStrip
+              list={onDuty.data ?? null}
+              planning={data}
+              zone={zone}
+              onShow={(id) => {
+                setOpen({ kind: 'shift', id });
+              }}
+            />
+            {leaves.data === undefined ? null : (
+              <OnLeave list={leaves.data} from={days[0] ?? monday} to={days[6] ?? monday} now={now} />
+            )}
+          </div>
           <Conflicts
             planning={data}
             templates={templates.data ?? []}
@@ -500,8 +500,8 @@ function OnDutyStrip({
 }
 
 /**
- * The weekly shifts the server could not place this week, in amber, each with the shift in its way, or « Pourvoir »
- * when its member is on leave (ADR 0031).
+ * « N shifts à pourvoir »: the weekly shifts the server could not place this week, in amber, one line each, with the
+ * shift in its way, or « Pourvoir » when its member is on leave (ADR 0031, EQ-03).
  */
 function Conflicts({
   planning,
@@ -522,19 +522,18 @@ function Conflicts({
   return (
     <section className="nv-plate sc-conflicts nv-swap" role="status" aria-labelledby="sc-conflicts-title">
       <h2 id="sc-conflicts-title" className="sc-conflicts__title">
-        {lines.length === 1
-          ? 'Un modèle de shift n’a pas pu poser son shift'
-          : `${String(lines.length)} modèles de shift n’ont pas pu poser leur shift`}
+        {lines.length === 1 ? '1 shift à pourvoir' : `${String(lines.length)} shifts à pourvoir`}
       </h2>
       <ul className="sc-conflicts__list">
         {lines.map((line) => {
           const shiftId = line.shiftId !== null && known.has(line.shiftId) ? line.shiftId : null;
           return (
             <li key={line.key} className="sc-conflicts__one">
-              <div className="sc-conflicts__text">
-                <p className="sc-conflicts__when nv-num">{line.when}</p>
-                <p className="sc-conflicts__what">{line.what}.</p>
-              </div>
+              {/* One line a shift: « jeu. 29 · 23 h – 5 h · Inès — Josué est en congé » (EQ-02, EQ-03). */}
+              <p className="sc-conflicts__text">
+                <span className="sc-conflicts__when nv-num">{line.when}</span>
+                <span className="sc-conflicts__what"> — {line.what}</span>
+              </p>
               {line.fill !== null ? (
                 <button
                   type="button"
@@ -616,6 +615,31 @@ function Grid({
     (sum, shift) => sum + new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime(),
     0,
   );
+  // The créneaux are the agency's: they line up at its hour, not at another one (EQ-01).
+  const lined = zone === planning.settings.timeZone;
+  const slotted = rows.map((row) => {
+    const shifts = planning.shifts.filter((shift) => shift.platformAccountId === row.account.id);
+    return new Map(
+      days.map((day) => [
+        day,
+        lined ? slotCellsOf(row.days.get(day) ?? [], shifts, day, planning.settings) : null,
+      ]),
+    );
+  });
+  const toFill = slotted.reduce(
+    (sum, cells) =>
+      sum +
+      [...cells.values()].reduce(
+        (inDay, slots) => inDay + (slots ?? []).filter((slot) => openSlot(slot, now)).length,
+        0,
+      ),
+    0,
+  );
+  const slotCount = lined ? (slotCellsOf([], [], days[0] ?? today, planning.settings)?.length ?? 0) : 0;
+  const marked = {
+    repeat: week.some((shift) => shift.templateId !== null),
+    incident: week.some((shift) => incidents.has(shift.id)),
+  };
   return (
     <Panel className="sc-grid-panel">
       <div className="sc-days" role="radiogroup" aria-label="Jour affiché">
@@ -649,6 +673,11 @@ function Grid({
             <span className="nv-num">
               {week.length === 1 ? '1 shift' : `${String(week.length)} shifts`}
               {week.length === 0 ? '' : ` · ${lengthOf(total)}`}
+              {toFill === 0 ? null : (
+                <span className="sc-grid__tofill">
+                  {toFill === 1 ? ' · 1 créneau à pourvoir' : ` · ${String(toFill)} créneaux à pourvoir`}
+                </span>
+              )}
             </span>
           </span>
           {days.map((day, index) => (
@@ -668,8 +697,8 @@ function Grid({
         {rows.map((row, rowIndex) => (
           <div
             key={row.account.id}
-            className="sc-grid__row nv-enter"
-            style={{ '--nv-i': rowIndex }}
+            className={`sc-grid__row nv-enter${slotCount === 0 ? '' : ' sc-grid__row--slots'}`}
+            style={slotCount === 0 ? { '--nv-i': rowIndex } : { '--nv-i': rowIndex, '--sc-slots': slotCount }}
             role="row"
           >
             <span className="sc-grid__account" role="rowheader">
@@ -681,6 +710,7 @@ function Grid({
                 key={day}
                 day={day}
                 chips={row.days.get(day) ?? []}
+                slots={slotted[rowIndex]?.get(day) ?? null}
                 accountId={row.account.id}
                 where={`${row.account.creatorName}, ${accountLine(row.account)}`}
                 today={day === today}
@@ -697,13 +727,35 @@ function Grid({
           </div>
         ))}
       </div>
+      {/* The two marks of a shift, said once under the grid (EQ-24). */}
+      {marked.repeat || marked.incident ? (
+        <p className="sc-legend">
+          {marked.repeat ? (
+            <span className="sc-legend__one">
+              <RepeatIcon className="sc-legend__icon" />
+              Revient chaque semaine
+            </span>
+          ) : null}
+          {marked.incident ? (
+            <span className="sc-legend__one">
+              <IncidentIcon className="sc-chip__incident" />
+              Incident signalé dans le rapport
+            </span>
+          ) : null}
+        </p>
+      ) : null}
     </Panel>
   );
 }
 
+/** An empty créneau still ahead: a dashed amber « À pourvoir » that opens the new-shift panel on it. */
+const openSlot = (slot: SlotCell, now: Date): boolean =>
+  slot.chips.length === 0 && !slot.covered && slot.from.getTime() > now.getTime();
+
 function Cell({
   day,
   chips,
+  slots,
   accountId,
   where,
   today,
@@ -718,6 +770,8 @@ function Cell({
 }: {
   day: string;
   chips: readonly Chip[];
+  /** The day cut into the agency's créneaux, `null` when they do not line up (another hour, too many créneaux). */
+  slots: readonly SlotCell[] | null;
   accountId: string;
   /** The creator and the account (« Nora Vidal, @nora sur Reveal »): two accounts of hers never read the same. */
   where: string;
@@ -731,6 +785,17 @@ function Cell({
   onAdd: (start: ShiftStart) => void;
   onShow: (shiftId: string) => void;
 }): JSX.Element {
+  const chipOf = (chip: Chip): JSX.Element => (
+    <ShiftChip
+      key={chip.shift.id}
+      chip={chip}
+      now={now}
+      zone={zone}
+      flagged={flagged.has(chip.shift.id)}
+      incident={incidents.has(chip.shift.id)}
+      onShow={onShow}
+    />
+  );
   return (
     <div
       className="sc-grid__cell"
@@ -739,17 +804,31 @@ function Cell({
       data-picked={picked ? 'true' : undefined}
       data-past={past ? 'true' : undefined}
     >
-      {chips.map((chip) => (
-        <ShiftChip
-          key={chip.shift.id}
-          chip={chip}
-          now={now}
-          zone={zone}
-          flagged={flagged.has(chip.shift.id)}
-          incident={incidents.has(chip.shift.id)}
-          onShow={onShow}
-        />
-      ))}
+      {slots === null
+        ? chips.map(chipOf)
+        : slots.map((slot, index) => (
+            <div key={slot.slot.startMinute} className="sc-slot">
+              {slot.chips.map(chipOf)}
+              {openSlot(slot, now) ? (
+                <button
+                  type="button"
+                  className="sc-slot__fill"
+                  aria-label={`À pourvoir : ${clockOf(slot.slot.startMinute)} – ${clockOf(slot.slot.endMinute)}, le ${longDay(day)} sur ${where}`}
+                  onClick={() => {
+                    onAdd({ accountId, day, slot: index });
+                  }}
+                >
+                  <span className="sc-slot__label">À pourvoir</span>
+                  <span className="sc-slot__hours nv-num">
+                    {clockOf(slot.slot.startMinute)} – {clockOf(slot.slot.endMinute)}
+                  </span>
+                </button>
+              ) : slot.chips.length === 0 && !slot.covered ? (
+                // A créneau gone by with nobody: left grey, nothing to do about it now.
+                <span className="sc-slot__gone" aria-hidden="true" />
+              ) : null}
+            </div>
+          ))}
       {past ? null : (
         <button
           type="button"
@@ -765,6 +844,26 @@ function Cell({
         </button>
       )}
     </div>
+  );
+}
+
+/** The mark of a weekly shift; `titled` on a chip, where its tip says it (the legend says it in words). */
+function RepeatIcon({ className, titled = false }: { className: string; titled?: boolean }): JSX.Element {
+  return (
+    <svg className={className} viewBox="0 0 16 16" aria-hidden="true">
+      {titled ? <title>Revient chaque semaine</title> : null}
+      <path d="M3 7a5 5 0 0 1 8.5-3.5L13 5M13 2v3h-3M13 9a5 5 0 0 1-8.5 3.5L3 11M3 14v-3h3" />
+    </svg>
+  );
+}
+
+function IncidentIcon({ className, titled = false }: { className: string; titled?: boolean }): JSX.Element {
+  return (
+    <svg className={className} viewBox="0 0 16 16" aria-hidden="true">
+      {titled ? <title>Incident signalé dans le rapport</title> : null}
+      <path d="M8 2.6 14.2 13.4H1.8Z" />
+      <path d="M8 6.6v3M8 11.5v.01" />
+    </svg>
   );
 }
 
@@ -794,6 +893,7 @@ function ShiftChip({
       data-phase={phase}
       data-flagged={flagged ? 'true' : undefined}
       data-incident={incident ? 'true' : undefined}
+      data-repeat={shift.templateId === null ? undefined : 'true'}
       data-color={member?.color === null || member === null ? undefined : 'true'}
       style={member?.color === null || member === null ? undefined : { '--sc-color': member.color }}
       aria-label={`${name}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}${chip.continued ? ', commencé la veille' : ''}${chip.overnight ? ', jusqu’au lendemain' : ''}${phase === 'live' ? ', en poste' : ''}${flagged ? ', pendant un congé à valider' : ''}${incident ? ', incident signalé' : ''}`}
@@ -803,24 +903,16 @@ function ShiftChip({
     >
       <span className="sc-chip__who">
         {phase === 'live' ? <span className="nv-dot nv-tone--ok nv-dot--live" /> : null}
-        {name}
-        {incident ? (
-          <svg className="sc-chip__incident" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M8 2.6 14.2 13.4H1.8Z" />
-            <path d="M8 6.6v3M8 11.5v.01" />
-          </svg>
-        ) : null}
+        {/* A long name gives way with an ellipsis; the marks keep their place (EQ-24). */}
+        <span className="sc-chip__name">{name}</span>
+        {incident ? <IncidentIcon className="sc-chip__incident" titled /> : null}
       </span>
       <span className="sc-chip__hours nv-num">
         {chip.continued ? '… ' : ''}
         {rangeAt(shift.startsAt, shift.endsAt, zone)}
         {chip.overnight ? <span className="sc-chip__night"> +1</span> : null}
       </span>
-      {shift.templateId === null ? null : (
-        <svg className="sc-chip__repeat" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M3 7a5 5 0 0 1 8.5-3.5L13 5M13 2v3h-3M13 9a5 5 0 0 1-8.5 3.5L3 11M3 14v-3h3" />
-        </svg>
-      )}
+      {shift.templateId === null ? null : <RepeatIcon className="sc-chip__repeat" titled />}
     </button>
   );
 }

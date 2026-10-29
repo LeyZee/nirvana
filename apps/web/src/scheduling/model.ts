@@ -9,13 +9,16 @@ import type {
   PlanningMember,
   Platform,
   Shift,
+  SchedulingSettings,
+  ShiftSlot,
   ShiftSwapRequest,
   ShiftSwapStatus,
   ShiftTemplate,
 } from '@nirvana/contracts';
+import { shiftSlotsOf } from '@nirvana/contracts';
 
 import type { SchedulingRefusalCode } from './api';
-import { clockOf, dayMonth, dayOf, daysFrom, minuteOf, rangeAt, shortDay } from './time';
+import { clockOf, dayMonth, dayOf, daysFrom, minuteOf, rangeAt, shortDay, zonedInstant } from './time';
 
 /**
  * The planning without React (EQ-02): where each shift sits in a week, what a conflict says, and where the member is
@@ -353,6 +356,55 @@ export function gridOf(planning: Planning, days: readonly string[], timeZone: st
   });
 }
 
+/** Past this many créneaux a day (slots under four hours), the cells stack their shifts instead of lining them up. */
+export const LINED_SLOTS_MAX = 6;
+
+/** One créneau of one day on one account (EQ-01): the shifts that start in it, and whether any shift covers it. */
+export interface SlotCell {
+  readonly slot: ShiftSlot;
+  readonly from: Date;
+  readonly to: Date;
+  readonly chips: readonly Chip[];
+  /** A shift of the account overlaps it, whether it starts in it or earlier (a long shift covers the next one). */
+  readonly covered: boolean;
+}
+
+/**
+ * A day of one account cut into the agency's créneaux, so that one créneau sits at the same height all week and an
+ * empty one shows. A shift goes to the créneau it starts in, by the hour of the agency; one carried over from the week
+ * before goes to the first. `null` when the créneaux are too many to line up.
+ */
+export function slotCellsOf(
+  chips: readonly Chip[],
+  shifts: readonly Pick<Shift, 'startsAt' | 'endsAt'>[],
+  day: string,
+  settings: Pick<SchedulingSettings, 'timeZone' | 'slotStartMinute' | 'slotLengthMinutes'>,
+): SlotCell[] | null {
+  const slots = shiftSlotsOf(settings);
+  if (slots.length > LINED_SLOTS_MAX) return null;
+  const length = settings.slotLengthMinutes;
+  const indexOf = (chip: Chip): number => {
+    if (chip.continued) return 0;
+    const minute = minuteOf(chip.shift.startsAt, settings.timeZone);
+    return Math.floor(((minute - settings.slotStartMinute + 1440) % 1440) / length);
+  };
+  return slots.map((slot, index) => {
+    const from = zonedInstant(day, settings.slotStartMinute + index * length, settings.timeZone);
+    const to = new Date(from.getTime() + length * 60_000);
+    return {
+      slot,
+      from,
+      to,
+      chips: chips.filter((chip) => indexOf(chip) === index),
+      covered: shifts.some(
+        (shift) =>
+          new Date(shift.startsAt).getTime() < to.getTime() &&
+          new Date(shift.endsAt).getTime() > from.getTime(),
+      ),
+    };
+  });
+}
+
 /** « Lun. 26 · 23 h – 5 h · Théo est déjà sur un autre shift »: one occurrence a template could not place. */
 export interface ConflictLine {
   readonly key: string;
@@ -388,7 +440,7 @@ export function conflictLines(
       const template = templates.find((one) => one.id === conflict.templateId);
       const who = template === undefined ? undefined : members.get(template.memberId);
       const account = template === undefined ? undefined : accounts.get(template.platformAccountId);
-      const where = account === undefined ? '' : ` sur ${account.creatorName}`;
+      const where = account === undefined ? '' : ` · ${account.creatorName}`;
       const what = whatOf(conflict, who, account);
       const agency = planning.settings.timeZone;
       return {
@@ -422,7 +474,7 @@ function whatOf(
     case 'account_taken':
       return `le compte${account === undefined ? '' : ` @${account.handle}`} a déjà quelqu’un`;
     case 'member_on_leave':
-      return `${who ?? 'Son membre'} est en congé : ce shift est à pourvoir`;
+      return `${who ?? 'Son membre'} est en congé`;
   }
 }
 

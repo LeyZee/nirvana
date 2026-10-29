@@ -377,11 +377,9 @@
 }
 
 /* ── Équipe › Planning ── */
-.sc-decide {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nv-space-2);
-  padding: var(--nv-space-4) var(--nv-space-5);
+/* The requests to decide, folded to one line until opened (EQ-02): the name of each requester in the summary. */
+.sc-decide > summary .nv-disclosure__title {
+  color: var(--nv-warning);
 }
 .sc-row--leave {
   transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
