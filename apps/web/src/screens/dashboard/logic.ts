@@ -1,4 +1,4 @@
-import type { AgentState, Lever, Period, SalesSeries, Todo, Tone } from './model';
+import type { AgentCard, AgentState, Lever, Period, SalesSeries, Todo, Tone } from './model';
 
 import type { AgentMode } from '@/agent/mode';
 
@@ -147,6 +147,14 @@ export interface Hero {
   readonly leadWithoutAction?: AgentState['leadWithoutAction'];
 }
 
+/** What the hero knows beyond the agent and its list. */
+export interface HeroContext {
+  /** A creator's Dashboard: the agent's state only (ADR 0023), the team's chores said as the agency's. */
+  readonly forCreator?: boolean;
+  /** An operator's global switch holds every creator: the hero says why the agent stops (DASH-08). */
+  readonly globalStop?: boolean;
+}
+
 /**
  * The state sentence follows the « À traiter » list: how many things wait, and whether one is urgent. A stopped
  * agent says so first; an agent in trouble (`bad`) keeps its own sentence; an empty list is the calm sentence.
@@ -158,10 +166,10 @@ export function heroState(
   agent: AgentState,
   todos: readonly Todo[],
   mode: AgentMode,
-  forCreator = false,
+  { forCreator = false, globalStop = false }: HeroContext = {},
 ): Hero {
-  if (!forCreator) return teamHero(agent, todos, mode);
-  const team = teamHero(agent, [], mode);
+  if (!forCreator) return teamHero(agent, todos, mode, globalStop);
+  const team = teamHero(agent, [], mode, globalStop);
   const hero: Hero = { tone: team.tone, headline: team.headline, lead: team.lead };
   if (team.actionTo !== undefined) {
     return {
@@ -183,17 +191,26 @@ export const agentRuns = (agent: Pick<AgentState, 'tone' | 'stalled'>): boolean 
 const modeLead = (mode: AgentMode): string =>
   mode === 'auto' ? 'L’agent écrit seul' : 'L’agent propose, les chatteurs valident dans Reveal';
 
-function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): Hero {
+const GLOBAL_STOP_LEAD =
+  'Un arrêt général est posé pour toutes les créatrices : seul un opérateur peut le lever.';
+
+/** A sentence, then the AI budget past its alert when there is one (DASH-06). */
+const withBudget = (lead: string, agent: AgentState): string =>
+  agent.budgetNote === undefined ? lead : lead === '' ? agent.budgetNote : `${lead} ${agent.budgetNote}`;
+
+function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode, globalStop: boolean): Hero {
   if (mode === 'stop') {
-    // On Arrêt the list keeps the grave lines only: said in the lead, the headline stays the stop.
+    // On Arrêt the list keeps the grave lines only: said in the lead, the headline stays the stop. Under a global
+    // stop the lead says first why, next to the sentence it explains, not in a corner of the screen (DASH-08).
     const urgent = todos.filter((todo) => todo.tone === 'bad').length;
+    const why = globalStop ? GLOBAL_STOP_LEAD : 'Plus rien ne part en son nom.';
     return {
       tone: 'bad',
       headline: 'L’agent est **arrêté**',
       lead:
         urgent === 0
-          ? 'Plus rien ne part en son nom. Les chatteurs gardent la main dans Reveal.'
-          : `Plus rien ne part en son nom. ${urgent === 1 ? 'Une urgence reste' : `${String(urgent)} urgences restent`} à traiter quand même.`,
+          ? `${why} Les chatteurs gardent la main dans Reveal.`
+          : `${why} ${urgent === 1 ? 'Une urgence reste' : `${String(urgent)} urgences restent`} à traiter quand même.`,
       action: 'Repasser en copilote',
     };
   }
@@ -203,7 +220,7 @@ function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): H
     return {
       tone: 'ok',
       headline: 'Tout va bien. **Rien ne t’attend.**',
-      lead: `${modeLead(mode)}. Les alertes arrivent ici et sur ton téléphone.`,
+      lead: `${modeLead(mode)}. ${agent.budgetNote ?? 'Les alertes arrivent ici et sur ton téléphone.'}`,
     };
   }
   const urgent = todos.filter((todo) => todo.tone === 'bad').length;
@@ -213,7 +230,7 @@ function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): H
     return {
       tone: 'warn',
       headline: waiting,
-      lead: 'Rien d’urgent : l’agent continue sur les autres conversations.',
+      lead: withBudget('Rien d’urgent : l’agent continue sur les autres conversations.', agent),
     };
   }
   // Only urgencies: named as such. Otherwise how many of them are.
@@ -226,7 +243,39 @@ function teamHero(agent: AgentState, todos: readonly Todo[], mode: AgentMode): H
   return {
     tone: 'warn',
     headline,
-    lead: agent.lead,
+    lead: withBudget(agent.lead, agent),
     ...(agent.action === undefined ? {} : { action: agent.action }),
   };
+}
+
+export interface Fold {
+  readonly tone: Tone;
+  readonly title: string;
+  /** Red: the dot beats, as the hero's orb. */
+  readonly live: boolean;
+}
+
+const RANK: Readonly<Record<Tone, number>> = { bad: 2, warn: 1, ok: 0, idle: 0 };
+
+/**
+ * The title and dot of the « L’agent » fold: they follow the worst card that can alarm (Reveal read late, the voice,
+ * waiting fans or blocked jobs, the budget), never « fonctionne normalement » over an amber card (DASH-06). A creator
+ * reads that the agency handles it (DASH-21): none of it is hers to do.
+ */
+export function foldOf(agent: AgentState, stopped: boolean, forCreator: boolean): Fold {
+  const own = agent.tone === 'bad' || agent.tone === 'idle' || agent.stalled === true;
+  const worst = agent.cards
+    .filter((card) => card.alarm !== undefined && RANK[card.tone] > 0)
+    .reduce<AgentCard | null>(
+      (pick, card) => (pick === null || RANK[card.tone] > RANK[pick.tone] ? card : pick),
+      null,
+    );
+  const tone = own ? agent.tone : (worst?.tone ?? 'ok');
+  const agency = forCreator && RANK[tone] > 0;
+  const title = agency
+    ? 'L’agence s’en occupe'
+    : own
+      ? agent.foldTitle
+      : (worst?.alarm ?? (stopped ? 'Le reste fonctionne normalement' : agent.foldTitle));
+  return { tone, title, live: tone === 'bad' };
 }

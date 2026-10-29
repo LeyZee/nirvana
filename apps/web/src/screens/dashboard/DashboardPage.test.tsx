@@ -57,7 +57,13 @@ afterEach(() => {
 /** Where the page's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderDashboard(forCreator = false, forOwner = false, opensTracking = true, at = '/'): QueryClient {
+function renderDashboard(
+  forCreator = false,
+  forOwner = false,
+  opensTracking = true,
+  at = '/',
+  canAddCreator = false,
+): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   // The night banner links to Réglages: the page needs a router around it.
@@ -76,6 +82,7 @@ function renderDashboard(forCreator = false, forOwner = false, opensTracking = t
           forCreator={forCreator}
           forOwner={forOwner}
           opensTracking={opensTracking}
+          canAddCreator={canAddCreator}
         />
       );
     },
@@ -86,6 +93,8 @@ function renderDashboard(forCreator = false, forOwner = false, opensTracking = t
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
       createRoute({ getParentRoute: () => root, path: '/suivi' }),
+      createRoute({ getParentRoute: () => root, path: '/creatrices' }),
+      createRoute({ getParentRoute: () => root, path: '/reglages/sauvegardes' }),
     ]),
     history: createMemoryHistory({ initialEntries: [at] }),
   });
@@ -99,13 +108,6 @@ function renderDashboard(forCreator = false, forOwner = false, opensTracking = t
 }
 
 const headline = (): string => document.querySelector('h1')?.textContent ?? '';
-/** The stop dialog; the fan reader is a dialog too. */
-const dialog = (): HTMLElement =>
-  screen
-    .getAllByRole('dialog', { hidden: true })
-    .find((d) => d.getAttribute('aria-labelledby') === 'db-stop-title') ??
-  screen.getByRole('dialog', { name: 'Arrêter l’agent ?' });
-
 describe('DashboardPage on the server’s data', () => {
   it('waits for the server without showing any figure', async () => {
     serveDashboard({ status: 200, body: apiDashboard() });
@@ -120,7 +122,9 @@ describe('DashboardPage on the server’s data', () => {
     expect(await screen.findByText('Kévin')).toBeDefined();
     expect(screen.queryByText('Exemple')).toBeNull();
     expect(headline()).toBe('Une urgence t’attend');
-    expect(screen.getByText(/dès que la connexion à Reveal les observera/u)).toBeDefined();
+    // No sales block until they are observed: one quiet line (DASH-02).
+    expect(screen.getByText(/Ventes : bientôt lues depuis Reveal/u)).toBeDefined();
+    expect(screen.queryByRole('heading', { name: /^Ventes/u })).toBeNull();
     expect(screen.getByText('Théo')).toBeDefined();
     // The best fans' bar names no colour: the agent's part is the data colour, not the urgencies' red.
     expect(screen.getByText(/d’abord la part de l’agent, puis celle des chatteurs/u)).toBeDefined();
@@ -386,7 +390,9 @@ describe('DashboardPage changing the mode', () => {
   it('says from the start when a global switch holds the agent, and offers no way back it cannot give', async () => {
     serveModes('stop', undefined, { globalStop: true });
     renderDashboard();
-    expect((await screen.findByRole('alert')).textContent).toContain('seul un opérateur peut le lever');
+    // In the hero, next to the sentence it explains, not in a corner (DASH-08).
+    expect(await screen.findByText(/Un arrêt général est posé pour toutes les créatrices/u)).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('radio', { name: 'Copilote' }).getAttribute('aria-disabled')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Repasser en copilote' })).toBeNull();
   });
@@ -497,6 +503,10 @@ describe('DashboardPage of the owner', () => {
     serveDashboard(backups('overdue'));
     renderDashboard(false, true);
     expect(await screen.findByText(/^Aucune sauvegarde réussie depuis le 26 octobre/u)).toBeDefined();
+    // Where the export is read and a restore test noted, one click away (DASH-19).
+    expect(screen.getByRole('link', { name: 'Voir les sauvegardes' }).getAttribute('href')).toBe(
+      '/reglages/sauvegardes',
+    );
   });
 
   it('says when none was ever made, and nothing while they are on time', async () => {
@@ -564,14 +574,18 @@ describe('DashboardPage of a creator', () => {
       expect(headline()).toBe('L’IA qui écrit attend sa clé');
     });
     expect(screen.queryByRole('link', { name: 'Poser la clé' })).toBeNull();
-    expect(screen.getByText(/L’agence s’en occupe/u)).toBeDefined();
-    expect(screen.getByRole('radio', { name: 'Arrêt' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText(/L’agence s’en occupe\. D’ici là/u)).toBeDefined();
+    // Her fold says it is the agency's to do, never « une étape reste à faire » (DASH-21).
+    expect(document.querySelector('.nv-disclosure__title')?.textContent).toBe('L’agence s’en occupe');
+    // Her mode, read only: the pill alone, no control that looks like one.
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(document.querySelector('.db-modepill')?.textContent).toContain('réglé par l’agence');
   });
 
   it('says nothing of the night’s alerts, the team’s', async () => {
     serveDashboard({ status: 200, body: apiDashboard({ telegramCoverage: { urgentReachable: false } }) });
     renderDashboard(true);
-    await screen.findByRole('radio', { name: 'Arrêt' });
+    await screen.findByText(/réglé par l’agence/u);
     expect(screen.queryByText('Personne n’est prévenu la nuit')).toBeNull();
   });
 });
@@ -604,15 +618,26 @@ describe('DashboardPage when the server does not answer', () => {
 });
 
 describe('DashboardPage before any creator exists', () => {
-  it('shows the sample, marked « Exemple », where nothing can be acted on', async () => {
+  it('asks for a first creator, with no made-up figure (DASH-13)', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() }, []);
+    renderDashboard(false, true, true, '/', true);
+    await waitFor(() => {
+      expect(headline()).toBe('Ajoute ta première créatrice');
+    });
+    expect(screen.getByRole('link', { name: 'Aller à Créatrices' }).getAttribute('href')).toBe('/creatrices');
+    expect(screen.queryByText('Kévin')).toBeNull();
+    expect(screen.queryByText('Exemple')).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('tells an account that cannot add one who does', async () => {
     serveDashboard({ status: 200, body: apiDashboard() }, []);
     renderDashboard();
-    expect(await screen.findByText('Exemple')).toBeDefined();
-    expect(headline()).toContain('3 choses');
-    expect(screen.getByRole('radio', { name: 'Arrêt' }).getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(screen.getByRole('radio', { name: 'Arrêt' }));
-    expect(dialog().getAttribute('aria-hidden')).toBe('true');
-    expect(screen.queryByRole('button', { name: 'Marquer comme traité' })).toBeNull();
+    await waitFor(() => {
+      expect(headline()).toBe('Aucune créatrice pour l’instant');
+    });
+    expect(screen.getByText(/Le propriétaire de l’agence les ajoute/u)).toBeDefined();
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });
 
@@ -621,10 +646,13 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
   const ANA = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Ana', timezone: 'Europe/Paris' };
   const writes: { creatorId: string; mode: AgentMode }[] = [];
 
+  /** Whose Dashboard was read last. */
+  let lastRead = (): string | null => null;
+
   /** Each creator's own Dashboard, by the id asked for. */
   function serveBoth(): void {
     writes.length = 0;
-    serveDashboard(
+    const server = serveDashboard(
       (url) => {
         const ana = url.searchParams.get('creatorId') === ANA.id;
         return {
@@ -645,6 +673,12 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
         return { status: 200, body: { mode: body.mode, globalStop: false } };
       },
     );
+    lastRead = () => {
+      const reads = server.mock.calls
+        .map(([input]) => new URL(String(input), 'http://localhost'))
+        .filter((url) => url.pathname === '/v1/dashboard');
+      return reads.at(-1)?.searchParams.get('creatorId') ?? null;
+    };
   }
 
   afterEach(() => {
@@ -655,13 +689,17 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
     serveBoth();
     renderDashboard();
     expect((await screen.findByRole('radio', { name: 'Ana' })).getAttribute('aria-checked')).toBe('true');
-    expect(document.querySelector('.db-top__name')?.textContent).toBe('Ana');
+    // The chips name her: the header does not say it a second time (DASH-03).
+    await waitFor(() => {
+      expect(lastRead()).toBe(ANA.id);
+    });
+    expect(document.querySelector('.db-top__name')).toBeNull();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Léa' }));
     await waitFor(() => {
-      expect(document.querySelector('.db-top__name')?.textContent).toBe('Léa');
+      expect(lastRead()).toBe(CREATOR.id);
     });
-    expect(screen.getByRole('radio', { name: 'Léa' }).getAttribute('aria-checked')).toBe('true');
+    expect((await screen.findByRole('radio', { name: 'Léa' })).getAttribute('aria-checked')).toBe('true');
 
     fireEvent.click(screen.getByRole('radio', { name: 'Arrêt' }));
     await act(async () => {
@@ -680,7 +718,7 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
     expect(lea.tabIndex).toBe(0);
     fireEvent.keyDown(lea, { key: 'ArrowLeft' });
     await waitFor(() => {
-      expect(document.querySelector('.db-top__name')?.textContent).toBe('Ana');
+      expect(lastRead()).toBe(ANA.id);
     });
     expect(localStorage.getItem('nirvana.followed-creator')).toBe(ANA.id);
   });
@@ -693,39 +731,25 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
   });
 });
 
-describe('DashboardPage, its fan reader', () => {
-  it('is a modal dialog that keeps Tab inside (recette 28/10, M5)', async () => {
-    serveDashboard({ status: 200, body: apiDashboard() });
-    renderDashboard();
-    fireEvent.click(await screen.findByText('Théo'));
-    const reader = screen.getByRole('dialog', { name: 'Conversation' });
-    expect(reader.getAttribute('aria-modal')).toBe('true');
-    const close = screen.getByRole('button', { name: 'Fermer' });
-    expect(document.activeElement).toBe(close);
-    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
-    expect(reader.contains(document.activeElement)).toBe(true);
-    expect(document.activeElement).not.toBe(close);
-  });
-
-  it('opens his conversation in Suivi, never a Corrections screen that does not exist yet', async () => {
+describe('DashboardPage, its best fans', () => {
+  it('opens his conversation in Suivi, with no reader in between (DASH-14)', async () => {
     const [theo] = apiDashboard().fans;
     if (theo === undefined) throw new Error('the fixture has a fan');
     serveDashboard({ status: 200, body: apiDashboard() });
     renderDashboard();
     fireEvent.click(await screen.findByText('Théo'));
-    expect(screen.queryByText(/Corrections/)).toBeNull();
-    fireEvent.click(screen.getByRole('link', { name: 'Ouvrir dans Suivi' }));
+    expect(screen.queryByRole('dialog', { name: 'Conversation' })).toBeNull();
     await waitFor(() => {
       expect(location()).toBe(`/suivi?conversation=${theo.conversationId}&creatrice=${CREATOR.id}`);
     });
   });
 
-  it('offers no way on to an account whose rail has no Suivi', async () => {
+  it('is read only for an account whose rail has no Suivi', async () => {
     serveDashboard({ status: 200, body: apiDashboard() });
     renderDashboard(false, false, false);
-    fireEvent.click(await screen.findByText('Théo'));
-    expect(screen.getByRole('dialog', { name: 'Conversation' })).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'Ouvrir dans Suivi' })).toBeNull();
-    expect(screen.queryByText(/Corrections/)).toBeNull();
+    const theo = await screen.findByText('Théo');
+    expect(theo.closest('button')).toBeNull();
+    fireEvent.click(theo);
+    expect(location()).toBe('/');
   });
 });

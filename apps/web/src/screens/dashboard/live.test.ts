@@ -4,12 +4,26 @@ import { ago, fromApi, replyDelay, usdNote } from './live';
 
 import { apiDashboard } from '@/test/fakes';
 
+/** Spaces as typed: the screen writes no-break spaces before units and inside hours. */
+const flat = (text: string | undefined): string => (text ?? '').replace(/\s/gu, ' ');
+
 const card = (id: string, data = fromApi(apiDashboard())) => data.agent.cards.find((c) => c.id === id);
 
 describe('fromApi', () => {
-  it('writes the todos in the trade’s words, at her time', () => {
+  it('writes the todos in the trade’s words, how long they wait, the hour at her time (DASH-11, DASH-26)', () => {
     const [todo] = fromApi(apiDashboard()).todos;
-    expect(todo).toMatchObject({ kind: 'Mineur possible', title: 'Kévin', tone: 'bad', at: '13:41' });
+    expect(todo).toMatchObject({ kind: 'Mineur possible', title: 'Kévin', tone: 'bad' });
+    expect(flat(todo?.at)).toBe('Reçu à 13 h 41');
+    const [fresh, late] = fromApi(
+      apiDashboard({
+        todos: apiDashboard().todos.flatMap((t) => [
+          { ...t, id: 'fresh', waitingMinutes: 3 },
+          { ...t, id: 'late', waitingMinutes: 19 },
+        ]),
+      }),
+    ).todos;
+    expect([flat(fresh?.waiting), fresh?.late]).toEqual(['depuis 3 min', false]);
+    expect([flat(late?.waiting), late?.late]).toEqual(['depuis 19 min', true]);
   });
 
   it('names a send that failed for good', () => {
@@ -37,8 +51,10 @@ describe('fromApi', () => {
     expect(card('reveal')?.rows[0]).toEqual(['Dernière lecture', 'il y a 14 s']);
   });
 
-  it('lists only the guards that fired, and says when Telegram is off', () => {
-    expect(card('guards')?.rows).toEqual([
+  it('lists only the handoffs that happened, and says when Telegram is off (DASH-16)', () => {
+    expect(card('relays')?.title).toBe('Passages à l’humain');
+    expect(card('relays')?.sub).toBe('Telegram éteint');
+    expect(card('relays')?.rows).toEqual([
       ['Mineur possible', '1'],
       ['Alertes Telegram cette nuit', 'Telegram éteint'],
     ]);
@@ -62,13 +78,14 @@ describe('fromApi', () => {
         },
       }),
     );
-    expect(card('guards', data)?.value).toBe('2 aujourd’hui');
-    expect(card('guards', data)?.rows.map(([label]) => label)).toEqual([
+    expect(card('relays', data)?.value).toBe('2 aujourd’hui');
+    expect(card('relays', data)?.rows.map(([label]) => label)).toEqual([
       'Mineur possible',
       'Alerte personnalisée',
       'Alertes Telegram cette nuit',
     ]);
-    expect(data.agent.foldSummary).toContain('2 gardes');
+    expect(data.agent.foldSummary).toContain('2 passages à l’humain');
+    expect(flat(data.agent.foldSummary)).toContain('64,5 % validés sans retouche, objectif 80 %');
   });
 
   it('says over which period the reply delay is measured, the one chosen for the sales', () => {
@@ -87,12 +104,13 @@ describe('fromApi', () => {
         apiDashboard({ creator: { ...apiDashboard().creator, now: '2026-10-28T20:00:00Z', timezone } }),
         false,
         viewer,
-      ).creator.now;
-    expect(at('Europe/Paris', 'Europe/Paris')).toBe('mercredi 28 octobre, 21:00');
+      ).creator.now.replace(/\s/gu, ' ');
+    // Hours written as everywhere in the CRM, « 21 h », « 0 h 44 » (DASH-26).
+    expect(at('Europe/Paris', 'Europe/Paris')).toBe('mercredi 28 octobre, 21 h');
     // Another name, the same time: nothing to say.
-    expect(at('Europe/Paris', 'Europe/Brussels')).toBe('mercredi 28 octobre, 21:00');
-    expect(at('Pacific/Kiritimati', 'Europe/Paris')).toBe('jeudi 29 octobre, 10:00, heure de Kiritimati');
-    expect(at('America/New_York', 'Europe/Paris')).toBe('mercredi 28 octobre, 16:00, heure de New York');
+    expect(at('Europe/Paris', 'Europe/Brussels')).toBe('mercredi 28 octobre, 21 h');
+    expect(at('Pacific/Kiritimati', 'Europe/Paris')).toBe('jeudi 29 octobre, 10 h, heure de Kiritimati');
+    expect(at('America/New_York', 'Europe/Paris')).toBe('mercredi 28 octobre, 16 h, heure de New York');
   });
 
   it('hands Telegram’s night coverage to the banner, off included', () => {
@@ -124,12 +142,33 @@ describe('fromApi', () => {
     expect(fromApi(apiDashboard()).fans.map((fan) => fan.name)).toEqual(['Théo']);
   });
 
-  it('says what an urgency does to the conversation, without repeating its line', () => {
+  it('says where to start under an urgency, without repeating its line (DASH-10)', () => {
     const { agent, todos } = fromApi(apiDashboard());
-    expect(agent.lead).toBe(
-      'Un fan est peut-être mineur : sa conversation est gelée jusqu’à ce que tu la regardes.',
+    expect(agent.lead).toBe('Commence par Kévin.');
+    expect(agent.lead).not.toContain(todos[0]?.why ?? '');
+  });
+
+  it('says the AI budget past its alert in a sentence, and the worst card in the fold (DASH-06)', () => {
+    const near = fromApi(
+      apiDashboard({ budget: { spentToday: 18.62, cap: 20, alertAt: 16, costPerEuroSold: null } }),
     );
-    expect(agent.lead).not.toBe(todos[0]?.why);
+    expect(flat(near.agent.budgetNote)).toBe('À 18,62 € sur 20 € de budget IA, l’agent s’arrêtera bientôt.');
+    expect(card('budget', near)).toMatchObject({ tone: 'warn', alarm: 'Le budget IA approche du plafond' });
+    expect(flat(card('budget', near)?.sub)).toBe('alerte à 16 €, arrêt à 20 €');
+    expect(fromApi(apiDashboard()).agent.budgetNote).toBeUndefined();
+  });
+
+  it('says since when Reveal is disconnected, in the lead (DASH-18)', () => {
+    const offline = fromApi(
+      apiDashboard({
+        reveal: { connected: false, lastReadAt: '2026-10-19T11:13:00Z', late: false, conversations: 0 },
+      }),
+    );
+    expect(offline.agent.lead).toMatch(/^Dernière lecture il y a \d+ (min|h|j)\. L’agent ne lit plus/u);
+  });
+
+  it('writes a best fan’s line short enough for a phone (DASH-27)', () => {
+    expect(fromApi(apiDashboard()).fans[0]?.line).toMatch(/^depuis /u);
   });
 
   it('says a Reveal never linked is a step to come, in no colour, not an outage', () => {

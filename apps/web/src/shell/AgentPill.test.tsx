@@ -152,7 +152,7 @@ describe('AgentPill', () => {
     expect(pill.getAttribute('title')).toContain('Aucune créatrice');
   });
 
-  it('follows the creator chosen on the Dashboard, not the first of the list (recette 28/10, G1)', async () => {
+  it('follows the creator chosen on the Dashboard, and names her among several (recette 28/10, G1; DASH-03)', async () => {
     const ana = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Ana', timezone: 'Europe/Paris' };
     localStorage.setItem('nirvana.followed-creator', CREATOR.id);
     try {
@@ -163,11 +163,19 @@ describe('AgentPill', () => {
       );
       const pill = await renderPill();
       await waitFor(() => {
-        expect(pill.textContent).toBe('Copilote');
+        expect(pill.textContent).toBe('Léa · Copilote');
       });
     } finally {
       localStorage.clear();
     }
+  });
+
+  it('names no creator when the account follows only one', async () => {
+    serveDashboard(live('copilot'));
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Copilote');
+    });
   });
 
   it('says Reveal is no longer read when the session holds but nothing reads it (recette 28/10, G8)', async () => {
