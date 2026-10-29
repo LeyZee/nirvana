@@ -16,7 +16,7 @@ Relecture (Extension, Équipe) :
 - Le bandeau « Ses shifts » prend le nom dans l'équipe : le planning ne nomme que les membres qui ont un shift ou un modèle dans la semaine. « Toute l'équipe » rend le focus au sélecteur de semaine. Le bandeau est un repère, sans `role="status"`.
 - Le pli des shifts sans rapport dit sa fenêtre, « cette quinzaine et la précédente ». Un rapport tardif n'est jamais refusé, puisque la paie le porte sur la première quinzaine ouverte (ADR 0023). Si une des deux lectures échoue, une ligne ambre avec « Réessayer » prend la place du pli.
 - « Relancer » prend les heures du membre, lues dans l'équipe. Si l'équipe ne se lit pas, une ligne ambre le dit et le bouton attend. Un membre parti ne peut plus se connecter : sa ligne dit « Parti », sans mot à copier.
-- « Message copié » s'annonce dans une seule zone de statut pour la page, toujours montée. Sans presse-papiers, le mot s'affiche dans un champ en lecture seule, déjà sélectionné.
+- « Message copié » s’annonce dans une seule zone de statut pour la page, toujours montée, avec le shift : une seconde copie pour le même membre est annoncée aussi. Sans presse-papiers, le mot s'affiche dans un champ en lecture seule, déjà sélectionné.
 - Rapports avec `?membre=` dit « Pas de shift de … sur cette quinzaine » pour un membre sans shift. « Pas de relevé de … » (Paie) n'est plus une zone de statut.
 - Le prénom d'exemple du glossaire vient des fixtures (Kofi).
 

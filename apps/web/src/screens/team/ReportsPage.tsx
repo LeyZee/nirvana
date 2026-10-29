@@ -63,7 +63,8 @@ type NudgeTo =
 /** What « Relancer » needs, the same everywhere on the page: who it reaches, and the one zone that says « copié ». */
 interface Nudging {
   readonly to: (memberId: string) => NudgeTo;
-  readonly onCopied: (name: string) => void;
+  /** `when`: the shift, so that a second word for the same member is said again, not swallowed as the same text. */
+  readonly onCopied: (name: string, when: string) => void;
 }
 
 const emptyCorrection = (): ReportDraft => ({
@@ -116,8 +117,8 @@ export function ReportsPage({
       if (one === undefined) return { kind: 'unknown' };
       return one.status === 'left' ? { kind: 'gone' } : { kind: 'home', zone: one.timeZone };
     },
-    onCopied: (name) => {
-      setCopied(`Message pour ${name} copié`);
+    onCopied: (name, when) => {
+      setCopied(`Message pour ${name} copié, shift du ${when}`);
     },
   };
   const ofPeriod = useReports(period, period !== null);
@@ -954,7 +955,12 @@ function MemberPeriod({
                     to={nudging.to(line.shift.memberId)}
                     text={(home) => nudgeText(name, line.shift, account?.creatorName, home)}
                     name={name}
-                    onCopied={nudging.onCopied}
+                    onCopied={() => {
+                      nudging.onCopied(
+                        name,
+                        swapShiftLine(line.shift.startsAt, line.shift.endsAt, account?.creatorName, zone),
+                      );
+                    }}
                   />
                 </>
               ) : (
@@ -1046,7 +1052,12 @@ function Late({
                 to={nudging.to(line.shift.memberId)}
                 text={(home) => nudgeText(name, line.shift, creator, home)}
                 name={name}
-                onCopied={nudging.onCopied}
+                onCopied={() => {
+                  nudging.onCopied(
+                    name,
+                    swapShiftLine(line.shift.startsAt, line.shift.endsAt, creator, zone),
+                  );
+                }}
               />
             </li>
           );
@@ -1070,7 +1081,7 @@ function Nudge({
   to: NudgeTo;
   text: (zone: string) => string;
   name: string;
-  onCopied: (name: string) => void;
+  onCopied: () => void;
 }): JSX.Element | null {
   const [state, setState] = useState<'idle' | 'copied' | 'shown'>('idle');
   const shown = useRef<HTMLTextAreaElement>(null);
@@ -1086,7 +1097,7 @@ function Nudge({
     try {
       await navigator.clipboard.writeText(text);
       setState('copied');
-      onCopied(name);
+      onCopied();
     } catch {
       setState('shown');
     }

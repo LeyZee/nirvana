@@ -447,9 +447,18 @@ describe('Équipe › Rapports', () => {
     fireEvent.click(within(late).getAllByRole('button', { name: 'Relancer Basile' })[0] ?? late);
     await within(late).findByRole('button', { name: 'Message copié pour Basile' });
     // Said once for the page, in a zone that was there and empty before.
-    expect(screen.getAllByRole('status').map((zone) => zone.textContent)).toContain(
-      'Message pour Basile copié',
+    const said = (): string[] => screen.getAllByRole('status').map((zone) => text(zone));
+    expect(said().some((one) => one.startsWith('Message pour Basile copié, shift du sam. 24 oct.'))).toBe(
+      true,
     );
+    // A second word for the same member says its own shift: the zone's text changes, so it is said again.
+    // The first now says « Message copié »: the one left to relance is his Monday.
+    fireEvent.click(within(late).getByRole('button', { name: 'Relancer Basile' }));
+    await waitFor(() => {
+      expect(said().some((one) => one.startsWith('Message pour Basile copié, shift du lun. 26 oct.'))).toBe(
+        true,
+      );
+    });
     expect(copied[0]).toMatch(
       /^Basile, ton rapport du sam\. 24 oct\. · 18\sh – 0\sh \(Nora Vidal\) n’est pas encore fait\. Fais-le dans Nirvana dès que tu peux\.$/u,
     );

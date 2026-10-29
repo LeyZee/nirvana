@@ -375,11 +375,8 @@ function Opened({
 
 /**
  * « Ses shifts », from a member's record (EQ-11): his shifts of the week stand out, the others are dimmed, and the
- * whole team comes back in one tap.
- */
-/**
- * « Ses shifts »: the member put forward, named from the team (the planning names only those with a shift or a
- * template in the week read). A landmark, not an announcement.
+ * whole team comes back in one tap. He is named from the team, since the planning names only those with a shift or a
+ * template in the week read. A landmark, not an announcement.
  */
 function Focus({
   planning,
