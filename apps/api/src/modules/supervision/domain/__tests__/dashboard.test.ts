@@ -7,7 +7,15 @@ import {
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assembleDashboard, revealLate, todos, unansweredSince, type VoiceHealth } from '../dashboard';
+import {
+  assembleDashboard,
+  creatorQueue,
+  queueAcross,
+  revealLate,
+  todos,
+  unansweredSince,
+  type VoiceHealth,
+} from '../dashboard';
 import type { DashboardFacts, TelegramReading, WaitingConversation } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
@@ -329,5 +337,65 @@ describe('unansweredSince (P3-14)', () => {
     expect(unansweredSince(at('10:00'), at('10:30'), her)).toEqual(at('10:00'));
     // Her slot closed at 18:00: silent again.
     expect(unansweredSince(at('10:00'), at('18:30'), her)).toBeNull();
+  });
+});
+
+describe('à traiter, every creator followed (SUIVI-09, DASH-03)', () => {
+  const LEA = '0192f3a0-0000-7000-8000-00000000c001';
+  const INES = '0192f3a0-0000-7000-8000-00000000c002';
+  const waiting = (fanName: string, kind: 'awaiting_approval' | 'minor' | 'meeting', minutes: number) => ({
+    conversationId: CONVERSATION,
+    fanId: FAN,
+    fanName,
+    kind,
+    since: minutesAgo(minutes),
+  });
+
+  it('names each line’s creator, the gravest first across them all, then the longest waiting', () => {
+    const merged = queueAcross([
+      {
+        creatorId: CreatorIdSchema.parse(LEA),
+        name: 'Léa',
+        todos: todos([waiting('Hugo', 'meeting', 20), waiting('Théo', 'awaiting_approval', 50)], NOW),
+      },
+      {
+        creatorId: CreatorIdSchema.parse(INES),
+        name: 'Inès',
+        todos: todos([waiting('Arthur', 'awaiting_approval', 35), waiting('Kévin', 'minor', 2)], NOW),
+      },
+    ]);
+    expect(merged.items.map((t) => [t.creatorName, t.title])).toEqual([
+      ['Inès', 'Kévin'],
+      ['Léa', 'Théo'],
+      ['Inès', 'Arthur'],
+      ['Léa', 'Hugo'],
+    ]);
+    expect(merged.items[0]).toMatchObject({ creatorId: INES, tone: 'bad' });
+  });
+
+  it('counts each creator’s lines and grave ones, in her order, none when nothing waits', () => {
+    const merged = queueAcross([
+      { creatorId: CreatorIdSchema.parse(LEA), name: 'Léa', todos: [] },
+      {
+        creatorId: CreatorIdSchema.parse(INES),
+        name: 'Inès',
+        todos: todos([waiting('Kévin', 'minor', 2), waiting('Arthur', 'awaiting_approval', 35)], NOW),
+      },
+    ]);
+    expect(merged.creators).toEqual([
+      { creatorId: LEA, name: 'Léa', todos: 0, grave: 0 },
+      { creatorId: INES, name: 'Inès', todos: 2, grave: 1 },
+    ]);
+  });
+
+  it('keeps the grave lines only of a creator on Arrêt, as her Dashboard does', () => {
+    const facts: DashboardFacts = {
+      ...FACTS,
+      switches: { global: false, creator: true },
+      waiting: [waiting('Kévin', 'minor', 2), waiting('Arthur', 'awaiting_approval', 35)],
+    };
+    const queue = creatorQueue(CreatorIdSchema.parse(INES), facts, NOW);
+    expect(queue.todos.map((t) => t.title)).toEqual(['Kévin']);
+    expect(queue.name).toBe(FACTS.creator.name);
   });
 });

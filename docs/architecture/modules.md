@@ -67,7 +67,7 @@ Chaque table a exactement un module propriétaire (voir le README de chaque modu
 | persona | 3 | versions de persona, créatrices et activation d'une version (`/v1/creators`) |
 | agent | 3 | composeur sens → cerveau → politique → voix → gardes, drapeaux posés sur un risque ; aucun message réel tant que les clés manquent |
 | media | 3 (sens), 6 (catalogue) | descriptions au vocabulaire Nirvana, ffmpeg vérifié au démarrage ; la lecture des médias Reveal attend la capture |
-| supervision | 4 | Dashboard (`/v1/dashboard`) : santé, jobs bloqués, taux en réel |
+| supervision | 4 | Dashboard (`/v1/dashboard`) : santé, jobs bloqués, taux en réel ; « À traiter » de toutes les créatrices suivies et le compte de chacune (`/v1/dashboard/todos`, une transaction RLS par créatrice, SUIVI-09 et DASH-03) |
 | sales | 6 | non créé : offres à prix codés, ventes détectées, règles de prix ; propriétaire de `offers`, `sales` (montants en centimes entiers + devise) |
 | scripts | 6 | non créé : structures, étapes, cartons, runs de script par conversation (machine d'état explicite) ; propriétaire de `scripts`, `script_steps`, `script_runs`, `cards` |
 | playground | 3 | API de l'écran Entraîner (P3-06) |

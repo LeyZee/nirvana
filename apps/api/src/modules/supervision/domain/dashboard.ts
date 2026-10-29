@@ -14,6 +14,7 @@ import {
   type DashboardPeriod,
   type DashboardTodo,
   type HandoffCause,
+  type TodosAcrossCreators,
 } from '@nirvana/contracts';
 
 import type {
@@ -134,6 +135,45 @@ export function todos(
       conversationId: ConversationIdSchema.parse(w.conversationId),
       fanId: FanIdSchema.parse(w.fanId),
     }));
+}
+
+/** One creator's « À traiter », as `todos` gave it. */
+export interface CreatorQueue {
+  readonly creatorId: CreatorId;
+  readonly name: string;
+  readonly todos: readonly DashboardTodo[];
+}
+
+/** Her « À traiter » as the Dashboard shows it: on Arrêt, the grave lines only (#296). */
+export function creatorQueue(creatorId: CreatorId, facts: DashboardFacts, now: Date): CreatorQueue {
+  return {
+    creatorId,
+    name: facts.creator.name,
+    todos: todos(facts.waiting, now, { stopped: mode(facts) === 'stop' }),
+  };
+}
+
+/**
+ * « À traiter » of several creators in one list (SUIVI-09): each line names its creator, the gravest first across
+ * them all, then the longest waiting; and each creator's count, in the order given (DASH-03).
+ */
+export function queueAcross(queues: readonly CreatorQueue[]): TodosAcrossCreators {
+  const items = queues
+    .flatMap((queue) =>
+      queue.todos.map((todo) => ({ ...todo, creatorId: queue.creatorId, creatorName: queue.name })),
+    )
+    .sort(
+      (a, b) => Number(b.tone === 'bad') - Number(a.tone === 'bad') || Date.parse(a.at) - Date.parse(b.at),
+    );
+  return {
+    items,
+    creators: queues.map((queue) => ({
+      creatorId: queue.creatorId,
+      name: queue.name,
+      todos: queue.todos.length,
+      grave: queue.todos.filter((todo) => todo.tone === 'bad').length,
+    })),
+  };
 }
 
 /** Arrêt wins; otherwise Automatique as soon as one conversation runs on its own. */

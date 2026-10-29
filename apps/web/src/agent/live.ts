@@ -28,7 +28,8 @@ export type LiveDashboard =
 
 /**
  * The Dashboard of the followed creator (`agent/followed.ts`: chosen on the Dashboard, the first one otherwise),
- * shared by the Dashboard, the bar's pill and Suivi's « À traiter » through the query cache. A failed read is never
+ * shared by the Dashboard and the bar's pill through the query cache (Suivi's « À traiter » reads every creator followed,
+ * `GET /v1/dashboard/todos`). A failed read is never
  * covered by an older answer: the screen says the server does not answer until it does again.
  */
 export function useLiveDashboard(period: DashboardPeriod = 'day'): LiveDashboard {

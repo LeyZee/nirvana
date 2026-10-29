@@ -412,6 +412,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       },
       voice: activeVoice,
       deadJobs: (creatorId) => countDeadJobs(adminDb.db, creatorId, Object.keys(tasks)),
+      allCreatorIds: async () => (await persona.creators.list('all')).map((creator) => creator.id),
       automatic: { read: (creatorId) => conversations.automaticLock(creatorId) },
       // The best fans in euros: dollars at pay's last ECB rate known (ADR 0033), read as whoever reads the Dashboard.
       usdRate: {

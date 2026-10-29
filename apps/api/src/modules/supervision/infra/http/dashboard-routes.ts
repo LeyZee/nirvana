@@ -1,7 +1,9 @@
 import {
+  CreatorIdSchema,
   DashboardQuerySchema,
   DashboardSchema,
   DomainError,
+  TodosAcrossCreatorsSchema,
   type CreatorId,
   type DashboardPeriod,
   type UserRole,
@@ -11,7 +13,14 @@ import { startOfLocalDay } from '@nirvana/llm';
 import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
-import { assembleDashboard, type BudgetReading, type VoiceHealth } from '../../domain/dashboard';
+import {
+  assembleDashboard,
+  creatorQueue,
+  queueAcross,
+  type BudgetReading,
+  type CreatorQueue,
+  type VoiceHealth,
+} from '../../domain/dashboard';
 import type {
   AutomaticView,
   DashboardReader,
@@ -38,6 +47,8 @@ export interface DashboardRouteDeps {
   readonly usdRate: UsdRateView;
   /** Absent when Telegram is off (no encryption key): both Telegram fields are null. */
   readonly telegram?: TelegramView;
+  /** Every creator, for the owner's « À traiter » across creators (`persona` module, by the composition root). */
+  readonly allCreatorIds: () => Promise<readonly CreatorId[]>;
   readonly now?: () => Date;
 }
 
@@ -106,6 +117,45 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
           budget: { ...dashboard.budget, spentToday: null },
           jobs: { dead: null },
         };
+      },
+    );
+
+    app.get(
+      '/dashboard/todos',
+      {
+        // A creator never sees a conversation nor a fan (ADR 0023): « À traiter » is the owner's and the chatters'.
+        preValidation: deps.requireRole('owner', 'operator'),
+        schema: { response: { 200: TodosAcrossCreatorsSchema } },
+      },
+      async (request) => {
+        const { user } = request;
+        if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
+        // The creators the person follows: every one for the owner, the account's own otherwise. Never the creators
+        // where a member reads only the conversations routed to him: their queue is not his.
+        const followed =
+          user.role === 'owner'
+            ? await deps.allCreatorIds()
+            : user.creatorIds.map((id) => CreatorIdSchema.parse(id));
+        const now = (deps.now ?? (() => new Date()))();
+        // One tenant transaction per creator (RLS): nothing of a creator outside the list is ever read.
+        const read = await Promise.all(
+          followed.map((creatorId) =>
+            deps.reader.read(
+              creatorId,
+              (timezone) => {
+                const dayStart = startOfLocalDay(now, timezone);
+                return { now, dayStart, periodStart: dayStart, voice: deps.voice };
+              },
+              // The queue counts no sale: no rate to read.
+              null,
+            ),
+          ),
+        );
+        const queues = followed.flatMap((creatorId, index): CreatorQueue[] => {
+          const found = read[index];
+          return found === undefined ? [] : [creatorQueue(creatorId, found.facts, now)];
+        });
+        return queueAcross(queues);
       },
     );
     return Promise.resolve();
