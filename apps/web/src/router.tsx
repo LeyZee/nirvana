@@ -18,7 +18,6 @@ import { GoalsPage } from './screens/pay/GoalsPage';
 import { PeriodPage } from './screens/pay/PeriodPage';
 import { PeriodsPage } from './screens/pay/PeriodsPage';
 import { MyPlanningPage } from './screens/planning/MyPlanningPage';
-import { AppearancePage } from './screens/settings/AppearancePage';
 import {
   DevicesPage,
   AgentModePage,
@@ -47,6 +46,7 @@ import { parseTelegramSearch, searchOfTab, tabOfSearch } from './settings/telegr
 import { AppShell } from './shell/AppShell';
 import { NotFoundPage } from './shell/NotFoundPage';
 import { canOpen, railOf, sectionOf } from './shell/nav';
+import { leaveNotice } from './shell/notice';
 
 /** What every screen can read: who is signed in, and how to sign out. Given by `App` once the session is known. */
 export interface RouterContext {
@@ -56,10 +56,13 @@ export interface RouterContext {
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   // A section outside the account's rail sends it to its first tab (ADR 0024); the server's 403 stays the barrier.
-  beforeLoad: ({ context, location }) => {
+  beforeLoad: ({ context, location, preload }) => {
     const rail = railOf(context.user);
     const section = sectionOf(location.pathname);
     if (section !== null && !canOpen(rail, section)) {
+      // Said once on arrival (NAV-21): a link pasted from someone else's space is not a broken app. Never on a
+      // preload, which goes nowhere.
+      if (!preload) leaveNotice('Cette page n’est pas dans ton espace.');
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
       throw redirect({ to: rail.home, replace: true });
     }
@@ -354,13 +357,10 @@ const settings = createRoute({
 const settingsIndex = createRoute({
   getParentRoute: () => settings,
   path: '/',
-  // The owner lands on Modèles IA; anyone else on Apparence, the first tab the server lets them use.
-  beforeLoad: ({ context }) => {
+  // Réglages is the owner's alone (the root sends anyone else home): it opens on Modèles IA.
+  beforeLoad: () => {
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
-    throw redirect({
-      to: context.user.role === 'owner' ? '/reglages/modeles-ia' : '/reglages/apparence',
-      replace: true,
-    });
+    throw redirect({ to: '/reglages/modeles-ia', replace: true });
   },
 });
 const aiModels = createRoute({
@@ -410,11 +410,6 @@ const alerts = createRoute({
   component: AlertsPage,
 });
 const devices = createRoute({ getParentRoute: () => settings, path: '/appareils', component: DevicesPage });
-const appearance = createRoute({
-  getParentRoute: () => settings,
-  path: '/apparence',
-  component: AppearancePage,
-});
 const backups = createRoute({
   getParentRoute: () => settings,
   path: '/sauvegardes',
@@ -452,17 +447,7 @@ const routeTree = rootRoute.addChildren([
   team.addChildren([teamIndex, teamPlanning, teamReports, teamMembers]),
   pay.addChildren([payIndex, payPeriod, payPeriods, payEntries, payGoals]),
   commissions,
-  settings.addChildren([
-    settingsIndex,
-    aiModels,
-    alerts,
-    telegram,
-    payRules,
-    backups,
-    devices,
-    appearance,
-    agentMode,
-  ]),
+  settings.addChildren([settingsIndex, aiModels, alerts, telegram, payRules, backups, devices, agentMode]),
 ]);
 
 const buildRouter = (context: RouterContext, history?: RouterHistory) =>

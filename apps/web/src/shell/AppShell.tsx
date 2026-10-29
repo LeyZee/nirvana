@@ -5,9 +5,11 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type J
 import { createPortal } from 'react-dom';
 
 import { AgentPill } from './AgentPill';
+import { AppearanceChoice } from './AppearanceChoice';
 import { NavIcon } from './NavIcon';
 import { keepTabInside } from './focus';
-import { FAMILY_LABELS, railOf, sectionLabel, sectionOf, type NavItem, type Rail } from './nav';
+import { documentTitle, FAMILY_LABELS, railOf, sectionOf, type NavItem, type Rail } from './nav';
+import { takeNotice } from './notice';
 
 import { initialOf } from '@/lib/utils';
 import { HoldProvider } from '@/reports/Hold';
@@ -21,16 +23,58 @@ function roleLabel(user: Me): string {
   return user.team.role === 'manager' ? 'Manager' : 'Chatteur';
 }
 
+const trimSlash = (path: string): string => (path.length > 1 ? path.replace(/\/+$/u, '') : path);
+
+/** Who is signed in, as the account's menu and the phone's sheet name them. */
+export interface Account {
+  readonly name: string;
+  readonly role: string;
+}
+
 export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void }): JSX.Element {
   const rail = useMemo(() => railOf(user), [user]);
+  const account = useMemo(() => ({ name: user.name, role: roleLabel(user) }), [user]);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  // An address outside every section lights no tab: the page says it does not exist.
-  const current = sectionOf(pathname);
+  // A screen the router does not know, even inside a section (/equipe/nexiste-pas), lights no tab (NAV-01).
+  // The router then matches the section alone, its deepest route short of the address.
+  const notFound = useRouterState({
+    select: (state) =>
+      state.matches.some((match) => match.status === 'notFound') ||
+      trimSlash(state.matches.at(-1)?.pathname ?? '') !== trimSlash(state.location.pathname),
+  });
+  const current = notFound ? null : sectionOf(pathname);
+  const main = useRef<HTMLElement>(null);
+  const shown = useRef(current);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // The tab's title names the screen, so that several open tabs read apart.
+  // The tab's title names the screen and its section, so that several open tabs read apart (NAV-12).
   useEffect(() => {
-    document.title = `${current === null ? 'Page introuvable' : sectionLabel(current)} · Nirvana`;
+    document.title = documentTitle(pathname, current, rail.kind);
+  }, [pathname, current, rail.kind]);
+
+  // Another section chosen: the keyboard starts on its title, not back at the top of the rail (NAV-20).
+  useEffect(() => {
+    if (shown.current === current) return;
+    shown.current = current;
+    const stage = main.current;
+    if (stage === null) return;
+    const title = stage.querySelector<HTMLElement>('h1') ?? stage;
+    if (title !== stage) title.tabIndex = -1;
+    title.focus({ preventScroll: true });
   }, [current]);
+
+  // What the route guard left to say on the way here (NAV-21): shown once, a few seconds.
+  useEffect(() => {
+    const text = takeNotice();
+    setNotice(text);
+    if (text === null) return undefined;
+    const timer = setTimeout(() => {
+      setNotice(null);
+    }, 6_000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [pathname]);
 
   // The hold outlives the screens: a report sent on leaving Aujourd'hui says its refusal in Suivi, and « Rouvrir »
   // takes the reader back to it (EQ-03).
@@ -38,17 +82,25 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
     <HoldProvider>
       <ReopenProvider>
         <div className="nv-app">
+          <a className="nv-skip" href="#contenu">
+            Aller au contenu
+          </a>
           <div className="nv-ambient" aria-hidden="true">
             <i />
             <i />
             <i />
           </div>
-          <RailNav rail={rail} current={current} onSignOut={onSignOut}>
-            <UserMenu name={user.name} role={roleLabel(user)} onSignOut={onSignOut} />
+          <RailNav rail={rail} current={current} onSignOut={onSignOut} account={account}>
+            <UserMenu account={account} onSignOut={onSignOut} />
           </RailNav>
-          <main className="nv-stage" key={current ?? 'none'}>
+          <main className="nv-stage" id="contenu" tabIndex={-1} ref={main} key={current ?? 'none'}>
             <Outlet />
           </main>
+          {notice === null ? null : (
+            <p className="nv-notice nv-glass nv-glass--thick" role="status">
+              {notice}
+            </p>
+          )}
         </div>
       </ReopenProvider>
     </HoldProvider>
@@ -63,16 +115,18 @@ export function RailNav({
   rail,
   current,
   onSignOut,
+  account,
   children,
 }: {
   rail: Rail;
   /** The section on screen, or null outside every section (an unknown address): no tab is lit. */
   current: string | null;
   /**
-   * On the phone the account's menu is hidden: « Plus » offers to sign out, and shows on every rail for it, even one
-   * whose tabs all fit on the bar (recette 28/10, M14).
+   * On the phone the account's menu is hidden: « Plus » says who is signed in, the appearance and the way out, and
+   * shows on every rail for it, even one whose tabs all fit on the bar (recette 28/10, M14; NAV-02, NAV-03).
    */
   onSignOut?: () => void;
+  account?: Account;
   children?: JSX.Element;
 }): JSX.Element {
   const railRef = useRef<HTMLElement>(null);
@@ -117,6 +171,9 @@ export function RailNav({
       data-phone={rail.more.has(item.to) ? 'more' : 'bar'}
       className="nv-rail__item"
       aria-current={item.to === current ? 'page' : undefined}
+      // The router lights any link the address starts with, and its aria-current wins: outside the tab's own section
+      // only the exact address counts, so that /equipe/nexiste-pas lights nothing (NAV-01).
+      activeOptions={{ exact: item.to !== current }}
       title={item.label}
     >
       <NavIcon name={item.icon} />
@@ -160,7 +217,8 @@ export function RailNav({
         );
       })}
       <span className="nv-rail__sp" />
-      {rail.items.some(({ to }) => to === '/') ? <AgentPill /> : null}
+      {/* On the Dashboard the mode's own control is on screen: the pill would say it twice (NAV-07). */}
+      {rail.items.some(({ to }) => to === '/') && current !== '/' ? <AgentPill /> : null}
       {rail.settings === null ? null : link(rail.settings)}
       {more.length === 0 && onSignOut === undefined ? null : (
         <button
@@ -184,6 +242,7 @@ export function RailNav({
           items={more}
           current={current}
           onSignOut={onSignOut}
+          account={account}
           onClose={() => {
             setIsMoreOpen(false);
             moreRef.current?.focus({ preventScroll: true });
@@ -202,11 +261,13 @@ export function MoreSheet({
   items,
   current,
   onSignOut,
+  account,
   onClose,
 }: {
   items: readonly NavItem[];
   current: string | null;
   onSignOut?: (() => void) | undefined;
+  account?: Account | undefined;
   onClose: () => void;
 }): JSX.Element {
   const sheet = useRef<HTMLDivElement>(null);
@@ -251,17 +312,34 @@ export function MoreSheet({
             className="nv-more__item nv-enter"
             style={{ '--nv-i': index + 1 }}
             aria-current={item.to === current ? 'page' : undefined}
+            activeOptions={{ exact: item.to !== current }}
             onClick={onClose}
           >
             <NavIcon name={item.icon} />
             {item.label}
           </Link>
         ))}
+        {account === undefined ? null : (
+          <div className="nv-more__account nv-enter" style={{ '--nv-i': items.length + 1 }}>
+            <span className="nv-avatar nv-avatar--sm" aria-hidden="true">
+              {initialOf(account.name)}
+            </span>
+            <span className="nv-user__id">
+              <span>{account.name}</span>
+              <small>{account.role}</small>
+            </span>
+          </div>
+        )}
+        {account === undefined ? null : (
+          <div className="nv-enter" style={{ '--nv-i': items.length + 2 }}>
+            <AppearanceChoice />
+          </div>
+        )}
         {onSignOut === undefined ? null : (
           <button
             type="button"
             className="nv-more__item nv-more__out nv-enter"
-            style={{ '--nv-i': items.length + 1 }}
+            style={{ '--nv-i': items.length + 3 }}
             onClick={onSignOut}
           >
             Se déconnecter
@@ -273,23 +351,26 @@ export function MoreSheet({
   );
 }
 
-function UserMenu({
-  name,
-  role,
-  onSignOut,
-}: {
-  name: string;
-  role: string;
-  onSignOut: () => void;
-}): JSX.Element {
+/**
+ * The account's menu at the foot of the rail: who is signed in, the appearance of this browser (NAV-03), the way out.
+ * A popover, not a menu: it holds a radio group.
+ */
+function UserMenu({ account, onSignOut }: { account: Account; onSignOut: () => void }): JSX.Element {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return undefined;
     const close = (event: PointerEvent | KeyboardEvent): void => {
       const outside = event.target instanceof Node && ref.current?.contains(event.target) !== true;
-      if (event instanceof KeyboardEvent ? event.key === 'Escape' : outside) setOpen(false);
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== 'Escape') return;
+        setOpen(false);
+        button.current?.focus({ preventScroll: true });
+        return;
+      }
+      if (outside) setOpen(false);
     };
     addEventListener('pointerdown', close);
     addEventListener('keydown', close);
@@ -302,31 +383,28 @@ function UserMenu({
   return (
     <div className="nv-user" ref={ref}>
       <button
+        ref={button}
         type="button"
         className="nv-user__btn"
-        aria-haspopup="menu"
         aria-expanded={open}
-        title={name}
+        aria-controls="nv-user-menu"
+        title={account.name}
         onClick={() => {
           setOpen(!open);
         }}
       >
         <span className="nv-avatar nv-avatar--sm" aria-hidden="true">
-          {initialOf(name)}
+          {initialOf(account.name)}
         </span>
         <span className="nv-user__id">
-          <span>{name}</span>
-          <small>{role}</small>
+          <span>{account.name}</span>
+          <small>{account.role}</small>
         </span>
       </button>
       {open ? (
-        <div className="nv-user__menu nv-glass nv-glass--thick" role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className="nv-btn nv-btn--plain nv-btn--sm"
-            onClick={onSignOut}
-          >
+        <div className="nv-user__menu nv-glass nv-glass--thick" id="nv-user-menu">
+          <AppearanceChoice />
+          <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" onClick={onSignOut}>
             Se déconnecter
           </button>
         </div>

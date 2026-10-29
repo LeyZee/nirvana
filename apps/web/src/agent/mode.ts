@@ -82,12 +82,12 @@ export function pillOf(
   running = true,
 ): {
   readonly label: string;
-  readonly tone: 'ok' | 'bad' | 'unknown';
+  readonly tone: 'ok' | 'warn' | 'unknown';
   readonly live: boolean;
 } {
   switch (mode) {
     case null:
-      return { label: 'Inconnu', tone: 'unknown', live: false };
+      return { label: 'Injoignable', tone: 'unknown', live: false };
     case 'auto':
       return running
         ? { label: 'Automatique', tone: 'ok', live: true }
@@ -97,6 +97,7 @@ export function pillOf(
         ? { label: 'Copilote', tone: 'ok', live: true }
         : { label: 'Copilote', tone: 'unknown', live: false };
     case 'stop':
-      return { label: MODE_LABEL.stop, tone: 'bad', live: false };
+      // A stop is a state someone chose, not an alarm: amber, the red stays the urgencies' (NAV-06).
+      return { label: MODE_LABEL.stop, tone: 'warn', live: false };
   }
 }

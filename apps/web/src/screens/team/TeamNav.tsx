@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { useReports } from '@/reports/api';
 import { SubNav } from '@/shell/layout';
+import { screenLabel } from '@/shell/nav';
 
 /**
  * Équipe's screens (ADR 0024 : Planning, Rapports, Membres, Annonces), those that exist today. Rapports carries the
@@ -16,9 +17,13 @@ export function TeamNav(): JSX.Element {
     <SubNav
       label="Équipe"
       items={[
-        { to: '/equipe/planning', label: 'Planning' },
-        { to: '/equipe/rapports', label: 'Rapports', ...(toValidate === 0 ? {} : { count: toValidate }) },
-        { to: '/equipe/membres', label: 'Membres' },
+        { to: '/equipe/planning', label: screenLabel('/equipe/planning') },
+        {
+          to: '/equipe/rapports',
+          label: screenLabel('/equipe/rapports'),
+          ...(toValidate === 0 ? {} : { count: toValidate }),
+        },
+        { to: '/equipe/membres', label: screenLabel('/equipe/membres') },
       ]}
     />
   );
