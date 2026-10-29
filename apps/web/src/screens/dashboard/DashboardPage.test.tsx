@@ -17,6 +17,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardPage } from './DashboardPage';
+import { dashboardSearch, parseDashboardSearch, periodOf } from './logic';
 
 import { apiDashboard, CREATOR, serveDashboard } from '@/test/fakes';
 
@@ -56,25 +57,37 @@ afterEach(() => {
 /** Where the page's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderDashboard(forCreator = false, forOwner = false, opensTracking = true): QueryClient {
+function renderDashboard(forCreator = false, forOwner = false, opensTracking = true, at = '/'): QueryClient {
   // No delay before the one retry: a failing server shows at once.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   // The night banner links to Réglages: the page needs a router around it.
   const root = createRootRoute();
+  const home = createRoute({
+    getParentRoute: () => root,
+    path: '/',
+    validateSearch: parseDashboardSearch,
+    component: function Home() {
+      const search = home.useSearch();
+      const navigate = home.useNavigate();
+      return (
+        <DashboardPage
+          period={periodOf(search)}
+          onPeriod={(next) => void navigate({ search: dashboardSearch(next), replace: true })}
+          forCreator={forCreator}
+          forOwner={forOwner}
+          opensTracking={opensTracking}
+        />
+      );
+    },
+  });
   const router = createRouter({
     routeTree: root.addChildren([
-      createRoute({
-        getParentRoute: () => root,
-        path: '/',
-        component: () => (
-          <DashboardPage forCreator={forCreator} forOwner={forOwner} opensTracking={opensTracking} />
-        ),
-      }),
+      home,
       createRoute({ getParentRoute: () => root, path: '/reglages/telegram' }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
       createRoute({ getParentRoute: () => root, path: '/suivi' }),
     ]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    history: createMemoryHistory({ initialEntries: [at] }),
   });
   location = () => router.state.location.href;
   render(
@@ -210,6 +223,53 @@ function serveModes(
 
 const checked = (name: string): string | null =>
   screen.getByRole('radio', { name }).getAttribute('aria-checked');
+
+describe('DashboardPage, its period (recette 28/10, M11 and M12)', () => {
+  it('reads the period from the address, so that a reload keeps it, and writes it back there', async () => {
+    const fetch = serveDashboard((url) => ({
+      status: 200,
+      body: apiDashboard({ period: url.searchParams.get('period') === 'week' ? 'week' : 'day' }),
+    }));
+    renderDashboard(false, false, true, '/?periode=7j');
+    const week = await screen.findByRole('radio', { name: '7 jours' });
+    expect(week.getAttribute('aria-checked')).toBe('true');
+    const asked = fetch.mock.calls.map(([input]) => String(input)).filter((u) => u.includes('/v1/dashboard'));
+    expect(asked.every((u) => u.includes('period=week'))).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: '30 jours' }));
+    await waitFor(() => {
+      expect(location()).toBe('/?periode=30j');
+    });
+    fireEvent.click(screen.getByRole('radio', { name: 'Aujourd’hui' }));
+    await waitFor(() => {
+      expect(location()).toBe('/');
+    });
+  });
+
+  it('moves between the periods with the arrow keys, one stop of the Tab key for the group', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard();
+    const today = await screen.findByRole('radio', { name: 'Aujourd’hui' });
+    const week = screen.getByRole('radio', { name: '7 jours' });
+    expect(today.tabIndex).toBe(0);
+    expect(week.tabIndex).toBe(-1);
+    today.focus();
+    fireEvent.keyDown(today, { key: 'ArrowRight' });
+    await waitFor(() => {
+      expect(location()).toBe('/?periode=7j');
+    });
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: '7 jours' }));
+    fireEvent.keyDown(document.activeElement ?? week, { key: 'ArrowLeft' });
+    await waitFor(() => {
+      expect(location()).toBe('/');
+    });
+    // As Réglages › Apparence: past the first, the last.
+    fireEvent.keyDown(document.activeElement ?? today, { key: 'ArrowLeft' });
+    await waitFor(() => {
+      expect(location()).toBe('/?periode=30j');
+    });
+  });
+});
 
 describe('DashboardPage changing the mode', () => {
   it('stops the agent after the confirmation, on the server, and resumes it in one click', async () => {

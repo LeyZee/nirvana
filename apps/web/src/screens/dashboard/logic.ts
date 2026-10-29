@@ -5,6 +5,25 @@ import type { AgentMode } from '@/agent/mode';
 /* Pure helpers of the Dashboard: formatting and the few decisions the screen makes on its data. */
 
 /** « 1 846 € », « 10,50 € »: the cents only when there are some, never rounded away (ADR 0011: exact money). */
+/** The period in the address (`/?periode=7j`): a reload or a shared link keeps it; today is the address with none. */
+export interface DashboardSearch {
+  readonly periode?: '7j' | '30j';
+}
+
+const PERIOD_PARAMS = { week: '7j', month: '30j' } as const satisfies Partial<Record<Period, string>>;
+
+/** Anything else in the address than a known period reads as today. */
+export function parseDashboardSearch(search: Record<string, unknown>): DashboardSearch {
+  const { periode } = search;
+  return periode === '7j' || periode === '30j' ? { periode } : {};
+}
+
+export const periodOf = (search: DashboardSearch): Period =>
+  search.periode === '7j' ? 'week' : search.periode === '30j' ? 'month' : 'day';
+
+export const dashboardSearch = (period: Period): DashboardSearch =>
+  period === 'day' ? {} : { periode: PERIOD_PARAMS[period] };
+
 export function eur(value: number): string {
   const cents = Math.round(value * 100);
   const digits = cents % 100 === 0 ? 0 : 2;

@@ -165,7 +165,8 @@ describe('Réglages › Telegram with its tab in the address', () => {
     const rootRoute = createRootRoute();
     const page = createRoute({
       getParentRoute: () => rootRoute,
-      path: '/',
+      // Its own path in the app: the route's search is typed by the app's route of that path.
+      path: '/reglages/telegram',
       validateSearch: parseTelegramSearch,
       component: function Page() {
         const search = page.useSearch();
@@ -207,19 +208,19 @@ describe('Réglages › Telegram with its tab in the address', () => {
   });
 
   it('opens Ventes from ?onglet=ventes, as a link from Réglages › Alertes does', async () => {
-    renderAt('/?onglet=ventes');
+    renderAt('/reglages/telegram?onglet=ventes');
     expect((await screen.findByRole('tab', { name: /Ventes/ })).getAttribute('aria-selected')).toBe('true');
   });
 
   it('falls back on « Qui est prévenu » for a tab it does not know, without an error', async () => {
-    renderAt('/?onglet=inconnu');
+    renderAt('/reglages/telegram?onglet=inconnu');
     expect((await screen.findByRole('tab', { name: /Qui est prévenu/ })).getAttribute('aria-selected')).toBe(
       'true',
     );
   });
 
   it('has no Mots-clés tab: the keywords are a line of « Qui est prévenu », where an old link lands', async () => {
-    renderAt('/?onglet=mots-cles');
+    renderAt('/reglages/telegram?onglet=mots-cles');
     expect((await screen.findByRole('tab', { name: /Qui est prévenu/ })).getAttribute('aria-selected')).toBe(
       'true',
     );
@@ -228,7 +229,7 @@ describe('Réglages › Telegram with its tab in the address', () => {
   });
 
   it('writes a tab change in the address in place, without one more step back', async () => {
-    const address = renderAt('/');
+    const address = renderAt('/reglages/telegram');
     fireEvent.click(await screen.findByRole('tab', { name: /Bots et groupes/ }));
     expect(await screen.findByRole('tab', { name: /Bots et groupes/, selected: true })).toBeTruthy();
     expect(address()).toEqual({ search: { onglet: 'bots' }, steps: 1 });

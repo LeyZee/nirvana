@@ -63,6 +63,16 @@ describe('fromApi', () => {
     expect(data.agent.foldSummary).toContain('2 gardes');
   });
 
+  it('says over which period the reply delay is measured, the one chosen for the sales', () => {
+    expect(card('activity')?.title).toBe('Délai de réponse habituel aujourd’hui');
+    expect(card('activity', fromApi(apiDashboard({ period: 'week' })))?.title).toBe(
+      'Délai de réponse habituel sur 7 jours',
+    );
+    expect(card('activity', fromApi(apiDashboard({ period: 'month' })))?.title).toBe(
+      'Délai de réponse habituel sur 30 jours',
+    );
+  });
+
   it('hands Telegram’s night coverage to the banner, off included', () => {
     expect(fromApi(apiDashboard()).telegram).toEqual({ coverage: null });
     const uncovered = apiDashboard({ telegramCoverage: { urgentReachable: false } });

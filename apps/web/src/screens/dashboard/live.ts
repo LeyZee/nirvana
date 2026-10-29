@@ -98,6 +98,13 @@ const GUARD_CAUSES = HANDOFF_CAUSES.filter(
   (cause) => cause !== 'budget' && cause !== 'llm_unavailable' && cause !== 'other',
 );
 
+/** Over which span the reply delay is measured: the period of the page. */
+const REPLY_SPAN: Readonly<Record<ApiDashboard['period'], string>> = {
+  day: 'aujourd’hui',
+  week: 'sur 7 jours',
+  month: 'sur 30 jours',
+};
+
 function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentState {
   const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
   // Never read once and not connected: no account was ever linked. A step to come, not an outage.
@@ -171,7 +178,8 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       id: 'activity',
       // A job the worker gave up on is work that will not happen until someone looks: amber.
       tone: replies.fansWaitingOver10Min > 0 || (jobs.dead ?? 0) > 0 ? 'warn' : 'ok',
-      title: 'Délai de réponse habituel',
+      // Measured over the period chosen for the sales: the title says which (recette 28/10, M11).
+      title: `Délai de réponse habituel ${REPLY_SPAN[api.period]}`,
       value:
         replies.medianReplyMinutes === null ? 'pas encore mesuré' : replyDelay(replies.medianReplyMinutes),
       rows: [
