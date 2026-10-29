@@ -153,8 +153,9 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label: 
     placeTabBarLens(nav, active, thumb);
   }, [pathname, lit, label]);
 
-  // Leaving: say where the glass was, for the sub-nav the next screen draws.
-  useEffect(() => {
+  // Leaving: say where the glass was, for the sub-nav the next screen draws. A layout effect: its cleanup runs before
+  // the new sub-nav's first placing, where a passive one would run after it and leave nothing to slide from.
+  useLayoutEffect(() => {
     const nav = navRef.current;
     return () => {
       const href = nav?.querySelector('[aria-current="page"]')?.getAttribute('href');

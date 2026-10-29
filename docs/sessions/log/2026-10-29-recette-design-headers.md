@@ -4,5 +4,6 @@ Fait : NAV-08 (dans une même section, choisir un sous-onglet ne rejoue plus l�
 Pas fait : rien.
 Décisions : NAV-08 traité par la scène et la lumière, sans route parente : chaque écran garde son en-tête (titre de quinzaine, phrase et actions propres), ce que la route parente aurait obligé à faire remonter par un emplacement. Le comportement voulu (titre qui reste, lumière qui glisse) est le même dans Entraîner, Réglages, Équipe, Paie et Suivi.
 Découvertes : avec Apparence, le menu du compte est plus haut et recouvre la pastille et Réglages ; posé sur le verre du rail, son flou ne floute rien et on lisait à travers : il prend un fond opaque (`--nv-surface-raised`).
+Relecture (Extension) : la sous-navigation qui part disait où était sa lumière dans le nettoyage d’un effet passif, qui passe après le premier placement de la nouvelle : rien à faire glisser au premier clic, une entrée périmée au second ; c’est maintenant un effet de mise en page, et un test le tient. La phrase de Commissions ne parle plus d’un « prochain palier » qui peut ne pas exister : « Ce que tu as gagné sur la quinzaine, et comment ta commission se construit. »
 Candidats à suppression : aucun (`.hr-tabs` retiré avec le segment).
 Vérifié : pnpm check ✓, tests web ✓.
