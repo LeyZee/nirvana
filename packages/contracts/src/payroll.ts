@@ -650,9 +650,16 @@ const StatementCountSchema = z.number().int().min(0);
 /**
  * A period of `GET /v1/payroll/periods` (EQ-05): its window, whether it has ended, when the team closed it, and the
  * statements its reader reads there (`withMember`), counted by status and summed. The team's for the owner and an
- * active manager; one's own for a member, never the team's. `carried` counts the statements that carry their total
- * over (below the minimum payout, or below zero); `paidMinor` is what was sent. `closedBy` is `null` while the period
- * is open, and always for a member, who reads of a closing only its date (never the team's net nor its rates).
+ * active manager; one's own for a member, never the team's. `closedBy` is `null` while the period is open, and always
+ * for a member, who reads of a closing only its date (never the team's net nor its rates).
+ *
+ * Only a validation makes an amount owed or carried: `payableMinor` sums every statement, those still to validate
+ * included (what the period would pay); `validatedPayableMinor` sums the validated and paid ones only (what is owed),
+ * so that « reste à envoyer » is `validatedPayableMinor − paidMinor` on every screen. `carried` counts the validated
+ * and paid statements whose total was carried over (below the minimum payout, or below zero), never a statement still
+ * to validate, and `carriedMinor` sums what they carried with its sign: positive under the minimum, negative below
+ * zero. For one member it is what goes over to the next period; over the team it is a net of both kinds, never an
+ * amount to show as owed or taken back. `paidMinor` is what was sent.
  */
 export const PayPeriodSummarySchema = z.object({
   window: PayPeriodWindowSchema,
@@ -667,6 +674,8 @@ export const PayPeriodSummarySchema = z.object({
   }),
   netMinor: PeriodSumSchema,
   payableMinor: PeriodSumSchema,
+  validatedPayableMinor: PeriodSumSchema,
+  carriedMinor: PeriodSumSchema,
   paidMinor: PeriodSumSchema,
 });
 export type PayPeriodSummary = z.infer<typeof PayPeriodSummarySchema>;

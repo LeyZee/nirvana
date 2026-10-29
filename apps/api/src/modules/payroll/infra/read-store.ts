@@ -83,6 +83,8 @@ const PeriodTotalsSchema = z.object({
   carried: ExactIntegerSchema,
   net: ExactIntegerSchema,
   payable: ExactIntegerSchema,
+  validatedPayable: ExactIntegerSchema,
+  carriedAmount: ExactIntegerSchema,
   sent: ExactIntegerSchema,
 });
 
@@ -262,6 +264,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
     // owner and an active manager, a member's own for a member. A member reads of a closing only its date.
     periods: (userId, page) =>
       withMember(db, userId, async (tx, scope) => {
+        const validatedOrPaid = sql`${commissionStatements.status} in ('validated', 'paid')`;
         const before = decodePeriodCursor(page.cursor);
         const rows = await tx
           .select({
@@ -275,10 +278,13 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
               draft: sql`count(*) filter (where ${commissionStatements.status} = 'draft')::text`,
               validated: sql`count(*) filter (where ${commissionStatements.status} = 'validated')::text`,
               paid: sql`count(*) filter (where ${commissionStatements.status} = 'paid')::text`,
-              // Under the minimum the carry-over is positive, below zero it is negative: both are carried.
-              carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} <> 0)::text`,
+              // Under the minimum the carry-over is positive, below zero it is negative: both are carried, once a
+              // validation carried them; a statement still to validate owes and carries nothing yet.
+              carried: sql`count(*) filter (where ${commissionStatements.carryOverOutMinor} <> 0 and ${validatedOrPaid})::text`,
               net: sql`sum(${commissionStatements.netMinor})::text`,
               payable: sql`sum(${commissionStatements.payableMinor})::text`,
+              validatedPayable: sql`coalesce(sum(${commissionStatements.payableMinor}) filter (where ${validatedOrPaid}), 0)::text`,
+              carriedAmount: sql`coalesce(sum(${commissionStatements.carryOverOutMinor}) filter (where ${validatedOrPaid}), 0)::text`,
               sent: sql`coalesce(sum(${commissionStatements.sentMinor}), 0)::text`,
             },
           })
@@ -308,6 +314,8 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
             },
             netMinor: totals.net,
             payableMinor: totals.payable,
+            validatedPayableMinor: totals.validatedPayable,
+            carriedMinor: totals.carriedAmount,
             paidMinor: totals.sent,
           };
         });

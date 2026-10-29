@@ -146,10 +146,12 @@ export function summaryOf(period: PayrollPeriod): Omit<PayPeriodSummary, 'window
       draft: count((one) => one.status === 'draft'),
       validated: count((one) => one.status === 'validated'),
       paid: count((one) => one.status === 'paid'),
-      carried: count((one) => one.carryOverOutMinor !== 0),
+      carried: count((one) => one.carryOverOutMinor !== 0 && one.status !== 'draft'),
     },
     netMinor: sum((one) => one.netMinor),
     payableMinor: sum((one) => one.payableMinor),
+    validatedPayableMinor: sum((one) => (one.status === 'draft' ? 0 : one.payableMinor)),
+    carriedMinor: sum((one) => (one.status === 'draft' ? 0 : one.carryOverOutMinor)),
     paidMinor: sum((one) => one.payment?.sentMinor ?? 0),
   };
 }
