@@ -945,9 +945,12 @@
     order: 2;
     width: auto;
   }
+  /* The medium rule lays the open panel over columns 2 to 4: on one column that would make new columns. */
   .pg-why[data-open='true'] {
     position: static;
     width: auto;
+    grid-column: auto;
+    grid-row: auto;
   }
   .pg-why__rail {
     flex-direction: row;
