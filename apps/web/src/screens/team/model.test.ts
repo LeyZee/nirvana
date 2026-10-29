@@ -10,6 +10,7 @@ import {
   FIRST_COUNTRIES,
   formatRate,
   invitationState,
+  lastRate,
   listMembers,
   longDay,
   matches,
@@ -17,8 +18,10 @@ import {
   parsePlanningSearch,
   parseRate,
   parseTeamSearch,
+  rateAhead,
   rateLine,
   suggestedZone,
+  periodStartsFrom,
   teamSummary,
 } from './model';
 
@@ -83,9 +86,20 @@ describe('the list', () => {
   });
 
   it('says how many work, are away and still have to sign in', () => {
-    expect(teamSummary(team)).toBe('2 actifs · 1 absent');
-    expect(teamSummary([member({ invitationPending: true })])).toBe('1 actif · 1 invitation en attente');
-    expect(teamSummary([member({ status: 'left' })])).toBeNull();
+    const now = new Date('2026-10-28T12:00:00Z');
+    expect(teamSummary(team, now)).toBe('2 actifs · 1 absent');
+    expect(teamSummary([member({ invitationPending: true })], now)).toBe('1 actif · 1 invitation en attente');
+    expect(teamSummary([member({ status: 'left' })], now)).toBeNull();
+    // A dead link is counted apart: it asks for a new one (EQ-06).
+    expect(
+      teamSummary(
+        [
+          member({ invitationPending: true, invitationExpiresAt: '2026-10-30T12:00:00Z' }),
+          member({ invitationPending: true, invitationExpiresAt: '2026-10-27T12:00:00Z' }),
+        ],
+        now,
+      ),
+    ).toBe('2 actifs · 1 invitation en attente · 1 lien expiré');
   });
 });
 
@@ -183,5 +197,37 @@ describe('the address', () => {
     const id = '0199f2a0-0000-7000-8000-0000000000a1';
     expect(parseTeamSearch({ onglet: 'managers', membre: id })).toEqual({ onglet: 'managers', membre: id });
     expect(parseTeamSearch({ onglet: 'chatteurs', membre: 'x', autre: 1 })).toEqual({});
+  });
+});
+
+describe('the days a new rate may start from (EQ-10)', () => {
+  it('gives the 1st and the 16th ahead, today when it is one', () => {
+    expect(periodStartsFrom('2026-10-29', 4)).toEqual([
+      '2026-11-01',
+      '2026-11-16',
+      '2026-12-01',
+      '2026-12-16',
+    ]);
+    expect(periodStartsFrom('2026-12-16', 3)).toEqual(['2026-12-16', '2027-01-01', '2027-01-16']);
+    expect(periodStartsFrom('2026-11-01', 2)).toEqual(['2026-11-01', '2026-11-16']);
+    expect(periodStartsFrom('2026-11-02', 1)).toEqual(['2026-11-16']);
+  });
+});
+
+describe('a rate set ahead (EQ-10)', () => {
+  const rate = (effectiveFrom: string, rateBps: number) => ({
+    rateBps,
+    teamShareBps: null,
+    presetId: null,
+    effectiveFrom,
+  });
+  const rates = [rate('2026-12-01', 4500), rate('2026-11-16', 4000), rate('2026-10-01', 3000)];
+
+  it('reads the nearest one after today, none on the day it starts, and the one set last', () => {
+    expect(rateAhead(rates, '2026-11-02')?.rateBps).toBe(4000);
+    expect(rateAhead(rates, '2026-11-16')?.rateBps).toBe(4500);
+    expect(rateAhead(rates, '2026-12-01')).toBeNull();
+    expect(lastRate(rates)?.rateBps).toBe(4500);
+    expect(lastRate([])).toBeNull();
   });
 });

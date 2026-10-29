@@ -27,6 +27,7 @@ import {
 
 import { localTime } from '@/creators/persona/model';
 import { countryFlag, countryName } from '@/lib/country';
+import { cityOf } from '@/scheduling/time';
 
 const ZONES: readonly string[] = Intl.supportedValuesOf('timeZone');
 const ROLES: readonly TeamRole[] = ['chatter', 'manager'];
@@ -144,8 +145,11 @@ export function AddMemberPanel({
     if (!busy) onClose(created?.member ?? null);
   };
 
+  // Each step on its first field; once added, on « Copier le message », the gesture expected next (EQ-12).
   useEffect(() => {
-    dialog.current?.querySelector<HTMLElement>('input, select, button.tm-primary')?.focus();
+    dialog.current
+      ?.querySelector<HTMLElement>(created === null ? 'input, select' : 'button.tm-primary')
+      ?.focus();
   }, [step, created]);
 
   // A step that cannot go on puts the focus on its first problem.
@@ -281,9 +285,10 @@ export function AddMemberPanel({
               purpose="invitation"
               label="Créer son lien"
               initial={created.link}
+              primary
             />
             <div className="tm-dialog__foot">
-              <button type="button" className="nv-btn nv-btn--soft tm-primary" onClick={close}>
+              <button type="button" className="nv-btn nv-btn--plain" onClick={close}>
                 Voir sa fiche
               </button>
             </div>
@@ -541,9 +546,7 @@ function Where({ id, draft, problems, onChange }: StepProps): JSX.Element {
         ) : (
           <div className="tm-zone nv-swap">
             <span className="tm-zone__time">{localTime(draft.timeZone)}</span>
-            <span className="tm-zone__name">
-              chez lui en ce moment · {draft.timeZone.replaceAll('_', ' ')}
-            </span>
+            <span className="tm-zone__name">là-bas en ce moment · {cityOf(draft.timeZone)}</span>
             <button
               type="button"
               className="nv-btn nv-btn--plain nv-btn--sm"
@@ -556,10 +559,10 @@ function Where({ id, draft, problems, onChange }: StepProps): JSX.Element {
           </div>
         )}
         {draft.zoneOpen && zoneValid ? (
-          <span className="tm-hint">Il y est {localTime(draft.timeZone.trim())}.</span>
+          <span className="tm-hint">Il est {localTime(draft.timeZone.trim())} là-bas.</span>
         ) : null}
       </Field>
-      <Field id={`${id}-joined`} label="Arrivé le" problem={problems.joinedOn}>
+      <Field id={`${id}-joined`} label="Dans l’équipe depuis" problem={problems.joinedOn}>
         <input
           id={`${id}-joined`}
           className="nv-field__control nv-glass tm-date"
