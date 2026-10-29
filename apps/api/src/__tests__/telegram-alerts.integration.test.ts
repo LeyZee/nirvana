@@ -4,6 +4,7 @@ import {
   CreatorIdSchema,
   DomainError,
   DraftIdSchema,
+  PersonaVersionIdSchema,
   newId,
   PlatformAccountIdSchema,
   UserIdSchema,
@@ -250,6 +251,18 @@ describe('Telegram alerts from the conversations module', () => {
 
   it('tells the group once when Automatique closes on its own, without the voice', async () => {
     const conversationId = await ingest();
+    // Automatique opens only with an active persona version, proved by her drafts (recette 28/10, G4).
+    const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: personaVersionId,
+      creatorId,
+      version: 'e2e',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'e2e',
+      isActive: true,
+      activatedAt: new Date(),
+    });
     const decided = (count: number, status: 'sent' | 'rejected', offset: number) =>
       test.admin.db.insert(schema.drafts).values(
         Array.from({ length: count }, (_, i) => ({
@@ -258,6 +271,7 @@ describe('Telegram alerts from the conversations module', () => {
           conversationId,
           status,
           promptHashes: VOICE,
+          personaVersionId,
           decidedAt: new Date(Date.now() - (offset + i + 1) * 1_000),
           idempotencyKey: `e2e:${status}:${String(offset + i)}`,
         })),
