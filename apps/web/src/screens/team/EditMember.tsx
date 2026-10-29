@@ -8,19 +8,24 @@ import {
   type TeamMemberStatus,
 } from '@nirvana/contracts';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
-import { changeStatus, MEMBERS_KEY, setCommission, updateMember, type Outcome } from './api';
+import { changeStatus, MEMBERS_KEY, setCommission, updateMember, useRates, type Outcome } from './api';
 import {
   ERROR_MESSAGES,
   formatRate,
+  lastRate,
   longDay,
   parseRate,
   periodStartsFrom,
+  rateAhead,
   STATUS_LABELS,
-  today,
 } from './model';
+
+import { usePlanning } from '@/scheduling/api';
+import { useAgencyToday } from '@/screens/pay/data';
 
 /**
  * Changing a member once added (EQ-10, owner only): their team name, colour and creators; their rate from a 1st or a
@@ -209,6 +214,7 @@ export function EditMemberPanel({
 /**
  * « Changer le taux »: a preset or a rate by hand, and the first day of a period ahead it starts on (Charles, 28/10:
  * a period is paid at one rate, nothing is recomputed backwards). A manager keeps or changes his share of the team.
+ * The days offered start from today in the agency's zone, the day the server checks the date against (#290).
  */
 export function RatePanel({
   member,
@@ -221,34 +227,40 @@ export function RatePanel({
 }): JSX.Element {
   const id = useId();
   const { busy, problem, run } = useWrite();
-  const starts = periodStartsFrom(today(), 4);
-  const [from, setFrom] = useState(starts[0] ?? today());
-  // Nothing chosen at first: a rate is never changed by a stray tap.
+  const today = useAgencyToday();
+  const starts = today === null ? [] : periodStartsFrom(today, 4);
+  const rates = useRates(member.id);
+  const ahead = today === null ? null : rateAhead(rates.data ?? [], today);
+  // Nothing chosen at first, neither the rate nor its day: a rate is never changed by a stray tap.
+  const [from, setFrom] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [byHand, setByHand] = useState(presets.length === 0);
   const [rate, setRate] = useState('');
   const manager = member.teamRole === 'manager';
-  const kept = manager ? (member.commission?.teamShareBps ?? null) : null;
-  const [share, setShare] = useState(kept === null ? '' : String(kept / 100).replace('.', ','));
+  // The share offered is the one set last, an ahead rate's if there is one, once the rates are read.
+  const [share, setShare] = useState<string | null>(null);
+  const kept = manager ? ((lastRate(rates.data ?? []) ?? member.commission)?.teamShareBps ?? null) : null;
+  const shareText = share ?? (kept === null ? '' : String(kept / 100).replace('.', ','));
   const typed = parseRate(rate);
-  const shareBps = share.trim() === '' ? null : parseRate(share);
+  const shareBps = shareText.trim() === '' ? null : parseRate(shareText);
   const rateOk = byHand ? typed !== null : presetId !== null;
-  const shareOk = !manager || share.trim() === '' || shareBps !== null;
+  const shareOk = !manager || shareText.trim() === '' || shareBps !== null;
+  const newRate = byHand ? typed : (presets.find((preset) => preset.id === presetId)?.rateBps ?? null);
   const body = SetCommissionRateBodySchema.safeParse({
     commission: byHand ? { rateBps: typed } : { presetId },
     teamShareBps: manager ? shareBps : null,
     effectiveFrom: from,
   });
-  const ready = rateOk && shareOk && body.success;
+  const ready = rateOk && shareOk && from !== null && body.success;
 
   return (
     <Dialog
       title="Changer le taux"
-      lead={
+      lead={`${
         member.commission === null
           ? `${member.displayName} n’a pas encore de taux.`
           : `Aujourd’hui ${formatRate(member.commission.rateBps)}, depuis le ${longDay(member.commission.effectiveFrom)}.`
-      }
+      }${ahead === null ? '' : ` ${formatRate(ahead.rateBps)} prévu à partir du ${longDay(ahead.effectiveFrom)}.`}`}
       busy={busy}
       onClose={onClose}
     >
@@ -328,7 +340,7 @@ export function RatePanel({
                 inputMode="decimal"
                 placeholder="5"
                 aria-invalid={!shareOk}
-                value={share}
+                value={shareText}
                 onChange={(event) => {
                   setShare(event.target.value);
                 }}
@@ -342,7 +354,7 @@ export function RatePanel({
         ) : null}
         <div className="nv-field tm-field">
           <span className="nv-field__label">À partir du</span>
-          <div className="tm-choices" role="radiogroup" aria-label="À partir du">
+          <div className="tm-choices" role="radiogroup" aria-label="À partir du" aria-busy={today === null}>
             {starts.map((day) => (
               <button
                 key={day}
@@ -363,6 +375,17 @@ export function RatePanel({
             avant.
           </span>
         </div>
+        {/* Said before it is sent: a rate saved is never changed, a slip would pay a whole period (Équipe, #318). */}
+        {ready && newRate !== null ? (
+          <p className="tm-recap nv-swap" role="status">
+            À partir du {longDay(from)} : <b>{formatRate(newRate)}</b>
+            {manager && shareBps !== null
+              ? `, part de l’équipe ${formatRate(shareBps)}`
+              : ''} (aujourd’hui{' '}
+            {member.commission === null ? 'pas de taux' : formatRate(member.commission.rateBps)}). Un taux
+            enregistré ne se modifie plus.
+          </p>
+        ) : null}
         <Foot busy={busy} problem={problem} ready={ready} label="Enregistrer le taux" onClose={onClose} />
       </form>
     </Dialog>
@@ -373,8 +396,46 @@ export function RatePanel({
 const LEAVING = (name: string): string =>
   `${name} n’aura plus accès à Nirvana : ses créatrices lui sont retirées et ses sessions fermées. Sa fiche, ses rapports et ses relevés restent. Ce changement est définitif.`;
 
+/** What a departure leaves to do by hand until the departure itself is built (EQ-14): nothing reads as settled. */
+const LEFT_TO_DO: readonly string[] = [
+  'Un report sous le minimum de versement lui reste dû : il n’est pas versé tant qu’aucun relevé final n’existe.',
+  'Son compte membre sur Reveal est à retirer à la main.',
+];
+
+/** Away or suspended, the same effect: a narrow access, no new shift, the creators kept for the return. */
+const AWAY = (name: string): string =>
+  `${name} garde sa connexion et ne voit plus que ses propres shifts, rapports et relevés. Aucun shift ne peut lui être posé. Ses créatrices restent attachées pour son retour.`;
+
+/** The planning read ahead for a member's shifts still set: what make-shifts lays, four weeks, inside the read's six. */
+const AHEAD_DAYS = 42;
+
+/** His shifts still to come: nobody holds them once he is away or gone, and the planning counts them as filled. */
+function ShiftsLeft({ member }: { member: TeamMember }): JSX.Element | null {
+  const [range] = useState(() => {
+    const from = new Date();
+    return {
+      from: from.toISOString(),
+      to: new Date(from.getTime() + AHEAD_DAYS * 86_400_000).toISOString(),
+      creatorId: null,
+    };
+  });
+  const planning = usePlanning(range);
+  const count = (planning.data?.shifts ?? []).filter(
+    (shift) => shift.memberId === member.id && shift.stoppedAt === null && shift.startsAt > range.from,
+  ).length;
+  if (count === 0) return null;
+  return (
+    <p className="tm-warn nv-swap">
+      {count} shift{count > 1 ? 's' : ''} à venir {count > 1 ? 'restent' : 'reste'} au planning : personne ne{' '}
+      {count > 1 ? 'les' : 'le'} tiendra et {count > 1 ? 'ils comptent' : 'il compte'} comme pourvu
+      {count > 1 ? 's' : ''}. <Link to="/equipe/planning">Voir le planning</Link>
+    </p>
+  );
+}
+
 /** « Changer le statut »: at work, away (leave, sick, travelling), suspended, or gone for good after a confirmation. */
 export function StatusPanel({ member, onClose }: { member: TeamMember; onClose: () => void }): JSX.Element {
+  const id = useId();
   const { busy, problem, run } = useWrite();
   const [status, setStatus] = useState<TeamMemberStatus>(member.status);
   const [sure, setSure] = useState(false);
@@ -411,15 +472,26 @@ export function StatusPanel({ member, onClose }: { member: TeamMember; onClose: 
             </button>
           ))}
         </div>
-        {status === 'suspended' ? (
-          <p className="tm-hint nv-swap">Suspendu : un accès restreint reste ouvert, rien n’est retiré.</p>
+        {status !== 'active' && !leaving ? (
+          <p className="tm-hint nv-swap">{AWAY(member.displayName)}</p>
         ) : null}
+        {status !== 'active' && !leaving ? <ShiftsLeft member={member} /> : null}
         {leaving ? (
-          <div className="nv-confirm nv-swap" role="alertdialog" aria-label="Confirmer le départ">
-            <p className="sc-confirm__text">{LEAVING(member.displayName)}</p>
+          <div className="nv-confirm nv-swap" role="group" aria-label="Confirmer le départ">
+            <div id={`${id}-leaving`} className="sc-confirm__text">
+              <p>{LEAVING(member.displayName)}</p>
+              <p>Nirvana ne le fait pas encore :</p>
+              <ul className="tm-todo">
+                {LEFT_TO_DO.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+            <ShiftsLeft member={member} />
             <label className="tm-sure">
               <input
                 type="checkbox"
+                aria-describedby={`${id}-leaving`}
                 checked={sure}
                 onChange={(event) => {
                   setSure(event.target.checked);

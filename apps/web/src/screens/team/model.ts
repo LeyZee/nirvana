@@ -1,6 +1,7 @@
 import {
   COUNTRY_CODES,
   type CommissionPreset,
+  type CommissionRate,
   type CreatorSummary,
   type TeamMember,
   type TeamMemberErrorCode,
@@ -257,6 +258,22 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long
 /** « 27 octobre 2026 », « 1er octobre 2026 », from a calendar day. */
 export const longDay = (day: string): string =>
   withFirstOfMonth(LONG_DAY.formatToParts(new Date(`${day}T12:00:00`)));
+
+/** The rate set to start after `day`, the nearest one: `member.commission` stays the one in force until then. */
+export const rateAhead = (rates: readonly CommissionRate[], day: string): CommissionRate | null =>
+  rates
+    .filter((rate) => rate.effectiveFrom > day)
+    .reduce<CommissionRate | null>(
+      (near, rate) => (near === null || rate.effectiveFrom < near.effectiveFrom ? rate : near),
+      null,
+    );
+
+/** The rate set last, ahead or in force: a manager's share is offered from it. */
+export const lastRate = (rates: readonly CommissionRate[]): CommissionRate | null =>
+  rates.reduce<CommissionRate | null>(
+    (last, rate) => (last === null || rate.effectiveFrom > last.effectiveFrom ? rate : last),
+    null,
+  );
 
 /** The creators of a member, by name, in the order of the list. */
 export const creatorNames = (member: TeamMember, creators: readonly CreatorSummary[]): string[] =>

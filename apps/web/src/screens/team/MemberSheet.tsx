@@ -4,7 +4,7 @@ import { useState, type JSX } from 'react';
 
 import { EditMemberPanel, RatePanel, StatusPanel } from './EditMember';
 import { ShareLink } from './ShareLink';
-import { addNote, useNotes } from './api';
+import { addNote, useNotes, useRates } from './api';
 import {
   creatorNames,
   deadline,
@@ -12,6 +12,7 @@ import {
   formatRate,
   invitationState,
   longDay,
+  rateAhead,
   ROLE_LABELS,
 } from './model';
 import { Avatar, StatusPill } from './parts';
@@ -19,6 +20,7 @@ import { Avatar, StatusPill } from './parts';
 import { localTime } from '@/creators/persona/model';
 import { countryFlag, countryName } from '@/lib/country';
 import { cityOf } from '@/scheduling/time';
+import { useAgencyToday } from '@/screens/pay/data';
 
 /** Arrived less than this many days ago: the « Nouveau » badge of Imperium. */
 const NEW_DAYS = 30;
@@ -52,6 +54,10 @@ export function MemberSheet({
   const gone = member.status === 'left';
   // A share counts for a manager only (pay ignores a chatter's): a manager who became a chatter shows none.
   const share = member.teamRole === 'manager' ? (member.commission?.teamShareBps ?? null) : null;
+  // A rate set ahead shows from the day it is saved, not only once it starts (Équipe, #318).
+  const today = useAgencyToday();
+  const rates = useRates(member.id, !gone);
+  const ahead = today === null ? null : rateAhead(rates.data ?? [], today);
   const [editing, setEditing] = useState<'member' | 'rate' | 'status' | null>(null);
   const close = (): void => {
     setEditing(null);
@@ -128,6 +134,11 @@ export function MemberSheet({
               ? 'Pas encore de taux'
               : `${preset === undefined ? 'Taux à la main' : preset.name} · depuis le ${longDay(member.commission.effectiveFrom)}`}
           </span>
+          {ahead === null ? null : (
+            <span className="tm-figure__note tm-figure__ahead">
+              {formatRate(ahead.rateBps)} à partir du {longDay(ahead.effectiveFrom)}
+            </span>
+          )}
         </div>
         {share === null ? null : (
           <div className="tm-figure nv-enter" style={{ '--nv-i': 2 }}>

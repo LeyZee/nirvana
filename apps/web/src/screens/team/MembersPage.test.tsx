@@ -13,7 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MembersPage } from './MembersPage';
-import { parseTeamSearch, periodStartsFrom, today } from './model';
+import { parseTeamSearch } from './model';
 
 const confirmPassword = vi.fn<(password: string) => Promise<string>>();
 vi.mock('@/settings/services/api', () => ({
@@ -59,6 +59,14 @@ const JULES = member(13, { displayName: 'Jules', firstName: 'Jules', status: 'le
 const INES = member(14, { displayName: 'Inès', firstName: 'Inès', teamRole: 'manager', country: 'FR' });
 const TEAM = [THEO, BASILE, JULES, INES];
 
+/** An agency far ahead of the browser: its day is the one the server checks a rate's start against (#290). */
+const SETTINGS = {
+  timeZone: 'Pacific/Kiritimati',
+  slotStartMinute: 0,
+  slotLengthMinutes: 360,
+  accessMarginMinutes: 15,
+};
+
 interface Reply {
   readonly status: number;
   readonly body?: unknown;
@@ -68,13 +76,22 @@ interface Posted {
   readonly body: unknown;
 }
 
+/** The text of an element with its narrow spaces read as spaces: « 30 % » is written with one. */
+const text = (element: Element): string => element.textContent.replace(/[\u00a0\u202f]/gu, ' ');
+
 const apiError = (code: string): unknown => ({
   error: { code, message: code, details: {}, requestId: 'r1' },
 });
 
 /** A fake `/v1/team`: the list, the presets, the notes, and every POST answered by `post` and kept in `posted`. */
 function serve(
-  routes: { members?: Reply; afterPost?: Reply; post?: (path: string, body: unknown) => Reply } = {},
+  routes: {
+    members?: Reply;
+    afterPost?: Reply;
+    post?: (path: string, body: unknown) => Reply;
+    rates?: readonly unknown[];
+    shifts?: readonly unknown[];
+  } = {},
 ): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -91,6 +108,13 @@ function serve(
           routes.members ?? { status: 200, body: { members: TEAM } };
       else if (path === '/v1/team/commission-presets') reply = { status: 200, body: { presets: PRESETS } };
       else if (path === '/v1/creators') reply = { status: 200, body: { creators: [LEA] } };
+      else if (path === '/v1/scheduling/settings') reply = { status: 200, body: SETTINGS };
+      else if (path.endsWith('/commission')) reply = { status: 200, body: { rates: routes.rates ?? [] } };
+      else if (path === '/v1/scheduling/planning')
+        reply = {
+          status: 200,
+          body: { settings: SETTINGS, accounts: [], members: [], shifts: routes.shifts ?? [], conflicts: [] },
+        };
       else if (path.endsWith('/notes')) reply = { status: 200, body: { notes: [] } };
       else if (path === `/v1/team/members/${THEO.id}`) reply = { status: 200, body: THEO };
       else reply = { status: 404 };
@@ -162,6 +186,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   confirmPassword.mockReset();
 });
 
@@ -428,22 +453,34 @@ describe('changing a member once added (EQ-10)', () => {
     ]);
   });
 
-  it('gives a new rate from the 1st or the 16th ahead, and words a refusal', async () => {
+  it('gives a new rate from the 1st or the 16th ahead of the agency’s day, chosen by hand, and words a refusal', async () => {
+    // 1 November, noon in London: already the 2nd at the agency, so the 1st has gone by and the 16th comes first.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-01T12:00:00Z'));
     const posted = serve({ post: () => ({ status: 409, body: apiError('commission_rate_conflict') }) });
     fireEvent.click(within(await sheet()).getByRole('button', { name: 'Changer le taux' }));
     const panel = await screen.findByRole('dialog', { name: 'Changer le taux' });
     const save = within(panel).getByRole('button', { name: 'Enregistrer le taux' });
-    // Nothing chosen: a rate never changes by a stray tap.
+    // Nothing chosen, neither the rate nor its day: a rate never changes by a stray tap.
     expect(save.hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(panel).getByRole('radio', { name: /Confirmé/u }));
-    const first = periodStartsFrom(today(), 1)[0];
-    expect(within(panel).getAllByRole('radio', { name: /\d{4}$/u })).toHaveLength(4);
+    const days = await within(panel).findAllByRole('radio', { name: /\d{4}$/u });
+    expect(days.map((day) => day.textContent)).toEqual([
+      '16 novembre 2026',
+      '1er décembre 2026',
+      '16 décembre 2026',
+      '1er janvier 2027',
+    ]);
+    expect(days.some((day) => day.getAttribute('aria-checked') === 'true')).toBe(false);
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(days[0] ?? panel);
+    expect(save.hasAttribute('disabled')).toBe(false);
     fireEvent.click(save);
     expect(await within(panel).findByText('Ce membre a déjà un taux à partir de ce jour.')).toBeDefined();
     expect(posted).toEqual([
       {
         path: `/v1/team/members/${THEO.id}/commission`,
-        body: { commission: { presetId: PRESET }, teamShareBps: null, effectiveFrom: first },
+        body: { commission: { presetId: PRESET }, teamShareBps: null, effectiveFrom: '2026-11-16' },
       },
     ]);
   });
@@ -455,8 +492,12 @@ describe('changing a member once added (EQ-10)', () => {
     fireEvent.click(within(await sheet()).getByRole('button', { name: 'Changer le statut' }));
     const panel = await screen.findByRole('dialog', { name: 'Statut de Théo' });
     fireEvent.click(within(panel).getByRole('radio', { name: 'Parti' }));
-    const confirm = within(panel).getByRole('alertdialog', { name: 'Confirmer le départ' });
+    // A group inside the dialog, not a second modal; the box reads what it confirms.
+    const confirm = within(panel).getByRole('group', { name: 'Confirmer le départ' });
     expect(confirm.textContent).toContain('Ce changement est définitif.');
+    expect(
+      within(confirm).getByRole('checkbox', { description: /Ce changement est définitif\./u }),
+    ).toBeDefined();
     const leave = within(panel).getByRole('button', { name: 'Confirmer le départ' });
     expect(leave.hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(confirm).getByRole('checkbox'));
@@ -464,6 +505,67 @@ describe('changing a member once added (EQ-10)', () => {
     await waitFor(() => {
       expect(posted).toEqual([{ path: `/v1/team/members/${THEO.id}/status`, body: { status: 'left' } }]);
     });
+  });
+
+  it('shows a rate set ahead on the sheet and in the panel, offers the share set last, and says the rate before it is sent', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-01T12:00:00Z'));
+    const inForce = { rateBps: 3000, teamShareBps: 300, presetId: null, effectiveFrom: '2026-10-01' };
+    const ahead = { rateBps: 4000, teamShareBps: 500, presetId: null, effectiveFrom: '2026-11-16' };
+    const rose = member(16, {
+      displayName: 'Rose',
+      firstName: 'Rose',
+      teamRole: 'manager',
+      commission: inForce,
+    });
+    serve({ members: { status: 200, body: { members: [rose] } }, rates: [ahead, inForce] });
+    renderPage(`/equipe/membres?membre=${rose.id}`);
+    const region = await screen.findByRole('region', { name: 'Rose' });
+    expect(await within(region).findByText('40 % à partir du 16 novembre 2026')).toBeDefined();
+    fireEvent.click(within(region).getByRole('button', { name: 'Changer le taux' }));
+    const panel = await screen.findByRole('dialog', { name: 'Changer le taux' });
+    expect(text(panel)).toContain(
+      'Aujourd’hui 30 %, depuis le 1er octobre 2026. 40 % prévu à partir du 16 novembre 2026.',
+    );
+    expect(within(panel).getByLabelText<HTMLInputElement>('Part du net de l’équipe').value).toBe('5');
+    expect(within(panel).queryByRole('status')).toBeNull();
+    fireEvent.click(within(panel).getByRole('radio', { name: /Autre/u }));
+    fireEvent.change(within(panel).getByLabelText('Taux à la main'), { target: { value: '45' } });
+    fireEvent.click(within(panel).getByRole('radio', { name: '1er décembre 2026' }));
+    expect(text(within(panel).getByRole('status'))).toBe(
+      'À partir du 1er décembre 2026 : 45 %, part de l’équipe 5 % (aujourd’hui 30 %). Un taux enregistré ne se modifie plus.',
+    );
+  });
+
+  it('says what an away status leaves and counts the shifts still on the planning', async () => {
+    const shift = (n: number, startsAt: string, memberId: string = THEO.id): unknown => ({
+      id: id(60 + n),
+      creatorId: LEA.id,
+      platformAccountId: id(50),
+      memberId,
+      startsAt,
+      endsAt: new Date(new Date(startsAt).getTime() + 6 * 3_600_000).toISOString(),
+      templateId: null,
+      stoppedAt: null,
+    });
+    const soon = (days: number): string => new Date(Date.now() + days * 86_400_000).toISOString();
+    serve({
+      shifts: [shift(1, soon(1)), shift(2, soon(2)), shift(3, soon(3), BASILE.id)],
+    });
+    fireEvent.click(within(await sheet()).getByRole('button', { name: 'Changer le statut' }));
+    const panel = await screen.findByRole('dialog', { name: 'Statut de Théo' });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Suspendu' }));
+    expect(panel.textContent).toContain('Théo garde sa connexion et ne voit plus que ses propres shifts');
+    const left = await within(panel).findByText(/2 shifts à venir restent au planning/u);
+    expect(within(left).getByRole('link', { name: 'Voir le planning' }).getAttribute('href')).toBe(
+      '/equipe/planning',
+    );
+    // Gone, the same count sits in the confirmation, beside what Nirvana does not do yet.
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Parti' }));
+    const confirm = within(panel).getByRole('group', { name: 'Confirmer le départ' });
+    expect(await within(confirm).findByText(/2 shifts à venir restent au planning/u)).toBeDefined();
+    expect(confirm.textContent).toContain('Son compte membre sur Reveal est à retirer à la main.');
+    expect(confirm.textContent).toContain('relevé final');
   });
 
   it('offers nothing to change to a manager', async () => {

@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   CommissionPresetListSchema,
+  CommissionRateHistorySchema,
   CommissionRateSchema,
   InvitationLinkCreatedSchema,
   REAUTHENTICATION_ERROR_CODE,
@@ -58,6 +59,19 @@ export function useMembers(enabled = true): UseQueryResult<TeamMember[]> {
 /** The presets are the owner's settings: a manager who cannot read them sees the figures alone. */
 export function usePresets(): UseQueryResult<CommissionPreset[]> {
   return useQuery({ queryKey: ['team', 'presets'], queryFn: fetchPresets, retry: false });
+}
+
+export const fetchRates = (memberId: string): Promise<CommissionRate[]> =>
+  read(`/v1/team/members/${memberId}/commission`, (body) => CommissionRateHistorySchema.parse(body).rates);
+
+/** Every rate of a member, ahead ones included; under the team's key, so a write that reads the team reads them too. */
+export function useRates(memberId: string, enabled = true): UseQueryResult<CommissionRate[]> {
+  return useQuery({
+    queryKey: [...MEMBERS_KEY, memberId, 'rates'],
+    queryFn: () => fetchRates(memberId),
+    enabled,
+    retry: 1,
+  });
 }
 
 export function useNotes(memberId: string): UseQueryResult<TeamMemberNote[]> {

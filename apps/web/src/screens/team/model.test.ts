@@ -10,6 +10,7 @@ import {
   FIRST_COUNTRIES,
   formatRate,
   invitationState,
+  lastRate,
   listMembers,
   longDay,
   matches,
@@ -17,6 +18,7 @@ import {
   parsePlanningSearch,
   parseRate,
   parseTeamSearch,
+  rateAhead,
   rateLine,
   suggestedZone,
   periodStartsFrom,
@@ -209,5 +211,23 @@ describe('the days a new rate may start from (EQ-10)', () => {
     expect(periodStartsFrom('2026-12-16', 3)).toEqual(['2026-12-16', '2027-01-01', '2027-01-16']);
     expect(periodStartsFrom('2026-11-01', 2)).toEqual(['2026-11-01', '2026-11-16']);
     expect(periodStartsFrom('2026-11-02', 1)).toEqual(['2026-11-16']);
+  });
+});
+
+describe('a rate set ahead (EQ-10)', () => {
+  const rate = (effectiveFrom: string, rateBps: number) => ({
+    rateBps,
+    teamShareBps: null,
+    presetId: null,
+    effectiveFrom,
+  });
+  const rates = [rate('2026-12-01', 4500), rate('2026-11-16', 4000), rate('2026-10-01', 3000)];
+
+  it('reads the nearest one after today, none on the day it starts, and the one set last', () => {
+    expect(rateAhead(rates, '2026-11-02')?.rateBps).toBe(4000);
+    expect(rateAhead(rates, '2026-11-16')?.rateBps).toBe(4500);
+    expect(rateAhead(rates, '2026-12-01')).toBeNull();
+    expect(lastRate(rates)?.rateBps).toBe(4500);
+    expect(lastRate([])).toBeNull();
   });
 });
