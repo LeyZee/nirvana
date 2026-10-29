@@ -282,6 +282,19 @@ describe('connectors module (P0-06)', () => {
     });
     expect(refused.statusCode).toBe(401);
     expect(refused.json()).toMatchObject({ error: { code: 'device_unauthenticated' } });
+    // The token before the body (recette 28/10): without it, a body that does not validate, or is not even JSON,
+    // gets the same 401, never a 400 listing the fields.
+    for (const attempt of [
+      { headers: {}, payload: { platformAccountId: 'nope' } },
+      { headers: { 'x-extension-token': 'wrong' }, payload: {} },
+      { headers: { 'content-type': 'application/json' }, payload: '{"session":' },
+    ]) {
+      const early = await server.inject({ method: 'POST', url: '/v1/connector/sessions', ...attempt });
+      expect([early.statusCode, early.json<{ error: { code: string } }>().error.code]).toEqual([
+        401,
+        'device_unauthenticated',
+      ]);
+    }
 
     const stored = await server.inject({
       method: 'POST',

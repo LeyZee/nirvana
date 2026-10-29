@@ -157,6 +157,7 @@ export function createConversationRoutes(
         const { creatorId, limit, cursor } = request.query;
         await actorOn(request, creatorId, request.params.id);
         const page = await reader.messages(creatorId, request.params.id, { limit, cursor });
+        if (page === null) throw new ConversationNotFound();
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
     );
@@ -175,6 +176,7 @@ export function createConversationRoutes(
         const { creatorId, limit, cursor } = request.query;
         await actorOn(request, creatorId, request.params.id);
         const page = await reader.events(creatorId, request.params.id, { limit, cursor });
+        if (page === null) throw new ConversationNotFound();
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
     );
@@ -192,7 +194,9 @@ export function createConversationRoutes(
       },
       async (request) => {
         await actorOn(request, request.query.creatorId, request.params.id);
-        return reader.desireCurve(request.query.creatorId, request.params.id);
+        const curve = await reader.desireCurve(request.query.creatorId, request.params.id);
+        if (curve === null) throw new ConversationNotFound();
+        return curve;
       },
     );
 

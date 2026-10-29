@@ -1,8 +1,35 @@
 import type { PlaygroundAnswer as Answer, PlaygroundState } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { bubblesOf, duration, euros, money, needsAttention, percent, rateTone, stepOf } from './logic';
-import { handoffReasons, intentLabel, suggestedDestination } from './model';
+import {
+  bubblesOf,
+  duration,
+  euros,
+  money,
+  needsAttention,
+  percent,
+  rateTone,
+  scriptsHint,
+  stepOf,
+} from './logic';
+import {
+  DESTINATION_HINTS,
+  handoffReasons,
+  intentLabel,
+  risksBesideTrap,
+  suggestedDestination,
+} from './model';
+
+describe('lesson words', () => {
+  it('names no one in the help of « Règle »', () => {
+    expect(DESTINATION_HINTS.rule).toBe('Part au propriétaire pour validation, puis devient du code.');
+  });
+
+  it('lists a manipulation attempt once when the trap already says it', () => {
+    expect(risksBesideTrap(['manipulation_attempt', 'distress'], true)).toEqual(['distress']);
+    expect(risksBesideTrap(['manipulation_attempt'], false)).toEqual(['manipulation_attempt']);
+  });
+});
 
 type Brief = NonNullable<Answer['brief']>;
 
@@ -33,6 +60,15 @@ describe('formatting', () => {
     expect(duration(3 * 3_600_000)).toBe('3 h');
     expect(duration(74 * 3_600_000)).toBe('3 j 2 h');
     expect(duration(48 * 3_600_000)).toBe('2 j');
+    expect(duration(30 * 24 * 3_600_000)).toBe('30 j');
+    // Past a month, months: « 299 j 13 h » was hard to read.
+    expect(duration((299 * 24 + 13) * 3_600_000)).toBe('10 mois');
+    expect(duration(31 * 24 * 3_600_000)).toBe('1 mois');
+  });
+
+  it('says which scripts the time of day lets her send, without a contradiction', () => {
+    expect(scriptsHint(false)).toBe('Il fait jour chez elle : seuls les scripts Jour partent.');
+    expect(scriptsHint(true)).toContain('seuls les scripts Nuit partent');
   });
 
   it('says what the models cost in euros, never a misleading zero', () => {

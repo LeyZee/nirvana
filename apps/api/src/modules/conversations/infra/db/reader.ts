@@ -13,6 +13,7 @@ import {
   MessageDirectionSchema,
   MessageIdSchema,
   type ConversationDesire,
+  type ConversationId,
   type ConversationSummary,
   type DraftView,
 } from '@nirvana/contracts';
@@ -116,6 +117,15 @@ function draftView(draft: typeof schema.drafts.$inferSelect): DraftView {
   };
 }
 
+/** Whether the creator has this conversation (RLS: another creator's is not there). */
+async function exists(tx: Transaction, id: ConversationId): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: schema.conversations.id })
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, id));
+  return row !== undefined;
+}
+
 /** The inbox's queries, in tenant transactions like everything else (RLS). */
 export function createDrizzleConversationReader(db: Database, clock: Clock): ConversationReader {
   return {
@@ -188,6 +198,7 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
 
     messages: (creatorId, id, page) =>
       withTenant(db, creatorId, async (tx) => {
+        if (!(await exists(tx, id))) return null;
         const after = decodeCursor(page.cursor);
         const rows = await tx
           .select({ row: schema.messages, cursorAt: cursorInstant(schema.messages.platformCreatedAt) })
@@ -221,6 +232,7 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
 
     events: (creatorId, id, page) =>
       withTenant(db, creatorId, async (tx) => {
+        if (!(await exists(tx, id))) return null;
         const before = decodeSeqCursor(page.cursor);
         const rows = await tx
           .select()
@@ -245,6 +257,7 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
 
     desireCurve: (creatorId, id) =>
       withTenant(db, creatorId, async (tx) => {
+        if (!(await exists(tx, id))) return null;
         const rows = await tx
           .select()
           .from(schema.conversationEvents)

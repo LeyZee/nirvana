@@ -137,7 +137,8 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
 
   /**
    * One writer of custom alerts at a time, until the transaction ends: the name check and the write it allows are
-   * never split by another one (two alerts of the same name posted at once).
+   * never split by another one (two alerts of the same name posted at once), and a creation sent twice at once is
+   * written and audited once, the second one reading it back as a replay.
    */
   const lockNames = (tx: Transaction) =>
     tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('alerts.custom_alert_names', 0))`);

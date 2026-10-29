@@ -25,9 +25,40 @@ export const DESTINATION_LABELS: Readonly<Record<Destination, string>> = {
 };
 export const DESTINATION_HINTS: Readonly<Record<Destination, string>> = {
   voice_example: 'Rejoint les exemples donnés à la voix.',
-  rule: 'Part à Charles pour validation, puis devient du code.',
+  rule: 'Part au propriétaire pour validation, puis devient du code.',
   test: 'Rejoué à chaque changement de prompt ou de modèle.',
 };
+/** Said once the lesson is filed: where it went and what it changes. */
+const DESTINATION_ACKS: Readonly<Record<Destination, string>> = {
+  voice_example: 'Rangée en Exemple de voix : elle rejoint les exemples donnés à la voix.',
+  rule: 'Rangée en Règle : elle part au propriétaire pour validation.',
+  test: 'Rangée en Test : rejouée à chaque changement de prompt ou de modèle.',
+};
+
+/** The line under the conversation once a lesson is filed; the demo saves nothing, and says so as its bar does. */
+export const filedAck = (destination: Destination, isDemo: boolean): string =>
+  isDemo ? 'Démo : rien n’est rangé pour de vrai.' : DESTINATION_ACKS[destination];
+
+/**
+ * Why an answer was rejected, kept in view while its destination is chosen: the reason first, since it decides where
+ * the lesson goes (a rule for some reasons), then the trainer's note when there is one.
+ */
+export function rejectedWords(
+  verdict: Extract<Verdict, { kind: 'rejected' }>,
+  reasons: PlaygroundState['rejectReasons'],
+): { reason: string; note: string | null } {
+  const reason = reasons.find((r) => r.id === verdict.reason)?.label ?? verdict.reason;
+  const note = verdict.note?.trim() ?? '';
+  return { reason, note: note === '' ? null : note };
+}
+
+/** A risk the trap already explains in words: listed once, under « Piège ». */
+const TRAP_RISKS: readonly string[] = ['manipulation_attempt'];
+
+/** The brain's risks worth a line of their own next to the trap's signals. */
+export function risksBesideTrap(risks: readonly string[], hasTrap: boolean): string[] {
+  return hasTrap ? risks.filter((r) => !TRAP_RISKS.includes(r)) : [...risks];
+}
 
 const RULE_REASONS: readonly RejectReason[] = ['too_early_sexual', 'missed_sale', 'forgot_fact'];
 
