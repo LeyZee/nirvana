@@ -168,14 +168,17 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
           .for('update');
         return rows.map(toDraft);
       },
-      async insert({ bubbles, softViolations, voice, facts, ...draft }) {
+      async insert({ bubbles, softViolations, voice, personaVersionId, facts, ...draft }) {
         await tx.insert(schema.drafts).values({
           ...draft,
           creatorId,
           ...(facts !== undefined && facts.length > 0 && { brief: toStoredBrief(facts) }),
           bubbles: [...(bubbles ?? [])],
           guardTrace: { softViolations: [...(softViolations ?? [])] },
-          ...(voice !== undefined && { promptHashes: { ...voice }, personaVersionId: activePersona }),
+          ...(voice !== undefined && {
+            promptHashes: { ...voice },
+            personaVersionId: personaVersionId ?? activePersona,
+          }),
         });
       },
       async setStatus(id, status, decision) {
@@ -309,6 +312,15 @@ function bind(tx: DbTransaction, creatorId: string): Transaction {
     },
 
     automatic: {
+      async personaActive() {
+        const [row] = await tx
+          .select({ id: schema.personaVersions.id })
+          .from(schema.personaVersions)
+          .where(
+            and(eq(schema.personaVersions.creatorId, creatorId), eq(schema.personaVersions.isActive, true)),
+          );
+        return row !== undefined;
+      },
       async decided(voice) {
         // Approved as is: neither edited nor rejected, and sent with the bubbles it was written with (ADR 0019).
         const rows = await tx.execute<{ as_is: boolean }>(sql`

@@ -126,6 +126,11 @@ type AgentComposeResult = (
       readonly costUsd: number;
       /** Absent when no model is known: no voice is better than a false one on the live rate (ADR 0019). */
       readonly voice?: { readonly voicePrompt: string; readonly voiceModel: string };
+      /**
+       * The persona version it was written with, read with her persona for this draft: a version activated while it
+       * was written never takes its place (ADR 0019, the live rate and the lock of Automatique per version).
+       */
+      readonly personaVersionId?: string;
       /** What the brief read about the fan; `conversations` keeps the categories it knows (P3-02). */
       readonly factsProposed: readonly {
         readonly category: string;
@@ -167,6 +172,8 @@ export interface ComposerPersonaFields {
   readonly offerLimits: OfferLimits;
   readonly sexualizationLimits: SexualizationLimits;
   readonly alertKeywords: readonly string[];
+  /** The version these fields were read from: the draft carries it, never the one active when it is saved. */
+  readonly personaVersionId?: string;
 }
 
 export interface DraftComposerDeps {
@@ -178,6 +185,8 @@ export interface DraftComposerDeps {
    * fields her persona gives. `null` (she has none) or a failed read: nothing is written, a human answers him.
    */
   readonly personaOf?: (creatorId: string, now: Date) => Promise<ComposerPersonaFields | null>;
+  /** Set from `personaOf`: the persona version this draft was written with. */
+  readonly personaVersionId?: string;
   /** The spirit of her follow-ups (`PersonaForModels.followUps.spirit`), for the voice. */
   readonly followUpSpirit?: string | null;
   /** Her clock (day and night, the time she answers at), from the creator of the conversation. */
@@ -464,6 +473,7 @@ async function followUp(
     ...(composed.model !== undefined && {
       voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
     }),
+    ...(her.deps.personaVersionId !== undefined && { personaVersionId: her.deps.personaVersionId }),
   };
 }
 
@@ -582,6 +592,7 @@ async function settle(
     ...(composed.model !== undefined && {
       voice: { voicePrompt: deps.voicePrompt, voiceModel: composed.model },
     }),
+    ...(deps.personaVersionId !== undefined && { personaVersionId: deps.personaVersionId }),
   };
 }
 
@@ -682,7 +693,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
         composed.brief !== undefined && holdDecision(composed.brief, waited).kind === 'handoff';
       const pause = composed.handoff !== undefined || riskFirst ? null : alerts.pause;
       const notices = pause === null ? fired.map(noticeOf) : alerts.notices;
-      const settled = withNotices(await settle(deps, input, composed, stop.flags, waited, pause), notices);
+      const settled = withNotices(await settle(withHer, input, composed, stop.flags, waited, pause), notices);
       if (composed.desire === undefined) return settled;
       const { before, score, signals, weightsVersion } = composed.desire;
       return { ...settled, desire: { before, score, signals, weightsVersion } };

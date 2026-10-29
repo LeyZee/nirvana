@@ -1425,6 +1425,26 @@ describe('createDraftComposer, her active persona (recette G4, ADR 0022)', () =>
     });
   });
 
+  it('marks the draft and the follow-up with the version they were written with', async () => {
+    const versioned = { ...NORA, personaVersionId: 'version-nora' };
+    const answer = withPersonaOf(() => Promise.resolve(versioned));
+    expect(await answer.draftComposer.compose(INPUT)).toMatchObject({
+      kind: 'draft',
+      personaVersionId: 'version-nora',
+    });
+    const followUp = withPersonaOf(() => Promise.resolve(versioned), limitsOf({}).limits);
+    expect(
+      await followUp.draftComposer.compose({
+        ...INPUT,
+        history: [
+          { direction: 'inbound', text: 'Bonne soirée', at: new Date('2026-10-16T21:58:00Z') },
+          { direction: 'outbound', text: 'Toi aussi ✨', at: new Date('2026-10-16T21:59:00Z') },
+        ],
+        followUp: { step: 0, steps: 2, silentSince: new Date('2026-10-16T21:58:00Z') },
+      }),
+    ).toMatchObject({ kind: 'draft', personaVersionId: 'version-nora' });
+  });
+
   it('watches the alert words of her active persona, not the fixed ones', async () => {
     const { draftComposer, seen } = withPersonaOf(() => Promise.resolve(NORA));
     const result = await draftComposer.compose({

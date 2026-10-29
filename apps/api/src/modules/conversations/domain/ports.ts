@@ -150,6 +150,11 @@ interface DraftRepository {
     softViolations?: readonly string[];
     /** The voice that wrote it, for the live rate (ADR 0019). */
     voice?: DraftVoice;
+    /**
+     * Her persona version it was written with, read by the composer with her persona. Absent, the version active
+     * when it is saved: a composer that reads no version per creator (tests, the terminal).
+     */
+    personaVersionId?: string;
     /** Facts the brief proposed, confirmed when a human approves the draft (P3-02). */
     facts?: readonly DraftFact[];
   }): Promise<void>;
@@ -221,6 +226,8 @@ interface KillSwitches {
  * (ADR 0022): the repository reads that persona itself, in the same statement.
  */
 interface AutomaticEvidence {
+  /** Whether she has an active persona version now: without one, nothing opens Automatique (recette 28/10, G4). */
+  personaActive(): Promise<boolean>;
   /** Her decided drafts of this version, newest first, at most `LIVE_WINDOW`: approved as is, edited or rejected. */
   decided(voice: DraftVoice): Promise<readonly DecidedDraft[]>;
   /** The rate of the latest blind test of this version, in tenths of a percent; null before the first. */
@@ -443,6 +450,8 @@ export type ComposeResult =
       readonly softViolations: readonly string[];
       readonly costUsd: number;
       readonly voice?: DraftVoice;
+      /** Her persona version it was written with (ADR 0019): never the one active when it is saved. */
+      readonly personaVersionId?: string;
       /** What the brief read about the fan in his messages. */
       readonly factsProposed?: readonly ProposedFact[];
       readonly desire?: ComposedDesire;
