@@ -4,6 +4,7 @@ import {
   EARNINGS_SOURCES,
   ForeignCurrencySchema,
   PAY_AMOUNT_MAX_MINOR,
+  PAY_PERIOD_BLOCK_CODES,
   PAY_TARGET_MAX_MINOR,
   PAYMENT_METHODS,
   PAYMENT_REFERENCE_MAX,
@@ -574,5 +575,36 @@ export const payPeriodReports = pgTable(
     index('pay_period_reports_period_member_idx').on(t.period, t.memberId),
     memberRead(t.memberId),
     pgPolicy('agency_insert', { for: 'insert', withCheck: readsTeam }),
+  ],
+);
+
+/**
+ * Why pay's job could not compute a period at its last try (EQ-04, recette du 28/10, Équipe G1): a member it pays
+ * without a commission rate (`member_ids`, every one of them), or a currency without a usable rate (`currency`). One
+ * row per period at most, written by the job (`withAdmin`) under `payroll.close` in the transaction of the computation
+ * that failed, and deleted by the next one that passes: what it says is the state of the period now, not a history (the
+ * job's log keeps that). `since` stays while the same reason holds. Read like `pay_periods`, by any member; what a
+ * member reads of it is narrowed by the application (only themselves among `member_ids`).
+ */
+export const payPeriodBlocks = pgTable(
+  'pay_period_blocks',
+  {
+    period: date('period')
+      .primaryKey()
+      .references(() => payPeriods.period),
+    code: text('code').notNull(),
+    memberIds: uuid('member_ids').array(),
+    currency: text('currency'),
+    since: timestampTz('since').notNull(),
+  },
+  (t) => [
+    periodCheck('pay_period_blocks_period_check', t.period),
+    enumCheck('pay_period_blocks', t.code, PAY_PERIOD_BLOCK_CODES),
+    enumCheck('pay_period_blocks', t.currency, ForeignCurrencySchema.options),
+    check(
+      'pay_period_blocks_reason_check',
+      sql`(${t.code} = 'commission_rate_missing_conflict' and cardinality(${t.memberIds}) > 0 and ${t.currency} is null) or (${t.code} = 'exchange_rate_missing_conflict' and ${t.memberIds} is null and ${t.currency} is not null)`,
+    ),
+    pgPolicy('team_read', { for: 'select', using: anyMember }),
   ],
 );

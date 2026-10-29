@@ -17,6 +17,7 @@ import type {
   PayAdjustmentId,
   PayCommissionStatementBody,
   PayPeriod,
+  PayPeriodBlock,
   PageQuery,
   PayPeriodClosing,
   PayPeriodSummary,
@@ -30,6 +31,7 @@ import type {
   UserId,
 } from '@nirvana/contracts';
 
+import type { PeriodBlockReason } from './period-blocks';
 import type { PeriodPlan, PeriodSnapshot, ReportForPay } from './recalculation';
 
 /** Who validates, for the policies (`withMember`) and the audit line. */
@@ -50,8 +52,13 @@ export interface JobLogger {
   error(object: object, message: string): void;
 }
 
-/** What a recalculation decided: a plan, or the business reason it could not compute the period (a missing rate). */
-export type PeriodDecision = PeriodPlan | { readonly kind: 'blocked'; readonly error: DomainError };
+/**
+ * What a recalculation decided: a plan, or the business reason it could not compute the period (a missing rate), with
+ * what the period records of it (`reason`, `null` for a refusal it does not record).
+ */
+export type PeriodDecision =
+  | PeriodPlan
+  | { readonly kind: 'blocked'; readonly error: DomainError; readonly reason: PeriodBlockReason | null };
 
 interface RecomputedPeriod {
   readonly decision: PeriodDecision;
@@ -70,7 +77,9 @@ export interface OpenPeriodFacts {
 export interface PayrollJobStore {
   /**
    * Under the lock `payroll.close`: writes pay's period `period` when it is missing, reads what its statements are
-   * made of, hands it to `decide`, and writes the drafts a plan gives.
+   * made of, hands it to `decide`, and writes the drafts a plan gives. In the same transaction, records why the period
+   * is blocked when the decision says so (`pay_period_blocks`, keeping `since` while the reason is the same), and
+   * lifts it otherwise.
    */
   recomputeUnscoped(
     period: PayPeriod,
@@ -207,6 +216,8 @@ export interface PeriodView {
   /** The team's first closed period, `null` before any closing. */
   readonly firstClosed: PayPeriod | null;
   readonly closing: PayPeriodClosing | null;
+  /** Why pay could not compute the period at its last try, as recorded: every member, whoever reads. */
+  readonly blocked: PayPeriodBlock | null;
   readonly statements: readonly StoredStatement[];
   readonly bonusTierSets: readonly BonusTierSet[];
   readonly collectiveGoals: readonly CollectiveGoal[];

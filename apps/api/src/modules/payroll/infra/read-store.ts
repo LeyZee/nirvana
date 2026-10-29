@@ -30,8 +30,10 @@ import { z } from 'zod';
 
 import { redactAuthors } from '../domain/authors';
 import { PayPeriodCursorInvalid, PayrollEntriesTooMany, PayrollForbidden } from '../domain/errors';
+import { blockFor } from '../domain/period-blocks';
 import type { PayrollReadStore, StoredStatement } from '../domain/ports';
 
+import { blockOfRow } from './period-blocks';
 import {
   adjustmentOfRow,
   bonusOfRow,
@@ -51,6 +53,7 @@ const {
   commissionStatements,
   exchangeRates,
   payAdjustments,
+  payPeriodBlocks,
   payPeriodClosings,
   payPeriods,
   payrollSettings,
@@ -127,6 +130,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
         const [first] = await tx
           .select({ period: sql`min(${payPeriodClosings.period})::text` })
           .from(payPeriodClosings);
+        const [blockRow] = await tx.select().from(payPeriodBlocks).where(eq(payPeriodBlocks.period, period));
         const statementRows = await tx
           .select()
           .from(commissionStatements)
@@ -253,6 +257,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
                   closedBy: closingRow.closedBy,
                   closedAt: closingRow.closedAt.toISOString(),
                 }),
+          blocked: blockRow === undefined ? null : blockOfRow(blockRow),
           statements,
           bonusTierSets: tierRows.map(bonusTierSetOfRow),
           collectiveGoals: goalRows.map(collectiveGoalOfRow),
@@ -266,6 +271,11 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
       withMember(db, userId, async (tx, scope) => {
         const validatedOrPaid = sql`${commissionStatements.status} in ('validated', 'paid')`;
         const before = decodePeriodCursor(page.cursor);
+        const [own] = await tx
+          .select({ id: teamMembers.id })
+          .from(teamMembers)
+          .where(eq(teamMembers.userId, userId));
+        const reader = { scope, memberId: own === undefined ? null : TeamMemberIdSchema.parse(own.id) };
         const rows = await tx
           .select({
             period: payPeriods.period,
@@ -274,6 +284,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
             timeZone: payPeriods.timeZone,
             closedAt: payPeriodClosings.closedAt,
             closedBy: payPeriodClosings.closedBy,
+            block: payPeriodBlocks,
             totals: {
               draft: sql`count(*) filter (where ${commissionStatements.status} = 'draft')::text`,
               validated: sql`count(*) filter (where ${commissionStatements.status} = 'validated')::text`,
@@ -291,8 +302,9 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
           .from(commissionStatements)
           .innerJoin(payPeriods, eq(payPeriods.period, commissionStatements.period))
           .leftJoin(payPeriodClosings, eq(payPeriodClosings.period, commissionStatements.period))
+          .leftJoin(payPeriodBlocks, eq(payPeriodBlocks.period, commissionStatements.period))
           .where(before === null ? undefined : sql`${commissionStatements.period} < ${before}`)
-          .groupBy(payPeriods.period, payPeriodClosings.period)
+          .groupBy(payPeriods.period, payPeriodClosings.period, payPeriodBlocks.period)
           .orderBy(sql`${payPeriods.period} desc`)
           .limit(page.limit + 1);
         const items = rows.slice(0, page.limit).map((row) => {
@@ -306,6 +318,7 @@ export function createDrizzlePayrollReadStore(db: Database): PayrollReadStore {
             }),
             closedAt: iso(row.closedAt),
             closedBy: scope === 'self' || row.closedBy === null ? null : UserIdSchema.parse(row.closedBy),
+            blocked: blockFor(row.block === null ? null : blockOfRow(row.block), reader),
             statements: {
               draft: totals.draft,
               validated: totals.validated,

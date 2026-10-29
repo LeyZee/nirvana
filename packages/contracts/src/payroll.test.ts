@@ -14,9 +14,13 @@ import {
   ExchangeRateSchema,
   mayValidateStatement,
   PAY_AMOUNT_MAX_MINOR,
+  PAY_PERIOD_BLOCK_CODES,
   PAYMENT_METHODS,
   PAYROLL_ERROR_CODES,
   PayCommissionStatementBodySchema,
+  PayPeriodBlockSchema,
+  PayPeriodSummarySchema,
+  PayrollPeriodSchema,
   PenaltySchema,
   bonusTiersFor,
   collectiveGoalFor,
@@ -274,5 +278,65 @@ describe('exchange rates', () => {
     expect(canonicalExchangeRates(rates).map((rate) => rate.currency)).toEqual(['CHF', 'GBP', 'USD']);
     expect(canonicalExchangeRates([...rates].reverse())).toEqual(canonicalExchangeRates(rates));
     expect(rates.map((rate) => rate.currency)).toEqual(['USD', 'CHF', 'GBP']);
+  });
+});
+
+describe('a blocked period', () => {
+  const since = '2026-11-02T09:00:00.000Z';
+
+  it('says which members lack a rate, or which currency', () => {
+    expect(
+      PayPeriodBlockSchema.parse({ code: 'commission_rate_missing_conflict', memberIds: [MEMBER], since }),
+    ).toEqual({ code: 'commission_rate_missing_conflict', memberIds: [MEMBER], since });
+    // A member reads only themselves among those without a rate: possibly nobody.
+    expect(
+      PayPeriodBlockSchema.safeParse({ code: 'commission_rate_missing_conflict', memberIds: [], since })
+        .success,
+    ).toBe(true);
+    expect(
+      PayPeriodBlockSchema.safeParse({ code: 'exchange_rate_missing_conflict', currency: 'USD', since })
+        .success,
+    ).toBe(true);
+    // The euro is never converted, so it never lacks a rate; an unknown reason is refused, never shown as fine.
+    expect(
+      PayPeriodBlockSchema.safeParse({ code: 'exchange_rate_missing_conflict', currency: 'EUR', since })
+        .success,
+    ).toBe(false);
+    expect(PayPeriodBlockSchema.safeParse({ code: 'pay_period_order_conflict', since }).success).toBe(false);
+    for (const code of PAY_PERIOD_BLOCK_CODES) expect(PAYROLL_ERROR_CODES).toContain(code);
+  });
+
+  it('reads as not blocked from a server that does not say it', () => {
+    const window = {
+      period: '2026-11-01',
+      startsAt: '2026-10-31T23:00:00.000Z',
+      endsAt: '2026-11-15T23:00:00.000Z',
+      timeZone: 'Europe/Paris',
+    };
+    const summary = {
+      window,
+      ended: true,
+      closedAt: null,
+      closedBy: null,
+      statements: { draft: 1, validated: 0, paid: 0, carried: 0 },
+      netMinor: 0,
+      payableMinor: 0,
+      paidMinor: 0,
+    };
+    expect(PayPeriodSummarySchema.parse(summary).blocked ?? null).toBeNull();
+    const block = { code: 'exchange_rate_missing_conflict', currency: 'USD', since };
+    expect(PayPeriodSummarySchema.parse({ ...summary, blocked: block }).blocked).toEqual(block);
+    const periodRead = {
+      period: '2026-11-01',
+      window,
+      ended: true,
+      closing: null,
+      beforeFirstClosing: false,
+      statements: [],
+      bonusTiers: null,
+      collectiveGoal: null,
+      settings: { minimumPayoutMinor: 1_500 },
+    };
+    expect(PayrollPeriodSchema.parse(periodRead).blocked ?? null).toBeNull();
   });
 });

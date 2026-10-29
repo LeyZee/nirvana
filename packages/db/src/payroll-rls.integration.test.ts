@@ -643,5 +643,43 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
         ),
       ).toMatch(/exchange_rates_currency_check/u);
     });
+
+    it('a blocked period is read by every member, written and lifted by the job alone, with its reason', async () => {
+      const block = {
+        period: '2025-11-16',
+        code: 'commission_rate_missing_conflict',
+        memberIds: [member(theo)],
+        since: new Date(),
+      };
+      expect(await failure(as(owner, (tx) => tx.insert(s.payPeriodBlocks).values(block)))).toMatch(
+        /permission denied/u,
+      );
+      await admin((tx) => tx.insert(s.payPeriodBlocks).values(block));
+      expect(await as(lea, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(1);
+      expect(await as(owner, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(1);
+      // Outside a member's context, nothing.
+      expect(await test.app.db.select().from(s.payPeriodBlocks)).toHaveLength(0);
+      expect(
+        await failure(
+          as(owner, (tx) => tx.delete(s.payPeriodBlocks).where(eq(s.payPeriodBlocks.period, '2025-11-16'))),
+        ),
+      ).toMatch(/permission denied/u);
+      // A reason says what it is about: members without a rate, or a currency, never both nor neither.
+      const refused = async (values: Partial<typeof s.payPeriodBlocks.$inferInsert>) =>
+        failure(
+          admin((tx) => tx.insert(s.payPeriodBlocks).values({ ...block, period: '2025-11-01', ...values })),
+        );
+      expect(await refused({ memberIds: [] })).toMatch(/pay_period_blocks_reason_check/u);
+      expect(await refused({ currency: 'USD' })).toMatch(/pay_period_blocks_reason_check/u);
+      expect(await refused({ code: 'exchange_rate_missing_conflict' })).toMatch(
+        /pay_period_blocks_reason_check/u,
+      );
+      expect(
+        await refused({ code: 'exchange_rate_missing_conflict', memberIds: null, currency: 'EUR' }),
+      ).toMatch(/pay_period_blocks_currency_check/u);
+      expect(await refused({ code: 'pay_period_order_conflict' })).toMatch(/pay_period_blocks_code_check/u);
+      await admin((tx) => tx.delete(s.payPeriodBlocks).where(eq(s.payPeriodBlocks.period, '2025-11-16')));
+      expect(await as(lea, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(0);
+    });
   });
 });
