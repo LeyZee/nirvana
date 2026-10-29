@@ -8,7 +8,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RateBar } from './RateBar';
 
@@ -35,7 +35,7 @@ const STATE: PlaygroundState = {
 /** Where the bar's router is, once a test has rendered it. */
 let location = (): string => '';
 
-function renderBar(state: PlaygroundState): void {
+function renderBar(state: PlaygroundState, isDemo = false): void {
   // « Clé manquante » links to Réglages: the bar needs a router around it.
   const root = createRootRoute();
   const router = createRouter({
@@ -43,7 +43,7 @@ function renderBar(state: PlaygroundState): void {
       createRoute({
         getParentRoute: () => root,
         path: '/',
-        component: () => <RateBar state={state} isDemo={false} />,
+        component: () => <RateBar state={state} isDemo={isDemo} />,
       }),
       createRoute({ getParentRoute: () => root, path: '/reglages/modeles-ia' }),
     ]),
@@ -54,7 +54,17 @@ function renderBar(state: PlaygroundState): void {
 }
 
 describe('RateBar', () => {
-  afterEach(cleanup);
+  beforeEach(() => {
+    // The count-up asks whether motion is reduced.
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it('names the voice and says what the session cost in euros', async () => {
     renderBar(STATE);
@@ -62,6 +72,49 @@ describe('RateBar', () => {
       await screen.findByText((_, element) => element?.textContent === '1,50\u00a0€ cette session'),
     ).toBeTruthy();
     expect(screen.queryByText('Clé manquante')).toBeNull();
+  });
+
+  it('says how the rate starts before the first rating', async () => {
+    renderBar(STATE);
+    expect(await screen.findByText('Note ta première réponse pour lancer le taux')).toBeTruthy();
+    expect(screen.queryByText(/Objectif/)).toBeNull();
+  });
+
+  it('shows the target and the trend once answers are rated', async () => {
+    renderBar({
+      ...STATE,
+      rate: {
+        ...STATE.rate,
+        rate: 0.62,
+        rated: 34,
+        validated: 21,
+        trendPoints: -4,
+        previousVersion: { voicePrompt: '1.3.0', voiceModel: 'grok-4.7' },
+      },
+    });
+    // How many answers the rate stands on, written out: 62 % on two answers is not 62 % on a hundred.
+    expect(await screen.findByText(/Sur 34 réponses notées · objectif 80 %/)).toBeTruthy();
+    expect(screen.getByText('-4 pts', { exact: false }).className).toBe('is-down');
+  });
+
+  it('never shows the demo’s made-up rate as the screen’s number', async () => {
+    renderBar(
+      {
+        ...STATE,
+        rate: {
+          ...STATE.rate,
+          rate: 0.64,
+          rated: 25,
+          validated: 16,
+          trendPoints: 6,
+          previousVersion: { voicePrompt: '1.3.0', voiceModel: 'grok-4.7' },
+        },
+      },
+      true,
+    );
+    expect(await screen.findByText('Démo : rien n’est noté pour de vrai')).toBeTruthy();
+    expect(screen.queryByText(/64/)).toBeNull();
+    expect(screen.queryByText(/pts/)).toBeNull();
   });
 
   it('says before the first message that no key reaches the voice, and leads to its settings', async () => {
