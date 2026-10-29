@@ -622,13 +622,43 @@ export const PayPeriodClosingSchema = z.object({
 });
 export type PayPeriodClosing = z.infer<typeof PayPeriodClosingSchema>;
 
+/** The business reasons pay records when it cannot compute a period (EQ-04, recette du 28/10, Équipe G1). */
+export const PAY_PERIOD_BLOCK_CODES = [
+  'commission_rate_missing_conflict',
+  'exchange_rate_missing_conflict',
+] as const;
+export type PayPeriodBlockCode = (typeof PAY_PERIOD_BLOCK_CODES)[number];
+
+/**
+ * Why pay could not compute a period at its last try, and since when the same reason holds: its statements are those
+ * of the last computation that passed, out of date. `commission_rate_missing_conflict`: members it pays have no
+ * commission rate in force on the period's last day (`memberIds`, all of them; for a member, only themselves, so
+ * possibly none). `exchange_rate_missing_conflict`: no usable rate for `currency`. Gone at the next computation that
+ * passes: the ECB rate read, or the data corrected for a member without a rate. Only what is shown: a validation computes
+ * the period again under `payroll.close` and refuses with the same code.
+ */
+export const PayPeriodBlockSchema = z.discriminatedUnion('code', [
+  z.object({
+    code: z.literal('commission_rate_missing_conflict'),
+    memberIds: z.array(TeamMemberIdSchema),
+    since: z.iso.datetime(),
+  }),
+  z.object({
+    code: z.literal('exchange_rate_missing_conflict'),
+    currency: ForeignCurrencySchema,
+    since: z.iso.datetime(),
+  }),
+]);
+export type PayPeriodBlock = z.infer<typeof PayPeriodBlockSchema>;
+
 /**
  * `GET /v1/payroll/periods/:period`: the period's statements (every member's for the agency, one's own for a member),
  * with what made them. `window` is `null` while pay has not written the period; `ended` says whether it can be
  * validated (a period validates once it has ended in the agency's zone); `closing` is `null` until its first
  * validation closes it for the team. `beforeFirstClosing` says the period comes before the team's first closing: it is
  * closed for good without a closing of its own and has no statement, and a report of it counts late on the team's
- * first open period (ADR 0032).
+ * first open period (ADR 0032). `blocked` says pay could not compute the period at its last try
+ * (`PayPeriodBlockSchema`): its statements are out of date until it can. Absent (an older server) reads as `null`.
  */
 export const PayrollPeriodSchema = z.object({
   period: PayPeriodSchema,
@@ -636,6 +666,7 @@ export const PayrollPeriodSchema = z.object({
   ended: z.boolean(),
   closing: PayPeriodClosingSchema.nullable(),
   beforeFirstClosing: z.boolean(),
+  blocked: PayPeriodBlockSchema.nullable(),
   statements: z.array(CommissionStatementSchema),
   bonusTiers: BonusTierSetSchema.nullable(),
   collectiveGoal: CollectiveGoalSchema.nullable(),
@@ -659,13 +690,15 @@ const StatementCountSchema = z.number().int().min(0);
  * and paid statements whose total was carried over (below the minimum payout, or below zero), never a statement still
  * to validate, and `carriedMinor` sums what they carried with its sign: positive under the minimum, negative below
  * zero. For one member it is what goes over to the next period; over the team it is a net of both kinds, never an
- * amount to show as owed or taken back. `paidMinor` is what was sent.
+ * amount to show as owed or taken back. `paidMinor` is what was sent. `blocked` says pay could not compute the period at
+ * its last try, as in `PayrollPeriodSchema`: its sums are out of date.
  */
 export const PayPeriodSummarySchema = z.object({
   window: PayPeriodWindowSchema,
   ended: z.boolean(),
   closedAt: z.iso.datetime().nullable(),
   closedBy: UserIdSchema.nullable(),
+  blocked: PayPeriodBlockSchema.nullable(),
   statements: z.object({
     draft: StatementCountSchema,
     validated: StatementCountSchema,

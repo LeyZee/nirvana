@@ -22,6 +22,7 @@ import { z } from 'zod';
 import type { OpenPeriodFacts, PayrollJobStore } from '../domain/ports';
 import type { CollectiveReached, StatementContent, StatementDraft } from '../domain/recalculation';
 
+import { recordBlock } from './period-blocks';
 import { closingsSpan, readSnapshot, registeredAmong, type PayInputReads } from './snapshot';
 
 const { commissionStatementLines, commissionStatements } = schema;
@@ -104,7 +105,8 @@ async function writeLines(
 
 /**
  * The jobs' store (EQ-04, ADR 0032), on the admin connection: pay's job reads every creator's reports, a read bounded
- * to it (ADR 0023 § Paie). Each recalculation holds `payroll.close`, so that a validation never sees half a period.
+ * to it (ADR 0023 § Paie). Each recalculation holds `payroll.close`, so that a validation never sees half a period,
+ * and records in the same transaction whether the period is blocked (`recordBlock`).
  */
 export function createDrizzlePayrollJobStore(
   adminDb: Database,
@@ -123,8 +125,9 @@ export function createDrizzlePayrollJobStore(
           await reads.validatedReportsUnscoped(tx, period),
         );
         const decision = decide(snapshot);
+        const computedAt = now();
+        await recordBlock(tx, period, decision, computedAt);
         if (decision.kind === 'write') {
-          const computedAt = now();
           for (const draft of decision.inserts) {
             const id = newId(CommissionStatementIdSchema);
             await tx.insert(commissionStatements).values({

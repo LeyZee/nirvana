@@ -382,6 +382,51 @@ describe('Paie › Quinzaine', () => {
     expect(text(row('Iris'))).toContain('Ton relevé : un autre membre de l’agence le valide.');
   });
 
+  it('says in amber that pay could not compute the period, who lacks a rate, and never shows its figures as true', async () => {
+    const blocked = {
+      code: 'commission_rate_missing_conflict',
+      memberIds: [LOU.id],
+      since: '2026-11-01T23:30:00.000Z',
+    };
+    periods[OCT2] = endedOctober({ blocked });
+    renderPage(OWNER);
+    const title = await screen.findByText('Le calcul est bloqué : Lou n’a pas de taux pour cette quinzaine.');
+    const notice = title.closest('.rp-notice');
+    expect(notice?.getAttribute('data-tone')).toBe('warn');
+    expect(text(notice)).toContain(
+      'Un rapport validé de Lou tombe sur une quinzaine où son taux n’a pas encore commencé.',
+    );
+    expect(text(notice)).toContain('elle se corrige dans la base, puis le calcul reprend seul.');
+    expect(text(notice)).toContain('ils ne sont plus à jour');
+    expect(text(notice)).toContain('Bloqué depuis le lundi 2 novembre à 0 h 30.');
+    // No gesture of the screen lifts it: no button reads as one.
+    expect(screen.queryByRole('link', { name: /^Ouvrir (sa fiche|les membres)$/u })).toBeNull();
+    // The stale figures say so, and nothing validates on them.
+    expect(screen.queryByText('À verser une fois validé')).toBeNull();
+    expect(screen.getByText('À verser une fois validé, au dernier calcul réussi')).toBeTruthy();
+    expect(screen.getByText('Plus à jour : le calcul est bloqué.')).toBeTruthy();
+    expect(screen.getByText('Calcul bloqué').className).toContain('rp-chip--warn');
+    expect(screen.queryAllByRole('checkbox')).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^Valider/u })).toBeNull();
+    expect(screen.queryByText(/Le premier relevé validé clôt la quinzaine/u)).toBeNull();
+  });
+
+  it('tells a manager the owner is told, with no record to open', async () => {
+    periods[OCT2] = endedOctober({
+      blocked: {
+        code: 'commission_rate_missing_conflict',
+        memberIds: [LOU.id],
+        since: '2026-11-01T23:30:00.000Z',
+      },
+    });
+    renderPage(IRIS_ME);
+    const title = await screen.findByText('Le calcul est bloqué : Lou n’a pas de taux pour cette quinzaine.');
+    expect(text(title.closest('.rp-notice'))).toContain(
+      'Le propriétaire est prévenu ; le calcul reprendra seul',
+    );
+    expect(screen.queryByRole('link', { name: 'Ouvrir sa fiche' })).toBeNull();
+  });
+
   it('lets the owner mark a validated statement paid in two steps, the amount to pay and none other', async () => {
     const closed = {
       period: OCT2,

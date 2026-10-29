@@ -4,19 +4,25 @@ import { DomainError, type PayPeriod } from '@nirvana/contracts';
 
 /** No usable rate for a currency the period was paid in: pay never guesses a rate (ADR 0023 § Paie). */
 export class MissingExchangeRate extends DomainError {
-  constructor(currency: string) {
+  constructor(readonly currency: string) {
     super('exchange_rate_missing_conflict', 'Aucun taux de change utilisable pour cette devise', {
       details: { currency },
     });
   }
 }
 
-/** A member to pay without a commission rate in force on the period's last day: pay never guesses a rate (EQ-01). */
+/**
+ * A member to pay without a commission rate in force on the period's last day: pay never guesses a rate (EQ-01).
+ * `details.memberId` is the first; `memberIds`, every member of the period without one, for the period's block.
+ */
 export class CommissionRateMissing extends DomainError {
-  constructor(memberId: string) {
+  readonly memberIds: readonly [string, ...string[]];
+
+  constructor(memberId: string, ...others: readonly string[]) {
     super('commission_rate_missing_conflict', 'Aucun taux de commission en vigueur pour ce membre', {
       details: { memberId },
     });
+    this.memberIds = [memberId, ...others];
   }
 }
 
