@@ -10,7 +10,7 @@ import type { AgentCard, AgentState, Dashboard, Fan, Todo } from './model';
 
 import { CAUSE_LABELS } from '@/agent/causes';
 import { percent } from '@/agent/mode';
-import { withFirstOfMonth } from '@/scheduling/time';
+import { cityOf, readerZone, withFirstOfMonth } from '@/scheduling/time';
 import { telegramNightOf } from '@/settings/telegram/NightBanner';
 
 /*
@@ -79,15 +79,15 @@ function clock(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone });
 }
 
-/** « lundi 19 octobre, 14:02 », in her time zone. */
-function today(iso: string, timeZone: string): string {
-  const date = new Date(iso).toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone,
-  });
-  return `${date}, ${clock(iso, timeZone)}`;
+/**
+ * « lundi 19 octobre, 14:02 », in her time zone. When the reader's clock reads another time, the city of hers follows
+ * (« …, heure de Tokyo »): every time of the page is hers (recette 28/10, M15).
+ */
+function today(iso: string, timeZone: string, viewerZone: string): string {
+  const at = (zone: string): string =>
+    `${new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone })}, ${clock(iso, zone)}`;
+  const hers = at(timeZone);
+  return hers === at(viewerZone) ? hers : `${hers}, heure de ${cityOf(timeZone)}`;
 }
 
 /**
@@ -361,12 +361,16 @@ export function usdNote(usdSales: ApiDashboard['usdSales']): string | undefined 
 }
 
 /** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
-export function fromApi(api: ApiDashboard, forCreator = false): Dashboard {
+export function fromApi(api: ApiDashboard, forCreator = false, viewerZone = readerZone()): Dashboard {
   const now = new Date(api.creator.now);
   const timeZone = api.creator.timezone;
   const dollars = usdNote(api.usdSales);
   return {
-    creator: { name: api.creator.name, platform: 'Reveal', now: today(api.creator.now, timeZone) },
+    creator: {
+      name: api.creator.name,
+      platform: 'Reveal',
+      now: today(api.creator.now, timeZone, viewerZone),
+    },
     agent: agentState(api, now, forCreator),
     todos: api.todos.map((todo) => todoOf(todo, timeZone)),
     sales: null,

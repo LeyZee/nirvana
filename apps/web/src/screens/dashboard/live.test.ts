@@ -73,6 +73,20 @@ describe('fromApi', () => {
     );
   });
 
+  it('names the city of her clock only when the reader’s reads another time', () => {
+    const at = (timezone: string, viewer: string): string =>
+      fromApi(
+        apiDashboard({ creator: { ...apiDashboard().creator, now: '2026-10-28T20:00:00Z', timezone } }),
+        false,
+        viewer,
+      ).creator.now;
+    expect(at('Europe/Paris', 'Europe/Paris')).toBe('mercredi 28 octobre, 21:00');
+    // Another name, the same time: nothing to say.
+    expect(at('Europe/Paris', 'Europe/Brussels')).toBe('mercredi 28 octobre, 21:00');
+    expect(at('Pacific/Kiritimati', 'Europe/Paris')).toBe('jeudi 29 octobre, 10:00, heure de Kiritimati');
+    expect(at('America/New_York', 'Europe/Paris')).toBe('mercredi 28 octobre, 16:00, heure de New York');
+  });
+
   it('hands Telegram’s night coverage to the banner, off included', () => {
     expect(fromApi(apiDashboard()).telegram).toEqual({ coverage: null });
     const uncovered = apiDashboard({ telegramCoverage: { urgentReachable: false } });
