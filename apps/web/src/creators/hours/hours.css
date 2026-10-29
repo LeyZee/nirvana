@@ -182,17 +182,6 @@
   font-size: 14px;
   color: var(--nv-ink-muted);
 }
-.hr-time[type='time'] {
-  color-scheme: dark;
-}
-:root[data-theme='light'] .hr-time[type='time'] {
-  color-scheme: light;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) .hr-time[type='time'] {
-    color-scheme: light;
-  }
-}
 
 .hr-warning {
   margin: 0;

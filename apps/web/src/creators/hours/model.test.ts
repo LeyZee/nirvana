@@ -47,7 +47,14 @@ describe('her hours in words (P3-14)', () => {
     expect(minuteOfInput('23:45')).toBe(1425);
     expect(minuteOfInput('')).toBeNull();
     expect(minuteOfInput('24:00')).toBeNull();
-    expect(minuteOfInput('9:00')).toBeNull();
+    // Typed by hand, on 24 hours: the field is text, never the browser's clock.
+    expect(minuteOfInput('9:00')).toBe(540);
+    expect(minuteOfInput(' 21h30 ')).toBe(1290);
+    expect(minuteOfInput('21 h')).toBe(1260);
+    expect(minuteOfInput('9:')).toBeNull();
+    expect(minuteOfInput('9:0')).toBeNull();
+    expect(minuteOfInput('12:60')).toBeNull();
+    expect(minuteOfInput('09:00 AM')).toBeNull();
   });
 });
 

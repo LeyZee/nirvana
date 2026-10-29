@@ -143,6 +143,25 @@ describe('Créatrices › Heures (P3-14)', () => {
     expect(save()).toHaveProperty('disabled', true);
   });
 
+  it('writes its hours on 24 hours in a text field, whatever the browser’s language (recette 28/10, M15)', async () => {
+    serve({});
+    renderSection();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Par créneaux' }));
+    const start = screen.getByLabelText('Début du créneau du mardi');
+    expect(start).toHaveProperty('type', 'text');
+    expect(start).toHaveProperty('value', '09:00');
+    fireEvent.change(start, { target: { value: '21h' } });
+    // Typed by hand, kept as typed until the field is left, then written back as HH:MM.
+    expect(start).toHaveProperty('value', '21h');
+    expect(start.getAttribute('aria-invalid')).toBeNull();
+    fireEvent.blur(start);
+    expect(start).toHaveProperty('value', '21:00');
+    fireEvent.change(start, { target: { value: '25:00' } });
+    expect(start.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.blur(start);
+    expect(start).toHaveProperty('value', '21:00');
+  });
+
   it('warns when no follow-up could ever go out, in amber, without blocking', async () => {
     serve({});
     renderSection();
