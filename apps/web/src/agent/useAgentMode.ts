@@ -12,6 +12,8 @@ export type AgentModeView =
       readonly automatic: AutomaticGate;
       /** Why nothing runs whatever the mode, or null when Reveal is read and a voice answers. */
       readonly stalled: string | null;
+      /** Whose agent: the pill names her when the account follows several (DASH-03). */
+      readonly creatorName: string;
     }
   | { readonly source: 'loading' | 'unavailable' | 'empty' };
 
@@ -35,7 +37,13 @@ export function useAgentMode(): AgentModeView {
           : voice.keyMissing
             ? 'l’IA qui écrit attend sa clé'
             : 'l’IA qui écrit ne répond pas';
-    return { source: 'live', mode: live.data.mode, automatic: live.data.automatic, stalled };
+    return {
+      source: 'live',
+      mode: live.data.mode,
+      automatic: live.data.automatic,
+      stalled,
+      creatorName: live.data.creator.name,
+    };
   }
   return { source: live.kind };
 }

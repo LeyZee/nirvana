@@ -89,6 +89,7 @@ const dashboard = createRoute({
         forCreator={user.role === 'creator'}
         forOwner={user.role === 'owner'}
         opensTracking={canOpen(railOf(user), '/suivi')}
+        canAddCreator={canOpen(railOf(user), '/creatrices')}
       />
     );
   },
