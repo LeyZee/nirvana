@@ -3,7 +3,7 @@ import { and, eq, inArray, schema, sql, withAdmin, type Database } from '@nirvan
 
 import type { ColleagueReads } from '../domain/ports';
 
-import { shiftColumns, StoredAccountSchema, toShift } from './rows';
+import { agencyZone, shiftColumns, StoredAccountSchema, toShift } from './rows';
 
 const { leaveRequests, platformAccounts, shiftSwapRequests, shifts, teamMembers, user } = schema;
 
@@ -67,8 +67,8 @@ export function createDrizzleColleagueReads(adminDb: Database): ColleagueReads {
               eq(teamMembers.status, 'active'),
               sql`${shift.creatorId} = any(${user.creatorIds})`,
               sql`${teamMembers.id} <> ${shift.memberId}`,
-              // Nobody before their first day, in their zone (`assertCanWork`).
-              sql`${teamMembers.joinedOn} <= (${shift.startsAt.toISOString()}::timestamptz at time zone ${teamMembers.timeZone})::date`,
+              // Nobody before their first day, in the agency's zone (`assertCanWork`).
+              sql`${teamMembers.joinedOn} <= (${shift.startsAt.toISOString()}::timestamptz at time zone ${agencyZone})::date`,
               sql`not ${away}`,
             ),
           );
@@ -145,7 +145,7 @@ export function createDrizzleColleagueReads(adminDb: Database): ColleagueReads {
             status: teamMembers.status,
             creatorIds: user.creatorIds,
             joinedOn: teamMembers.joinedOn,
-            timeZone: teamMembers.timeZone,
+            agencyTimeZone: agencyZone,
           })
           .from(teamMembers)
           .innerJoin(user, eq(user.id, teamMembers.userId))

@@ -388,7 +388,7 @@ function Form({
   const total = validatedTotal(data.reports, data.shift.id);
   const amountProblem =
     typed !== null && typed !== currency
-      ? `Ce compte se déclare ${CURRENCY_WORDS[currency]} : tape le montant sans « ${CURRENCY_SIGNS[typed]} ».`
+      ? `Ce compte se déclare ${CURRENCY_WORDS[currency]} : tape le montant seul, sans devise.`
       : minor === null
         ? correcting
           ? 'Un montant à ajouter ou retirer, comme 20 ou −15,50.'

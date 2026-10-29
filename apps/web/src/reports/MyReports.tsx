@@ -147,8 +147,8 @@ export function MyReportsCard({
           <div className="rp-figures">
             {sums.map((sum) => (
               <div key={sum.currency} className="rp-figures__row">
-                {/* Nothing validated yet in this currency: no « Validé 0,00 $US » that reads as a report at zero. */}
-                {sum.validatedMinor === 0 && sum.waiting + sum.sentBack > 0 ? null : (
+                {/* No report validated yet in this currency: no « Validé 0,00 $US » that reads as one at zero. */}
+                {sum.validated === 0 && sum.waiting + sum.sentBack > 0 ? null : (
                   <div className="rp-figures__one">
                     <span className="rp-figures__label">Validé</span>
                     <span className="rp-figures__value nv-num">

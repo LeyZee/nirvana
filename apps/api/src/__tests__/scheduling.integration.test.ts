@@ -84,6 +84,7 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
     teamRole: 'chatter' | 'manager';
     creatorIds: CreatorId[];
     joinedOn?: string;
+    timeZone?: string;
   }): Promise<{ member: TeamMember; cookie: string }> => {
     const response = await call('POST', '/team/members', owner, {
       ...body,
@@ -752,5 +753,32 @@ describe('Équipe › Planning (/v1/scheduling, EQ-02)', () => {
       validFrom: parisDay(0),
     });
     expect([template.statusCode, codeOf(template)]).toEqual([409, 'member_not_joined_conflict']);
+  });
+
+  it('reads the day a member joins in the agency’s zone, where the shift’s report is paid', async () => {
+    // Mia lives in Madagascar (UTC+3): 23:30 in Paris on the eve of her first day is already that day for her, but
+    // its report would fall in the Paris fortnight before, where she has no rate.
+    const { member: mia } = await addMember({
+      email: 'mia@example.test',
+      displayName: 'Mia',
+      teamRole: 'chatter',
+      creatorIds: [ines],
+      joinedOn: parisDay(12),
+      timeZone: 'Indian/Antananarivo',
+    });
+    const miaAccount = newId(PlatformAccountIdSchema);
+    await test.admin.db
+      .insert(schema.platformAccounts)
+      .values({ id: miaAccount, creatorId: ines, platform: 'reveal', handle: 'ines-troisieme' });
+    const place = (startsAt: Date) =>
+      call(
+        'POST',
+        '/scheduling/shifts',
+        owner,
+        shiftBody(mia.id, ines, miaAccount, startsAt, new Date(startsAt.getTime() + 2 * HOUR)),
+      );
+    const eve = await place(parisInstant(parisDay(11), 23 * 60 + 30));
+    expect([eve.statusCode, codeOf(eve)]).toEqual([409, 'member_not_joined_conflict']);
+    expect((await place(parisInstant(parisDay(12), 30))).statusCode).toBe(201);
   });
 });

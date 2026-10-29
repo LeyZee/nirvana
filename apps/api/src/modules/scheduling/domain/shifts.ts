@@ -60,9 +60,13 @@ export function assertPlans(scope: TeamScope): void {
 export interface WorkingMember {
   readonly status: TeamMemberStatus;
   readonly creatorIds: readonly string[];
-  /** Their first day, in their own zone: pay has no rate of theirs before it (EQ-01). */
+  /** Their first day: pay has no rate of theirs before it (EQ-01). */
   readonly joinedOn: string;
-  readonly timeZone: string;
+  /**
+   * The agency's zone, never the member's: a shift's report falls in the fortnight of its first day there
+   * (`shiftPeriod`), so a shift that day would be paid in a fortnight without their rate.
+   */
+  readonly agencyTimeZone: string;
 }
 
 /** A shift goes to an `active` member who works on its creator, and starts on the day they join or later. */
@@ -72,9 +76,13 @@ export function assertCanWork(member: WorkingMember, creatorId: string, startsAt
   assertJoined(member, startsAt);
 }
 
-/** No shift before the member's first day, read in their zone (a moved shift keeps its member). */
-export function assertJoined(member: Pick<WorkingMember, 'joinedOn' | 'timeZone'>, startsAt: Date): void {
-  if (calendarDayIn(startsAt, member.timeZone) < member.joinedOn) throw new MemberNotJoined(member.joinedOn);
+/** No shift before the member's first day, read in the agency's zone (a moved shift keeps its member). */
+export function assertJoined(
+  member: Pick<WorkingMember, 'joinedOn' | 'agencyTimeZone'>,
+  startsAt: Date,
+): void {
+  if (calendarDayIn(startsAt, member.agencyTimeZone) < member.joinedOn)
+    throw new MemberNotJoined(member.joinedOn);
 }
 
 /** On the minute, ending after it starts, a day at most. */

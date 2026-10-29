@@ -77,9 +77,9 @@ export function PlanningPage({
 }: {
   userId: string;
   /** The Monday of the week in the address (`?semaine=`), `null` for this week. */
-  week?: string | null;
-  /** Writes the week shown into the address; without it the page keeps the week itself. */
-  onWeek?: (monday: string | null) => void;
+  week: string | null;
+  /** Writes the week shown into the address, `null` for this week. */
+  onWeek: (monday: string | null) => void;
 }): JSX.Element {
   const now = useNow();
   const mine = readerZone();
@@ -92,11 +92,9 @@ export function PlanningPage({
   const zone = own || agency === null ? mine : agency;
   const today = dayOf(now, zone);
   const thisMonday = mondayOf(today);
-  const [localMonday, setLocalMonday] = useState(thisMonday);
-  const monday = onWeek === undefined ? localMonday : (week ?? thisMonday);
+  const monday = week ?? thisMonday;
   const setMonday = (next: string): void => {
-    if (onWeek === undefined) setLocalMonday(next);
-    else onWeek(next === thisMonday ? null : next);
+    onWeek(next === thisMonday ? null : next);
   };
   const days = weekOf(monday);
   const shown = usePlanning(rangeOf(monday, zone));

@@ -191,6 +191,7 @@ describe('what a period’s list says', () => {
       {
         currency: 'EUR',
         validatedMinor: 8_000,
+        validated: 2,
         waitingMinor: 500,
         waiting: 1,
         sentBackMinor: 4_000,

@@ -9,7 +9,7 @@ import {
 } from '@nirvana/contracts';
 
 import { countryName } from '@/lib/country';
-import { mondayOf } from '@/scheduling/time';
+import { mondayOf, withFirstOfMonth } from '@/scheduling/time';
 
 /**
  * Équipe › Membres, without React (EQ-01): who shows in which tab, how a status, a rate, a country and an invitation
@@ -252,9 +252,7 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long
 
 /** « 27 octobre 2026 », « 1er octobre 2026 », from a calendar day. */
 export const longDay = (day: string): string =>
-  LONG_DAY.formatToParts(new Date(`${day}T12:00:00`))
-    .map((part) => (part.type === 'day' && part.value === '1' ? '1er' : part.value))
-    .join('');
+  withFirstOfMonth(LONG_DAY.formatToParts(new Date(`${day}T12:00:00`)));
 
 /** The initial of a name, for the avatar. */
 export const initialOf = (name: string): string => name.trim().slice(0, 1).toUpperCase() || '?';

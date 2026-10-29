@@ -49,6 +49,7 @@ import {
 import {
   assertMemberWorks,
   assertNotOnLeave,
+  agencyZone,
   audit,
   creatorOfUnscoped,
   lockMembers,
@@ -159,7 +160,7 @@ async function ownWork(tx: Transaction, userId: string): Promise<WorkingMember> 
       status: teamMembers.status,
       creatorIds: user.creatorIds,
       joinedOn: teamMembers.joinedOn,
-      timeZone: teamMembers.timeZone,
+      agencyTimeZone: agencyZone,
     })
     .from(teamMembers)
     .innerJoin(user, eq(user.id, teamMembers.userId))

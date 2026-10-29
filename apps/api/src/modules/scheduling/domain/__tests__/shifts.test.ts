@@ -41,7 +41,12 @@ describe('who plans, who works', () => {
   });
 
   it('gives a shift to an active member of the creator only', () => {
-    const member = { status: 'active', creatorIds: ['c1'], joinedOn: '2026-10-01', timeZone: PARIS } as const;
+    const member = {
+      status: 'active',
+      creatorIds: ['c1'],
+      joinedOn: '2026-10-01',
+      agencyTimeZone: PARIS,
+    } as const;
     const startsAt = at('2026-11-02T08:00:00Z');
     expect(codeOf(assertCanWork, member, 'c1', startsAt)).toBeNull();
     expect(codeOf(assertCanWork, { ...member, status: 'sick' }, 'c1', startsAt)).toBe('member_left_conflict');
@@ -50,21 +55,24 @@ describe('who plans, who works', () => {
     );
   });
 
-  it('gives no shift before the member’s first day, read in their zone', () => {
+  it('gives no shift before the member’s first day, read in the agency’s zone, where its report is paid', () => {
+    // A chatter in Madagascar (UTC+3) who joins on the 16th, in an agency in Paris (UTC+1 in November).
     const member = {
       status: 'active',
       creatorIds: ['c1'],
-      joinedOn: '2026-11-05',
-      timeZone: 'Africa/Porto-Novo',
+      joinedOn: '2026-11-16',
+      agencyTimeZone: PARIS,
     } as const;
     expect(codeOf(assertCanWork, member, 'c1', at('2026-10-28T08:00:00Z'))).toBe(
       'member_not_joined_conflict',
     );
-    // 23:30 UTC on the 4th is already the 5th in Porto-Novo (UTC+1).
-    expect(codeOf(assertCanWork, member, 'c1', at('2026-11-04T23:30:00Z'))).toBeNull();
-    expect(codeOf(assertCanWork, member, 'c1', at('2026-11-04T22:30:00Z'))).toBe(
+    // 21:30 UTC on the 15th is already the 16th in Antananarivo but still the 15th in Paris: its report would fall
+    // in the fortnight of the 1st to the 15th, where the member has no rate.
+    expect(codeOf(assertCanWork, member, 'c1', at('2026-11-15T21:30:00Z'))).toBe(
       'member_not_joined_conflict',
     );
+    // 23:30 UTC on the 15th is the 16th in Paris.
+    expect(codeOf(assertCanWork, member, 'c1', at('2026-11-15T23:30:00Z'))).toBeNull();
   });
 
   it('finds when a template’s first shift starts', () => {

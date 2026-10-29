@@ -234,8 +234,13 @@ describe('Faire mon rapport', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Faire mon rapport' });
     fireEvent.change(amountField(), { target: { value: '50 €' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer mon rapport' }));
-    expect(dialog.textContent).toContain('Ce compte se déclare en dollars : tape le montant sans « € ».');
+    expect(dialog.textContent).toContain(
+      'Ce compte se déclare en dollars : tape le montant seul, sans devise.',
+    );
     expect(screen.queryByRole('status')).toBeNull();
+    // A code says the same, never a sign the member did not type.
+    fireEvent.change(amountField(), { target: { value: '50 EUR' } });
+    expect(dialog.textContent).toContain('tape le montant seul, sans devise.');
     fireEvent.change(amountField(), { target: { value: '50 $' } });
     expect(dialog.textContent).not.toContain('Ce compte se déclare en dollars');
   });
@@ -398,6 +403,23 @@ describe('Mes rapports', () => {
     const text = (mine.closest('section')?.textContent ?? '').replaceAll(/\s/gu, ' ');
     expect(text).toContain('En attente80,00 $US');
     expect(text).not.toContain('Validé');
+  });
+
+  it('says a report validated at zero, beside one waiting, as the list counts it', async () => {
+    served.reports = [
+      report({
+        status: 'validated',
+        reviewedAt: '2026-10-27T08:00:00.000Z',
+        amount: { amountMinor: 0, currency: 'EUR' },
+      }),
+      report({ id: id(304), shiftId: SHIFT, amount: { amountMinor: 1_500, currency: 'EUR' } }),
+    ];
+    renderPage();
+    const mine = await screen.findByText('Tous mes rapports');
+    const text = (mine.closest('section')?.textContent ?? '').replaceAll(/\s/gu, ' ');
+    expect(text).toContain('Validé0,00 €');
+    expect(text).toContain('En attente15,00 €');
+    expect(text).toContain('1 validé · 1 en attente');
   });
 
   it('sums the period: validated, what waits for the agency, what came back, counted the same way', async () => {

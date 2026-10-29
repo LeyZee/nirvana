@@ -261,7 +261,7 @@ async function workingMember(tx: Transaction, memberId: TeamMemberId): Promise<W
       status: teamMembers.status,
       creatorIds: user.creatorIds,
       joinedOn: teamMembers.joinedOn,
-      timeZone: teamMembers.timeZone,
+      agencyTimeZone: agencyZone,
     })
     .from(teamMembers)
     .innerJoin(user, eq(user.id, teamMembers.userId))
@@ -387,6 +387,9 @@ export async function assertNotReported(tx: Transaction, shiftId: string): Promi
  * The agency's zone, which the pay periods follow (ADR 0023): the planning's, or its default until the owner sets it.
  * Every team scope reads the settings.
  */
+/** The agency's zone as a column, for a read that also takes a member's row (`WorkingMember`). */
+export const agencyZone = sql<string>`coalesce((select ${schedulingSettings.timeZone} from ${schedulingSettings} limit 1), ${DEFAULT_SCHEDULING_SETTINGS.timeZone})`;
+
 export async function agencyTimeZone(tx: Transaction): Promise<string> {
   const [row] = await tx.select({ timeZone: schedulingSettings.timeZone }).from(schedulingSettings);
   return row?.timeZone ?? DEFAULT_SCHEDULING_SETTINGS.timeZone;

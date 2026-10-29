@@ -194,6 +194,8 @@ export function linesOf(list: ShiftReportList): ShiftLine[] {
 export interface PeriodSum {
   readonly currency: Currency;
   readonly validatedMinor: number;
+  /** Reports and corrections validated, one validated at zero among them. */
+  readonly validated: number;
   readonly waitingMinor: number;
   readonly waiting: number;
   readonly sentBackMinor: number;
@@ -205,6 +207,7 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
   for (const report of reports) {
     const sum = sums.get(report.amount.currency) ?? {
       validatedMinor: 0,
+      validated: 0,
       waitingMinor: 0,
       waiting: 0,
       sentBackMinor: 0,
@@ -214,7 +217,7 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
     sums.set(
       report.amount.currency,
       report.status === 'validated'
-        ? { ...sum, validatedMinor: sum.validatedMinor + minor }
+        ? { ...sum, validatedMinor: sum.validatedMinor + minor, validated: sum.validated + 1 }
         : report.status === 'submitted'
           ? { ...sum, waitingMinor: sum.waitingMinor + minor, waiting: sum.waiting + 1 }
           : { ...sum, sentBackMinor: sum.sentBackMinor + minor, sentBack: sum.sentBack + 1 },
