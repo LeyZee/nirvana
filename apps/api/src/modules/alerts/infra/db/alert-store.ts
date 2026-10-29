@@ -305,6 +305,9 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
 
     async archive(groupId, userId) {
       return db.transaction(async (tx) => {
+        // Behind a change of the same alert, never between its read and its write: the change would bring the
+        // archived rows back, or leave active the ones it adds.
+        await lockNames(tx);
         const creators = await creatorIds(tx);
         const rows = await groupRows(tx, groupId, creators, false);
         if (rows.length === 0) return false;
