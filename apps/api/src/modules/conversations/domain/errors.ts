@@ -40,7 +40,7 @@ export class AutomaticLocked extends DomainError {
   constructor(missing: readonly AutomaticMissing[]) {
     super(
       'agent_mode_conflict',
-      'Le mode Automatique reste fermé tant que le taux en réel et le test à l’aveugle ne sont pas validés',
+      'Le mode Automatique reste fermé tant qu’il manque une persona active, le taux en réel ou le test à l’aveugle',
       { details: { missing: [...missing] } },
     );
   }

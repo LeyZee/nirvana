@@ -4,6 +4,7 @@ import {
   CreatorIdSchema,
   DomainError,
   DraftIdSchema,
+  PersonaVersionIdSchema,
   JOB_PAYLOADS,
   newId,
   PlatformAccountIdSchema,
@@ -458,6 +459,18 @@ describe('conversations module (P0-05)', () => {
     draftId = await respond(conversationId);
     await conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Un', 'Deux'] });
     await conversations.jobs.send({ creatorId, conversationId, draftId, correlationId: 'test' }, NO_LOG, 1);
+    // Automatique opens only with an active persona version, proved by her drafts (recette 28/10, G4).
+    const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: personaVersionId,
+      creatorId,
+      version: 'rebuild',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'rebuild',
+      isActive: true,
+      activatedAt: new Date(),
+    });
     // Automatique opens behind its lock (ADR 0019): 100 drafts sent as is and a passed blind test.
     await test.admin.db.insert(schema.drafts).values(
       Array.from({ length: 100 }, (_, i) => ({
@@ -466,6 +479,7 @@ describe('conversations module (P0-05)', () => {
         conversationId,
         status: 'sent',
         promptHashes: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+        personaVersionId,
         decidedAt: new Date(T0.getTime() - (i + 1) * 1_000),
         idempotencyKey: `rebuild:${String(i)}`,
       })),

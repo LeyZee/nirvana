@@ -248,15 +248,13 @@ describe('drafts written with her active persona version, and what an activation
     app = await createApp(config, createLogger(config));
     cleo = (await app.modules.persona.creators.create({ displayName: 'Cleo' })).id;
     account = newId(PlatformAccountIdSchema);
-    await test.admin.db
-      .insert(schema.platformAccounts)
-      .values({
-        id: account,
-        creatorId: cleo,
-        platform: 'reveal',
-        handle: 'active-persona-drafts',
-        sessionState: 'valid',
-      });
+    await test.admin.db.insert(schema.platformAccounts).values({
+      id: account,
+      creatorId: cleo,
+      platform: 'reveal',
+      handle: 'active-persona-drafts',
+      sessionState: 'valid',
+    });
     // Read from the base at each call, as the composition root wires it: nothing kept in memory (ADR 0022).
     const activePersona: ActivePersonaSource = (creatorId) =>
       app.modules.persona.versions.active(CreatorIdSchema.parse(creatorId));
