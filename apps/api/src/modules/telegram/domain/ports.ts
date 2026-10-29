@@ -114,6 +114,16 @@ export interface BotsStore {
     },
   ): Promise<void>;
 
+  /**
+   * REG-28, in one transaction: deletes the group, its routes and its deliveries (cascade) if `mayRemove` says so of its
+   * membership read under a row lock, and moves the routing version so open screens reload; writes `audit_log`.
+   */
+  removeChat(
+    id: TelegramChatId,
+    mayRemove: (membership: TelegramMembership) => boolean,
+    userId: string,
+  ): Promise<'removed' | 'missing' | 'refused'>;
+
   listRoutes(): Promise<{ readonly routes: readonly TelegramRoute[]; readonly version: number }>;
   /** Replaces the whole table if it is still at `version`; false otherwise. */
   replaceRoutes(version: number, routes: readonly TelegramRoute[]): Promise<boolean>;

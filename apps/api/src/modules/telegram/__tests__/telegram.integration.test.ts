@@ -457,6 +457,37 @@ describe('telegram module on Postgres', () => {
     expect((await module.overview()).coverage[0]).toMatchObject({ urgentReachable: false });
   });
 
+  it('keeps a group the bot was banned from in the list, and removes it with its routes on request (REG-28)', async () => {
+    const { bot, chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
+    expect(await module.removeChat(chatId, 'owner-telegram')).toBe('refused');
+
+    telegram.updates.push({
+      kind: 'membership',
+      updateId: telegram.updates.length + 1,
+      telegramChatId: '-100',
+      title: 'Groupe demo_bot',
+      chatKind: 'group',
+      membership: 'kicked',
+      canPost: false,
+    });
+    await module.jobs.pollUpdates(bot.id, 0);
+    const before = await module.overview();
+    expect(before.bots[0]?.chats).toMatchObject([{ id: chatId, membership: 'kicked', canPost: false }]);
+    expect(before.routes.filter((route) => route.chatId === chatId)).toHaveLength(3);
+
+    expect(await module.removeChat(chatId, 'owner-telegram')).toBe('removed');
+    const after = await module.overview();
+    expect(after.bots[0]?.chats).toEqual([]);
+    expect(after.routes).toEqual([]);
+    expect(after.version).toBeGreaterThan(before.version);
+    const audit = await test.admin.db
+      .select({ userId: schema.auditLog.userId, details: schema.auditLog.details })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, 'telegram_chat.remove'));
+    expect(audit).toEqual([{ userId: 'owner-telegram', details: { membership: 'kicked' } }]);
+    expect(await module.removeChat(chatId, 'owner-telegram')).toBe('missing');
+  });
+
   it('marks the bot to reconnect on a 401 and keeps its messages for the retry window', async () => {
     const { bot, chatId } = await botInGroup(FAKE_TOKEN, 'demo_bot', '-100');
     await publish(
@@ -584,7 +615,18 @@ describe('telegram module on Postgres', () => {
 
   it('serves the settings to the owner only, a bot change after a fresh sign-in only', async () => {
     const ownerOnly: preValidationAsyncHookHandler = async (request, reply) => {
-      if (request.headers['x-test-role'] !== 'owner') await reply.code(403).send({ error: 'forbidden' });
+      if (request.headers['x-test-role'] !== 'owner') {
+        await reply.code(403).send({ error: 'forbidden' });
+        return;
+      }
+      request.user = {
+        id: 'owner-telegram',
+        email: 'owner@example.test',
+        name: 'Owner',
+        role: 'owner',
+        creatorIds: [],
+        routedCreatorIds: [],
+      };
     };
     const freshOnly: preValidationAsyncHookHandler = async (request, reply) => {
       if (request.headers['x-test-stale'] === '1')
@@ -664,7 +706,34 @@ describe('telegram module on Postgres', () => {
       });
       expect(noChat.statusCode).toBe(404);
       expect(noChat.json()).toMatchObject({ error: { code: 'telegram_chat_not_found' } });
-      const { version } = overview.json<{ version: number }>();
+      const noGroup = await server.inject({
+        method: 'DELETE',
+        url: `/v1/settings/telegram/chats/${newId(z.uuid().brand<'TelegramChatId'>())}`,
+        headers,
+      });
+      expect([noGroup.statusCode, noGroup.json()]).toMatchObject([
+        404,
+        { error: { code: 'telegram_chat_not_found' } },
+      ]);
+      const { id: botId } = created.json<{ id: string }>();
+      telegram.updates.push(joined(telegram.updates.length + 1, '-300', 'Groupe vivant'));
+      await module.jobs.pollUpdates(z.uuid().brand<'TelegramBotId'>().parse(botId), 0);
+      const living = (await module.overview()).bots[0]?.chats[0];
+      if (living === undefined) throw new Error('group not found');
+      const stillIn = await server.inject({
+        method: 'DELETE',
+        url: `/v1/settings/telegram/chats/${living.id}`,
+        headers,
+      });
+      expect([stillIn.statusCode, stillIn.json()]).toMatchObject([
+        409,
+        { error: { code: 'telegram_chat_member_conflict' } },
+      ]);
+      const { version } = (
+        await server.inject({ method: 'GET', url: '/v1/settings/telegram', headers })
+      ).json<{
+        version: number;
+      }>();
       const unknownChat = await server.inject({
         method: 'PUT',
         url: '/v1/settings/telegram/routes',

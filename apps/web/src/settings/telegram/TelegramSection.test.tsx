@@ -11,7 +11,14 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TelegramSection } from './TelegramSection';
-import { TelegramForbidden, TelegramOff, fetchDeliveries, fetchOverview, saveRoutes } from './api';
+import {
+  TelegramForbidden,
+  TelegramOff,
+  fetchDeliveries,
+  fetchOverview,
+  removeChat,
+  saveRoutes,
+} from './api';
 import { parseTelegramSearch, searchOfTab, tabOfSearch } from './search';
 
 vi.mock('./api', async (actual) => ({
@@ -19,6 +26,7 @@ vi.mock('./api', async (actual) => ({
   fetchOverview: vi.fn(),
   fetchDeliveries: vi.fn(),
   saveRoutes: vi.fn(),
+  removeChat: vi.fn(),
 }));
 
 function renderSection(): void {
@@ -299,6 +307,74 @@ describe('Réglages › Telegram, her own alerts (P4-01)', () => {
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Modifier les mots dans la Persona' }).getAttribute('href')).toBe(
       '/creatrices',
+    );
+  });
+});
+
+describe('Réglages › Telegram with a group the bot was banned from (REG-28)', () => {
+  const gone = TelegramChatIdSchema.parse('01900000-0000-7000-8000-0000000000c9');
+  beforeEach(() => {
+    vi.mocked(fetchOverview).mockResolvedValue({
+      bots: [
+        {
+          id: TelegramBotIdSchema.parse('01900000-0000-7000-8000-0000000000b9'),
+          username: 'demo_bot',
+          displayName: 'Démo',
+          state: 'active',
+          lastPolledAt: null,
+          chats: [
+            {
+              id: TelegramChatIdSchema.parse('01900000-0000-7000-8000-0000000000c8'),
+              title: 'Astreinte',
+              kind: 'group',
+              membership: 'member',
+              canPost: true,
+              lastSentAt: null,
+              lastError: null,
+            },
+            {
+              id: gone,
+              title: 'Ancien groupe',
+              kind: 'supergroup',
+              membership: 'kicked',
+              canPost: false,
+              lastSentAt: null,
+              lastError: null,
+            },
+          ],
+        },
+      ],
+      routes: [{ creatorId: null, topic: 'urgent', chatId: gone }],
+      coverage: [],
+      version: 4,
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('says why, asks in the page, and removes the group only once confirmed', async () => {
+    vi.mocked(removeChat).mockResolvedValue('removed');
+    renderSection();
+    fireEvent.click(await screen.findByRole('tab', { name: /Bots et groupes/ }));
+    expect(await screen.findByText('Supergroupe · le bot a été exclu de ce groupe')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer de la liste' }));
+    expect(screen.getByText('Retirer Ancien groupe de la liste ?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Garder' }));
+    expect(removeChat).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer de la liste' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }));
+    await waitFor(() => {
+      expect(removeChat).toHaveBeenCalledWith(gone);
+    });
+  });
+
+  it('keeps the group when the bot came back in meanwhile, and says so', async () => {
+    vi.mocked(removeChat).mockResolvedValue('still_member');
+    renderSection();
+    fireEvent.click(await screen.findByRole('tab', { name: /Bots et groupes/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retirer de la liste' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Le bot est revenu dans Ancien groupe : le groupe reste.',
     );
   });
 });

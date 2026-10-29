@@ -293,6 +293,32 @@ export function createPostgresTelegramStore(deps: TelegramStoreDeps): {
           .where(eq(state.id, 1));
       });
     },
+    async removeChat(id, mayRemove, userId) {
+      return admin(async (tx) => {
+        const [row] = await tx
+          .select({ membership: chats.membership, title: chats.title })
+          .from(chats)
+          .where(eq(chats.id, id))
+          .for('update');
+        if (row === undefined) return 'missing';
+        if (!mayRemove(TelegramMembershipSchema.parse(row.membership))) return 'refused';
+        // Cascades to its routes and deliveries; the routing version moves so open screens reload.
+        await tx.delete(chats).where(eq(chats.id, id));
+        await tx
+          .update(state)
+          .set({ routesVersion: sql`${state.routesVersion} + 1` })
+          .where(eq(state.id, 1));
+        await tx.insert(schema.auditLog).values({
+          id: newId(AuditEntryIdSchema),
+          userId,
+          action: 'telegram_chat.remove',
+          entity: 'telegram_chat',
+          entityId: id,
+          details: { membership: row.membership },
+        });
+        return 'removed';
+      });
+    },
     async listChats() {
       const rows = await admin((tx) => tx.select().from(chats).orderBy(chats.discoveredAt));
       return rows.map(toChat);

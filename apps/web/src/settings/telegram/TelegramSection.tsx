@@ -1,5 +1,6 @@
 import type {
   TelegramBot,
+  TelegramChat,
   TelegramChatId,
   TelegramDelivery,
   TelegramOverview,
@@ -21,6 +22,7 @@ import {
   fetchDeliveries,
   fetchOverview,
   removeBot,
+  removeChat,
   saveRoutes,
   sendTest,
 } from './api';
@@ -29,6 +31,8 @@ import {
   botLine,
   chatChoices,
   chatLine,
+  goneChats,
+  goneLine,
   clockLabel,
   coverOf,
   deliveryLabel,
@@ -838,7 +842,11 @@ function ValidationsTab({ scope, onScope, ...routing }: ScopedProps): JSX.Elemen
   );
 }
 
-type Pending = { kind: 'confirm'; botId: string } | { kind: 'reauth'; botId: string } | null;
+type Pending =
+  | { kind: 'confirm'; botId: string }
+  | { kind: 'reauth'; botId: string }
+  | { kind: 'forget'; chatId: string }
+  | null;
 type TestState = Record<string, { kind: 'busy' } | { kind: 'ok' } | { kind: 'error'; message: string }>;
 
 function BotsTab({
@@ -869,6 +877,19 @@ function BotsTab({
       }
       setError(`${bot.displayName} n’a pas été supprimé. ${OFFLINE}`);
     });
+  };
+
+  const forget = (chat: TelegramChat): void => {
+    setError(null);
+    removeChat(chat.id).then(
+      (result) => {
+        if (result === 'still_member') setError(`Le bot est revenu dans ${chat.title} : le groupe reste.`);
+        onChanged();
+      },
+      () => {
+        setError(`${chat.title} n’a pas été retiré. ${OFFLINE}`);
+      },
+    );
   };
 
   const test = (chatId: TelegramChatId): void => {
@@ -902,6 +923,7 @@ function BotsTab({
             {overview.bots.map((bot) => {
               const line = botLine(bot);
               const botChoices = choices.filter((c) => c.bot.id === bot.id);
+              const gone = goneChats(bot);
               return (
                 <div className="tg-bot" key={bot.id}>
                   <div className="tg-bot__head">
@@ -933,7 +955,7 @@ function BotsTab({
                       )}
                     </div>
                   </div>
-                  {botChoices.length === 0 ? (
+                  {botChoices.length === 0 && gone.length === 0 ? (
                     <p className="tg-hint tg-bot__empty">Ce bot n’est dans aucun groupe.</p>
                   ) : (
                     <div className="nv-list">
@@ -982,6 +1004,58 @@ function BotsTab({
                           </div>
                         );
                       })}
+                      {gone.map((chat) => (
+                        <div className="tg-chat" key={chat.id}>
+                          <span className="tg-av">{initials(chat.title)}</span>
+                          <div className="tg-chat__t">
+                            <b>{chat.title}</b>
+                            <small data-warning="true">{goneLine(chat)}</small>
+                          </div>
+                          <div className="tg-actions">
+                            <button
+                              type="button"
+                              className="nv-btn nv-btn--plain nv-btn--sm nv-btn--destructive"
+                              onClick={() => {
+                                setPending({ kind: 'forget', chatId: chat.id });
+                              }}
+                            >
+                              Retirer de la liste
+                            </button>
+                          </div>
+                          {pending?.kind === 'forget' && pending.chatId === chat.id ? (
+                            <div className="nv-confirm tg-full">
+                              <p>
+                                <b>Retirer {chat.title} de la liste ?</b>{' '}
+                                <span className="tg-hint">
+                                  Ses routes partent avec lui. Si tu rajoutes le bot à ce groupe, il revient
+                                  tout seul.
+                                </span>
+                              </p>
+                              <div className="nv-confirm__actions">
+                                <button
+                                  type="button"
+                                  className="nv-btn nv-btn--soft nv-btn--sm"
+                                  onClick={() => {
+                                    setPending(null);
+                                  }}
+                                >
+                                  Garder
+                                </button>
+                                <button
+                                  type="button"
+                                  className="nv-btn nv-btn--soft nv-btn--destructive nv-btn--sm"
+                                  onClick={() => {
+                                    setPending(null);
+                                    forget(chat);
+                                  }}
+                                >
+                                  Retirer
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                   )}
                   <div className="tg-bot__foot">
@@ -1016,7 +1090,7 @@ function BotsTab({
                     >
                       Supprimer
                     </button>
-                    {pending?.botId === bot.id && pending.kind === 'confirm' ? (
+                    {pending?.kind === 'confirm' && pending.botId === bot.id ? (
                       <div className="nv-confirm tg-full">
                         <p>
                           <b>Supprimer {bot.displayName} ?</b>{' '}
@@ -1052,7 +1126,7 @@ function BotsTab({
                         </div>
                       </div>
                     ) : null}
-                    {pending?.botId === bot.id && pending.kind === 'reauth' ? (
+                    {pending?.kind === 'reauth' && pending.botId === bot.id ? (
                       <div className="nv-confirm tg-full">
                         <Reauth
                           onConfirmed={() => {

@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { nextBatch, type Pending } from '../batch';
 import { classify } from '../classify';
 import { chatsFor, computeCoverage } from '../coverage';
+import { mayRemoveChat } from '../membership';
 import { describeTelegramError } from '../messages';
 import { MAX_TEXT, escapeHtml, joinTexts, renderClosedBy, renderNotice } from '../render';
 import { morningDigestKey, nightOf, retryDelayMs, shouldRetry } from '../schedule';
@@ -373,5 +374,13 @@ describe('token and messages', () => {
       'Le bot ne peut plus écrire dans ce groupe. Rajoute-le au groupe, puis réessaie.',
     );
     expect(describeTelegramError('unreachable')).not.toMatch(/\d{3}/);
+  });
+});
+
+describe('mayRemoveChat (REG-28)', () => {
+  it('lets go of a group the bot left or was banned from, never of one it sits in', () => {
+    expect(mayRemoveChat('left')).toBe(true);
+    expect(mayRemoveChat('kicked')).toBe(true);
+    expect(mayRemoveChat('member')).toBe(false);
   });
 });

@@ -45,11 +45,13 @@ export interface ChatChoice {
   readonly isReachable: boolean;
 }
 
-/** Every group a bot sits in, the reachable ones first. */
+/** Every group a bot sits in, the reachable ones first. A group it left or was banned from is not a choice. */
 export function chatChoices(bots: readonly TelegramBot[]): ChatChoice[] {
   return bots
     .flatMap((bot) =>
-      bot.chats.map((chat) => ({ chat, bot, isReachable: chat.canPost && bot.state === 'active' })),
+      bot.chats
+        .filter((chat) => chat.membership === 'member')
+        .map((chat) => ({ chat, bot, isReachable: chat.canPost && bot.state === 'active' })),
     )
     .sort((a, b) => Number(b.isReachable) - Number(a.isReachable));
 }
@@ -265,6 +267,19 @@ export function chatLine(choice: ChatChoice, now: Date): { text: string; isWarni
   return { text: `${kind} · dernier envoi ${whenLabel(choice.chat.lastSentAt, now)}`, isWarning: false };
 }
 
+/** The groups a bot left or was banned from: listed under its groups, to remove (REG-28). */
+export function goneChats(bot: TelegramBot): TelegramChat[] {
+  return bot.chats.filter((chat) => chat.membership !== 'member');
+}
+
+/** The second line of a group the bot is out of. */
+export function goneLine(chat: TelegramChat): string {
+  const kind = KIND_LABEL[chat.kind];
+  return chat.membership === 'kicked'
+    ? `${kind} · le bot a été exclu de ce groupe`
+    : `${kind} · le bot n’est plus dans ce groupe`;
+}
+
 /** The line under a bot's name: its @identifier, or what is wrong with it. */
 export function botLine(bot: TelegramBot): { text: string; isWarning: boolean } {
   switch (bot.state) {
@@ -296,7 +311,7 @@ export function deliveryLabel(delivery: TelegramDelivery): { text: string; isOk:
 
 /** The groups a bot entered while the sheet was waiting for one. */
 export function newChats(bot: TelegramBot | undefined, knownIds: ReadonlySet<string>): TelegramChat[] {
-  return bot?.chats.filter((chat) => !knownIds.has(chat.id)) ?? [];
+  return bot?.chats.filter((chat) => chat.membership === 'member' && !knownIds.has(chat.id)) ?? [];
 }
 
 /** A bot token, as @BotFather gives it; the server checks it again (`token_shape`). */

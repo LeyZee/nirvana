@@ -1,0 +1,13 @@
+# 2026-10-29 — Recette design, API : retirer un groupe que le bot a quitté (REG-28) — done
+Recommandation acceptée par Charles le 29/10 00h22 :
+- REG-28 : « Faut-il pouvoir retirer depuis le CRM un groupe que le bot a quitté, avec une nouvelle route API ? Je recommande oui, seulement pour les groupes quittés ou interdits : sinon la liste s’encrasse et l’ambre ne s’éteint jamais. »
+Fait :
+- Serveur. `DELETE /v1/settings/telegram/chats/:id` (propriétaire, sans redemande du mot de passe : aucun jeton n’est touché) retire un groupe dont le bot est sorti (`left`) ou a été exclu (`kicked`), et seulement ceux-là (`mayRemoveChat`, domaine pur). La lecture de l’appartenance, sous verrou de ligne, et la suppression sont dans la même transaction : un bot revenu entre-temps garde son groupe (409 `telegram_chat_member_conflict`, constante dans les contrats). La suppression emporte les routes et les envois du groupe (cascade existante), fait avancer la version du routage pour que les écrans ouverts rechargent, et écrit `telegram_chat.remove` dans `audit_log`. 404 pour un groupe inconnu.
+- `GET /v1/settings/telegram` montre désormais aussi ces groupes (`membership` `left` ou `kicked`) : jusqu’ici ils disparaissaient de la liste alors que leurs routes « cassées » restaient (ADR 0020 § 8 dit « le groupe passe retiré »), donc rien à retirer n’était visible.
+- Écran. Réglages › Telegram › Bots et groupes : sous les groupes d’un bot, chaque groupe quitté ou interdit dit pourquoi (« Supergroupe · le bot a été exclu de ce groupe », « Groupe · le bot n’est plus dans ce groupe ») et propose « Retirer de la liste », avec une confirmation dans la page (« Ses routes partent avec lui. Si tu rajoutes le bot à ce groupe, il revient tout seul. »). Ces groupes ne sont plus proposés au routage ni comptés comme nouveaux pendant l’attente d’un groupe.
+Pas fait : un groupe où le bot est encore mais sans droit d’écrire (cité dans le constat) reste dans la liste, comme la recommandation le demande : lui rendre ce droit est la sortie.
+Migration : aucune.
+Décisions : pas de redemande du mot de passe (la règle ADR 0016 vise les jetons) ; un 404 côté écran vaut retiré (même fin).
+Découvertes : les lignes du journal « Dernières alertes » d’un groupe retiré partent avec lui (cascade sur `telegram_deliveries`) ; l’ADR 0020 dit qu’un envoi n’est pas une preuve et que le journal est purgé à 30 jours, donc accepté ici, mais le fil Telegram peut préférer garder le titre du groupe sur la livraison.
+Candidats à suppression : aucun.
+Vérifié : typecheck api et web ✓ ; unitaires `telegram` (37) ✓ ; intégration `telegram` (19, dont le retrait et les 404/409 HTTP) ✓ sur un Postgres 16 local (`NIRVANA_TEST_PG_URL`) ; web `settings/telegram` (48) ✓.

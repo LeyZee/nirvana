@@ -15,6 +15,8 @@ import {
   chatLine,
   coverOf,
   deliveryLabel,
+  goneChats,
+  goneLine,
   healthOf,
   initials,
   looksLikeToken,
@@ -182,6 +184,19 @@ describe('health and coverage', () => {
       bot([chat(groupB, 'Ouvert')], { state: 'conflict' }),
     ]);
     expect(choices.map((c) => c.isReachable)).toEqual([false, false]);
+  });
+});
+
+describe('a group the bot is out of (REG-28)', () => {
+  it('is no routing choice nor a new group, but listed to remove, with why', () => {
+    const left = chat(groupA, 'Ancien', { membership: 'left', canPost: false });
+    const kicked = chat(groupB, 'Banni', { membership: 'kicked', canPost: false, kind: 'supergroup' });
+    const owner = bot([left, kicked, chat(newId(TelegramChatIdSchema), 'Vivant')]);
+    expect(chatChoices([owner]).map((c) => c.chat.title)).toEqual(['Vivant']);
+    expect(newChats(owner, new Set()).map((c) => c.title)).toEqual(['Vivant']);
+    expect(goneChats(owner)).toEqual([left, kicked]);
+    expect(goneLine(left)).toBe('Groupe · le bot n’est plus dans ce groupe');
+    expect(goneLine(kicked)).toBe('Supergroupe · le bot a été exclu de ce groupe');
   });
 });
 

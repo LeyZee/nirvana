@@ -6,7 +6,7 @@
 
 **Tables possédées.** `telegram_bots`, `telegram_chats`, `telegram_routes`, `telegram_deliveries`, `telegram_state` (`packages/db/src/schema/telegram.ts`, migration 0006) : hors RLS, retirées au rôle applicatif, lues et écrites par `withAdmin`. Le jeton d'un bot est scellé par `CREDENTIALS_ENCRYPTION_KEYS` (contexte `telegram_bot:<id>`). La migration pose aussi le déclencheur `domain_events_telegram_scan`, qui enfile `telegram.scan` au commit d'un événement consommé et n'annule jamais l'écriture de l'outbox.
 
-**Routes.** `/v1/settings/telegram` : `GET`, `POST /bots`, `PUT /bots/:id/token`, `POST /bots/:id/listen`, `DELETE /bots/:id`, `POST /chats/:id/test`, `PUT /routes`, `GET /deliveries`, derrière `requireRole('owner')` ; ajouter, remplacer ou supprimer un bot demande une connexion de moins de 10 minutes.
+**Routes.** `/v1/settings/telegram` : `GET`, `POST /bots`, `PUT /bots/:id/token`, `POST /bots/:id/listen`, `DELETE /bots/:id`, `POST /chats/:id/test`, `DELETE /chats/:id`, `PUT /routes`, `GET /deliveries`, derrière `requireRole('owner')` ; ajouter, remplacer ou supprimer un bot demande une connexion de moins de 10 minutes. `DELETE /chats/:id` (REG-28) retire un groupe que le bot a quitté ou dont il a été exclu, avec ses routes et ses envois (cascade), et rien d'autre : un groupe où le bot est encore répond 409 `telegram_chat_member_conflict`. Ces groupes restent dans `GET` (`membership` `left` ou `kicked`) jusqu'à ce retrait ; l'écran ne les propose plus au routage.
 
 **Jobs.** `TELEGRAM_JOB_PAYLOADS` (contracts) ; le worker les branche sur `module.jobs` :
 

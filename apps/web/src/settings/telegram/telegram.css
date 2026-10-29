@@ -642,6 +642,10 @@
   align-items: center;
   padding: 11px 18px 11px 76px;
 }
+/* « Retirer de la liste » (REG-28): the confirmation spans the whole line of the group. */
+.tg-chat > .nv-confirm {
+  grid-column: 1 / -1;
+}
 .tg-chat__t {
   min-width: 0;
   display: flex;
