@@ -73,7 +73,14 @@ function approach(strategies: Persona['strategies']): Record<string, Record<stri
  * computed for `today`; the gender is left out (the product serves women creators).
  */
 export function readPersonaFile(source: string, fallbackName: string, today: string): PersonaForModels {
-  const persona = PersonaSchema.parse(parse(source));
+  return personaForModels(PersonaSchema.parse(parse(source)), fallbackName, today);
+}
+
+/**
+ * The same reading for a persona already parsed: her active version stored in `persona_versions`, read by the
+ * agent at each draft. `fallbackName` stands in for a first name still left as a placeholder.
+ */
+export function personaForModels(persona: Persona, fallbackName: string, today: string): PersonaForModels {
   const name = persona.details.first_name;
   const dateOfBirth = persona.details.date_of_birth;
   // Left out: the birth date (her age is given), the gender, and the time zone and reply delay that code applies.

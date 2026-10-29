@@ -110,6 +110,30 @@ async function activateRow(
 
 export function createDrizzlePersonaVersionStore(db: Database): PersonaVersionStore {
   return {
+    active(creatorId) {
+      return withTenant(db, creatorId, async (tx) => {
+        const [row] = await tx
+          .select({
+            id: schema.personaVersions.id,
+            version: schema.personaVersions.version,
+            content: schema.personaVersions.content,
+            creatorName: schema.creators.displayName,
+          })
+          .from(schema.personaVersions)
+          .innerJoin(schema.creators, eq(schema.creators.id, schema.personaVersions.creatorId))
+          .where(
+            and(eq(schema.personaVersions.creatorId, creatorId), eq(schema.personaVersions.isActive, true)),
+          );
+        if (row === undefined) return null;
+        return {
+          id: PersonaVersionIdSchema.parse(row.id),
+          version: row.version,
+          creatorName: row.creatorName,
+          persona: PersonaSchema.parse(row.content),
+        };
+      });
+    },
+
     overview(creatorId) {
       return withTenant(db, creatorId, async (tx) => {
         const rows = await summaries(tx);

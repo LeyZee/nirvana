@@ -89,7 +89,7 @@ Les clés des services IA (xAI, Google, Mistral, ElevenLabs) ne sont **pas** des
 
 ### 1.5 Persona réelle
 
-La persona réelle ne vit jamais dans le dépôt (ADR 0010). Coolify → service `api` → Storages → montage de fichier : chemin `/data/persona/persona.yaml`, contenu = le YAML. Même montage sur `worker` (c'est lui qui écrit les brouillons). Puis `PLAYGROUND_PERSONA_PATH=/data/persona/persona.yaml` et redéployer. Pour l'enregistrer comme version de la créatrice :
+La persona réelle ne vit jamais dans le dépôt (ADR 0010). Coolify → service `api` → Storages → montage de fichier : chemin `/data/persona/persona.yaml`, contenu = le YAML. Même montage sur `worker` (c'est lui qui écrit les brouillons). Puis `PLAYGROUND_PERSONA_PATH=/data/persona/persona.yaml` et redéployer. Les brouillons s'écrivent avec la version **active** de la créatrice en base, pas avec ce fichier (qui sert encore la garde à l'approbation, « À apprendre » et le playground) : sans version active, l'agent n'écrit rien et un chatteur répond. Pour l'enregistrer comme version de la créatrice et l'activer :
 
 ```sh
 node dist/scripts/persona-validate.js /data/persona/persona.yaml

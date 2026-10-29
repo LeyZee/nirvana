@@ -8,7 +8,9 @@
 
 ## Composeur
 
-`startDraftComposer` répond à `conversation.respond` (port `DraftComposer` de `conversations`, reconnu par sa forme : `agent` n'importe pas `conversations`). Même chemin que le playground (`composeTurn` : cerveau, voix, gardes), avec la persona du fichier et les réponses corrigées au playground comme exemples de voix. Il n'envoie jamais rien : un brouillon attend toujours un humain.
+`startDraftComposer` répond à `conversation.respond` (port `DraftComposer` de `conversations`, reconnu par sa forme : `agent` n'importe pas `conversations`). Même chemin que le playground (`composeTurn` : cerveau, voix, gardes), avec les réponses corrigées au playground comme exemples de voix. Il n'envoie jamais rien : un brouillon attend toujours un humain.
+
+Persona (recette 28/10, G4 ; ADR 0010, 0022) : chaque brouillon et chaque relance s'écrivent avec la version **active** de la persona de la créatrice de la conversation, lue en base à chaque message par le port `ActivePersonaSource` (`persona.versions.active`, câblé par la racine de composition) : fiche, nom, limites d'offre et de sexualisation, mots d'alerte, esprit des relances. Rien n'est gardé en mémoire. Elle est lue après ce que la sécurité lit sans elle (limites du fan, médias). Sans version active, rien n'est écrit et la main passe à un chatteur (`handoff`, détail `persona_inactive`) ; une version qui ne se lit plus fait de même (`persona_unreadable`) ; jamais une autre persona, jamais celle de démonstration. Une relance sans persona active n'est pas écrite (`no_reply`, `follow_up_persona_inactive`), sans alerte. Les délais de relance (`startFollowUpPlan`) lisent la même version : aucun sans elle. Restent sur le fichier `PLAYGROUND_PERSONA_PATH` : la garde à l'approbation (`startBubbleGuard`), « À apprendre » (`readKycSlots`) et le playground.
 
 Retenue (`held`), décidée dans le code :
 
