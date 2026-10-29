@@ -10,7 +10,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { JSX } from 'react';
+import { StrictMode, type JSX } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAppRouter, type AppRouter } from '../router';
@@ -193,9 +193,8 @@ describe('Réglages › Sauvegardes', () => {
         await waitFor(() => {
           expect(router.state.location.pathname).toBe('/');
         });
-        expect((await screen.findByText('Cette page n’est pas dans ton espace.')).getAttribute('role')).toBe(
-          'status',
-        );
+        const said = await screen.findByText('Cette page n’est pas dans ton espace.');
+        expect(said.closest('[role="status"]')).not.toBeNull();
         expect(screen.queryByRole('navigation', { name: 'Réglages' })).toBeNull();
         cleanup();
       }
@@ -494,5 +493,80 @@ describe('the account’s menu (NAV-02, NAV-03)', () => {
     expect(within(sheet).getByText('Nora')).toBeDefined();
     expect(within(sheet).getByText('Propriétaire')).toBeDefined();
     expect(within(sheet).getByRole('radiogroup', { name: 'Apparence' })).toBeDefined();
+    // What « Appareil » means is on screen: a phone has no hover to show a title.
+    expect(
+      within(sheet).getByText(
+        'Appareil suit le réglage clair ou sombre du téléphone ou de l’ordinateur. Le choix vaut pour ce navigateur.',
+      ),
+    ).toBeDefined();
+  });
+});
+
+describe('the shell while a screen loads (review of #313)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+  });
+
+  it('never reads « introuvable » on the way between two sub-tabs, keeps its stage, and leaves the focus alone', async () => {
+    const router = renderApp(owner, '/equipe/membres');
+    await waitFor(() => {
+      expect(document.title).toBe('Membres · Équipe · Nirvana');
+    });
+    const stage = document.getElementById('contenu');
+    const titles: string[] = [];
+    const observer = new MutationObserver(() => {
+      titles.push(document.title);
+    });
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    const lit: (string | null)[] = [];
+    const unsubscribe = router.subscribe('onBeforeRouteMount', () => {
+      lit.push(document.querySelector('.nv-rail [aria-current="page"]')?.getAttribute('title') ?? null);
+    });
+    await router.navigate({ to: '/equipe/rapports' });
+    await waitFor(() => {
+      expect(document.title).toBe('Rapports · Équipe · Nirvana');
+    });
+    observer.disconnect();
+    unsubscribe();
+    expect(titles.filter((title) => title.startsWith('Page introuvable'))).toEqual([]);
+    expect(lit.filter((title) => title !== 'Équipe')).toEqual([]);
+    expect(document.getElementById('contenu')).toBe(stage);
+    expect(document.activeElement?.tagName).not.toBe('H1');
+  });
+
+  it('says « pas dans ton espace » on a link followed inside the app, even to the screen already shown', async () => {
+    const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
+    const router = renderApp(operator, '/');
+    await screen.findByRole('navigation', { name: 'Navigation' });
+    const region = screen.getAllByRole('status').find((node) => node.classList.contains('nv-notice-region'));
+    // The region is there before it speaks: a screen reader announces what comes into it.
+    expect(region?.textContent).toBe('');
+    await router.navigate({ to: '/reglages/alertes' });
+    await waitFor(() => {
+      expect(region?.textContent).toBe('Cette page n’est pas dans ton espace.');
+    });
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('says it under StrictMode too, as in the app', async () => {
+    const operator: Me = { ...base, role: 'operator', team: null, teamScope: 'self' };
+    const router = createAppRouter(
+      { user: operator, onSignOut: () => undefined },
+      createMemoryHistory({ initialEntries: ['/reglages/alertes'] }),
+    );
+    render(
+      <StrictMode>
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    expect(await screen.findByText('Cette page n’est pas dans ton espace.')).toBeDefined();
   });
 });

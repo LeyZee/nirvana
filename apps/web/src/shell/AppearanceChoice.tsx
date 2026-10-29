@@ -41,7 +41,7 @@ export function AppearanceChoice(): JSX.Element {
         className="nv-seg nv-glass nv-glass--thin nv-appearance__seg"
         role="radiogroup"
         aria-labelledby={labelId}
-        title="Appareil suit le réglage clair ou sombre de l’ordinateur ou du téléphone. Le choix vaut pour ce navigateur."
+        aria-describedby={`${labelId}-hint`}
         style={{ '--nv-seg-count': APPEARANCES.length, '--nv-seg-index': APPEARANCES.indexOf(appearance) }}
         onKeyDown={onKeyDown}
       >
@@ -63,6 +63,11 @@ export function AppearanceChoice(): JSX.Element {
           </button>
         ))}
       </div>
+      {/* Said on screen, not in a title: the phone and the touch have no hover (NAV-03). */}
+      <p className="nv-appearance__hint" id={`${labelId}-hint`}>
+        Appareil suit le réglage clair ou sombre du téléphone ou de l’ordinateur. Le choix vaut pour ce
+        navigateur.
+      </p>
     </div>
   );
 }

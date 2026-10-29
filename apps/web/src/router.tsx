@@ -46,7 +46,6 @@ import { parseTelegramSearch, searchOfTab, tabOfSearch } from './settings/telegr
 import { AppShell } from './shell/AppShell';
 import { NotFoundPage } from './shell/NotFoundPage';
 import { canOpen, railOf, sectionOf } from './shell/nav';
-import { leaveNotice } from './shell/notice';
 
 /** What every screen can read: who is signed in, and how to sign out. Given by `App` once the session is known. */
 export interface RouterContext {
@@ -54,17 +53,19 @@ export interface RouterContext {
   readonly onSignOut: () => void;
 }
 
+/** What the shell says when the route guard sends someone to the first tab of their rail (NAV-21). */
+export const NOT_YOURS = 'Cette page n’est pas dans ton espace.';
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   // A section outside the account's rail sends it to its first tab (ADR 0024); the server's 403 stays the barrier.
-  beforeLoad: ({ context, location, preload }) => {
+  beforeLoad: ({ context, location }) => {
     const rail = railOf(context.user);
     const section = sectionOf(location.pathname);
     if (section !== null && !canOpen(rail, section)) {
-      // Said once on arrival (NAV-21): a link pasted from someone else's space is not a broken app. Never on a
-      // preload, which goes nowhere.
-      if (!preload) leaveNotice('Cette page n’est pas dans ton espace.');
+      // Said once on arrival (NAV-21): a link pasted from someone else's space is not a broken app. The word rides
+      // with the redirect, in the history's state: each arrival has its own, even on the address already shown.
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router redirects by throwing.
-      throw redirect({ to: rail.home, replace: true });
+      throw redirect({ to: rail.home, replace: true, state: { notice: NOT_YOURS } });
     }
   },
   component: function Root() {
@@ -470,5 +471,9 @@ export function createAppRouter(context: RouterContext, history?: RouterHistory)
 declare module '@tanstack/react-router' {
   interface Register {
     router: AppRouter;
+  }
+  interface HistoryState {
+    /** A word for the screen a redirect lands on (NAV-21). */
+    notice?: string;
   }
 }

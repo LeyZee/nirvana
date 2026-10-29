@@ -610,6 +610,13 @@
   height: 32px;
   padding: 0 var(--nv-space-2);
 }
+.nv-appearance__hint {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--nv-ink-faint);
+  font-size: 12px;
+  line-height: 16px;
+}
 
 /* « Aller au contenu »: the first stop of the keyboard, seen only when it has the focus (NAV-20). */
 .nv-skip {
@@ -638,8 +645,12 @@
 }
 
 /* A word the route guard left (NAV-21): above everything, a few seconds, then gone. */
+.nv-notice-region {
+  margin: 0;
+}
 .nv-notice.nv-glass {
   --_radius: 16px;
+  display: block;
   position: fixed;
   z-index: 50;
   top: calc(16px + env(safe-area-inset-top, 0px));

@@ -9,7 +9,6 @@ import { AppearanceChoice } from './AppearanceChoice';
 import { NavIcon } from './NavIcon';
 import { keepTabInside } from './focus';
 import { documentTitle, FAMILY_LABELS, railOf, sectionOf, type NavItem, type Rail } from './nav';
-import { takeNotice } from './notice';
 
 import { initialOf } from '@/lib/utils';
 import { HoldProvider } from '@/reports/Hold';
@@ -34,18 +33,23 @@ export interface Account {
 export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void }): JSX.Element {
   const rail = useMemo(() => railOf(user), [user]);
   const account = useMemo(() => ({ name: user.name, role: roleLabel(user) }), [user]);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  // A screen the router does not know, even inside a section (/equipe/nexiste-pas), lights no tab (NAV-01).
-  // The router then matches the section alone, its deepest route short of the address.
+  // The address on screen: while the next one loads, the screen, its tab and its title are still the last one's.
+  const pathname = useRouterState({ select: (state) => (state.resolvedLocation ?? state.location).pathname });
+  // A screen the router does not know, even inside a section (/equipe/nexiste-pas), lights no tab (NAV-01): the router
+  // then matches the section alone, its deepest route short of the address.
   const notFound = useRouterState({
-    select: (state) =>
-      state.matches.some((match) => match.status === 'notFound') ||
-      trimSlash(state.matches.at(-1)?.pathname ?? '') !== trimSlash(state.location.pathname),
+    select: (state) => {
+      if (state.matches.some((match) => match.status === 'notFound')) return true;
+      // While the next address loads, the matches answer either it or the last one resolved: neither is unknown.
+      const deepest = trimSlash(state.matches.at(-1)?.pathname ?? '');
+      return [state.location, state.resolvedLocation].every(
+        (location) => location === undefined || trimSlash(location.pathname) !== deepest,
+      );
+    },
   });
   const current = notFound ? null : sectionOf(pathname);
   const main = useRef<HTMLElement>(null);
   const shown = useRef(current);
-  const [notice, setNotice] = useState<string | null>(null);
 
   // The tab's title names the screen and its section, so that several open tabs read apart (NAV-12).
   useEffect(() => {
@@ -63,18 +67,21 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
     title.focus({ preventScroll: true });
   }, [current]);
 
-  // What the route guard left to say on the way here (NAV-21): shown once, a few seconds.
+  // What the route guard said on the way here (NAV-21), carried by the arrival's own history entry: shown a few
+  // seconds, once per arrival.
+  const notice = useRouterState({ select: (state) => state.resolvedLocation?.state.notice ?? null });
+  const arrival = useRouterState({ select: (state) => state.resolvedLocation?.state.__TSR_key ?? null });
+  const [closed, setClosed] = useState<string | null>(null);
   useEffect(() => {
-    const text = takeNotice();
-    setNotice(text);
-    if (text === null) return undefined;
+    if (notice === null) return undefined;
     const timer = setTimeout(() => {
-      setNotice(null);
+      setClosed(arrival);
     }, 6_000);
     return () => {
       clearTimeout(timer);
     };
-  }, [pathname]);
+  }, [notice, arrival]);
+  const said = notice !== null && closed !== arrival ? notice : null;
 
   // The hold outlives the screens: a report sent on leaving Aujourd'hui says its refusal in Suivi, and « Rouvrir »
   // takes the reader back to it (EQ-03).
@@ -96,11 +103,14 @@ export function AppShell({ user, onSignOut }: { user: Me; onSignOut: () => void 
           <main className="nv-stage" id="contenu" tabIndex={-1} ref={main} key={current ?? 'none'}>
             <Outlet />
           </main>
-          {notice === null ? null : (
-            <p className="nv-notice nv-glass nv-glass--thick" role="status">
-              {notice}
-            </p>
-          )}
+          {/* Always there, empty when silent: a screen reader announces what comes into a region it already knows. */}
+          <p className="nv-notice-region" role="status">
+            {said === null ? null : (
+              <span className="nv-notice nv-glass nv-glass--thick" key={arrival}>
+                {said}
+              </span>
+            )}
+          </p>
         </div>
       </ReopenProvider>
     </HoldProvider>
