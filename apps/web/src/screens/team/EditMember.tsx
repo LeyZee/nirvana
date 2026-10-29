@@ -355,20 +355,26 @@ export function RatePanel({
         <div className="nv-field tm-field">
           <span className="nv-field__label">À partir du</span>
           <div className="tm-choices" role="radiogroup" aria-label="À partir du" aria-busy={today === null}>
-            {starts.map((day) => (
-              <button
-                key={day}
-                type="button"
-                role="radio"
-                className="nv-chip"
-                aria-checked={from === day}
-                onClick={() => {
-                  setFrom(day);
-                }}
-              >
-                {longDay(day)}
-              </button>
-            ))}
+            {starts.map((day) => {
+              // A day that already has a rate is said and closed: the server would refuse a second one.
+              const set = rates.data?.find((one) => one.effectiveFrom === day);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  role="radio"
+                  className="nv-chip"
+                  aria-checked={from === day}
+                  disabled={set !== undefined}
+                  onClick={() => {
+                    setFrom(day);
+                  }}
+                >
+                  {longDay(day)}
+                  {set === undefined ? null : ` · ${formatRate(set.rateBps)} prévu`}
+                </button>
+              );
+            })}
           </div>
           <span className="tm-hint">
             Une quinzaine se paie à un seul taux : le nouveau part d’un 1er ou d’un 16, rien n’est recalculé
@@ -420,6 +426,14 @@ function ShiftsLeft({ member }: { member: TeamMember }): JSX.Element | null {
     };
   });
   const planning = usePlanning(range);
+  // Unread is not « none »: the owner is sent to the planning rather than told nothing is left.
+  if (planning.isError) {
+    return (
+      <p className="tm-warn nv-swap">
+        Ses shifts à venir n’ont pas pu être lus. <Link to="/equipe/planning">Vérifier au planning</Link>
+      </p>
+    );
+  }
   const count = (planning.data?.shifts ?? []).filter(
     (shift) => shift.memberId === member.id && shift.stoppedAt === null && shift.startsAt > range.from,
   ).length;

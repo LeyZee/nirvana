@@ -91,6 +91,7 @@ function serve(
     post?: (path: string, body: unknown) => Reply;
     rates?: readonly unknown[];
     shifts?: readonly unknown[];
+    planningDown?: boolean;
   } = {},
 ): Posted[] {
   const posted: Posted[] = [];
@@ -111,10 +112,19 @@ function serve(
       else if (path === '/v1/scheduling/settings') reply = { status: 200, body: SETTINGS };
       else if (path.endsWith('/commission')) reply = { status: 200, body: { rates: routes.rates ?? [] } };
       else if (path === '/v1/scheduling/planning')
-        reply = {
-          status: 200,
-          body: { settings: SETTINGS, accounts: [], members: [], shifts: routes.shifts ?? [], conflicts: [] },
-        };
+        reply =
+          routes.planningDown === true
+            ? { status: 503 }
+            : {
+                status: 200,
+                body: {
+                  settings: SETTINGS,
+                  accounts: [],
+                  members: [],
+                  shifts: routes.shifts ?? [],
+                  conflicts: [],
+                },
+              };
       else if (path.endsWith('/notes')) reply = { status: 200, body: { notes: [] } };
       else if (path === `/v1/team/members/${THEO.id}`) reply = { status: 200, body: THEO };
       else reply = { status: 404 };
@@ -532,6 +542,9 @@ describe('changing a member once added (EQ-10)', () => {
     fireEvent.click(within(panel).getByRole('radio', { name: /Autre/u }));
     fireEvent.change(within(panel).getByLabelText('Taux à la main'), { target: { value: '45' } });
     fireEvent.click(within(panel).getByRole('radio', { name: '1er décembre 2026' }));
+    // A day that already has a rate is closed and says it.
+    const set = within(panel).getByRole('radio', { name: /^16 novembre 2026 · 40\s%\sprévu$/u });
+    expect(set.hasAttribute('disabled')).toBe(true);
     expect(text(within(panel).getByRole('status'))).toBe(
       'À partir du 1er décembre 2026 : 45 %, part de l’équipe 5 % (aujourd’hui 30 %). Un taux enregistré ne se modifie plus.',
     );
@@ -566,6 +579,21 @@ describe('changing a member once added (EQ-10)', () => {
     expect(await within(confirm).findByText(/2 shifts à venir restent au planning/u)).toBeDefined();
     expect(confirm.textContent).toContain('Son compte membre sur Reveal est à retirer à la main.');
     expect(confirm.textContent).toContain('relevé final');
+  });
+
+  it('sends the owner to the planning when his shifts ahead cannot be read', async () => {
+    serve({ planningDown: true });
+    fireEvent.click(within(await sheet()).getByRole('button', { name: 'Changer le statut' }));
+    const panel = await screen.findByRole('dialog', { name: 'Statut de Théo' });
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Malade' }));
+    const unread = await within(panel).findByText(
+      /Ses shifts à venir n’ont pas pu être lus/u,
+      {},
+      { timeout: 4_000 },
+    );
+    expect(within(unread).getByRole('link', { name: 'Vérifier au planning' }).getAttribute('href')).toBe(
+      '/equipe/planning',
+    );
   });
 
   it('offers nothing to change to a manager', async () => {
