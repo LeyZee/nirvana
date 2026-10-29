@@ -360,15 +360,26 @@ export function createAuthRoutes(
     /**
      * A sign-in from a browser that already holds a session of the same account (the password confirmed again before
      * a sensitive action, ADR 0016) closes that session: its cookie is replaced, it would otherwise stay open, unused,
-     * until it expires. Another account's session is left to its own sign-out.
+     * until it expires. Another account's session is left to its own sign-out. A cleanup, never a condition of the
+     * sign-in: if reading or closing the old session fails, it is logged and the sign-in still answers 200 with its
+     * cookie, so that the new session is never left in the base without its cookie.
      */
     const closeReplacedSession = async (request: FastifyRequest) => {
-      const previous = await auth.api.getSession({ headers: authHeaders(request) });
+      const previous = await auth.api
+        .getSession({ headers: authHeaders(request) })
+        .catch((error: unknown) => {
+          request.log.warn({ err: error }, 'sign-in: the session being replaced could not be read');
+          return null;
+        });
       return async (json: unknown) => {
         const signedIn = SignedInSchema.safeParse(json);
         if (previous === null || !signedIn.success || signedIn.data.user.id !== previous.user.id) return;
-        const context = await auth.$context;
-        await context.internalAdapter.deleteSession(previous.session.token);
+        try {
+          const context = await auth.$context;
+          await context.internalAdapter.deleteSession(previous.session.token);
+        } catch (error) {
+          request.log.warn({ err: error }, 'sign-in: the replaced session could not be closed');
+        }
       };
     };
 
