@@ -258,6 +258,7 @@ describe('a period in the list', () => {
     // The draft under the minimum would carry its total, but only the validated one did.
     expect(summaryOf(period)).toMatchObject({
       statements: { draft: 1, validated: 1, paid: 1, carried: 1 },
+      netMinor: 25_500,
       payableMinor: 2_125,
       validatedPayableMinor: 2_125,
       carriedMinor: 700,
