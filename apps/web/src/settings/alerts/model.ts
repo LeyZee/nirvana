@@ -248,16 +248,29 @@ export const testCostLine = (draft: Pick<AlertDraft, 'phrase'>): string =>
     : 'La phrase se teste par l’IA : un appel au modèle, compté dans le budget du jour.';
 
 /**
- * What « Tester » sends: the alert as written now, on her example message, read by the contract's own schema; `null`
- * while there is nothing the route would take (no phrase and no word, no message, a phrase or message past its
- * limit, a word too long or with no letter nor digit, too many words).
+ * The creator whose active persona reads the phrase (recette M13): the one she picked, while it is still among the
+ * alert's creators, otherwise the first of them; `null` while the alert has none.
+ */
+export const testCreatorOf = (
+  draft: Pick<AlertDraft, 'creatorIds'>,
+  picked: CreatorId | null,
+): CreatorId | null =>
+  picked !== null && draft.creatorIds.includes(picked) ? picked : (draft.creatorIds[0] ?? null);
+
+/**
+ * What « Tester » sends: the alert as written now, on her example message, for the creator `testCreatorOf` names,
+ * read by the contract's own schema; `null` while there is nothing the route would take (no creator, no phrase and
+ * no word, no message, a phrase or message past its limit, a word too long or with no letter nor digit, too many
+ * words).
  */
 export function testBodyOf(
-  draft: Pick<AlertDraft, 'phrase' | 'keywords'>,
+  draft: Pick<AlertDraft, 'phrase' | 'keywords' | 'creatorIds'>,
   message: string,
+  picked: CreatorId | null = null,
 ): AlertTestBody | null {
   const phrase = draft.phrase.trim();
   const body = AlertTestBodySchema.safeParse({
+    creatorId: testCreatorOf(draft, picked),
     alert: { phrase: phrase === '' ? null : phrase, keywords: cleanKeywords(draft.keywords) },
     message,
   });
@@ -266,19 +279,29 @@ export function testBodyOf(
 
 /**
  * Why « Tester » waits once a message is written: a message past its limit (the field already stops there), nothing
- * to look for yet, or an alert the route would refuse (one word too many, said above under the keywords).
+ * to look for yet, no creator to read her persona, or an alert the route would refuse (one word too many, said above
+ * under the keywords).
  */
-export function testHint(draft: Pick<AlertDraft, 'phrase' | 'keywords'>, message: string): string | null {
+export function testHint(
+  draft: Pick<AlertDraft, 'phrase' | 'keywords' | 'creatorIds'>,
+  message: string,
+): string | null {
   if (message.trim() === '' || testBodyOf(draft, message) !== null) return null;
   if (message.trim().length > ALERT_TEST_MESSAGE_MAX)
     return `Ce message est trop long pour un essai : ${atMost(ALERT_TEST_MESSAGE_MAX)}`;
-  return draft.phrase.trim() === '' && cleanKeywords(draft.keywords).length === 0
-    ? 'Écris une phrase ou un mot-clé à tester.'
+  if (draft.phrase.trim() === '' && cleanKeywords(draft.keywords).length === 0)
+    return 'Écris une phrase ou un mot-clé à tester.';
+  return draft.creatorIds.length === 0
+    ? 'Choisis une créatrice au-dessus pour tester.'
     : 'Corrige l’alerte au-dessus pour la tester.';
 }
 
-/** Whether an answer was for this very test: the same phrase, the same words in the same order, the same message. */
+/**
+ * Whether an answer was for this very test: the same creator, the same phrase, the same words in the same order,
+ * the same message.
+ */
 export const sameTest = (a: AlertTestBody, b: AlertTestBody): boolean =>
+  a.creatorId === b.creatorId &&
   a.message === b.message &&
   a.alert.phrase === b.alert.phrase &&
   a.alert.keywords.length === b.alert.keywords.length &&

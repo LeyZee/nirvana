@@ -52,6 +52,7 @@ import {
   telegramHeadLine,
   telegramLine,
   testBodyOf,
+  testCreatorOf,
   testCostLine,
   testHint,
   testVerdict,
@@ -637,7 +638,7 @@ function AlertEditor({
             </span>
           </p>
         ) : null}
-        <AlertTry draft={draft} />
+        <AlertTry draft={draft} creators={creators} />
         {error === null ? null : (
           <p className="ps-error" role="alert">
             {error}
@@ -658,11 +659,19 @@ function AlertEditor({
 
 /**
  * « Tester » (P4-01): the alert as written now, tried on a message she types, before it is saved. Words are read by
- * the code, the phrase by one call to the brain (said before she asks). An answer for another phrase, other words or
+ * the code, the phrase by one call to the brain (said before she asks), with the active persona of one of the alert's
+ * creators, chosen here when it has several (recette M13). An answer for another creator, phrase, other words or
  * another message is not shown: it would say what the alert no longer is.
  */
-function AlertTry({ draft }: { draft: AlertDraft }): JSX.Element {
+function AlertTry({
+  draft,
+  creators,
+}: {
+  draft: AlertDraft;
+  creators: readonly CreatorSummary[];
+}): JSX.Element {
   const id = useId();
+  const [picked, setPicked] = useState<CreatorId | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<{
@@ -670,7 +679,9 @@ function AlertTry({ draft }: { draft: AlertDraft }): JSX.Element {
     readonly result: AlertTestResult;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const body = testBodyOf(draft, message);
+  const body = testBodyOf(draft, message, picked);
+  const reader = testCreatorOf(draft, picked);
+  const chosen = creators.filter((creator) => draft.creatorIds.includes(creator.id));
   const hint = testHint(draft, message);
   const current = answer !== null && body !== null && sameTest(answer.sent, body) ? answer : null;
   const verdict = current === null ? null : testVerdict(current.sent, current.result, draft.pausesAgent);
@@ -693,6 +704,26 @@ function AlertTry({ draft }: { draft: AlertDraft }): JSX.Element {
       <p className="al-try__title" id={`${id}-title`}>
         Tester sur un message
       </p>
+      {chosen.length > 1 ? (
+        <Field label="Avec la persona active de">
+          <div className="ps-chips" role="radiogroup" aria-label="Avec la persona active de">
+            {chosen.map((creator) => (
+              <button
+                key={creator.id}
+                type="button"
+                role="radio"
+                className="nv-chip"
+                aria-checked={creator.id === reader}
+                onClick={() => {
+                  setPicked(creator.id);
+                }}
+              >
+                {creator.displayName}
+              </button>
+            ))}
+          </div>
+        </Field>
+      ) : null}
       <Field label="Message d’un fan" id={`${id}-message`} hint={testCostLine(draft)}>
         <TextArea
           id={`${id}-message`}

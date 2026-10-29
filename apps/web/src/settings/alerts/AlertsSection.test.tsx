@@ -448,6 +448,7 @@ describe('the system’s alerts', () => {
     expect(status.textContent).toContain('Mot-clé trouvé : « custom ».');
     expect(status.textContent).toContain('L’IA ne reconnaît pas la situation de la phrase.');
     expect(calls.find((call) => call.url === '/v1/alerts/test')?.body).toEqual({
+      creatorId: NORA,
       alert: { phrase: 'Le fan demande une vidéo faite pour lui', keywords: ['vidéo perso', 'custom'] },
       message: 'une custom stp',
     });
@@ -458,6 +459,41 @@ describe('the system’s alerts', () => {
       target: { value: 'Le fan veut un appel' },
     });
     expect(status.textContent).toBe('');
+  });
+
+  it('reads the phrase with the persona of the creator chosen among the alert’s (recette M13)', async () => {
+    const calls = serve({
+      ...BASE,
+      'POST /v1/alerts/test': () => ({
+        status: 200,
+        body: { keywords: [], phraseMatched: true, reason: null },
+      }),
+    });
+    renderSection();
+    fireEvent.click(within(await line('Vidéo perso')).getByRole('button', { name: 'Modifier' }));
+    const form = screen.getByRole('form', { name: 'Modifier « Vidéo perso »' });
+    const readers = within(form).getByRole('radiogroup', { name: 'Avec la persona active de' });
+    expect(within(readers).getByRole('radio', { name: 'Nora Vidal' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    fireEvent.click(within(readers).getByRole('radio', { name: 'Léa' }));
+    fireEvent.change(within(form).getByLabelText('Message d’un fan'), { target: { value: 'bonjour' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Tester' }));
+    await waitFor(() => {
+      expect(calls.filter((call) => call.url === '/v1/alerts/test')).toHaveLength(1);
+    });
+    expect(calls.find((call) => call.url === '/v1/alerts/test')?.body).toMatchObject({ creatorId: LEA });
+
+    // Léa taken off the alert: one creator left, no choice to make, and the test reads Nora's persona.
+    fireEvent.click(within(within(form).getByRole('group', { name: 'Créatrices' })).getByText('Léa'));
+    expect(within(form).queryByRole('radiogroup', { name: 'Avec la persona active de' })).toBeNull();
+    fireEvent.click(within(form).getByRole('button', { name: 'Tester' }));
+    await waitFor(() => {
+      expect(calls.filter((call) => call.url === '/v1/alerts/test')).toHaveLength(2);
+    });
+    expect(calls.filter((call) => call.url === '/v1/alerts/test')[1]?.body).toMatchObject({
+      creatorId: NORA,
+    });
   });
 
   it('says in amber why the phrase could not be read, and when the server does not answer', async () => {

@@ -196,9 +196,11 @@ export const ALERT_TEST_MESSAGE_MAX = 4_000;
 
 /**
  * `POST /v1/alerts/test` (owner): an alert being written, tried on an example message, before it is saved. Nothing is
- * stored, nothing is sent; the words are read in code as on a real message, the phrase by one call to the brain.
+ * stored, nothing is sent; the words are read in code as on a real message, the phrase by one call to the brain, with
+ * the active persona version of `creatorId`, one of the alert's creators (recette M13).
  */
 export const AlertTestBodySchema = z.object({
+  creatorId: CreatorIdSchema,
   alert: customAlertFields.pick({ phrase: true, keywords: true }).refine(phraseOrKeyword, PHRASE_OR_KEYWORD),
   message: z.string().trim().min(1).max(ALERT_TEST_MESSAGE_MAX),
 });
