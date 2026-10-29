@@ -73,7 +73,13 @@ export const hoursQueryKey = (creatorId: string): readonly string[] => ['agent-h
 export const fetchAgentHours = (creatorId: string): Promise<AgentHoursView> => call(creatorId);
 
 export function useAgentHours(creatorId: string): UseQueryResult<AgentHoursView> {
-  return useQuery({ queryKey: hoursQueryKey(creatorId), queryFn: () => fetchAgentHours(creatorId) });
+  // One retry, not three: « Le serveur ne répond pas » comes in under two seconds instead of a long skeleton (CREA-30).
+  return useQuery({
+    queryKey: hoursQueryKey(creatorId),
+    queryFn: () => fetchAgentHours(creatorId),
+    retry: 1,
+    retryDelay: 400,
+  });
 }
 
 /** Stores her hours, `null` to follow the defaults; answers with what the agent now reads. */

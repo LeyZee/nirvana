@@ -43,13 +43,13 @@ async function loadExample(): Promise<Persona> {
   return parsePersonaYaml(file.default);
 }
 
-async function loadPersona(creatorId: string | null): Promise<PersonaReady> {
+async function loadPersona(creatorId: string | null, name: string | null): Promise<PersonaReady> {
   const empty = async (): Promise<PersonaReady> => {
     const example = await loadExample();
     return {
       kind: 'ready',
-      // For a known creator, the start of her first version: nothing of the example that nobody typed.
-      persona: creatorId === null ? example : firstDraft(example, creatorId),
+      // For a known creator, the start of her first version: nothing of the example that nobody typed, her name.
+      persona: creatorId === null ? example : firstDraft(example, creatorId, name),
       source: 'example',
       basedOn: null,
       versions: [],
@@ -72,13 +72,17 @@ async function loadPersona(creatorId: string | null): Promise<PersonaReady> {
 }
 
 /** The one hook the screen reads the persona through; `reload` fetches it again (after a save, for instance). */
-export function usePersona(creatorId: string | null): { load: PersonaLoad; reload: () => void } {
+export function usePersona(
+  creatorId: string | null,
+  /** Her name in Nirvana: the first name of a persona she has not written yet starts from it (CREA-13). */
+  name: string | null = null,
+): { load: PersonaLoad; reload: () => void } {
   const [load, setLoad] = useState<PersonaLoad>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
-    loadPersona(creatorId).then(
+    loadPersona(creatorId, name).then(
       (ready) => {
         if (live) setLoad(ready);
       },
@@ -89,7 +93,7 @@ export function usePersona(creatorId: string | null): { load: PersonaLoad; reloa
     return () => {
       live = false;
     };
-  }, [creatorId, attempt]);
+  }, [creatorId, name, attempt]);
 
   const reload = useCallback(() => {
     setAttempt((n) => n + 1);

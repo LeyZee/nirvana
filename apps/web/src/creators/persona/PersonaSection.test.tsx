@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import blocksYaml from '../../../../../personas/demo/v0.2.0.yaml?raw';
 
-import { PersonaSection } from './PersonaSection';
+import { PersonaSection, tabsOutOfView } from './PersonaSection';
 import { parsePersonaYaml } from './source';
 
 const CREATOR = '6f1c2a0e-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
@@ -71,7 +71,7 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     expect(gauge.getAttribute('aria-valuenow')).toBe('100');
     expect(screen.getByText('100 %')).toBeDefined();
 
-    fireEvent.click(tab('Réponses types'));
+    fireEvent.click(tab('Elle en détail'));
     // Her three replies: each « Retirer » removes the first one left.
     for (let left = 3; left > 0; left -= 1) {
       fireEvent.click(screen.getByRole('button', { name: 'Retirer la 1re réponse' }));
@@ -83,10 +83,10 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     const missing = screen.getByText('À compléter :').parentElement;
     if (missing === null) throw new Error('the missing blocks have a line');
     fireEvent.click(within(missing).getByRole('button', { name: 'Réponses types' }));
-    expect(tab('Réponses types').getAttribute('aria-selected')).toBe('true');
+    expect(tab('Elle en détail').getAttribute('aria-selected')).toBe('true');
     fireEvent.click(tab('Détails'));
     fireEvent.click(within(missing).getByRole('button', { name: 'Réponses types' }));
-    expect(tab('Réponses types').getAttribute('aria-selected')).toBe('true');
+    expect(tab('Elle en détail').getAttribute('aria-selected')).toBe('true');
   });
 
   it('puts a 422 on the reply the agent would not send, until that reply changes', async () => {
@@ -94,7 +94,7 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
     await screen.findByRole('progressbar', { name: 'Complétude de la persona' });
 
-    fireEvent.click(tab('Réponses types'));
+    fireEvent.click(tab('Elle en détail'));
     fireEvent.change(screen.getByLabelText('Situation de la 1re réponse'), {
       target: { value: 'Il lui demande ce qu’elle fait ce soir' },
     });
@@ -102,14 +102,14 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
 
     expect((await screen.findByRole('alert')).textContent).toBe('L’agent ne l’enverrait pas : un aveu d’IA.');
     expect(screen.getByText('1 champ à corriger')).toBeDefined();
-    expect(within(tab('Réponses types')).getByLabelText('1 à corriger')).toBeDefined();
+    expect(within(tab('Elle en détail')).getByLabelText('1 à corriger')).toBeDefined();
     expect(fake.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
 
     // Another edit, even on the same reply's situation, leaves the refusal where it is.
     fireEvent.change(screen.getByLabelText('Situation de la 2e réponse'), { target: { value: '' } });
-    fireEvent.click(tab('Mode de vie'));
+    fireEvent.click(tab('Elle en détail'));
     fireEvent.change(screen.getByLabelText('Ses projets'), { target: { value: 'Ouvrir un studio' } });
-    fireEvent.click(tab('Réponses types'));
+    fireEvent.click(tab('Elle en détail'));
     expect(screen.getByRole('alert').textContent).toBe('L’agent ne l’enverrait pas : un aveu d’IA.');
 
     const refused = screen.getAllByLabelText('Sa réponse')[1];
@@ -122,7 +122,7 @@ describe('Créatrices › Persona, the P5-01 blocks', () => {
     await serve(refusal([{ index: 99, code: 'ai_disclosure' }]));
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
     await screen.findByRole('progressbar', { name: 'Complétude de la persona' });
-    fireEvent.click(tab('Mode de vie'));
+    fireEvent.click(tab('Elle en détail'));
     fireEvent.change(screen.getByLabelText('Ses projets'), { target: { value: 'Ouvrir un studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer une version' }));
     expect(await screen.findByText(/L’enregistrement n’a pas abouti/u)).toBeDefined();
@@ -179,6 +179,30 @@ describe('Créatrices › Persona, recette 28/10', () => {
     expect(init?.body).toBe(JSON.stringify({ expectedActive: OLDER.id }));
   });
 
+  it('says nothing of the state while nothing waits, and says the changes once there are some (CREA-05)', async () => {
+    await serveVersions([SUMMARY], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    const name = await screen.findByLabelText('Prénom');
+    expect(screen.queryByText('Aucune modification')).toBeNull();
+    expect(screen.queryByText(/Tout est décrit/u)).toBeNull();
+    fireEvent.change(name, { target: { value: 'Elenaa' } });
+    expect(screen.getByText('1 modification, prête à enregistrer')).toBeDefined();
+  });
+
+  it('gathers the five P5-01 blocks, folded, in « Elle en détail » (CREA-02)', async () => {
+    await serveVersions([SUMMARY], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
+    await screen.findByLabelText('Prénom');
+    expect(screen.getAllByRole('tab')).toHaveLength(8);
+    fireEvent.click(tab('Elle en détail'));
+    const panel = screen.getByRole('tabpanel');
+    const folds = [...panel.querySelectorAll('details > summary .nv-disclosure__title')].map(
+      (t) => t.textContent,
+    );
+    expect(folds).toEqual(['Mode de vie', 'Goûts', 'Intime', 'Style d’écriture', 'Réponses types']);
+    expect(panel.querySelectorAll('details[open]')).toHaveLength(0);
+  });
+
   it('says the agent writes with her active version, and nothing without one (recette G4)', async () => {
     await serveVersions([SUMMARY], () => [500, {}]);
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
@@ -214,7 +238,7 @@ describe('Créatrices › Persona, recette 28/10', () => {
     });
     render(<PersonaSection creatorId={CREATOR} canSave timezone="Europe/Paris" />);
     await screen.findByLabelText('Prénom');
-    fireEvent.click(tab('Mode de vie'));
+    fireEvent.click(tab('Elle en détail'));
     fireEvent.change(screen.getByLabelText('Ses projets'), { target: { value: 'Ouvrir un studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer une version' }));
     await waitFor(() => {
@@ -223,7 +247,7 @@ describe('Créatrices › Persona, recette 28/10', () => {
     await waitFor(() => {
       expect(fake.mock.calls.filter(([url]) => url === `/v1/creators/${CREATOR}/persona`)).toHaveLength(2);
     });
-    expect((await screen.findByRole('tab', { name: /^Mode de vie/u })).getAttribute('aria-selected')).toBe(
+    expect((await screen.findByRole('tab', { name: /^Elle en détail/u })).getAttribute('aria-selected')).toBe(
       'true',
     );
   });
@@ -235,6 +259,53 @@ describe('Créatrices › Persona, recette 28/10', () => {
     expect(birth).toHaveProperty('value', '');
     expect(screen.queryByText(/ans aujourd’hui/u)).toBeNull();
     expect(screen.queryByText(/^Version /u)).toBeNull();
+    expect(screen.getByText('Jamais enregistrée')).toBeDefined();
+  });
+
+  it('greets a persona never written calmly, with her name, and flags fields only once she types (CREA-13)', async () => {
+    await serveVersions([], () => [500, {}]);
+    render(<PersonaSection creatorId={CREATOR} creatorName="Léa Martin" canSave timezone="Europe/Paris" />);
+    const name = await screen.findByLabelText('Prénom');
+    expect(name).toHaveProperty('value', 'Léa');
+    expect(screen.getByText(/^\d+ champs? à remplir avant d’enregistrer$/u)).toBeDefined();
+    expect(screen.queryByText(/à corriger/u)).toBeNull();
+    expect(screen.queryByText('À remplir')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Enregistrer une version' })).toHaveProperty('disabled', true);
+
+    fireEvent.change(name, { target: { value: 'Léana' } });
+    expect(screen.getByText(/^\d+ champs? à corriger$/u)).toBeDefined();
     expect(screen.getAllByText('À remplir').length).toBeGreaterThan(0);
+  });
+});
+
+describe('Créatrices › Persona, the tabs past an edge (CREA-01)', () => {
+  /** A bar 300 px wide scrolled by `scroll`, its tabs 100 px each, side by side. */
+  const barOf = (ids: readonly string[], scroll: number): HTMLElement => {
+    const bar = document.createElement('div');
+    Object.defineProperties(bar, {
+      scrollLeft: { value: scroll },
+      clientWidth: { value: 300 },
+      scrollWidth: { value: ids.length * 100 },
+    });
+    ids.forEach((id, index) => {
+      const item = document.createElement('button');
+      item.dataset['tab'] = id;
+      Object.defineProperties(item, { offsetLeft: { value: index * 100 }, offsetWidth: { value: 100 } });
+      bar.append(item);
+    });
+    return bar;
+  };
+
+  it('names the tabs hidden on each side, none when they all fit', () => {
+    const ids = ['details', 'additional_info', 'in_depth', 'behavior', 'strategies', 'follow_ups'];
+    expect(tabsOutOfView(barOf(ids.slice(0, 3), 0))).toEqual({ start: [], end: [] });
+    expect(tabsOutOfView(barOf(ids, 0))).toEqual({
+      start: [],
+      end: ['in_depth', 'behavior', 'strategies', 'follow_ups'],
+    });
+    expect(tabsOutOfView(barOf(ids, 200))).toEqual({
+      start: ['details', 'additional_info', 'in_depth'],
+      end: ['strategies', 'follow_ups'],
+    });
   });
 });

@@ -18,6 +18,7 @@ import {
   NOTHING_REFUSED,
   stillRefused,
   emojiKey,
+  desireHint,
   firstDraft,
   intimateOrNone,
   localDay,
@@ -26,6 +27,7 @@ import {
   repliesOrNone,
   tastesOrNone,
   withoutPlaceholders,
+  withIssues,
   followUpsSummary,
   issueCountByTab,
   issuesOf,
@@ -36,6 +38,8 @@ import {
   nudgesSummary,
   physiqueSummary,
   strategySummaries,
+  IN_DEPTH_BLOCKS,
+  tabOf,
   TABS,
   validate,
   localTime,
@@ -49,15 +53,11 @@ const example = (): Promise<Persona> => parsePersonaYaml(exampleYaml);
 const demo = (): Promise<Persona> => parsePersonaYaml(demoYaml);
 
 describe('Persona screen rules', () => {
-  it('follows the tabs of OnlyChat, with the P5-01 blocks after the details, the limits last, never a negotiation', () => {
+  it('follows the tabs of OnlyChat, the P5-01 blocks in one tab after « Infos en plus », the limits last, never a negotiation', () => {
     expect(TABS.map((tab) => tab.label)).toEqual([
       'Détails',
-      'Mode de vie',
-      'Goûts',
-      'Intime',
-      'Style d’écriture',
-      'Réponses types',
       'Infos en plus',
+      'Elle en détail',
       'Comportement',
       'Stratégies',
       'Relances',
@@ -65,6 +65,8 @@ describe('Persona screen rules', () => {
       'Limites',
     ]);
     expect(JSON.stringify(TABS).toLowerCase()).not.toContain('négociation');
+    expect(IN_DEPTH_BLOCKS.map(tabOf)).toEqual(Array(5).fill('in_depth'));
+    expect(tabOf('limits')).toBe('limits');
   });
 
   it('loads the example of the repository, which passes the schema once she has a first name', async () => {
@@ -93,7 +95,7 @@ describe('Persona screen rules', () => {
       { field: 'details.first_name', message: 'À remplir' },
     ]);
     expect(issuesOf(issues, 'details.hobbies')[0]?.message).toBe('Entrée en double');
-    expect(issuesOf(issues, 'strategies.kyc.max_messages')[0]?.message).toBe('500 au plus');
+    expect(issuesOf(issues, 'strategies.kyc.max_messages')[0]?.message).toBe('500\u00a0messages au plus');
     expect(issuesOf(issues, 'strategies.sexualization.initiate_after_hours')[0]?.message).toBe(
       'Nombre entier attendu',
     );
@@ -179,6 +181,20 @@ describe('Persona screen rules', () => {
     expect(validate({ ...draft, details: { ...draft.details, first_name: 'Léa' } })).toEqual([
       { field: 'details.date_of_birth', message: 'À remplir' },
     ]);
+    // Her name in Nirvana is known: her first name starts from its first word (CREA-13).
+    const named = firstDraft(
+      await example(),
+      '0192f3a0-0000-7000-8000-0000000000c1',
+      ' Marie-Claire Dubois ',
+    );
+    expect(named.details.first_name).toBe('Marie-Claire');
+    expect(firstDraft(await example(), 'x', '  ').details.first_name).toBe(draft.details.first_name);
+  });
+
+  it('says a desire threshold in plain words, never « bande » (CREA-10)', () => {
+    expect(desireHint(45, 30)).toBe('À partir de 45 : dès qu’il devient joueur.');
+    expect(desireHint(undefined, 75)).toBe('Par défaut : 75. À partir de 75 : dès qu’il devient chaud.');
+    expect(desireHint(10, 45)).toBe('À partir de 10 : même s’il reste neutre.');
   });
 
   it('dates a version on the local calendar, not on UTC (recette 28/10)', () => {
@@ -294,7 +310,7 @@ describe('Persona blocks (P5-01)', () => {
         message: 'L’agent ne l’enverrait pas : des coordonnées, une promesse de rencontre.',
       },
     ]);
-    expect(issueCountByTab(refusedReplyIssues([{ index: 1, code: 'contempt' }])).sample_replies).toBe(1);
+    expect(issueCountByTab(refusedReplyIssues([{ index: 1, code: 'contempt' }])).in_depth).toBe(1);
   });
 
   it('leaves the canvas lines absent only when she collects them all in the canvas order', () => {
@@ -336,7 +352,7 @@ describe('Persona blocks (P5-01)', () => {
       strategies: { ...persona.strategies, kyc: { ...persona.strategies.kyc, collect: [] } },
     };
     expect(issuesOf(validate(draft), 'strategies.kyc.collect')).toEqual([
-      { field: 'strategies.kyc.collect', message: 'Garde au moins une ligne du canevas.' },
+      { field: 'strategies.kyc.collect', message: 'Garde au moins une info à collecter.' },
     ]);
   });
 
@@ -368,5 +384,24 @@ describe('Persona blocks (P5-01)', () => {
     expect(stillRefused(refused, { ...persona, sample_replies: rewritten })).toEqual([]);
     expect(stillRefused(refused, { ...persona, sample_replies: replies.slice(1) })).toEqual([]);
     expect(stillRefused(NOTHING_REFUSED, persona)).toEqual([]);
+  });
+});
+
+describe('withIssues (CREA-14)', () => {
+  const full = { percent: 100, missing: [] };
+
+  it('never says complete while a field of a block waits to be fixed', () => {
+    const issue = { field: 'details.first_name', message: 'À remplir' };
+    expect(withIssues(full, [issue])).toEqual({
+      percent: 99,
+      missing: [{ block: 'details', label: 'Détails' }],
+    });
+  });
+
+  it('keeps the gauge as it is when nothing waits, or when the field is outside the gauge', () => {
+    expect(withIssues(full, [])).toBe(full);
+    expect(withIssues(full, [{ field: 'strategies.reply_delay.max_seconds', message: '60 s au plus' }])).toBe(
+      full,
+    );
   });
 });
