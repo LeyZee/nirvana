@@ -219,4 +219,125 @@ describe('Réglages › Sauvegardes', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
+
+  it('opens the steps of a test while none is fresh, and never says Remote Control (REG-23)', async () => {
+    serve({});
+    renderPage();
+    await screen.findByRole('button', { name: 'Noter un essai' });
+    const steps = screen.getByText('Comment se joue un essai').closest('details');
+    expect(steps?.open).toBe(true);
+    expect(screen.getByText(/Une session Claude sur ton PC le joue/u)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Remote Control/u);
+  });
+
+  it('keeps the steps folded once the test is fresh', async () => {
+    serve({
+      status: () => ({
+        status: 200,
+        body: {
+          ...STATUS,
+          lastRestoreTest: {
+            testedAt: '2026-10-20T15:00:00Z',
+            backupFinishedAt: '2026-10-20T01:05:00Z',
+            durationSeconds: 252,
+            rowCountMismatches: 0,
+          },
+          restoreTestFresh: true,
+        },
+      }),
+    });
+    renderPage();
+    await screen.findByRole('button', { name: 'Noter un essai' });
+    expect(screen.getByText('Comment se joue un essai').closest('details')?.open).toBe(false);
+  });
+
+  it('asks for an export now, the password again, then says the request waits (REG-24)', async () => {
+    let attempts = 0;
+    let asked: string | null = null;
+    const posted = serve({
+      status: () => ({ status: 200, body: asked === null ? STATUS : { ...STATUS, runRequestedAt: asked } }),
+      post: (body) => {
+        if (attempts++ === 0) return { status: 403, body: apiError('reauthentication_forbidden') };
+        asked = '2026-10-27T09:58:00.000Z';
+        const { id } = z.object({ id: z.string() }).parse(body);
+        return { status: 202, body: { id, requestedAt: asked, pickedAt: null } };
+      },
+    });
+    confirmPassword.mockResolvedValue('ok');
+    renderPage();
+    const button = await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' });
+    expect(button.className).toContain('nv-btn--soft');
+    fireEvent.click(button);
+    fireEvent.change(await screen.findByLabelText('Mot de passe'), { target: { value: 'secret' } });
+    // « Noter un essai » stays the page's one neon while the password is asked here.
+    expect(screen.getByRole('button', { name: 'Confirmer' }).className).toContain('nv-btn--soft');
+    expect(document.querySelectorAll('.nv-btn--neon')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+
+    const line = await screen.findByRole('status');
+    expect(line.textContent).toMatch(/^Relance demandée à /u);
+    // The button is gone: the keyboard lands on the line that replaced it, not at the top of the page.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(line);
+    });
+    expect(screen.queryByRole('button', { name: 'Relancer la sauvegarde maintenant' })).toBeNull();
+    expect(posted).toHaveLength(2);
+    const [first, second] = posted;
+    expect(second).toEqual(first);
+  });
+
+  it('says an export already running, and offers nothing while it runs', async () => {
+    serve({ post: () => ({ status: 409, body: apiError('backup_run_in_progress_conflict') }) });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/déjà en cours/u);
+  });
+
+  it('keeps the keyboard on the strip when the export it found running hides the button', async () => {
+    let running = false;
+    serve({
+      status: () => ({
+        status: 200,
+        body: running
+          ? { ...STATUS, lastRun: { ...STATUS.lastRun, status: 'running', finishedAt: null } }
+          : STATUS,
+      }),
+      post: () => {
+        running = true;
+        return { status: 409, body: apiError('backup_run_in_progress_conflict') };
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' }));
+    expect(await screen.findByText(/^Une sauvegarde est en cours depuis /u)).toBeTruthy();
+    await waitFor(() => {
+      expect(document.activeElement?.id).toBe('bk-copy-title');
+    });
+    expect(screen.queryByRole('button', { name: 'Relancer la sauvegarde maintenant' })).toBeNull();
+  });
+
+  it('reads the status again while the request waits, until the export has run', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let reads = 0;
+      serve({
+        status: () => {
+          reads += 1;
+          return {
+            status: 200,
+            body: reads === 1 ? { ...STATUS, runRequestedAt: '2026-10-27T09:58:00.000Z' } : STATUS,
+          };
+        },
+      });
+      renderPage();
+      expect((await screen.findByRole('status')).textContent).toMatch(/^Relance demandée à /u);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' })).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(reads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

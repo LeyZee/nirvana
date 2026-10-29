@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { REAUTHENTICATION_ERROR_CODE } from './auth';
-import { BACKUP_ERROR_CODES, RecordRestoreTestBodySchema } from './backups';
+import { BACKUP_ERROR_CODES, BACKUP_RUN_ERROR_CODES, RecordRestoreTestBodySchema } from './backups';
 
 const body = {
   id: '0195f0c0-0000-7000-8000-0000000000aa',
@@ -35,5 +35,6 @@ describe('restore test entry (ADR 0028 § 6)', () => {
 
   it('lists the sign-in error with its own, for the entry screen', () => {
     expect(BACKUP_ERROR_CODES).toContain(REAUTHENTICATION_ERROR_CODE);
+    expect(BACKUP_RUN_ERROR_CODES).toContain(REAUTHENTICATION_ERROR_CODE);
   });
 });

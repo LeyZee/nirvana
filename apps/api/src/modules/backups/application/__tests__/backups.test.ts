@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BackupOverduePayload, BackupRunsReader, RestoreTestsStore } from '../../domain/ports';
+import type {
+  BackupOverduePayload,
+  BackupRequestsStore,
+  BackupRunsReader,
+  RestoreTestsStore,
+} from '../../domain/ports';
 import type { StoredRestoreTest } from '../../domain/restore-tests';
+import { BackupRunInProgress, decideRequest, type StoredBackupRequest } from '../../domain/run-requests';
 import type { BackupRun } from '../../domain/status';
-import { checkBackups, readBackupStatus, recordRestoreTest, restoreTestFresh } from '../backups';
+import {
+  checkBackups,
+  readBackupStatus,
+  recordRestoreTest,
+  requestBackupRun,
+  restoreTestFresh,
+} from '../backups';
 
 const now = new Date('2026-10-27T12:00:00Z');
 const clock = { now: () => now };
@@ -54,6 +66,28 @@ function memoryRestoreTests(
   };
 }
 
+/** `backup_requests` in memory: the decision of the domain, as the Postgres store applies it under its lock. */
+function memoryRequests(latestRun: BackupRun | null = null): BackupRequestsStore & {
+  readonly rows: StoredBackupRequest[];
+} {
+  const rows: StoredBackupRequest[] = [];
+  return {
+    rows,
+    request(entry, _actor, decide) {
+      const decision = decide({
+        sameId: rows.find((row) => row.id === entry.id) ?? null,
+        pending: rows.find((row) => row.pickedAt === null) ?? null,
+        latestRun,
+      });
+      if (decision.kind === 'existing') return Promise.resolve({ created: false, request: decision.request });
+      const request = { ...entry, requestedAt: now, pickedAt: null };
+      rows.push(request);
+      return Promise.resolve({ created: true, request });
+    },
+    pending: () => Promise.resolve(rows.find((row) => row.pickedAt === null) ?? null),
+  };
+}
+
 function alerts() {
   const published: BackupOverduePayload[] = [];
   const days = new Set<string>();
@@ -81,6 +115,7 @@ describe('backups', () => {
       await readBackupStatus({
         runs: reader(new Date('2026-10-26T12:10:00Z'), failed),
         restoreTests: memoryRestoreTests(),
+        requests: memoryRequests(),
         clock,
       }),
     ).toEqual({
@@ -98,7 +133,12 @@ describe('backups', () => {
       restoreTestFresh: false,
     });
     expect(
-      await readBackupStatus({ runs: reader(null), restoreTests: memoryRestoreTests(), clock }),
+      await readBackupStatus({
+        runs: reader(null),
+        restoreTests: memoryRestoreTests(),
+        requests: memoryRequests(),
+        clock,
+      }),
     ).toMatchObject({
       state: 'never',
       lastRun: null,
@@ -199,5 +239,37 @@ describe('restore tests (ADR 0028 § 6)', () => {
       owner,
     );
     expect(await restoreTestFresh({ restoreTests: store }, now)).toBe(false);
+  });
+
+  it('records a request to export now once, says it waits, and refuses one while an export runs (REG-24)', async () => {
+    const requests = memoryRequests();
+    const actor = { userId: 'owner', ip: null };
+    const id = '0192f3a0-0000-7000-8000-0000000000b1';
+    const first = await requestBackupRun({ requests, clock }, id, actor);
+    expect(first).toEqual({
+      created: true,
+      request: { id, requestedAt: now.toISOString(), pickedAt: null },
+    });
+    // Sent again, or a second click with another id: the request already waiting, no second row.
+    expect(await requestBackupRun({ requests, clock }, id, actor)).toEqual({ ...first, created: false });
+    expect(
+      await requestBackupRun({ requests, clock }, '0192f3a0-0000-7000-8000-0000000000b2', actor),
+    ).toEqual({ ...first, created: false });
+    expect(requests.rows).toHaveLength(1);
+    expect(
+      await readBackupStatus({ runs: reader(null), restoreTests: memoryRestoreTests(), requests, clock }),
+    ).toMatchObject({ runRequestedAt: now.toISOString() });
+
+    const running: BackupRun = {
+      status: 'running',
+      startedAt: new Date(now.getTime() - 60_000),
+      finishedAt: null,
+      sizeBytes: null,
+      error: null,
+    };
+    await expect(requestBackupRun({ requests: memoryRequests(running), clock }, id, actor)).rejects.toThrow(
+      BackupRunInProgress,
+    );
+    expect(decideRequest({ sameId: null, pending: null, latestRun: null }, now)).toEqual({ kind: 'insert' });
   });
 });
