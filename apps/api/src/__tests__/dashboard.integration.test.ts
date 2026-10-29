@@ -11,6 +11,7 @@ import {
   MessageIdSchema,
   newId,
   PlatformAccountIdSchema,
+  TeamMemberIdSchema,
   type AgentHours,
   type ConversationId,
   type CreatorId,
@@ -697,6 +698,37 @@ describe('GET /v1/dashboard', () => {
     expect(hers.items.map((t) => [t.creatorName, t.conversationId])).toEqual([['Inès', arthur]]);
     expect(hers.creators).toEqual([{ creatorId: ines, name: 'Inès', todos: 1, grave: 0 }]);
     expect(await todosOf(operatorCookie)).toEqual({ items: [], creators: [] });
+    // A team chatter of Inès reads only the conversations routed to him: her queue is not his, even Arthur's.
+    const routedChatter = {
+      email: 'ines-routed@example.test',
+      name: 'Routed',
+      password: 'correct horse battery',
+    };
+    const routed = (await createOwner(app.auth, app.db.db, routedChatter)).userId;
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'operator', creatorIds: [ines] })
+      .where(eq(schema.user.id, routed));
+    // An invented member (ADR 0010).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: routed,
+      teamRole: 'chatter',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Chatteur',
+      country: 'BJ',
+      timeZone: 'Africa/Porto-Novo',
+      joinedOn: '2026-10-01',
+    });
+    await test.admin.db
+      .update(schema.conversations)
+      .set({ routedToUserId: routed })
+      .where(eq(schema.conversations.id, arthur));
+    expect(await todosOf(await signIn(server, routedChatter.email, routedChatter.password))).toEqual({
+      items: [],
+      creators: [],
+    });
     expect((await call('/v1/dashboard/todos', creatorCookie)).statusCode).toBe(403);
     expect((await call('/v1/dashboard/todos')).statusCode).toBe(401);
   });

@@ -85,9 +85,10 @@ export function TrackingPage({
       refetchInterval: REFRESH_MS,
     })),
   });
-  // « À traiter » of every creator followed, not only the one the Dashboard shows (SUIVI-09).
+  // « À traiter » of every creator followed, not only the one the Dashboard shows (SUIVI-09). Under ['dashboard'], so a
+  // decision in the reader, which reads the Dashboard again, reads this queue again too.
   const queue = useQuery({
-    queryKey: ['todos-across'],
+    queryKey: ['dashboard', 'todos-across'],
     queryFn: fetchTodosAcross,
     refetchInterval: REFRESH_MS,
   });
@@ -115,6 +116,7 @@ export function TrackingPage({
   const retry = (): void => {
     if (creatorsQuery.isError) void creatorsQuery.refetch();
     for (const q of failed) void q.refetch();
+    if (queue.isError) void queue.refetch();
   };
   // Each line of the queue carries its creator: its conversation opens with her id.
   const todos = queue.data?.items ?? [];
@@ -182,6 +184,17 @@ export function TrackingPage({
       ) : (
         <div className="tr-layout">
           <div className="tr-side">
+            {/* An unread queue is never silent: an urgency may be missing from it. */}
+            {queue.isError ? (
+              <Panel className="tr-panel" eyebrow="À traiter">
+                <p className="tr-queue-error tr-warn">
+                  « À traiter » n’a pas pu être lu : une urgence peut manquer ici.
+                </p>
+                <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={retry}>
+                  Réessayer
+                </button>
+              </Panel>
+            ) : null}
             {todos.length === 0 ? null : (
               <Panel className="tr-panel" eyebrow="À traiter">
                 <ul className="nv-list tr-list" aria-label="À traiter">

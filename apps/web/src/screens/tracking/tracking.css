@@ -248,6 +248,9 @@
   margin: 0;
 }
 /* Amber: the server does not answer, a decision did not go through. Red stays for urgencies. */
+.tr-queue-error {
+  margin: 0 0 8px;
+}
 .tr-warn {
   margin: 0;
   color: var(--nv-warning);

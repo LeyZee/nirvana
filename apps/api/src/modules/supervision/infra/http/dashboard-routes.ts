@@ -137,24 +137,21 @@ export function createDashboardRoutes(deps: DashboardRouteDeps): FastifyPluginAs
             ? await deps.allCreatorIds()
             : user.creatorIds.map((id) => CreatorIdSchema.parse(id));
         const now = (deps.now ?? (() => new Date()))();
-        // One tenant transaction per creator (RLS): nothing of a creator outside the list is ever read.
-        const read = await Promise.all(
-          followed.map((creatorId) =>
-            deps.reader.read(
-              creatorId,
-              (timezone) => {
-                const dayStart = startOfLocalDay(now, timezone);
-                return { now, dayStart, periodStart: dayStart, voice: deps.voice };
-              },
-              // The queue counts no sale: no rate to read.
-              null,
-            ),
-          ),
-        );
-        const queues = followed.flatMap((creatorId, index): CreatorQueue[] => {
-          const found = read[index];
-          return found === undefined ? [] : [creatorQueue(creatorId, found.facts, now)];
-        });
+        // One tenant transaction per creator (RLS): nothing of a creator outside the list is ever read. One after the
+        // other, so a refresh holds one connection of the pool, not one per creator.
+        const queues: CreatorQueue[] = [];
+        for (const creatorId of followed) {
+          const found = await deps.reader.read(
+            creatorId,
+            (timezone) => {
+              const dayStart = startOfLocalDay(now, timezone);
+              return { now, dayStart, periodStart: dayStart, voice: deps.voice };
+            },
+            // The queue counts no sale: no rate to read.
+            null,
+          );
+          if (found !== undefined) queues.push(creatorQueue(creatorId, found.facts, now));
+        }
         return queueAcross(queues);
       },
     );

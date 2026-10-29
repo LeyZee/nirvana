@@ -115,7 +115,7 @@ function serve(routes: {
   /** The thread's messages, newest first; one message of his when not given. */
   messages?: unknown[];
   /** « À traiter » across creators; the Dashboard's todos, named after its creator, when not given. */
-  todos?: Reply;
+  todos?: Reply | (() => Reply);
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -153,7 +153,7 @@ function serve(routes: {
         const dashboard = DashboardSchema.parse(
           (routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) }).body,
         );
-        reply = routes.todos ?? {
+        reply = (typeof routes.todos === 'function' ? routes.todos() : routes.todos) ?? {
           status: 200,
           body: {
             items: dashboard.todos.map((todo) => ({
@@ -269,6 +269,29 @@ describe('TrackingPage', () => {
     expect(await screen.findByText('Rien pour toi pour l’instant')).toBeDefined();
     expect(screen.queryByText('Aucune créatrice pour l’instant')).toBeNull();
     expect(document.querySelector('a[href="/creatrices"]')).toBeNull();
+  });
+
+  it('says « À traiter » could not be read, in amber, and Réessayer reads it again', async () => {
+    const [kevin] = apiDashboard().todos;
+    if (kevin === undefined) throw new Error('no todo');
+    let calls = 0;
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      todos: () =>
+        ++calls === 1
+          ? { status: 500 }
+          : {
+              status: 200,
+              body: { items: [{ ...kevin, creatorId: LEA.id, creatorName: 'Léa' }], creators: [] },
+            },
+    });
+    renderPage();
+    const warning = await screen.findByText(/« À traiter » n’a pas pu être lu/u);
+    expect(warning.classList.contains('tr-warn')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByRole('list', { name: 'À traiter' })).toBeDefined();
+    expect(screen.queryByText(/« À traiter » n’a pas pu être lu/u)).toBeNull();
   });
 
   it('says the server does not answer, and Réessayer reads again', async () => {
@@ -542,11 +565,18 @@ describe('the reader of Suivi', () => {
       },
     });
     renderPage(OPEN);
+    const queueReads = (): number =>
+      vi.mocked(fetch).mock.calls.filter(([input]) => input === '/v1/dashboard/todos').length;
     fireEvent.click(await screen.findByRole('button', { name: 'Valider' }));
+    const before = queueReads();
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Brouillon à valider' })).toBeNull();
     });
     expect(posted).toEqual([{ action: 'approve', body: {} }]);
+    // « À traiter » is read again at once: the line just decided leaves it.
+    await waitFor(() => {
+      expect(queueReads()).toBeGreaterThan(before);
+    });
   });
 
   it('sends the retouched bubbles, one per line', async () => {
