@@ -54,6 +54,8 @@ const AN_ID: unknown = expect.any(String);
 let periods: Record<string, PayrollPeriod | 'down'>;
 let reports: unknown[];
 let rules: unknown;
+/** The latest dollar rate the daily job read. */
+let usd: unknown;
 /** What a `POST` answers, from its path. */
 let answer: (path: string) => { status: number; body: unknown };
 const writes: { path: string; body: unknown }[] = [];
@@ -98,7 +100,7 @@ function serve(): void {
         case '/v1/team/pay-rules':
           return json(rules);
         case '/v1/payroll/exchange-rates':
-          return json({ usd: null });
+          return json({ usd });
         case '/v1/scheduling/shift-reports':
           return json({ reports, shifts: [], accounts: [], members: [] });
         default:
@@ -209,6 +211,7 @@ beforeEach(() => {
     [NOV1]: periodOf(NOV1, [statementOf(THEO, NOV1)]),
   };
   answer = () => ({ status: 200, body: null });
+  usd = null;
   serve();
 });
 
@@ -221,17 +224,81 @@ afterEach(() => {
 describe('Paie › Quinzaine', () => {
   it('opens the period to validate, what to pay first, every draft checked, a carry-over its one amber mark', async () => {
     renderPage(OWNER);
-    expect(text(await screen.findByText('À verser pour la quinzaine')).length).toBeGreaterThan(0);
-    expect(screen.getByText('16 – 31 octobre 2026')).toBeTruthy();
-    expect(text(screen.getByText('À verser pour la quinzaine').nextElementSibling)).toBe('342,50 €');
+    // Nothing validated yet: the amount says it is owed only once validated, never as owed already.
+    expect(text(await screen.findByText('À verser une fois validé')).length).toBeGreaterThan(0);
+    // The period is the page's title, its arrows beside it.
+    expect(text(screen.getByRole('heading', { level: 1 }))).toBe('16 – 31 octobre 2026');
+    expect(text(screen.getByText('À verser une fois validé').nextElementSibling)).toBe('342,50 €');
     expect(screen.getByRole('button', { name: 'Valider (4)' })).toBeTruthy();
     expect(text(row('Lou'))).toContain(
-      'Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.',
+      'Sous le minimum de 15,00 € : 12,00 € iront sur la quinzaine suivante une fois le relevé validé.',
     );
-    expect(within(row('Lou')).getByText('Reporté').className).toContain('rp-chip--warn');
-    // Théo made a fifth more than in the first half.
-    expect(text(within(row('Théo')).getByTitle(/Net comparé/u))).toBe('+20 %');
+    // Not « Reporté » before it is validated: under the minimum, amber, its total and where it would go.
+    expect(within(row('Lou')).getByText('Sous le minimum').className).toContain('rp-chip--warn');
+    expect(within(row('Lou')).queryByText('Reporté')).toBeNull();
+    expect(text(row('Lou'))).toContain('total 12,00 € → irait en report');
+    // Every row is to validate, as the header says: no row repeats it, and each amount says what it is.
+    expect(within(row('Théo')).queryByText('À valider')).toBeNull();
+    expect(within(row('Théo')).getByText('à verser')).toBeTruthy();
+    // No change against the period before on a row: the statement says it, with what it compares to.
+    expect(row('Théo').querySelector('.nv-delta')).toBeNull();
     expect(screen.getByText(/Le premier relevé validé clôt la quinzaine pour toute l’équipe/u)).toBeTruthy();
+  });
+
+  it('says of a closed period what is left to send, apart from what went and what waits, each amount named', async () => {
+    const validatedAt = '2026-11-02T08:41:00.000Z';
+    periods[OCT2] = periodOf(
+      OCT2,
+      [
+        statementOf(THEO, OCT2, {
+          status: 'paid',
+          payableMinor: 10_000,
+          totalMinor: 10_000,
+          validatedAt,
+          payment: { paidOn: '2026-11-03', method: 'worldremit', reference: null, sentMinor: 10_000 },
+        }),
+        statementOf(BASILE, OCT2, {
+          status: 'validated',
+          payableMinor: 20_000,
+          totalMinor: 20_000,
+          validatedAt,
+        }),
+        statementOf(LOU, OCT2, { payableMinor: 5_000, totalMinor: 5_000 }),
+      ],
+      { closing: { period: OCT2, exchangeRates: [], closedBy: OWNER_USER, closedAt: validatedAt } },
+    );
+    renderPage(OWNER);
+    // Only the validated statements not paid yet: never the drafts, never what already went.
+    expect(text((await screen.findByText('Reste à envoyer')).nextElementSibling)).toBe('200,00 €');
+    expect(text(screen.getByText(/^Déjà versé/u))).toBe(
+      'Déjà versé 100,00 € · 50,00 € pas encore validé (1 relevé)',
+    );
+    expect(text(row('Théo'))).toContain('versé le 3 nov.');
+    expect(within(row('Théo')).getByText('Payé').className).toContain('rp-chip--ok');
+    // Validated with money still to send waits: not the tone of what is paid.
+    expect(within(row('Basile')).getByText('Validé').className).toContain('rp-chip--wait');
+    expect(text(row('Basile'))).toContain('à verser');
+    expect(text(row('Lou'))).toContain('à verser, une fois validé');
+    expect(within(row('Lou')).getByText('À valider')).toBeTruthy();
+  });
+
+  it('says how old the last dollar rate is, that the amount is provisional, and to warn once it stops coming', async () => {
+    const dollars = euroLine({ currency: 'USD', rateMicros: 861_200 });
+    periods[OCT2] = periodOf(OCT2, [statementOf(THEO, OCT2, { lines: [dollars] })]);
+    usd = {
+      currency: 'USD',
+      day: '2026-10-22',
+      rateMicros: 861_200,
+      source: 'ecb',
+      fetchedAt: '2026-10-22T15:00:00.000Z',
+    };
+    renderPage(OWNER);
+    const notice = await screen.findByText(/^Dernier lu/u);
+    // Monday 2 November: six working days without a rate since Thursday 22 October.
+    expect(text(notice)).toBe(
+      'Dernier lu : 1 $ = 0,8612 € le jeu. 22 oct. Le taux n’arrive plus depuis plusieurs jours ouvrés : préviens le support.',
+    );
+    expect(screen.getByText(/^Provisoire : les ventes en dollars/u)).toBeTruthy();
   });
 
   it('says before the first validation that it closes the period, then validates one by one, a refusal on its row', async () => {
@@ -320,7 +387,7 @@ describe('Paie › Quinzaine', () => {
       await within(await waitFor(() => row('Théo'))).findByRole('button', { name: 'Marquer payé' }),
     );
     const dialog = await screen.findByRole('dialog');
-    const amount = within(dialog).getByLabelText('Montant envoyé');
+    const amount = within(dialog).getByLabelText('Montant envoyé, en euros');
     fireEvent.change(amount, { target: { value: '200' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
     expect(text(within(dialog).getByText(/Celui à verser/u))).toContain('288,40 €');
@@ -348,6 +415,10 @@ describe('Paie › Quinzaine', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
     expect(text(await within(dialog).findByText(/versés à/u))).toBe(
       '288,40 € versés à Théo le lundi 2 novembre par WorldRemit, référence WR-4E7F2C1A, pour la quinzaine du 16 au 31 octobre.',
+    );
+    // What it is worth in CFA francs, a guide only: the euro stays what is sent.
+    expect(text(within(dialog).getByText(/FCFA/u))).toBe(
+      '≈ 189 178 FCFA, avant frais WorldRemit (1 € = 655,957 FCFA, parité fixe). Indicatif : le montant envoyé reste en euros.',
     );
     answer = () => ({ status: 200, body: statementOf(THEO, OCT2, { status: 'paid' }) });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Marquer payé' }));
@@ -442,8 +513,16 @@ describe('Paie › Quinzaine', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Basile' }));
     let dialog = await screen.findByRole('dialog');
     expect(
-      within(dialog).getByText('Brouillon : il suit chaque rapport validé jusqu’à sa validation.'),
+      within(dialog).getByText('À valider : il suit chaque rapport validé jusqu’à sa validation.'),
     ).toBeTruthy();
+    // The engine's revision stays in « Règles et calcul »: the gesture validates this statement, as shown.
+    expect(within(dialog).getByRole('button', { name: 'Valider ce relevé' })).toBeTruthy();
+    expect(text(within(dialog).getByRole('heading').parentElement)).not.toMatch(/révision/u);
+    expect(text(within(dialog).getByText('Règles et calcul').nextElementSibling)).toMatch(
+      /^révision 3 · calculé /u,
+    );
+    // The change against the period before is said with what it compares to.
+    expect(text(dialog)).toContain('vs 1er – 15 octobre');
     fireEvent.click(within(dialog).getByText('Fermer', { selector: '.py-dialog__foot button' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
@@ -695,7 +774,9 @@ describe('Paie › Quinzaine', () => {
     periods[NOV1] = periodOf(NOV1, [statementOf(THEO, NOV1, { netMinor: 50_000 })]);
     renderPage(OWNER, `/paie/quinzaine?quinzaine=${NOV1}`);
     expect(await screen.findByText('Net de l’équipe à ce jour')).toBeTruthy();
-    expect(text(screen.getByText(/À ce rythme/u))).toBe('À ce rythme, 1 500,00 € le dimanche 15 novembre.');
+    // The forecast is a figure of its own, in whole euros, said once.
+    expect(text(screen.getByText('Prévision de fin').nextElementSibling)).toBe('1 500 €');
+    expect(screen.queryByText(/À ce rythme/u)).toBeNull();
     expect(screen.queryAllByRole('checkbox')).toEqual([]);
     expect(screen.queryByRole('button', { name: /^Valider/u })).toBeNull();
   });

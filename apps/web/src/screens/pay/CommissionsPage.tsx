@@ -18,6 +18,7 @@ import { Chip, Empty, Gauge, GoalTicks, Loading, MoneyPath, Unreachable } from '
 
 import { PAYROLL_KEY, PeriodCursorInvalid, usePayPeriod, usePayPeriods } from '@/payroll/api';
 import {
+  fcfaText,
   forecastNet,
   gaugePercent,
   goalSpanBps,
@@ -34,7 +35,14 @@ import {
 } from '@/payroll/model';
 import '@/payroll/pay.css';
 import '@/reports/reports.css';
-import { amountText, percentText, periodLine, periodTitle, signedAmountText } from '@/reports/model';
+import {
+  amountText,
+  followingPeriod,
+  percentText,
+  periodLine,
+  periodTitle,
+  signedAmountText,
+} from '@/reports/model';
 import { platformName } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
 import { longDay } from '@/scheduling/time';
@@ -179,7 +187,12 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
               <Hero statement={statement} period={heroData} now={now} />
               <Panel className="nv-enter" eyebrow="Le parcours de ton argent">
                 <div className="rp-sec">
-                  <MoneyPath statement={statement} names={heroNames} you />
+                  <MoneyPath
+                    statement={statement}
+                    names={heroNames}
+                    you
+                    payLabel={myStatementWords(statement, heroData.ended, now).label}
+                  />
                 </div>
               </Panel>
             </>
@@ -282,6 +295,7 @@ function Hero({
   return (
     <section className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter" aria-label={words.label}>
       <div className="py-mehero__top">
+        <span className="py-mehero__period nv-num">{periodTitle(period.period, false)}</span>
         <Chip chip={memberPhaseChip(summaryOf(period))} />
         <span className="py-quiet nv-num">{words.since}</span>
       </div>
@@ -289,6 +303,9 @@ function Hero({
       <p className="py-hero__value nv-num nv-swap" key={statement.revision}>
         {amountText(statement.payableMinor, 'EUR')}
       </p>
+      {statement.payableMinor === 0 ? null : (
+        <p className="py-hero__note nv-num">{fcfaText(statement.payableMinor)}</p>
+      )}
       {words.notes.map((note) => (
         <p key={note} className="py-hero__note nv-num">
           {note}
@@ -466,7 +483,18 @@ function GoalShare({
 /** One of the member's past periods: its state, its net and closing beneath, and one amount. */
 function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: () => void }): JSX.Element {
   const { window } = summary;
-  const amount = memberPeriodAmount(summary);
+  const chip = memberPhaseChip(summary);
+  // A period carried over pays nothing: its row says what went on the next one, read in its statement.
+  const carried = chip.label === 'Reporté';
+  const read = usePayPeriod(carried ? window.period : null);
+  const statement = read.data?.period === window.period ? read.data.statements[0] : undefined;
+  const amount =
+    carried && statement !== undefined
+      ? {
+          minor: statement.carryOverOutMinor,
+          what: `reporté sur le ${periodTitle(followingPeriod(window.period), false)}`,
+        }
+      : memberPeriodAmount(summary);
   const sub = `${amountText(summary.netMinor, 'EUR')} de net${summary.ended ? '' : ' à ce jour'}`;
   return (
     <button type="button" className="py-period nv-tap" onClick={onOpen}>
@@ -474,7 +502,7 @@ function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: (
         <span className="py-period__name nv-num">{periodTitle(window.period, false)}</span>
         <span className="py-period__sub nv-num">{sub}</span>
       </span>
-      <Chip chip={memberPhaseChip(summary)} />
+      <Chip chip={chip} />
       <span className="py-period__amount nv-num">
         {amountText(amount.minor, 'EUR')}
         <small>{amount.what}</small>
@@ -532,6 +560,9 @@ function MyStatementDialog({
               <div className="py-hero">
                 <p className="py-hero__label">{words.label}</p>
                 <p className="py-hero__value nv-num">{amountText(statement.payableMinor, 'EUR')}</p>
+                {statement.payableMinor === 0 ? null : (
+                  <p className="py-hero__note nv-num">{fcfaText(statement.payableMinor)}</p>
+                )}
               </div>
               {words.notes.map((note) => (
                 <p key={note} className="py-hero__note nv-num">
@@ -539,7 +570,7 @@ function MyStatementDialog({
                 </p>
               ))}
             </div>
-            <MoneyPath statement={statement} names={names} you />
+            <MoneyPath statement={statement} names={names} you payLabel={words.label} />
           </>
         )}
         <div className="py-dialog__foot">

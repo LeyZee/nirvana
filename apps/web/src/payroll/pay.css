@@ -58,6 +58,10 @@
   gap: var(--nv-space-1);
   min-width: 0;
 }
+/* In the period's head, the hero's width is its column's: a long amount shrinks to it (below). */
+.py-sum .py-hero {
+  container-type: inline-size;
+}
 .py-hero__label {
   margin: 0;
   color: var(--nv-ink-muted);
@@ -71,6 +75,14 @@
   letter-spacing: var(--nv-text-hero-tracking);
   font-weight: 700;
   white-space: nowrap;
+}
+/* A long amount (« 266 331,73 € ») shrinks to the width it has, and its block takes the whole row. */
+.py-hero .py-hero__value[data-long='true'] {
+  font-size: min(var(--nv-text-hero), 13cqi);
+  line-height: 1.05;
+}
+.py-sum__body:has(.py-hero__value[data-long='true']) {
+  grid-template-columns: minmax(0, 1fr);
 }
 .py-hero__note {
   margin: 0;
@@ -218,15 +230,19 @@
   font-size: var(--nv-text-footnote);
   font-weight: 500;
 }
+/* A row's amount says what it is beneath it: to pay, paid on a day, so far; and a carry-over, its total. */
 .py-member__amount {
   display: flex;
-  align-items: baseline;
-  gap: var(--nv-space-2);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
 }
-.py-member__was {
+.py-member__amount small {
   color: var(--nv-ink-faint);
-  font-size: var(--nv-text-footnote);
-  text-decoration: line-through;
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  font-weight: 500;
+  white-space: nowrap;
 }
 .py-member__refused {
   grid-column: 2 / -1;
@@ -600,6 +616,9 @@
   white-space: nowrap;
 }
 .py-period__amount small {
+  max-width: 18ch;
+  white-space: normal;
+  text-align: right;
   color: var(--nv-ink-faint);
   font-size: var(--nv-text-caption);
   line-height: var(--nv-text-caption-leading);
@@ -857,17 +876,21 @@
 .py-tierrow--head > :last-child {
   grid-column: span 2;
 }
-.py-tierrow__field {
+.py-tierrow__field,
+.py-money {
   position: relative;
   min-width: 0;
 }
 .py-tierrow__field .nv-field__control {
   width: 100%;
 }
-.py-tierrow__field:has(.py-tierrow__suffix) .nv-field__control {
+.py-tierrow__field:has(.py-tierrow__suffix) .nv-field__control,
+.py-money .nv-field__control {
+  width: 100%;
   padding-right: 30px;
 }
-.py-tierrow__suffix {
+.py-tierrow__suffix,
+.py-money__sign {
   position: absolute;
   top: 50%;
   right: 12px;
@@ -1069,4 +1092,90 @@
   outline: 2px solid var(--nv-focus);
   outline-offset: 2px;
   border-radius: var(--nv-radius-xs);
+}
+
+/* The title of a page that shows one period: the period, its arrows beside it. */
+.py-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nv-space-2) var(--nv-space-3);
+}
+.py-title .py-arrows {
+  font-size: var(--nv-text-body);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* A statement opened: its name and amount on top, its gestures at the bottom, only the path of the money scrolls in
+   between, and the glass behind the whole height. */
+.py-dialog:has(.py-read) {
+  overflow: hidden;
+}
+.py-read {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.py-read__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-4);
+  min-height: 0;
+  margin: 0 calc(-1 * var(--nv-space-2));
+  padding: 0 var(--nv-space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.py-read > .py-dialog__hero,
+.py-read > .py-dialog__foot {
+  flex: none;
+}
+
+/* On a phone a row without a box loses the empty column, and « Marquer payé » takes its own line, full width. */
+@media (max-width: 640px) {
+  .py-member:has(> span.rp-review__pick) {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: var(--nv-space-4);
+  }
+  .py-member > span.rp-review__pick {
+    display: none;
+  }
+  .py-member:has(> span.rp-review__pick) .rp-review__side,
+  .py-member[data-nopick='true'] .rp-review__side {
+    grid-column: 1;
+  }
+  .py-member .rp-review__side {
+    flex-wrap: wrap;
+  }
+  .py-member .py-member__amount {
+    align-items: flex-start;
+  }
+  .py-member .rp-review__side > .nv-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .py-member[data-nopick='true'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* What a penalty really takes, under its amount: « de son net, soit −100,00 € », « retenu −23,34 € (plafonné) ». */
+.py-entry__taken {
+  max-width: 24ch;
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  text-align: right;
+  text-wrap: pretty;
+}
+
+/* Commissions: the period the hero's amount is for, beside its stage. */
+.py-mehero__period {
+  font-weight: 650;
+}
+.py-mehero__top {
+  justify-content: flex-start;
+}
+.py-mehero__top .py-quiet {
+  margin-left: auto;
 }

@@ -4,6 +4,7 @@ import type { JSX } from 'react';
 import type { PayNames } from './data';
 
 import {
+  dayMonthText,
   flowOf,
   gaugePercent,
   goalTiersInOrder,
@@ -14,7 +15,6 @@ import {
 } from '@/payroll/model';
 import { followingPeriod, percentText, periodTitle, previousPeriod } from '@/reports/model';
 import { accountLine } from '@/scheduling/model';
-import { dayMonth } from '@/scheduling/time';
 
 /** The pieces Paie's screens and Commissions share (EQ-05). */
 
@@ -114,8 +114,11 @@ export function LockIcon(): JSX.Element {
   );
 }
 
-/** The previous and next period around `period`; never past the one under way. */
-export function PeriodArrows({
+/**
+ * A page's title when it shows one period (Quinzaine, Primes et malus, Objectifs): the period itself, the screen's main
+ * fact, with its arrows beside it.
+ */
+export function PeriodHeading({
   period,
   current,
   onPeriod,
@@ -125,7 +128,27 @@ export function PeriodArrows({
   onPeriod: (period: PayPeriod) => void;
 }): JSX.Element {
   return (
-    <div className="sc-week" role="group" aria-label="Quinzaine">
+    <span className="py-title">
+      <span className="nv-swap nv-num" key={period} aria-live="polite">
+        {periodTitle(period)}
+      </span>
+      <PeriodArrows period={period} current={current} onPeriod={onPeriod} />
+    </span>
+  );
+}
+
+/** The previous and next period around `period`; never past the one under way. */
+function PeriodArrows({
+  period,
+  current,
+  onPeriod,
+}: {
+  period: PayPeriod;
+  current: PayPeriod | null;
+  onPeriod: (period: PayPeriod) => void;
+}): JSX.Element {
+  return (
+    <span className="sc-week py-arrows" role="group" aria-label="Quinzaine">
       <button
         type="button"
         className="sc-arrow"
@@ -138,9 +161,6 @@ export function PeriodArrows({
           <path d="m10 3.5-4.5 4.5 4.5 4.5" />
         </svg>
       </button>
-      <p className="sc-week__label nv-swap" key={period} aria-live="polite">
-        {periodTitle(period)}
-      </p>
       <button
         type="button"
         className="sc-arrow"
@@ -154,7 +174,7 @@ export function PeriodArrows({
           <path d="m6 3.5 4.5 4.5-4.5 4.5" />
         </svg>
       </button>
-    </div>
+    </span>
   );
 }
 
@@ -198,10 +218,13 @@ export function MoneyPath({
   statement,
   names,
   you,
+  payLabel,
 }: {
   statement: CommissionStatement;
   names: Pick<PayNames, 'account'>;
   you: boolean;
+  /** The name of what is paid, as the screen's hero says it, so that one amount has one name. */
+  payLabel?: string;
 }): JSX.Element {
   return (
     <>
@@ -232,7 +255,7 @@ export function MoneyPath({
                         className="py-flow__op nv-num"
                         title={
                           step.label === 'En euros' && rate !== undefined
-                            ? `Taux de référence de la BCE du ${dayMonth(rate.day)}`
+                            ? `Taux de référence de la BCE du ${dayMonthText(rate.day)}`
                             : undefined
                         }
                       >
@@ -248,7 +271,7 @@ export function MoneyPath({
         </ul>
       )}
       <dl className="py-lines nv-num">
-        {totalsOf(statement, you).map((row, index) => (
+        {totalsOf(statement, you, payLabel).map((row, index) => (
           <div
             key={`${row.label}-${String(index)}`}
             className={row.kind === 'line' ? undefined : `py-lines__${row.kind}`}

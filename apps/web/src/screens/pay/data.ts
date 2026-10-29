@@ -1,4 +1,5 @@
 import type {
+  ExchangeRate,
   PayPeriod,
   PayrollPeriod,
   PlanningAccount,
@@ -44,7 +45,11 @@ export type PeriodBlock =
       /** Who and which day each report is from, as the reports' list names them. */
       readonly whose: (report: ShiftReport) => { readonly name: string; readonly startsAt: string | null };
     }
-  | { readonly kind: 'rate_missing' };
+  | {
+      readonly kind: 'rate_missing';
+      /** The latest rate the daily job read, to say how old it is. */
+      readonly latest: ExchangeRate | null;
+    };
 
 /** The pre-checks of an ended period that is not closed yet: reports still submitted, then a missing rate. */
 export function usePeriodBlock(period: PayrollPeriod | undefined): PeriodBlock | null {
@@ -67,7 +72,8 @@ export function usePeriodBlock(period: PayrollPeriod | undefined): PeriodBlock |
       }),
     };
   }
-  if (foreign && rateMissing(period, rates.data?.usd ?? null)) return { kind: 'rate_missing' };
+  const latest = rates.data?.usd ?? null;
+  if (foreign && rateMissing(period, latest)) return { kind: 'rate_missing', latest };
   return null;
 }
 

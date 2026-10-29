@@ -11,7 +11,7 @@ import { useState, type JSX } from 'react';
 import { GoalDialog, TiersDialog } from './GoalForms';
 import { PayNav } from './PayNav';
 import { useCurrentPeriod, usePayNames } from './data';
-import { Gauge, GoalTicks, Loading, LockIcon, PeriodArrows, Unreachable } from './parts';
+import { Gauge, GoalTicks, Loading, LockIcon, PeriodHeading, Unreachable } from './parts';
 
 import { usePayPeriod, usePayPeriods } from '@/payroll/api';
 import {
@@ -83,14 +83,18 @@ export function GoalsPage({
 
   const head = (
     <PageHeader
-      eyebrow="Objectifs"
-      title="Paie"
+      eyebrow="Paie"
+      title={
+        period === null ? (
+          'Objectifs'
+        ) : (
+          <PeriodHeading period={period} current={current} onPeriod={onPeriod} />
+        )
+      }
       lead="Ce que l’équipe vise ensemble, et ce que chacun débloque seul."
       actions={<PayNav />}
     />
   );
-  const arrows =
-    period === null ? undefined : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />;
 
   if (period === null || (data === undefined && !read.isError))
     return (
@@ -111,7 +115,7 @@ export function GoalsPage({
       <Page>
         {head}
         <div className="py-board">
-          <Panel eyebrow="Objectif collectif" actions={arrows}>
+          <Panel eyebrow="Objectif collectif">
             <Unreachable
               what="la quinzaine"
               onRetry={() => {
@@ -140,7 +144,6 @@ export function GoalsPage({
               ? 'Pas d’objectif collectif'
               : `${amountText(goal.targetMinor, 'EUR')} de net pour l’équipe`
           }
-          actions={arrows}
         >
           <div className="rp-sec">
             {goal === null ? (

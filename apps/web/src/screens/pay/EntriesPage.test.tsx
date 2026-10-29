@@ -228,6 +228,33 @@ describe('Paie › Primes et malus', () => {
     expect(screen.getAllByRole('button', { name: /^Ajouter$/u })).toHaveLength(1);
   });
 
+  it('says what a penalty really takes, read in the statement: a percent in euros, a capped one what is kept', async () => {
+    const capped = penaltyOf(1, BASILE, NOV1, { amount: { kind: 'fixed', amountMinor: 6_000 } });
+    const percent = penaltyOf(3, THEO, NOV1, { amount: { kind: 'percent', bps: 1_000 } });
+    entries = { [NOV1]: entriesOf(NOV1, { penalties: [capped, percent] }) };
+    periods[NOV1] = periodOf(NOV1, [
+      statementOf(BASILE, NOV1, {
+        penalties: [capped],
+        penaltiesRequestedMinor: 6_000,
+        penaltiesMinor: 2_334,
+      }),
+      statementOf(THEO, NOV1, {
+        penalties: [percent],
+        penaltiesRequestedMinor: 10_000,
+        penaltiesMinor: 10_000,
+      }),
+    ]);
+    renderPage(OWNER);
+    await waitFor(() => {
+      expect(text(entry('Basile', 'Malus'))).toContain('−60,00 €retenu −23,34 € (plafonné)');
+    });
+    expect(text(entry('Théo', 'Malus en pourcentage'))).toContain('−10 %de son net, soit −100,00 €');
+    // A total may go under zero (an adjustment): only a penalty never takes it there.
+    expect(
+      screen.getByText(/^Un malus ne fait jamais passer un relevé sous zéro : il est plafonné/u),
+    ).toBeTruthy();
+  });
+
   it('cancels a bonus only once confirmed, and keeps it struck through', async () => {
     answer = () => ({
       status: 200,

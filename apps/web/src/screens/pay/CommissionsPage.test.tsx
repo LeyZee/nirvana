@@ -186,12 +186,20 @@ describe('CommissionsPage', () => {
     renderPage();
     const hero = await screen.findByRole('region', { name: 'Ce que tu vas toucher' });
     expect(text(hero)).toContain('En validation');
-    expect(text(hero)).toContain('depuis le dim. 1 nov.');
+    expect(text(hero)).toContain('depuis le dim. 1er nov.');
+    // The amount names its period beside its stage: the column on the right speaks of another one.
+    expect(text(hero.querySelector('.py-mehero__period'))).toBe('16 – 31 octobre');
     expect(text(hero)).toContain('31,20 €');
+    // What it is in CFA francs, at the fixed parity, as a guide: the euro stays what pay computes.
+    expect(text(hero)).toContain('≈ 20 466 FCFA, avant frais WorldRemit');
     expect(text(hero)).toContain('L’agence valide, puis le versement suit.');
     expect(text(document.querySelector('.nv-eyebrow'))).toBe('Quinzaine du 16 au 31 octobre');
 
     expect(text(panel('Le parcours de ton argent'))).toContain('Ta commission');
+    // One amount, one name: the path ends on the hero's words.
+    expect(text(panel('Le parcours de ton argent').querySelector('.py-lines__total dt'))).toBe(
+      'Ce que tu vas toucher',
+    );
 
     const performance = panel('Ma performance');
     expect(
@@ -257,7 +265,8 @@ describe('CommissionsPage', () => {
     renderPage({ ...THEO_ME, team: { role: 'manager', status: 'on_leave' } });
     const hero = await screen.findByRole('region', { name: 'Ce que tu touches à ce jour' });
     expect(text(hero)).toContain('En cours');
-    expect(text(hero)).toContain('se valide à partir du lun. 16 nov.');
+    // Not the chatter's gesture: the agency validates.
+    expect(text(hero)).toContain('validation par l’agence à partir du lun. 16 nov.');
     expect(text(hero)).toContain('Calculé le lun. 2 nov. à 10 h 07 sur tes rapports validés.');
     expect(text(document.querySelector('.nv-eyebrow'))).toBe('Quinzaine du 1er au 15 novembre');
     const performance = panel('Ma performance');
@@ -267,6 +276,30 @@ describe('CommissionsPage', () => {
     });
     expect(text(performance)).not.toContain('Objectif de l’équipe');
     expect(within(panel('Mes relevés')).getAllByRole('button').map(text)[0]).toContain('Payé31,20 €touché');
+  });
+
+  it('says of a period carried over what went on the next one, never « 0,00 € touché »', async () => {
+    periods[OCT1] = periodOf(
+      OCT1,
+      [
+        statementOf(THEO, OCT1, {
+          status: 'validated',
+          canValidate: false,
+          validatedAt: '2026-10-16T08:41:00.000Z',
+          totalMinor: 667,
+          carryOverOutMinor: 667,
+          payableMinor: 0,
+        }),
+      ],
+      { closing: CLOSED(OCT1, '2026-10-16T08:41:00.000Z') },
+    );
+    renderPage();
+    const panelOf = await waitFor(() => panel('Mes relevés'));
+    const carried = await within(panelOf).findByRole('button', { name: /^1er – 15 octobre/u });
+    await waitFor(() => {
+      expect(text(carried)).toContain('Reporté6,67 €reporté sur le 16 – 31 octobre');
+    });
+    expect(text(carried)).not.toContain('touché');
   });
 
   it('tells a new chatter where their first statement comes from', async () => {

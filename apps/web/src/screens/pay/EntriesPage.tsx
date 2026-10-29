@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import { EntryForm, type EntryAdded } from './EntryForm';
 import { PayNav } from './PayNav';
 import { useCurrentPeriod, usePayNames, type PayMember } from './data';
-import { Chip, Empty, Loading, PeriodArrows, Swatch, Unreachable } from './parts';
+import { Chip, Empty, Loading, PeriodHeading, Swatch, Unreachable } from './parts';
 
 import {
   cancelBonus,
@@ -19,6 +19,7 @@ import {
   entryByText,
   entryRows,
   payRefusalText,
+  penaltyTaken,
   spanText,
   whoName,
   type EntryKind,
@@ -94,8 +95,14 @@ export function EntriesPage({
 
   const head = (
     <PageHeader
-      eyebrow="Primes et malus"
-      title="Paie"
+      eyebrow="Paie"
+      title={
+        period === null ? (
+          'Primes et malus'
+        ) : (
+          <PeriodHeading period={period} current={current} onPeriod={onPeriod} />
+        )
+      }
       lead="Une prime, un malus ou un ajustement, toujours avec son motif."
       actions={
         <>
@@ -114,14 +121,12 @@ export function EntriesPage({
       }
     />
   );
-  const arrows =
-    period === null ? undefined : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />;
 
   return (
     <Page>
       {head}
       <div className="py-board">
-        <Panel className="nv-enter" eyebrow="Saisies" actions={arrows}>
+        <Panel className="nv-enter" eyebrow="Saisies">
           {period === null || (data === undefined && !entries.isError) ? (
             <Loading />
           ) : data === undefined ? (
@@ -153,6 +158,10 @@ export function EntriesPage({
                       member={names.member(row.memberId)}
                       own={names.member(row.memberId).userId === user.id}
                       frozen={frozen(row, period, statements)}
+                      taken={penaltyTaken(
+                        row,
+                        statements?.statements.find((one) => one.memberId === row.memberId),
+                      )}
                       corrects={correctsText(row, [statements, before.data])}
                       by={entryByText(row, period, (userId) => whoName(userId, me, names.members), zone)}
                       armed={arming === row.id}
@@ -169,8 +178,8 @@ export function EntriesPage({
                 </ul>
               )}
               <p className="py-quiet">
-                Un malus est plafonné à la part du membre plus ses primes : un relevé n’est jamais négatif.
-                Personne ne saisit pour soi.
+                Un malus ne fait jamais passer un relevé sous zéro : il est plafonné à la part du membre plus
+                ses primes. Personne ne saisit pour soi.
               </p>
             </div>
           )}
@@ -272,6 +281,7 @@ function EntryItem({
   member,
   own,
   frozen: isFrozen,
+  taken,
   corrects,
   by,
   armed,
@@ -285,6 +295,8 @@ function EntryItem({
   member: PayMember;
   own: boolean;
   frozen: boolean;
+  /** What a penalty really takes in the period, read in the member's statement. */
+  taken: string | null;
   corrects: string | null;
   by: string;
   armed: boolean;
@@ -329,6 +341,7 @@ function EntryItem({
       </div>
       <div className="py-entry__side">
         <span className="py-entry__amount nv-num">{row.amount}</span>
+        {taken === null ? null : <small className="py-entry__taken nv-num">{taken}</small>}
         {row.cancellable && !own && !isFrozen && !armed ? (
           <button
             ref={trigger}
