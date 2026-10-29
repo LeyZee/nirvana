@@ -279,7 +279,7 @@ pay_period_reports         shift_report_id (clé) → shift_reports, period → 
                            écrit par la clôture dans sa transaction ; ajout seul)
 pay_period_blocks          period (clé) → pay_periods, code (commission_rate_missing_conflict |
                            exchange_rate_missing_conflict), member_ids uuid[] (tous les membres sans taux) | currency,
-                           since (migration 0036 ; pourquoi le job n'a pas pu calculer la quinzaine à son dernier essai :
+                           since (migration 0038 ; pourquoi le job n'a pas pu calculer la quinzaine à son dernier essai :
                            écrit et supprimé par le job sous `payroll.close`, dans la transaction du calcul ; un état, pas
                            un historique ; lu comme `pay_periods`)
 ```
@@ -299,7 +299,7 @@ La clôture d'une quinzaine pour toute l'équipe (migration 0029, ADR 0032) ajou
 
 Les droits par colonne tiennent en plus le rôle de l'application, qui part de `REVOKE ALL` : il ne touche à un relevé que par son statut, qui l'a validé et qui l'a payé.
 
-Une quinzaine bloquée (migration 0036, recette du 28/10, Équipe G1) : quand le recalcul d'une quinzaine échoue sur un membre payé sans taux de commission ou sur une devise sans taux, le job écrit `pay_period_blocks` dans la même transaction, sous `payroll.close` (ADR 0032), et le calcul suivant qui passe la supprime. `since` reste tant que la raison est la même, et un rejeu n'écrit rien. Seul le job écrit (`REVOKE ALL`, puis `SELECT` pour l'application) ; tout membre la lit, comme `pay_periods`, et l'application ne montre à un membre que lui-même parmi `member_ids`. La ligne n'est pas en ajout seul : elle dit l'état présent, le journal du job garde l'historique.
+Une quinzaine bloquée (migration 0038, recette du 28/10, Équipe G1) : quand le recalcul d'une quinzaine échoue sur un membre payé sans taux de commission ou sur une devise sans taux, le job écrit `pay_period_blocks` dans la même transaction, sous `payroll.close` (ADR 0032), et le calcul suivant qui passe la supprime. `since` reste tant que la raison est la même, et un rejeu n'écrit rien. Seul le job écrit (`REVOKE ALL`, puis `SELECT` pour l'application) ; tout membre la lit, comme `pay_periods`, et l'application ne montre à un membre que lui-même parmi `member_ids`. La ligne n'est pas en ajout seul : elle dit l'état présent, le journal du job garde l'historique.
 
 ## Système (hors RLS, sans `creator_id`)
 

@@ -321,6 +321,8 @@ describe('a blocked period', () => {
       statements: { draft: 1, validated: 0, paid: 0, carried: 0 },
       netMinor: 0,
       payableMinor: 0,
+      validatedPayableMinor: 0,
+      carriedMinor: 0,
       paidMinor: 0,
     };
     expect(PayPeriodSummarySchema.parse(summary).blocked ?? null).toBeNull();
