@@ -167,6 +167,8 @@ describe('/v1/playground', () => {
     expect(state.rejectReasons).toContainEqual({ id: 'too_long', label: 'trop long' });
     expect(state).toMatchObject({ pending: null, rate: { rate: null, target: 0.8 }, presetId: null });
     expect(state).toMatchObject({ sessionCostEur: 0, voice: { reachable: true } });
+    // The persona it plays, by her first name: never taken for one of the agency's creators.
+    expect(state.persona).toEqual({ name: 'Lina' });
     expect(state.situation).toMatchObject({ timeZone: 'Europe/Paris', isNight: false });
   });
 
