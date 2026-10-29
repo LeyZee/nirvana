@@ -604,7 +604,7 @@ export function createDraftComposer(deps: DraftComposerDeps): AgentDraftComposer
       }
       // Her active persona, after what safety reads without it (his limits, his media): none, a human answers him.
       const her = await herPersona(deps, input);
-      if ('missing' in her) return { ...HANDOFF, detail: [her.missing] };
+      if ('missing' in her) return { ...HANDOFF, cause: 'persona_inactive', detail: [her.missing] };
       const withHer = her.deps;
       // What he wrote since her last answer: her alerts and the traps read it as one message.
       const fanText = sinceAnswer.map((m) => m.text).join('\n');

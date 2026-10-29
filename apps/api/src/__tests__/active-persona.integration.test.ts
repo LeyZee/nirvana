@@ -168,6 +168,7 @@ describe('the agent writes with her active persona version (recette G4, M13; ADR
     expect(await composer.compose(input(bea))).toEqual({
       kind: 'held',
       reason: 'handoff',
+      cause: 'persona_inactive',
       detail: ['persona_inactive'],
       costUsd: 0,
     });
@@ -230,7 +231,7 @@ describe('the agent writes with her active persona version (recette G4, M13; ADR
       .from(schema.domainEvents)
       .where(and(eq(schema.domainEvents.creatorId, bea), eq(schema.domainEvents.type, 'handoff_requested')));
     expect(handoffs).toHaveLength(1);
-    expect(handoffs[0]?.payload).toMatchObject({ conversationId, cause: 'other' });
+    expect(handoffs[0]?.payload).toMatchObject({ conversationId, cause: 'persona_inactive' });
     expect(JSON.stringify(handoffs[0]?.payload)).toContain('persona_inactive');
   });
 });
