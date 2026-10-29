@@ -723,11 +723,57 @@ describe('DashboardPage with several creators (recette 28/10, G1)', () => {
     expect(localStorage.getItem('nirvana.followed-creator')).toBe(ANA.id);
   });
 
+  it('shows the urgencies of the others on their chip, and says when they cannot be read (DASH-03)', async () => {
+    let queue = true;
+    serveDashboard(
+      (url) =>
+        url.pathname === '/v1/dashboard/todos'
+          ? queue
+            ? {
+                status: 200,
+                body: {
+                  items: [],
+                  creators: [
+                    { creatorId: ANA.id, name: 'Ana', todos: 1, grave: 1 },
+                    { creatorId: CREATOR.id, name: 'Léa', todos: 3, grave: 2 },
+                  ],
+                },
+              }
+            : { status: 500 }
+          : { status: 200, body: apiDashboard() },
+      [ANA, CREATOR],
+    );
+    renderDashboard();
+    // Ana is followed: her own urgencies are on the page; Léa's are on her chip.
+    expect(await screen.findByRole('radio', { name: 'Léa, 2 urgences' })).toBeDefined();
+    expect(screen.getByRole('radio', { name: 'Ana' })).toBeDefined();
+    cleanup();
+    queue = false;
+    renderDashboard();
+    expect(
+      await screen.findByText(/Les urgences des autres créatrices n’ont pas pu être lues/u, undefined, {
+        timeout: 4000,
+      }),
+    ).toBeDefined();
+  });
+
   it('offers no choice with a single creator', async () => {
     serveDashboard({ status: 200, body: apiDashboard() });
     renderDashboard();
     expect(await screen.findByText('Kévin')).toBeDefined();
     expect(screen.queryByRole('radiogroup', { name: 'Créatrice suivie' })).toBeNull();
+  });
+});
+
+describe('DashboardPage, the fold of the agent', () => {
+  it('says each card’s detail to a screen reader, not only in the tip (DASH-17)', async () => {
+    serveDashboard({ status: 200, body: apiDashboard() });
+    renderDashboard(false, true);
+    await screen.findByText('Kévin');
+    const budget = [...document.querySelectorAll('.nv-tile')].find((tile) =>
+      tile.textContent.includes('Budget IA du jour'),
+    );
+    expect(budget?.querySelector('.sr-only')?.textContent).toContain('Compté : pour toutes les créatrices.');
   });
 });
 

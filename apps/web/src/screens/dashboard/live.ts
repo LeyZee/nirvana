@@ -95,7 +95,8 @@ const REPLY_SPAN: Readonly<Record<ApiDashboard['period'], string>> = {
   month: 'sur 30 jours',
 };
 
-function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentState {
+function agentState(api: ApiDashboard, now: Date, reader: DashboardReader): AgentState {
+  const forCreator = reader === 'creator';
   const { reveal, voice, jobs, replies, guards, budget, liveRate, todos } = api;
   // Never read once and not connected: no account was ever linked. A step to come, not an outage.
   const unlinked = !reveal.connected && reveal.lastReadAt === null;
@@ -160,14 +161,23 @@ function agentState(api: ApiDashboard, now: Date, forCreator: boolean): AgentSta
       tone: voice.ok ? 'ok' : voice.keyMissing ? 'warn' : 'bad',
       title: 'IA qui écrit les messages',
       value: voice.ok ? 'En service' : voice.keyMissing ? 'Clé manquante' : 'Ne répond plus',
+      // Réglages is the owner's alone: anyone else of the team reads who sets the key, as the hero says it.
       sub:
         voice.keyMissing && !forCreator
-          ? 'à poser dans Réglages › Modèles IA'
+          ? reader === 'owner'
+            ? 'à poser dans Réglages › Modèles IA'
+            : 'posée par le propriétaire dans Réglages › Modèles IA'
           : voice.medianWriteMs === null
             ? 'temps pour écrire pas encore mesuré'
             : `écrit en ${(voice.medianWriteMs / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`,
       rows: [
-        ...(voice.keyMissing && !forCreator ? [['À poser dans', 'Réglages › Modèles IA'] as const] : []),
+        ...(voice.keyMissing && !forCreator
+          ? [
+              reader === 'owner'
+                ? (['À poser dans', 'Réglages › Modèles IA'] as const)
+                : (['Posée par', 'le propriétaire, dans Réglages › Modèles IA'] as const),
+            ]
+          : []),
         [
           'Temps pour écrire',
           voice.medianWriteMs === null
@@ -404,7 +414,17 @@ export function usdNote(usdSales: ApiDashboard['usdSales']): string | undefined 
 }
 
 /** The server's Dashboard as the screen draws it. `sales` is null: nothing is invented in its place. */
-export function fromApi(api: ApiDashboard, forCreator = false, viewerZone = readerZone()): Dashboard {
+/**
+ * Who reads the Dashboard: the owner, who holds Réglages; the rest of the team; or the creator, who reads her agent's
+ * state only (ADR 0023).
+ */
+export type DashboardReader = 'owner' | 'team' | 'creator';
+
+export function fromApi(
+  api: ApiDashboard,
+  reader: DashboardReader = 'owner',
+  viewerZone = readerZone(),
+): Dashboard {
   const now = new Date(api.creator.now);
   const timeZone = api.creator.timezone;
   const dollars = usdNote(api.usdSales);
@@ -414,7 +434,7 @@ export function fromApi(api: ApiDashboard, forCreator = false, viewerZone = read
       platform: 'Reveal',
       now: today(api.creator.now, timeZone, viewerZone),
     },
-    agent: agentState(api, now, forCreator),
+    agent: agentState(api, now, reader),
     todos: api.todos.map((todo) => todoOf(todo, timeZone)),
     sales: null,
     telegram: telegramNightOf(api),

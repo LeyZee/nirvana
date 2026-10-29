@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { fromApi } from './live';
+import { fromApi, type DashboardReader } from './live';
 import type { Dashboard, Period } from './model';
 
 import { useLiveDashboard } from '@/agent/live';
@@ -31,13 +31,10 @@ export type DashboardView =
     };
 
 /** The one door of the Dashboard to its data: `GET /v1/dashboard` for the period. */
-export function useDashboard(period: Period, forCreator = false): DashboardView {
+export function useDashboard(period: Period, reader: DashboardReader = 'owner'): DashboardView {
   const live = useLiveDashboard(period);
   const liveData = live.kind === 'live' ? live.data : undefined;
-  const data = useMemo(
-    () => (liveData === undefined ? null : fromApi(liveData, forCreator)),
-    [liveData, forCreator],
-  );
+  const data = useMemo(() => (liveData === undefined ? null : fromApi(liveData, reader)), [liveData, reader]);
   switch (live.kind) {
     case 'loading':
       return { status: 'loading' };

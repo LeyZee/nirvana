@@ -656,3 +656,11 @@ div.db-fan {
   color: var(--nv-warning);
   background: color-mix(in srgb, var(--nv-warning) 14%, transparent);
 }
+/* The others' urgencies could not be read: said under the chips, in amber, not left silent. */
+.db-creators__unread {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-warning);
+}

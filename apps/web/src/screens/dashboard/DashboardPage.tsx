@@ -146,7 +146,7 @@ export function DashboardPage({
   /** The account's rail holds Créatrices: before any creator, the screen leads there (DASH-13). */
   canAddCreator?: boolean;
 }): JSX.Element {
-  const view = useDashboard(period, forCreator);
+  const view = useDashboard(period, forCreator ? 'creator' : forOwner ? 'owner' : 'team');
   if (view.status === 'loading') {
     return (
       <div className="db" aria-busy="true">

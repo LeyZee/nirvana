@@ -102,7 +102,7 @@ describe('fromApi', () => {
     const at = (timezone: string, viewer: string): string =>
       fromApi(
         apiDashboard({ creator: { ...apiDashboard().creator, now: '2026-10-28T20:00:00Z', timezone } }),
-        false,
+        'owner',
         viewer,
       ).creator.now.replace(/\s/gu, ' ');
     // Hours written as everywhere in the CRM, « 21 h », « 0 h 44 » (DASH-26).
@@ -200,6 +200,16 @@ describe('fromApi', () => {
     expect(noKey.agent.lead).toContain('Pose-la dans Réglages › Modèles IA.');
     expect(card('voice', noKey)).toMatchObject({ tone: 'warn', value: 'Clé manquante' });
     expect(card('voice', noKey)?.rows[0]).toEqual(['À poser dans', 'Réglages › Modèles IA']);
+    // A manager does not hold Réglages: the card says who sets the key, as the hero does.
+    const forTeam = fromApi(
+      apiDashboard({ voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 } }),
+      'team',
+    );
+    expect(card('voice', forTeam)?.sub).toBe('posée par le propriétaire dans Réglages › Modèles IA');
+    expect(card('voice', forTeam)?.rows[0]).toEqual([
+      'Posée par',
+      'le propriétaire, dans Réglages › Modèles IA',
+    ]);
     // Never linked and no key: Reveal leads, the key is said in the same lead.
     const both = fromApi(
       apiDashboard({
@@ -297,7 +307,7 @@ describe('fromApi for a creator', () => {
         jobs: { dead: null },
         voice: { ok: false, keyMissing: true, medianWriteMs: null, outagesLast7d: 0 },
       }),
-      true,
+      'creator',
     );
     expect(card('budget', data)).toBeUndefined();
     expect(card('activity', data)?.rows.map(([label]) => label)).not.toContain('Tâches bloquées');

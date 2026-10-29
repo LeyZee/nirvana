@@ -29,6 +29,8 @@ export function CreatorPicker(): JSX.Element | null {
     enabled: several,
   });
   if (!several) return null;
+  // Unread, the chips would say nothing of the others' urgencies, as if there were none: the line under them says so.
+  const unread = queue.isError && queue.data === undefined;
   const graveOf = (creatorId: string): number =>
     queue.data?.creators.find((count) => count.creatorId === creatorId)?.grave ?? 0;
 
@@ -45,42 +47,49 @@ export function CreatorPicker(): JSX.Element | null {
   };
 
   return (
-    <div
-      className="db-creators"
-      role="radiogroup"
-      aria-label="Créatrice suivie"
-      ref={ref}
-      onKeyDown={onKeyDown}
-    >
-      {creators.map((creator, i) => {
-        const grave = creator.id === current ? 0 : graveOf(creator.id);
-        return (
-          <button
-            key={creator.id}
-            type="button"
-            role="radio"
-            className="nv-chip"
-            data-creator={creator.id}
-            aria-checked={creator.id === current}
-            tabIndex={i === Math.max(0, index) ? 0 : -1}
-            onClick={() => {
-              follow(creator.id);
-            }}
-            aria-label={
-              grave === 0
-                ? undefined
-                : `${creator.displayName}, ${grave === 1 ? 'une urgence' : `${String(grave)} urgences`}`
-            }
-          >
-            {creator.displayName}
-            {grave === 0 ? null : (
-              <span className="db-creators__grave nv-num" aria-hidden="true">
-                {grave}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div
+        className="db-creators"
+        role="radiogroup"
+        aria-label="Créatrice suivie"
+        ref={ref}
+        onKeyDown={onKeyDown}
+      >
+        {creators.map((creator, i) => {
+          const grave = creator.id === current ? 0 : graveOf(creator.id);
+          return (
+            <button
+              key={creator.id}
+              type="button"
+              role="radio"
+              className="nv-chip"
+              data-creator={creator.id}
+              aria-checked={creator.id === current}
+              tabIndex={i === Math.max(0, index) ? 0 : -1}
+              onClick={() => {
+                follow(creator.id);
+              }}
+              aria-label={
+                grave === 0
+                  ? undefined
+                  : `${creator.displayName}, ${grave === 1 ? 'une urgence' : `${String(grave)} urgences`}`
+              }
+            >
+              {creator.displayName}
+              {grave === 0 ? null : (
+                <span className="db-creators__grave nv-num" aria-hidden="true">
+                  {grave}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {unread ? (
+        <p className="db-creators__unread" role="status">
+          Les urgences des autres créatrices n’ont pas pu être lues : regarde-les dans Suivi.
+        </p>
+      ) : null}
+    </>
   );
 }

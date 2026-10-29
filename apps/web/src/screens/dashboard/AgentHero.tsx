@@ -183,8 +183,14 @@ export function AgentHero({
                     <span className="nv-gauge__mark" />
                   </span>
                 )}
-                {/* One sentence under the value; the rest in the card's tip (DASH-17). */}
+                {/* One sentence under the value; the rest in the card's tip (DASH-17), and said to a screen reader in
+                  the tile itself, the tip being for the pointer and the eye. */}
                 <span className="nv-tile__sub">{card.sub}</span>
+                {card.rows.length === 0 ? null : (
+                  <span className="sr-only">
+                    {card.rows.map(([label, value]) => `${label} : ${value}.`).join(' ')}
+                  </span>
+                )}
               </div>
             ))}
           </div>
