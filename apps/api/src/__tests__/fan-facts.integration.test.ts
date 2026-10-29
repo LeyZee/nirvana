@@ -24,7 +24,9 @@ import {
 } from '../modules/conversations';
 import { createFansModule, type FansModule } from '../modules/fans';
 
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = newId(UserIdSchema);
 

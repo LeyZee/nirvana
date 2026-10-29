@@ -20,7 +20,13 @@ import {
   type UserId,
 } from '@nirvana/contracts';
 
-import { AutomaticLocked, CreatorNotFound, DraftGuarded, SendBlocked } from '../domain/errors';
+import {
+  AutomaticLocked,
+  CreatorNotFound,
+  DraftGuarded,
+  PersonaInactive,
+  SendBlocked,
+} from '../domain/errors';
 import type {
   BubbleGuard,
   Clock,
@@ -245,6 +251,8 @@ export function createConversationCommands({
     },
 
     async approveDraft(input) {
+      // Her guards, from her active persona, read before the transaction: no second connection held inside it.
+      const herGuard = await guard.forCreator(input.creatorId);
       await uow.inTenant(input.creatorId, async (tx) => {
         const conversation = await lockConversation(tx, input.conversationId);
         const isEdited = input.bubbles !== undefined;
@@ -259,8 +267,10 @@ export function createConversationCommands({
         }
         // Rewritten or not, what leaves passes the hard guards again: a chatter's words speak for her too, read
         // against what she already sent him (P3-13).
+        // Without her active persona, her guards cannot be read: nothing leaves (fail closed).
+        if (herGuard === null) throw new PersonaInactive();
         const history = await tx.messages.history(conversation.id, GUARD_HISTORY_MESSAGES);
-        const verdict = guard.check(bubbles, {
+        const verdict = herGuard.check(bubbles, {
           history: history.map((message) => ({
             from: message.direction === 'inbound' ? 'fan' : 'creator',
             text: message.text,

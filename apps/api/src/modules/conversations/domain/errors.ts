@@ -57,6 +57,19 @@ export class DraftGuarded extends DomainError {
   }
 }
 
+/**
+ * Her guards cannot be read without an active persona version (recette 28/10, G4): nothing is approved, the draft
+ * stays as it was, until a version is active in Créatrices › Persona.
+ */
+export class PersonaInactive extends DomainError {
+  constructor() {
+    super(
+      'persona_inactive_unprocessable',
+      'Ce message ne peut pas partir : cette créatrice n’a pas de persona active, ses gardes ne se lisent pas',
+    );
+  }
+}
+
 /** A command the conversation's state does not allow (approving while a human holds it, for instance). */
 export class TransitionConflict extends DomainError {
   constructor(state: ConversationState, command: ConversationCommand) {

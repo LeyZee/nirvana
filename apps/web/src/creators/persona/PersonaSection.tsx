@@ -387,7 +387,7 @@ function noteOf(ready: PersonaReady, known: boolean): string {
   // The agent reads her active version at each draft; without one he writes nothing (recette 28/10, G4).
   return `Chaque enregistrement crée une nouvelle version, inactive, et tu actives la nouvelle quand elle est prête. ${
     active === undefined
-      ? 'Aucune version n’est active pour l’instant : l’agent n’écrit rien pour elle, un chatteur répond.'
+      ? 'Aucune version n’est active pour l’instant : l’agent n’écrit rien pour elle, et aucun message ne peut partir avant l’activation d’une version.'
       : `Version active : ${active.version}. C’est avec elle que l’agent écrit ses brouillons.`
   }`;
 }

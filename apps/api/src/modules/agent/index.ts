@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { KycSlot } from '@nirvana/contracts';
@@ -20,7 +19,7 @@ import {
 } from './infra/draft-composer';
 import { createFanLimits } from './infra/fan-limits';
 import { createJsonlCalibrationStore } from './infra/jsonl-calibration-store';
-import { guardSettingsOf, readPersonaFile, type PersonaForModels } from './infra/persona-file';
+import { guardSettingsOf, type PersonaForModels } from './infra/persona-file';
 
 /** Public entry point of the `agent` module (ADR 0002). Other modules import this file only. */
 export {
@@ -170,28 +169,41 @@ export function startFollowUpPlan(options: {
   };
 }
 
-/** The canvas lines her persona collects (P5-01), in her order: what the Suivi says is left to learn of a fan. */
-export async function readKycSlots(options: { readonly personaPath: string }): Promise<readonly KycSlot[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  return readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today).kycSlots;
+/**
+ * The canvas lines her persona collects (P5-01), in her order, read from her active version at each call: what the
+ * Suivi says is left to learn of a fan. `null` without an active version; a failed read throws.
+ */
+export function startKycSlots(options: {
+  readonly activePersona: ActivePersonaSource;
+  readonly now?: () => Date;
+}): (creatorId: string) => Promise<readonly KycSlot[] | null> {
+  const now = options.now ?? (() => new Date());
+  return async (creatorId) =>
+    (await activePersonaForModels(options.activePersona, creatorId, now()))?.kycSlots ?? null;
+}
+
+/** The guards of a creator's approvals: her active version's hard limits, `null` without one (fail closed). */
+export interface AgentApprovalGuard {
+  forCreator(creatorId: string): Promise<AgentBubbleGuard | null>;
 }
 
 /**
- * The hard guards for the bubbles a chatter rewrote, with her disgusts and forbidden words.
- * @public Wired by the composition root once `conversations` has its `BubbleGuard` port (revue 09, G5).
+ * The hard guards for the bubbles a chatter approves, with her disgusts, forbidden words and emojis and pet names,
+ * read from her active persona version before each approval (recette 28/10, G4). Without one, `null`: the approval
+ * is refused, never read against another persona nor the shared guards alone.
+ * @public Wired by the composition root on the `BubbleGuard` port of `conversations` (revue 09, G5).
  */
-export async function startBubbleGuard(options: { readonly personaPath: string }): Promise<AgentBubbleGuard> {
-  const today = new Date().toISOString().slice(0, 10);
-  const persona = readPersonaFile(await readFile(options.personaPath, 'utf8'), 'Messa', today);
-  return createBubbleGuard(guardSettingsOf(persona));
-}
-
-/**
- * The hard guards every creator shares (never an AI, no meeting, no contact), without her persona's own limits.
- * @public The composition root's fallback when her persona is unreadable or is the demo one in production.
- */
-export function startSharedBubbleGuard(): AgentBubbleGuard {
-  return createBubbleGuard(SHARED_GUARD_SETTINGS);
+export function startBubbleGuard(options: {
+  readonly activePersona: ActivePersonaSource;
+  readonly now?: () => Date;
+}): AgentApprovalGuard {
+  const now = options.now ?? (() => new Date());
+  return {
+    forCreator: async (creatorId) => {
+      const persona = await activePersonaForModels(options.activePersona, creatorId, now());
+      return persona === null ? null : createBubbleGuard(guardSettingsOf(persona));
+    },
+  };
 }
 
 export interface AgentModule {

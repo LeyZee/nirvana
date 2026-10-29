@@ -44,6 +44,21 @@ const apiError = (code: string, details: Record<string, unknown> = {}) => ({
 });
 
 describe('threadOf', () => {
+  it('says the agent stepped back because she has no active persona (recette G4)', () => {
+    const items = threadOf({
+      messages: [message(1)],
+      events: [
+        event(1, 1, {
+          type: 'handoff_requested',
+          payload: { conversationId: CONVERSATION, cause: 'persona_inactive' },
+        }),
+      ],
+    });
+    expect(items.flatMap((i) => (i.kind === 'note' ? [i.text] : []))).toEqual([
+      'L’agent passe la main (Pas de persona active pour cette créatrice)',
+    ]);
+  });
+
   it('reads oldest first, and notes where the agent stepped back or a draft was refused', () => {
     const items = threadOf({
       // The API pages newest first.
@@ -232,6 +247,12 @@ describe('draftsOf', () => {
 });
 
 describe('decisionError', () => {
+  it('says a creator without an active persona sends nothing, and where to activate one (recette G4)', () => {
+    expect(decisionError(422, apiError('persona_inactive_unprocessable', {}))).toBe(
+      'Ce message ne peut pas partir : cette créatrice n’a pas de persona active. Active une version dans Créatrices › Persona.',
+    );
+  });
+
   it('says which guard blocks a draft, in words', () => {
     expect(
       decisionError(422, apiError('draft_unprocessable', { guards: ['meeting_promise', 'contact_info'] })),

@@ -30,7 +30,9 @@ import { createFansModule } from '../modules/fans';
 const T0 = new Date('2026-10-18T01:00:00.000Z');
 const OPENING = new Date('2026-10-18T07:00:00.000Z');
 const MINUTE_MS = 60_000;
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 
 type ComposeInput = Parameters<DraftComposer['compose']>[0];

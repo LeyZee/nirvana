@@ -261,9 +261,19 @@ export interface UnitOfWork {
 
 /**
  * The hard guards of the agent's output (ADR 0012: never an AI, no meeting, no contact; her hard limits), read
- * again on the bubbles a chatter approves, rewritten or not (revue 09, G5). Implemented by the `agent` module.
+ * again on the bubbles a chatter approves, rewritten or not (revue 09, G5). Implemented by the `agent` module, with
+ * the limits of her active persona version, read before each approval (recette 28/10, G4).
  */
 export interface BubbleGuard {
+  /**
+   * Her guards; `null` when she has no active persona version: nothing is approved (fail closed). A failed read
+   * throws, and nothing is approved either.
+   */
+  forCreator(creatorId: CreatorId): Promise<CreatorBubbleGuard | null>;
+}
+
+/** The hard guards of one creator, read on the bubbles of one approval. */
+interface CreatorBubbleGuard {
   check(
     bubbles: readonly string[],
     context: GuardReadContext,
