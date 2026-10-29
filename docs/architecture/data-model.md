@@ -63,7 +63,7 @@ conversation_events  id, creator_id, conversation_id, seq bigint, type, payload 
                      correlation_id, created_at      (append-only, UNIQUE (conversation_id, seq))
 drafts               id, creator_id, conversation_id, status (pending|approved|edited|rejected|sent|failed|expired),
                      brief jsonb (sortie du cerveau), bubbles text[], final_bubbles text[] (après édition),
-                     persona_version_id (la persona active quand il est écrit, ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
+                     persona_version_id (la version avec laquelle le composeur l'a écrit, lue avec la persona du brouillon, jamais celle active à l'enregistrement ; ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
                      decided_by (nullable user_id), decided_at, idempotency_key, created_at
 blind_tests          id, creator_id, voice_prompt, voice_model, persona_version_id (nullable), rate_per_mille (0 à 1000, 800 = 80 %), recorded_by,
                      recorded_at      (append-only : ni UPDATE ni DELETE pour nirvana_app)
