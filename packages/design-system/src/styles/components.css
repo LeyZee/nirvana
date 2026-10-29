@@ -858,8 +858,9 @@
 .nv-status--human {
   --_c: var(--nv-ink);
 }
+/* A failed send is a warning, as in « À traiter »: amber, never red, which stays for urgencies. */
 .nv-status--error {
-  --_c: var(--nv-danger);
+  --_c: var(--nv-warning);
 }
 .nv-status--sale {
   --_c: var(--nv-sale);

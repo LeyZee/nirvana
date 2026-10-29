@@ -136,11 +136,11 @@
   background: var(--nv-select-strong);
   color: var(--nv-ink);
 }
-/* A 44 px target around the 28 px check. */
+/* The touch target around the 28 px check. */
 .hi-line__see::before {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: calc((var(--nv-target-min) - 28px) / -2);
 }
 /* Its word, beside it on hover or focus. */
 .hi-line__see::after {

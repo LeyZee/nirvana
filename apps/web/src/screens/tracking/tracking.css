@@ -576,11 +576,6 @@
   max-width: 380px;
 }
 
-/* A failed send is a warning, as in « À traiter »: amber, never red (red stays for the grave guards). */
-.tr-page .nv-status--error {
-  --_c: var(--nv-warning);
-}
-
 /* On a phone, reading takes the screen: the page's title and sub-tabs step aside, and the way back, the fan's name,
  * his state and the hand stay at the top while the thread scrolls. */
 @media (max-width: 899px) {

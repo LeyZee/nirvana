@@ -116,6 +116,7 @@ export function TrackingPage({
   const todos = queue?.todos ?? [];
   const queueCreator = queue?.creator.id ?? null;
   // The gravest first (the server's order): three lines keep the search and the list above the fold; the one open stays.
+  // A fourth line is shown rather than hidden alone, so at least two hide behind « Voir les N autres ».
   const openIndex = todos.findIndex((t) => t.conversationId === selected);
   const shownTodos =
     allTodos || todos.length <= QUEUE_SHOWN + 1 || openIndex >= QUEUE_SHOWN
@@ -168,11 +169,8 @@ export function TrackingPage({
             Aller à Créatrices
           </Link>
         </Notice>
-      ) : offShift !== undefined &&
-        lines.length === 0 &&
-        todos.length ===
-          0 ? null : creators // Off shift with nothing listed: the banner above says it all, never « no conversation yet ».
-        .length === 0 ? (
+      ) : // Off shift with nothing listed: the banner above says it all, never « no conversation yet ».
+      offShift !== undefined && lines.length === 0 && todos.length === 0 ? null : creators.length === 0 ? (
         <Notice
           title="Rien pour toi pour l’instant"
           text="Les conversations des créatrices qui te sont confiées arrivent ici."
@@ -206,7 +204,7 @@ export function TrackingPage({
                         setAllTodos(true);
                       }}
                     >
-                      {hiddenTodos === 1 ? 'Voir l’autre' : `Voir les ${String(hiddenTodos)} autres`}
+                      {`Voir les ${String(hiddenTodos)} autres`}
                     </button>
                   </p>
                 )}
