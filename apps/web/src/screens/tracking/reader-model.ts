@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   type AlertTrigger,
   GuardCodeSchema,
+  SYSTEM_ALERT_LABELS,
   type ConnectorErrorCode,
   type ConversationDetail,
   type ConversationEventView,
@@ -78,19 +79,15 @@ const SEND_FAILURES: Readonly<Record<SendFailureCode, string>> = {
 
 const isSendFailureCode = (code: string): code is SendFailureCode => Object.hasOwn(SEND_FAILURES, code);
 
-/** A system alert that lets a human know without pausing the agent, in the words of Réglages › Alertes. */
-const SYSTEM_ALERT_NAMES = {
-  keyword: 'Mot d’alerte',
-  service_request: 'Demande de service',
-  identity_doubt: 'Doute sur la personne',
-} as const;
-
-/** An alert that went off and let the agent go on: which one, and her word when a word set it off. */
+/**
+ * An alert that went off and let the agent go on: which one, and her word when a word set it off. The event names her
+ * own alert by its id only: the thread calls it « Alerte personnalisée », the history gives its name.
+ */
 function alertNote(trigger: AlertTrigger): string {
   const name =
     trigger.alert.kind === 'custom'
       ? 'Alerte personnalisée'
-      : `Alerte « ${SYSTEM_ALERT_NAMES[trigger.alert.code]} »`;
+      : `Alerte « ${SYSTEM_ALERT_LABELS[trigger.alert.code]} »`;
   const word = trigger.keyword === undefined ? '' : ` (mot « ${trigger.keyword} »)`;
   return `${name}${word} : l’agent continue`;
 }
