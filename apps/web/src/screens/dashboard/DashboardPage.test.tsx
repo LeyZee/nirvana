@@ -591,15 +591,19 @@ describe('DashboardPage of a creator', () => {
 });
 
 describe('DashboardPage when the server does not answer', () => {
-  it('says so in one sentence, with no figure and nothing to act on', async () => {
-    serveDashboard({ status: 500 });
+  it('says so in one sentence, with no figure and only « Réessayer » (DASH-22)', async () => {
+    let up = false;
+    serveDashboard(() => (up ? { status: 200, body: apiDashboard() } : { status: 500 }));
     renderDashboard();
     expect(await screen.findByText('ne répond pas')).toBeDefined();
     expect(headline()).toBe('Le serveur ne répond pas');
     expect(screen.getByText('Léa')).toBeDefined();
     expect(screen.queryByText('Exemple')).toBeNull();
     expect(screen.queryByRole('radio')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Réessayer']);
+    up = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText('Kévin')).toBeDefined();
   });
 
   it('never keeps an older answer on screen once a read fails', async () => {

@@ -487,7 +487,8 @@
 .rp-figures__row {
   display: flex;
   flex-wrap: wrap;
-  align-items: last baseline;
+  /* The labels on one line, whatever the size of the figure under each (DASH-24). */
+  align-items: flex-start;
   gap: var(--nv-space-3) var(--nv-space-8);
 }
 .rp-figures__one {
@@ -499,9 +500,7 @@
   color: var(--nv-ink-faint);
   font-size: var(--nv-text-caption);
   line-height: var(--nv-text-caption-leading);
-  letter-spacing: var(--nv-text-caption-tracking);
   font-weight: 600;
-  text-transform: uppercase;
 }
 .rp-figures__value {
   font-size: var(--nv-text-title-1);

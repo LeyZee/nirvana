@@ -811,17 +811,17 @@ button.sc-duty__one:active {
 }
 .sc-hero__title {
   margin: 0;
-  font-family: var(--nv-font-serif);
-  font-style: italic;
-  font-weight: 400;
-  font-size: var(--nv-text-hero);
-  line-height: var(--nv-text-hero-leading);
-  letter-spacing: var(--nv-text-hero-tracking);
+  /* Her name in Geist, bold: the serif is the whisper of an empty state, never a name (DASH-23). */
+  font-weight: 700;
+  font-size: var(--nv-text-title-1);
+  line-height: var(--nv-text-title-1-leading);
+  letter-spacing: var(--nv-text-title-1-tracking);
   text-wrap: balance;
 }
 .sc-hero--none .sc-hero__title {
-  font-size: var(--nv-text-title-1);
-  line-height: var(--nv-text-title-1-leading);
+  font-family: var(--nv-font-serif);
+  font-style: italic;
+  font-weight: 400;
   letter-spacing: normal;
 }
 .sc-hero__where {

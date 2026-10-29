@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, type JSX, type ReactNode } from 'react';
 
@@ -19,6 +20,7 @@ import { useAgentModeWriter } from '@/agent/write';
 import { useCreators } from '@/creators/api';
 import { initialOf } from '@/lib/utils';
 import { NightBanner } from '@/settings/telegram/NightBanner';
+import { ServerSilent } from '@/shell/ServerSilent';
 
 /** Why the control cannot change the mode under an operator's global switch: the hero says it too (DASH-08). */
 const GLOBAL_NOTE =
@@ -30,34 +32,20 @@ const FUNNEL_SUB: Record<Period, string> = {
   month: 'les fans arrivés ces 30 jours, et combien passent chaque étape',
 };
 
-/** A sentence alone where the page would be: the server is silent, or there is no creator yet. */
+/** A sentence alone where the page would be: there is no creator yet. */
 function Alone({
   tone,
   headline,
   lead,
-  creatorName = null,
   children,
 }: {
   tone: Tone;
   headline: string;
   lead: string;
-  creatorName?: string | null;
   children?: ReactNode;
 }): JSX.Element {
   return (
     <div className="db">
-      {creatorName === null ? null : (
-        <header className="db-top nv-enter">
-          {/* Another creator's Dashboard may still answer: the choice stays at hand. */}
-          <CreatorPicker />
-          <div className="db-top__who">
-            <span className="db-top__av" aria-hidden="true">
-              {initialOf(creatorName)}
-            </span>
-            <span className="db-top__name">{creatorName}</span>
-          </div>
-        </header>
-      )}
       <section
         className="db-hero nv-enter"
         style={{ '--_c': TONE_COLOR[tone], '--nv-i': 1 }}
@@ -82,17 +70,36 @@ function Alone({
 }
 
 /**
- * The server does not answer: one sentence, no figure and nothing to act on, until it answers again. Amber, not red:
- * a warning, the red stays the urgencies'.
+ * The server does not answer: one sentence, no figure, only « Réessayer », until it answers again. Amber, not red: a
+ * warning, the red stays the urgencies'.
  */
 function Offline({ creatorName }: { creatorName: string | null }): JSX.Element {
+  const client = useQueryClient();
   return (
-    <Alone
-      tone="warn"
-      headline="Le serveur **ne répond pas**"
-      lead="Les chiffres reviennent dès qu’il répond. Rien ici n’est à jour en attendant."
-      creatorName={creatorName}
-    />
+    <div className="db">
+      {creatorName === null ? null : (
+        <header className="db-top nv-enter">
+          {/* Another creator's Dashboard may still answer: the choice stays at hand. */}
+          <CreatorPicker />
+          <div className="db-top__who">
+            <span className="db-top__av" aria-hidden="true">
+              {initialOf(creatorName)}
+            </span>
+            <span className="db-top__name">{creatorName}</span>
+          </div>
+        </header>
+      )}
+      {/* The same face as on Aujourd'hui (DASH-22): the sentence, what it holds back, « Réessayer ». */}
+      <ServerSilent
+        headline
+        text="Les chiffres reviennent dès qu’il répond. Rien ici n’est à jour en attendant."
+        onRetry={() => {
+          // The list of creators may be what failed: both are read again.
+          void client.refetchQueries({ queryKey: ['creators'] });
+          void client.refetchQueries({ queryKey: ['dashboard'] });
+        }}
+      />
+    </div>
   );
 }
 
