@@ -19,6 +19,7 @@ import {
   handoffReasons,
   isHandoff,
   MEDIA_FLAG_LABELS,
+  rejectedWords,
   type MediaKind,
   type Turn,
 } from './model';
@@ -458,8 +459,13 @@ function VerdictView({ verdict, state }: { verdict: Verdict; state: PlaygroundSt
     );
   }
   if (verdict.kind === 'rejected') {
-    const reason = state.rejectReasons.find((r) => r.id === verdict.reason)?.label ?? verdict.reason;
-    return <span className="pg-verdict">Rejetée : {verdict.note ?? reason}</span>;
+    const { reason, note } = rejectedWords(verdict, state.rejectReasons);
+    return (
+      <span className="pg-verdict">
+        Rejetée : {reason}
+        {note === null ? null : <span className="pg-verdict__note">{note}</span>}
+      </span>
+    );
   }
   return null;
 }

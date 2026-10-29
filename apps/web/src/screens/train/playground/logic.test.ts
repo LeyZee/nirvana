@@ -67,9 +67,7 @@ describe('formatting', () => {
   });
 
   it('says which scripts the time of day lets her send, without a contradiction', () => {
-    expect(scriptsHint(false)).toBe(
-      'Il fait jour chez elle : seuls les scripts Jour partent (Nuit de 22 h à 7 h).',
-    );
+    expect(scriptsHint(false)).toBe('Il fait jour chez elle : seuls les scripts Jour partent.');
     expect(scriptsHint(true)).toContain('seuls les scripts Nuit partent');
   });
 

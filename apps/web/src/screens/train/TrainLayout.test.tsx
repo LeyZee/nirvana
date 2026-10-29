@@ -30,7 +30,7 @@ beforeEach(() => {
   );
   vi.stubGlobal(
     'matchMedia',
-    vi.fn(() => ({ matches: true })),
+    vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
   );
   // The Playground stays on its loading state: only the header is under test.
   vi.stubGlobal(

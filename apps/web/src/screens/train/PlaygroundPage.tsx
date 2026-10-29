@@ -1,5 +1,5 @@
 import type { Destination, PlaygroundComparison, PlaygroundMedia, Verdict } from '@nirvana/contracts';
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { Composer, Conversation, LessonCard, type LocalMode } from './playground/Conversation';
 import { RateBar } from './playground/RateBar';
@@ -7,10 +7,13 @@ import { SetupPanel } from './playground/SetupPanel';
 import { WhyPanel } from './playground/WhyPanel';
 import { COMPARE_MODEL, PlaygroundError, type PlaygroundErrorCode } from './playground/client';
 import { fanMessageCount, needsAttention, percent, stepOf } from './playground/logic';
-import { DESTINATION_ACKS, isHandoff, suggestedDestination } from './playground/model';
+import { filedAck, isHandoff, suggestedDestination } from './playground/model';
 import { usePlayground } from './playground/usePlayground';
 
 import { initialOf } from '@/lib/utils';
+
+/** The width under which the situation is a sheet over the conversation (playground.css). */
+const PHONE = '(max-width: 820px)';
 
 /** The fan's name while his notes give none: the fan type is already on the « Le fan » card. */
 const FALLBACK_NAME = 'Fan fictif';
@@ -48,6 +51,26 @@ export function PlaygroundPage(): JSX.Element {
   const [filed, setFiled] = useState<Destination | undefined>(undefined);
   /** On a phone the situation is a sheet over the conversation. */
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The situation's sheet takes the focus when it opens and gives it back to « Fan » when it closes.
+  const fanButton = useRef<HTMLButtonElement>(null);
+  const sheetWasOpen = useRef(false);
+  useEffect(() => {
+    if (sheetOpen) document.querySelector<HTMLElement>('#pg-setup .nv-close')?.focus();
+    else if (sheetWasOpen.current) fanButton.current?.focus();
+    sheetWasOpen.current = sheetOpen;
+  }, [sheetOpen]);
+  // The sheet is a phone's: a screen that widens past it (a tablet turned) closes it, its column back in place.
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const phone = matchMedia(PHONE);
+    const onChange = (): void => {
+      if (!phone.matches) setSheetOpen(false);
+    };
+    phone.addEventListener('change', onChange);
+    return () => {
+      phone.removeEventListener('change', onChange);
+    };
+  }, []);
 
   const pending = state?.pending ?? null;
   const step = stepOf(state, mode, pg.busy);
@@ -110,6 +133,10 @@ export function PlaygroundPage(): JSX.Element {
   // Same keys as the copilot: A validate, E correct, R reject (docs/design/README.md).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && sheetOpen) {
+        setSheetOpen(false);
+        return;
+      }
       const target = event.target;
       if (target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -154,7 +181,12 @@ export function PlaygroundPage(): JSX.Element {
 
   const name = fanName(state.fanNotes);
   const fans = fanMessageCount(state);
-  const ratePill = pg.client.isDemo ? 'Démo' : percent(state.rate.rate);
+  // The rate with how many answers it stands on: 100 % on two answers is not 100 % on a hundred.
+  const ratePill = pg.client.isDemo
+    ? 'Démo'
+    : state.rate.rate === null
+      ? percent(null)
+      : `${percent(state.rate.rate)} sur ${String(state.rate.rated)}`;
 
   return (
     <div className="pg">
@@ -183,6 +215,7 @@ export function PlaygroundPage(): JSX.Element {
           </span>
           <button
             type="button"
+            ref={fanButton}
             className="nv-btn nv-btn--soft nv-btn--sm pg-top__fan"
             aria-expanded={sheetOpen}
             aria-controls="pg-setup"
@@ -265,7 +298,7 @@ export function PlaygroundPage(): JSX.Element {
         <div className="pg-dock">
           {filed === undefined || mode === 'lesson' ? null : (
             <p className="pg-ack" role="status">
-              {DESTINATION_ACKS[filed]}
+              {filedAck(filed, pg.client.isDemo)}
             </p>
           )}
           {mode === 'lesson' && lesson !== undefined ? (

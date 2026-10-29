@@ -77,7 +77,7 @@ beforeEach(() => {
   );
   vi.stubGlobal(
     'matchMedia',
-    vi.fn(() => ({ matches: true })),
+    vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
   );
   vi.stubGlobal(
     'fetch',
@@ -139,6 +139,34 @@ describe('Playground', () => {
     expect(await screen.findByText('Théo')).toBeTruthy();
     expect(screen.queryByText(/Fan fictif ·/)).toBeNull();
     expect(screen.getByPlaceholderText('Écris comme Théo…')).toBeTruthy();
+  });
+
+  it('opens the situation as a sheet that takes the focus, closes on Escape or « Fermer », and gives it back', async () => {
+    answer = serve(BASE);
+    open();
+    const fan = await screen.findByRole('button', { name: 'Fan' });
+    fireEvent.click(fan);
+    const close = screen.getByRole('button', { name: 'Fermer' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(close);
+    });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(fan.getAttribute('aria-expanded')).toBe('false');
+    });
+    expect(document.activeElement).toBe(fan);
+    fireEvent.click(fan);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(fan);
+    });
+    expect(fan.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('says on how many answers the rate stands, in the header a phone shows', async () => {
+    answer = serve({ ...BASE, rate: { ...BASE.rate, rate: 0.5, rated: 2, validated: 1 } });
+    open();
+    expect(await screen.findByText('50 % sur 2')).toBeTruthy();
   });
 
   it('says « Fan fictif » with no first name, and the composer writes as « le fan »', async () => {

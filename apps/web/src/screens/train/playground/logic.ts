@@ -31,11 +31,14 @@ export function duration(ms: number): string {
   return rest === 0 ? `${String(days)} j` : `${String(days)} j ${String(rest)} h`;
 }
 
-/** What the time of day lets her send, said without « Nuit … scripts Jour » reading as a contradiction. */
+/**
+ * What the time of day lets her send, said without « Nuit … scripts Jour » reading as a contradiction. The night's
+ * hours are the server's rule (`isNight`): never written here, so the sentence cannot outlive a change of them.
+ */
 export function scriptsHint(isNight: boolean): string {
   return isNight
-    ? 'Il fait nuit chez elle : seuls les scripts Nuit partent (Nuit de 22 h à 7 h).'
-    : 'Il fait jour chez elle : seuls les scripts Jour partent (Nuit de 22 h à 7 h).';
+    ? 'Il fait nuit chez elle : seuls les scripts Nuit partent.'
+    : 'Il fait jour chez elle : seuls les scripts Jour partent.';
 }
 
 export function clockAt(iso: string, timeZone: string): string {

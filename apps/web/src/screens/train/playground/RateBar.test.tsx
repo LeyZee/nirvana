@@ -92,7 +92,8 @@ describe('RateBar', () => {
         previousVersion: { voicePrompt: '1.3.0', voiceModel: 'grok-4.7' },
       },
     });
-    expect(await screen.findByText(/Objectif 80 %/)).toBeTruthy();
+    // How many answers the rate stands on, written out: 62 % on two answers is not 62 % on a hundred.
+    expect(await screen.findByText(/Sur 34 réponses notées · objectif 80 %/)).toBeTruthy();
     expect(screen.getByText('-4 pts', { exact: false }).className).toBe('is-down');
   });
 

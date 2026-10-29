@@ -607,6 +607,11 @@
   font-weight: 600;
   color: var(--nv-ink-muted);
 }
+/* The trainer's note under the reason, which decides the destination. */
+.pg-verdict__note {
+  display: block;
+  font-weight: 400;
+}
 .pg-gest {
   display: flex;
   gap: 6px;

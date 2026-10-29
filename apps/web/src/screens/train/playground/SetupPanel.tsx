@@ -42,8 +42,8 @@ export function SetupPanel({
     >
       <div className="pg-setup__h">
         <b>Mise en situation</b>
-        <button type="button" className="pg-why__x" title="Fermer" onClick={onCloseSheet}>
-          ×
+        <button type="button" className="nv-close" aria-label="Fermer" onClick={onCloseSheet}>
+          <span aria-hidden="true">×</span>
         </button>
       </div>
       <div className="nv-scroll">
@@ -74,7 +74,7 @@ export function SetupPanel({
             <span className="nv-disclosure__sum">
               {clockAt(situation.now, situation.timeZone)}, {situation.isNight ? 'Nuit' : 'Jour'} ·{' '}
               {/* Kept on one line when the summary wraps. */}
-              {`relation de ${duration(age)}`.replaceAll(' ', ' ')}
+              {`relation de ${duration(age)}`.replaceAll(' ', '\u00a0')}
             </span>
           </summary>
           <div className="nv-disclosure__body">

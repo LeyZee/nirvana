@@ -5,6 +5,8 @@ import { useEffect, useRef, type JSX } from 'react';
 
 import { euros, percent, rateTone } from './logic';
 
+const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
+
 /**
  * The one number of the screen, and nothing that competes with it: what wrote the answers and what the
  * session cost sit in retreat on the right. The action lives under the answer, not here.
@@ -33,10 +35,7 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
 
   return (
     <div className="pg-bar nv-plate">
-      <div
-        className={`pg-rate pg-rate--${tone}`}
-        title={`Réponses gardées telles quelles sur les ${String(rated)} dernières notées de cette version.`}
-      >
+      <div className={`pg-rate pg-rate--${tone}`}>
         {/* Written by the effect only: React never owns this text, so the count is never overwritten. */}
         <span className={`pg-rate__v ${rate === null ? 'is-empty' : ''}`} ref={valueRef} />
         <span className="pg-rate__t">
@@ -56,7 +55,7 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
               'Note ta première réponse pour lancer le taux'
             ) : (
               <>
-                Objectif {percent(target)}
+                Sur {plural(rated, 'réponse notée', 'réponses notées')} · objectif {percent(target)}
                 {trendPoints === null || previousVersion === null ? null : (
                   <>
                     {' · '}
