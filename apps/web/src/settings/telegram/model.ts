@@ -142,8 +142,8 @@ export function healthOf(overview: TelegramOverview): Health {
     return { ...base, tone: 'empty', label: 'Aucun bot pour l’instant', fix: null };
   const isBotBroken = overview.bots.some((bot) => bot.state !== 'active');
   if (overview.coverage.some((c) => !c.urgentReachable)) {
-    // A broken bot, or groups none of which can be written to: the fix is in Bots et groupes, not in the routing.
-    const isBotsFault = isBotBroken || (choices.length > 0 && !choices.some((c) => c.isReachable));
+    // No group can be written to: the fix is in Bots et groupes. Otherwise a group is to choose, in the routing.
+    const isBotsFault = !choices.some((c) => c.isReachable);
     return {
       ...base,
       tone: 'bad',
