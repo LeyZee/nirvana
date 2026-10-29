@@ -46,7 +46,12 @@ import {
   type DraftComposer,
 } from './modules/conversations';
 import { createFansModule, type FansModule } from './modules/fans';
-import { createMediaModule, missingMediaBinaries, type MediaModule } from './modules/media';
+import {
+  createDrizzleDescriptionReader,
+  createMediaModule,
+  missingMediaBinaries,
+  type MediaModule,
+} from './modules/media';
 import { createPayrollModule, enqueuePayRecalculation, type PayrollModule } from './modules/payroll';
 import { createPersonaModule, type PersonaModule } from './modules/persona';
 import { startPlaygroundModule, type PlaygroundModule } from './modules/playground';
@@ -377,6 +382,7 @@ export async function createApp(config: Config, logger: Logger, options: AppOpti
       },
     },
     alertNames: { ofCreator: (creatorId) => alerts.store.names(creatorId) },
+    mediaDescriptions: createDrizzleDescriptionReader(db.db),
   });
   const modules: Modules = {
     alerts,

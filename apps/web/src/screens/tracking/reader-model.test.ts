@@ -21,6 +21,7 @@ function message(n: number, patch: Partial<MessageView> = {}): MessageView {
     direction: 'inbound',
     author: 'fan',
     text: `Message ${String(n)}`,
+    media: [],
     priceMinor: null,
     currency: null,
     isPaid: false,
@@ -57,6 +58,29 @@ describe('threadOf', () => {
     expect(items.flatMap((i) => (i.kind === 'note' ? [i.text] : []))).toEqual([
       'L’agent passe la main (Pas de persona active pour cette créatrice)',
     ]);
+  });
+
+  it('names each media by its kind, with what it shows once described (SUIVI-26)', () => {
+    const [item] = threadOf({
+      messages: [
+        message(1, {
+          text: '',
+          media: [
+            { kind: 'video', isLocked: true, description: 'Elle danse dans une chambre, lumière tamisée.' },
+            { kind: 'image', isLocked: true, description: null },
+          ],
+          priceMinor: 4990,
+          currency: 'EUR',
+        }),
+      ],
+      events: [],
+    });
+    expect(item).toMatchObject({
+      media: [
+        { label: 'Vidéo', description: 'Elle danse dans une chambre, lumière tamisée.' },
+        { label: 'Photo', description: null },
+      ],
+    });
   });
 
   it('reads oldest first, and notes where the agent stepped back or a draft was refused', () => {
