@@ -269,9 +269,17 @@ describe('Réglages › Sauvegardes', () => {
     expect(button.className).toContain('nv-btn--soft');
     fireEvent.click(button);
     fireEvent.change(await screen.findByLabelText('Mot de passe'), { target: { value: 'secret' } });
+    // « Noter un essai » stays the page's one neon while the password is asked here.
+    expect(screen.getByRole('button', { name: 'Confirmer' }).className).toContain('nv-btn--soft');
+    expect(document.querySelectorAll('.nv-btn--neon')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
 
-    expect((await screen.findByRole('status')).textContent).toMatch(/^Relance demandée à /u);
+    const line = await screen.findByRole('status');
+    expect(line.textContent).toMatch(/^Relance demandée à /u);
+    // The button is gone: the keyboard lands on the line that replaced it, not at the top of the page.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(line);
+    });
     expect(screen.queryByRole('button', { name: 'Relancer la sauvegarde maintenant' })).toBeNull();
     expect(posted).toHaveLength(2);
     const [first, second] = posted;
@@ -283,5 +291,53 @@ describe('Réglages › Sauvegardes', () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/déjà en cours/u);
+  });
+
+  it('keeps the keyboard on the strip when the export it found running hides the button', async () => {
+    let running = false;
+    serve({
+      status: () => ({
+        status: 200,
+        body: running
+          ? { ...STATUS, lastRun: { ...STATUS.lastRun, status: 'running', finishedAt: null } }
+          : STATUS,
+      }),
+      post: () => {
+        running = true;
+        return { status: 409, body: apiError('backup_run_in_progress_conflict') };
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' }));
+    expect(await screen.findByText(/^Une sauvegarde est en cours depuis /u)).toBeTruthy();
+    await waitFor(() => {
+      expect(document.activeElement?.id).toBe('bk-copy-title');
+    });
+    expect(screen.queryByRole('button', { name: 'Relancer la sauvegarde maintenant' })).toBeNull();
+  });
+
+  it('reads the status again while the request waits, until the export has run', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let reads = 0;
+      serve({
+        status: () => {
+          reads += 1;
+          return {
+            status: 200,
+            body: reads === 1 ? { ...STATUS, runRequestedAt: '2026-10-27T09:58:00.000Z' } : STATUS,
+          };
+        },
+      });
+      renderPage();
+      expect((await screen.findByRole('status')).textContent).toMatch(/^Relance demandée à /u);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await screen.findByRole('button', { name: 'Relancer la sauvegarde maintenant' })).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(reads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

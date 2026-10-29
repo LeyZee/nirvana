@@ -143,6 +143,7 @@ export const BACKUP_ERROR_CODES = [
   'restore_test_conflict',
   REAUTHENTICATION_ERROR_CODE,
 ] as const;
+export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];
 
 /**
  * The error codes of `POST /v1/backups/runs`. `backup_run_in_progress_conflict`: an export is running now (started less
@@ -152,4 +153,4 @@ export const BACKUP_RUN_ERROR_CODES = [
   'backup_run_in_progress_conflict',
   REAUTHENTICATION_ERROR_CODE,
 ] as const;
-export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];
+export type BackupRunErrorCode = (typeof BACKUP_RUN_ERROR_CODES)[number];

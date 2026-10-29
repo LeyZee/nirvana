@@ -132,6 +132,18 @@ export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string)
  * « Relancer la sauvegarde maintenant » (REG-24): what the strip offers. `asked`: a request waits for the service,
  * which picks it up within a minute. `running`: an export runs now, its outcome will show. Otherwise the button.
  */
+/** How often the page reads the status again while a request waits or an export runs; otherwise never by itself. */
+export const WATCH_MS = 15_000;
+
+/**
+ * Réglages reads the status again only while something is under way: « Relance demandée… » turns into « en cours »
+ * when the service picks the request up, then into the outcome, without the owner reloading the page.
+ */
+export function watchIntervalOf(status: BackupStatus | undefined): number | false {
+  if (status === undefined) return false;
+  return status.runRequestedAt !== undefined || status.lastRun?.status === 'running' ? WATCH_MS : false;
+}
+
 export type RunNowView =
   | { readonly kind: 'offer' }
   | { readonly kind: 'asked'; readonly text: string }

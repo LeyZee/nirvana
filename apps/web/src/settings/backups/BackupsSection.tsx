@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 
 import { RestoreTestDialog } from './RestoreTestDialog';
 import { RunNow } from './RunNow';
@@ -16,6 +16,7 @@ import './backups.css';
 export function BackupsSection(): JSX.Element {
   const status = useBackupStatusQuery();
   const [isOpen, setIsOpen] = useState(false);
+  const copyTitle = useRef<HTMLHeadingElement>(null);
 
   if (status.isPending) {
     return (
@@ -65,12 +66,12 @@ export function BackupsSection(): JSX.Element {
         <StateDot tone={copy.tone} />
         <div className="bk-strip__body">
           <p className="bk-eyebrow">Sauvegarde de chaque nuit</p>
-          <h2 id="bk-copy-title" className="bk-strip__title">
+          <h2 ref={copyTitle} id="bk-copy-title" className="bk-strip__title" tabIndex={-1}>
             {copy.title}
           </h2>
           <p className="bk-text">{copy.text}</p>
           {copy.lastRun === null ? null : <p className="bk-meta">{copy.lastRun}</p>}
-          <RunNow status={status.data} />
+          <RunNow status={status.data} landmark={copyTitle} />
         </div>
       </article>
 

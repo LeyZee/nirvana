@@ -405,3 +405,9 @@
   gap: var(--nv-space-2);
   margin-top: var(--nv-space-2);
 }
+
+/* Focus sent here by the page after a request: the ring for the keyboard only, as on any control. */
+.bk-strip__title:focus:not(:focus-visible),
+.bk-run-asked:focus:not(:focus-visible) {
+  outline: none;
+}

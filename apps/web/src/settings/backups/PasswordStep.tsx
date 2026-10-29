@@ -11,14 +11,17 @@ const PASSWORD_MESSAGES: Record<Exclude<ConfirmResult, 'ok'>, string> = {
 
 /**
  * The sign-in is older than 10 minutes: the password again, then the caller sends its request again, with the same id
- * (a restore test, a request to export now).
+ * (a restore test, a request to export now). `tone`: « Confirmer » is the neon only where the step stands alone (the
+ * restore test's dialog); on the page, the neon stays « Noter un essai ».
  */
 export function PasswordStep({
   hint,
+  tone = 'neon',
   onConfirmed,
   onCancel,
 }: {
   hint: string;
+  tone?: 'neon' | 'soft';
   onConfirmed: () => void;
   onCancel: () => void;
 }): JSX.Element {
@@ -73,7 +76,7 @@ export function PasswordStep({
         />
         <button
           type="button"
-          className="nv-btn nv-btn--neon nv-btn--sm"
+          className={`nv-btn nv-btn--${tone} nv-btn--sm`}
           disabled={busy}
           aria-busy={busy}
           onClick={() => void confirm()}

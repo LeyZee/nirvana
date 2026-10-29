@@ -1,9 +1,11 @@
 import {
   ApiErrorSchema,
   BACKUP_ERROR_CODES,
+  BACKUP_RUN_ERROR_CODES,
   BackupRunRequestSchema,
   REAUTHENTICATION_ERROR_CODE,
   RestoreTestSchema,
+  type BackupRunErrorCode,
   type BackupRunRequest,
   type BackupStatus,
   type RecordRestoreTestBody,
@@ -11,7 +13,7 @@ import {
 } from '@nirvana/contracts';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import type { REFUSALS } from './model';
+import { watchIntervalOf, type REFUSALS } from './model';
 
 import { backupStatusQuery } from '@/screens/dashboard/backups';
 
@@ -21,7 +23,7 @@ import { backupStatusQuery } from '@/screens/dashboard/backups';
  */
 
 export function useBackupStatusQuery(): UseQueryResult<BackupStatus> {
-  return useQuery(backupStatusQuery);
+  return useQuery({ ...backupStatusQuery, refetchInterval: (query) => watchIntervalOf(query.state.data) });
 }
 
 export type RefusalCode = keyof typeof REFUSALS;
@@ -77,6 +79,9 @@ export type RunOutcome =
   | { readonly kind: 'rate_limited' }
   | { readonly kind: 'failed' };
 
+const isRunCode = (code: string): code is BackupRunErrorCode =>
+  BACKUP_RUN_ERROR_CODES.some((known) => known === code);
+
 /**
  * `POST /v1/backups/runs` (REG-24, owner, sign-in under 10 minutes): export now. The same `id` sent twice is one
  * request, and a request already waiting answers a second one: pressing again never queues two exports.
@@ -95,8 +100,8 @@ export async function requestBackupRun(id: string): Promise<RunOutcome> {
     const parsed = ApiErrorSchema.safeParse(await response.json().catch(() => null));
     if (!parsed.success) return { kind: 'failed' };
     const { code } = parsed.data.error;
-    if (code === REAUTHENTICATION_ERROR_CODE) return { kind: 'reauth' };
-    return code === 'backup_run_in_progress_conflict' ? { kind: 'in_progress' } : { kind: 'failed' };
+    if (!isRunCode(code)) return { kind: 'failed' };
+    return code === REAUTHENTICATION_ERROR_CODE ? { kind: 'reauth' } : { kind: 'in_progress' };
   } catch {
     return { kind: 'failed' };
   }

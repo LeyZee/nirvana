@@ -11,6 +11,7 @@ import {
   restoreViewOf,
   runErrorOf,
   runNowOf,
+  watchIntervalOf,
   withReport,
   type RestoreDraft,
 } from './model';
@@ -134,6 +135,22 @@ describe('runNowOf (REG-24)', () => {
         }),
       ),
     ).toEqual({ kind: 'running' });
+  });
+});
+
+describe('watchIntervalOf (REG-24)', () => {
+  it('reads the status again every 15 s while a request waits or an export runs, never otherwise', () => {
+    const running = {
+      status: 'running' as const,
+      startedAt: '2026-10-27T09:59:00Z',
+      finishedAt: null,
+      sizeBytes: null,
+      error: null,
+    };
+    expect(watchIntervalOf(undefined)).toBe(false);
+    expect(watchIntervalOf(status())).toBe(false);
+    expect(watchIntervalOf(status({ runRequestedAt: '2026-10-27T09:58:00Z' }))).toBe(15_000);
+    expect(watchIntervalOf(status({ lastRun: running }))).toBe(15_000);
   });
 });
 
