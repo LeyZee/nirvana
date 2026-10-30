@@ -1,5 +1,5 @@
-import type { CreatorId } from '@nirvana/contracts';
-import type { Database } from '@nirvana/db';
+import type { CreatorId, PayPeriod } from '@nirvana/contracts';
+import type { Database, Transaction } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import { createLeaveService } from './application/leaves';
@@ -11,10 +11,19 @@ import { createSwapService } from './application/swaps';
 import type { CreatorDirectory, JobLogger, OnShift } from './domain/ports';
 import { createDrizzleColleagueReads } from './infra/colleague-reads';
 import { createDrizzleLeaveStore } from './infra/leave-store';
+import {
+  reportsAwaitingReviewScoped,
+  validatedReportsScoped,
+  validatedReportsUnscoped,
+  type CreatorReportsForPay,
+  type EnqueuePayRecalculation,
+  type ValidatedReportForPay,
+} from './infra/pay-reads';
 import { createDrizzlePayRulesStore } from './infra/pay-rules-store';
 import { createDrizzlePlanningAdmin, createDrizzlePlanningStore } from './infra/planning-store';
 import { createDrizzleShiftReportStore } from './infra/report-store';
 import { createSchedulingRoutes, type RequireRole } from './infra/routes';
+import { agencyTimeZone } from './infra/rows';
 import { createDrizzleSwapStore } from './infra/swap-store';
 
 /** Public entry point of the `scheduling` module (EQ-02, ADR 0002). Other modules import this file only. */
@@ -31,6 +40,27 @@ export interface SchedulingModule {
    * is only in their margin.
    */
   onShift(creatorId: CreatorId, at: Date): Promise<OnShift[]>;
+  /**
+   * What pay reads of the planning (EQ-04), in pay's own transaction, given by the composition root: the validated
+   * reports up to a period, each with its account's rules for the period it was made in, on every creator (pay's job,
+   * admin connection) or creator by creator as the validating member reads them (ADR 0032), the reports still waiting
+   * for review, and the agency's zone the periods follow. A validated report enqueues `payroll.recalculate`.
+   */
+  readonly pay: {
+    readonly validatedReportsUnscoped: (tx: Transaction, upTo: PayPeriod) => Promise<ValidatedReportForPay[]>;
+    readonly validatedReportsScoped: (
+      tx: Transaction,
+      creatorIds: readonly string[],
+      upTo: PayPeriod,
+    ) => Promise<CreatorReportsForPay[]>;
+    readonly reportsAwaitingReviewScoped: (
+      tx: Transaction,
+      creatorIds: readonly string[],
+      after: PayPeriod | null,
+      upTo: PayPeriod,
+    ) => Promise<number>;
+    readonly agencyTimeZone: (tx: Transaction) => Promise<string>;
+  };
   readonly jobs: {
     /**
      * `scheduling.make_shifts`: the shifts every running template makes ahead; how many were new. A template that
@@ -56,6 +86,8 @@ export interface SchedulingDeps {
   readonly adminDb: Database;
   /** The creators that exist, with their names (the `persona` module's directory). */
   readonly creators: CreatorDirectory;
+  /** Pay's `payroll.recalculate` for a period, which a validated report enqueues (the `payroll` module's, EQ-04). */
+  readonly enqueuePayRecalculation: EnqueuePayRecalculation;
   readonly now?: () => Date;
 }
 
@@ -82,7 +114,7 @@ export function createSchedulingModule(deps: SchedulingDeps): SchedulingModule {
       now,
     ),
     reports: createShiftReportService(
-      createDrizzleShiftReportStore(deps.db, deps.adminDb),
+      createDrizzleShiftReportStore(deps.db, deps.adminDb, deps.enqueuePayRecalculation),
       deps.creators,
       now,
     ),
@@ -91,6 +123,7 @@ export function createSchedulingModule(deps: SchedulingDeps): SchedulingModule {
   return {
     name: 'scheduling',
     onShift: (creatorId, at) => admin.onShiftUnscoped(creatorId, at),
+    pay: { validatedReportsUnscoped, validatedReportsScoped, reportsAwaitingReviewScoped, agencyTimeZone },
     routes: (requireRole) => createSchedulingRoutes(services, requireRole),
     jobs: {
       makeShifts: (logger) => makeShifts(admin, logger, now()),

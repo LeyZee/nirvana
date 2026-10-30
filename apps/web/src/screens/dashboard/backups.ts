@@ -1,6 +1,8 @@
 import { BackupStatusSchema, RESTORE_TEST_FRESH_DAYS, type BackupStatus } from '@nirvana/contracts';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 
+import { withFirstOfMonth } from '@/scheduling/time';
+
 /** The export is daily: reading its state again every five minutes is plenty. */
 const REFRESH_MS = 300_000;
 
@@ -37,9 +39,13 @@ function when(iso: string, timeZone: string | undefined): string {
   return `${day(iso, timeZone)} à ${clock}`;
 }
 
-/** « 12 juillet », in the reader's time zone. */
+/** « 12 juillet », « 1er août », in the reader's time zone. */
 function day(iso: string, timeZone: string | undefined): string {
-  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', timeZone }).format(new Date(iso));
+  return withFirstOfMonth(
+    new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', timeZone }).formatToParts(
+      new Date(iso),
+    ),
+  );
 }
 
 /**

@@ -16,7 +16,7 @@ import {
   PlaygroundSituationBodySchema,
   PlaygroundStateSchema,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import type { AlertTester } from '../../agent/index';
@@ -25,7 +25,7 @@ import type { PlaygroundService } from '../application/playground-service';
 
 export interface PlaygroundRoutesOptions {
   /** `requireRole('owner')` for now (coordinator, 17/10); Messa (`creator`) later. */
-  readonly guard: preHandlerAsyncHookHandler;
+  readonly guard: preValidationAsyncHookHandler;
 }
 
 const state = { 200: PlaygroundStateSchema };
@@ -40,7 +40,7 @@ export function createPlaygroundRoutes(
   options: PlaygroundRoutesOptions,
 ): FastifyPluginAsyncZod {
   return (app) => {
-    app.addHook('preHandler', options.guard);
+    app.addHook('preValidation', options.guard);
 
     const engineOf = (request: FastifyRequest): PlaygroundEngine => {
       // The guard has set the user; a route reached without one is a wiring error, not a user error.

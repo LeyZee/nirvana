@@ -26,7 +26,12 @@ import {
 } from '../domain/errors';
 import { leaveCover } from '../domain/leaves';
 import type { Actor, StoredLeave, StoredMember, StoredShift, StoredTemplate } from '../domain/ports';
-import { assertCanWork, DEFAULT_SCHEDULING_SETTINGS } from '../domain/shifts';
+import {
+  assertCanWork,
+  assertJoined,
+  DEFAULT_SCHEDULING_SETTINGS,
+  type WorkingMember,
+} from '../domain/shifts';
 
 /** What the planning's stores share: the columns read, their parsing, the audit line, the member lock, the leaves. */
 
@@ -249,22 +254,42 @@ export async function assertNotOnLeave(
   if (away !== undefined) throw new MemberOnLeave(away.id);
 }
 
-/** A shift goes to an `active` member working on its creator; `member_not_found` when the member does not exist. */
-export async function assertMemberWorks(
-  tx: Transaction,
-  memberId: TeamMemberId,
-  creatorId: CreatorId,
-): Promise<void> {
+/** What a shift's member must be (`assertCanWork`); `member_not_found` when the member does not exist. */
+async function workingMember(tx: Transaction, memberId: TeamMemberId): Promise<WorkingMember> {
   const [member] = await tx
-    .select({ status: teamMembers.status, creatorIds: user.creatorIds })
+    .select({
+      status: teamMembers.status,
+      creatorIds: user.creatorIds,
+      joinedOn: teamMembers.joinedOn,
+      agencyTimeZone: agencyZone,
+    })
     .from(teamMembers)
     .innerJoin(user, eq(user.id, teamMembers.userId))
     .where(eq(teamMembers.id, memberId));
   if (member === undefined) throw new MemberNotFound();
-  assertCanWork(
-    { status: TeamMemberStatusSchema.parse(member.status), creatorIds: member.creatorIds },
-    creatorId,
-  );
+  return { ...member, status: TeamMemberStatusSchema.parse(member.status) };
+}
+
+/**
+ * A shift starting at `startsAt` goes to an `active` member working on its creator, who has joined by then;
+ * `member_not_found` when the member does not exist.
+ */
+export async function assertMemberWorks(
+  tx: Transaction,
+  memberId: TeamMemberId,
+  creatorId: CreatorId,
+  startsAt: Date,
+): Promise<void> {
+  assertCanWork(await workingMember(tx, memberId), creatorId, startsAt);
+}
+
+/** A shift of the same member moved to another start: still on or after the day they join. */
+export async function assertMemberJoined(
+  tx: Transaction,
+  memberId: TeamMemberId,
+  startsAt: Date,
+): Promise<void> {
+  assertJoined(await workingMember(tx, memberId), startsAt);
 }
 
 /** The account is the creator's: the tenant policy hides any other. */
@@ -358,11 +383,14 @@ export async function assertNotReported(tx: Transaction, shiftId: string): Promi
   if (report !== undefined) throw new ShiftReportExists(report.id);
 }
 
+/** The agency's zone as a column, for a read that also takes a member's row (`WorkingMember`). */
+export const agencyZone = sql<string>`coalesce((select ${schedulingSettings.timeZone} from ${schedulingSettings} limit 1), ${DEFAULT_SCHEDULING_SETTINGS.timeZone})`;
+
 /**
  * The agency's zone, which the pay periods follow (ADR 0023): the planning's, or its default until the owner sets it.
  * Every team scope reads the settings.
  */
 export async function agencyTimeZone(tx: Transaction): Promise<string> {
-  const [row] = await tx.select({ timeZone: schedulingSettings.timeZone }).from(schedulingSettings);
-  return row?.timeZone ?? DEFAULT_SCHEDULING_SETTINGS.timeZone;
+  const result = await tx.execute<{ zone: string }>(sql`select ${agencyZone} as zone`);
+  return result.rows[0]?.zone ?? DEFAULT_SCHEDULING_SETTINGS.timeZone;
 }

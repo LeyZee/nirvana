@@ -8,6 +8,7 @@ import {
   MediaAssetIdSchema,
   PlatformAccountIdSchema,
 } from './ids';
+import { PayPeriodSchema } from './pay-periods';
 import { TELEGRAM_JOB_PAYLOADS } from './telegram';
 
 /**
@@ -36,6 +37,10 @@ export const JOB_NAMES = [
   'backups.check',
   'scheduling.make_shifts',
   'scheduling.lapse_swaps',
+  'team.apply_roles',
+  'payroll.recalculate',
+  'payroll.recalculate_open',
+  'payroll.fetch_exchange_rates',
   'media.describe',
   'providers.check_credentials',
   'telegram.scan',
@@ -101,6 +106,22 @@ export const JOB_PAYLOADS = {
   'backups.check': z.object({}),
   'scheduling.make_shifts': z.object({}),
   'scheduling.lapse_swaps': z.object({}),
+  /** Each member's record takes the role in force today (`member_roles`), a role dated for today taking effect. */
+  'team.apply_roles': z.object({}),
+  /**
+   * The drafts of `period` computed again (EQ-04, ADR 0032), and those of the team's first open period when `period`
+   * is closed: a report validated after its period's closing counts there. Enqueued by what changes a period's inputs,
+   * under the key `payroll.recalculate:<period>` (one waiting job per period); a run that finds nothing new writes
+   * nothing.
+   */
+  'payroll.recalculate': z.object({ period: PayPeriodSchema }),
+  /** Every open period up to the current one computed again, the hour's safety net; pay's periods written first. */
+  'payroll.recalculate_open': z.object({}),
+  /**
+   * The ECB's last 90 days of rates, each day written once (ADR 0033); a run that finds nothing new writes nothing. Not
+   * strict: the cron adds `_cron` to the payload of every run it enqueues.
+   */
+  'payroll.fetch_exchange_rates': z.object({}),
   'media.describe': z.object({
     creatorId: CreatorIdSchema,
     mediaAssetId: MediaAssetIdSchema,
@@ -132,6 +153,12 @@ export const JOB_MAX_ATTEMPTS = {
   'backups.check': 1,
   'scheduling.make_shifts': 1,
   'scheduling.lapse_swaps': 1,
+  'team.apply_roles': 1,
+  // A recalculation is replayable and writes nothing when nothing changed; the hourly one catches up anyway.
+  'payroll.recalculate': 5,
+  'payroll.recalculate_open': 1,
+  // The ECB may be down for a minute; the next hour reads the 90 days again anyway.
+  'payroll.fetch_exchange_rates': 3,
   'media.describe': 3,
   'providers.check_credentials': 1,
   // The scan is also enqueued by the `domain_events` trigger (0006) with 25, and a flush by the module with 10:

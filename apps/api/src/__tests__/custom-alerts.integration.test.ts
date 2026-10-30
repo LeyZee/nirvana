@@ -250,4 +250,194 @@ describe('alerts (P4-01, /v1/alerts)', () => {
     });
     expect(errorOf(unknownGroup)).toEqual([404, 'custom_alert_not_found']);
   });
+
+  it('refuses a second active alert of the same name on a creator, case, accents and spaces aside', async () => {
+    const lina = await app.modules.persona.creators.create({ displayName: 'Lina N.' });
+    const maya = await app.modules.persona.creators.create({ displayName: 'Maya N.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const alertOn = (name: string, creators: { creatorId: string; enabled: boolean }[]) => ({
+      groupId: newId(CustomAlertGroupIdSchema),
+      name,
+      phrase: null,
+      keywords: ['appel'],
+      pausesAgent: false,
+      notify: false,
+      creators,
+    });
+    const post = (payload: object) =>
+      server.inject({ method: 'POST', url: '/v1/alerts', headers: owner, payload });
+    const put = (groupId: string, payload: object) =>
+      server.inject({ method: 'PUT', url: `/v1/alerts/${groupId}`, headers: owner, payload });
+
+    const first = alertOn('Appel vidéo', [{ creatorId: lina.id, enabled: true }]);
+    expect((await post(first)).statusCode).toBe(201);
+    // Same name on the same creator, written otherwise: refused, nothing written.
+    const twin = alertOn('  APPEL VIDEO ', [
+      { creatorId: maya.id, enabled: true },
+      { creatorId: lina.id, enabled: true },
+    ]);
+    const refused = await post(twin);
+    expect(errorOf(refused)).toEqual([409, 'custom_alert_name_conflict']);
+    expect(refused.json()).toMatchObject({
+      error: { message: 'Une alerte active porte déjà ce nom', details: { creatorIds: [lina.id] } },
+    });
+    expect(
+      await test.admin.db
+        .select()
+        .from(schema.customAlerts)
+        .where(eq(schema.customAlerts.groupId, twin.groupId)),
+    ).toEqual([]);
+    // Another creator, or the same one with the twin switched off: the name is free.
+    expect((await post({ ...twin, creators: [{ creatorId: maya.id, enabled: true }] })).statusCode).toBe(201);
+    const off = alertOn('Appel Vidéo', [{ creatorId: lina.id, enabled: false }]);
+    expect((await post(off)).statusCode).toBe(201);
+    // Switching it on would make two: refused; the first switched off, it goes through.
+    expect(
+      errorOf(await put(off.groupId, { ...off, creators: [{ creatorId: lina.id, enabled: true }] })),
+    ).toEqual([409, 'custom_alert_name_conflict']);
+    expect(
+      (await put(first.groupId, { ...first, creators: [{ creatorId: lina.id, enabled: false }] })).statusCode,
+    ).toBe(200);
+    expect(
+      (await put(off.groupId, { ...off, creators: [{ creatorId: lina.id, enabled: true }] })).statusCode,
+    ).toBe(200);
+    // An alert keeps its own name when replaced, and an archived one frees it.
+    expect(
+      (
+        await put(off.groupId, {
+          ...off,
+          keywords: ['visio'],
+          creators: [{ creatorId: lina.id, enabled: true }],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await server.inject({ method: 'DELETE', url: `/v1/alerts/${off.groupId}`, headers: owner }))
+        .statusCode,
+    ).toBe(204);
+    expect((await post(alertOn('appel vidéo', [{ creatorId: lina.id, enabled: true }]))).statusCode).toBe(
+      201,
+    );
+  });
+
+  it('writes one of two alerts of the same name posted at once', async () => {
+    const zoe = await app.modules.persona.creators.create({ displayName: 'Zoé N.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const body = () => ({
+      groupId: newId(CustomAlertGroupIdSchema),
+      name: 'Rendez-vous',
+      phrase: null,
+      keywords: ['rdv'],
+      pausesAgent: false,
+      notify: false,
+      creators: [{ creatorId: zoe.id, enabled: true }],
+    });
+    const answers = await Promise.all(
+      [body(), body()].map((payload) =>
+        server.inject({ method: 'POST', url: '/v1/alerts', headers: owner, payload }),
+      ),
+    );
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([201, 409]);
+    expect((await app.modules.alerts.store.activeFor(zoe.id)).map((alert) => alert.name)).toEqual([
+      'Rendez-vous',
+    ]);
+  });
+
+  it('writes and audits once the same alert posted five times at once, the replays unaudited (recette 28/10)', async () => {
+    const lea = await app.modules.persona.creators.create({ displayName: 'Léa N.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const groupId = newId(CustomAlertGroupIdSchema);
+    const payload = {
+      groupId,
+      name: 'Double envoi',
+      phrase: null,
+      keywords: ['double'],
+      pausesAgent: false,
+      notify: false,
+      creators: [{ creatorId: lea.id, enabled: true }],
+    };
+    const answers = await Promise.all(
+      Array.from({ length: 5 }, () => payload).map((body) =>
+        server.inject({ method: 'POST', url: '/v1/alerts', headers: owner, payload: body }),
+      ),
+    );
+    // Without the writers' lock, four of them were created and audited, the fifth a 500.
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([200, 200, 200, 200, 201]);
+    const [first, ...replays] = answers.map((answer) => CustomAlertGroupSchema.parse(answer.json()));
+    for (const replay of replays) expect(replay).toEqual(first);
+    const audit = await test.admin.db
+      .select({ action: schema.auditLog.action })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.entityId, groupId));
+    expect(audit).toEqual([{ action: 'custom_alert.create' }]);
+    const rows = await test.admin.db
+      .select({ id: schema.customAlerts.id })
+      .from(schema.customAlerts)
+      .where(eq(schema.customAlerts.groupId, groupId));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('keeps archived an alert changed at the same moment, on every creator', async () => {
+    const ines = await app.modules.persona.creators.create({ displayName: 'Inès R.' });
+    const lou = await app.modules.persona.creators.create({ displayName: 'Lou R.' });
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const fields = {
+      phrase: null,
+      keywords: ['adresse'],
+      pausesAgent: false,
+      notify: false,
+    };
+    for (let round = 0; round < 8; round += 1) {
+      const groupId = newId(CustomAlertGroupIdSchema);
+      const name = `Adresse ${String(round)}`;
+      const created = await server.inject({
+        method: 'POST',
+        url: '/v1/alerts',
+        headers: owner,
+        payload: { groupId, name, ...fields, creators: [{ creatorId: ines.id, enabled: true }] },
+      });
+      expect(created.statusCode).toBe(201);
+      // The change also puts the alert on a second creator: an insert, besides the update of the first row.
+      const [changed, archived] = await Promise.all([
+        server.inject({
+          method: 'PUT',
+          url: `/v1/alerts/${groupId}`,
+          headers: owner,
+          payload: {
+            name,
+            ...fields,
+            keywords: ['adresse', 'rue'],
+            creators: [
+              { creatorId: ines.id, enabled: true },
+              { creatorId: lou.id, enabled: true },
+            ],
+          },
+        }),
+        server.inject({ method: 'DELETE', url: `/v1/alerts/${groupId}`, headers: owner }),
+      ]);
+      expect(archived.statusCode).toBe(204);
+      const rows = await test.admin.db
+        .select({ archivedAt: schema.customAlerts.archivedAt })
+        .from(schema.customAlerts)
+        .where(eq(schema.customAlerts.groupId, groupId));
+      const audit = await test.admin.db
+        .select({ action: schema.auditLog.action })
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.entityId, groupId));
+      if (changed.statusCode === 200) {
+        // Both were written, so the change went first and the archive after it: archived on every creator, the
+        // second one included, never brought back by the change.
+        expect(audit.map((a) => a.action).toSorted()).toEqual([
+          'custom_alert.archive',
+          'custom_alert.create',
+          'custom_alert.update',
+        ]);
+        expect(rows.every((row) => row.archivedAt !== null)).toBe(true);
+      } else {
+        // The archive came first: the change finds no alert to change.
+        expect(errorOf(changed)).toEqual([404, 'custom_alert_not_found']);
+        expect(rows.every((row) => row.archivedAt !== null)).toBe(true);
+      }
+    }
+  });
 });

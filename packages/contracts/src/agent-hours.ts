@@ -15,7 +15,7 @@ const MINUTES_PER_DAY = 1440;
 export const MinuteRangeSchema = z
   .object({ startMinute: MinuteOfDaySchema, endMinute: MinuteOfDaySchema })
   .refine((range) => range.startMinute !== range.endMinute, {
-    message: 'Une plage commence et finit à des heures différentes',
+    message: 'Une plage doit commencer et finir à des heures différentes',
     path: ['endMinute'],
   });
 export type MinuteRange = z.infer<typeof MinuteRangeSchema>;

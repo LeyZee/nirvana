@@ -370,6 +370,58 @@
   inset: calc((var(--nv-target-min) - 34px) / -2);
 }
 
+/* The round close of a sheet or a dialog: quiet (the neon stays on the action), 36px seen, 44px to touch. */
+.nv-close {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-glass-fill);
+  color: var(--nv-ink-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--nv-dur-fast) var(--nv-ease-out),
+    color var(--nv-dur-fast) var(--nv-ease-out),
+    transform var(--nv-dur-slow) var(--nv-ease-spring);
+}
+.nv-close::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--nv-target-min) - 36px) / -2);
+}
+.nv-close:hover:not(:disabled) {
+  background: var(--nv-select-strong);
+  color: var(--nv-ink);
+  transform: rotate(90deg);
+}
+.nv-close:active:not(:disabled) {
+  transform: scale(0.9);
+  transition-duration: var(--nv-dur-instant);
+}
+.nv-close:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+}
+.nv-close:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.nv-close svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
 /* Keyboard hint inside a button or a help line: <kbd class="nv-kbd">a</kbd> */
 .nv-kbd {
   display: inline-grid;
@@ -806,8 +858,9 @@
 .nv-status--human {
   --_c: var(--nv-ink);
 }
+/* A failed send is a warning, as in « À traiter »: amber, never red, which stays for urgencies. */
 .nv-status--error {
-  --_c: var(--nv-danger);
+  --_c: var(--nv-warning);
 }
 .nv-status--sale {
   --_c: var(--nv-sale);
@@ -2547,5 +2600,9 @@
   .nv-tip,
   .nv-funnel__bar {
     transition-duration: 1ms;
+  }
+  .nv-close:hover:not(:disabled),
+  .nv-close:active:not(:disabled) {
+    transform: none;
   }
 }

@@ -378,6 +378,8 @@ export function createDemoClient(start: Date = new Date('2026-10-17T22:40:00+02:
     const validated = last.filter(Boolean).length;
     const hour = hourIn(now, timeZone);
     return {
+      // The demo persona's first name (`personas/demo`): the screen says whom it plays, here too.
+      persona: { name: 'Elena' },
       presets: [...PRESETS],
       presetId,
       situation: {

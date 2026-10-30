@@ -1,4 +1,5 @@
-import type { AlertTriggerItem, CreatorSummary, CustomAlertGroupId } from '@nirvana/contracts';
+import type { AlertTriggerItem, CreatorSummary } from '@nirvana/contracts';
+import { Link } from '@tanstack/react-router';
 import { useId, useRef, useState, type JSX, type ReactNode } from 'react';
 
 import { Reader } from '../Reader';
@@ -17,10 +18,13 @@ import './history.css';
 import {
   alertChoices,
   alertsOf,
+  ownedAlerts,
+  type KnownAlert,
   choiceOf,
   markAllTargets,
   markedLine,
   mergeTriggers,
+  reasonAddsSomething,
   whenLine,
   type AlertChoice,
 } from './model';
@@ -84,11 +88,19 @@ export function AlertHistoryPage({
   };
 
   return (
-    <Page className={selected === null ? '' : 'tr-is-reading'}>
+    <Page className={selected === null ? 'tr-page' : 'tr-page tr-is-reading'}>
       <PageHeader
         eyebrow={creators.length === 1 ? creators[0]?.displayName : undefined}
         title="Suivi"
-        lead="Chaque alerte qui a sonné, la plus récente d’abord. Ce qui demande une main est dans « À traiter »."
+        lead={
+          <>
+            Chaque alerte qui a sonné, la plus récente d’abord. Ce qui demande une main est dans{' '}
+            <Link to="/suivi" className="hi-lead-link">
+              «&nbsp;À traiter&nbsp;»
+            </Link>
+            .
+          </>
+        }
         actions={nav}
       />
       {creatorsQuery.isError ? (
@@ -153,7 +165,11 @@ export function AlertHistoryPage({
               }}
             />
           </div>
-          {selected === null ? null : open === null ? (
+          {selected === null ? (
+            <section className="nv-plate tr-reader tr-reader--idle" aria-label="Conversation">
+              <p className="tr-reader__empty">Choisis une alerte à gauche : sa conversation s’ouvre ici.</p>
+            </section>
+          ) : open === null ? (
             <section className="nv-plate tr-reader" aria-label="Conversation">
               <p className="tr-reader__empty">Cette conversation n’est pas dans la liste.</p>
             </section>
@@ -166,6 +182,7 @@ export function AlertHistoryPage({
               onClose={() => {
                 onSelect(null);
               }}
+              backLabel="Toutes les alertes"
             />
           )}
         </div>
@@ -218,10 +235,10 @@ function History({
   const refresh = useRefreshHistory();
   const owned = useAlerts({ enabled: isOwner });
   // Her alerts named once read, so that the filter still offers them when it narrows the list to one.
-  const named = useRef(new Map<CustomAlertGroupId, string>());
-  for (const one of [...(owned.data?.custom ?? []), ...alertsOf(items)])
-    named.current.set(one.groupId, one.name);
-  const choices = alertChoices([...named.current].map(([groupId, name]) => ({ groupId, name })));
+  const named = useRef(new Map<string, KnownAlert>());
+  for (const one of [...ownedAlerts(owned.data?.custom ?? []), ...alertsOf(items)])
+    named.current.set(`${one.groupId} ${one.creatorId}`, one);
+  const choices = alertChoices([...named.current.values()], creator, alert);
   const [marking, setMarking] = useState<ReadonlySet<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
   const [said, setSaid] = useState<{ readonly text: string; readonly failed: boolean } | null>(null);
@@ -269,7 +286,6 @@ function History({
   return (
     <Panel
       className="tr-panel hi-panel"
-      eyebrow="Alertes"
       actions={
         anyUnseen ? (
           <button
@@ -449,7 +465,7 @@ function Line({
             {item.alertName}
             {item.pausedAgent ? <span className="nv-tag hi-line__tag">Agent en pause</span> : null}
           </span>
-          <span className="hi-line__reason">{item.reason}</span>
+          {reasonAddsSomething(item) ? <span className="hi-line__reason">{item.reason}</span> : null}
           <span className="nv-convo__preview">
             {creatorName === undefined ? fan : `${fan} · ${creatorName}`}
           </span>
@@ -466,7 +482,6 @@ function Line({
           disabled={marking}
           aria-busy={marking}
           aria-label={`Marquer comme vu : ${item.alertName}, ${fan}`}
-          title="Marquer comme vu"
           onClick={onSeen}
         >
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">

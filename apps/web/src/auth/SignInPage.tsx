@@ -1,9 +1,10 @@
 import { useState, type JSX, type SyntheticEvent } from 'react';
 
+import { PublicBrand } from './PublicBrand';
 import { signIn, type SignInResult } from './session';
 
 const MESSAGES: Record<Exclude<SignInResult, 'ok'>, string> = {
-  wrong_credentials: 'Email ou mot de passe incorrect.',
+  wrong_credentials: 'E-mail ou mot de passe incorrect.',
   too_many_attempts: 'Trop de tentatives. Réessaie dans un quart d’heure.',
   unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
 };
@@ -37,18 +38,10 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
         className="nv-plate nv-plate--pad flex w-full max-w-sm flex-col gap-5"
         onSubmit={(event) => void submit(event)}
       >
-        <h1 className="flex items-center gap-2 font-serif text-4xl italic">
-          <img
-            src="/nirvana-mark.svg"
-            alt=""
-            width={34}
-            height={34}
-            className="drop-shadow-[0_0_10px_color-mix(in_srgb,var(--nv-neon)_45%,transparent)]"
-          />
-          Nirvana
-        </h1>
+        <PublicBrand page="Connexion" />
+        <h1 className="sr-only">Connexion</h1>
         <label className="nv-field">
-          <span className="nv-field__label">Email</span>
+          <span className="nv-field__label">E-mail</span>
           <input
             className="nv-field__control"
             name="email"
@@ -77,7 +70,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
           {isSubmitting ? 'Connexion…' : 'Se connecter'}
         </button>
         <p className="text-center text-sm text-[var(--nv-ink-faint)]">
-          Mot de passe oublié ? Demande un nouveau lien à ton responsable.
+          Mot de passe oublié ? Demande un nouveau lien à la personne qui gère ton accès.
         </p>
       </form>
     </main>

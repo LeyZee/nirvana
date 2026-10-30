@@ -13,6 +13,7 @@ import {
 
 import type { ReportRefusalCode } from './api';
 
+import { swapShiftLine } from '@/scheduling/model';
 import { dayOf } from '@/scheduling/time';
 
 /**
@@ -24,9 +25,9 @@ const NBSP = '\u00a0';
 
 /**
  * A typed amount in minor units: « 1 234,56 », « 1234.5 », « 12 € »; a sign only where it is allowed (a correction).
- * `null` for anything else: letters, three decimals, more than the slip guard.
+ * `null` for anything else: letters, three decimals, more than `max` (the slip guard, or a target's ceiling).
  */
-export function parseAmount(text: string, signed = false): number | null {
+export function parseAmount(text: string, signed = false, max = SHIFT_REPORT_MAX_MINOR): number | null {
   const bare = text.replace(/[\s\u00a0\u202f€$]/gu, '').replace(/^(EUR|USD)|(EUR|USD)$/giu, '');
   const match = /^([+\-−]?)(\d+)(?:[.,](\d{1,2}))?$/u.exec(bare);
   if (match === null) return null;
@@ -34,25 +35,33 @@ export function parseAmount(text: string, signed = false): number | null {
   if (sign !== '' && !signed) return null;
   if (units.length > 9) return null;
   const minor = Number(units) * 100 + Number(cents.padEnd(2, '0'));
-  if (minor > SHIFT_REPORT_MAX_MINOR) return null;
+  if (minor > max) return null;
   return sign === '-' || sign === '−' ? -minor : minor;
 }
 
-const MONEY = new Map<Currency, Intl.NumberFormat>();
+const MONEY = new Map<string, Intl.NumberFormat>();
 
-/** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */
-export function amountText(minor: number, currency: Currency): string {
-  let format = MONEY.get(currency);
+/** An amount in French, the true minus sign « − » in place of the hyphen `Intl` gives. */
+function money(minor: number, currency: Currency, signDisplay: 'auto' | 'exceptZero'): string {
+  const key = `${currency} ${signDisplay}`;
+  let format = MONEY.get(key);
   if (format === undefined) {
-    format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency });
-    MONEY.set(currency, format);
+    format = new Intl.NumberFormat('fr-FR', { style: 'currency', currency, signDisplay });
+    MONEY.set(key, format);
   }
-  return format.format(minor / 100).replace('-', '−');
+  // A sum that cancels out can be -0 (« −5 + 5 » in a reduce): written « 0,00 € », never « −0,00 € ».
+  return format.format(minor === 0 ? 0 : minor / 100).replace('-', '−');
 }
 
-/** A correction's amount, its sign always said: « + 5,00 € », « − 30,00 € ». */
+/** An amount as French reads it, with its currency: « 1 234,56 € », « 80,00 $US ». */
+export const amountText = (minor: number, currency: Currency): string => money(minor, currency, 'auto');
+
+/**
+ * An amount whose sign is always said, attached to its figure: « +5,00 € », « −30,00 € ». A correction, a bonus, a
+ * penalty, a gap: every signed amount of the team's screens reads through this one.
+ */
 export const signedAmountText = (minor: number, currency: Currency): string =>
-  `${minor < 0 ? '−' : '+'}${NBSP}${amountText(Math.abs(minor), currency)}`;
+  money(minor, currency, 'exceptZero');
 
 /** The figure an amount field shows back, without its currency: « 1234,56 ». */
 export const amountInput = (minor: number): string =>
@@ -75,10 +84,11 @@ export function periodLine(period: PayPeriod): string {
   return `du ${dayNumber(period)} au ${dayNumber(last)} ${MONTH.format(new Date(`${period}T12:00:00Z`))}`;
 }
 
-/** « 1er – 15 octobre 2026 »: a period as a title. */
-export function periodTitle(period: PayPeriod): string {
+/** « 1er – 15 octobre 2026 »: a period as a title; « 1er – 15 octobre » in a list that has room for no more. */
+export function periodTitle(period: PayPeriod, year = true): string {
   const last = payPeriodLastDay(period);
-  return `${dayNumber(period)} – ${dayNumber(last)} ${MONTH_YEAR.format(new Date(`${period}T12:00:00Z`))}`;
+  const month = (year ? MONTH_YEAR : MONTH).format(new Date(`${period}T12:00:00Z`));
+  return `${dayNumber(period)} – ${dayNumber(last)} ${month}`;
 }
 
 /** The period running at `now` in the agency's zone, which the periods follow (ADR 0023). */
@@ -86,7 +96,8 @@ export const periodAt = (now: Date, agencyZone: string): PayPeriod => payPeriodO
 
 /** A status as its member reads it, and as the agency does. */
 export const MEMBER_STATUS: Readonly<Record<ShiftReportStatus, string>> = {
-  submitted: 'Envoyé',
+  // The word of the figure above it, « En attente », not a second name for the same state (EQ-21).
+  submitted: 'En attente',
   validated: 'Validé',
   rejected: 'Renvoyé',
 };
@@ -178,6 +189,39 @@ export function linesOf(list: ShiftReportList): ShiftLine[] {
     .toSorted((a, b) => b.shift.startsAt.localeCompare(a.shift.startsAt));
 }
 
+/** The shifts over with no report yet, the oldest first: the late ones the agency sees at a glance (EQ-14). */
+export function lateLines(list: ShiftReportList, now: Date): ShiftLine[] {
+  return linesOf(list)
+    .filter((line) => line.report === null && new Date(line.shift.endsAt).getTime() <= now.getTime())
+    .toReversed();
+}
+
+/** « depuis 25 min », « depuis 8 h », « depuis 2 jours »: how long a report has been waiting since its shift ended. */
+export function lateFor(endsAt: string, now: Date): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - new Date(endsAt).getTime()) / 60_000));
+  if (minutes < 60) return `depuis ${String(minutes)}${NBSP}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `depuis ${String(hours)}${NBSP}h`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'depuis 1 jour' : `depuis ${String(days)} jours`;
+}
+
+/**
+ * The word « Relancer » copies for a member whose report is late (EQ-15), at his own hour: « Kofi, ton rapport du
+ * mer. 28 oct. · 11 h – 17 h (Léa) n’est pas encore fait. Fais-le dans Nirvana dès que tu peux. » Nirvana sends
+ * nothing: the agency pastes it where it talks to him.
+ */
+export function nudgeText(
+  name: string,
+  shift: Pick<Shift, 'startsAt' | 'endsAt'>,
+  creatorName: string | undefined,
+  timeZone: string,
+): string {
+  const when = swapShiftLine(shift.startsAt, shift.endsAt, undefined, timeZone);
+  const on = creatorName === undefined ? '' : ` (${creatorName})`;
+  return `${name}, ton rapport du ${when}${on} n’est pas encore fait. Fais-le dans Nirvana dès que tu peux.`;
+}
+
 /**
  * A period's figures per currency: what is validated, what still waits for the agency (sent, not yet read), and what
  * came back and waits for its member. Corrections count in each, as their amounts do.
@@ -185,6 +229,8 @@ export function linesOf(list: ShiftReportList): ShiftLine[] {
 export interface PeriodSum {
   readonly currency: Currency;
   readonly validatedMinor: number;
+  /** Reports and corrections validated, one validated at zero among them. */
+  readonly validated: number;
   readonly waitingMinor: number;
   readonly waiting: number;
   readonly sentBackMinor: number;
@@ -196,6 +242,7 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
   for (const report of reports) {
     const sum = sums.get(report.amount.currency) ?? {
       validatedMinor: 0,
+      validated: 0,
       waitingMinor: 0,
       waiting: 0,
       sentBackMinor: 0,
@@ -205,7 +252,7 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
     sums.set(
       report.amount.currency,
       report.status === 'validated'
-        ? { ...sum, validatedMinor: sum.validatedMinor + minor }
+        ? { ...sum, validatedMinor: sum.validatedMinor + minor, validated: sum.validated + 1 }
         : report.status === 'submitted'
           ? { ...sum, waitingMinor: sum.waitingMinor + minor, waiting: sum.waiting + 1 }
           : { ...sum, sentBackMinor: sum.sentBackMinor + minor, sentBack: sum.sentBack + 1 },
@@ -218,13 +265,13 @@ export function periodSums(reports: readonly ShiftReport[]): PeriodSum[] {
 export const percentText = (bps: number): string =>
   `${(bps / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}${NBSP}%`;
 
-/** A typed percentage in basis points, 0 to 100 with two decimals at most; `null` otherwise. */
-export function parsePercent(text: string): number | null {
-  const match = /^(\d{1,3})(?:[.,](\d{1,2}))?$/u.exec(text.replace(/[\s\u00a0%]/gu, ''));
+/** A typed percentage in basis points, 0 to `max` (100 %) with two decimals at most; `null` otherwise. */
+export function parsePercent(text: string, max = 10_000): number | null {
+  const match = /^(\d{1,4})(?:[.,](\d{1,2}))?$/u.exec(text.replace(/[\s\u00a0%]/gu, ''));
   if (match === null) return null;
   const [, units = '0', decimals = ''] = match;
   const bps = Number(units) * 100 + Number(decimals.padEnd(2, '0'));
-  return bps <= 10_000 ? bps : null;
+  return bps <= max ? bps : null;
 }
 
 /** The periods new rules may start with: the current one for an account's first rules, then the next ones. */
@@ -296,3 +343,16 @@ export const READ_AGAIN: ReadonlySet<ReportRefusalCode> = new Set<ReportRefusalC
   'pay_rules_conflict',
   'pay_rules_period_conflict',
 ]);
+
+/**
+ * The currency a typed amount names, by its symbol or its code (« 50 € », « $50 », « 50 USD »), `null` when it names
+ * none: `parseAmount` drops them, so a « 50 € » on an account in dollars is caught here rather than read as $50.
+ */
+export function currencyTyped(text: string): Currency | null {
+  if (/€|EUR/iu.test(text)) return 'EUR';
+  if (/\$|USD/iu.test(text)) return 'USD';
+  return null;
+}
+
+/** « en euros », « en dollars »: the currency an account declares in, in a sentence. */
+export const CURRENCY_WORDS: Readonly<Record<Currency, string>> = { EUR: 'en euros', USD: 'en dollars' };

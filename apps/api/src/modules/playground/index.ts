@@ -7,10 +7,12 @@ import { DEFAULT_LLM_CONFIG, loadPrompt, type LlmGateway } from '@nirvana/llm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import {
+  activePersonaForModels,
   createAlertTester,
   createJsonlCalibrationStore,
   readPersonaFile,
   type CalibrationRecord,
+  type ActivePersonaSource,
   type CalibrationStore,
   type PersonaForModels,
 } from '../agent/index';
@@ -28,12 +30,17 @@ export { createPlaygroundSession, type PlaygroundFollowUp, type PlaygroundTurn }
 
 export interface PlaygroundModule {
   readonly name: 'playground';
-  /** `/v1/playground`, and `POST /v1/alerts/test` read with the same persona (P4-01), behind the guard given here. */
+  /**
+   * `/v1/playground` with its persona, and `POST /v1/alerts/test` (P4-01) with the active persona of the creator it
+   * names (recette M13), behind the guard given here.
+   */
   readonly routes: (options: PlaygroundRoutesOptions) => FastifyPluginAsyncZod;
 }
 
 export interface PlaygroundDeps extends PlaygroundGatewayDeps {
   readonly persona: PersonaForModels;
+  /** Her active persona version (`persona` module): « Tester » an alert reads the phrase with it, as her drafts do. */
+  readonly activePersona: ActivePersonaSource;
   readonly store: CalibrationStore;
   /** The ratings already kept: the rate starts from them and the corrections come back as voice examples. */
   readonly records: CalibrationRecord[];
@@ -68,7 +75,11 @@ export function createPlaygroundModule(deps: PlaygroundDeps): PlaygroundModule {
       ...(deps.now !== undefined && { now: deps.now }),
     }),
   );
-  const alertTester = createAlertTester({ gateway, persona: deps.persona });
+  const now = deps.now ?? (() => new Date());
+  const alertTester = createAlertTester({
+    gateway,
+    personaOf: (creatorId) => activePersonaForModels(deps.activePersona, creatorId, now()),
+  });
   return {
     name: 'playground',
     routes: (options) => createPlaygroundRoutes(service, alertTester, options),
@@ -82,6 +93,7 @@ export interface PlaygroundStartOptions extends PlaygroundGatewayDeps {
   /** Where the ratings are kept, outside the repository, until a table exists. */
   readonly trainingDir: string;
   readonly creatorId?: () => Promise<string | null>;
+  readonly activePersona: ActivePersonaSource;
 }
 
 /** Reads the persona and the ratings kept so far, then builds the module. Throws when the persona is unreadable. */

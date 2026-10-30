@@ -1,6 +1,8 @@
 import {
   ApiErrorSchema,
   CommissionPresetListSchema,
+  CommissionRateHistorySchema,
+  CommissionRateSchema,
   InvitationLinkCreatedSchema,
   REAUTHENTICATION_ERROR_CODE,
   TEAM_MEMBER_ERROR_CODES,
@@ -9,12 +11,16 @@ import {
   TeamMemberNoteSchema,
   TeamMemberSchema,
   type CommissionPreset,
+  type CommissionRate,
   type CreateTeamMemberBody,
   type InvitationLinkCreated,
   type InvitationLinkPurpose,
+  type SetCommissionRateBody,
   type TeamMember,
   type TeamMemberErrorCode,
   type TeamMemberNote,
+  type TeamMemberStatus,
+  type UpdateTeamMemberBody,
 } from '@nirvana/contracts';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
@@ -44,13 +50,28 @@ export const fetchNotes = (memberId: string): Promise<TeamMemberNote[]> =>
 
 export const MEMBERS_KEY = ['team', 'members'] as const;
 
-export function useMembers(): UseQueryResult<TeamMember[]> {
-  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers });
+/** The team as the agency reads it; `enabled` false for a member, who does not read it. */
+export function useMembers(enabled = true): UseQueryResult<TeamMember[]> {
+  // One retry: a silent server is said in about a second (EQ-22).
+  return useQuery({ queryKey: MEMBERS_KEY, queryFn: fetchMembers, enabled, retry: 1 });
 }
 
 /** The presets are the owner's settings: a manager who cannot read them sees the figures alone. */
 export function usePresets(): UseQueryResult<CommissionPreset[]> {
   return useQuery({ queryKey: ['team', 'presets'], queryFn: fetchPresets, retry: false });
+}
+
+export const fetchRates = (memberId: string): Promise<CommissionRate[]> =>
+  read(`/v1/team/members/${memberId}/commission`, (body) => CommissionRateHistorySchema.parse(body).rates);
+
+/** Every rate of a member, ahead ones included; under the team's key, so a write that reads the team reads them too. */
+export function useRates(memberId: string, enabled = true): UseQueryResult<CommissionRate[]> {
+  return useQuery({
+    queryKey: [...MEMBERS_KEY, memberId, 'rates'],
+    queryFn: () => fetchRates(memberId),
+    enabled,
+    retry: 1,
+  });
 }
 
 export function useNotes(memberId: string): UseQueryResult<TeamMemberNote[]> {
@@ -78,10 +99,15 @@ async function refusalOf(response: Response): Promise<Refusal> {
   return isTeamCode(code) ? { kind: 'refused', code } : { kind: 'failed' };
 }
 
-async function send<T>(url: string, body: unknown, parse: (json: unknown) => T): Promise<Outcome<T>> {
+async function send<T>(
+  url: string,
+  body: unknown,
+  parse: (json: unknown) => T,
+  method: 'POST' | 'PATCH' | 'PUT' = 'POST',
+): Promise<Outcome<T>> {
   try {
     const response = await fetch(url, {
-      method: 'POST',
+      method,
       credentials: 'include',
       headers: JSON_HEADERS,
       body: JSON.stringify(body),
@@ -109,3 +135,18 @@ export const createInvitationLink = (
 /** `POST /v1/team/members/:memberId/notes` (owner, active manager). */
 export const addNote = (memberId: string, body: string): Promise<Outcome<TeamMemberNote>> =>
   send(`/v1/team/members/${memberId}/notes`, { body }, (json) => TeamMemberNoteSchema.parse(json));
+
+/** `PATCH /v1/team/members/:memberId` (owner): the team name, the colour, the creators (EQ-10). */
+export const updateMember = (memberId: string, body: UpdateTeamMemberBody): Promise<Outcome<TeamMember>> =>
+  send(`/v1/team/members/${memberId}`, body, (json) => TeamMemberSchema.parse(json), 'PATCH');
+
+/** `PUT /v1/team/members/:memberId/status` (owner): `left` takes his creators and ends his sessions, for good. */
+export const changeStatus = (memberId: string, status: TeamMemberStatus): Promise<Outcome<TeamMember>> =>
+  send(`/v1/team/members/${memberId}/status`, { status }, (json) => TeamMemberSchema.parse(json), 'PUT');
+
+/** `POST /v1/team/members/:memberId/commission` (owner): a new rate from the 1st or the 16th, never before today. */
+export const setCommission = (
+  memberId: string,
+  body: SetCommissionRateBody,
+): Promise<Outcome<CommissionRate>> =>
+  send(`/v1/team/members/${memberId}/commission`, body, (json) => CommissionRateSchema.parse(json));

@@ -8,7 +8,8 @@ import {
 import { and, eq, schema, sql, withAdmin, type Database } from '@nirvana/db';
 import { z } from 'zod';
 
-import type { BackupAlerts, BackupRunsReader, RestoreTestsStore } from '../domain/ports';
+import type { BackupAlerts, BackupRequestsStore, BackupRunsReader, RestoreTestsStore } from '../domain/ports';
+import type { StoredBackupRequest } from '../domain/run-requests';
 import type { BackupRun } from '../domain/status';
 
 /**
@@ -73,7 +74,8 @@ export function createPostgresBackupRunsReader(db: Database): BackupRunsReader {
  * `backup_overdue` in the outbox (ADR 0020 § 3), as `budget_threshold_crossed`: it belongs to no creator, so the row
  * has `creator_id` null and is written with the admin role (RLS). The API never runs the check, but two workers can:
  * the first writes the day's row, the other finds it (advisory lock). The payload is parsed by its contract before
- * it is written (docs/architecture/jsonb.md).
+ * it is written (docs/architecture/jsonb.md). The search looks back two days only: the day's row is younger than that,
+ * and `domain_events_created_idx` then serves it instead of a scan of every conversation's events, each hour.
  */
 export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
   return {
@@ -85,7 +87,8 @@ export function createPostgresBackupAlerts(adminDb: Database): BackupAlerts {
       return withAdmin(adminDb, async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`backup_overdue:${day}`}))`);
         const seen = await tx.execute(sql`
-          select 1 from domain_events where type = 'backup_overdue' and payload->>'day' = ${day} limit 1`);
+          select 1 from domain_events where created_at >= now() - interval '2 days' and type = 'backup_overdue'
+            and payload->>'day' = ${day} limit 1`);
         if (seen.rows.length > 0) return false;
         await tx.insert(schema.domainEvents).values({
           id: newId(EventIdSchema),
@@ -175,5 +178,73 @@ export function createPostgresRestoreTestsStore(db: Database): RestoreTestsStore
         .limit(1);
       return row === undefined ? null : StoredRestoreTestSchema.parse(row);
     },
+  };
+}
+
+const StoredBackupRequestSchema = z.object({
+  id: z.uuid(),
+  requestedAt: z.date(),
+  requestedByUserId: z.string().min(1),
+  pickedAt: z.date().nullable(),
+});
+
+const requestColumns = {
+  id: schema.backupRequests.id,
+  requestedAt: schema.backupRequests.requestedAt,
+  requestedByUserId: schema.backupRequests.requestedByUserId,
+  pickedAt: schema.backupRequests.pickedAt,
+};
+
+/**
+ * `backup_requests` (REG-24), with the application role: SELECT and INSERT (migration 0039); the `backup` service marks
+ * a request picked with the admin role. A transaction-scoped advisory lock serialises the requests, so two clicks
+ * never make two; the `audit_log` line goes in the same transaction.
+ */
+export function createPostgresBackupRequestsStore(db: Database): BackupRequestsStore {
+  const oldestPending = async (tx: Pick<Database, 'select'>): Promise<StoredBackupRequest | null> => {
+    const [row] = await tx
+      .select(requestColumns)
+      .from(schema.backupRequests)
+      .where(sql`${schema.backupRequests.pickedAt} is null`)
+      .orderBy(schema.backupRequests.requestedAt)
+      .limit(1);
+    return row === undefined ? null : StoredBackupRequestSchema.parse(row);
+  };
+  return {
+    request(entry, actor, decide) {
+      return db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('backups.request'))`);
+        const [same] = await tx
+          .select(requestColumns)
+          .from(schema.backupRequests)
+          .where(eq(schema.backupRequests.id, entry.id));
+        const [latest] = await tx
+          .select(columns)
+          .from(schema.backupRuns)
+          .orderBy(sql`${schema.backupRuns.startedAt} desc`)
+          .limit(1);
+        const decision = decide({
+          sameId: same === undefined ? null : StoredBackupRequestSchema.parse(same),
+          pending: await oldestPending(tx),
+          latestRun: latest === undefined ? null : toRun(latest),
+        });
+        if (decision.kind === 'existing') return { created: false, request: decision.request };
+        const [inserted] = await tx
+          .insert(schema.backupRequests)
+          .values({ id: entry.id, requestedByUserId: entry.requestedByUserId })
+          .returning(requestColumns);
+        await tx.insert(schema.auditLog).values({
+          id: newId(AuditEntryIdSchema),
+          userId: actor.userId,
+          action: 'backup.request',
+          entity: 'backup_request',
+          entityId: entry.id,
+          ip: actor.ip,
+          details: {},
+        });
+        return { created: true, request: StoredBackupRequestSchema.parse(inserted) };
+      });
+    },
+    pending: () => oldestPending(db),
   };
 }

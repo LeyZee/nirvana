@@ -15,7 +15,8 @@ Dernière revue : 2026-10-16. Le schéma Drizzle (`packages/db/src/schema/`, P0-
 ## Tenant et comptes
 
 ```
-creators            id, display_name, timezone, settings jsonb (schéma Zod CreatorSettings),
+creators            id, display_name, name_key (creatorNameKey, unique : jamais deux créatrices du même nom,
+                    migration 0035), timezone, settings jsonb (schéma Zod CreatorSettings),
                     agent_hours jsonb (AgentHoursSchema, null = DEFAULT_AGENT_HOURS, P3-14), created_at
 platform_accounts   id, creator_id, platform (reveal|onlyfans|instagram|nirvana), handle,
                     session_state (none|valid|warning|expired), session_ciphertext bytea, session_updated_at,
@@ -53,7 +54,7 @@ conversations        id, creator_id, platform_account_id, fan_id, platform_conve
                      mode (copilot|auto), last_inbound_at, last_outbound_at, unread_count,
                      cooldowns jsonb, active_script_run_id (nullable), routed_to_user_id (nullable, fk user), desire_score, desire_band, desire_at (nullables ensemble, P3-12), updated_at
 messages             id, creator_id, platform_account_id (dénormalisé pour l'unicité), conversation_id, platform_message_id,
-                     direction (inbound|outbound), author (fan|human|ai), text, media_ids uuid[], price_minor, currency, is_paid,
+                     direction (inbound|outbound), author (fan|human|ai), text, media_ids uuid[], price_minor (≥ 0, migration 0036), currency, is_paid,
                      platform_created_at, created_at, draft_id (nullable),
                      platform_media jsonb (médias listés par la plateforme : kind, ref, isLocked ; lus par le moteur
                      avant que le module media ne les range dans media_ids)
@@ -62,7 +63,7 @@ conversation_events  id, creator_id, conversation_id, seq bigint, type, payload 
                      correlation_id, created_at      (append-only, UNIQUE (conversation_id, seq))
 drafts               id, creator_id, conversation_id, status (pending|approved|edited|rejected|sent|failed|expired),
                      brief jsonb (sortie du cerveau), bubbles text[], final_bubbles text[] (après édition),
-                     persona_version_id (la persona active quand il est écrit, ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
+                     persona_version_id (la version avec laquelle le composeur l'a écrit, lue avec la persona du brouillon, jamais celle active à l'enregistrement ; ADR 0022), prompt_hashes jsonb, policy_trace jsonb, guard_trace jsonb,
                      decided_by (nullable user_id), decided_at, idempotency_key, created_at
 blind_tests          id, creator_id, voice_prompt, voice_model, persona_version_id (nullable), rate_per_mille (0 à 1000, 800 = 80 %), recorded_by,
                      recorded_at      (append-only : ni UPDATE ni DELETE pour nirvana_app)
@@ -83,7 +84,7 @@ Payload minimal par famille d'événement (clés en camelCase, jamais de contenu
 | `media_described` | `mediaAssetId`, `mediaDescriptionId`, `model` |
 | `draft_*` | `draftId`, `status`, `decidedBy?`, `editedBubbles?` (pour `draft_edited`) |
 | `fact_*`, `summary_refreshed` | `fanId`, `factId?`, `summaryId?`, `category?` |
-| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other`, `custom_alert`, `identity_doubt` ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi), `trigger?` (l'alerte qui a mis l'agent en pause, P4-01, comme ci-dessous) |
+| `handoff_requested` | `conversationId`, `cause` (liste fermée : `minor`, `non_consent`, `distress`, `meeting`, `manipulation`, `guard`, `budget`, `keyword`, `llm_unavailable`, `other`, `custom_alert`, `identity_doubt`, `persona_inactive` (elle n'a pas de version de persona active, ou elle ne se lit plus) ; les alertes classent sur elle, jamais sur `reason`), `reason?` (une phrase en français pour un chatteur, jamais un code), `detail?` (les codes du moteur, `guard_blocked`, `meeting_promise`…, gardés au journal et jamais affichés ; une ligne ancienne qui les joignait dans `reason` est relue ainsi), `trigger?` (l'alerte qui a mis l'agent en pause, P4-01, comme ci-dessous) |
 | `alert_triggered` | `conversationId`, `trigger` : `alert` (`{ kind: 'custom', id }` ou `{ kind: 'system', code }`, codes `keyword`, `service_request`, `identity_doubt`), `matchedBy` (`keyword` \| `rule` \| `model`), `keyword?` (le mot tel qu'elle l'a déclaré, présent pour un mot-clé et lui seul) ; `notify` (booléen : envoyer ou non sur Telegram, la case « prévenir » de son alerte au moment où elle s'est déclenchée, toujours vrai pour une alerte du système). Une alerte qui prévient seulement ; celle qui met en pause est un `handoff_requested` avec son `trigger`, jamais les deux. Rien de ce que le fan a écrit (ADR 0020). |
 | `takeover_started`, `takeover_ended` | `conversationId`, `userId?`, `reason?` |
 | `mode_changed` | `userId?`, `reason?`, `mode?` |
@@ -121,7 +122,7 @@ media_assets        id, creator_id, kind (image|video|audio), origin (creator|fa
                     storage_key, mime, bytes, duration_ms, sha256, rights jsonb, expires_at, created_at
 media_descriptions  id, creator_id, media_asset_id, vocabulary_version, content jsonb (MediaDescription),
                     model, prompt_hash, created_at
-media_sends         id, creator_id, media_asset_id, fan_id, conversation_id, message_id, price_minor, currency, sent_at
+media_sends         id, creator_id, media_asset_id, fan_id, conversation_id, message_id, price_minor (≥ 0), currency, sent_at
                     (anti-doublon : un média payant n'est jamais revendu au même fan)
 ```
 
@@ -144,7 +145,7 @@ calibration_ratings   id, creator_id, session_id, rated_at, voice_prompt, voice_
                       (voice_example|rule|test, nullable), fan_message, bubbles jsonb, moment jsonb (RatedMoment,
                       opaque, nullable une fois purgé), moment_purged_at, created_at
   Append-only (trigger) : seule la purge de `moment` après 90 jours est permise, le verdict et la version restent.
-  Lu pour le taux de validation (50 derniers par version), les exemples de voix (corrected + voice_example, 12 max)
+  Lu pour le taux de validation (50 derniers par version), les exemples de voix du playground seulement (corrected + voice_example, 12 max ; jamais dans la fiche d'une créatrice)
   et les tests rejouables (tout sauf validated). Contenu intime : jamais copié dans les logs.
 ```
 
@@ -179,6 +180,9 @@ team_member_notes        id, member_id, body (1 à 2 000 car.), author_user_id, 
 commission_presets       id, name, rate_bps (0 à 10 000), effective_from, created_by, created_at   (ajout seul, unique name + effective_from)
 member_commission_rates  id, member_id, rate_bps, team_share_bps (manager), preset_id, effective_from, created_by, created_at
                          (ajout seul, unique member_id + effective_from : le taux d'un jour est la dernière ligne en vigueur ce jour-là)
+member_roles             id, member_id, team_role (chatter|manager), effective_from, created_by, created_at
+                         (ajout seul, unique member_id + effective_from : le rôle d'un jour est la dernière ligne en vigueur ;
+                         la première part de l'arrivée, une autre du 1er ou du 16 ; team_members.team_role = le rôle d'aujourd'hui)
 invitation_links         id, member_id, purpose (invitation|reset), token_hash (SHA-256, unique), created_by, expires_at,
                          used_at, revoked_at, created_at      (EQ-10 ; hors RLS et hors de portée de nirvana_app : withAdmin seul)
 ```
@@ -232,7 +236,7 @@ Rapports de fin de shift et règles de paie d'un compte (migration 0026, EQ-03) 
 
 ## Paie (module `payroll`, ADR 0023, EQ-04)
 
-Hors RLS des créatrices (aucun `creator_id`) : un membre lit ses lignes, la portée `owner` | `agency` de `withMember` lit tout. Les relevés, leurs lignes, les quinzaines et les taux sont écrits par les jobs (`nirvana_admin`) ; l'application lit, valide, marque payé et écrit les entrées.
+Hors RLS des créatrices (aucun `creator_id`) : un membre lit ses lignes, la portée `owner` | `agency` de `withMember` lit tout. Les relevés, leurs lignes, les quinzaines et les taux sont écrits par les jobs (`nirvana_admin`) ; l'application lit, valide (et clôture la quinzaine à sa première validation), marque payé et écrit les entrées.
 
 ```
 pay_periods                period (1er ou 16, clé), starts_at, ends_at (instants de la quinzaine dans le fuseau de
@@ -240,7 +244,12 @@ pay_periods                period (1er ou 16, clé), starts_at, ends_at (instant
                            (ajout seul, écrit par le job)
 exchange_rates             (currency, day) clé, rate_micros bigint (euros pour une unité, en millionièmes), source,
                            fetched_at (globale, lecture seule pour l'application, écrite par le job des taux, ajout seul)
-payroll_settings           id = 1, minimum_payout_minor (15 € sans ligne), updated_by, updated_at (propriétaire)
+payroll_settings           id = 1, minimum_payout_minor (15 € sans ligne ; plus modifiable par l'application, migration
+                           0040), payout_delay_business_days (1 à 30, null = aucun délai annoncé), updated_by,
+                           updated_at (propriétaire)
+payout_minimums            id, from_period, minimum_payout_minor, created_by, created_at (propriétaire, ajout seul ;
+                           le plus récent de la dernière quinzaine ≤ la période fait foi, jamais sur une quinzaine
+                           déjà validée)
 bonus_tier_sets            id, from_period, tiers (jsonb : seuil, prime, libellé), created_by, created_at (propriétaire,
                            ajout seul ; le plus récent de la dernière quinzaine ≤ la période fait foi)
 collective_goals           id, period, target_minor bigint, tiers (jsonb : pourcentage en points de base, prime par
@@ -256,7 +265,10 @@ commission_statements      id, member_id, period → pay_periods, status (draft|
                            collective_bonus, bonuses, penalties_requested, penalties, carry_overs_in, adjustments, total,
                            carry_over_out, payable (≥ 0, = total − report), team_net_minor bigint, collective, rules
                            (jsonb, règles et taux copiés), counted (jsonb, entrées comptées), computed_at, validated_at,
-                           validated_by, paid_at, paid_by, created_at (un par membre et quinzaine ; jamais supprimé)
+                           validated_by, paid_at, paid_by, paid_on, payment_method (worldremit, 0033),
+                           payment_reference (référence du transfert, jamais un IBAN), sent_minor (= payable ; les quatre
+                           remplis si et seulement si payé, migration 0031), created_at (un par membre et quinzaine ;
+                           jamais supprimé)
 commission_statement_lines id, statement_id, revision, platform_account_id, currency, vat_bps, platform_fee_bps,
                            rate_micros, gross, gross_eur, excl_vat, net, commission (unités mineures), shift_report_ids,
                            late_reports (jsonb), created_at (ajout seul ; une par compte et règles d'une révision)
@@ -264,6 +276,17 @@ pay_adjustments            id, member_id, period (première quinzaine ouverte du
                            corrects_statement_id, created_by, created_at (agence, jamais pour soi ; ajout seul)
 carry_overs                id, member_id, from_period, to_period (la suivante), amount_minor (≠ 0), statement_id
                            (unique), created_at (écrit à la validation ; un par membre et quinzaine d'origine ; ajout seul)
+pay_period_closings        period (clé) → pay_periods, team_net_minor bigint, collective (jsonb, l'objectif tel
+                           qu'atteint), exchange_rates (jsonb, les taux figés), closed_by, closed_at (migration 0029,
+                           ADR 0032 ; écrit par la validation qui clôture la quinzaine pour toute l'équipe ; ajout seul)
+pay_period_reports         shift_report_id (clé) → shift_reports, period → pay_period_closings, member_id, created_at
+                           (le registre des rapports comptés : un rapport l'est une fois, dans une seule quinzaine ;
+                           écrit par la clôture dans sa transaction ; ajout seul)
+pay_period_blocks          period (clé) → pay_periods, code (commission_rate_missing_conflict |
+                           exchange_rate_missing_conflict), member_ids uuid[] (tous les membres sans taux) | currency,
+                           since (migration 0038 ; pourquoi le job n'a pas pu calculer la quinzaine à son dernier essai :
+                           écrit et supprimé par le job sous `payroll.close`, dans la transaction du calcul ; un état, pas
+                           un historique ; lu comme `pay_periods`)
 ```
 
 Le passé de la paie est gardé pour tous les rôles, les jobs compris (migration 0028) :
@@ -273,7 +296,15 @@ Le passé de la paie est gardé pour tous les rôles, les jobs compris (migratio
 - une quinzaine est fermée pour un membre dès qu'un de ses relevés de cette quinzaine ou d'une plus récente est validé (`pay_period_closed`). Rien n'y arrive plus : ni prime, ni malus, ni ajustement, ni annulation. Paliers et objectifs ne changent plus pour une quinzaine dont un relevé est validé (`pay_period_settled`) ;
 - un report vient du relevé validé de son membre, vers la quinzaine suivante, et porte exactement ce que ce relevé a reporté (`carry_over_out_minor`, `keep_carry_over`).
 
+La clôture d'une quinzaine pour toute l'équipe (migration 0029, ADR 0032) ajoute :
+- une quinzaine ne se clôture qu'une fois finie, juste après la dernière clôturée. Les quinzaines se clôturent donc dans l'ordre, une vide aussi. La première clôture est celle de la plus ancienne quinzaine qui a un relevé. `closed_at` est l'heure de la base, quoi qu'écrive l'auteur (`keep_pay_period_closing`) ;
+- un rapport n'entre au registre que s'il est validé, de ce membre, d'une quinzaine d'origine qui n'est pas après sa quinzaine de comptage, et seulement dans la transaction qui a écrit la clôture, hors de tout point de sauvegarde (`xmin` de la clôture = `pg_current_xact_id()`, `keep_counted_report`). Aucune transaction plus tardive n'ajoute un rapport à une clôture passée ;
+- un relevé ne se valide que s'il porte la clôture de sa quinzaine : même net d'équipe, même objectif tel qu'atteint, mêmes taux (`rules.exchangeRates`), et exactement les rapports que le registre a comptés pour son membre dans la quinzaine, ni plus ni moins (`keep_commission_statement`) ;
+- une quinzaine d'avant la première clôture est fermée pour tous les membres (`pay_period_closed`) : elle ne sera plus jamais calculée, rien n'y arrive.
+
 Les droits par colonne tiennent en plus le rôle de l'application, qui part de `REVOKE ALL` : il ne touche à un relevé que par son statut, qui l'a validé et qui l'a payé.
+
+Une quinzaine bloquée (migration 0038, recette du 28/10, Équipe G1) : quand le recalcul d'une quinzaine échoue sur un membre payé sans taux de commission ou sur une devise sans taux, le job écrit `pay_period_blocks` dans la même transaction, sous `payroll.close` (ADR 0032), et le calcul suivant qui passe la supprime. `since` reste tant que la raison est la même, et un rejeu n'écrit rien. Seul le job écrit (`REVOKE ALL`, puis `SELECT` pour l'application) ; tout membre la lit, comme `pay_periods`, et l'application ne montre à un membre que lui-même parmi `member_ids`. La ligne n'est pas en ajout seul : elle dit l'état présent, le journal du job garde l'historique.
 
 ## Système (hors RLS, sans `creator_id`)
 

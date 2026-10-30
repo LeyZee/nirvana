@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { SubNav } from '@/shell/layout';
+import { screenLabel } from '@/shell/nav';
 
 /**
  * Suivi's views (ADR 0024, P4-01): the conversations, and the history of the alerts beside them, a sub-view and no new
@@ -11,8 +12,8 @@ export function SuiviNav(): JSX.Element {
     <SubNav
       label="Suivi"
       items={[
-        { to: '/suivi', label: 'Conversations' },
-        { to: '/suivi/alertes', label: 'Historique des alertes' },
+        { to: '/suivi', label: screenLabel('/suivi') },
+        { to: '/suivi/alertes', label: screenLabel('/suivi/alertes') },
       ]}
     />
   );

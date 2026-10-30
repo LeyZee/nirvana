@@ -1,10 +1,13 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
   ApiErrorSchema,
+  newId,
   PersonaSampleReplyUnprocessableDetailsSchema,
   PersonaSchema,
+  PersonaVersionIdSchema,
   type CreatorId,
   type Persona,
   type PersonaOverview,
@@ -212,24 +215,39 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
   });
 
   it('activates a version from the dashboard, for her owner and herself only, audited with who did it', async () => {
-    const activate = (creatorId: string, versionId: string, cookie: string) =>
+    const activate = (creatorId: string, versionId: string, cookie: string, expectedActive: string | null) =>
       server.inject({
         method: 'POST',
         url: `/v1/creators/${creatorId}/persona/versions/${versionId}/activate`,
         headers: { cookie, origin: DASHBOARD_ORIGIN },
+        payload: { expectedActive },
       });
     const [newest, older] = (await get(anna, owner)).json<PersonaOverview>().versions;
     if (newest === undefined || older === undefined) throw new Error('two versions expected');
 
-    expect((await activate(anna, older.id, operator)).statusCode).toBe(403);
-    expect((await activate(bea, older.id, owner)).statusCode).toBe(404);
+    expect((await activate(anna, older.id, operator, null)).statusCode).toBe(403);
+    expect((await activate(bea, older.id, owner, null)).statusCode).toBe(404);
 
-    const first = await activate(anna, older.id, owner);
+    const first = await activate(anna, older.id, owner, null);
     expect(first.statusCode).toBe(200);
     expect(first.json<PersonaVersionSummary>()).toMatchObject({ id: older.id, isActive: true });
-    const second = await activate(anna, newest.id, owner);
+    const second = await activate(anna, newest.id, owner, older.id);
     expect(second.json<PersonaVersionSummary>()).toMatchObject({ id: newest.id, isActive: true });
-    expect((await activate(anna, newest.id, owner)).statusCode).toBe(200);
+    expect((await activate(anna, newest.id, owner, newest.id)).statusCode).toBe(200);
+
+    // A tab left open still believes `older` is active, or that none is: it cannot undo the activation made since.
+    for (const stale of [older.id, null]) {
+      const refused = await activate(anna, older.id, owner, stale);
+      expect(refused.statusCode).toBe(409);
+      expect(ApiErrorSchema.parse(refused.json()).error.code).toBe('persona_version_conflict');
+    }
+    const withoutPrecondition = await server.inject({
+      method: 'POST',
+      url: `/v1/creators/${anna}/persona/versions/${older.id}/activate`,
+      headers: { cookie: owner, origin: DASHBOARD_ORIGIN },
+      payload: {},
+    });
+    expect(withoutPrecondition.statusCode).toBe(400);
 
     const after = (await get(anna, owner)).json<PersonaOverview>().versions;
     expect(after.filter((v) => v.isActive).map((v) => v.id)).toEqual([newest.id]);
@@ -240,6 +258,38 @@ describe('persona versions (GET /v1/creators/:id/persona, POST …/persona/versi
     const activations = audit.filter((row) => row.action === 'persona_version.activate');
     expect(activations).toHaveLength(1);
     expect(activations[0]?.userId).not.toBeNull();
+  });
+
+  it('checks a stored version again before activating it: one saved before a guard changed stays inactive (P5-01)', async () => {
+    const before = (await get(anna, owner)).json<PersonaOverview>().versions;
+    const active = before.find((v) => v.isActive);
+    if (active === undefined) throw new Error('an active version expected');
+    // Stored as it would have been before the guard that now blocks it: straight in the base, past every check.
+    const id = newId(PersonaVersionIdSchema);
+    const taught = {
+      ...withVersion(demo(), '0.8.0'),
+      sample_replies: [{ situation: 'Il propose de se voir', reply: 'On se fait un rdv samedi ?' }],
+    };
+    await test.admin.db.insert(schema.personaVersions).values({
+      id,
+      creatorId: anna,
+      version: '0.8.0',
+      sourcePath: 'dashboard',
+      content: taught,
+      contentHash: createHash('sha256').update('stored before the guard').digest('hex'),
+      createdBy: 'cli',
+    });
+
+    const refused = await server.inject({
+      method: 'POST',
+      url: `/v1/creators/${anna}/persona/versions/${id}/activate`,
+      headers: { cookie: owner, origin: DASHBOARD_ORIGIN },
+      payload: { expectedActive: active.id },
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(ApiErrorSchema.parse(refused.json()).error.code).toBe('persona_sample_reply_unprocessable');
+    const after = (await get(anna, owner)).json<PersonaOverview>().versions;
+    expect(after.filter((v) => v.isActive).map((v) => v.id)).toEqual([active.id]);
   });
 
   it('lets the owner add a creator, and nobody else', async () => {

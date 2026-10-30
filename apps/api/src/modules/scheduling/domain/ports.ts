@@ -23,6 +23,7 @@ import type {
 } from '@nirvana/contracts';
 
 import type { Reader, RulesRow } from './reports';
+import type { WorkingMember } from './shifts';
 
 /** Who writes, for the policies (`withTenantMember`) and the audit line. */
 export interface Actor {
@@ -366,12 +367,10 @@ export interface ColleagueReads {
     span: { readonly startsAt: Date; readonly endsAt: Date },
   ): Promise<boolean>;
   /**
-   * Whether a member can take a shift on a creator (status and creators), for the side of a swap the reader's
+   * Whether a member can take a shift on a creator (status, creators, first day), for the side of a swap the reader's
    * policies hide: the colleague asked when proposing, the requester when accepting. `null` when no such member.
    */
-  memberWorkUnscoped(
-    memberId: TeamMemberId,
-  ): Promise<{ status: TeamMemberStatus; creatorIds: readonly string[] } | null>;
+  memberWorkUnscoped(memberId: TeamMemberId): Promise<WorkingMember | null>;
   /** A shift the reader's policies hide: the colleague's shift asked back in an exchange. */
   shiftUnscoped(id: ShiftId): Promise<(StoredShift & { cancelled: boolean }) | null>;
   /**

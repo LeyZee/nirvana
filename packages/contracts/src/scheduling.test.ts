@@ -108,7 +108,15 @@ describe('shifts and templates', () => {
       validFrom: '2026-11-02',
     };
     expect(CreateShiftTemplateBodySchema.safeParse(template).success).toBe(true);
-    expect(CreateShiftTemplateBodySchema.safeParse({ ...template, endMinute: 1080 }).success).toBe(false);
+    const same = CreateShiftTemplateBodySchema.safeParse({ ...template, endMinute: 1080 });
+    expect(same.success).toBe(false);
+    // The rule, not a fact (recette 28/10, as her hours' ranges).
+    expect(same.error?.issues).toContainEqual(
+      expect.objectContaining({
+        path: ['endMinute'],
+        message: 'Un modèle doit commencer et finir à des heures différentes',
+      }),
+    );
     expect(CreateShiftTemplateBodySchema.safeParse({ ...template, weekday: 0 }).success).toBe(false);
   });
 

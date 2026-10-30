@@ -52,3 +52,47 @@ export function previousPayPeriod(period: PayPeriod): PayPeriod {
   if (date === 16) return periodAt(year, month, false);
   return month === 1 ? periodAt(year - 1, 12, true) : periodAt(year, month - 1, true);
 }
+
+/** The calendar day it is at `at` in `timeZone`, `YYYY-MM-DD`: today in the agency's zone, for pay. */
+export function calendarDayAt(at: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/** The period the instant `at` falls in, in the agency's zone `timeZone`: today's period, for pay's jobs. */
+export function payPeriodAt(at: Date, timeZone: string): PayPeriod {
+  return payPeriodOfDay(calendarDayAt(at, timeZone));
+}
+
+/**
+ * PAIE-22: a pay rule of the team (individual tiers, the payout minimum) starts with a period that has not begun, as a
+ * commission rate or a role does: its first day is `today` at the earliest. A chatter never sees a rule change under a
+ * fortnight already worked. `today` is the agency's calendar day (`calendarDayAt`), never the client's.
+ */
+export function payPeriodNotBegun(period: PayPeriod, today: string): boolean {
+  return period >= today;
+}
+
+/** PAIE-22: the collective goal of a period may still be set up to this day of the period, the 3rd (or the 18th). */
+export const COLLECTIVE_GOAL_LAST_DAY = 3;
+
+/** The last day the goal of `period` may be set: its 3rd day, the 3rd or the 18th. */
+export function collectiveGoalLastDay(period: PayPeriod): string {
+  const first = Number(period.slice(8, 10));
+  return `${period.slice(0, 8)}${pad(first + COLLECTIVE_GOAL_LAST_DAY - 1)}`;
+}
+
+/**
+ * Where the goal of `period` stands on `today` (PAIE-22): `ahead` before its first day, `started` from its first to its
+ * 3rd day (allowed, with a warning: the team has begun working on it), `closed` after.
+ */
+export function collectiveGoalWindow(period: PayPeriod, today: string): 'ahead' | 'started' | 'closed' {
+  if (today < period) return 'ahead';
+  return today <= collectiveGoalLastDay(period) ? 'started' : 'closed';
+}

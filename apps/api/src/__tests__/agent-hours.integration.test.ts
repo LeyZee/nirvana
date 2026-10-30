@@ -30,7 +30,9 @@ import { createFansModule } from '../modules/fans';
 const T0 = new Date('2026-10-18T01:00:00.000Z');
 const OPENING = new Date('2026-10-18T07:00:00.000Z');
 const MINUTE_MS = 60_000;
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 
 type ComposeInput = Parameters<DraftComposer['compose']>[0];
@@ -197,7 +199,7 @@ describe('conversation.respond and her hours', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Nora Vidal', timezone: PARIS });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Nora Vidal', timezone: PARIS });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: `hours-${creatorId}` });

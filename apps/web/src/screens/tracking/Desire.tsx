@@ -243,7 +243,10 @@ function DesireChart({ points, now }: { points: readonly DesirePoint[]; now: num
         >
           <span className="nv-chart__tip-l">{reading.when}</span>
           <span className="nv-chart__tip-v">{reading.movement}</span>
-          <span className="nv-chart__tip-l tr-desire__signals">{reading.why}</span>
+          {/* A point with no signal (a first score, a reset) says no why: no empty line in the tip. */}
+          {reading.why === '' ? null : (
+            <span className="nv-chart__tip-l tr-desire__signals">{reading.why}</span>
+          )}
         </div>
       )}
     </div>

@@ -6,39 +6,43 @@ import {
   DomainError,
   NewCreatorSchema,
   SetAgentHoursBodySchema,
+  UpdateCreatorBodySchema,
+  type CreatorErrorCode,
   type UserRole,
 } from '@nirvana/contracts';
-import type { preHandlerAsyncHookHandler } from 'fastify';
+import type { preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { CreatorDirectory } from '../../domain/ports';
 
 const CreatorParamsSchema = z.object({ id: CreatorIdSchema });
+const CreatorIdParamsSchema = z.object({ creatorId: CreatorIdSchema });
 
 class CreatorNotFound extends DomainError {
   constructor() {
-    super('creator_not_found', 'Créatrice introuvable');
+    super('creator_not_found' satisfies CreatorErrorCode, 'Créatrice introuvable');
   }
 }
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 /**
- * `GET /v1/creators`: the creators the signed-in user may open, an owner sees them all; `POST`: the owner adds one.
+ * `GET /v1/creators`: the creators the signed-in user may open, an owner sees them all; `POST`: the owner adds one;
+ * `PATCH /creators/:creatorId`: the owner moves her to another zone, with a recent sign-in.
  * `/creators/:id/agent-hours`: her hours (P3-14), the owner's alone, a change with a recent sign-in.
  */
 export function createCreatorRoutes(
   directory: CreatorDirectory,
   requireRole: RequireRole,
-  recentLogin: preHandlerAsyncHookHandler,
+  recentLogin: preValidationAsyncHookHandler,
 ): FastifyPluginAsyncZod {
   return (app) => {
     app.get(
       '/creators',
       {
-        preHandler: requireRole('owner', 'operator', 'creator'),
+        preValidation: requireRole('owner', 'operator', 'creator'),
         schema: { response: { 200: CreatorListSchema } },
       },
       async (request) => {
@@ -53,7 +57,7 @@ export function createCreatorRoutes(
       '/creators',
       {
         // A new creator is the agency's call: the owner only (`pnpm creator:create` does the same).
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: { body: NewCreatorSchema, response: { 201: CreatorSummarySchema } },
       },
       async (request, reply) => {
@@ -63,10 +67,30 @@ export function createCreatorRoutes(
       },
     );
 
+    app.patch(
+      '/creators/:creatorId',
+      {
+        // Her zone moves her day, her night and her hours: the owner's call, with a recent sign-in, like her hours.
+        preValidation: [requireRole('owner'), recentLogin],
+        schema: {
+          params: CreatorIdParamsSchema,
+          body: UpdateCreatorBodySchema,
+          response: { 200: CreatorSummarySchema },
+        },
+      },
+      async (request) => {
+        const { user } = request;
+        if (user === null) throw new DomainError('session_unauthenticated', 'Connexion requise');
+        const creator = await directory.setTimezone(request.params.creatorId, request.body.timezone, user.id);
+        if (creator === null) throw new CreatorNotFound();
+        return creator;
+      },
+    );
+
     app.get(
       '/creators/:id/agent-hours',
       {
-        preHandler: requireRole('owner'),
+        preValidation: requireRole('owner'),
         schema: { params: CreatorParamsSchema, response: { 200: AgentHoursViewSchema } },
       },
       async (request) => {
@@ -81,7 +105,7 @@ export function createCreatorRoutes(
     app.put(
       '/creators/:id/agent-hours',
       {
-        preHandler: [requireRole('owner'), recentLogin],
+        preValidation: [requireRole('owner'), recentLogin],
         schema: {
           params: CreatorParamsSchema,
           body: SetAgentHoursBodySchema,

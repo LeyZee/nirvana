@@ -6,8 +6,8 @@ import { AddMemberPanel } from './AddMemberPanel';
 import { MemberSheet } from './MemberSheet';
 import { TeamNav } from './TeamNav';
 import { useMembers, usePresets } from './api';
-import { creatorNames, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
-import { Avatar, Notice, StatusPill } from './parts';
+import { creatorNames, invitationState, listMembers, rateLine, TAB_LABELS, teamSummary } from './model';
+import { Avatar, Notice, StatusPill, Unread } from './parts';
 import './team.css';
 
 import { useCreators } from '@/creators/api';
@@ -50,7 +50,7 @@ export function MembersPage({
   const searching = query.trim() !== '';
   const onlyGone = searching && lists.current.length === 0 && lists.gone.length > 0;
   const open = all.find((member) => member.id === selected) ?? null;
-  const summary = teamSummary(all);
+  const summary = teamSummary(all, new Date());
   const known = presets.data ?? [];
   const names = creators.data ?? [];
 
@@ -69,7 +69,6 @@ export function MembersPage({
   return (
     <Page className={open === null ? '' : 'tm-is-reading'}>
       <PageHeader
-        eyebrow="Membres"
         title="Équipe"
         lead={summary ?? 'Les chatteurs et les managers de l’agence, leurs créatrices et leur taux.'}
         actions={
@@ -80,20 +79,12 @@ export function MembersPage({
         }
       />
       {members.isError ? (
-        <Notice
-          title="Le serveur ne répond pas"
-          text="L’équipe n’a pas pu être lue. Réessaie dans un instant."
-        >
-          <button
-            type="button"
-            className="nv-btn nv-btn--soft nv-btn--sm"
-            onClick={() => {
-              void members.refetch();
-            }}
-          >
-            Réessayer
-          </button>
-        </Notice>
+        <Unread
+          text="Le serveur ne répond pas : l’équipe n’a pas pu être lue."
+          onRetry={() => {
+            void members.refetch();
+          }}
+        />
       ) : members.isPending ? (
         <Panel className="tm-panel">
           <div className="tm-skeleton" aria-hidden="true">
@@ -243,8 +234,9 @@ function Row({
   onOpen: () => void;
 }): JSX.Element {
   const theirs = creatorNames(member, creators);
-  // Still to choose his password: a reset link out for one who has it is not an invitation (the summary says the same).
-  const waiting = member.invitationPending;
+  // Still to choose a password: one pill, « Invité » or « Lien expiré », in place of the status (EQ-05, EQ-06). A reset
+  // link out for one who has a password is not an invitation (the summary says the same).
+  const access = member.invitationPending ? invitationState(member, new Date()).kind : null;
   return (
     <li className="nv-enter">
       <button
@@ -255,18 +247,22 @@ function Row({
       >
         <Avatar member={member} />
         <span className="nv-convo__main">
-          <span className="nv-convo__name tm-name">
-            {member.displayName}
-            {waiting ? <span className="tm-invited">Invité</span> : null}
-          </span>
+          <span className="nv-convo__name tm-name">{member.displayName}</span>
           <span className="nv-convo__preview">
             <span aria-hidden="true">{countryFlag(member.country)} </span>
             {countryName(member.country)} · {rateLine(member.commission, presets)}
             {theirs.length === 0 ? null : ` · ${theirs.join(', ')}`}
           </span>
         </span>
+        {/* « Actif » is the rule, not news: a pill only for what is not (EQ-05). */}
         <span className="nv-convo__side">
-          <StatusPill member={member} />
+          {access === 'expired' ? (
+            <span className="tm-invited tm-invited--expired">Lien expiré</span>
+          ) : access !== null ? (
+            <span className="tm-invited">Invité</span>
+          ) : member.status === 'active' ? null : (
+            <StatusPill member={member} />
+          )}
         </span>
       </button>
     </li>

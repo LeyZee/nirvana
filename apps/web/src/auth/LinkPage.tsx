@@ -7,6 +7,7 @@ import {
 } from '@nirvana/contracts';
 import { useCallback, useEffect, useState, type JSX, type ReactNode, type SyntheticEvent } from 'react';
 
+import { PublicBrand } from './PublicBrand';
 import { inspectInvitationLink, redeemInvitationLink, takeToken } from './api';
 import { fetchCurrentUser } from './session';
 
@@ -22,6 +23,8 @@ export interface LinkPageCopy {
   /** Above the title: what the member checks of his record (EQ-10 « vérifier son nom et son pays »). */
   readonly eyebrow?: (preview: InvitationLinkPreview) => string;
   readonly title: (preview: InvitationLinkPreview) => string;
+  /** The browser tab's name for the page, before the link is read. */
+  readonly page: string;
   readonly lead: string;
   readonly passwordLabel: string;
   readonly submit: string;
@@ -67,16 +70,7 @@ export function LinkPage({ copy, onSignedIn, onLeave }: LinkPageProps & { copy: 
   return (
     <main className="nv-aura grid min-h-dvh place-items-center px-4 py-10">
       <div className="nv-plate nv-plate--pad flex w-full max-w-sm flex-col gap-6">
-        <h1 className="flex items-center gap-2 font-serif text-4xl italic">
-          <img
-            src="/nirvana-mark.svg"
-            alt=""
-            width={34}
-            height={34}
-            className="drop-shadow-[0_0_10px_color-mix(in_srgb,var(--nv-neon)_45%,transparent)]"
-          />
-          Nirvana
-        </h1>
+        <PublicBrand page={copy.page} />
         {/* Each step comes in on its own; the wordmark stays put. */}
         <div key={step.kind}>{renderStep()}</div>
       </div>
@@ -98,7 +92,7 @@ export function LinkPage({ copy, onSignedIn, onLeave }: LinkPageProps & { copy: 
             title="Ce lien ne marche plus"
             action={{ label: 'Aller à la connexion', onClick: onLeave }}
           >
-            Demande-en un nouveau.
+            Demande un nouveau lien à ton responsable.
           </Refused>
         );
       case 'used_by_this_page':
@@ -168,7 +162,7 @@ function Refused({
       <div className="nv-enter flex items-start gap-4" style={{ '--nv-i': 1 }}>
         <span className="nv-orb nv-tone--warn mt-1 shrink-0" aria-hidden="true" />
         <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold">{title}</h2>
+          <h1 className="text-xl font-semibold">{title}</h1>
           <p className="text-sm text-[var(--nv-ink-muted)]">{children}</p>
         </div>
       </div>
@@ -250,7 +244,7 @@ function PasswordForm({
         {copy.eyebrow === undefined ? null : (
           <p className="text-sm font-medium text-[var(--nv-ink-muted)]">{copy.eyebrow(preview)}</p>
         )}
-        <h2 className="font-serif text-3xl leading-tight">{copy.title(preview)}</h2>
+        <h1 className="text-title-1 font-bold text-balance">{copy.title(preview)}</h1>
         <p className="text-[var(--nv-ink-muted)]">{copy.lead}</p>
       </header>
       <label className="nv-field nv-enter" style={{ '--nv-i': 2 }}>
@@ -323,8 +317,8 @@ function PasswordForm({
       ) : null}
       {otherAccount === null ? null : (
         <p className="nv-enter text-sm text-[var(--nv-ink-muted)]" style={{ '--nv-i': 4 }}>
-          Ce navigateur est connecté au compte de {otherAccount.name}. « {copy.submit} » ouvrira celui de{' '}
-          {preview.displayName} à sa place.
+          Ce navigateur est ouvert sur le compte {otherAccount.name}. « {copy.submit} » ouvrira à sa place le
+          compte {preview.displayName}.
         </p>
       )}
       <button

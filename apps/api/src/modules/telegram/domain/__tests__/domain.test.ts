@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { nextBatch, type Pending } from '../batch';
 import { classify } from '../classify';
 import { chatsFor, computeCoverage } from '../coverage';
+import { mayRemoveChat } from '../membership';
 import { describeTelegramError } from '../messages';
 import { MAX_TEXT, escapeHtml, joinTexts, renderClosedBy, renderNotice } from '../render';
 import { morningDigestKey, nightOf, retryDelayMs, shouldRetry } from '../schedule';
@@ -145,6 +146,24 @@ describe('classification (ADR 0020 §2)', () => {
     });
   });
 
+  it('says no ECB rate came for a currency since a day, or ever, without a figure of the pay', () => {
+    expect(classify({ kind: 'exchange_rate_overdue', currency: 'USD', lastRateDay: '2026-10-23' })).toEqual({
+      kind: 'notice',
+      topic: 'important',
+      threadKey: null,
+      title: 'Important',
+      body: 'Pas de nouveau taux USD de la BCE depuis le 23 oct. : une quinzaine qui finit sans taux récent ne pourra pas être clôturée.',
+      link: { label: 'Ouvrir le Dashboard', path: '/' },
+    });
+    // A calendar day, never shifted by a time zone: the 1st stays the 1st.
+    const first = classify({ kind: 'exchange_rate_overdue', currency: 'USD', lastRateDay: '2026-11-01' });
+    expect(first?.kind === 'notice' ? first.body : '').toContain('depuis le 1 nov. :');
+    expect(classify({ kind: 'exchange_rate_overdue', currency: 'USD', lastRateDay: null })).toMatchObject({
+      topic: 'important',
+      body: 'Aucun taux USD de la BCE n’est encore arrivé : une quinzaine payée en USD ne peut pas être clôturée.',
+    });
+  });
+
   it('says a message could not leave, as important, in the conversation’s thread', () => {
     expect(classify({ kind: 'send_failed', conversationId })).toEqual({
       kind: 'notice',
@@ -180,6 +199,14 @@ describe('classification (ADR 0020 §2)', () => {
       conversations: 2,
     });
     expect(unmeasured?.kind === 'notice' ? unmeasured.body : '').toContain('pas encore mesuré');
+    const noPersona = classify({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'active_persona' }],
+      conversations: 1,
+    });
+    expect(noPersona?.kind === 'notice' ? noPersona.body : '').toContain(
+      'Raison : elle n’a pas de persona active.',
+    );
   });
 
   it('opens a thread on an expired session and closes it with a reply when it comes back', () => {
@@ -355,5 +382,13 @@ describe('token and messages', () => {
       'Le bot ne peut plus écrire dans ce groupe. Rajoute-le au groupe, puis réessaie.',
     );
     expect(describeTelegramError('unreachable')).not.toMatch(/\d{3}/);
+  });
+});
+
+describe('mayRemoveChat (REG-28)', () => {
+  it('lets go of a group the bot left or was banned from, never of one it sits in', () => {
+    expect(mayRemoveChat('left')).toBe(true);
+    expect(mayRemoveChat('kicked')).toBe(true);
+    expect(mayRemoveChat('member')).toBe(false);
   });
 });

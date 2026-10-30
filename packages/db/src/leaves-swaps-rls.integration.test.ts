@@ -134,9 +134,12 @@ describe('leaves and swaps (ADR 0031): the member, the colleague, the agency', (
         ['Nora', nora],
         ['Inès', ines],
       ] as const) {
-        await tx
-          .insert(s.creators)
-          .values({ id: creator.creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+        await tx.insert(s.creators).values({
+          id: creator.creatorId,
+          nameKey: creator.creatorId,
+          displayName: `Créatrice ${label}`,
+          timezone: 'Europe/Paris',
+        });
         await tx.insert(s.platformAccounts).values({
           id: creator.accountId,
           creatorId: creator.creatorId,

@@ -8,6 +8,7 @@ import {
   AlertTriggerSchema,
   CUSTOM_ALERT_TOPIC,
   CustomAlertBodySchema,
+  customAlertNameKey,
   SYSTEM_ALERT_CODES,
   SYSTEM_ALERT_TOPICS,
 } from './alerts';
@@ -111,15 +112,28 @@ describe('custom alerts (P4-01)', () => {
 
   it('tries an alert being written on one message, and answers without the fan’s words', () => {
     const alert = { phrase: null, keywords: ['vidéo perso'] };
-    expect(AlertTestBodySchema.safeParse({ alert, message: 'une vidéo perso ?' }).success).toBe(true);
-    expect(AlertTestBodySchema.safeParse({ alert, message: '   ' }).success).toBe(false);
+    const creatorId = '0190f3a4-7c2d-7e5b-9a1f-3b6c8d2e4f10';
+    expect(AlertTestBodySchema.safeParse({ creatorId, alert, message: 'une vidéo perso ?' }).success).toBe(
+      true,
+    );
+    // Tried with one creator's active persona: a request that names none is refused.
+    expect(AlertTestBodySchema.safeParse({ alert, message: 'une vidéo perso ?' }).success).toBe(false);
+    expect(AlertTestBodySchema.safeParse({ creatorId, alert, message: '   ' }).success).toBe(false);
     expect(
-      AlertTestBodySchema.safeParse({ alert: { phrase: null, keywords: [] }, message: 'coucou' }).success,
+      AlertTestBodySchema.safeParse({ creatorId, alert: { phrase: null, keywords: [] }, message: 'coucou' })
+        .success,
     ).toBe(false);
     expect(
       AlertTestResultSchema.safeParse({ keywords: ['vidéo perso'], phraseMatched: null, reason: null })
         .success,
     ).toBe(true);
+  });
+
+  it('reads two names as one alert whatever their case, accents and spaces around, never their words', () => {
+    expect(customAlertNameKey('  APPEL Vidéo ')).toBe(customAlertNameKey('appel video'));
+    expect(customAlertNameKey('Éloïse')).toBe('eloise');
+    expect(customAlertNameKey('appel vidéo')).not.toBe(customAlertNameKey('appel-vidéo'));
+    expect(customAlertNameKey('appel vidéo')).not.toBe(customAlertNameKey('appel  vidéo'));
   });
 
   it('gives every error code a suffix that sets its status (api.md)', () => {

@@ -240,24 +240,12 @@
 .sc-away__when {
   color: var(--nv-ink-muted);
 }
-.sc-mine__shift[data-actions='true'] {
-  grid-template-columns: minmax(96px, auto) minmax(0, 1fr) auto auto;
-}
-/* The phase stays on the right edge of every row; « Échanger » comes just before it. */
-.sc-mine__shift[data-actions='true'] .sc-mine__swap {
-  grid-column: 3;
-  grid-row: 1;
-}
-.sc-mine__shift[data-actions='true'] .sc-phase {
-  grid-column: 4;
-  grid-row: 1;
-}
+/* A proposal waiting for its answer is a normal state, not a warning (EQ-20). */
 .sc-mine__offer {
   margin: 2px 0 0;
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
-  color: var(--nv-warning);
-  font-weight: 600;
+  color: var(--nv-ink-muted);
 }
 .sc-mine__swap {
   display: inline-flex;
@@ -377,11 +365,9 @@
 }
 
 /* ── Équipe › Planning ── */
-.sc-decide {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nv-space-2);
-  padding: var(--nv-space-4) var(--nv-space-5);
+/* The requests to decide, folded to one line until opened (EQ-02): the name of each requester in the summary. */
+.sc-decide > summary .nv-disclosure__title {
+  color: var(--nv-warning);
 }
 .sc-row--leave {
   transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
@@ -431,12 +417,6 @@
   .sc-card__line {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-  }
-  .sc-mine__shift[data-actions='true'] {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .sc-mine__shift[data-actions='true'] .sc-phase {
-    grid-column: 2;
   }
   .sc-mine__shift[data-actions='true'] .sc-mine__swap {
     grid-column: 1 / -1;

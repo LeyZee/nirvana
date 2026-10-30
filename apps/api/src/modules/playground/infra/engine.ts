@@ -183,6 +183,7 @@ export function createPlaygroundEngine(deps: EngineDeps): PlaygroundEngine {
   const state = (): PlaygroundState => {
     const { situation, lastExchange } = session;
     return {
+      persona: { name: deps.persona.creatorName },
       presets: FAN_PRESETS.map((p) => ({ id: p.id, label: p.label, tests: p.tests, opening: p.opening })),
       presetId,
       situation: {

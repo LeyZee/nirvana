@@ -2,6 +2,7 @@ import {
   ConversationDetailSchema,
   CreatorIdSchema,
   DashboardSchema,
+  TodosAcrossCreatorsSchema,
   DEFAULT_AGENT_HOURS,
   DraftIdSchema,
   EventIdSchema,
@@ -10,6 +11,7 @@ import {
   MessageIdSchema,
   newId,
   PlatformAccountIdSchema,
+  TeamMemberIdSchema,
   type AgentHours,
   type ConversationId,
   type CreatorId,
@@ -27,6 +29,7 @@ import type { DraftComposer } from '../modules/conversations';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
+import { activateDemoPersona } from './support/persona';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 const NO_LOG = { info: () => undefined, warn: () => undefined };
@@ -92,7 +95,8 @@ describe('GET /v1/dashboard', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Lina', timezone: 'America/Montreal' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Lina', timezone: 'America/Montreal' });
+    await activateDemoPersona(app, creatorId);
     await test.admin.db.insert(schema.platformAccounts).values({
       id: platformAccountId,
       creatorId,
@@ -255,6 +259,8 @@ describe('GET /v1/dashboard', () => {
     expect(dashboard.budget).toMatchObject({ cap: 20, alertAt: 16, costPerEuroSold: null });
     expect(dashboard.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
     expect(dashboard.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([['Julien', 25, 25]]);
+    // « Ouvrir dans Suivi » in the fan reader opens his conversation.
+    expect(dashboard.fans[0]?.conversationId).toBe(conversations.get('Julien'));
   });
 
   it('shows a creator her aggregates, never a conversation nor a fan', async () => {
@@ -291,7 +297,7 @@ describe('GET /v1/dashboard', () => {
     ]);
   });
 
-  it('shows a message left with nothing under way for 30 minutes, except while she is stopped or Reveal unread (P3-11)', async () => {
+  it('shows a message left with nothing under way for 30 minutes, except while Reveal is unread (P3-11)', async () => {
     const longAgo = new Date(Date.now() - 40 * 60_000);
     const seed = async (name: string, at: Date): Promise<ConversationId> => {
       const { conversationId } = await app.modules.conversations.ingestMessage({
@@ -387,7 +393,7 @@ describe('GET /v1/dashboard', () => {
     expect(fromOpening[1]?.waitingMinutes).toBeGreaterThanOrEqual(39);
     await hoursAre(null);
 
-    // An expired Reveal session, then her kill switch, say it all: the net stays quiet, the rest still waits.
+    // An expired Reveal session says it all: the net stays quiet, the rest still waits.
     const sessionIs = (state: 'valid' | 'expired') =>
       test.admin.db
         .update(schema.platformAccounts)
@@ -396,15 +402,334 @@ describe('GET /v1/dashboard', () => {
     await sessionIs('expired');
     expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
     await sessionIs('valid');
-    await test.admin.db.insert(schema.killSwitches).values({
-      id: newId(KillSwitchIdSchema),
-      scope: 'creator',
-      scopeId: creatorId,
-      creatorId,
-      active: true,
-      reason: 'test',
-      setBy: 'test',
+  });
+
+  it('keeps the grave lines only while she is stopped (choix de Charles, 28/10)', async () => {
+    const read = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json());
+    const running = await read();
+    expect(running.todos.map((t) => t.kind)).toEqual(
+      expect.arrayContaining(['minor', 'unanswered', 'send_failed']),
+    );
+    const stopIs = (active: boolean) =>
+      test.admin.db.insert(schema.killSwitches).values({
+        id: newId(KillSwitchIdSchema),
+        scope: 'creator',
+        scopeId: creatorId,
+        creatorId,
+        active,
+        reason: 'test',
+        setBy: 'test',
+        // The latest row of her scope wins: one millisecond apart is enough.
+        setAt: new Date(),
+      });
+
+    // Arrêt: Leo, who may be a minor, still waits for a human; the draft, the failed send and the net leave.
+    await stopIs(true);
+    const stopped = await read();
+    expect(stopped.mode).toBe('stop');
+    expect(stopped.todos.map((t) => [t.title, t.kind, t.tone])).toEqual([['Leo', 'minor', 'bad']]);
+
+    // Back on: every line comes back.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await stopIs(false);
+    expect((await read()).todos.map((t) => t.kind)).toEqual(running.todos.map((t) => t.kind));
+  });
+
+  it('lists a handoff until the hand is given back, never a takeover a person chose (recette 28/10)', async () => {
+    const seed = async (name: string): Promise<ConversationId> => {
+      const { conversationId } = await app.modules.conversations.ingestMessage({
+        creatorId,
+        platformAccountId,
+        platformConversationId: `c-${name}`,
+        platformFanId: `f-${name}`,
+        fanDisplayName: name,
+        message: {
+          ref: { platform: 'reveal', id: `m-${name}` },
+          conversationRef: { platform: 'reveal', id: `c-${name}` },
+          direction: 'inbound',
+          text: `Bonsoir, c'est ${name}`,
+          media: [],
+          priceMinor: null,
+          currency: null,
+          isPaid: false,
+          createdAt: new Date().toISOString(),
+        },
+        correlationId: 'seed',
+      });
+      return conversationId;
+    };
+    const act = async (id: ConversationId, action: 'takeover' | 'release') => {
+      expect((await post(`/v1/conversations/${id}/${action}?creatorId=${creatorId}`, {})).statusCode).toBe(
+        204,
+      );
+    };
+    const titles = async () =>
+      DashboardSchema.parse(
+        (await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json(),
+      ).todos.map((t) => t.title);
+
+    // Nina: a person took the hand of their own accord, without any handoff.
+    await act(await seed('Nina'), 'takeover');
+    // Paul: the agent handed him over for a meeting, a person gave the hand back, then took it again.
+    const paul = await seed('Paul');
+    await act(paul, 'takeover');
+    await test.admin.db.execute(sql`
+      insert into conversation_events (id, creator_id, conversation_id, seq, type, payload, actor, correlation_id)
+      select ${newId(EventIdSchema)}::uuid, ${creatorId}::uuid, ${paul}::uuid, max(seq) + 1, 'handoff_requested',
+             ${JSON.stringify({ conversationId: paul, cause: 'meeting' })}::jsonb, 'ai', 'seed'
+      from conversation_events where conversation_id = ${paul}::uuid`);
+    expect(await titles()).toContain('Paul');
+    await act(paul, 'release');
+    await act(paul, 'takeover');
+
+    const listed = await titles();
+    expect(listed).toContain('Leo');
+    expect(listed).not.toContain('Nina');
+    expect(listed).not.toContain('Paul');
+  });
+
+  it('ranks the best fans on their sales in euros, dollars at the last ECB rate known (choix de Charles, 28/10)', async () => {
+    const marc = conversations.get('Marc')!;
+    const sale = (id: string, author: 'ai' | 'human', priceMinor: number, currency: 'EUR' | 'USD') =>
+      test.admin.db.insert(schema.messages).values({
+        id: newId(MessageIdSchema),
+        creatorId,
+        platformAccountId,
+        conversationId: marc,
+        platformMessageId: id,
+        direction: 'outbound',
+        author,
+        text: 'Pour toi',
+        priceMinor,
+        currency,
+        isPaid: true,
+        platformCreatedAt: new Date(),
+      });
+    // Marc: 10 € sold by a chatter, 30 $ by the agent. Julien: 25 € by the agent.
+    await sale('paid-marc-eur', 'human', 1_000, 'EUR');
+    await sale('paid-marc-usd', 'ai', 3_000, 'USD');
+    const read = async (cookie = ownerCookie) =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, cookie)).json());
+
+    // No rate yet: his dollars do not count, and the screen is told so.
+    const without = await read();
+    expect(without.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([
+      ['Julien', 25, 25],
+      ['Marc', 10, 0],
+    ]);
+    expect(without.usdSales).toEqual({ seen: true, rate: null });
+
+    // Pay's job wrote two days; the latest counts: 30 $ × 0.9 = 27 €, 37 € in all, ahead of Julien.
+    await test.admin.db.insert(schema.exchangeRates).values([
+      {
+        currency: 'USD',
+        day: '2026-10-26',
+        rateMicros: 800_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      },
+      {
+        currency: 'USD',
+        day: '2026-10-27',
+        rateMicros: 900_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      },
+    ]);
+    const converted = await read();
+    expect(converted.fans.map((f) => [f.name, f.spent, f.byAgent])).toEqual([
+      ['Marc', 37, 27],
+      ['Julien', 25, 25],
+    ]);
+    expect(converted.fans[0]?.conversationId).toBe(marc);
+    expect(converted.usdSales).toEqual({ seen: true, rate: { day: '2026-10-27' } });
+
+    // Her own Dashboard keeps no fan, and says nothing of them.
+    expect((await read(creatorCookie)).usdSales).toEqual({ seen: false, rate: null });
+  });
+
+  it('leaves out a paid message at a zero price, a negative one refused by the base (recette 28/10, #296)', async () => {
+    const leo = conversations.get('Leo')!;
+    const sale = (id: string, priceMinor: number, currency: 'EUR' | 'USD') =>
+      test.admin.db.insert(schema.messages).values({
+        id: newId(MessageIdSchema),
+        creatorId,
+        platformAccountId,
+        conversationId: leo,
+        platformMessageId: id,
+        direction: 'outbound',
+        author: 'ai',
+        text: 'Pour toi',
+        priceMinor,
+        currency,
+        isPaid: true,
+        platformCreatedAt: new Date(),
+      });
+    await test.admin.db
+      .insert(schema.exchangeRates)
+      .values({
+        currency: 'USD',
+        day: '2026-10-27',
+        rateMicros: 900_000,
+        source: 'BCE, taux de référence',
+        fetchedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    // A negative price is refused by the base (migration 0036); a zero price is allowed and never counts.
+    await sale('paid-leo-eur', 1_000, 'EUR');
+    await expect(sale('paid-leo-usd-negative', -5_000, 'USD')).rejects.toHaveProperty(
+      'cause.constraint',
+      'messages_price_minor_check',
+    );
+    await sale('paid-leo-eur-zero', 0, 'EUR');
+    const response = await call(`/v1/dashboard?creatorId=${creatorId}&period=week`, ownerCookie);
+    expect(response.statusCode).toBe(200);
+    const dashboard = DashboardSchema.parse(response.json());
+    expect(dashboard.fans.filter((f) => f.name === 'Leo').map((f) => [f.spent, f.byAgent])).toEqual([
+      [10, 10],
+    ]);
+  });
+
+  it('says Reveal is read late once three of its polls have gone by without a read (recette 28/10, G8)', async () => {
+    const account = (set: Partial<typeof schema.platformAccounts.$inferInsert>) =>
+      test.admin.db
+        .update(schema.platformAccounts)
+        .set(set)
+        .where(eq(schema.platformAccounts.id, platformAccountId));
+    const reveal = async () =>
+      DashboardSchema.parse((await call(`/v1/dashboard?creatorId=${creatorId}`, ownerCookie)).json()).reveal;
+
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    // The session holds, but nothing read it for an hour: the default rhythm (60 s + 20 s) allows 7 minutes.
+    await account({ lastPollAt: new Date(Date.now() - 3_600_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: true });
+    // An account read every hour is not late after one.
+    await account({ connectorConfig: { pollIntervalSeconds: 3_600, jitterSeconds: 300 } });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    await account({ lastPollAt: new Date(), connectorConfig: {} });
+    // The session set an hour ago and never read (worker stopped, first read failed): late from the first day.
+    await account({ lastPollAt: null, sessionUpdatedAt: new Date(Date.now() - 3_600_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: true });
+    // Set a minute ago: the first read may still come.
+    await account({ sessionUpdatedAt: new Date(Date.now() - 60_000) });
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    // Captured again a minute ago, last read three hours ago: the new session waits for its first poll.
+    await account({
+      lastPollAt: new Date(Date.now() - 3 * 3_600_000),
+      sessionUpdatedAt: new Date(Date.now() - 60_000),
     });
-    expect((await read()).map((t) => t.kind)).toEqual(['minor', 'send_failed']);
+    expect(await reveal()).toMatchObject({ connected: true, late: false });
+    await account({ lastPollAt: new Date() });
+  });
+
+  it('gathers « À traiter » of every creator followed, each line naming hers, never one not followed (SUIVI-09)', async () => {
+    // Inès, a second invented creator (ADR 0010): Arthur's send failed for good.
+    const ines = newId(CreatorIdSchema);
+    const inesAccount = newId(PlatformAccountIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: ines, nameKey: ines, displayName: 'Inès', timezone: 'Europe/Paris' });
+    await test.admin.db.insert(schema.platformAccounts).values({
+      id: inesAccount,
+      creatorId: ines,
+      platform: 'reveal',
+      handle: 'test-dashboard-ines',
+      sessionState: 'valid',
+      lastPollAt: new Date(),
+    });
+    const { conversationId: arthur } = await app.modules.conversations.ingestMessage({
+      creatorId: ines,
+      platformAccountId: inesAccount,
+      platformConversationId: 'c-Arthur',
+      platformFanId: 'f-Arthur',
+      fanDisplayName: 'Arthur',
+      message: {
+        ref: { platform: 'reveal', id: 'm-Arthur' },
+        conversationRef: { platform: 'reveal', id: 'c-Arthur' },
+        direction: 'inbound',
+        text: 'Salut',
+        media: [],
+        priceMinor: null,
+        currency: null,
+        isPaid: false,
+        createdAt: new Date().toISOString(),
+      },
+      correlationId: 'seed',
+    });
+    await test.admin.db.execute(sql`update conversations set state = 'error' where id = ${arthur}::uuid`);
+
+    const todosOf = async (cookie: string) =>
+      TodosAcrossCreatorsSchema.parse((await call('/v1/dashboard/todos', cookie)).json());
+    // The owner follows both: one list, each line with its creator, the gravest first.
+    const all = await todosOf(ownerCookie);
+    expect(all.items.find((t) => t.conversationId === arthur)).toMatchObject({
+      creatorId: ines,
+      creatorName: 'Inès',
+      kind: 'send_failed',
+    });
+    expect(all.items.some((t) => t.creatorId === creatorId && t.creatorName === 'Lina')).toBe(true);
+    const tones = all.items.map((t) => t.tone);
+    expect(tones).toEqual([...tones].sort((a, b) => Number(b === 'bad') - Number(a === 'bad')));
+    // The count of each creator, for the Dashboard's picker (DASH-03).
+    for (const creator of all.creators) {
+      const hers = all.items.filter((t) => t.creatorId === creator.creatorId);
+      expect(creator).toEqual({
+        creatorId: creator.creatorId,
+        name: creator.creatorId === ines ? 'Inès' : 'Lina',
+        todos: hers.length,
+        grave: hers.filter((t) => t.tone === 'bad').length,
+      });
+    }
+    expect(all.creators.map((c) => c.creatorId).sort()).toEqual([creatorId, ines].sort());
+
+    // A chatter of Inès alone reads hers only; one of no existing creator reads nothing; a creator never.
+    const chatter = {
+      email: 'ines-chatter@example.test',
+      name: 'Chatter',
+      password: 'correct horse battery',
+    };
+    const { userId } = await createOwner(app.auth, app.db.db, chatter);
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'operator', creatorIds: [ines] })
+      .where(eq(schema.user.id, userId));
+    const hers = await todosOf(await signIn(server, chatter.email, chatter.password));
+    expect(hers.items.map((t) => [t.creatorName, t.conversationId])).toEqual([['Inès', arthur]]);
+    expect(hers.creators).toEqual([{ creatorId: ines, name: 'Inès', todos: 1, grave: 0 }]);
+    expect(await todosOf(operatorCookie)).toEqual({ items: [], creators: [] });
+    // A team chatter of Inès reads only the conversations routed to him: her queue is not his, even Arthur's.
+    const routedChatter = {
+      email: 'ines-routed@example.test',
+      name: 'Routed',
+      password: 'correct horse battery',
+    };
+    const routed = (await createOwner(app.auth, app.db.db, routedChatter)).userId;
+    await test.admin.db
+      .update(schema.user)
+      .set({ role: 'operator', creatorIds: [ines] })
+      .where(eq(schema.user.id, routed));
+    // An invented member (ADR 0010).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: routed,
+      teamRole: 'chatter',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Chatteur',
+      country: 'BJ',
+      timeZone: 'Africa/Porto-Novo',
+      joinedOn: '2026-10-01',
+    });
+    await test.admin.db
+      .update(schema.conversations)
+      .set({ routedToUserId: routed })
+      .where(eq(schema.conversations.id, arthur));
+    expect(await todosOf(await signIn(server, routedChatter.email, routedChatter.password))).toEqual({
+      items: [],
+      creators: [],
+    });
+    expect((await call('/v1/dashboard/todos', creatorCookie)).statusCode).toBe(403);
+    expect((await call('/v1/dashboard/todos')).statusCode).toBe(401);
   });
 });

@@ -16,7 +16,9 @@ import { appendEvent, lockConversation } from '../../../application/journal';
 import { createConversationsModule } from '../../../index';
 import { createDrizzleUnitOfWork } from '../unit-of-work';
 
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 
 /** What the journal copies to the outbox (`domain_events`), where the other modules read it (ADR 0007, ADR 0020). */
 describe('the journal’s outbox', () => {
@@ -33,7 +35,7 @@ describe('the journal’s outbox', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test' });

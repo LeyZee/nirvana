@@ -5,21 +5,28 @@ import {
   CommissionRateHistorySchema,
   CommissionRateSchema,
   InvitationLinkCreatedSchema,
+  nextPayPeriod,
+  payPeriodOfDay,
   TeamMemberListSchema,
   TeamMemberNoteListSchema,
   TeamMemberSchema,
+  TeamRoleChangeSchema,
+  TeamRoleHistorySchema,
   type CreatorId,
   type InvitationLinkCreated,
   type TeamMember,
 } from '@nirvana/contracts';
-import { eq, schema } from '@nirvana/db';
+import { eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
+import type { Config } from '../config';
 import { createLogger } from '../logger';
+import { enqueuePayRecalculation } from '../modules/payroll';
+import { createTeamModule } from '../modules/team';
 import { buildServer, type Server } from '../server';
 
 import { testConfig } from './support/config';
@@ -43,6 +50,7 @@ const codeOf = (response: LightMyRequestResponse): string => ApiErrorSchema.pars
 
 describe('Équipe › Membres (/v1/team, EQ-01)', () => {
   let test: TestDb;
+  let config: Config;
   let app: App;
   let server: Server;
   let owner: string;
@@ -54,8 +62,14 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
   let theoCookie: string;
   let noraCookie: string;
 
-  const call = (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, cookie: string, payload?: object) =>
-    server.inject({
+  const call = (
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT',
+    url: string,
+    cookie: string,
+    payload?: object,
+    via?: Server,
+  ) =>
+    (via ?? server).inject({
       method,
       url: `/v1${url}`,
       headers: { cookie, origin: DASHBOARD_ORIGIN },
@@ -72,6 +86,37 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
       password: await context.password.hash(password),
     });
   };
+
+  const recalculations = async (): Promise<string[]> =>
+    (
+      await test.admin.db.execute<{ key: string }>(
+        sql`select key from graphile_worker._private_jobs where key like 'payroll.recalculate:%' order by key`,
+      )
+    ).rows.map((row) => row.key);
+  const forgetRecalculations = () =>
+    test.admin.db.execute(
+      sql`delete from graphile_worker._private_jobs where key like 'payroll.recalculate:%'`,
+    );
+
+  /** The team module as it runs on `day` (noon in Paris), on this test's database. */
+  const teamOn = (day: string) =>
+    createTeamModule({
+      db: app.db.db,
+      adminDb: app.adminDb.db,
+      creators: { existing: () => Promise.resolve(new Set()) },
+      invitationLinks: { live: () => Promise.resolve(new Map()) },
+      enqueuePayRecalculation,
+      now: () => new Date(`${day}T11:00:00Z`),
+    });
+
+  /** A server whose team routes run on `day`, for a write dated that very day; the sessions are the same. */
+  const serverOn = (day: string): Promise<Server> =>
+    buildServer({
+      config,
+      logger: createLogger(config),
+      routes: [teamOn(day).routes(app.requireRole)],
+      readiness: app.readiness,
+    });
 
   const auditOf = (action: string) =>
     test.admin.db
@@ -94,7 +139,7 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
 
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
-    const config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
+    config = testConfig({ DATABASE_URL: test.appUrl, DATABASE_ADMIN_URL: test.adminUrl });
     app = await createApp(config, createLogger(config));
     server = await buildServer({
       config,
@@ -181,7 +226,7 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(created?.details).toEqual({ teamRole: 'chatter', creators: 1 });
   });
 
-  it('refuses an e-mail that already has an account, an unknown creator and an unknown preset', async () => {
+  it('refuses an e-mail that already has an account, an unknown creator, preset or country', async () => {
     const twice = await call('POST', '/team/members', owner, theoBody());
     expect(twice.statusCode).toBe(409);
     expect(codeOf(twice)).toBe('member_conflict');
@@ -204,6 +249,13 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     });
     expect(unknownPreset.statusCode).toBe(404);
     expect(codeOf(unknownPreset)).toBe('commission_preset_not_found');
+
+    const unknownCountry = await call('POST', '/team/members', owner, {
+      ...theoBody(),
+      email: 'basile@example.test',
+      country: 'ZZ',
+    });
+    expect([unknownCountry.statusCode, codeOf(unknownCountry)]).toEqual([400, 'request_invalid']);
     expect(
       await test.admin.db.select().from(schema.user).where(eq(schema.user.email, 'basile@example.test')),
     ).toEqual([]);
@@ -292,41 +344,54 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(
       (await call('POST', `/team/members/${theo.id}/notes`, theoCookie, { body: 'Moi' })).statusCode,
     ).toBe(403);
-    expect((await call('GET', `/team/members/${nora.id}/notes`, noraCookie)).statusCode).toBe(403);
+    const own = await call('GET', `/team/members/${nora.id}/notes`, noraCookie);
+    expect([own.statusCode, ApiErrorSchema.parse(own.json()).error.message]).toEqual([
+      403,
+      'Les notes sur toi ne te sont pas lisibles',
+    ]);
     expect((await call('GET', '/team/commission-presets', theoCookie)).statusCode).toBe(403);
     const [audited] = await auditOf('team_member_note.create');
     expect(JSON.stringify(audited)).not.toContain('relances');
   });
 
-  it('sets a rate from a day on, never before today nor twice the same day, a share for a manager only', async () => {
+  it('sets a rate from a period on, never before today nor twice the same day, a share for a manager only', async () => {
+    // A new rate starts the 1st or the 16th (Charles, 28/10): the next period's first day, and a day that is not one.
+    const nextStart = nextPayPeriod(payPeriodOfDay(agencyDay()));
+    const notAStart = `${nextStart.slice(0, 8)}${nextStart.endsWith('-01') ? '02' : '17'}`;
     const past = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1500 },
       effectiveFrom: agencyDay(-1),
     });
     expect(codeOf(past)).toBe('commission_date_invalid');
 
+    const midPeriod = await call('POST', `/team/members/${theo.id}/commission`, owner, {
+      commission: { rateBps: 1500 },
+      effectiveFrom: notAStart,
+    });
+    expect([midPeriod.statusCode, codeOf(midPeriod)]).toEqual([400, 'commission_date_invalid']);
+
     const share = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1500 },
       teamShareBps: 300,
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     expect(share.statusCode).toBe(400);
     expect(codeOf(share)).toBe('team_share_invalid');
 
     const next = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1500 },
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     expect(next.statusCode).toBe(201);
     expect(CommissionRateSchema.parse(next.json())).toEqual({
       rateBps: 1500,
       teamShareBps: null,
       presetId: null,
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     const again = await call('POST', `/team/members/${theo.id}/commission`, owner, {
       commission: { rateBps: 1600 },
-      effectiveFrom: agencyDay(1),
+      effectiveFrom: nextStart,
     });
     expect(again.statusCode).toBe(409);
     expect(codeOf(again)).toBe('commission_rate_conflict');
@@ -337,6 +402,110 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
     expect(history.rates.map((rate) => rate.rateBps)).toEqual([1500, 1250]);
     const today = TeamMemberSchema.parse((await call('GET', `/team/members/${theo.id}`, owner)).json());
     expect(today.commission?.rateBps).toBe(1250);
+  });
+
+  it('has pay compute nothing again for a rate of a later period', async () => {
+    const running = payPeriodOfDay(agencyDay());
+    // A rate from the next period changes nothing computed yet (the running period's own first day is unit-tested).
+    await forgetRecalculations();
+    const later = await call('POST', `/team/members/${theo.id}/commission`, owner, {
+      commission: { rateBps: 1700 },
+      effectiveFrom: nextPayPeriod(nextPayPeriod(running)),
+    });
+    expect(later.statusCode).toBe(201);
+    expect(await recalculations()).toEqual([]);
+  });
+
+  it('dates a change of role from the 1st or the 16th, effective on its day for access and pay (Charles, 28/10)', async () => {
+    const first = nextPayPeriod(payPeriodOfDay(agencyDay()));
+    const second = nextPayPeriod(first);
+    const notAStart = `${first.slice(0, 8)}${first.endsWith('-01') ? '02' : '17'}`;
+    await forgetRecalculations();
+
+    // The record does not take a role any more: a role is dated, on its own route.
+    const patched = await call('PATCH', `/team/members/${nora.id}`, owner, { teamRole: 'chatter' });
+    expect([patched.statusCode, codeOf(patched)]).toEqual([400, 'request_invalid']);
+    for (const effectiveFrom of [notAStart, '2020-01-16']) {
+      const refused = await call('POST', `/team/members/${nora.id}/role`, owner, {
+        teamRole: 'chatter',
+        effectiveFrom,
+      });
+      expect([refused.statusCode, codeOf(refused)]).toEqual([400, 'role_date_invalid']);
+      expect(ApiErrorSchema.parse(refused.json()).error.message).toBe(
+        'Un changement de rôle commence le 1er ou le 16 d’un mois, aujourd’hui au plus tôt',
+      );
+    }
+    expect(
+      (
+        await call('POST', `/team/members/${nora.id}/role`, noraCookie, {
+          teamRole: 'chatter',
+          effectiveFrom: first,
+        })
+      ).statusCode,
+    ).toBe(403);
+
+    // Made a chatter from the next period: she stays a manager until then, and nothing computed changes.
+    const demoted = await call('POST', `/team/members/${nora.id}/role`, owner, {
+      teamRole: 'chatter',
+      effectiveFrom: first,
+    });
+    expect(demoted.statusCode).toBe(201);
+    expect(TeamRoleChangeSchema.parse(demoted.json())).toEqual({ teamRole: 'chatter', effectiveFrom: first });
+    expect(await recalculations()).toEqual([]);
+    expect(
+      TeamMemberSchema.parse((await call('GET', `/team/members/${nora.id}`, owner)).json()).teamRole,
+    ).toBe('manager');
+    const twice = await call('POST', `/team/members/${nora.id}/role`, owner, {
+      teamRole: 'manager',
+      effectiveFrom: first,
+    });
+    expect([twice.statusCode, codeOf(twice)]).toEqual([409, 'role_change_conflict']);
+    // A share of the team's net from a day she is a chatter is refused, though she is a manager today.
+    const share = await call('POST', `/team/members/${nora.id}/commission`, owner, {
+      commission: { rateBps: 1000 },
+      teamShareBps: 500,
+      effectiveFrom: first,
+    });
+    expect([share.statusCode, codeOf(share)]).toEqual([400, 'team_share_invalid']);
+
+    const history = TeamRoleHistorySchema.parse(
+      (await call('GET', `/team/members/${nora.id}/role`, noraCookie)).json(),
+    );
+    expect(history.roles).toEqual([
+      { teamRole: 'chatter', effectiveFrom: first },
+      { teamRole: 'manager', effectiveFrom: nora.joinedOn },
+    ]);
+    expect((await call('GET', `/team/members/${nora.id}/role`, theoCookie)).statusCode).toBe(404);
+    const [audited] = await auditOf('team_role.create');
+    expect(audited?.details).toEqual({ teamRole: 'chatter', effectiveFrom: first });
+
+    // On its day, the hourly job gives it to her record: her scope follows, she reads her own record only.
+    expect(await teamOn(agencyDay()).jobs.applyRoles()).toBe(0);
+    expect(await teamOn(first).jobs.applyRoles()).toBe(1);
+    expect(await teamOn(first).jobs.applyRoles()).toBe(0);
+    const byNora = TeamMemberListSchema.parse((await call('GET', '/team/members', noraCookie)).json());
+    expect(byNora.members.map((member) => [member.id, member.teamRole])).toEqual([[nora.id, 'chatter']]);
+
+    // On the 1st or the 16th, a role from that very day is hers at once, and pay computes that period again.
+    const onSecond = await serverOn(second);
+    try {
+      const promoted = await call(
+        'POST',
+        `/team/members/${nora.id}/role`,
+        owner,
+        { teamRole: 'manager', effectiveFrom: second },
+        onSecond,
+      );
+      expect(promoted.statusCode).toBe(201);
+      expect(await recalculations()).toEqual([`payroll.recalculate:${second}`]);
+      expect(
+        TeamMemberSchema.parse((await call('GET', `/team/members/${nora.id}`, owner)).json()).teamRole,
+      ).toBe('manager');
+      expect(await teamOn(second).jobs.applyRoles()).toBe(0);
+    } finally {
+      await onSecond.close();
+      await forgetRecalculations();
+    }
   });
 
   it('changes what is sent and keeps the account in step', async () => {
@@ -387,6 +556,30 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
       rows.filter((row) => JSON.stringify(row.details).includes('"left"')),
     );
     expect(left?.details).toEqual({ from: 'active', to: 'left', sessionsEnded: 1 });
+
+    // Signing in again is refused like a wrong password: the page does not learn the account exists (ADR 0023).
+    const signInAs = (password: string) =>
+      server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email: 'theo@example.test', password },
+        headers: { origin: DASHBOARD_ORIGIN },
+      });
+    const refused = await signInAs(THEO_PASSWORD);
+    const wrong = await signInAs('not the password at all');
+    expect(refused.statusCode).toBe(401);
+    expect(refused.headers['set-cookie']).toBeUndefined();
+    expect(ApiErrorSchema.parse(refused.json()).error).toMatchObject({
+      code: 'sign_in_unauthenticated',
+      message: 'E-mail ou mot de passe incorrect',
+    });
+    expect(ApiErrorSchema.parse(wrong.json()).error).toMatchObject({
+      code: 'sign_in_unauthenticated',
+      message: 'E-mail ou mot de passe incorrect',
+    });
+    expect(
+      await test.admin.db.select().from(schema.session).where(eq(schema.session.userId, theo.userId)),
+    ).toEqual([]);
   });
 
   it('shows when a member’s link stops working: none, live, expired, used, then a new password link', async () => {

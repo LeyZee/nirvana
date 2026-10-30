@@ -31,7 +31,9 @@ export const READY_SECTIONS = [
   '/suivi',
   '/entrainer',
   '/planning',
+  '/commissions',
   '/equipe',
+  '/paie',
   '/creatrices',
   '/reglages',
 ] as const;
@@ -112,24 +114,25 @@ const RAILS: Readonly<Record<RailKind, RailPlan>> = {
     settings: false,
     phone: ['/aujourdhui', '/suivi', '/planning', '/commissions'],
   },
+  // No Entraîner for an operator nor a creator: the playground is the owner's alone on the server
+  // (`requireRole('owner')`), and a tab never leads to a screen that can only refuse. Nor Réglages: every page of it
+  // is the owner's, and the appearance lives in the account's menu (NAV-03, NAV-18).
   operator: {
     sections: [
       ['/', null],
       ['/suivi', 'chatting'],
-      ['/entrainer', 'chatting'],
       ['/creatrices', 'agency'],
     ],
-    settings: true,
-    phone: ['/', '/suivi', '/entrainer', '/creatrices'],
+    settings: false,
+    phone: ['/', '/suivi', '/creatrices'],
   },
   creator: {
     sections: [
       ['/', null],
-      ['/entrainer', 'chatting'],
       ['/creatrices', 'agency'],
     ],
-    settings: true,
-    phone: ['/', '/entrainer', '/creatrices'],
+    settings: false,
+    phone: ['/', '/creatrices'],
   },
 };
 
@@ -198,11 +201,21 @@ export interface Rail {
   readonly more: ReadonlySet<ReadySection>;
 }
 
+/** A creator's Créatrices is her own persona alone: her tab says so (NAV-18). */
+function labelOf(kind: RailKind, section: Section): string {
+  return kind === 'creator' && section === '/creatrices' ? 'Persona' : ITEMS[section].label;
+}
+
 /** The rail of the signed-in account, with the screens that exist today. */
 export function railOf(me: Me): Rail {
   const kind = railKindOf(me);
   const layout = layoutRail(kind, isReady);
-  const item = (to: ReadySection, family: Family | null): NavItem => ({ to, family, ...ITEMS[to] });
+  const item = (to: ReadySection, family: Family | null): NavItem => ({
+    to,
+    family,
+    ...ITEMS[to],
+    label: labelOf(kind, to),
+  });
   const items: NavItem[] = [];
   for (const [to, family] of layout.sections) if (isReady(to)) items.push(item(to, family));
   const settings = layout.settings ? item('/reglages', null) : null;
@@ -220,6 +233,48 @@ export function railOf(me: Me): Rail {
 export function sectionOf(pathname: string): Section | null {
   const first = `/${pathname.split('/')[1] ?? ''}`;
   return SECTIONS.find((section) => section === first) ?? null;
+}
+
+/** What a section is called, in the rail and in the tab's title: as the account's own rail names it. */
+export function sectionLabel(section: Section, kind?: RailKind): string {
+  return kind === undefined ? ITEMS[section].label : labelOf(kind, section);
+}
+
+/**
+ * The screens inside a section, by address: the names of their sub-tabs, and of the browser tab's title, which says
+ * « Rapports · Équipe » so that Équipe › Rapports and Équipe › Planning read apart (NAV-12).
+ */
+const SCREENS = {
+  '/suivi': 'Conversations',
+  '/suivi/alertes': 'Historique des alertes',
+  '/equipe/planning': 'Planning',
+  '/equipe/rapports': 'Rapports',
+  '/equipe/membres': 'Membres',
+  '/paie/quinzaine': 'Quinzaine',
+  '/paie/releves': 'Historique',
+  '/paie/primes-malus': 'Primes et malus',
+  '/paie/objectifs': 'Objectifs',
+  '/reglages/modeles-ia': 'Modèles IA',
+  '/reglages/alertes': 'Alertes',
+  '/reglages/telegram': 'Telegram',
+  '/reglages/regles-de-paie': 'Règles de paie',
+  '/reglages/sauvegardes': 'Sauvegardes',
+} as const;
+export type ScreenPath = keyof typeof SCREENS;
+
+/** The name of a screen inside its section, for its sub-tab. */
+export const screenLabel = (to: ScreenPath): string => SCREENS[to];
+
+const SCREEN_TITLES: ReadonlyMap<string, string> = new Map(Object.entries(SCREENS));
+
+/** The browser tab's title: the screen, its section, then the app; « Page introuvable » outside every screen. */
+export function documentTitle(pathname: string, section: Section | null, kind: RailKind): string {
+  if (section === null) return 'Page introuvable · Nirvana';
+  const path = pathname.replace(/\/+$/u, '');
+  // A section's own page is no screen of its own: « Suivi · Nirvana », not « Conversations · Suivi ».
+  const screen = path === section ? undefined : SCREEN_TITLES.get(path);
+  const label = sectionLabel(section, kind);
+  return `${screen === undefined ? '' : `${screen} · `}${label} · Nirvana`;
 }
 
 /** Whether the rail holds the section: what the route guard asks before every screen. */

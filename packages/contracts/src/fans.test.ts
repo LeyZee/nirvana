@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { FanFlagsSchema, FanKycViewSchema, KYC_SLOT_LABELS, KycSlotSchema } from './fans';
+import {
+  FanFlagsSchema,
+  FanKycViewSchema,
+  KYC_SLOT_LABELS,
+  KycSlotSchema,
+  SetFanFlagBodySchema,
+  SPENDING_LIMIT_MAX_MINOR,
+} from './fans';
 
 describe('fans', () => {
   it('names each KYC slot as the notes canvas does', () => {
@@ -33,6 +40,22 @@ describe('fans', () => {
     expect(
       FanFlagsSchema.safeParse({ salesFrozen: { reason: 'bored', since: '2026-10-02T10:00:00Z' } }).success,
     ).toBe(false);
+  });
+
+  it('takes a ceiling above 0 € and up to 100 000 € only', () => {
+    const ceiling = (limitMinor: number) =>
+      SetFanFlagBodySchema.safeParse({ flag: 'spendingLimitMinor', set: true, limitMinor }).success;
+    expect(ceiling(4_990)).toBe(true);
+    expect(ceiling(SPENDING_LIMIT_MAX_MINOR)).toBe(true);
+    expect(ceiling(0)).toBe(false);
+    expect(ceiling(SPENDING_LIMIT_MAX_MINOR + 1)).toBe(false);
+  });
+
+  it('lifts any limit but a disputed age, which only a confirmation ends (SUIVI-04)', () => {
+    const lift = (flag: string) => SetFanFlagBodySchema.safeParse({ flag, set: false, reason: 'x' }).success;
+    expect(lift('ageConfirmedAt')).toBe(true);
+    expect(lift('salesFrozen')).toBe(true);
+    expect(lift('ageDisputed')).toBe(false);
   });
 
   it('says the lines left to learn of a fan as canvas slots only', () => {

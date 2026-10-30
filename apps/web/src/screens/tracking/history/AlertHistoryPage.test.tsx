@@ -147,17 +147,27 @@ describe('Suivi › Historique des alertes (P4-01)', () => {
     renderPage();
     const [first, second, third] = await lines();
     expect(first?.textContent).toContain('Demande de service');
-    expect(first?.textContent).toContain('Le fan demande un service');
+    // A system alert matched without a word: its line would only repeat its name.
+    expect(first?.textContent).not.toContain('Le fan demande un service');
     expect(first?.textContent).toContain('Théo · Nora Vidal');
     expect(first?.textContent).toContain('il y a 5 min');
     expect(second?.textContent).toContain('Vidéo perso');
     expect(second?.textContent).toContain('Agent en pause');
+    expect(second?.textContent).toContain('Le fan a écrit « vidéo perso »');
     expect(second?.textContent).toContain('Basile · Léa');
     // Seen: said so, without a button.
     expect(third?.textContent).toContain('Vu');
     expect(within(third ?? document.body).queryByRole('button', { name: /Marquer comme vu/ })).toBeNull();
     // Nothing here counts in red: no number, no alarm.
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('leads to « À traiter » from its intro, and says where a conversation opens', async () => {
+    serve(history);
+    renderPage();
+    await lines();
+    expect(screen.getByRole('link', { name: '«\u00a0À traiter\u00a0»' }).getAttribute('href')).toBe('/suivi');
+    expect(screen.getByText(/Choisis une alerte à gauche/u)).toBeDefined();
   });
 
   it('opens the conversation of a line beside the list', async () => {
@@ -274,6 +284,21 @@ describe('Suivi › Historique des alertes (P4-01)', () => {
     });
     expect(triggerReads(calls).some((call) => call.query['cursor'] === 'p2')).toBe(true);
     expect(screen.queryByRole('button', { name: 'Voir plus' })).toBeNull();
+  });
+
+  it('never says nothing rang while the first read of her alerts has not answered', async () => {
+    // Creators answer at once; their alerts never do.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.startsWith('/v1/creators')
+          ? Promise.resolve(new Response(JSON.stringify({ creators: CREATORS }), { status: 200 }))
+          : new Promise<Response>(() => undefined),
+      ),
+    );
+    renderPage();
+    await screen.findByRole('group', { name: 'Filtres' });
+    expect(screen.queryByText(/Aucune alerte n’a encore sonné/)).toBeNull();
   });
 
   it('says when nothing rang yet, and when the server does not answer', async () => {

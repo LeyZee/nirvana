@@ -11,6 +11,9 @@ import {
   amountInput,
   amountText,
   incidentsOf,
+  currencyTyped,
+  lateFor,
+  MEMBER_STATUS,
   parseAmount,
   parsePercent,
   percentText,
@@ -70,6 +73,16 @@ const report = (
     createdAt: '2026-10-20T10:00:00.000Z',
   });
 
+describe('the currency typed with an amount', () => {
+  it('reads a symbol or a code, and nothing in a bare figure', () => {
+    expect(currencyTyped('50 €')).toBe('EUR');
+    expect(currencyTyped('50 eur')).toBe('EUR');
+    expect(currencyTyped('$50')).toBe('USD');
+    expect(currencyTyped('50 USD')).toBe('USD');
+    expect(currencyTyped('50,25')).toBeNull();
+  });
+});
+
 describe('an amount typed in a report', () => {
   it('reads French and plain figures, in minor units', () => {
     expect(parseAmount('1 234,56')).toBe(123_456);
@@ -86,6 +99,7 @@ describe('an amount typed in a report', () => {
     expect(parseAmount('-5')).toBeNull();
     expect(parseAmount('50000,01')).toBeNull();
     expect(parseAmount('50000')).toBe(5_000_000);
+    expect(parseAmount('150 000', false, 100_000_000)).toBe(15_000_000);
   });
 
   it('takes a sign on a correction', () => {
@@ -99,8 +113,13 @@ describe('an amount typed in a report', () => {
     expect(amountInput(-3_005)).toBe('-30,05');
     expect(plain(amountText(123_456, 'EUR'))).toBe('1 234,56 €');
     expect(plain(amountText(8_000, 'USD'))).toBe('80,00 $US');
-    expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('− 30,00 €');
-    expect(plain(signedAmountText(500, 'EUR'))).toBe('+ 5,00 €');
+    expect(plain(amountText(-3_000, 'EUR'))).toBe('−30,00 €');
+    expect(plain(signedAmountText(-3_000, 'EUR'))).toBe('−30,00 €');
+    expect(plain(signedAmountText(500, 'EUR'))).toBe('+5,00 €');
+    expect(plain(signedAmountText(-123_456, 'USD'))).toBe('−1 234,56 $US');
+    // A zero is a zero, whatever its sign: never « −0,00 € ».
+    expect(plain(amountText(-0, 'EUR'))).toBe('0,00 €');
+    expect(plain(signedAmountText(-0, 'EUR'))).toBe('0,00 €');
   });
 });
 
@@ -174,6 +193,7 @@ describe('what a period’s list says', () => {
       {
         currency: 'EUR',
         validatedMinor: 8_000,
+        validated: 2,
         waitingMinor: 500,
         waiting: 1,
         sentBackMinor: 4_000,
@@ -191,6 +211,22 @@ describe('a rate', () => {
     expect(parsePercent('5,5 %')).toBe(550);
     expect(parsePercent('100')).toBe(10_000);
     expect(parsePercent('100,01')).toBeNull();
+    expect(parsePercent('1000')).toBeNull();
+    expect(parsePercent('120', 100_000)).toBe(12_000);
     expect(parsePercent('vingt')).toBeNull();
+  });
+});
+
+describe('a late report (EQ-14, EQ-21)', () => {
+  const now = new Date('2026-10-28T12:00:00Z');
+  it('says since when its shift ended, in minutes, hours, then days', () => {
+    expect(lateFor('2026-10-28T11:35:00Z', now)).toBe('depuis 25\u00a0min');
+    expect(lateFor('2026-10-28T04:00:00Z', now)).toBe('depuis 8\u00a0h');
+    expect(lateFor('2026-10-27T10:00:00Z', now)).toBe('depuis 1 jour');
+    expect(lateFor('2026-10-25T12:00:00Z', now)).toBe('depuis 3 jours');
+  });
+
+  it('calls a report sent and not yet read « En attente », as the figure above it does', () => {
+    expect(MEMBER_STATUS.submitted).toBe('En attente');
   });
 });

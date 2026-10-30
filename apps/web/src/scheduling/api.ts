@@ -67,6 +67,8 @@ export function usePlanning(range: PlanningRange, enabled = true): UseQueryResul
     queryKey: [...SCHEDULING_KEY, 'planning', range.from, range.to, range.creatorId],
     queryFn: () => fetchPlanning(range),
     enabled,
+    // One retry, not three: a silent server is said in about a second, not seven (EQ-22).
+    retry: 1,
     // The week stays on screen while the next one loads: no blank grid between two weeks.
     placeholderData: (before) => before,
   });
@@ -97,6 +99,8 @@ export function useMyShifts(): UseQueryResult<MyShifts> {
     queryKey: [...SCHEDULING_KEY, 'mine'],
     queryFn: () => read('/v1/scheduling/my-shifts', (body) => MyShiftsSchema.parse(body)),
     refetchInterval: 60_000,
+    // One retry, then Aujourd'hui says the server does not answer, as the Dashboard does: not 8 s of skeleton (DASH-22).
+    retry: 1,
   });
 }
 

@@ -28,7 +28,7 @@ export interface ReportDraft {
 }
 
 /** The screens that open a report panel. */
-export type ReportScreen = '/aujourdhui' | '/equipe/rapports';
+export type ReportScreen = '/aujourdhui' | '/planning' | '/equipe/rapports';
 
 export interface Reopening {
   readonly screen: ReportScreen;

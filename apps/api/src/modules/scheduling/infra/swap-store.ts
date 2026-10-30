@@ -36,7 +36,7 @@ import {
   ShiftSwapRevert,
 } from '../domain/errors';
 import type { ColleagueReads, StoredAccount, StoredShift, StoredSwap, SwapStore } from '../domain/ports';
-import { assertCanWork } from '../domain/shifts';
+import { assertCanWork, type WorkingMember } from '../domain/shifts';
 import {
   assertAnswers,
   assertColleague,
@@ -49,6 +49,7 @@ import {
 import {
   assertMemberWorks,
   assertNotOnLeave,
+  agencyZone,
   audit,
   creatorOfUnscoped,
   lockMembers,
@@ -153,14 +154,19 @@ async function readSwap(
 }
 
 /** The signed-in member's own status and creators, to take a shift by a swap like one set by hand. */
-async function ownWork(tx: Transaction, userId: string) {
+async function ownWork(tx: Transaction, userId: string): Promise<WorkingMember> {
   const [row] = await tx
-    .select({ status: teamMembers.status, creatorIds: user.creatorIds })
+    .select({
+      status: teamMembers.status,
+      creatorIds: user.creatorIds,
+      joinedOn: teamMembers.joinedOn,
+      agencyTimeZone: agencyZone,
+    })
     .from(teamMembers)
     .innerJoin(user, eq(user.id, teamMembers.userId))
     .where(eq(teamMembers.userId, userId));
   if (row === undefined) throw new MemberNotFound();
-  return { status: TeamMemberStatusSchema.parse(row.status), creatorIds: row.creatorIds };
+  return { ...row, status: TeamMemberStatusSchema.parse(row.status) };
 }
 
 /** A shift as a swap sees it now, in the creator the transaction stands in; `null` when the policies hide it. */
@@ -314,11 +320,11 @@ export function createDrizzleSwapStore(
         assertColleague(me, swap.targetMemberId);
         const colleague = await colleagues.memberWorkUnscoped(swap.targetMemberId);
         if (colleague === null) throw new MemberNotFound();
-        assertCanWork(colleague, offered.creatorId);
+        assertCanWork(colleague, offered.creatorId, offered.startsAt);
         const back = swap.targetShiftId === null ? null : await colleagues.shiftUnscoped(swap.targetShiftId);
         if (swap.targetShiftId !== null) {
           assertOffered(back, swap.targetMemberId, now);
-          assertCanWork(await ownWork(tx, actor.userId), back.creatorId);
+          assertCanWork(await ownWork(tx, actor.userId), back.creatorId, back.startsAt);
           // The requester reads their own leaves: no shift comes back to them during one.
           await assertNotOnLeave(tx, me, back.startsAt, back.endsAt);
         }
@@ -423,12 +429,12 @@ export function createDrizzleSwapStore(
           return { lapsed: true };
         }
         // The rules of a shift set by hand: the colleague can take it and is not on leave then.
-        assertCanWork(await ownWork(tx, actor.userId), swap.creatorId);
+        assertCanWork(await ownWork(tx, actor.userId), swap.creatorId, swap.shiftStartsAt);
         await assertNotOnLeave(tx, swap.targetMemberId, swap.shiftStartsAt, swap.shiftEndsAt);
         if (back !== null) {
           const requester = await colleagues.memberWorkUnscoped(swap.requesterId);
           if (requester === null) throw new MemberNotFound();
-          assertCanWork(requester, back.creatorId);
+          assertCanWork(requester, back.creatorId, back.startsAt);
           // The approval of the requester's leave lapses such a proposal under the same lock; read again here, past
           // the colleague's policies, so that no path gives them a shift during a leave. The leave itself is not said.
           if (await colleagues.onLeaveUnscoped(swap.requesterId, back)) throw new MemberOnLeave(null);
@@ -499,6 +505,7 @@ export function createDrizzleSwapStore(
             tx,
             TeamMemberIdSchema.parse(move.to),
             CreatorIdSchema.parse(move.creatorId),
+            move.startsAt,
           );
           await assertNotOnLeave(tx, move.to, move.startsAt, move.endsAt);
         }

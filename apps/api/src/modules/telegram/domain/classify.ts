@@ -35,6 +35,7 @@ export const SCANNED_EVENT_TYPES = [
   'automatic_closed',
   'send_failed',
   'backup_overdue',
+  'exchange_rate_overdue',
 ] as const;
 
 const URGENT_CAUSES: ReadonlySet<HandoffCause> = new Set([
@@ -58,6 +59,7 @@ const CAUSE_TEXT: Readonly<Record<HandoffCause, string>> = {
   other: 'L’agent ne sait pas répondre.',
   custom_alert: 'Une alerte personnalisée a sonné.',
   identity_doubt: 'Le fan doute de parler vraiment à la créatrice.',
+  persona_inactive: 'La créatrice n’a pas de persona active : l’agent n’écrit rien.',
 };
 
 /**
@@ -107,6 +109,8 @@ const percent = (value: number, minimumFractionDigits: 0 | 1): string =>
 /** Why Automatique closed, in the owner's words; the figures are the server's, the thresholds too. */
 function missingText(missing: AutomaticMissing): string {
   switch (missing.kind) {
+    case 'active_persona':
+      return 'elle n’a pas de persona active';
     case 'live_rate':
       return missing.value === null
         ? `le taux en réel n’est pas encore mesuré (objectif : ${percent(missing.target, 0)})`
@@ -128,6 +132,10 @@ const parisMoment = (at: Date): string => {
   });
   return `le ${day} à ${time}`;
 };
+
+/** « le 24 oct. », for a day as the ECB writes it (`2026-10-24`): a calendar day, no time zone to apply. */
+const calendarDay = (day: string): string =>
+  `le ${new Date(`${day}T12:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'short' })}`;
 
 const conversationLink = (conversationId: string | null): { label: string; path: string } => ({
   label: 'Ouvrir la conversation',
@@ -272,6 +280,19 @@ export function classify(signal: Signal, nameOf: AlertNameOf = noNames): Outcome
           signal.lastSucceededAt === null
             ? 'Aucune sauvegarde de la base n’a encore réussi : la copie chiffrée hors Neon n’existe pas.'
             : `Pas de sauvegarde de la base depuis ${parisMoment(signal.lastSucceededAt)} : la copie chiffrée hors Neon a plus de 26 h.`,
+        link: { label: 'Ouvrir le Dashboard', path: '/' },
+      };
+    // Important, not urgent: nothing is paid on a wrong rate, a closing without a recent one is refused (ADR 0033).
+    case 'exchange_rate_overdue':
+      return {
+        kind: 'notice',
+        topic: 'important',
+        threadKey: null,
+        title: 'Important',
+        body:
+          signal.lastRateDay === null
+            ? `Aucun taux ${signal.currency} de la BCE n’est encore arrivé : une quinzaine payée en ${signal.currency} ne peut pas être clôturée.`
+            : `Pas de nouveau taux ${signal.currency} de la BCE depuis ${calendarDay(signal.lastRateDay)} : une quinzaine qui finit sans taux récent ne pourra pas être clôturée.`,
         link: { label: 'Ouvrir le Dashboard', path: '/' },
       };
     case 'automatic_closed': {

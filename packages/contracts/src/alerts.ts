@@ -38,6 +38,14 @@ export const AlertKeywordSchema = z
   .max(ALERT_KEYWORD_MAX)
   .refine((keyword) => alertKeywordKey(keyword) !== '', 'Un mot-clé contient une lettre ou un chiffre');
 
+/**
+ * An alert's name as the owner reads it: case, accents and the spaces around set aside. Two active alerts (enabled, not
+ * archived) of one creator never share it (Charles, 28/10); a switched-off or archived one leaves its name free.
+ */
+export function customAlertNameKey(name: string): string {
+  return name.trim().normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr');
+}
+
 /** What the owner writes: a phrase the brain reads each message against, words matched in code, or both. */
 const customAlertFields = z.object({
   name: z.string().trim().min(1).max(CUSTOM_ALERT_NAME_MAX),
@@ -188,9 +196,11 @@ export const ALERT_TEST_MESSAGE_MAX = 4_000;
 
 /**
  * `POST /v1/alerts/test` (owner): an alert being written, tried on an example message, before it is saved. Nothing is
- * stored, nothing is sent; the words are read in code as on a real message, the phrase by one call to the brain.
+ * stored, nothing is sent; the words are read in code as on a real message, the phrase by one call to the brain, with
+ * the active persona version of `creatorId`, one of the alert's creators (recette M13).
  */
 export const AlertTestBodySchema = z.object({
+  creatorId: CreatorIdSchema,
   alert: customAlertFields.pick({ phrase: true, keywords: true }).refine(phraseOrKeyword, PHRASE_OR_KEYWORD),
   message: z.string().trim().min(1).max(ALERT_TEST_MESSAGE_MAX),
 });
@@ -211,12 +221,14 @@ export type AlertTestResult = z.infer<typeof AlertTestResultSchema>;
 /**
  * The error codes of `/v1/alerts`, for the screen to say them in French (the suffix gives the status, api.md):
  * `custom_alert_not_found` 404, the alert has no row left that is not archived ; `custom_alert_conflict` 409, the same
- * `groupId` with other values, or archived ; `alert_creator_invalid` 400, a creator that does not exist ;
+ * `groupId` with other values, or archived ; `custom_alert_name_conflict` 409, another active alert of one of its
+ * creators has the same name (`customAlertNameKey`), `details.creatorIds` naming them ; `alert_creator_invalid` 400, a creator that does not exist ;
  * `system_alert_locked_unprocessable` 422, `keyword` cannot be switched off.
  */
 export const ALERT_ERROR_CODES = [
   'custom_alert_not_found',
   'custom_alert_conflict',
+  'custom_alert_name_conflict',
   'alert_creator_invalid',
   'system_alert_locked_unprocessable',
 ] as const;

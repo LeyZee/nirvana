@@ -3,16 +3,19 @@ import {
   BonusTierSetIdSchema,
   CarryOverIdSchema,
   CollectiveGoalIdSchema,
+  PayoutMinimumIdSchema,
   CommissionStatementIdSchema,
   CreatorIdSchema,
   newId,
+  nextPayPeriod,
   PayAdjustmentIdSchema,
+  PayPeriodSchema,
   PenaltyIdSchema,
   PlatformAccountIdSchema,
   TeamMemberIdSchema,
   UserIdSchema,
 } from '@nirvana/contracts';
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { withAdmin, withMember } from './client';
@@ -59,13 +62,13 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     withMember(test.app.db, userId, fn);
 
   const periods = [
-    '2026-08-16',
-    '2026-09-01',
-    '2026-09-16',
-    '2026-10-01',
-    '2026-10-16',
-    '2026-11-01',
-    '2026-11-16',
+    '2025-08-16',
+    '2025-09-01',
+    '2025-09-16',
+    '2025-10-01',
+    '2025-10-16',
+    '2025-11-01',
+    '2025-11-16',
   ];
 
   /** A statement of `userId` for `period`, as the job writes it. */
@@ -93,7 +96,7 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     carryOverOutMinor: 0,
     payableMinor: 13_333,
     teamNetMinor: 66_666,
-    rules: {},
+    rules: { exchangeRates: [] },
     counted: {},
     computedAt: new Date(),
     ...values,
@@ -109,24 +112,68 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     return row.id;
   };
 
-  const validate = (
+  /**
+   * Closes the team's periods up to `period`, one by one, as the first validation of each does (ADR 0032): nothing
+   * counted, the team net every statement here carries. `payroll-closing.integration.test.ts` tests the closing.
+   */
+  const closeUpTo = (period: string) =>
+    admin(async (tx) => {
+      const [last] = await tx
+        .select({ period: s.payPeriodClosings.period })
+        .from(s.payPeriodClosings)
+        .orderBy(desc(s.payPeriodClosings.period))
+        .limit(1);
+      let next = last === undefined ? period : nextPayPeriod(PayPeriodSchema.parse(last.period));
+      for (; next <= period; next = nextPayPeriod(PayPeriodSchema.parse(next))) {
+        await tx.insert(s.payPeriodClosings).values({
+          period: next,
+          teamNetMinor: 66_666,
+          exchangeRates: [],
+          closedBy: owner,
+        });
+      }
+    });
+
+  /** Validates statement `id` as `by`, its period closed first. */
+  const validate = async (
     by: string,
     id: string,
     values: Partial<typeof s.commissionStatements.$inferInsert> = {},
-  ) =>
-    as(by, (tx) =>
+  ) => {
+    const [statement] = await admin((tx) =>
+      tx
+        .select({ period: s.commissionStatements.period })
+        .from(s.commissionStatements)
+        .where(eq(s.commissionStatements.id, id)),
+    );
+    if (statement === undefined) throw new Error('no statement');
+    await closeUpTo(statement.period);
+    return as(by, (tx) =>
       tx
         .update(s.commissionStatements)
         .set({ status: 'validated', validatedAt: new Date(), validatedBy: by, ...values })
         .where(eq(s.commissionStatements.id, id))
         .returning({ id: s.commissionStatements.id }),
     );
+  };
 
-  const pay = (by: string, id: string) =>
+  /** How the owner paid, as the application writes it (ADR 0023 § Factures). */
+  const payment = {
+    paidOn: '2025-10-02',
+    paymentMethod: 'worldremit',
+    paymentReference: 'WR-0412',
+    sentMinor: 13_333,
+  };
+
+  const pay = (
+    by: string,
+    id: string,
+    values: Partial<typeof s.commissionStatements.$inferInsert> = payment,
+  ) =>
     as(by, (tx) =>
       tx
         .update(s.commissionStatements)
-        .set({ status: 'paid', paidAt: new Date(), paidBy: by })
+        .set({ status: 'paid', paidAt: new Date(), paidBy: by, ...values })
         .where(eq(s.commissionStatements.id, id))
         .returning({ id: s.commissionStatements.id }),
     );
@@ -177,9 +224,12 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
     await admin(async (tx) => {
-      await tx
-        .insert(s.creators)
-        .values({ id: nora.creatorId, displayName: 'Créatrice Nora', timezone: 'Europe/Paris' });
+      await tx.insert(s.creators).values({
+        id: nora.creatorId,
+        nameKey: nora.creatorId,
+        displayName: 'Créatrice Nora',
+        timezone: 'Europe/Paris',
+      });
       await tx
         .insert(s.platformAccounts)
         .values({ id: nora.accountId, creatorId: nora.creatorId, platform: 'reveal', handle: 'handle-nora' });
@@ -208,7 +258,7 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
           displayName: `Membre ${teamRole}`,
           country: 'BJ',
           timeZone: 'Africa/Porto-Novo',
-          joinedOn: '2026-08-01',
+          joinedOn: '2025-08-01',
         });
       }
       for (const period of periods) {
@@ -229,7 +279,7 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
 
   describe('statements', () => {
     it('a member reads their own; a colleague none; the agency all', async () => {
-      const id = await draft(basile, '2026-09-01');
+      const id = await draft(basile, '2025-09-01');
       expect(await readStatements(basile)).toContain(id);
       expect(await readStatements(lea)).not.toContain(id);
       expect(await readStatements(manager)).toContain(id);
@@ -237,25 +287,25 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       // The application never writes one: the job does.
       expect(
         await failure(
-          as(owner, (tx) => tx.insert(s.commissionStatements).values(statementRow(lou, '2026-09-01'))),
+          as(owner, (tx) => tx.insert(s.commissionStatements).values(statementRow(lou, '2025-09-01'))),
         ),
       ).toMatch(/permission denied/u);
     });
 
     it('a recalculation takes the next revision and keeps the member and the period', async () => {
-      const id = await draft(lou, '2026-09-01');
+      const id = await draft(lou, '2025-09-01');
       const recalc = (values: Partial<typeof s.commissionStatements.$inferInsert>) =>
         admin((tx) => tx.update(s.commissionStatements).set(values).where(eq(s.commissionStatements.id, id)));
       await recalc({ revision: 2, totalMinor: 14_000, payableMinor: 14_000 });
       expect(await failure(recalc({ revision: 2, totalMinor: 15_000, payableMinor: 15_000 }))).toMatch(KEPT);
-      expect(await failure(recalc({ revision: 3, period: '2026-09-16' }))).toMatch(KEPT);
+      expect(await failure(recalc({ revision: 3, period: '2025-09-16' }))).toMatch(KEPT);
       // The job makes drafts: only a validation validates.
       const validated = { status: 'validated', validatedAt: new Date(), validatedBy: owner };
-      expect(await failure(draft(lou, '2026-09-16', validated))).toMatch(KEPT);
+      expect(await failure(draft(lou, '2025-09-16', validated))).toMatch(KEPT);
     });
 
     it('the agency validates a draft, never its own, and changes nothing else then', async () => {
-      const own = await draft(manager, '2026-09-01');
+      const own = await draft(manager, '2025-09-01');
       expect(await validate(manager, own)).toEqual([]);
       const [theirs] = await admin((tx) =>
         tx
@@ -291,8 +341,8 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     });
 
     it('closes periods in order: an earlier draft of the member blocks a later validation', async () => {
-      const first = await draft(iris, '2026-09-01');
-      const later = await draft(iris, '2026-09-16');
+      const first = await draft(iris, '2025-09-01');
+      const later = await draft(iris, '2025-09-16');
       expect(await failure(validate(manager, later))).toMatch(KEPT);
       await validate(manager, first);
       expect(await validate(manager, later)).toEqual([{ id: later }]);
@@ -314,19 +364,66 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       expect(
         await failure(change({ status: 'draft', validatedAt: null, validatedBy: null, revision: 2 })),
       ).toMatch(KEPT);
-      expect(await pay(owner, id)).toEqual([{ id }]);
+      // Paid says how: the day, the method of the list and what was sent; the reference when there is one.
+      const PAYMENT = /commission_statements_payment_check/u;
+      expect(await failure(pay(owner, id, {}))).toMatch(PAYMENT);
+      // WorldRemit only (0033): the methods of 0031's default list are refused like any other.
+      for (const paymentMethod of ['cash', 'bank_transfer', 'wise', 'paypal', 'other']) {
+        expect(await failure(pay(owner, id, { ...payment, paymentMethod }))).toMatch(
+          /commission_statements_payment_method_check/u,
+        );
+      }
+      expect(await failure(pay(owner, id, { ...payment, paymentReference: 'V'.repeat(101) }))).toMatch(
+        PAYMENT,
+      );
+      expect(await failure(pay(owner, id, { ...payment, sentMinor: 0 }))).toMatch(PAYMENT);
+      // And nothing else with it: the grants, then the guard for the job too.
+      expect(await failure(pay(owner, id, { ...payment, totalMinor: 1, payableMinor: 1 }))).toMatch(
+        /permission denied/u,
+      );
+      expect(
+        await failure(
+          change({
+            status: 'paid',
+            paidAt: new Date(),
+            paidBy: owner,
+            ...payment,
+            totalMinor: 1,
+            payableMinor: 1,
+          }),
+        ),
+      ).toMatch(KEPT);
+      expect(await pay(owner, id, { ...payment, paymentReference: null })).toEqual([{ id }]);
       expect(await failure(change({ paidAt: new Date() }))).toMatch(KEPT);
+      expect(await failure(change({ paymentReference: 'VIR-0413' }))).toMatch(KEPT);
       expect(
         await failure(
           admin((tx) => tx.delete(s.commissionStatements).where(eq(s.commissionStatements.id, id))),
         ),
       ).toMatch(KEPT);
       // No draft comes back for an earlier period of the member: it is closed too.
-      expect(await failure(draft(basile, '2026-08-16'))).toMatch(KEPT);
+      expect(await failure(draft(basile, '2025-08-16'))).toMatch(KEPT);
+    });
+
+    it('only a paid statement says how it was paid', async () => {
+      expect(await failure(draft(theo, '2025-11-16', payment))).toMatch(
+        /commission_statements_payment_check/u,
+      );
+      const id = await draft(theo, '2025-11-16');
+      expect(
+        await failure(
+          admin((tx) =>
+            tx
+              .update(s.commissionStatements)
+              .set({ ...payment, revision: 2 })
+              .where(eq(s.commissionStatements.id, id)),
+          ),
+        ),
+      ).toMatch(/commission_statements_payment_check/u);
     });
 
     it('lines belong to the current revision of a draft, and are added only', async () => {
-      const id = await draft(lou, '2026-11-01');
+      const id = await draft(lou, '2025-11-01');
       await admin((tx) => tx.insert(s.commissionStatementLines).values(lineRow(id, 1)));
       expect(
         await failure(admin((tx) => tx.insert(s.commissionStatementLines).values(lineRow(id, 2)))),
@@ -356,34 +453,34 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
 
   describe('bonuses, penalties and adjustments', () => {
     it('the agency writes them for others, never for itself; a chatter writes none', async () => {
-      await as(manager, (tx) => tx.insert(s.bonuses).values(bonusRow(manager, lea, '2026-11-01')));
+      await as(manager, (tx) => tx.insert(s.bonuses).values(bonusRow(manager, lea, '2025-11-01')));
       expect(
         await failure(
-          as(manager, (tx) => tx.insert(s.bonuses).values(bonusRow(manager, manager, '2026-11-01'))),
+          as(manager, (tx) => tx.insert(s.bonuses).values(bonusRow(manager, manager, '2025-11-01'))),
         ),
       ).toMatch(RLS);
       expect(
-        await failure(as(theo, (tx) => tx.insert(s.bonuses).values(bonusRow(theo, lea, '2026-11-01')))),
+        await failure(as(theo, (tx) => tx.insert(s.bonuses).values(bonusRow(theo, lea, '2025-11-01')))),
       ).toMatch(RLS);
       expect(
         await failure(
-          as(theo, (tx) => tx.insert(s.penalties).values(penaltyRow(theo, lea, '2026-11-01', '2026-11-01'))),
+          as(theo, (tx) => tx.insert(s.penalties).values(penaltyRow(theo, lea, '2025-11-01', '2025-11-01'))),
         ),
       ).toMatch(RLS);
     });
 
     it('nothing lands on a period the member closed', async () => {
       // Theo's period of October 1st is validated.
-      await validate(manager, await draft(theo, '2026-10-01'));
+      await validate(manager, await draft(theo, '2025-10-01'));
       expect(
         await failure(
-          as(manager, (tx) => tx.insert(s.bonuses).values(bonusRow(manager, theo, '2026-10-01'))),
+          as(manager, (tx) => tx.insert(s.bonuses).values(bonusRow(manager, theo, '2025-10-01'))),
         ),
       ).toMatch(KEPT);
       expect(
         await failure(
           as(manager, (tx) =>
-            tx.insert(s.penalties).values(penaltyRow(manager, theo, '2026-10-01', '2026-11-01')),
+            tx.insert(s.penalties).values(penaltyRow(manager, theo, '2025-10-01', '2025-11-01')),
           ),
         ),
       ).toMatch(KEPT);
@@ -396,14 +493,14 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
         createdBy: manager,
       });
       expect(
-        await failure(as(manager, (tx) => tx.insert(s.payAdjustments).values(adjustment('2026-10-01')))),
+        await failure(as(manager, (tx) => tx.insert(s.payAdjustments).values(adjustment('2025-10-01')))),
       ).toMatch(KEPT);
-      await as(manager, (tx) => tx.insert(s.payAdjustments).values(adjustment('2026-10-16')));
+      await as(manager, (tx) => tx.insert(s.payAdjustments).values(adjustment('2025-10-16')));
       expect(await failure(admin((tx) => tx.update(s.payAdjustments).set({ amountMinor: 1 })))).toMatch(KEPT);
     });
 
     it('a bonus is cancelled once, while its period is open; never deleted', async () => {
-      const row = bonusRow(manager, theo, '2026-10-16');
+      const row = bonusRow(manager, theo, '2025-10-16');
       await as(manager, (tx) => tx.insert(s.bonuses).values(row));
       const cancel = (by: string) =>
         as(by, (tx) =>
@@ -427,7 +524,7 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     });
 
     it('a penalty is cancelled from an open period on; the closed ones keep it', async () => {
-      const row = penaltyRow(manager, lea, '2026-11-01', '2026-11-16');
+      const row = penaltyRow(manager, lea, '2025-11-01', '2025-11-16');
       await as(manager, (tx) => tx.insert(s.penalties).values(row));
       const cancelFrom = (from: string) =>
         as(owner, (tx) =>
@@ -438,13 +535,13 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
             .returning({ id: s.penalties.id }),
         );
       // Out of its periods.
-      expect(await failure(cancelFrom('2026-12-01'))).toMatch(/penalties_cancellation_check/u);
+      expect(await failure(cancelFrom('2025-12-01'))).toMatch(/penalties_cancellation_check/u);
       // Lea's period of November 1st is validated: it keeps the penalty.
-      await validate(manager, await draft(lea, '2026-11-01'));
-      expect(await failure(cancelFrom('2026-11-01'))).toMatch(KEPT);
-      expect(await cancelFrom('2026-11-16')).toEqual([{ id: row.id }]);
+      await validate(manager, await draft(lea, '2025-11-01'));
+      expect(await failure(cancelFrom('2025-11-01'))).toMatch(KEPT);
+      expect(await cancelFrom('2025-11-16')).toEqual([{ id: row.id }]);
       // Once: a cancelled penalty is no longer the policy's to change.
-      expect(await cancelFrom('2026-11-16')).toEqual([]);
+      expect(await cancelFrom('2025-11-16')).toEqual([]);
     });
   });
 
@@ -452,32 +549,42 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
     it('a carry-over is what the member’s validated statement carried, to the next period, once', async () => {
       // Iris's total of October 1st is under the minimum: carried over, nothing paid.
       const under = { totalMinor: 900, carryOverOutMinor: 900, payableMinor: 0 };
-      const statementId = await draft(iris, '2026-10-01', under);
+      const statementId = await draft(iris, '2025-10-01', under);
       await validate(manager, statementId);
       const carry = (values: Partial<typeof s.carryOvers.$inferInsert> = {}) => ({
         id: newId(CarryOverIdSchema),
         memberId: member(iris),
-        fromPeriod: '2026-10-01',
-        toPeriod: '2026-10-16',
+        fromPeriod: '2025-10-01',
+        toPeriod: '2025-10-16',
         amountMinor: 900,
         statementId,
         ...values,
       });
       const insert = (by: string, row: ReturnType<typeof carry>) =>
         as(by, (tx) => tx.insert(s.carryOvers).values(row));
-      expect(await failure(insert(owner, carry({ toPeriod: '2026-11-01' })))).toMatch(KEPT);
+      expect(await failure(insert(owner, carry({ toPeriod: '2025-11-01' })))).toMatch(KEPT);
       // Exactly what the statement carried, never another amount.
       expect(await failure(insert(owner, carry({ amountMinor: 1_000 })))).toMatch(KEPT);
       await insert(manager, carry());
       expect(await failure(insert(owner, carry()))).toMatch(/unique/u);
       expect(await failure(admin((tx) => tx.update(s.carryOvers).set({ amountMinor: 2 })))).toMatch(KEPT);
-      // A manager never writes his own, even what his statement carried.
-      const own = await draft(manager, '2026-08-16', under);
+      // A manager never writes his own, even what his statement carried. His September 1st is validated first.
+      const [first] = await admin((tx) =>
+        tx
+          .select({ id: s.commissionStatements.id })
+          .from(s.commissionStatements)
+          .where(
+            sql`${s.commissionStatements.memberId} = ${member(manager)} and ${s.commissionStatements.period} = '2025-09-01'`,
+          ),
+      );
+      if (first === undefined) throw new Error('no statement');
+      await validate(owner, first.id);
+      const own = await draft(manager, '2025-09-16', under);
       await validate(owner, own);
       const mine = carry({
         memberId: member(manager),
-        fromPeriod: '2026-08-16',
-        toPeriod: '2026-09-01',
+        fromPeriod: '2025-09-16',
+        toPeriod: '2025-10-01',
         statementId: own,
       });
       expect(await failure(insert(manager, mine))).toMatch(RLS);
@@ -499,26 +606,68 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
         createdBy: by,
       });
       expect(
-        await failure(as(manager, (tx) => tx.insert(s.collectiveGoals).values(goal('2026-12-01', manager)))),
+        await failure(as(manager, (tx) => tx.insert(s.collectiveGoals).values(goal('2025-12-01', manager)))),
       ).toMatch(RLS);
       expect(
-        await failure(as(owner, (tx) => tx.insert(s.bonusTierSets).values(tiers('2026-11-01')))),
+        await failure(as(owner, (tx) => tx.insert(s.bonusTierSets).values(tiers('2025-11-01')))),
       ).toMatch(KEPT);
       expect(
-        await failure(as(owner, (tx) => tx.insert(s.collectiveGoals).values(goal('2026-11-01')))),
+        await failure(as(owner, (tx) => tx.insert(s.collectiveGoals).values(goal('2025-11-01')))),
       ).toMatch(KEPT);
-      await as(owner, (tx) => tx.insert(s.bonusTierSets).values(tiers('2026-11-16')));
-      await as(owner, (tx) => tx.insert(s.collectiveGoals).values(goal('2026-11-16')));
+      await as(owner, (tx) => tx.insert(s.bonusTierSets).values(tiers('2025-11-16')));
+      await as(owner, (tx) => tx.insert(s.collectiveGoals).values(goal('2025-11-16')));
       expect(await failure(admin((tx) => tx.update(s.collectiveGoals).set({ targetMinor: 1 })))).toMatch(
         KEPT,
       );
       expect(await as(theo, (tx) => tx.select().from(s.bonusTierSets))).toHaveLength(1);
     });
 
+    it('the owner alone dates a payout minimum, never on a period validated, and it never changes (PAIE-22)', async () => {
+      const minimum = (fromPeriod: string, by = owner) => ({
+        id: newId(PayoutMinimumIdSchema),
+        fromPeriod,
+        minimumPayoutMinor: 2_000,
+        createdBy: by,
+      });
+      expect(
+        await failure(
+          as(manager, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-12-01', manager))),
+        ),
+      ).toMatch(RLS);
+      expect(
+        await failure(as(owner, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-11-01')))),
+      ).toMatch(KEPT);
+      await as(owner, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-12-16')));
+      expect(
+        await failure(as(owner, (tx) => tx.update(s.payoutMinimums).set({ minimumPayoutMinor: 0 }))),
+      ).toMatch(/permission denied/u);
+      expect(
+        await failure(admin((tx) => tx.update(s.payoutMinimums).set({ minimumPayoutMinor: 0 }))),
+      ).toMatch(KEPT);
+      // The single minimum no longer changes from the application; the delay does.
+      await admin((tx) =>
+        tx
+          .insert(s.payrollSettings)
+          .values({ id: 1, minimumPayoutMinor: 1_500, updatedBy: owner })
+          .onConflictDoNothing(),
+      );
+      expect(
+        await failure(
+          as(owner, (tx) => tx.update(s.payrollSettings).set({ minimumPayoutMinor: 0, updatedBy: owner })),
+        ),
+      ).toMatch(/permission denied/u);
+      await as(owner, (tx) =>
+        tx
+          .update(s.payrollSettings)
+          .set({ payoutDelayBusinessDays: 3, updatedBy: owner, updatedAt: new Date() }),
+      );
+      expect(await as(theo, (tx) => tx.select().from(s.payoutMinimums))).toHaveLength(1);
+    });
+
     it('rates are read by every member, written by the job alone, and never change', async () => {
       const rate = {
         currency: 'USD',
-        day: '2026-10-31',
+        day: '2025-10-31',
         rateMicros: 920_000,
         source: 'test',
         fetchedAt: new Date(),
@@ -533,9 +682,47 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       );
       expect(
         await failure(
-          admin((tx) => tx.insert(s.exchangeRates).values({ ...rate, currency: 'EUR', day: '2026-11-01' })),
+          admin((tx) => tx.insert(s.exchangeRates).values({ ...rate, currency: 'EUR', day: '2025-11-01' })),
         ),
       ).toMatch(/exchange_rates_currency_check/u);
+    });
+
+    it('a blocked period is read by every member, written and lifted by the job alone, with its reason', async () => {
+      const block = {
+        period: '2025-11-16',
+        code: 'commission_rate_missing_conflict',
+        memberIds: [member(theo)],
+        since: new Date(),
+      };
+      expect(await failure(as(owner, (tx) => tx.insert(s.payPeriodBlocks).values(block)))).toMatch(
+        /permission denied/u,
+      );
+      await admin((tx) => tx.insert(s.payPeriodBlocks).values(block));
+      expect(await as(lea, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(1);
+      expect(await as(owner, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(1);
+      // Outside a member's context, nothing.
+      expect(await test.app.db.select().from(s.payPeriodBlocks)).toHaveLength(0);
+      expect(
+        await failure(
+          as(owner, (tx) => tx.delete(s.payPeriodBlocks).where(eq(s.payPeriodBlocks.period, '2025-11-16'))),
+        ),
+      ).toMatch(/permission denied/u);
+      // A reason says what it is about: members without a rate, or a currency, never both nor neither.
+      const refused = async (values: Partial<typeof s.payPeriodBlocks.$inferInsert>) =>
+        failure(
+          admin((tx) => tx.insert(s.payPeriodBlocks).values({ ...block, period: '2025-11-01', ...values })),
+        );
+      expect(await refused({ memberIds: [] })).toMatch(/pay_period_blocks_reason_check/u);
+      expect(await refused({ currency: 'USD' })).toMatch(/pay_period_blocks_reason_check/u);
+      expect(await refused({ code: 'exchange_rate_missing_conflict' })).toMatch(
+        /pay_period_blocks_reason_check/u,
+      );
+      expect(
+        await refused({ code: 'exchange_rate_missing_conflict', memberIds: null, currency: 'EUR' }),
+      ).toMatch(/pay_period_blocks_currency_check/u);
+      expect(await refused({ code: 'pay_period_order_conflict' })).toMatch(/pay_period_blocks_code_check/u);
+      await admin((tx) => tx.delete(s.payPeriodBlocks).where(eq(s.payPeriodBlocks.period, '2025-11-16')));
+      expect(await as(lea, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(0);
     });
   });
 });

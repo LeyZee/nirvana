@@ -79,6 +79,17 @@ async function changed(deps: ConnectionsDeps, provider: AiProvider): Promise<voi
 }
 
 /**
+ * The checks made before any call: a cut paste or a key meant for another service. The route runs them before it
+ * asks for the password too, so an obvious mistake gets its answer at once (recette du 28/10).
+ */
+export function checkPastedKey(provider: AiProvider, rawKey: string): Result<string, ConnectRefusal> {
+  const shape = checkKeyShape(provider, rawKey);
+  if (shape.ok) return shape;
+  const details = shape.error.kind === 'wrong_provider' ? { belongsTo: shape.error.belongsTo } : {};
+  return err({ kind: shape.error.kind, message: describeRefusal(provider, shape.error.kind, details) });
+}
+
+/**
  * Connects or replaces a key. The key is saved only once the provider accepted it, so a refused replacement leaves
  * the key in place running (fiche P3-03, point 3).
  */
@@ -89,11 +100,8 @@ export async function connectProvider(
   by?: KeyActor,
 ): Promise<Result<ProviderStatus, ConnectRefusal>> {
   const verifier = verifierFor(deps, provider);
-  const shape = checkKeyShape(provider, rawKey);
-  if (!shape.ok) {
-    const details = shape.error.kind === 'wrong_provider' ? { belongsTo: shape.error.belongsTo } : {};
-    return err({ kind: shape.error.kind, message: describeRefusal(provider, shape.error.kind, details) });
-  }
+  const shape = checkPastedKey(provider, rawKey);
+  if (!shape.ok) return shape;
   const previous = await deps.store.find(provider);
   const settings = previous?.settings ?? {};
   const outcome = await verifier.verify(shape.value, settings);

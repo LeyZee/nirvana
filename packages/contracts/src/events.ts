@@ -103,6 +103,11 @@ export const HANDOFF_CAUSES = [
   'custom_alert',
   /** The system's alert « doute sur la personne » (P4-01): the fan doubts it is her; a chatter on shift answers. */
   'identity_doubt',
+  /**
+   * She has no active persona version, or it no longer reads (recette 28/10, G4): the agent writes nothing without
+   * it (ADR 0010, 0022).
+   */
+  'persona_inactive',
 ] as const;
 export const HandoffCauseSchema = z.enum(HANDOFF_CAUSES);
 export type HandoffCause = z.infer<typeof HandoffCauseSchema>;
@@ -179,6 +184,7 @@ export const EVENT_TYPES = [
   'session_state_changed',
   'budget_threshold_crossed',
   'backup_overdue',
+  'exchange_rate_overdue',
   'automatic_closed',
   'fan_flag_set',
   'fan_flag_cleared',
@@ -288,6 +294,22 @@ export const EVENT_PAYLOADS = {
     day: z.iso.date(),
   }),
   /**
+   * No ECB rate of a currency pay converts arrived for more than two weekdays (ADR 0033): the hourly job reads it and
+   * publishes this with no creator, at most once per day and currency while it lasts. A closing already refuses a rate
+   * too old (`exchange_rate_missing_conflict`); this tells the owner before.
+   */
+  exchange_rate_overdue: z.object({
+    /** A currency pay converts, never the euro (`ForeignCurrencySchema` in payroll.ts, which imports this file). */
+    currency: CurrencySchema.exclude(['EUR']),
+    /**
+     * The ECB's day of the last rate written; `null` when none ever came, which only production says, counted from the
+     * day the job was first scheduled (ADR 0033).
+     */
+    lastRateDay: z.iso.date().nullable(),
+    /** The day of the check, in the ECB's zone (Frankfurt): one alert per day. */
+    day: z.iso.date(),
+  }),
+  /**
    * Automatique closed on its own (ADR 0019): the live rate fell under its target, or the voice version changed and
    * has not proved itself yet. Every conversation in automatic went back to the copilot. Published once, for the owner.
    */
@@ -347,6 +369,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   typedEvent('session_state_changed'),
   typedEvent('budget_threshold_crossed'),
   typedEvent('backup_overdue'),
+  typedEvent('exchange_rate_overdue'),
   typedEvent('automatic_closed'),
   typedEvent('fan_flag_set'),
   typedEvent('fan_flag_cleared'),

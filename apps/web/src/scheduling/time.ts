@@ -165,6 +165,12 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', {
   timeZone: 'UTC',
 });
 const MONTH_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const FULL_DAY = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'short',
@@ -173,36 +179,75 @@ const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
   timeZone: 'UTC',
 });
 
-/** « mar. 28 oct. »: a day further than this week. */
-export const dayMonth = (day: string): string => DAY_MONTH.format(utcMidnight(day));
+/** « mar. 28 oct. », « dim. 1er nov. »: a day further than this week. */
+export const dayMonth = (day: string): string => withFirstOfMonth(DAY_MONTH.formatToParts(utcMidnight(day)));
 
 /** Calendar days from `from` to `to`, `to` excluded. */
 export const daysFrom = (from: string, to: string): number =>
   Math.round((utcMidnight(to) - utcMidnight(from)) / DAY_MS);
 
-/** « mar. 28 ». */
-export const shortDay = (day: string): string => SHORT_DAY.format(utcMidnight(day));
+/** « mar. 28 », « dim. 1er ». */
+export const shortDay = (day: string): string => withFirstOfMonth(SHORT_DAY.formatToParts(utcMidnight(day)));
 
-/** « mardi 28 octobre ». */
-export const longDay = (day: string): string => LONG_DAY.format(utcMidnight(day));
+/** « 28 », « 1 »: the day's number alone, as a calendar's column heads it. */
+export const dayNumber = (day: string): string => String(Number(day.slice(8)));
 
-/** « 26 oct. – 1 nov. », the week that starts on `monday`. */
+/** A formatted date as French writes it: the first of a month is « 1er ». */
+export const withFirstOfMonth = (parts: readonly Intl.DateTimeFormatPart[]): string =>
+  parts.map((part) => (part.type === 'day' && part.value === '1' ? '1er' : part.value)).join('');
+
+/** « mardi 28 octobre », « dimanche 1er novembre ». */
+export const longDay = (day: string): string => withFirstOfMonth(LONG_DAY.formatToParts(utcMidnight(day)));
+
+/** « 17 octobre 2026 », « 1er novembre 2026 ». */
+export const fullDay = (day: string): string => withFirstOfMonth(FULL_DAY.formatToParts(utcMidnight(day)));
+
+/** « 26 oct. – 1er nov. », the week that starts on `monday` (PAIE-19: the first of a month is « 1er » everywhere). */
 export const weekLabel = (monday: string): string =>
-  `${MONTH_DAY.format(utcMidnight(monday))} – ${MONTH_DAY.format(utcMidnight(addDays(monday, 6)))}`;
+  `${withFirstOfMonth(MONTH_DAY.formatToParts(utcMidnight(monday)))} – ${withFirstOfMonth(
+    MONTH_DAY.formatToParts(utcMidnight(addDays(monday, 6))),
+  )}`;
 
 /** The zone the browser reads in: the reader's own time. */
 export const readerZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-/** « Paris », « Porto-Novo »: a zone named by its city. */
-export const cityOf = (timeZone: string): string =>
-  (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
+/** The cities French names otherwise than their zone does. */
+const FRENCH_CITIES: ReadonlyMap<string, string> = new Map([
+  ['Brussels', 'Bruxelles'],
+  ['Lome', 'Lomé'],
+  ['London', 'Londres'],
+  ['Lisbon', 'Lisbonne'],
+  ['Vienna', 'Vienne'],
+  ['Warsaw', 'Varsovie'],
+  ['Copenhagen', 'Copenhague'],
+  ['Athens', 'Athènes'],
+  ['Moscow', 'Moscou'],
+  ['Mexico City', 'Mexico'],
+  ['Sao Paulo', 'São Paulo'],
+]);
 
-/** « 23:30 » from a time field into minutes of the day; null when it is not a time. */
+/**
+ * « Paris », « Porto-Novo », « Bruxelles »: a zone named by its city, in French. The one name every screen gives a
+ * zone, the list that chooses it included (CREA-27).
+ */
+export const cityOf = (timeZone: string): string => {
+  const city = (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
+  return FRENCH_CITIES.get(city) ?? city;
+};
+
+/**
+ * The minute of the day a time field holds, on 24 hours: « 23:30 », « 9:00 », « 21h30 », « 21 h », « 22 »,
+ * « 2230 », or null while it is empty, half typed or not an hour. The fields are text (`TimeField`), never
+ * `<input type="time">`, which Chromium writes in the system's language, « 09:00 AM » on a machine in English,
+ * whatever the page's `lang` (recette 28/10).
+ */
 export function minuteOfInput(text: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})$/u.exec(text.trim());
+  const typed = text.trim();
+  // Digits alone, as the phone's number pad types them: « 22 » is 22 h, « 930 » 9 h 30, « 2230 » 22 h 30.
+  const match = /^(\d{1,2})(\d{2})$/u.exec(typed) ?? /^(\d{1,2})\s*(?::(\d{2})|h\s*(\d{2})?)?$/iu.exec(typed);
   if (match === null) return null;
   const hours = Number(match[1]);
-  const minutes = Number(match[2]);
+  const minutes = Number(match[2] ?? match[3] ?? '0');
   return hours < 24 && minutes < 60 ? hours * 60 + minutes : null;
 }
 

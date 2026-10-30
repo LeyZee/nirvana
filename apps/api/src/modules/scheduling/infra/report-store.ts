@@ -59,6 +59,7 @@ import {
 } from '../domain/reports';
 import { addMinutes, wallClockToInstant } from '../domain/time';
 
+import type { EnqueuePayRecalculation } from './pay-reads';
 import {
   agencyTimeZone,
   audit,
@@ -209,7 +210,11 @@ function periodSpan(period: PayPeriod, timeZone: string): { from: Date; to: Date
  * and writes each row, the module's rules run in the same transaction, and every write takes the lock (member,
  * period) of ADR 0023 § Paie before it locks any row, the lock pay's validation takes too.
  */
-export function createDrizzleShiftReportStore(db: Database, adminDb: Database): ShiftReportStore {
+export function createDrizzleShiftReportStore(
+  db: Database,
+  adminDb: Database,
+  enqueuePayRecalculation: EnqueuePayRecalculation,
+): ShiftReportStore {
   /** In the creator of report `id`, as `userId`; `shift_report_not_found` when no such report exists. */
   async function inReportCreator<T>(
     id: ShiftReportId,
@@ -457,6 +462,8 @@ export function createDrizzleShiftReportStore(db: Database, adminDb: Database): 
             updatedAt: now,
           })
           .where(eq(shiftReports.id, id));
+        // Pay counts it from now on: its period's drafts, or the team's first open period's (EQ-04, ADR 0032).
+        if (validating) await enqueuePayRecalculation(tx, report.period);
         await audit(
           tx,
           actor,

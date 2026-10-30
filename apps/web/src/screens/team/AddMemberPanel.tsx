@@ -27,6 +27,7 @@ import {
 
 import { localTime } from '@/creators/persona/model';
 import { countryFlag, countryName } from '@/lib/country';
+import { cityOf } from '@/scheduling/time';
 
 const ZONES: readonly string[] = Intl.supportedValuesOf('timeZone');
 const ROLES: readonly TeamRole[] = ['chatter', 'manager'];
@@ -144,8 +145,11 @@ export function AddMemberPanel({
     if (!busy) onClose(created?.member ?? null);
   };
 
+  // Each step on its first field; once added, on « Copier le message », the gesture expected next (EQ-12).
   useEffect(() => {
-    dialog.current?.querySelector<HTMLElement>('input, select, button.tm-primary')?.focus();
+    dialog.current
+      ?.querySelector<HTMLElement>(created === null ? 'input, select' : 'button.tm-primary')
+      ?.focus();
   }, [step, created]);
 
   // A step that cannot go on puts the focus on its first problem.
@@ -281,9 +285,10 @@ export function AddMemberPanel({
               purpose="invitation"
               label="Créer son lien"
               initial={created.link}
+              primary
             />
             <div className="tm-dialog__foot">
-              <button type="button" className="nv-btn nv-btn--soft tm-primary" onClick={close}>
+              <button type="button" className="nv-btn nv-btn--plain" onClick={close}>
                 Voir sa fiche
               </button>
             </div>
@@ -541,7 +546,7 @@ function Where({ id, draft, problems, onChange }: StepProps): JSX.Element {
         ) : (
           <div className="tm-zone nv-swap">
             <span className="tm-zone__time">{localTime(draft.timeZone)}</span>
-            <span className="tm-zone__name">chez lui en ce moment · {draft.timeZone.replace('_', ' ')}</span>
+            <span className="tm-zone__name">là-bas en ce moment · {cityOf(draft.timeZone)}</span>
             <button
               type="button"
               className="nv-btn nv-btn--plain nv-btn--sm"
@@ -554,10 +559,10 @@ function Where({ id, draft, problems, onChange }: StepProps): JSX.Element {
           </div>
         )}
         {draft.zoneOpen && zoneValid ? (
-          <span className="tm-hint">Il y est {localTime(draft.timeZone.trim())}.</span>
+          <span className="tm-hint">Il est {localTime(draft.timeZone.trim())} là-bas.</span>
         ) : null}
       </Field>
-      <Field id={`${id}-joined`} label="Arrivé le" problem={problems.joinedOn}>
+      <Field id={`${id}-joined`} label="Dans l’équipe depuis" problem={problems.joinedOn}>
         <input
           id={`${id}-joined`}
           className="nv-field__control nv-glass tm-date"
@@ -587,7 +592,7 @@ function Rate({
       <Field
         id={presets.length === 0 ? `${id}-rate` : undefined}
         label="Commission"
-        hint={presets.length === 0 ? 'Aucun préréglage pour l’instant : saisis son taux.' : undefined}
+        hint={`${presets.length === 0 ? 'Aucun préréglage pour l’instant : saisis son taux. ' : ''}Il part de son arrivée ; un taux suivant partira d’un 1er ou d’un 16.`}
         problem={problems.rate}
       >
         {presets.length === 0 ? null : (
@@ -667,7 +672,7 @@ function Rate({
       <Field
         label="Créatrices"
         hint={
-          creators.length === 0 ? 'Aucune créatrice pour l’instant.' : 'Tu pourras en changer sur sa fiche.'
+          creators.length === 0 ? 'Aucune créatrice pour l’instant.' : 'Celles sur lesquelles il travaille.'
         }
       >
         {creators.length === 0 ? null : (

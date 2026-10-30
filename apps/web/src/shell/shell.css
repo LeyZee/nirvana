@@ -189,8 +189,8 @@
   outline: none;
   box-shadow: var(--nv-shadow-focus);
 }
-.nv-rail__agent[data-tone='bad'] {
-  color: var(--nv-neon-ink);
+.nv-rail__agent[data-tone='warn'] {
+  color: var(--nv-warning);
 }
 
 /* Icons: a readable rest state, and a gesture played once on activation (`is-playing`). */
@@ -396,10 +396,8 @@
   height: 34px;
   padding: 0 12px 6px;
   color: var(--nv-ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   white-space: nowrap;
   user-select: none;
 }
@@ -439,10 +437,17 @@
 .nv-more__title {
   margin: 4px 12px 6px;
   color: var(--nv-ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+}
+/* Who is signed in, under the tabs: the desktop's account card, on the phone (NAV-02). */
+.nv-more__account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 10px 14px 4px;
+  border-top: 1px solid var(--nv-hairline);
 }
 .nv-more__item {
   display: flex;
@@ -483,6 +488,17 @@
 }
 .nv-more__item:hover .nav-icon {
   transform: translateY(-1px);
+}
+/* Se déconnecter: a button that reads as the sheet's other lines (recette 28/10, M14). */
+.nv-more__out {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
 }
 @keyframes nv-more-fade {
   from {
@@ -564,10 +580,114 @@
   padding: 6px;
   transform-origin: 50% 100%;
   animation: nv-shell-pop var(--nv-dur-slow) var(--nv-ease-spring) both;
+  /* Over the rail's own glass a backdrop blurs nothing: an opaque ground, or the pill and Réglages read through. */
+  background: linear-gradient(180deg, var(--nv-glass-fill) 0%, transparent 40%), var(--nv-surface-raised);
 }
 .nv-user__menu .nv-btn {
   justify-content: flex-start;
   width: 100%;
+}
+.nv-user__menu .nv-appearance {
+  padding: 6px 6px 8px;
+}
+
+/* Nuit, Jour, Appareil: the browser's own choice, in the account's menu and the phone's sheet (NAV-03). */
+.nv-appearance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 14px 8px;
+}
+.nv-appearance__label {
+  color: var(--nv-ink-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+.nv-appearance__seg {
+  position: relative;
+  display: grid;
+  width: 100%;
+}
+.nv-appearance__seg .nv-seg__opt {
+  height: 32px;
+  padding: 0 var(--nv-space-2);
+}
+.nv-appearance__hint {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--nv-ink-faint);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* « Aller au contenu »: the first stop of the keyboard, seen only when it has the focus (NAV-20). */
+.nv-skip {
+  position: fixed;
+  z-index: 60;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  padding: 8px 14px;
+  border-radius: var(--nv-radius-full);
+  background: var(--nv-plate);
+  color: var(--nv-ink);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--nv-shadow-focus);
+  transform: translateY(calc(-100% - 24px));
+}
+.nv-skip:focus-visible {
+  outline: none;
+  transform: none;
+}
+/* The stage and a section's title take the focus on arrival: a ring for the keyboard only. */
+.nv-stage:focus:not(:focus-visible),
+.nv-stage h1:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* A word the route guard left (NAV-21): above everything, a few seconds, then gone. */
+/* Out of the app's grid: an empty region must not make a row of its own under the rail and the stage. */
+.nv-notice-region {
+  position: fixed;
+  z-index: 50;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  pointer-events: none;
+}
+.nv-notice.nv-glass {
+  --_radius: 16px;
+  display: block;
+  pointer-events: auto;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 16px;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink);
+  /* A fade alone: the pop's own transform would pull it off centre. */
+  animation: nv-more-fade var(--nv-dur-base) var(--nv-ease-out) both;
+}
+/* A sign-out the server did not make (App.tsx): said above everything, from either way out (menu, Réglages). */
+.nv-signout-failed.nv-glass {
+  --_radius: 16px;
+  position: fixed;
+  z-index: 50;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 16px;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-warning);
 }
 /* Glass materializes out of the button that opened it. */
 @keyframes nv-shell-pop {
@@ -605,7 +725,9 @@
   height: 100%;
 }
 .nv-page > * {
-  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) both;
+  /* backwards, not both: a fill that outlives the entrance keeps a transform and a filter on the section, which then
+     traps any position: fixed descendant (a sheet's scrim) inside it. */
+  animation: nv-shell-rise var(--nv-dur-slow) var(--nv-ease-spring) backwards;
 }
 .nv-page > *:nth-child(2) {
   animation-delay: var(--nv-stagger);
@@ -774,8 +896,8 @@
   padding: 0 5px;
   box-sizing: border-box;
   border-radius: 99px;
-  background: var(--nv-neon-solid);
-  color: var(--nv-on-neon);
+  background: color-mix(in srgb, var(--nv-ink) 16%, transparent);
+  color: var(--nv-ink);
   font-size: 10px;
   line-height: 18px;
   font-weight: 700;
@@ -971,6 +1093,7 @@
   .nv-ambient i,
   .nv-page > *,
   .nv-user__menu,
+  .nv-notice,
   .nv-more,
   .nv-more-scrim {
     animation: none !important;
@@ -979,5 +1102,49 @@
   .nv-subnav__thumb,
   .nav-needle {
     transition: none;
+  }
+}
+
+/* A sub-tab of the same section: the header stays put, only the content arrives (NAV-08). */
+.nv-stage[data-within] .nv-page > .nv-page__head {
+  animation: none;
+}
+
+/* « Le serveur ne répond pas », one face on every screen (DASH-22): the orb, the sentence, « Réessayer ». */
+.nv-silent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--nv-space-4);
+  align-items: center;
+  align-self: start;
+  max-width: 720px;
+}
+.nv-silent__body {
+  min-width: 0;
+}
+.nv-silent__title {
+  margin: 0;
+  font-size: var(--nv-text-title-1);
+  line-height: var(--nv-text-title-1-leading);
+  letter-spacing: var(--nv-text-title-1-tracking);
+  font-weight: 680;
+  text-wrap: balance;
+}
+.nv-silent__title em {
+  font-style: normal;
+  color: var(--nv-warning);
+}
+.nv-silent__text {
+  margin: var(--nv-space-1) 0 0;
+  color: var(--nv-ink-muted);
+  text-wrap: pretty;
+}
+@media (max-width: 560px) {
+  .nv-silent {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .nv-silent__retry {
+    grid-column: 2;
+    justify-self: start;
   }
 }

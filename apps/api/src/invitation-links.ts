@@ -20,7 +20,7 @@ import {
   type PasswordInvalidReason,
 } from '@nirvana/contracts';
 import { and, eq, inArray, schema, sql, withAdmin, type Database, type Transaction } from '@nirvana/db';
-import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyReply, FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -303,7 +303,7 @@ export interface InvitationLinkRoutesDeps {
   readonly adminDb: Database;
   readonly config: Pick<Config, 'WEB_ORIGIN'>;
   readonly requireRole: RequireRole;
-  readonly recentLogin: preHandlerAsyncHookHandler;
+  readonly recentLogin: preValidationAsyncHookHandler;
 }
 
 const MemberParamsSchema = z.object({ memberId: TeamMemberIdSchema });
@@ -338,7 +338,7 @@ export function createInvitationLinkRoutes(deps: InvitationLinkRoutesDeps): Fast
     app.post(
       '/team/members/:memberId/invitation-link',
       {
-        preHandler: [deps.requireRole('owner'), deps.recentLogin],
+        preValidation: [deps.requireRole('owner'), deps.recentLogin],
         schema: {
           params: MemberParamsSchema,
           body: CreateInvitationLinkBodySchema,

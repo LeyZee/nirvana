@@ -12,6 +12,9 @@ import {
 } from '@nirvana/contracts';
 import { useId, useState, type JSX } from 'react';
 
+import { MinimumPayout } from './MinimumPayout';
+import { PayoutDelay } from './PayoutDelay';
+
 import { addPayRules, usePayRules, useRefreshPayRules, type ReportRefusal } from '@/reports/api';
 import {
   parsePercent,
@@ -91,10 +94,12 @@ export function PayRulesSection(): JSX.Element {
   return (
     <section className="rp-rules">
       <p className="rp-rules__lede nv-enter">
-        Ce que la paie lit pour chaque compte : la devise, la TVA, la commission de la plateforme et la source
-        des ventes. Des règles ne changent jamais : de nouvelles prennent la suite à une quinzaine qui n’a pas
-        commencé.
+        Ce que la paie lit : le minimum de versement de toute l’équipe, puis pour chaque compte la devise, la
+        TVA, la commission de la plateforme et la source des ventes. Les règles d’un compte ne changent jamais
+        : de nouvelles prennent la suite à une quinzaine qui n’a pas commencé.
       </p>
+      <MinimumPayout />
+      <PayoutDelay />
       {missing.length === 0 ? null : (
         <div className="rp-notice nv-enter" data-tone="warn" style={{ '--nv-i': 1 }}>
           <p className="rp-notice__title">
@@ -103,16 +108,18 @@ export function PayRulesSection(): JSX.Element {
               : `${String(missing.length)} comptes sans règles de paie`}
           </p>
           <p className="rp-notice__text">
-            Leurs rapports de fin de shift sont refusés tant qu’elles ne sont pas posées pour la quinzaine{' '}
-            {periodLine(currentPeriod)}.
+            {missing.length === 1 ? 'Ses' : 'Leurs'} rapports de fin de shift sont refusés tant qu’elles ne
+            sont pas posées pour la quinzaine {periodLine(currentPeriod)}.
           </p>
         </div>
       )}
       {accounts.length === 0 ? (
         <div className="nv-plate rp-rules__cover nv-enter">
-          <p className="rp-notice__title">Aucun compte</p>
+          <p className="rp-notice__title">Aucun compte plateforme</p>
+          {/* No screen creates an account yet (recette du 28/10): the text asks for nothing the page cannot do. */}
           <p className="rp-notice__text">
-            Ajoute un compte à une créatrice : ses règles de paie se posent ici.
+            Les règles de paie se posent sur le compte plateforme d’une créatrice, son compte Reveal par
+            exemple. Aucun n’est encore relié à Nirvana : chaque compte relié apparaîtra ici.
           </p>
         </div>
       ) : (
@@ -160,11 +167,7 @@ function AccountRules({
     .toSorted((a, b) => a.fromPeriod.localeCompare(b.fromPeriod));
   const past = entry.rules.filter((one) => one.fromPeriod <= currentPeriod && one.id !== inForce?.id);
   return (
-    <li
-      className="nv-plate rp-account nv-enter"
-      style={{ '--nv-i': Math.min(index + 1, 8) }}
-      data-missing={inForce === null ? 'true' : undefined}
-    >
+    <li className="nv-plate rp-account nv-enter" style={{ '--nv-i': Math.min(index + 1, 8) }}>
       <div className="rp-account__head">
         <div className="rp-account__who">
           <p className="rp-account__name">{entry.account.creatorName}</p>

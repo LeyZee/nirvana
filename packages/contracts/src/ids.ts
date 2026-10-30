@@ -70,6 +70,10 @@ export type CommissionPresetId = z.infer<typeof CommissionPresetIdSchema>;
 export const CommissionRateIdSchema = uuid.brand<'CommissionRateId'>();
 export type CommissionRateId = z.infer<typeof CommissionRateIdSchema>;
 
+/** A member's team role from a date (`member_roles`, Charles 28/10). */
+export const MemberRoleIdSchema = uuid.brand<'MemberRoleId'>();
+export type MemberRoleId = z.infer<typeof MemberRoleIdSchema>;
+
 /** A single-use link to choose a password, for a member's first access or a reset (EQ-10). */
 export const InvitationLinkIdSchema = uuid.brand<'InvitationLinkId'>();
 export type InvitationLinkId = z.infer<typeof InvitationLinkIdSchema>;
@@ -121,6 +125,10 @@ export type CarryOverId = z.infer<typeof CarryOverIdSchema>;
 /** The individual bonus tiers from a pay period on (EQ-04). */
 export const BonusTierSetIdSchema = uuid.brand<'BonusTierSetId'>();
 export type BonusTierSetId = z.infer<typeof BonusTierSetIdSchema>;
+
+/** A payout minimum from a pay period on (PAIE-22). */
+export const PayoutMinimumIdSchema = uuid.brand<'PayoutMinimumId'>();
+export type PayoutMinimumId = z.infer<typeof PayoutMinimumIdSchema>;
 
 /** The team's collective goal for a pay period, with its tiers (EQ-04). */
 export const CollectiveGoalIdSchema = uuid.brand<'CollectiveGoalId'>();

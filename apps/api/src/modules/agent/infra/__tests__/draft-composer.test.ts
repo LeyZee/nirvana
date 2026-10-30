@@ -23,6 +23,7 @@ import type { Protection } from '../../domain/hold';
 import {
   createDraftComposer,
   type AgentComposeInput,
+  type ComposerPersonaFields,
   type DraftComposerDeps,
   type MediaSight,
   type MediaToSee,
@@ -1373,5 +1374,139 @@ describe('createDraftComposer, a follow-up on his silence (P3-10)', () => {
       reason: 'guard_blocked',
       detail: ['explicit_before_age'],
     });
+  });
+});
+
+describe('createDraftComposer, her active persona (recette G4, ADR 0022)', () => {
+  const NORA: ComposerPersonaFields = {
+    persona: {
+      creatorName: 'Nora',
+      personaSheet: 'fiche active de Nora',
+      guardSettings: DEFAULT_GUARD_SETTINGS,
+    },
+    followUpSpirit: null,
+    offerLimits: { cooldownHours: 10, minDesire: 70 },
+    sexualizationLimits: { initiateAfterHours: 36, minHoursBeforeFollowing: 2, minDesireToOpen: 40 },
+    alertKeywords: ['rendez-vous'],
+  };
+
+  function withPersonaOf(personaOf: DraftComposerDeps['personaOf'], limits?: FanLimits) {
+    const seen: Seen = { voiceCalls: 0, traces: [], brainInputs: [], voiceInputs: [] };
+    const asked: string[] = [];
+    const draftComposer = createDraftComposer({
+      gateway: gateway({}, seen),
+      // The fixed persona is never read once hers is: a test that sees « Lina » fails.
+      persona: { creatorName: 'Lina', personaSheet: 'fiche fixe', guardSettings: DEFAULT_GUARD_SETTINGS },
+      ...(personaOf !== undefined && {
+        personaOf: (creatorId, now) => {
+          asked.push(creatorId);
+          return personaOf(creatorId, now);
+        },
+      }),
+      timeZoneOf: () => Promise.resolve('Europe/Paris'),
+      voicePrompt: '1.2.0',
+      ...(limits !== undefined && { limits }),
+    });
+    return { draftComposer, seen, asked };
+  }
+
+  it('writes with the persona of the creator of the conversation, read at each message', async () => {
+    const { draftComposer, seen, asked } = withPersonaOf(() => Promise.resolve(NORA));
+    expect(await draftComposer.compose(INPUT)).toMatchObject({ kind: 'draft' });
+    await draftComposer.compose(INPUT);
+    expect(asked).toEqual(['creator-1', 'creator-1']);
+    expect(seen.brainInputs?.[0]).toMatchObject({
+      creatorName: 'Nora',
+      personaSheet: 'fiche active de Nora',
+    });
+    expect(seen.voiceInputs?.[0]).toMatchObject({
+      creatorName: 'Nora',
+      personaSheet: 'fiche active de Nora',
+    });
+  });
+
+  it('marks the draft and the follow-up with the version they were written with', async () => {
+    const versioned = { ...NORA, personaVersionId: 'version-nora' };
+    const answer = withPersonaOf(() => Promise.resolve(versioned));
+    expect(await answer.draftComposer.compose(INPUT)).toMatchObject({
+      kind: 'draft',
+      personaVersionId: 'version-nora',
+    });
+    const followUp = withPersonaOf(() => Promise.resolve(versioned), limitsOf({}).limits);
+    expect(
+      await followUp.draftComposer.compose({
+        ...INPUT,
+        history: [
+          { direction: 'inbound', text: 'Bonne soirée', at: new Date('2026-10-16T21:58:00Z') },
+          { direction: 'outbound', text: 'Toi aussi ✨', at: new Date('2026-10-16T21:59:00Z') },
+        ],
+        followUp: { step: 0, steps: 2, silentSince: new Date('2026-10-16T21:58:00Z') },
+      }),
+    ).toMatchObject({ kind: 'draft', personaVersionId: 'version-nora' });
+  });
+
+  it('watches the alert words of her active persona, not the fixed ones', async () => {
+    const { draftComposer, seen } = withPersonaOf(() => Promise.resolve(NORA));
+    const result = await draftComposer.compose({
+      ...INPUT,
+      history: [{ direction: 'inbound', text: 'On se donne rendez-vous ?', at: INPUT.now }],
+    });
+    expect(result).toMatchObject({ kind: 'held', reason: 'handoff', detail: ['alert_keyword'] });
+    expect(seen.brainInputs).toHaveLength(0);
+  });
+
+  it('writes nothing without an active persona, nor on an unreadable one: a human answers, no model is called', async () => {
+    const none = withPersonaOf(() => Promise.resolve(null));
+    expect(await none.draftComposer.compose(INPUT)).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'persona_inactive',
+      detail: ['persona_inactive'],
+      costUsd: 0,
+    });
+    expect(none.seen.traces).toHaveLength(0);
+    expect(none.seen.voiceCalls).toBe(0);
+
+    const broken = withPersonaOf(() => Promise.reject(new Error('content no longer a persona')));
+    expect(await broken.draftComposer.compose(INPUT)).toEqual({
+      kind: 'held',
+      reason: 'handoff',
+      cause: 'persona_inactive',
+      detail: ['persona_unreadable'],
+      costUsd: 0,
+    });
+    expect(broken.seen.traces).toHaveLength(0);
+  });
+
+  it('still reads his limits before her persona: a stopped fan stays with a chatter', async () => {
+    const { draftComposer, asked } = withPersonaOf(
+      () => Promise.resolve(null),
+      limitsOf({ doNotContact: true }).limits,
+    );
+    expect(await draftComposer.compose(INPUT)).toMatchObject({ detail: ['do_not_contact'] });
+    expect(asked).toEqual([]);
+  });
+
+  it('writes no follow-up without her active persona, and alerts nobody', async () => {
+    const FOLLOW_UP: AgentComposeInput = {
+      ...INPUT,
+      history: [
+        { direction: 'inbound', text: 'Bonne soirée', at: new Date('2026-10-16T21:58:00Z') },
+        { direction: 'outbound', text: 'Toi aussi ✨', at: new Date('2026-10-16T21:59:00Z') },
+      ],
+      followUp: { step: 0, steps: 2, silentSince: new Date('2026-10-16T21:58:00Z') },
+    };
+    const none = withPersonaOf(() => Promise.resolve(null), limitsOf({}).limits);
+    expect(await none.draftComposer.compose(FOLLOW_UP)).toEqual({
+      kind: 'held',
+      reason: 'no_reply',
+      detail: ['follow_up_persona_inactive'],
+      costUsd: 0,
+    });
+    expect(none.seen.voiceCalls).toBe(0);
+
+    const active = withPersonaOf(() => Promise.resolve(NORA), limitsOf({}).limits);
+    expect(await active.draftComposer.compose(FOLLOW_UP)).toMatchObject({ kind: 'draft' });
+    expect(active.seen.voiceInputs?.[0]).toMatchObject({ creatorName: 'Nora' });
   });
 });

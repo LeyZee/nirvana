@@ -36,9 +36,12 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     const accountId = newId(PlatformAccountIdSchema);
     const fanIds = Array.from({ length: fanCount }, () => newId(FanIdSchema));
     await withAdmin(test.admin.db, async (tx) => {
-      await tx
-        .insert(schema.creators)
-        .values({ id: creatorId, displayName: `Créatrice ${label}`, timezone: 'Europe/Paris' });
+      await tx.insert(schema.creators).values({
+        id: creatorId,
+        nameKey: creatorId,
+        displayName: `Créatrice ${label}`,
+        timezone: 'Europe/Paris',
+      });
       await tx
         .insert(schema.platformAccounts)
         .values({ id: accountId, creatorId, platform: 'reveal', handle: `handle-${label}` });
@@ -142,13 +145,14 @@ describe('fan facts (P3-02), as the application role sees them', () => {
     expect(await fans.flags(her.creatorId, fanId)).toEqual({});
     expect(await fans.setFlag(her.creatorId, fanId, { flag: 'salesFrozen', value: frozen }, command)).toEqual(
       {
-        salesFrozen: frozen,
+        flags: { salesFrozen: frozen },
+        mayConfirmDisputedAge: false,
       },
     );
     await fans.setFlag(her.creatorId, fanId, { flag: 'salesFrozen', value: frozen }, command);
     expect(
       await fans.clearFlag(her.creatorId, fanId, 'salesFrozen', { ...command, correlationId: 'flags-2' }),
-    ).toEqual({});
+    ).toEqual({ flags: {}, mayConfirmDisputedAge: false });
     await fans.clearFlag(her.creatorId, fanId, 'salesFrozen', command);
 
     const events = await withAdmin(test.admin.db, (tx) =>

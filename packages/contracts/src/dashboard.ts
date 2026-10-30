@@ -69,10 +69,38 @@ export const DashboardTodoSchema = z.object({
 });
 export type DashboardTodo = z.infer<typeof DashboardTodoSchema>;
 
+/** One line of « À traiter » across the creators a person follows (SUIVI-09): whose conversation it is. */
+export const CreatorTodoSchema = DashboardTodoSchema.extend({
+  creatorId: CreatorIdSchema,
+  creatorName: z.string().min(1),
+});
+export type CreatorTodo = z.infer<typeof CreatorTodoSchema>;
+
+/** How many lines wait for one creator, and how many of them are grave (tone `bad`): the picker shows them (DASH-03). */
+export const CreatorTodoCountSchema = z.object({
+  creatorId: CreatorIdSchema,
+  name: z.string().min(1),
+  todos: count,
+  grave: count,
+});
+export type CreatorTodoCount = z.infer<typeof CreatorTodoCountSchema>;
+
+/**
+ * `GET /v1/dashboard/todos`: « À traiter » of every creator the person follows (every creator for the owner, those of
+ * the account otherwise), the gravest first then the longest waiting, and the count of each creator in her order.
+ */
+export const TodosAcrossCreatorsSchema = z.object({
+  items: z.array(CreatorTodoSchema),
+  creators: z.array(CreatorTodoCountSchema),
+});
+export type TodosAcrossCreators = z.infer<typeof TodosAcrossCreatorsSchema>;
+
 /** One of her best fans over the period. */
 export const DashboardFanSchema = z.object({
   id: FanIdSchema,
   name: z.string().min(1),
+  /** The conversation of his latest purchase over the period: « Ouvrir dans Suivi » opens it. */
+  conversationId: ConversationIdSchema,
   firstSeenAt: at,
   /** Paid over the period, and the part sold by the agent. */
   spent: euros,
@@ -100,7 +128,16 @@ export const DashboardSchema = z.object({
     /** The same rate as it stood three weeks ago, for the trend. */
     threeWeeksAgo: percent.nullable(),
   }),
-  reveal: z.object({ connected: z.boolean(), lastReadAt: at.nullable(), conversations: count }),
+  reveal: z.object({
+    connected: z.boolean(),
+    lastReadAt: at.nullable(),
+    /**
+     * Connected, but the last read is older than three of the account's polls: the session holds and nobody reads
+     * (worker stopped, polls failing). The screen says « en retard », not « connectée ».
+     */
+    late: z.boolean(),
+    conversations: count,
+  }),
   voice: z.object({
     ok: z.boolean(),
     /**
@@ -148,7 +185,16 @@ export const DashboardSchema = z.object({
     costPerEuroSold: z.number().nonnegative().nullable(),
   }),
   todos: z.array(DashboardTodoSchema),
-  /** Best fans first. */
+  /**
+   * Best fans first, by what they spent over the period in euros: sales in dollars converted at the last ECB rate known,
+   * the one pay keeps (ADR 0033); a ranking, never a payout.
+   */
   fans: z.array(DashboardFanSchema),
+  /**
+   * The dollar sales of the period, for the sentence under the best fans (choix de Charles, 28/10). `seen`: at least one
+   * paid message in dollars falls in the period. `rate`: the ECB day of the rate they were converted at, `null` when no
+   * rate is known yet, and then they are not counted.
+   */
+  usdSales: z.object({ seen: z.boolean(), rate: z.object({ day: z.iso.date() }).nullable() }),
 });
 export type Dashboard = z.infer<typeof DashboardSchema>;

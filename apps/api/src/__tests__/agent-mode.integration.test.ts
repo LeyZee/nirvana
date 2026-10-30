@@ -65,7 +65,7 @@ describe('PUT /v1/agent/mode', () => {
     const platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Lina', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Lina', timezone: 'Europe/Paris' });
     await test.admin.db.insert(schema.platformAccounts).values({
       id: platformAccountId,
       creatorId,
@@ -123,6 +123,12 @@ describe('PUT /v1/agent/mode', () => {
   it('refuses a creator outside the operator’s list', async () => {
     expect((await setMode('stop', operatorCookie)).statusCode).toBe(403);
     expect(await creatorSwitches()).toEqual([]);
+  });
+
+  it('answers 404 for a creator that does not exist, not a 500 from the foreign key', async () => {
+    const response = await send('PUT', '/v1/agent/mode', { creatorId: newId(CreatorIdSchema), mode: 'stop' });
+    expect(response.statusCode).toBe(404);
+    expect(ApiErrorSchema.parse(response.json()).error.code).toBe('creator_not_found');
   });
 
   it('Arrêt sets her kill switch at once, with its event and its audit line', async () => {

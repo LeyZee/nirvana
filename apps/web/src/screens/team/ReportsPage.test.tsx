@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReportsPage } from './ReportsPage';
@@ -37,6 +37,32 @@ const MEMBERS = [
   { id: THEO, displayName: 'Théo', color: null },
   { id: BASILE, displayName: 'Basile', color: null },
 ];
+
+/** The team as `/v1/team/members` reads it: each member's own zone and status, for « Relancer ». */
+const teamMember = (memberId: string, name: string, status = 'active'): Record<string, unknown> => ({
+  id: memberId,
+  userId: id(Number(memberId.slice(-3)) + 50),
+  email: `member${memberId.slice(-3)}@example.test`,
+  firstName: name,
+  lastName: 'Martin',
+  displayName: name,
+  teamRole: 'chatter',
+  status,
+  country: 'FR',
+  timeZone: 'Europe/Paris',
+  color: null,
+  joinedOn: '2026-09-01',
+  creatorIds: [id(1)],
+  commission: null,
+  invitationPending: false,
+  invitationExpiresAt: null,
+});
+let team: { status: number; body: unknown };
+/** A period whose list the server does not answer. */
+let downPeriod: string | null;
+
+const text = (element: Element | null | undefined): string =>
+  (element?.textContent ?? '').replaceAll('\u00a0', ' ');
 
 const shift = (n: number, memberId: string, day: number) => ({
   id: id(100 + n),
@@ -110,7 +136,10 @@ function serve(): void {
             slotLengthMinutes: 360,
             accessMarginMinutes: 15,
           });
+        case '/v1/team/members':
+          return json(team.body, team.status);
         case '/v1/scheduling/shift-reports':
+          if (downPeriod !== null && url.searchParams.get('period') === downPeriod) return json(null, 500);
           return json(
             url.searchParams.has('period')
               ? url.searchParams.get('period') === '2026-10-16'
@@ -149,7 +178,7 @@ const validatesAll = (body: unknown): { status: number; body: unknown } => {
 };
 
 /** Renders the page, and gives the way to Suivi, as the rail would take it. */
-function renderPage(): () => Promise<void> {
+function renderPage(focus: string | null = null): () => Promise<void> {
   // The app's one hold, as the shell mounts it, and Suivi to leave Équipe › Rapports for.
   const root = createRootRoute({
     component: () => (
@@ -163,7 +192,7 @@ function renderPage(): () => Promise<void> {
   const page = createRoute({
     getParentRoute: () => root,
     path: '/equipe/rapports',
-    component: () => <ReportsPage owner />,
+    component: () => <ReportsPage owner member={focus} />,
   });
   const tracking = createRoute({ getParentRoute: () => root, path: '/suivi', component: () => <p>Suivi</p> });
   const router = createRouter({
@@ -197,6 +226,8 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date('2026-10-28T00:00:00Z'));
   writes.length = 0;
+  team = { status: 200, body: { members: [teamMember(THEO, 'Théo'), teamMember(BASILE, 'Basile')] } };
+  downPeriod = null;
   open = [
     report(1, 0, { comment: 'Un pack a bien plu' }),
     report(2, 1, { incident: 'Le compte a été déconnecté une heure' }),
@@ -222,8 +253,11 @@ describe('Équipe › Rapports', () => {
     expect(screen.getByText('Le compte a été déconnecté une heure')).toBeTruthy();
     expect(screen.getByText('Ton propre shift : un autre membre de l’agence le valide.')).toBeTruthy();
 
+    // No « Valider » until something is chosen, then at the foot of the list (EQ-26).
+    expect(screen.queryByRole('button', { name: /^Valider/u })).toBe(null);
     fireEvent.click(screen.getByLabelText('Tout sélectionner'));
-    expect(screen.getByRole('button', { name: 'Valider (2)' })).toBeTruthy();
+    const bar = screen.getByRole('button', { name: 'Valider (2)' }).closest('.rp-validate__bar');
+    expect(text(bar)).toContain('2 rapports choisis');
     expect(
       screen
         .getAllByRole('checkbox', { name: /Sélectionner le rapport de Théo/u })
@@ -253,10 +287,11 @@ describe('Équipe › Rapports', () => {
     fireEvent.click(await screen.findByLabelText('Tout sélectionner'));
     fireEvent.click(screen.getByRole('button', { name: 'Valider (2)' }));
 
-    expect((await screen.findByRole('status')).textContent).toContain('Validation de 2 rapports dans 5 s');
+    expect(await screen.findByText(/Validation de 2 rapports dans 5\ss/u)).toBeTruthy();
     // Held in place, out of the selection, until they are sent.
     expect(screen.getAllByText('En validation')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Valider' }).matches(':disabled')).toBe(true);
+    // Nothing chosen any more: no greyed « Valider » left in the header (EQ-26).
+    expect(screen.queryByRole('button', { name: /^Valider/u })).toBeNull();
     expect(writes).toEqual([]);
     await act(() => vi.advanceTimersByTimeAsync(5_000));
 
@@ -310,7 +345,7 @@ describe('Équipe › Rapports', () => {
     ).toBe(true);
     // Its refusal has its own island, above the second one counting down.
     expect((await screen.findByRole('alert')).textContent).toContain('Le rapport de Théo (');
-    expect(screen.getByRole('status').textContent).toContain('Validation du rapport dans');
+    expect(screen.getByText(/Validation du rapport dans/u)).toBeTruthy();
   });
 
   it('validates more than a batch holds in batches of 100, under one hold', async () => {
@@ -373,6 +408,8 @@ describe('Équipe › Rapports', () => {
     expect((summary?.textContent ?? '').replaceAll(/\s/gu, ' ')).toContain(
       '150,00 € validés · 1 sans rapport',
     );
+    // Only the shifts without a report are amber, not the money beside them (EQ-14).
+    expect(text(summary?.querySelector('.rp-member__late') ?? null)).toBe(' · 1 sans rapport');
     expect(screen.getByText(/16 – 31 octobre 2026/u)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Quinzaine suivante' }).matches(':disabled')).toBe(true);
 
@@ -382,6 +419,118 @@ describe('Équipe › Rapports', () => {
     expect(await within(dialog).findByText('Pas encore de règles de paie')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: 'Poser les règles' })).toBeTruthy();
     expect(dialog.textContent).not.toContain('Préviens l’agence');
+  });
+
+  it('says the shifts without a report at a glance, oldest first, and copies a word to send (EQ-14, EQ-15)', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (value: string) => {
+          copied.push(value);
+          return Promise.resolve();
+        },
+      },
+    });
+    renderPage();
+    const late = (await screen.findByText('3 shifts sans rapport')).closest('details');
+    if (!(late instanceof HTMLDetailsElement)) throw new Error('no late fold');
+    // The fold says its window: older shifts without a report exist, pay carries a late one (ADR 0023).
+    expect(text(late.querySelector('summary'))).toContain(
+      'le plus ancien depuis 3 jours · cette quinzaine et la précédente',
+    );
+    const rows = [...late.querySelectorAll('.rp-late__one')].map((row) => text(row));
+    expect(rows[0]).toMatch(/^Basilesam\. 24 oct\./u);
+    expect(rows[1]).toMatch(/^Théodim\. 25 oct\./u);
+    expect(rows[2]).toMatch(/^Basilelun\. 26 oct\./u);
+    fireEvent.click(within(late).getAllByRole('button', { name: 'Relancer Basile' })[0] ?? late);
+    await within(late).findByRole('button', { name: 'Message copié pour Basile' });
+    // Said once for the page, in a zone that was there and empty before.
+    const said = (): string[] => screen.getAllByRole('status').map((zone) => text(zone));
+    expect(said().some((one) => one.startsWith('Message pour Basile copié, shift du sam. 24 oct.'))).toBe(
+      true,
+    );
+    // A second word for the same member says its own shift: the zone's text changes, so it is said again.
+    // The first now says « Message copié »: the one left to relance is his Monday.
+    fireEvent.click(within(late).getByRole('button', { name: 'Relancer Basile' }));
+    await waitFor(() => {
+      expect(said().some((one) => one.startsWith('Message pour Basile copié, shift du lun. 26 oct.'))).toBe(
+        true,
+      );
+    });
+    expect(copied[0]).toMatch(
+      /^Basile, ton rapport du sam\. 24 oct\. · 18\sh – 0\sh \(Nora Vidal\) n’est pas encore fait\. Fais-le dans Nirvana dès que tu peux\.$/u,
+    );
+  });
+
+  it('shows the word to copy by hand, selected, when there is no clipboard', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+    });
+    renderPage();
+    const late = (await screen.findByText('3 shifts sans rapport')).closest('details');
+    if (!(late instanceof HTMLDetailsElement)) throw new Error('no late fold');
+    late.open = true;
+    fireEvent.click(within(late).getAllByRole('button', { name: 'Relancer Basile' })[0] ?? late);
+    const word = await within(late).findByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Message pour Basile, à copier',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(word);
+    });
+    expect(word.selectionEnd - word.selectionStart).toBe(word.value.length);
+  });
+
+  it('says « Parti » for a member who left, and keeps « Relancer » until the team is read', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    team = {
+      status: 200,
+      body: { members: [teamMember(THEO, 'Théo'), teamMember(BASILE, 'Basile', 'left')] },
+    };
+    renderPage();
+    const late = (await screen.findByText('3 shifts sans rapport')).closest('details') ?? document.body;
+    await within(late).findAllByText('Parti');
+    expect(within(late).queryByRole('button', { name: 'Relancer Basile' })).toBeNull();
+    expect(within(late).getByRole('button', { name: 'Relancer Théo' })).toBeTruthy();
+  });
+
+  it('says why « Relancer » waits when the team cannot be read, and when the late shifts cannot be', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    team = { status: 503, body: null };
+    downPeriod = '2026-10-01';
+    renderPage();
+    expect(
+      await screen.findByText(
+        'Les fiches des membres n’ont pas pu être lues : « Relancer » attend leurs heures.',
+        {},
+        { timeout: 4_000 },
+      ),
+    ).toBeTruthy();
+    expect(await screen.findByText('Les shifts sans rapport n’ont pas pu être lus.')).toBeTruthy();
+    expect(screen.queryByText('3 shifts sans rapport')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Relancer/u })).toBeNull();
+  });
+
+  it('says so when the member asked has no shift on the period', async () => {
+    const lou = id(23);
+    team = {
+      status: 200,
+      body: { members: [teamMember(THEO, 'Théo'), teamMember(BASILE, 'Basile'), teamMember(lou, 'Lou')] },
+    };
+    renderPage(lou);
+    expect(await screen.findByText('Pas de shift de Lou sur cette quinzaine.')).toBeTruthy();
+  });
+
+  it('opens the fold of the member asked from his record or a shift (EQ-11, EQ-13)', async () => {
+    period = [report(5, 0, { status: 'validated', reviewedAt: '2026-10-27T08:00:00.000Z' })];
+    renderPage(THEO);
+    const theo = await screen.findByText('Théo', { selector: '.nv-disclosure__title' });
+    const basile = screen.getByText('Basile', { selector: '.nv-disclosure__title' });
+    expect(theo.closest('details')?.open).toBe(true);
+    expect(basile.closest('details')?.open).toBe(false);
   });
 
   it('opens a refused correction again here, its member named, wherever the reader went since', async () => {

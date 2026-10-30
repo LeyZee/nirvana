@@ -3,16 +3,19 @@ import {
   CustomAlertGroupIdSchema,
   CustomAlertIdSchema,
   type AlertTriggerItem,
+  type CustomAlertGroupId,
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
   alertChoices,
   alertsOf,
+  ownedAlerts,
   choiceOf,
   markAllTargets,
   markedLine,
   mergeTriggers,
+  reasonAddsSomething,
   whenLine,
 } from './model';
 
@@ -140,9 +143,13 @@ describe('the alert filter', () => {
   it('offers the system’s alerts, then hers by name, each once', () => {
     expect(
       alertChoices([
-        { groupId: GROUP, name: 'Vidéo perso' },
-        { groupId: CustomAlertGroupIdSchema.parse('0192f3a0-0000-7000-8000-0000000000a2'), name: 'Appel' },
-        { groupId: GROUP, name: 'Vidéo perso' },
+        { groupId: GROUP, name: 'Vidéo perso', creatorId: NORA },
+        {
+          groupId: CustomAlertGroupIdSchema.parse('0192f3a0-0000-7000-8000-0000000000a2'),
+          name: 'Appel',
+          creatorId: NORA,
+        },
+        { groupId: GROUP, name: 'Vidéo perso', creatorId: LEA },
       ]).map((one) => one.label),
     ).toEqual([
       'Mot-clé de sa persona',
@@ -173,6 +180,43 @@ describe('the alert filter', () => {
         }),
         item(2, NORA, '2026-10-28T09:00:00.000Z'),
       ]),
-    ).toEqual([{ groupId: GROUP, name: 'Vidéo perso' }]);
+    ).toEqual([{ groupId: GROUP, name: 'Vidéo perso', creatorId: NORA }]);
+  });
+
+  it('offers, with one creator chosen, only the alerts that watch her, and always the one chosen', () => {
+    const other = CustomAlertGroupIdSchema.parse('0192f3a0-0000-7000-8000-0000000000a2');
+    const known = ownedAlerts([
+      { groupId: GROUP, name: 'Vidéo perso', creators: [{ creatorId: NORA }, { creatorId: LEA }] },
+      { groupId: other, name: 'Appel', creators: [{ creatorId: LEA }] },
+    ]);
+    const custom = (creator: string | null, chosen: CustomAlertGroupId | null = null) =>
+      alertChoices(known, creator, chosen)
+        .slice(3)
+        .map((one) => one.label);
+    expect(custom(null)).toEqual(['Appel', 'Vidéo perso']);
+    expect(custom(NORA)).toEqual(['Vidéo perso']);
+    expect(custom(LEA)).toEqual(['Appel', 'Vidéo perso']);
+    expect(custom(NORA, other)).toEqual(['Appel', 'Vidéo perso']);
+  });
+  it('keeps the server’s line only when it says more than the alert’s name', () => {
+    const at = '2026-10-28T10:00:00.000Z';
+    expect(reasonAddsSomething(item(1, NORA, at))).toBe(false);
+    expect(
+      reasonAddsSomething(
+        item(2, NORA, at, {
+          trigger: { alert: { kind: 'system', code: 'keyword' }, matchedBy: 'keyword', keyword: 'adresse' },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      reasonAddsSomething(
+        item(3, NORA, at, {
+          trigger: {
+            alert: { kind: 'custom', id: CustomAlertIdSchema.parse('0192f3a0-0000-7000-8000-0000000000b1') },
+            matchedBy: 'model',
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 });

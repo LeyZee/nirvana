@@ -12,6 +12,7 @@ import { accountLine, dayStateOf, platformName, progressOf, type DayState } from
 import '@/scheduling/scheduling.css';
 import { addDays, clockAt, dayOf, lengthOf, longDay, rangeAt, readerZone, untilOf } from '@/scheduling/time';
 import { useNow } from '@/scheduling/useNow';
+import { ServerSilent } from '@/shell/ServerSilent';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 /**
@@ -37,31 +38,29 @@ export function TodayPage(): JSX.Element {
 
   return (
     <Page>
-      <PageHeader eyebrow={longDay(today)} title="Aujourd’hui" />
+      <PageHeader
+        eyebrow={longDay(today)}
+        title="Aujourd’hui"
+        lead="Ton shift, où aller et jusqu’à quand, puis tes rapports à faire."
+      />
       {mine.isError ? (
-        <Panel className="nv-coming">
-          <div className="nv-coming__in sc-notice">
-            <h2>Le serveur ne répond pas</h2>
-            <p>Tes shifts n’ont pas pu être lus. Réessaie dans un instant.</p>
-            <button
-              type="button"
-              className="nv-btn nv-btn--soft nv-btn--sm"
-              onClick={() => {
-                void mine.refetch();
-              }}
-            >
-              Réessayer
-            </button>
-          </div>
-        </Panel>
+        <ServerSilent
+          text="Tes shifts n’ont pas pu être lus. Rien ici n’est à jour en attendant."
+          onRetry={() => {
+            void mine.refetch();
+          }}
+        />
       ) : mine.data === undefined ? (
-        <Panel className="sc-hero">
-          <div className="sc-skeleton" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </div>
-        </Panel>
+        // As wide as the day it stands for, not the whole page (DASH-22).
+        <div className="sc-today">
+          <Panel className="sc-hero">
+            <div className="sc-skeleton" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+          </Panel>
+        </div>
       ) : (
         <Day
           state={dayStateOf(mine.data, now)}
@@ -199,7 +198,8 @@ function Hero({
       <div className="sc-hero__top">
         <span className={`nv-status sc-state sc-state--${state.kind}`}>
           <span
-            className={`nv-dot ${state.kind === 'on' ? 'nv-tone--ok nv-dot--live' : state.kind === 'later' ? '' : 'nv-tone--warn'}`}
+            // A shift that ended is a normal state, not a warning: a neutral dot, the amber stays the report's (DASH-25).
+            className={`nv-dot ${state.kind === 'on' ? 'nv-tone--ok nv-dot--live' : state.kind === 'soon' ? 'nv-tone--warn' : ''}`}
           />
           {state.kind === 'on'
             ? 'En poste'
@@ -213,7 +213,7 @@ function Hero({
           {state.kind === 'on'
             ? `encore ${lengthOf(left)}`
             : state.kind === 'ended'
-              ? `Suivi encore ${lengthOf(new Date(shift.accessEndsAt).getTime() - now.getTime())}`
+              ? `Suivi ouvert encore ${lengthOf(new Date(shift.accessEndsAt).getTime() - now.getTime())}`
               : soonOf(toStart)}
         </span>
       </div>

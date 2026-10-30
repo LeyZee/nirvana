@@ -71,11 +71,38 @@ export type FanFlags = z.infer<typeof FanFlagsSchema>;
 export const FanFlagNameSchema = FanFlagsSchema.keyof();
 export type FanFlagName = z.infer<typeof FanFlagNameSchema>;
 
-/** `GET /v1/fans/:id/flags`, and the answer of `PUT`: his limits now. */
-export const FanFlagsViewSchema = z.object({ fanId: FanIdSchema, flags: FanFlagsSchema });
+/**
+ * The limits a person or the policy lifts directly. Not `ageDisputed`: a dispute ends only when the owner or an active
+ * manager confirms his age, with a reason (SUIVI-04); lifting it alone would let anyone confirm him after.
+ */
+export const ClearableFanFlagNameSchema = FanFlagNameSchema.exclude(['ageDisputed']);
+export type ClearableFanFlagName = z.infer<typeof ClearableFanFlagNameSchema>;
+
+/**
+ * `GET /v1/fans/:id/flags`, and the answer of `PUT`: his limits now, and whether the reader may confirm his age once
+ * it is disputed (a sign of a minor): the owner and an active manager only, with a written reason (SUIVI-04).
+ */
+export const FanFlagsViewSchema = z.object({
+  fanId: FanIdSchema,
+  flags: FanFlagsSchema,
+  mayConfirmDisputedAge: z.boolean(),
+});
 export type FanFlagsView = z.infer<typeof FanFlagsViewSchema>;
 
 const flagReason = z.string().trim().min(1).max(500).exactOptional();
+
+/**
+ * The highest ceiling a person sets, in cents (100 000 €): past it, a typing slip rather than his word. A ceiling of
+ * 0 € is no ceiling but a freeze, which `salesFrozen` says.
+ */
+export const SPENDING_LIMIT_MAX_MINOR = 10_000_000;
+
+/**
+ * Refusals of `PUT /v1/fans/:id/flags` on a disputed age: not the owner nor an active manager (403), or no written
+ * reason (400). The screen says which.
+ */
+export const AGE_DISPUTE_FORBIDDEN = 'age_dispute_forbidden';
+export const AGE_DISPUTE_REASON_INVALID = 'age_dispute_reason_invalid';
 
 /**
  * `PUT /v1/fans/:id/flags`: a human sets or lifts one limit. The server dates `ageConfirmedAt` and the start of a
@@ -96,9 +123,9 @@ export const SetFanFlagBodySchema = z.union([
   z.object({
     flag: z.literal('spendingLimitMinor'),
     set: z.literal(true),
-    limitMinor: z.number().int().nonnegative(),
+    limitMinor: z.number().int().positive().max(SPENDING_LIMIT_MAX_MINOR),
     reason: flagReason,
   }),
-  z.object({ flag: FanFlagNameSchema, set: z.literal(false), reason: flagReason }),
+  z.object({ flag: ClearableFanFlagNameSchema, set: z.literal(false), reason: flagReason }),
 ]);
 export type SetFanFlagBody = z.infer<typeof SetFanFlagBodySchema>;

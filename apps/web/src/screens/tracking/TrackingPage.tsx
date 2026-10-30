@@ -1,6 +1,6 @@
-import type { ConversationSummary, DashboardTodo } from '@nirvana/contracts';
+import type { ConversationSummary, CreatorTodo } from '@nirvana/contracts';
 import { placeSegmentThumb } from '@nirvana/design-system';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   useEffect,
@@ -13,15 +13,17 @@ import {
 } from 'react';
 
 import { Reader } from './Reader';
-import { fetchConversations } from './api';
+import { fetchConversations, fetchTodosAcross } from './api';
 import { todoLabel } from './reader-model';
 import {
+  duration,
   LIST_ORDER_LABELS,
   LIST_ORDERS,
   MODE_MEANINGS,
   mergeConversations,
   orderLines,
   readListOrder,
+  searchLines,
   sharedMode,
   STATE_LABELS,
   statusClass,
@@ -31,11 +33,14 @@ import {
 } from './view';
 import './tracking.css';
 
-import { useLiveDashboard } from '@/agent/live';
 import { useCreators } from '@/creators/api';
+import { initialOf } from '@/lib/utils';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
 const REFRESH_MS = 30_000;
+
+/** The lines of « À traiter » shown before « Voir les N autres ». */
+const QUEUE_SHOWN = 3;
 
 /** Arrow keys of a radio group and the way they move. */
 const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
@@ -47,6 +52,7 @@ const STEPS: Readonly<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, A
  */
 export function TrackingPage({
   selected,
+  selectedCreator = null,
   onSelect,
   canDecide,
   canAddCreator,
@@ -55,6 +61,8 @@ export function TrackingPage({
 }: {
   /** The conversation open in the reader (`/suivi?conversation=<id>`), or null for the list alone. */
   selected: string | null;
+  /** The creator the link names for it (`&creatrice=<id>`), read first when she is one of this account's. */
+  selectedCreator?: string | null;
   onSelect: (conversationId: string | null) => void;
   /** Owners and chatters decide on drafts and take over; a creator reads. */
   canDecide: boolean;
@@ -77,9 +85,17 @@ export function TrackingPage({
       refetchInterval: REFRESH_MS,
     })),
   });
-  const dashboard = useLiveDashboard();
+  // « À traiter » of every creator followed, not only the one the Dashboard shows (SUIVI-09). Under ['dashboard'], so a
+  // decision in the reader, which reads the Dashboard again, reads this queue again too.
+  const queue = useQuery({
+    queryKey: ['dashboard', 'todos-across'],
+    queryFn: fetchTodosAcross,
+    refetchInterval: REFRESH_MS,
+  });
   const now = useNow();
   const [order, setOrder] = useState<ListOrder>(readListOrder);
+  const [search, setSearch] = useState('');
+  const [allTodos, setAllTodos] = useState(false);
 
   const isLoading = creatorsQuery.isPending || queries.some((q) => q.isPending);
   const failed = queries.filter((q) => q.isError);
@@ -93,24 +109,35 @@ export function TrackingPage({
   const hasMore = queries.some((q) => q.data?.hasMore === true);
   // The order only offers itself once a fan has a desire score: before that, « Chauds d'abord » would sort nothing.
   const canOrder = lines.some((l) => l.conversation.desire !== null);
-  const shown = orderLines(lines, canOrder ? order : 'recent');
+  const shown = searchLines(orderLines(lines, canOrder ? order : 'recent'), search);
+  const isSearching = search.trim() !== '';
   const showsCreator = creators.length > 1;
   const mode = sharedMode(lines);
   const retry = (): void => {
     if (creatorsQuery.isError) void creatorsQuery.refetch();
     for (const q of failed) void q.refetch();
+    if (queue.isError) void queue.refetch();
   };
-  // The queue is the first creator's (as the Dashboard): its conversations open with her id.
-  const todos = dashboard.kind === 'live' ? dashboard.data.todos : [];
-  const queueCreator = creators[0]?.id ?? null;
+  // Each line of the queue carries its creator: its conversation opens with her id.
+  const todos = queue.data?.items ?? [];
+  // The gravest first (the server's order): three lines keep the search and the list above the fold; the one open stays.
+  // A fourth line is shown rather than hidden alone, so at least two hide behind « Voir les N autres ».
+  const openIndex = todos.findIndex((t) => t.conversationId === selected);
+  const shownTodos =
+    allTodos || todos.length <= QUEUE_SHOWN + 1 || openIndex >= QUEUE_SHOWN
+      ? todos
+      : todos.slice(0, QUEUE_SHOWN);
+  const hiddenTodos = todos.length - shownTodos.length;
   const open =
     selected === null
       ? null
       : (lines.find((l) => l.conversation.id === selected)?.creatorId ??
-        (creators.length === 1 ? queueCreator : null));
+        creators.find((c) => c.id === selectedCreator)?.id ??
+        todos.find((t) => t.conversationId === selected)?.creatorId ??
+        null);
 
   return (
-    <Page className={selected === null ? '' : 'tr-is-reading'}>
+    <Page className={selected === null ? 'tr-page' : 'tr-page tr-is-reading'}>
       <PageHeader
         eyebrow={creators.length === 1 ? creators[0]?.displayName : undefined}
         title="Suivi"
@@ -148,7 +175,8 @@ export function TrackingPage({
             Aller à Créatrices
           </Link>
         </Notice>
-      ) : creators.length === 0 && offShift !== undefined ? null : creators.length === 0 ? (
+      ) : // Off shift with nothing listed: the banner above says it all, never « no conversation yet ».
+      offShift !== undefined && lines.length === 0 && todos.length === 0 ? null : creators.length === 0 ? (
         <Notice
           title="Rien pour toi pour l’instant"
           text="Les conversations des créatrices qui te sont confiées arrivent ici."
@@ -156,13 +184,25 @@ export function TrackingPage({
       ) : (
         <div className="tr-layout">
           <div className="tr-side">
+            {/* An unread queue is never silent: an urgency may be missing from it. */}
+            {queue.isError ? (
+              <Panel className="tr-panel" eyebrow="À traiter">
+                <p className="tr-queue-error tr-warn">
+                  « À traiter » n’a pas pu être lu : une urgence peut manquer ici.
+                </p>
+                <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={retry}>
+                  Réessayer
+                </button>
+              </Panel>
+            ) : null}
             {todos.length === 0 ? null : (
               <Panel className="tr-panel" eyebrow="À traiter">
                 <ul className="nv-list tr-list" aria-label="À traiter">
-                  {todos.map((todo) => (
+                  {shownTodos.map((todo) => (
                     <QueueRow
-                      key={todo.id}
+                      key={`${todo.creatorId}-${todo.id}`}
                       todo={todo}
+                      withCreator={showsCreator}
                       isOpen={todo.conversationId === selected}
                       onOpen={() => {
                         onSelect(todo.conversationId);
@@ -170,6 +210,19 @@ export function TrackingPage({
                     />
                   ))}
                 </ul>
+                {hiddenTodos === 0 ? null : (
+                  <p className="tr-more tr-more--action">
+                    <button
+                      type="button"
+                      className="nv-btn nv-btn--plain nv-btn--sm"
+                      onClick={() => {
+                        setAllTodos(true);
+                      }}
+                    >
+                      {`Voir les ${String(hiddenTodos)} autres`}
+                    </button>
+                  </p>
+                )}
               </Panel>
             )}
             {lines.length === 0 ? (
@@ -191,14 +244,28 @@ export function TrackingPage({
                     }}
                   />
                 ) : null}
+                <label className="tr-search">
+                  <span className="sr-only">Chercher un fan par son pseudo</span>
+                  <input
+                    type="search"
+                    className="nv-field__control"
+                    placeholder="Chercher un fan"
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                    }}
+                  />
+                </label>
                 <div className="nv-scroll">
+                  {isSearching && shown.length === 0 ? (
+                    <p className="tr-more">Aucun fan ne porte ce pseudo dans la liste.</p>
+                  ) : null}
                   <ul className="nv-list tr-list" aria-label="Conversations">
                     {shown.map(({ conversation, creatorName }) => (
                       <Row
                         key={conversation.id}
                         conversation={conversation}
                         creatorName={showsCreator ? creatorName : undefined}
-                        withMode={mode === null}
                         now={now}
                         isOpen={conversation.id === selected}
                         onOpen={() => {
@@ -209,16 +276,24 @@ export function TrackingPage({
                   </ul>
                   {hasMore ? (
                     <p className="tr-more">
-                      {canOrder && order === 'hot'
-                        ? 'Seules les plus récentes sont affichées : le classement ne porte que sur elles.'
-                        : 'Seules les plus récentes sont affichées.'}
+                      {isSearching
+                        ? 'Seules les plus récentes sont affichées : la recherche ne porte que sur elles.'
+                        : canOrder && order === 'hot'
+                          ? 'Seules les plus récentes sont affichées : le classement ne porte que sur elles.'
+                          : 'Seules les plus récentes sont affichées.'}
                     </p>
                   ) : null}
                 </div>
               </Panel>
             )}
           </div>
-          {selected === null ? null : open === null ? (
+          {selected === null ? (
+            <section className="nv-plate tr-reader tr-reader--idle" aria-label="Conversation">
+              <p className="tr-reader__empty">
+                Choisis une conversation à gauche : elle s’ouvre ici, avec son brouillon s’il y en a un.
+              </p>
+            </section>
+          ) : open === null ? (
             <section className="nv-plate tr-reader" aria-label="Conversation">
               <p className="tr-reader__empty">Cette conversation n’est pas dans la liste.</p>
             </section>
@@ -307,13 +382,15 @@ function OrderControl({
   );
 }
 
-/** A line of « À traiter »: what it is, the fan, why it waits, and since when. */
+/** A line of « À traiter »: whose fan when several creators are followed, what it is, why it waits, since when. */
 function QueueRow({
   todo,
+  withCreator,
   isOpen,
   onOpen,
 }: {
-  todo: DashboardTodo;
+  todo: CreatorTodo;
+  withCreator: boolean;
   isOpen: boolean;
   onOpen: () => void;
 }): JSX.Element {
@@ -328,15 +405,12 @@ function QueueRow({
         <span className={`nv-dot nv-tone--${todo.tone}`} aria-hidden="true" />
         <span className="nv-convo__main">
           <span className="nv-convo__name">
+            {withCreator ? `${todo.creatorName} · ` : ''}
             {todoLabel(todo)} · {todo.title}
           </span>
-          <span className="nv-convo__preview">{todo.why}</span>
+          <span className="nv-convo__preview tr-why">{todo.why}</span>
         </span>
-        <span className="nv-convo__side tr-wait">
-          {todo.waitingMinutes < 60
-            ? `${String(todo.waitingMinutes)} min`
-            : `${String(Math.floor(todo.waitingMinutes / 60))} h`}
-        </span>
+        <span className="nv-convo__side tr-wait">{duration(todo.waitingMinutes)}</span>
       </button>
     </li>
   );
@@ -345,21 +419,19 @@ function QueueRow({
 function Row({
   conversation,
   creatorName,
-  withMode,
   now,
   isOpen,
   onOpen,
 }: {
   conversation: ConversationSummary;
-  /** Shown before the mode when the account sees several creators. */
+  /** Shown beside his pseudo when the account sees several creators, never cut. */
   creatorName: string | undefined;
-  withMode: boolean;
   now: Date;
   isOpen: boolean;
   onOpen: () => void;
 }): JSX.Element {
   const name = conversation.fanDisplayName.trim() === '' ? 'Fan sans nom' : conversation.fanDisplayName;
-  const line = subline(conversation, now, withMode);
+  const line = subline(conversation, now);
   return (
     <li className="nv-enter">
       <button
@@ -369,16 +441,17 @@ function Row({
         onClick={onOpen}
       >
         <span className="nv-avatar nv-avatar--sm" aria-hidden="true">
-          {name.slice(0, 1).toUpperCase()}
+          {initialOf(name)}
         </span>
         <span className="nv-convo__main">
-          <span className="nv-convo__name">{name}</span>
-          <span className="nv-convo__preview tr-preview">
-            <span className="tr-preview__text">
-              {creatorName === undefined ? null : `${creatorName} · `}
-              {line.text}
-            </span>
-            {line.band === null ? null : <span className="tr-preview__band">{` · ${line.band}`}</span>}
+          <span className="nv-convo__name tr-row__name">
+            <span className="tr-row__pseudo">{name}</span>
+            {creatorName === undefined ? null : (
+              <span className="nv-tag nv-tag--declared tr-row__creator">{creatorName}</span>
+            )}
+          </span>
+          <span className="nv-convo__preview">
+            {line.band === null ? line.text : `${line.text} · ${line.band}`}
           </span>
         </span>
         <span className="nv-convo__side">

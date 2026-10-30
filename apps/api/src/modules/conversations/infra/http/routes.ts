@@ -25,7 +25,7 @@ import {
   type UserId,
   type UserRole,
 } from '@nirvana/contracts';
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
@@ -34,7 +34,7 @@ import { ConversationNotFound } from '../../domain/errors';
 import type { ConversationReader } from '../../domain/ports';
 
 /** The composition root's `requireRole`: 401 without a session, 403 with another role; sets `request.user`. */
-export type RequireRole = (...roles: UserRole[]) => preHandlerAsyncHookHandler;
+export type RequireRole = (...roles: UserRole[]) => preValidationAsyncHookHandler;
 
 class CreatorForbidden extends DomainError {
   constructor() {
@@ -77,7 +77,7 @@ export function actorFor(
 export function createConversationRoutes(
   reader: ConversationReader,
   commands: ConversationCommands,
-  guards: { readonly requireRole: RequireRole; readonly recentLogin: preHandlerAsyncHookHandler },
+  guards: { readonly requireRole: RequireRole; readonly recentLogin: preValidationAsyncHookHandler },
 ): FastifyPluginAsyncZod {
   const { requireRole } = guards;
 
@@ -100,8 +100,8 @@ export function createConversationRoutes(
 
   return (app) => {
     // A creator never reads a conversation (ADR 0023): her fans' words stay with the agency.
-    const read = { preHandler: requireRole('owner', 'operator') };
-    const act = { preHandler: requireRole('owner', 'operator') };
+    const read = { preValidation: requireRole('owner', 'operator') };
+    const act = { preValidation: requireRole('owner', 'operator') };
 
     app.get(
       '/conversations',
@@ -157,6 +157,7 @@ export function createConversationRoutes(
         const { creatorId, limit, cursor } = request.query;
         await actorOn(request, creatorId, request.params.id);
         const page = await reader.messages(creatorId, request.params.id, { limit, cursor });
+        if (page === null) throw new ConversationNotFound();
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
     );
@@ -175,6 +176,7 @@ export function createConversationRoutes(
         const { creatorId, limit, cursor } = request.query;
         await actorOn(request, creatorId, request.params.id);
         const page = await reader.events(creatorId, request.params.id, { limit, cursor });
+        if (page === null) throw new ConversationNotFound();
         return { items: [...page.items], nextCursor: page.nextCursor };
       },
     );
@@ -192,7 +194,9 @@ export function createConversationRoutes(
       },
       async (request) => {
         await actorOn(request, request.query.creatorId, request.params.id);
-        return reader.desireCurve(request.query.creatorId, request.params.id);
+        const curve = await reader.desireCurve(request.query.creatorId, request.params.id);
+        if (curve === null) throw new ConversationNotFound();
+        return curve;
       },
     );
 
@@ -316,7 +320,7 @@ export function createConversationRoutes(
     app.post(
       '/creators/:id/blind-tests',
       {
-        preHandler: [requireRole('owner'), guards.recentLogin],
+        preValidation: [requireRole('owner'), guards.recentLogin],
         schema: {
           params: CreatorParamsSchema,
           body: RecordBlindTestBodySchema,

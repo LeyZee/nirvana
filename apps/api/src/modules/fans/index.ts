@@ -1,4 +1,4 @@
-import { KycSlotSchema, type KycSlot } from '@nirvana/contracts';
+import { KycSlotSchema, type CreatorId, type KycSlot } from '@nirvana/contracts';
 import type { Database } from '@nirvana/db';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
@@ -21,10 +21,14 @@ export interface FansModule extends FansService {
   };
   /**
    * Mounted under `/v1` by the server: `/fans/:id/flags`, read by the dashboard and set by a chatter, and
-   * `/fans/:id/kyc`, what is left to learn among `kycSlots` (her persona's canvas lines; all of them by default).
+   * `/fans/:id/kyc`, what is left to learn among `kycSlotsOf` (her active persona's canvas lines, read at each
+   * request; all of them when she has none, or without it).
    */
-  routes(requireRole: RequireRole, kycSlots?: readonly KycSlot[]): FastifyPluginAsyncZod;
+  routes(requireRole: RequireRole, kycSlotsOf?: KycSlotsOf): FastifyPluginAsyncZod;
 }
+
+/** Her persona's canvas lines (P5-01), in her order; `null` when she has no active persona version. */
+type KycSlotsOf = (creatorId: CreatorId) => Promise<readonly KycSlot[] | null>;
 
 export interface FansDeps {
   /** Application role (RLS). */
@@ -44,10 +48,16 @@ export function createFansModule(deps: FansDeps): FansModule {
     name: 'fans',
     ...service,
     routes:
-      (requireRole, kycSlots = KycSlotSchema.options) =>
+      (requireRole, kycSlotsOf = () => Promise.resolve(null)) =>
       async (app) => {
         await app.register(createFlagRoutes(service, requireRole));
-        await app.register(createKycRoutes(service, requireRole, kycSlots));
+        await app.register(
+          createKycRoutes(
+            service,
+            requireRole,
+            async (creatorId) => (await kycSlotsOf(creatorId)) ?? KycSlotSchema.options,
+          ),
+        );
       },
     jobs: { purgeFacts: () => purge.dropFactsOfFansLastSeenBefore(factRetentionCutoff(new Date())) },
   };

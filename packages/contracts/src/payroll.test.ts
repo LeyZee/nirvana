@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { PayPeriodSchema } from './pay-periods';
 import {
   BonusTierSetSchema,
+  canonicalExchangeRates,
   CollectiveGoalSchema,
+  containsIban,
   CreateBonusBodySchema,
   CreateBonusTierSetBodySchema,
   CreateCollectiveGoalBodySchema,
@@ -12,11 +14,23 @@ import {
   ExchangeRateSchema,
   mayValidateStatement,
   PAY_AMOUNT_MAX_MINOR,
+  PAY_PERIOD_BLOCK_CODES,
+  PAYMENT_METHODS,
   PAYROLL_ERROR_CODES,
+  PayCommissionStatementBodySchema,
+  PayPeriodBlockSchema,
+  PayPeriodSummarySchema,
+  PayrollPeriodSchema,
   PenaltySchema,
   bonusTiersFor,
   collectiveGoalFor,
+  nextPayoutMinimum,
+  payoutMinimumFor,
+  PayoutMinimumSchema,
+  PayrollSettingsSchema,
+  UpdatePayrollSettingsBodySchema,
   penaltyApplies,
+  penaltyCovers,
 } from './payroll';
 
 const MEMBER = '0199f2a0-0000-7000-8000-0000000000b1';
@@ -121,6 +135,12 @@ describe('penalties', () => {
     const cancelled = PenaltySchema.parse({ ...made, cancellation });
     expect(penaltyApplies(cancelled, period('2026-11-01'))).toBe(true);
     expect(penaltyApplies(cancelled, period('2026-11-16'))).toBe(false);
+    // Cancelled or not, it still covers its periods: a list of the period shows it, struck through where it stopped.
+    expect(
+      ['2026-10-16', '2026-11-01', '2026-11-16', '2026-12-01'].map((p) =>
+        penaltyCovers(cancelled, period(p)),
+      ),
+    ).toEqual([false, true, true, false]);
   });
 });
 
@@ -191,7 +211,175 @@ describe('statements', () => {
 
   it('give every error code a suffix that sets its status (api.md)', () => {
     for (const code of PAYROLL_ERROR_CODES) {
-      expect(code).toMatch(/_(not_found|invalid|conflict|forbidden)$/u);
+      expect(code).toMatch(/_(not_found|invalid|conflict|unprocessable|forbidden)$/u);
     }
+  });
+});
+
+describe('payments', () => {
+  // Invented, with their check digits computed: a French, a Swiss and a Beninese IBAN (UEMOA, outside SWIFT's registry).
+  const IBANS = ['FR6212345678900000ABC123456', 'CH3108390123456789012', 'BJ75BC0100100100000012345678'];
+  const spaced = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
+  const pay = (reference: string) =>
+    PayCommissionStatementBodySchema.safeParse({
+      revision: 1,
+      paidOn: '2026-11-02',
+      method: 'worldremit',
+      reference,
+      sentMinor: 13_333,
+    });
+
+  it('refuse a reference that holds an IBAN, alone or in a sentence, with or without spaces', () => {
+    for (const iban of IBANS)
+      for (const reference of [iban, spaced(iban), iban.toLowerCase(), `Transfert ${spaced(iban)} reçu`]) {
+        expect(containsIban(reference), reference).toBe(true);
+        const refused = pay(reference);
+        expect(refused.success, reference).toBe(false);
+        expect(refused.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
+          [['reference'], 'Une référence de transfert, jamais un IBAN'],
+        ]);
+      }
+  });
+
+  it('keep a transfer’s reference, a wrong check digit included', () => {
+    const wrongKey = ['FR6312345678900000ABC123456', 'CH3208390123456789012', 'BJ76BC0100100100000012345678'];
+    for (const reference of [
+      ...wrongKey,
+      ...wrongKey.map(spaced),
+      'P2P-4E7F2C1A',
+      'Transfer #1284759302',
+      '8MC585209K746392H',
+      'Commission du 16 au 31 octobre',
+      'FR76',
+    ]) {
+      expect(containsIban(reference), reference).toBe(false);
+      expect(pay(reference).success, reference).toBe(true);
+    }
+  });
+
+  it('take WorldRemit only: the chatters are paid by it, an old or unknown method is refused', () => {
+    const by = (method: string) =>
+      PayCommissionStatementBodySchema.safeParse({
+        revision: 1,
+        paidOn: '2026-11-02',
+        method,
+        sentMinor: 13_333,
+      });
+    expect(PAYMENT_METHODS).toEqual(['worldremit']);
+    expect(by('worldremit').success).toBe(true);
+    for (const method of ['bank_transfer', 'wise', 'paypal', 'other', 'WorldRemit', '']) {
+      expect(
+        by(method).error?.issues.map((issue) => issue.path),
+        method,
+      ).toEqual([['method']]);
+    }
+  });
+});
+
+describe('exchange rates', () => {
+  it('are copied in one order, by currency, whatever order they were read in', () => {
+    // The database compares a statement's rates with its closing's as written (ADR 0032): one order for every writer.
+    const rates = [{ currency: 'USD' }, { currency: 'CHF' }, { currency: 'GBP' }];
+    expect(canonicalExchangeRates(rates).map((rate) => rate.currency)).toEqual(['CHF', 'GBP', 'USD']);
+    expect(canonicalExchangeRates([...rates].reverse())).toEqual(canonicalExchangeRates(rates));
+    expect(rates.map((rate) => rate.currency)).toEqual(['USD', 'CHF', 'GBP']);
+  });
+});
+
+describe('a blocked period', () => {
+  const since = '2026-11-02T09:00:00.000Z';
+
+  it('says which members lack a rate, or which currency', () => {
+    expect(
+      PayPeriodBlockSchema.parse({ code: 'commission_rate_missing_conflict', memberIds: [MEMBER], since }),
+    ).toEqual({ code: 'commission_rate_missing_conflict', memberIds: [MEMBER], since });
+    // A member reads only themselves among those without a rate: possibly nobody.
+    expect(
+      PayPeriodBlockSchema.safeParse({ code: 'commission_rate_missing_conflict', memberIds: [], since })
+        .success,
+    ).toBe(true);
+    expect(
+      PayPeriodBlockSchema.safeParse({ code: 'exchange_rate_missing_conflict', currency: 'USD', since })
+        .success,
+    ).toBe(true);
+    // The euro is never converted, so it never lacks a rate; an unknown reason is refused, never shown as fine.
+    expect(
+      PayPeriodBlockSchema.safeParse({ code: 'exchange_rate_missing_conflict', currency: 'EUR', since })
+        .success,
+    ).toBe(false);
+    expect(PayPeriodBlockSchema.safeParse({ code: 'pay_period_order_conflict', since }).success).toBe(false);
+    for (const code of PAY_PERIOD_BLOCK_CODES) expect(PAYROLL_ERROR_CODES).toContain(code);
+  });
+
+  it('always says whether a period is blocked: a read without it is refused', () => {
+    const window = {
+      period: '2026-11-01',
+      startsAt: '2026-10-31T23:00:00.000Z',
+      endsAt: '2026-11-15T23:00:00.000Z',
+      timeZone: 'Europe/Paris',
+    };
+    const summary = {
+      window,
+      ended: true,
+      closedAt: null,
+      closedBy: null,
+      statements: { draft: 1, validated: 0, paid: 0, carried: 0 },
+      netMinor: 0,
+      payableMinor: 0,
+      validatedPayableMinor: 0,
+      carriedMinor: 0,
+      paidMinor: 0,
+    };
+    expect(PayPeriodSummarySchema.safeParse(summary).success).toBe(false);
+    expect(PayPeriodSummarySchema.parse({ ...summary, blocked: null }).blocked).toBeNull();
+    const block = { code: 'exchange_rate_missing_conflict', currency: 'USD', since };
+    expect(PayPeriodSummarySchema.parse({ ...summary, blocked: block }).blocked).toEqual(block);
+    const periodRead = {
+      period: '2026-11-01',
+      window,
+      ended: true,
+      closing: null,
+      beforeFirstClosing: false,
+      statements: [],
+      bonusTiers: null,
+      collectiveGoal: null,
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
+    };
+    expect(PayrollPeriodSchema.safeParse(periodRead).success).toBe(false);
+    expect(PayrollPeriodSchema.parse({ ...periodRead, blocked: null }).blocked).toBeNull();
+  });
+});
+
+describe('the payout minimum and delay (PAIE-22, PAIE-32)', () => {
+  const minimum = (id: string, fromPeriod: string, createdAt: string, minimumPayoutMinor: number) =>
+    PayoutMinimumSchema.parse({ id, fromPeriod, minimumPayoutMinor, createdBy: USER, createdAt });
+  const a = minimum('0199f2a0-0000-7000-8000-0000000000a1', '2026-11-01', '2026-10-20T10:00:00.000Z', 2_000);
+  const b = minimum('0199f2a0-0000-7000-8000-0000000000a2', '2026-11-01', '2026-10-21T10:00:00.000Z', 2_500);
+  const c = minimum('0199f2a0-0000-7000-8000-0000000000a3', '2026-12-01', '2026-10-21T11:00:00.000Z', 3_000);
+
+  it('reads the newest of the latest period at or before, and the first change after', () => {
+    expect(payoutMinimumFor([a, b, c], period('2026-10-16'))).toBeNull();
+    expect(payoutMinimumFor([c, b, a], period('2026-11-16'))?.minimumPayoutMinor).toBe(2_500);
+    expect(payoutMinimumFor([a, b, c], period('2026-12-01'))?.minimumPayoutMinor).toBe(3_000);
+    expect(nextPayoutMinimum([c, a, b], period('2026-10-16'))?.minimumPayoutMinor).toBe(2_500);
+    expect(nextPayoutMinimum([a, b, c], period('2026-11-01'))?.minimumPayoutMinor).toBe(3_000);
+    expect(nextPayoutMinimum([a, b, c], period('2026-12-01'))).toBeNull();
+  });
+
+  it('takes a delay in whole business days, from 1 to 30, or none', () => {
+    expect(UpdatePayrollSettingsBodySchema.safeParse({ payoutDelayBusinessDays: 3 }).success).toBe(true);
+    expect(UpdatePayrollSettingsBodySchema.safeParse({ payoutDelayBusinessDays: null }).success).toBe(true);
+    for (const wrong of [0, 31, 2.5, '3']) {
+      expect(UpdatePayrollSettingsBodySchema.safeParse({ payoutDelayBusinessDays: wrong }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      PayrollSettingsSchema.parse({
+        minimumPayoutMinor: 1_500,
+        nextMinimum: null,
+        payoutDelayBusinessDays: null,
+      }),
+    ).toEqual({ minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null });
   });
 });

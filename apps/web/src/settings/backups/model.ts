@@ -6,6 +6,7 @@ import {
   type RecordRestoreTestBody,
 } from '@nirvana/contracts';
 
+import { withFirstOfMonth } from '@/scheduling/time';
 import { backupBannerOf } from '@/screens/dashboard/backups';
 
 /**
@@ -19,16 +20,18 @@ const DAY_MS = 86_400_000;
 /** No-break space between a number and its unit: « 4 min 12 s » never splits across two lines. */
 const NBSP = '\u00a0';
 
-/** « 12 juillet », with the year when it is not this one. */
+/** « 12 juillet », « 1er août », with the year when it is not this one. */
 function dayOf(iso: string, now: Date, timeZone: string | undefined): string {
   const at = new Date(iso);
   const year = (date: Date) => new Intl.DateTimeFormat('fr-FR', { year: 'numeric', timeZone }).format(date);
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    ...(year(at) !== year(now) && { year: 'numeric' }),
-    timeZone,
-  }).format(at);
+  return withFirstOfMonth(
+    new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      ...(year(at) !== year(now) && { year: 'numeric' }),
+      timeZone,
+    }).formatToParts(at),
+  );
 }
 
 /** « 03:12 ». */
@@ -37,6 +40,12 @@ function clockOf(iso: string, timeZone: string | undefined): string {
     new Date(iso),
   );
 }
+
+/** « 20 octobre », « 1er novembre »: the day a restore test was made, in the reader's zone. */
+export const testedDay = (iso: string): string =>
+  withFirstOfMonth(
+    new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).formatToParts(new Date(iso)),
+  );
 
 /** « 4 min 12 s », « 52 s », « 1 h 05 min ». */
 export function durationOf(seconds: number): string {
@@ -59,6 +68,30 @@ function sizeOf(bytes: number): string {
 
 export type Tone = 'ok' | 'warn';
 
+/** The steps of `ops/db-export/export.sh`, as the service names them in « failed at step … ». */
+const FAILED_STEPS: Record<string, string> = {
+  start: 'la sauvegarde n’a pas pu démarrer',
+  record: 'la sauvegarde n’a pas pu s’inscrire dans la base',
+  settings: 'la lecture des réglages de la base a échoué',
+  snapshot: 'la base n’a pas pu être figée pour la copie',
+  dump: 'la copie de la base a échoué',
+  count: 'le comptage des lignes a échoué',
+  verify: 'la vérification de la copie a échoué',
+  encrypt: 'le chiffrement a échoué',
+  upload: 'l’envoi vers le stockage a échoué',
+  finish: 'la fin de la sauvegarde n’a pas pu être notée',
+};
+
+/**
+ * The step that failed, in the page's words. The service writes « failed at step upload »: never shown raw. A step the
+ * page does not know yet reads as a failure without detail.
+ */
+export function runErrorOf(error: string | null): string | null {
+  if (error === null) return null;
+  const step = /^failed at step (\w+)$/.exec(error.trim())?.[1];
+  return step === undefined ? null : (FAILED_STEPS[step] ?? null);
+}
+
 export interface ExportView {
   readonly tone: Tone;
   readonly title: string;
@@ -73,13 +106,14 @@ export interface ExportView {
  */
 export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string): ExportView {
   const run = status.lastRun;
+  const failedStep = runErrorOf(run?.error ?? null);
   const lastRun =
     run === null
       ? null
       : run.status === 'running'
         ? `Une sauvegarde est en cours depuis ${clockOf(run.startedAt, timeZone)}.`
         : run.status === 'failed'
-          ? `Dernière tentative échouée le ${dayOf(run.startedAt, now, timeZone)} à ${clockOf(run.startedAt, timeZone)}${run.error === null ? '' : ` (${run.error})`}.`
+          ? `Dernière tentative échouée le ${dayOf(run.startedAt, now, timeZone)} à ${clockOf(run.startedAt, timeZone)}${failedStep === null ? '' : ` : ${failedStep}`}.`
           : `Dernière tentative réussie le ${dayOf(run.startedAt, now, timeZone)}${
               run.finishedAt === null
                 ? ''
@@ -97,9 +131,41 @@ export function exportViewOf(status: BackupStatus, now: Date, timeZone?: string)
   return {
     tone: 'ok',
     title: `Sauvegardée le ${dayOf(status.lastSucceededAt, now, timeZone)} à ${clockOf(status.lastSucceededAt, timeZone)}`,
-    text: `Chaque nuit, la base est chiffrée et copiée hors de chez son hébergeur, gardée 30${NBSP}jours. Après ${String(status.overdueAfterHours)}${NBSP}h sans copie réussie, le Dashboard et Telegram te préviennent.`,
+    // « Chaque nuit… » is the page's lede, just above: the block says only what it adds (REG-25).
+    text: `Chaque copie est gardée 30${NBSP}jours. Après ${String(status.overdueAfterHours)}${NBSP}h sans copie réussie, le Dashboard et Telegram te préviennent.`,
     lastRun,
   };
+}
+
+/**
+ * « Relancer la sauvegarde maintenant » (REG-24): what the strip offers. `asked`: a request waits for the service,
+ * which picks it up within a minute. `running`: an export runs now, its outcome will show. Otherwise the button.
+ */
+export type RunNowView =
+  | { readonly kind: 'offer' }
+  | { readonly kind: 'asked'; readonly text: string }
+  | { readonly kind: 'running' };
+
+export function runNowOf(status: BackupStatus, timeZone?: string): RunNowView {
+  if (status.runRequestedAt !== undefined) {
+    return {
+      kind: 'asked',
+      text: `Relance demandée à ${clockOf(status.runRequestedAt, timeZone)} : elle démarre dans la minute.`,
+    };
+  }
+  return status.lastRun?.status === 'running' ? { kind: 'running' } : { kind: 'offer' };
+}
+
+/** How often the page reads the status again while a request waits or an export runs; otherwise never by itself. */
+export const WATCH_MS = 15_000;
+
+/**
+ * Réglages reads the status again only while something is under way: « Relance demandée… » turns into « en cours »
+ * when the service picks the request up, then into the outcome, without the owner reloading the page.
+ */
+export function watchIntervalOf(status: BackupStatus | undefined): number | false {
+  if (status === undefined) return false;
+  return status.runRequestedAt !== undefined || status.lastRun?.status === 'running' ? WATCH_MS : false;
 }
 
 export interface RestoreView {
@@ -141,7 +207,7 @@ export function restoreViewOf(status: BackupStatus, now: Date, timeZone?: string
     return {
       tone: 'warn',
       title: `Le dernier essai date du ${dayOf(test.testedAt, now, timeZone)}`,
-      text: `${restored}, toutes les lignes retrouvées. Il a plus de ${String(RESTORE_TEST_FRESH_DAYS)}${NBSP}jours : ${PAY_RULE.charAt(0).toLowerCase()}${PAY_RULE.slice(1)}`,
+      text: `${restored}, toutes les lignes retrouvées. Il a plus de ${String(RESTORE_TEST_FRESH_DAYS)}${NBSP}jours : la paie attend un nouvel essai réussi.`,
       validity: null,
     };
   }

@@ -1,6 +1,7 @@
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 
 import { RestoreTestDialog } from './RestoreTestDialog';
+import { RunNow } from './RunNow';
 import { useBackupStatusQuery } from './api';
 import { exportViewOf, restoreViewOf, type Tone } from './model';
 
@@ -8,12 +9,14 @@ import './backups.css';
 
 /**
  * Réglages › Sauvegardes (EQ-17, ADR 0028), owner only: the nightly export as a strip, then the restore test, the
- * one thing to do here (« Noter un essai », the page's only neon). Everything is read from `GET /v1/backups/status`;
- * nothing on this page touches the export itself.
+ * one thing to do here (« Noter un essai », the page's only neon). Everything is read from `GET /v1/backups/status`.
+ * The strip can ask for an export now (REG-24, a soft button): the API records the request, the `backup` service
+ * runs it; nothing here starts anything on the PC.
  */
 export function BackupsSection(): JSX.Element {
   const status = useBackupStatusQuery();
   const [isOpen, setIsOpen] = useState(false);
+  const copyTitle = useRef<HTMLHeadingElement>(null);
 
   if (status.isPending) {
     return (
@@ -44,6 +47,8 @@ export function BackupsSection(): JSX.Element {
   const now = new Date();
   const copy = exportViewOf(status.data, now);
   const restore = restoreViewOf(status.data, now);
+  // A test restores a copy that succeeded and checks its fingerprint: without one, any test would be refused.
+  const hasCopy = status.data.lastSucceededAt !== null;
 
   return (
     <section className="bk-page">
@@ -61,11 +66,12 @@ export function BackupsSection(): JSX.Element {
         <StateDot tone={copy.tone} />
         <div className="bk-strip__body">
           <p className="bk-eyebrow">Sauvegarde de chaque nuit</p>
-          <h2 id="bk-copy-title" className="bk-strip__title">
+          <h2 ref={copyTitle} id="bk-copy-title" className="bk-strip__title" tabIndex={-1}>
             {copy.title}
           </h2>
           <p className="bk-text">{copy.text}</p>
           {copy.lastRun === null ? null : <p className="bk-meta">{copy.lastRun}</p>}
+          <RunNow status={status.data} landmark={copyTitle} />
         </div>
       </article>
 
@@ -86,22 +92,28 @@ export function BackupsSection(): JSX.Element {
         {restore.validity === null ? null : <p className="bk-validity">{restore.validity}</p>}
         <button
           type="button"
-          className="nv-btn nv-btn--neon bk-self-start"
+          className={`nv-btn ${hasCopy ? 'nv-btn--neon' : 'nv-btn--soft'} bk-self-start`}
+          disabled={!hasCopy}
+          aria-describedby={hasCopy ? undefined : 'bk-restore-needs-copy'}
           onClick={() => {
             setIsOpen(true);
           }}
         >
           Noter un essai
         </button>
-        <details className="nv-disclosure bk-how">
+        {hasCopy ? null : (
+          <p id="bk-restore-needs-copy" className="bk-meta">
+            Il faut d’abord une sauvegarde réussie à restaurer.
+          </p>
+        )}
+        {/* REG-23: open by itself while the test is not fresh, the steps are then the thing to read. */}
+        <details className="nv-disclosure bk-how" open={!status.data.restoreTestFresh}>
           <summary>
             <span className="nv-disclosure__title">Comment se joue un essai</span>
             <span className="nv-disclosure__sum">Sur ton PC, rien ne part</span>
           </summary>
           <ol className="nv-disclosure__body bk-steps">
-            <li>
-              Une session Remote Control le joue sur ton PC : tu approuves, tu ne tapes aucune commande.
-            </li>
+            <li>Une session Claude sur ton PC le joue : tu approuves, tu ne tapes aucune commande.</li>
             <li>
               Elle restaure la dernière sauvegarde dans une base jetable, sans les clés de l’application :
               rien ne peut joindre un fan ni un service.

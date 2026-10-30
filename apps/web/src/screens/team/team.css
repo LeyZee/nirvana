@@ -186,6 +186,11 @@
   font-weight: 600;
   color: var(--nv-ink-muted);
 }
+/* A link gone dead before it was opened: amber, a new one is to make (EQ-06). */
+.tm-invited--expired {
+  outline-color: color-mix(in srgb, var(--nv-warning) 70%, transparent);
+  color: var(--nv-warning);
+}
 .tm-none {
   margin: 0;
   padding: var(--nv-space-5) var(--nv-space-4);
@@ -422,6 +427,10 @@
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
 }
+.tm-figure__ahead {
+  color: var(--nv-ink);
+  font-weight: 600;
+}
 
 .tm-facts {
   margin: 0;
@@ -496,6 +505,20 @@
   margin: 0;
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
+}
+.tm-recap {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-fill-track);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+.tm-todo {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 2px;
 }
 .tm-self-start {
   align-self: flex-start;
@@ -843,4 +866,51 @@
   .tm-close:hover:not(:disabled) {
     transform: none;
   }
+}
+
+/* What could not be read: one amber line and « Réessayer », on Planning, Membres and Rapports alike (EQ-22). */
+.tm-unread {
+  align-self: start;
+  padding: var(--nv-space-4) var(--nv-space-5);
+}
+
+/* Where the member is and what hour it is there, under the name (EQ-08). */
+.tm-sheet__where {
+  margin: 0;
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+  color: var(--nv-ink-muted);
+}
+
+/* The owner's gestures on a member once added (EQ-10): one row under the head. */
+.tm-sheet__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nv-space-2);
+}
+.tm-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nv-space-2);
+}
+.tm-color {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-3);
+}
+.tm-color__well {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nv-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+.tm-sure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  font-weight: 600;
+  cursor: pointer;
 }

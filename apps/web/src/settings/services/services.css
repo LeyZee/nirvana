@@ -11,6 +11,12 @@
   flex-direction: column;
   gap: var(--nv-space-5);
 }
+/* The one line under the tab, in the style of every Réglages sub-page (tg-lede, bk-lede). */
+.sv-lede {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--nv-ink-muted);
+}
 .sv-muted {
   margin: 0;
   font-size: var(--nv-text-footnote);
@@ -55,35 +61,6 @@
   flex-direction: column;
   gap: 2px;
 }
-.sv-bar {
-  display: flex;
-  gap: 6px;
-}
-.sv-bar i {
-  flex: 1;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--nv-glass-fill-strong);
-  overflow: hidden;
-  position: relative;
-}
-.sv-bar i::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--nv-success);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--nv-dur-slow) var(--nv-ease-spring);
-}
-.sv-bar i[data-segment='on']::after {
-  transform: scaleX(1);
-}
-.sv-bar i[data-segment='bad']::after {
-  background: var(--nv-danger);
-  transform: scaleX(1);
-}
-
 /* State dots: calm is still, waiting breathes, an error pulses; colour changes fade in 300 ms. */
 .sv-dot {
   width: 12px;
@@ -155,6 +132,13 @@
   font-weight: 400;
   font-size: 12px;
   color: var(--nv-ink-faint);
+}
+/* Development only: says so quietly, never a sentence about the server. */
+.sv-dev {
+  align-self: center;
+  outline: 1px dashed var(--nv-ink-faint);
+  outline-offset: -1px;
+  color: var(--nv-ink-muted);
 }
 .sv-row__act {
   grid-row: 1 / 3;
@@ -252,7 +236,7 @@
 .sv-scrim {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 40;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -298,23 +282,6 @@
   margin: 2px 0 0;
   font-size: var(--nv-text-footnote);
   color: var(--nv-ink-muted);
-}
-.sv-close {
-  appearance: none;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  border: 0;
-  border-radius: var(--nv-radius-full);
-  background: transparent;
-  color: var(--nv-ink-muted);
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-}
-.sv-close:hover {
-  background: var(--nv-glass-fill);
-  color: var(--nv-ink);
 }
 .sv-steps {
   list-style: none;
@@ -684,4 +651,9 @@
 .sv-reauth {
   display: grid;
   gap: 8px;
+}
+.sv-reauth__label {
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+  color: var(--nv-ink);
 }
