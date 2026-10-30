@@ -187,7 +187,10 @@ export function phaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
   }
 }
 
-/** The one amount a period shows in the list: what is paid, or what is left to pay. */
+/**
+ * The one amount a period shows in the list: what is paid, or what is left to pay. Only a validation makes an amount
+ * owed: once one is, « reste à envoyer » is `validatedPayableMinor − paidMinor`, the figure Quinzaine shows (#295).
+ */
 export function periodAmount(summary: Omit<PayPeriodSummary, 'window'>): { minor: number; what: string } {
   if (summary.blocked !== null)
     return { minor: summary.payableMinor - summary.paidMinor, what: 'au dernier calcul, plus à jour' };
@@ -195,15 +198,14 @@ export function periodAmount(summary: Omit<PayPeriodSummary, 'window'>): { minor
     case 'running':
       return { minor: summary.payableMinor, what: 'à verser à ce jour' };
     case 'to_validate':
-      return {
-        minor: summary.payableMinor - summary.paidMinor,
-        what:
-          summary.statements.validated + summary.statements.paid === 0
-            ? 'à verser une fois validé'
-            : 'à verser, validation en cours',
-      };
+      return summary.statements.validated + summary.statements.paid === 0
+        ? { minor: summary.payableMinor, what: 'à verser une fois validé' }
+        : {
+            minor: summary.validatedPayableMinor - summary.paidMinor,
+            what: 'reste à envoyer, validation en cours',
+          };
     case 'to_pay':
-      return { minor: summary.payableMinor - summary.paidMinor, what: 'reste à envoyer' };
+      return { minor: summary.validatedPayableMinor - summary.paidMinor, what: 'reste à envoyer' };
     case 'paid':
       return { minor: summary.paidMinor, what: 'versé' };
   }
@@ -1188,8 +1190,10 @@ export function memberPeriodAmount(summary: Omit<PayPeriodSummary, 'window'>): {
     case 'running':
       return { minor: summary.payableMinor, what: 'à ce jour' };
     case 'to_validate':
-    case 'to_pay':
+      // Not validated yet: what the period would pay, as Quinzaine says it.
       return { minor: summary.payableMinor - summary.paidMinor, what: 'à toucher' };
+    case 'to_pay':
+      return { minor: summary.validatedPayableMinor - summary.paidMinor, what: 'à toucher' };
     case 'paid':
       return { minor: summary.paidMinor, what: 'touché' };
   }

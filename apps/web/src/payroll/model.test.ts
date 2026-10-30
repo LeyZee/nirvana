@@ -277,17 +277,23 @@ describe('a period in the list', () => {
     ]);
     const ended = summary({ statements: { draft: 4, validated: 0, paid: 0, carried: 1 } });
     expect(phaseChip(ended)).toEqual({ label: 'Finie : à valider', tone: 'wait' });
+    // Half validated: what is left to send counts the validated statements only, as Quinzaine does (#295).
     const closed = summary({
       closedAt: '2026-11-02T09:41:00.000Z',
       statements: { draft: 1, validated: 2, paid: 1, carried: 1 },
+      validatedPayableMinor: 25_000,
       paidMinor: 10_000,
     });
     expect([phaseChip(closed).label, periodAmount(closed)]).toEqual([
       'Close : à valider',
-      { minor: 20_000, what: 'à verser, validation en cours' },
+      { minor: 15_000, what: 'reste à envoyer, validation en cours' },
     ]);
     expect(periodAmount(ended).what).toBe('à verser une fois validé');
-    const toPay = summary({ statements: { draft: 0, validated: 2, paid: 1, carried: 0 }, paidMinor: 10_000 });
+    const toPay = summary({
+      statements: { draft: 0, validated: 2, paid: 1, carried: 0 },
+      validatedPayableMinor: 30_000,
+      paidMinor: 10_000,
+    });
     expect(periodAmount(toPay)).toEqual({ minor: 20_000, what: 'reste à envoyer' });
     const paid = summary({ statements: { draft: 0, validated: 1, paid: 3, carried: 1 }, paidMinor: 30_000 });
     expect([phaseChip(paid), periodAmount(paid)]).toEqual([
@@ -977,6 +983,12 @@ describe('Commissions, as the member reads them', () => {
     expect(
       memberPeriodAmount(summary({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })),
     ).toEqual({ minor: 2_125, what: 'touché' });
+    // Validated, not sent yet: what is owed (#295).
+    expect(
+      memberPeriodAmount(
+        summary({ statements: counts(0, 1, 0), payableMinor: 2_125, validatedPayableMinor: 2_125 }),
+      ),
+    ).toEqual({ minor: 2_125, what: 'à toucher' });
   });
 
   it('opens on the money on its way, then on the period under way, else on what the last one brought', () => {
