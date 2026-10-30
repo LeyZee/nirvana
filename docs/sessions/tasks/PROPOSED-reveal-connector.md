@@ -44,3 +44,5 @@ Un `RevealApiConnector` qui lit la boîte de réception, les conversations, les 
 Capture de session par l'extension et endpoint `/v1/connector/sessions` (fiche à part), poller et ingestion (P0-05, P0-06), moteur de vente, interface copilote, mise en production, tout appel au vrai Reveal (un test manuel en lecture seule se fait seulement à la demande de Charles).
 
 ## Notes de session
+
+- 2026-10-30 (fil Extension, accord du coordinateur) : route `/aide/reveal` (apps/web, propriétaire) réservée pour l'aide « Reconnecter Reveal ». Elle s'écrit dans la même PR que la capture de session (fiche à part), d'après `docs/runbooks/session-expired.md`, et le lead « Reveal est déconnecté » du Dashboard y mènera (DASH-18, recette design). Le runbook dit désormais la session du membre « bot », comme cette fiche.
