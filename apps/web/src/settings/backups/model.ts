@@ -41,13 +41,13 @@ function clockOf(iso: string, timeZone: string | undefined): string {
   );
 }
 
-/** « 4 min 12 s », « 52 s », « 1 h 05 min ». */
 /** « 20 octobre », « 1er novembre »: the day a restore test was made, in the reader's zone. */
 export const testedDay = (iso: string): string =>
   withFirstOfMonth(
     new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).formatToParts(new Date(iso)),
   );
 
+/** « 4 min 12 s », « 52 s », « 1 h 05 min ». */
 export function durationOf(seconds: number): string {
   if (seconds < 60) return `${String(seconds)}${NBSP}s`;
   const minutes = Math.floor(seconds / 60);

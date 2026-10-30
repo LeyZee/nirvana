@@ -9,4 +9,4 @@ Déjà faits, vérifiés : PAIE-16 (fondu et défilement jusqu'à l'onglet actif
 Décisions : Montréal et Genève n'ont pas de fuseau à elles, elles se lisent « Toronto (Montréal) » et « Zurich (Genève) » dans la liste, puis « Toronto » et « Zurich » partout, le nom du fuseau gardé ; un fuseau déjà posé hors de la liste reste proposé tel quel.
 Découvertes : aucune.
 Candidats à suppression : aucun.
-Vérifié : pnpm check ✓, tests web ✓ (« 1er » dans les deux formats, compteur neutre, ville et fuseau derrière, fuseau refusé).
+Vérifié : pnpm check ✓, tests web ✓ (« 1er » dans chaque format de date, un test par format, chiffre seul de la grille ; compteur neutre ; ville et fuseau derrière, un seul nom de ville ; fuseau refusé).
