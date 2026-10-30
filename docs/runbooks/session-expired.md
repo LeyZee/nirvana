@@ -2,7 +2,7 @@
 
 Symptômes : `platform_accounts.session_state = expired`, notification « Session Reveal expirée », le connecteur est arrêté (coupe-circuit).
 
-La capture de session par l'extension n'est pas encore codée (phase 2, fiche à part de `PROPOSED-reveal-connector.md`) : cette procédure est celle qu'elle mettra en place. L'aide côté interface, « Reconnecter Reveal », s'écrit avec elle sur la route réservée `/aide/reveal`.
+La capture de session dans l'extension (bouton Sync) n'est pas encore codée (phase 2, fiche à part de `PROPOSED-reveal-connector.md`) ; la route qui la reçoit, `POST /v1/connector/sessions`, existe déjà côté serveur (jeton d'appareil `x-extension-token`). Cette procédure est celle que le bouton mettra en place. L'aide côté interface, « Reconnecter Reveal », s'écrit avec elle sur la route réservée `/aide/reveal`.
 
 1. Ouvrir Reveal dans Chrome avec l'extension installée et se connecter avec le compte du **membre d'équipe « bot »** créé dans Reveal pour l'agent, jamais avec la session de Charles ni celle d'un chatteur (décision de Charles du 17/10, `PROPOSED-reveal-connector.md`) : les messages de l'agent partent sous ce membre.
 2. Popup de l'extension → **Sync**. L'extension envoie la session chiffrée à `/v1/connector/sessions` ; le dashboard affiche `valid` dans la minute.
