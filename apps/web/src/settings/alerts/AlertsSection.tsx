@@ -359,7 +359,7 @@ function AlertLine({
             <span id={`${switchId}-name`} className="al-line__name">
               {alert.name}
             </span>
-            {active && alert.pausesAgent ? <span className="nv-tag al-pause">Pause</span> : null}
+            {active && alert.pausesAgent ? <span className="nv-tag">Pause</span> : null}
           </span>
           <span className="al-line__meta">
             {creatorsLine(
