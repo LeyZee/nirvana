@@ -1085,8 +1085,15 @@ button.sc-duty__one:active {
 .sc-mine__shift:hover {
   background: var(--nv-plate-hover);
 }
-.sc-mine__shift[data-phase='past'] {
+/* A finished shift is quiet; its report, still to make or to read, keeps full ink (EQ-19). */
+.sc-mine__shift[data-phase='past'] > :not(.sc-mine__report) {
   opacity: 0.62;
+}
+.sc-mine__report {
+  justify-self: end;
+}
+.sc-mine__earlier .nv-disclosure__body {
+  padding-top: var(--nv-space-2);
 }
 .sc-mine__shift[data-phase='live'] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nv-success) 40%, transparent);

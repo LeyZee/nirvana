@@ -87,15 +87,33 @@ export function useReports(period: PayPeriod | null, enabled = true): UseQueryRe
   return useQuery({ ...listQuery(period), enabled, retry: 1, placeholderData: (before) => before });
 }
 
-/** The reports of some periods as one list, `null` until each is read: a planning week spans one or two. */
-export function useReportsOf(periods: readonly PayPeriod[]): ShiftReportList | null {
-  return useQueries({ queries: periods.map((period) => listQuery(period)), combine: listsAsOne });
+/** The reports of some periods as one read: a planning week spans one or two. */
+export interface ReportsOf {
+  /** Their lists as one, `null` until each is read. */
+  readonly list: ShiftReportList | null;
+  /** A period's read failed: the screen says so rather than show no report to make. */
+  readonly failed: boolean;
+  readonly retry: () => void;
+}
+
+export function useReportsOf(periods: readonly PayPeriod[]): ReportsOf {
+  // One retry, as `useReports`: a silent server is said in about a second (EQ-22).
+  return useQueries({
+    queries: periods.map((period) => ({ ...listQuery(period), retry: 1 })),
+    combine: listsAsOne,
+  });
 }
 
 /** The periods' lists as one once each is read. Out of the hook, so that TanStack keeps it while they do not change. */
-function listsAsOne(results: UseQueryResult<ShiftReportList>[]): ShiftReportList | null {
+function listsAsOne(results: UseQueryResult<ShiftReportList>[]): ReportsOf {
   const lists = results.flatMap((result) => (result.data === undefined ? [] : [result.data]));
-  return lists.length === 0 || lists.length < results.length ? null : mergeLists(lists);
+  return {
+    list: lists.length === 0 || lists.length < results.length ? null : mergeLists(lists),
+    failed: results.some((result) => result.isError),
+    retry: () => {
+      for (const result of results) if (result.isError) void result.refetch();
+    },
+  };
 }
 
 /** The owner's and the managers' read of the accounts' rules, with the period running now. */

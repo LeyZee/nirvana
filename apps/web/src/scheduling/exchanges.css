@@ -240,24 +240,12 @@
 .sc-away__when {
   color: var(--nv-ink-muted);
 }
-.sc-mine__shift[data-actions='true'] {
-  grid-template-columns: minmax(96px, auto) minmax(0, 1fr) auto auto;
-}
-/* The phase stays on the right edge of every row; « Échanger » comes just before it. */
-.sc-mine__shift[data-actions='true'] .sc-mine__swap {
-  grid-column: 3;
-  grid-row: 1;
-}
-.sc-mine__shift[data-actions='true'] .sc-phase {
-  grid-column: 4;
-  grid-row: 1;
-}
+/* A proposal waiting for its answer is a normal state, not a warning (EQ-20). */
 .sc-mine__offer {
   margin: 2px 0 0;
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
-  color: var(--nv-warning);
-  font-weight: 600;
+  color: var(--nv-ink-muted);
 }
 .sc-mine__swap {
   display: inline-flex;
@@ -429,12 +417,6 @@
   .sc-card__line {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-  }
-  .sc-mine__shift[data-actions='true'] {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .sc-mine__shift[data-actions='true'] .sc-phase {
-    grid-column: 2;
   }
   .sc-mine__shift[data-actions='true'] .sc-mine__swap {
     grid-column: 1 / -1;
