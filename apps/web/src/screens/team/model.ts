@@ -262,6 +262,11 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long
 export const longDay = (day: string): string =>
   withFirstOfMonth(LONG_DAY.formatToParts(new Date(`${day}T12:00:00`)));
 
+const NOTE_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+
+/** « 27 oct. », « 1er nov. »: the day an internal note was written, in the reader's zone. */
+export const noteDay = (iso: string): string => withFirstOfMonth(NOTE_DAY.formatToParts(new Date(iso)));
+
 /** The rate set to start after `day`, the nearest one: `member.commission` stays the one in force until then. */
 export const rateAhead = (rates: readonly CommissionRate[], day: string): CommissionRate | null =>
   rates

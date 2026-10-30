@@ -14,6 +14,7 @@ import {
   listMembers,
   longDay,
   matches,
+  noteDay,
   OTHER_COUNTRIES,
   parsePlanningSearch,
   parseRate,
@@ -132,6 +133,9 @@ describe('days', () => {
   it('says the first of the month « 1er »', () => {
     expect(longDay('2026-10-01')).toBe('1er octobre 2026');
     expect(longDay('2026-10-27')).toBe('27 octobre 2026');
+    // An internal note's day (PAIE-19), at noon so that every reader's zone keeps it.
+    expect(noteDay('2026-11-01T12:00:00Z')).toBe('1er nov.');
+    expect(noteDay('2026-10-27T12:00:00Z')).toBe('27 oct.');
     expect(longDay('2026-10-11')).toBe('11 octobre 2026');
   });
 });

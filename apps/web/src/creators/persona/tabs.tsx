@@ -11,8 +11,6 @@ import {
 import { Link } from '@tanstack/react-router';
 import { useId, useState, type JSX, type ReactNode } from 'react';
 
-import { zoneCity } from '../hours/model';
-
 import {
   Choice,
   CodeTag,
@@ -41,6 +39,8 @@ import {
   type BlockId,
   type FieldIssue,
 } from './model';
+
+import { cityOf } from '@/scheduling/time';
 
 /**
  * One component per tab, in OnlyChat's order. Each edits its own section of the draft; the numbers the policy
@@ -198,7 +198,7 @@ export function DetailsTab({
           path="details.timezone"
         >
           <p className="ps-static-line" title={zone}>
-            {zoneCity(zone)} · {localTime(zone)} chez elle
+            {cityOf(zone)} · {localTime(zone)} chez elle
           </p>
         </Field>
       </Block>

@@ -66,7 +66,14 @@ function since(iso: string, now: Date): string {
  */
 function today(iso: string, timeZone: string, viewerZone: string): string {
   const at = (zone: string): string =>
-    `${new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone })}, ${clockAt(iso, zone)}`;
+    `${withFirstOfMonth(
+      new Intl.DateTimeFormat('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        timeZone: zone,
+      }).formatToParts(new Date(iso)),
+    )}, ${clockAt(iso, zone)}`;
   const hers = at(timeZone);
   return hers === at(viewerZone) ? hers : `${hers}, heure de ${cityOf(timeZone)}`;
 }

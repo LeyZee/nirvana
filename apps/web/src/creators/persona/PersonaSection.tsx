@@ -60,6 +60,8 @@ import {
   NotificationsTab,
   StrategiesTab,
 } from './tabs';
+
+import { fullDay } from '@/scheduling/time';
 import './persona.css';
 
 /**
@@ -552,11 +554,7 @@ function Head({
             : notice !== null
               ? { dot: 'ok', text: notice }
               : null;
-  const created = new Date(`${draft.meta.created_at}T12:00:00Z`).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const created = fullDay(draft.meta.created_at);
 
   return (
     <div className="nv-plate ps-head" ref={headRef}>

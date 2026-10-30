@@ -9,7 +9,7 @@ import {
   type MinuteRange,
 } from '@nirvana/contracts';
 
-import { clockOf, MINUTES_PER_DAY } from '@/scheduling/time';
+import { cityOf, clockOf, MINUTES_PER_DAY } from '@/scheduling/time';
 
 /*
  * Créatrices › Heures (P3-14) in words and shapes: her slots on a week of her clock, the sentences the planning uses
@@ -45,16 +45,12 @@ export function slotNote(slot: Pick<AgentSlot, 'startMinute' | 'endMinute'>): st
   return slot.endMinute !== 0 && slot.endMinute < slot.startMinute ? 'jusqu’au lendemain' : null;
 }
 
-/** « Paris » from « Europe/Paris », « Sao Paulo » from « America/Sao_Paulo ». */
-export const zoneCity = (timeZone: string): string =>
-  (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
-
 /**
  * The header that says whose clock the page reads: the planning reads at the agency's hour, these hours at hers.
  * Her first name only, like the reader of Suivi.
  */
 export const clockHeader = (name: string, timeZone: string): string =>
-  `À l’heure de ${name.trim().split(/\s+/u)[0] ?? name} (${zoneCity(timeZone)})`;
+  `À l’heure de ${name.trim().split(/\s+/u)[0] ?? name} (${cityOf(timeZone)})`;
 
 /** A slot drawn on one day of the week: an overnight slot is two bars, the second one « continued » the next day. */
 export interface Bar {

@@ -6,6 +6,7 @@ import { UNKNOWN_ZONE, ZoneInput } from './ZoneInput';
 import { moveCreator, type MoveResult } from './api';
 import { Field } from './persona/fields';
 
+import { cityOf } from '@/scheduling/time';
 import { PasswordPrompt, SignInAgain } from '@/settings/services/PasswordPrompt';
 
 /** What each refusal of `PATCH /v1/creators/:creatorId` says; her zone is unchanged on every one. */
@@ -62,7 +63,9 @@ export function ZoneEditor({
     setBusy(false);
     if (result.kind === 'moved') {
       setOpen(false);
-      setNotice(`Fuseau changé : ${result.creator.timezone}. Ses heures suivent ce fuseau dès maintenant.`);
+      setNotice(
+        `Fuseau changé : ${cityOf(result.creator.timezone)}. Ses heures suivent ce fuseau dès maintenant.`,
+      );
       onMoved(result.creator);
       await client.invalidateQueries({ queryKey: ['creators'] });
     } else if (result.kind === 'reauth') {
@@ -76,9 +79,7 @@ export function ZoneEditor({
     return (
       <div className="ps-stack">
         <div className="ps-head__actions">
-          <p className="ps-muted">
-            Fuseau : <span className="nv-num">{timeZone}</span>
-          </p>
+          <p className="ps-muted">Fuseau : {cityOf(timeZone)}</p>
           <button
             ref={opener}
             type="button"

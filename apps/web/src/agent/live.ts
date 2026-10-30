@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { followedOf, useFollowedCreatorId } from './followed';
 
-import { fetchCreators } from '@/creators/api';
+import { creatorsQuery } from '@/creators/api';
 
 /** How often the Dashboard and the bar read the agent again, as Suivi does. */
 const REFRESH_MS = 30_000;
@@ -34,8 +34,7 @@ export type LiveDashboard =
  */
 export function useLiveDashboard(period: DashboardPeriod = 'day'): LiveDashboard {
   const creators = useQuery({
-    queryKey: ['creators'],
-    queryFn: fetchCreators,
+    ...creatorsQuery,
     // Read again while it fails, so the page comes back on its own once the server does.
     refetchInterval: (query) => (query.state.status === 'error' ? REFRESH_MS : false),
   });

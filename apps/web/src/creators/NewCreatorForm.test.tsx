@@ -55,7 +55,7 @@ describe('NewCreatorForm', () => {
     show(201, LEA);
     const zone = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Fuseau horaire' });
     expect(zone.selectedOptions[0]?.textContent).toBe('Paris');
-    const montreal = screen.getByRole<HTMLOptionElement>('option', { name: 'Montréal' });
+    const montreal = screen.getByRole<HTMLOptionElement>('option', { name: 'Toronto (Montréal)' });
     expect(montreal.value).toBe('America/Toronto');
     expect(screen.getByRole('option', { name: 'Tokyo · Asia' })).toBeDefined();
   });

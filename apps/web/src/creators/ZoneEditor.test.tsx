@@ -58,11 +58,12 @@ describe('ZoneEditor', () => {
 
   it('moves her to the zone typed and says so', async () => {
     const { sent, onMoved } = serve({ status: 200, body: { ...NORA, timezone: 'America/New_York' } });
-    expect(screen.getByText('Europe/Paris')).toBeDefined();
+    // Her zone reads by its city, as on every screen (CREA-27).
+    expect(screen.getByText('Fuseau : Paris')).toBeDefined();
     move('America/New_York');
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Fuseau changé : America/New_York. Ses heures suivent ce fuseau dès maintenant.',
+      'Fuseau changé : New York. Ses heures suivent ce fuseau dès maintenant.',
     );
     expect(sent).toEqual([{ timezone: 'America/New_York' }]);
     expect(onMoved).toHaveBeenCalledWith({ ...NORA, timezone: 'America/New_York' });

@@ -1,22 +1,27 @@
 import { type JSX } from 'react';
 
+import { cityOf } from '@/scheduling/time';
+
 /** Where a new creator lives unless the owner says otherwise. */
 export const DEFAULT_ZONE = 'Europe/Paris';
 
 /** What a zone the server does not know reads as, at her creation and when she moves. */
 export const UNKNOWN_ZONE = 'Ce fuseau n’existe pas. Choisis une ville dans la liste.';
 
-/** The cities the agency works with, first and in French; the zone behind each is what the server keeps. */
+/**
+ * The zones the agency works with, first. Each reads as `cityOf` names it everywhere else, a city of the same hour that
+ * has no zone of its own beside it: « Toronto (Montréal) », never « Montréal » then « Toronto » (CREA-27).
+ */
 const FIRST: readonly { readonly zone: string; readonly city: string }[] = [
-  { zone: 'Europe/Paris', city: 'Paris' },
-  { zone: 'Europe/Brussels', city: 'Bruxelles' },
-  { zone: 'Europe/Zurich', city: 'Genève' },
-  { zone: 'America/Toronto', city: 'Montréal' },
-  { zone: 'Africa/Porto-Novo', city: 'Porto-Novo' },
-  { zone: 'Africa/Abidjan', city: 'Abidjan' },
-  { zone: 'Africa/Dakar', city: 'Dakar' },
-  { zone: 'Africa/Lome', city: 'Lomé' },
-  { zone: 'Indian/Antananarivo', city: 'Antananarivo' },
+  { zone: 'Europe/Paris', city: cityOf('Europe/Paris') },
+  { zone: 'Europe/Brussels', city: cityOf('Europe/Brussels') },
+  { zone: 'Europe/Zurich', city: `${cityOf('Europe/Zurich')} (Genève)` },
+  { zone: 'America/Toronto', city: `${cityOf('America/Toronto')} (Montréal)` },
+  { zone: 'Africa/Porto-Novo', city: cityOf('Africa/Porto-Novo') },
+  { zone: 'Africa/Abidjan', city: cityOf('Africa/Abidjan') },
+  { zone: 'Africa/Dakar', city: cityOf('Africa/Dakar') },
+  { zone: 'Africa/Lome', city: cityOf('Africa/Lome') },
+  { zone: 'Indian/Antananarivo', city: cityOf('Indian/Antananarivo') },
 ];
 const FIRST_ZONES: ReadonlySet<string> = new Set(FIRST.map((one) => one.zone));
 
@@ -24,14 +29,13 @@ const FIRST_ZONES: ReadonlySet<string> = new Set(FIRST.map((one) => one.zone));
 const OTHERS: readonly { readonly zone: string; readonly city: string }[] = Intl.supportedValuesOf('timeZone')
   .filter((zone) => !FIRST_ZONES.has(zone))
   .map((zone) => {
-    const parts = zone.split('/');
-    const city = (parts.at(-1) ?? zone).replaceAll('_', ' ');
-    return { zone, city: parts.length > 1 ? `${city} · ${parts[0] ?? ''}` : city };
+    const region = zone.includes('/') ? zone.split('/')[0] : undefined;
+    return { zone, city: region === undefined ? cityOf(zone) : `${cityOf(zone)} · ${region}` };
   })
   .toSorted((a, b) => a.city.localeCompare(b.city, 'fr'));
 
 /**
- * A creator's zone, chosen by city (« Paris », « Montréal ») with the zone kept behind it (CREA-27): never an
+ * A creator's zone, chosen by city (« Paris », « Toronto (Montréal) ») with the zone kept behind it (CREA-27): never an
  * identifier to type. A zone she already has outside the list stays offered as it is. Used at creation and to move her.
  */
 export function ZoneInput({

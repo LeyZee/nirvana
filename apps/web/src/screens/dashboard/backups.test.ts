@@ -23,6 +23,15 @@ describe('the backup banner', () => {
     expect(backupBannerOf(status({}))).toBeNull();
   });
 
+  it('writes the first of a month « 1er » (PAIE-19)', () => {
+    expect(
+      backupBannerOf(
+        status({ state: 'overdue', lastSucceededAt: '2026-11-01T02:12:00.000Z' }),
+        'Europe/Paris',
+      )?.title,
+    ).toBe('Aucune sauvegarde réussie depuis le 1er novembre à 03:12');
+  });
+
   it('says since when no export succeeded, in the reader’s time', () => {
     expect(backupBannerOf(status({ state: 'overdue' }), 'Europe/Paris')).toEqual({
       title: 'Aucune sauvegarde réussie depuis le 26 octobre à 03:12',
