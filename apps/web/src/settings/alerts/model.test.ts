@@ -28,7 +28,6 @@ import {
   testHint,
   testCostLine,
   testVerdict,
-  watchLine,
 } from './model';
 
 /* Invented creators: no real person. */
@@ -91,9 +90,9 @@ describe('an alert of her own, before it is saved (P4-01)', () => {
     ).toEqual(['Vidéo', 'appel', 'Rendez-vous']);
   });
 
-  it('starts on the only creator, or on none when she has several', () => {
+  it('starts on every creator: an alert almost always watches them all (REG-18)', () => {
     expect(newDraft([NORA]).creatorIds).toEqual([NORA.id]);
-    expect(newDraft(ALL).creatorIds).toEqual([]);
+    expect(newDraft(ALL).creatorIds).toEqual(ALL.map((creator) => creator.id));
     expect(newDraft(ALL).notify).toBe(true);
     expect(newDraft(ALL).pausesAgent).toBe(false);
   });
@@ -156,14 +155,6 @@ describe('what goes to the server', () => {
 });
 
 describe('an alert on its line', () => {
-  it('says what it watches', () => {
-    expect(watchLine({ phrase: 'Le fan demande un appel', keywords: ['appel', 'cam', 'facetime'] })).toBe(
-      'Une phrase et 3 mots-clés',
-    );
-    expect(watchLine({ phrase: null, keywords: ['appel'] })).toBe('1 mot-clé');
-    expect(watchLine({ phrase: 'Le fan demande un appel', keywords: [] })).toBe('Une phrase');
-  });
-
   it('names its creators, or all of them', () => {
     expect(creatorsLine([NORA.id, LEA.id, IRIS.id, ZOE.id], ALL)).toBe('Toutes les créatrices');
     expect(creatorsLine([NORA.id], ALL)).toBe('Nora Vidal');

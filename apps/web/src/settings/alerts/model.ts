@@ -43,10 +43,10 @@ export const EMPTY_DRAFT: AlertDraft = {
   creatorIds: [],
 };
 
-/** A new alert watches every creator when there is only one; otherwise she picks. */
+/** A new alert watches every creator: it almost always does, and she unticks those it should not (REG-18). */
 export const newDraft = (creators: readonly { readonly id: CreatorId }[]): AlertDraft => ({
   ...EMPTY_DRAFT,
-  creatorIds: creators.length === 1 ? creators.map((creator) => creator.id) : [],
+  creatorIds: creators.map((creator) => creator.id),
 });
 
 export const draftOf = (alert: CustomAlertGroup): AlertDraft => ({
@@ -148,17 +148,6 @@ export function hasChanges(draft: AlertDraft, saved: CustomAlertGroup | null): b
   );
 }
 
-/** « Une phrase et 3 mots-clés », « 1 mot-clé », « Une phrase ». */
-export function watchLine(alert: {
-  readonly phrase: string | null;
-  readonly keywords: readonly string[];
-}): string {
-  const count = alert.keywords.length;
-  const words = count === 0 ? null : count === 1 ? '1 mot-clé' : `${String(count)} mots-clés`;
-  if ((alert.phrase ?? '').trim() === '') return words ?? 'Rien à surveiller';
-  return words === null ? 'Une phrase' : `Une phrase et ${words}`;
-}
-
 /** « Toutes les créatrices », « Nora », « Nora et Léa », « Nora, Léa et 2 autres ». */
 export function creatorsLine(
   creatorIds: readonly string[],
@@ -211,7 +200,7 @@ export const SYSTEM_ALERTS: Readonly<
     what: 'Un fan demande un contenu sur mesure, un appel, une cam ou un vocal : un humain est prévenu pour le vendre, sans pause.',
   },
   identity_doubt: {
-    title: 'Doute sur la personne',
+    title: 'Le fan demande si c’est un bot',
     what: 'Un fan demande s’il parle à un bot : la main passe à un humain s’il y en a un en poste.',
   },
 };

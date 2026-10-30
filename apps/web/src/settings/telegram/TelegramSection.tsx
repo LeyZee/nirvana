@@ -50,6 +50,8 @@ import {
 import type { TelegramTab } from './search';
 import './telegram.css';
 
+import { creatorsSearch } from '@/creators/search';
+
 /** The topics of the Alertes tab, her own alerts with them: what « Dernières alertes » lists. */
 const ALERT_TOPIC_SET: ReadonlySet<TelegramTopic> = new Set(ALERT_TOPICS);
 
@@ -640,7 +642,11 @@ function RoutingList({
                   <small>
                     Un mot de sa Persona arrête l’agent pour ce fan ; le groupe reçoit le mot trouvé et un
                     lien, jamais le message.{' '}
-                    <Link className="tg-route__link" to="/creatrices">
+                    <Link
+                      className="tg-route__link"
+                      to="/creatrices"
+                      search={creatorsSearch('persona', scope === 'all' ? null : scope)}
+                    >
                       Modifier les mots dans la Persona
                     </Link>
                   </small>

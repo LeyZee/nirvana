@@ -56,7 +56,6 @@ import {
   testCostLine,
   testHint,
   testVerdict,
-  watchLine,
   type AlertDraft,
   type TelegramLine,
   type TelegramRouting,
@@ -66,6 +65,7 @@ import './alerts.css';
 import { useCreators } from '@/creators/api';
 import { Entries, Field, FormContext, SwitchRow, TextArea, TextInput } from '@/creators/persona/fields';
 import '@/creators/persona/persona.css';
+import { creatorsSearch } from '@/creators/search';
 import { distinctNames } from '@/settings/names';
 import { fetchOverview, TelegramOff } from '@/settings/telegram/api';
 import { TOPICS } from '@/settings/telegram/model';
@@ -88,8 +88,13 @@ export function AlertsSection(): JSX.Element {
       return (
         <section className="ps-page al-page">
           <div className="nv-plate ps-head nv-enter">
-            <p className="ps-title">Les alertes ne se chargent pas</p>
-            <p className="ps-muted">{ALERTS_ERRORS[kind]}</p>
+            {/* One wording for a silent server across Réglages: what it is, then what could not be read (REG-21). */}
+            <p className="ps-title">
+              {kind === 'unavailable' ? 'Le serveur ne répond pas' : 'Les alertes ne se chargent pas'}
+            </p>
+            <p className="ps-muted">
+              {kind === 'unavailable' ? 'Les alertes n’ont pas pu être lues.' : ALERTS_ERRORS[kind]}
+            </p>
             {kind === 'unavailable' ? (
               <button
                 type="button"
@@ -222,7 +227,7 @@ export function AlertsSection(): JSX.Element {
           Alertes du système
         </h3>
         <p className="ps-muted al-group__lede">
-          Le code les lève lui-même, sans que tu les écrives. Chacune se coupe créatrice par créatrice.
+          Le code les lève lui-même. Sauf les mots-clés, chacune se coupe créatrice par créatrice.
         </p>
         <ul className="al-list">
           {SYSTEM_ALERT_CODES.map((code, index) => {
@@ -256,8 +261,9 @@ function useTelegramRouting(): { data: TelegramRouting | undefined } {
   });
 }
 
+/** Said only when something is off (no group, Telegram silent for it): an alert that goes where it should says nothing. */
 function TelegramNote({ line }: { line: TelegramLine | null }): JSX.Element | null {
-  if (line === null) return null;
+  if (line === null || line.kind === 'sent') return null;
   return (
     <p className="al-telegram" data-kind={line.kind}>
       <span className="al-telegram__dot" aria-hidden="true" />
@@ -302,6 +308,7 @@ function AlertLine({
 }): JSX.Element {
   const queryClient = useQueryClient();
   const switchId = useId();
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -337,19 +344,30 @@ function AlertLine({
       data-off={active ? undefined : 'true'}
       aria-labelledby={`${switchId}-name`}
     >
+      {/* One line by alert, the rest opened on a tap: twelve alerts no longer make a wall (REG-16). */}
       <div className="al-line__top">
-        <div className="al-line__text">
-          <p id={`${switchId}-name`} className="al-line__name">
-            {alert.name}
-          </p>
-          <p className="al-line__meta">
-            {watchLine(alert)} ·{' '}
+        <button
+          type="button"
+          className="al-line__open"
+          aria-expanded={open}
+          aria-controls={`${switchId}-more`}
+          onClick={() => {
+            setOpen((was) => !was);
+          }}
+        >
+          <span className="al-line__title">
+            <span id={`${switchId}-name`} className="al-line__name">
+              {alert.name}
+            </span>
+            {active && alert.pausesAgent ? <span className="nv-tag">Pause</span> : null}
+          </span>
+          <span className="al-line__meta">
             {creatorsLine(
               alert.creators.map((creator) => creator.creatorId),
               creators,
             )}
-          </p>
-        </div>
+          </span>
+        </button>
         <label className="al-line__switch" htmlFor={switchId}>
           <span className="ps-muted">{active ? 'Active' : 'Coupée'}</span>
           <input
@@ -367,72 +385,79 @@ function AlertLine({
           />
         </label>
       </div>
-      {alert.phrase === null ? null : <p className="al-line__phrase">« {alert.phrase} »</p>}
-      {alert.keywords.length === 0 ? null : (
-        <ul className="al-words" aria-label="Mots-clés">
-          {alert.keywords.map((word) => (
-            <li key={alertKeywordKey(word)} className="al-word">
-              {word}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="al-line__does" data-pauses={alert.pausesAgent ? 'true' : undefined}>
-        {active
-          ? pauseLine(alert.pausesAgent)
-          : 'Coupée : elle ne surveille rien tant que tu ne la rallumes pas'}
-      </p>
       <TelegramNote line={telegram} />
       {error === null ? null : (
         <p className="ps-error" role="alert">
           {error}
         </p>
       )}
-      {confirming ? (
-        <div className="nv-confirm al-confirm">
-          <p className="al-confirm__text">
-            Archiver « {alert.name} » ? Elle ne surveille plus rien ; ce qu’elle a déjà repéré reste dans
-            l’historique du Suivi.
-          </p>
-          <div className="nv-confirm__actions">
+      <div id={`${switchId}-more`} className="al-line__more" hidden={!open}>
+        {alert.phrase === null ? null : <p className="al-line__phrase">« {alert.phrase} »</p>}
+        {alert.keywords.length === 0 ? null : (
+          <ul className="al-words" aria-label="Mots-clés">
+            {alert.keywords.map((word) => (
+              <li key={alertKeywordKey(word)} className="al-word">
+                {word}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="al-line__does" data-pauses={alert.pausesAgent ? 'true' : undefined}>
+          {active
+            ? pauseLine(alert.pausesAgent)
+            : 'Coupée : elle ne surveille rien tant que tu ne la rallumes pas'}
+        </p>
+        {confirming ? (
+          <div className="nv-confirm al-confirm">
+            <p className="al-confirm__text">
+              Archiver « {alert.name} » ? Elle ne surveille plus rien ; ce qu’elle a déjà repéré reste dans
+              l’historique du Suivi.
+            </p>
+            <div className="nv-confirm__actions">
+              <button
+                type="button"
+                className="nv-btn nv-btn--plain nv-btn--sm"
+                onClick={() => {
+                  setConfirming(false);
+                }}
+              >
+                Garder
+              </button>
+              <button
+                type="button"
+                className="nv-btn nv-btn--destructive nv-btn--sm"
+                disabled={busy}
+                onClick={() => void run(() => archiveAlert(alert.groupId))}
+              >
+                Archiver
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="al-line__actions">
+            {onEdit === null ? null : (
+              <button
+                type="button"
+                className="nv-btn nv-btn--soft nv-btn--sm"
+                disabled={busy}
+                onClick={onEdit}
+              >
+                Modifier
+              </button>
+            )}
             <button
               type="button"
               className="nv-btn nv-btn--plain nv-btn--sm"
-              onClick={() => {
-                setConfirming(false);
-              }}
-            >
-              Garder
-            </button>
-            <button
-              type="button"
-              className="nv-btn nv-btn--destructive nv-btn--sm"
               disabled={busy}
-              onClick={() => void run(() => archiveAlert(alert.groupId))}
+              onClick={() => {
+                setConfirming(true);
+              }}
             >
               Archiver
             </button>
           </div>
-        </div>
-      ) : (
-        <div className="al-line__actions">
-          {onEdit === null ? null : (
-            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" disabled={busy} onClick={onEdit}>
-              Modifier
-            </button>
-          )}
-          <button
-            type="button"
-            className="nv-btn nv-btn--plain nv-btn--sm"
-            disabled={busy}
-            onClick={() => {
-              setConfirming(true);
-            }}
-          >
-            Archiver
-          </button>
-        </div>
-      )}
+        )}
+      </div>
     </li>
   );
 }
@@ -547,7 +572,7 @@ function AlertEditor({
             id={`${id}-name`}
             value={draft.name}
             maxLength={CUSTOM_ALERT_NAME_MAX}
-            placeholder="Vidéo perso"
+            example="Vidéo perso"
             invalid={formState.issues.some((issue) => issue.field === 'name')}
             onChange={(name) => {
               edit({ name });
@@ -565,7 +590,9 @@ function AlertEditor({
             value={draft.phrase}
             maxLength={CUSTOM_ALERT_PHRASE_MAX}
             rows={2}
-            placeholder="Le fan demande une vidéo faite pour lui"
+            example="Le fan demande une vidéo faite pour lui"
+            // « Une phrase, des mots-clés, ou les deux » is said under the words, and marks both fields (REG-18).
+            invalid={formState.issues.some((issue) => issue.field === 'watch')}
             onChange={(phrase) => {
               edit({ phrase });
             }}
@@ -730,7 +757,7 @@ function AlertTry({
           value={message}
           maxLength={ALERT_TEST_MESSAGE_MAX}
           rows={2}
-          placeholder="Tu me ferais une vidéo rien que pour moi ?"
+          example="Tu me ferais une vidéo rien que pour moi ?"
           onChange={(next) => {
             setMessage(next);
             setError(null);
@@ -833,6 +860,21 @@ function SystemLine({
         )}
       </div>
       <p className="al-line__does">{meta.what}</p>
+      {/* The words are taken out in the creator's persona: one link each, to the right one (REG-13). */}
+      {setting.code === 'keyword' ? (
+        <p className="al-line__links">
+          {creators.map((creator, at) => (
+            <span key={creator.id}>
+              {at === 0 ? null : ' · '}
+              <Link to="/creatrices" search={creatorsSearch('persona', creator.id)} className="al-link">
+                {creators.length === 1
+                  ? 'Modifier les mots dans sa persona'
+                  : `Persona de ${creator.displayName}`}
+              </Link>
+            </span>
+          ))}
+        </p>
+      ) : null}
       <TelegramNote
         line={
           on.length === 0
