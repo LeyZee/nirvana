@@ -124,7 +124,7 @@ describe('after the connection', () => {
   });
 });
 
-describe('keys kept in memory (development without CREDENTIALS_ENCRYPTION_KEYS)', () => {
+describe('the line of a saved key (REG-08)', () => {
   it('shows the line of a working key as it is, never a sentence about the server (REG-08)', async () => {
     const { deps } = setup({ current: works });
     const result = await connectProvider(deps, 'xai', OLD_KEY);
