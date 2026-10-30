@@ -289,6 +289,14 @@ describe('a period in the list', () => {
       { minor: 15_000, what: 'reste à envoyer, validation en cours' },
     ]);
     expect(periodAmount(ended).what).toBe('à verser une fois validé');
+    // Everything validated is paid, one statement still waits: what it would pay, never « 0,00 € reste à envoyer ».
+    const waiting = summary({
+      statements: { draft: 1, validated: 0, paid: 2, carried: 0 },
+      payableMinor: 30_000,
+      validatedPayableMinor: 20_000,
+      paidMinor: 20_000,
+    });
+    expect(periodAmount(waiting)).toEqual({ minor: 10_000, what: 'à verser une fois validé' });
     const toPay = summary({
       statements: { draft: 0, validated: 2, paid: 1, carried: 0 },
       validatedPayableMinor: 30_000,
@@ -976,9 +984,10 @@ describe('Commissions, as the member reads them', () => {
       minor: 2_125,
       what: 'à ce jour',
     });
+    // Not validated, so not owed yet (#295).
     expect(memberPeriodAmount(summary({ statements: counts(1, 0, 0), payableMinor: 2_125 }))).toEqual({
       minor: 2_125,
-      what: 'à toucher',
+      what: 'à toucher une fois validé',
     });
     expect(
       memberPeriodAmount(summary({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })),

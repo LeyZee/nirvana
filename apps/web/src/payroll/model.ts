@@ -197,13 +197,14 @@ export function periodAmount(summary: Omit<PayPeriodSummary, 'window'>): { minor
   switch (phaseOf(summary)) {
     case 'running':
       return { minor: summary.payableMinor, what: 'à verser à ce jour' };
-    case 'to_validate':
-      return summary.statements.validated + summary.statements.paid === 0
-        ? { minor: summary.payableMinor, what: 'à verser une fois validé' }
-        : {
-            minor: summary.validatedPayableMinor - summary.paidMinor,
-            what: 'reste à envoyer, validation en cours',
-          };
+    case 'to_validate': {
+      // What is owed and what waits for a validation stay apart, never added: when nothing owed is left to send, the
+      // row says what the statements still to validate would pay rather than « 0,00 € ».
+      const owed = summary.validatedPayableMinor - summary.paidMinor;
+      return summary.statements.validated + summary.statements.paid === 0 || owed === 0
+        ? { minor: summary.payableMinor - summary.validatedPayableMinor, what: 'à verser une fois validé' }
+        : { minor: owed, what: 'reste à envoyer, validation en cours' };
+    }
     case 'to_pay':
       return { minor: summary.validatedPayableMinor - summary.paidMinor, what: 'reste à envoyer' };
     case 'paid':
@@ -1190,8 +1191,11 @@ export function memberPeriodAmount(summary: Omit<PayPeriodSummary, 'window'>): {
     case 'running':
       return { minor: summary.payableMinor, what: 'à ce jour' };
     case 'to_validate':
-      // Not validated yet: what the period would pay, as Quinzaine says it.
-      return { minor: summary.payableMinor - summary.paidMinor, what: 'à toucher' };
+      // Not validated yet, so not owed: what the period would pay, as Quinzaine says it (« à verser une fois validé »).
+      return {
+        minor: summary.payableMinor - summary.validatedPayableMinor,
+        what: 'à toucher une fois validé',
+      };
     case 'to_pay':
       return { minor: summary.validatedPayableMinor - summary.paidMinor, what: 'à toucher' };
     case 'paid':
