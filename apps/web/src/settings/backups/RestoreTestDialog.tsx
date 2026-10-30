@@ -12,6 +12,7 @@ import {
   problemsOf,
   readReport,
   REFUSALS,
+  testedDay,
   withReport,
   type DraftField,
   type RestoreDraft,
@@ -478,9 +479,7 @@ function CheckFields({
 }
 
 function Done({ test, onClose }: { test: RestoreTest; onClose: () => void }): JSX.Element {
-  const day = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(
-    new Date(test.testedAt),
-  );
+  const day = testedDay(test.testedAt);
   return (
     <div className="bk-dialog__body nv-swap" key="done">
       <p className="bk-done">

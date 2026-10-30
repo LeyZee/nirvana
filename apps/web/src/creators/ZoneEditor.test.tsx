@@ -42,7 +42,7 @@ function serve(...replies: { status: number; body?: unknown }[]) {
   return { sent, onMoved };
 }
 
-/** Opens the field, types `zone` and saves. */
+/** Opens the field, picks `zone` (a city, its zone behind it) and saves. */
 function move(zone: string): void {
   fireEvent.click(screen.getByRole('button', { name: 'Changer de fuseau' }));
   fireEvent.change(screen.getByLabelText('Fuseau'), { target: { value: zone } });
@@ -58,11 +58,12 @@ describe('ZoneEditor', () => {
 
   it('moves her to the zone typed and says so', async () => {
     const { sent, onMoved } = serve({ status: 200, body: { ...NORA, timezone: 'America/New_York' } });
-    expect(screen.getByText('Europe/Paris')).toBeDefined();
-    move(' America/New_York ');
+    // Her zone reads by its city, as on every screen (CREA-27).
+    expect(screen.getByText('Fuseau : Paris')).toBeDefined();
+    move('America/New_York');
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Fuseau changé : America/New_York. Ses heures suivent ce fuseau dès maintenant.',
+      'Fuseau changé : New York. Ses heures suivent ce fuseau dès maintenant.',
     );
     expect(sent).toEqual([{ timezone: 'America/New_York' }]);
     expect(onMoved).toHaveBeenCalledWith({ ...NORA, timezone: 'America/New_York' });
@@ -119,10 +120,11 @@ describe('ZoneEditor', () => {
       { status: 400, body: apiError('request_invalid') },
       { status: 403, body: apiError('role_forbidden') },
     );
-    move('Europe/Atlantis');
+    // A city of the list the server does not know (an older zone base): said, and her zone kept.
+    move('Asia/Tokyo');
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
+      'Ce fuseau n’existe pas. Choisis une ville dans la liste.',
     );
     expect(screen.getByLabelText('Fuseau').getAttribute('aria-invalid')).toBe('true');
     fireEvent.change(screen.getByLabelText('Fuseau'), { target: { value: 'Europe/Rome' } });

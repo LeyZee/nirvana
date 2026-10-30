@@ -7,7 +7,7 @@ import {
   type CreatorId,
   type CreatorSummary,
 } from '@nirvana/contracts';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { z } from 'zod';
 
 /** `GET /v1/creators`: the creators the signed-in user may open, parsed with the contract. */
@@ -17,9 +17,21 @@ export async function fetchCreators(): Promise<CreatorSummary[]> {
   return CreatorListSchema.parse(await response.json()).creators;
 }
 
+/**
+ * How the creators are read, by every reader of `['creators']` (the screens and the bar's pill): one retry, not
+ * three, so that « Le serveur ne répond pas » comes in under two seconds instead of a long skeleton (CREA-30). A
+ * reader with other options would set them for all, the first one rendered winning.
+ */
+export const creatorsQuery = queryOptions({
+  queryKey: ['creators'],
+  queryFn: fetchCreators,
+  retry: 1,
+  retryDelay: 400,
+});
+
 /** The creators, read once and shared by every screen that lists them (Créatrices, Suivi). */
 export function useCreators(): UseQueryResult<CreatorSummary[]> {
-  return useQuery({ queryKey: ['creators'], queryFn: fetchCreators });
+  return useQuery(creatorsQuery);
 }
 
 export type CreateResult =

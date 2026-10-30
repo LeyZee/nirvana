@@ -11,6 +11,7 @@ import {
   restoreViewOf,
   runErrorOf,
   runNowOf,
+  testedDay,
   watchIntervalOf,
   withReport,
   type RestoreDraft,
@@ -102,6 +103,16 @@ describe('exportViewOf', () => {
     expect(
       exportViewOf(status({ state: 'never', lastSucceededAt: null, lastRun: null }), NOW, PARIS).lastRun,
     ).toBe(null);
+  });
+});
+
+describe('the first of a month (PAIE-19)', () => {
+  it('writes it « 1er » in the export and on a restore test', () => {
+    expect(exportViewOf(status({ lastSucceededAt: '2026-11-01T02:12:00Z' }), NOW, PARIS).title).toBe(
+      'Sauvegardée le 1er novembre à 03:12',
+    );
+    expect(testedDay('2026-11-01T12:00:00Z')).toBe('1er novembre');
+    expect(testedDay('2026-10-20T12:00:00Z')).toBe('20 octobre');
   });
 });
 

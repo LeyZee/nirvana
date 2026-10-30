@@ -113,6 +113,17 @@ describe('fromApi', () => {
     expect(at('America/New_York', 'Europe/Paris')).toBe('mercredi 28 octobre, 16 h, heure de New York');
   });
 
+  it('writes the first of a month « 1er » (PAIE-19)', () => {
+    const now = fromApi(
+      apiDashboard({
+        creator: { ...apiDashboard().creator, now: '2026-11-01T13:00:00Z', timezone: 'Europe/Paris' },
+      }),
+      'owner',
+      'Europe/Paris',
+    ).creator.now.replace(/\s/gu, ' ');
+    expect(now).toBe('dimanche 1er novembre, 14 h');
+  });
+
   it('hands Telegram’s night coverage to the banner, off included', () => {
     expect(fromApi(apiDashboard()).telegram).toEqual({ coverage: null });
     const uncovered = apiDashboard({ telegramCoverage: { urgentReachable: false } });

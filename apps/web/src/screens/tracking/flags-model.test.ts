@@ -43,6 +43,9 @@ describe('the fan’s limits', () => {
     const flags = { salesFrozen: { reason: 'money_trouble' as const, since: '2026-10-23T10:00:00.000Z' } };
     expect(switchDetail(flags, 'salesFrozen')).toBe('Depuis le 23 octobre : il a dit manquer d’argent.');
     expect(switchDetail(flags, 'fragile')).toBeNull();
+    // PAIE-19: the first of a month is « 1er ».
+    const first = { salesFrozen: { reason: 'money_trouble' as const, since: '2026-11-01T10:00:00.000Z' } };
+    expect(switchDetail(first, 'salesFrozen')).toBe('Depuis le 1er novembre : il a dit manquer d’argent.');
   });
 
   it('says whether his age is confirmed', () => {

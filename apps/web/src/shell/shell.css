@@ -896,17 +896,12 @@
   padding: 0 5px;
   box-sizing: border-box;
   border-radius: 99px;
-  background: var(--nv-neon-solid);
-  color: var(--nv-on-neon);
+  background: color-mix(in srgb, var(--nv-ink) 16%, transparent);
+  color: var(--nv-ink);
   font-size: 10px;
   line-height: 18px;
   font-weight: 700;
   text-align: center;
-}
-
-.nv-subnav__count[data-tone='quiet'] {
-  background: color-mix(in srgb, var(--nv-ink) 16%, transparent);
-  color: var(--nv-ink);
 }
 
 /* ── A screen not built yet ── */

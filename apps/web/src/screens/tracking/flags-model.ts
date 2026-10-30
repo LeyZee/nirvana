@@ -7,6 +7,8 @@ import {
   type SalesFreezeReason,
 } from '@nirvana/contracts';
 
+import { withFirstOfMonth } from '@/scheduling/time';
+
 /** The switches of the fan's limits: on or off, nothing else to say when setting them. */
 export type SwitchFlag = 'doNotContact' | 'salesFrozen' | 'noExplicit' | 'fragile';
 
@@ -37,7 +39,9 @@ export const isBlocking = (flags: FanFlags): boolean =>
   flags.doNotContact !== undefined || flags.salesFrozen !== undefined;
 
 const dayOf = (iso: string): string =>
-  new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(iso));
+  withFirstOfMonth(
+    new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).formatToParts(new Date(iso)),
+  );
 
 /** « 50 € » for a round amount, « 49,90 € » otherwise: never « 49,9 € » (ADR 0011). */
 export const euros = (minor: number): string =>

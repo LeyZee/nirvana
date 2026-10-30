@@ -6,6 +6,7 @@ import {
   type RecordRestoreTestBody,
 } from '@nirvana/contracts';
 
+import { withFirstOfMonth } from '@/scheduling/time';
 import { backupBannerOf } from '@/screens/dashboard/backups';
 
 /**
@@ -19,16 +20,18 @@ const DAY_MS = 86_400_000;
 /** No-break space between a number and its unit: « 4 min 12 s » never splits across two lines. */
 const NBSP = '\u00a0';
 
-/** « 12 juillet », with the year when it is not this one. */
+/** « 12 juillet », « 1er août », with the year when it is not this one. */
 function dayOf(iso: string, now: Date, timeZone: string | undefined): string {
   const at = new Date(iso);
   const year = (date: Date) => new Intl.DateTimeFormat('fr-FR', { year: 'numeric', timeZone }).format(date);
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    ...(year(at) !== year(now) && { year: 'numeric' }),
-    timeZone,
-  }).format(at);
+  return withFirstOfMonth(
+    new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      ...(year(at) !== year(now) && { year: 'numeric' }),
+      timeZone,
+    }).formatToParts(at),
+  );
 }
 
 /** « 03:12 ». */
@@ -37,6 +40,12 @@ function clockOf(iso: string, timeZone: string | undefined): string {
     new Date(iso),
   );
 }
+
+/** « 20 octobre », « 1er novembre »: the day a restore test was made, in the reader's zone. */
+export const testedDay = (iso: string): string =>
+  withFirstOfMonth(
+    new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).formatToParts(new Date(iso)),
+  );
 
 /** « 4 min 12 s », « 52 s », « 1 h 05 min ». */
 export function durationOf(seconds: number): string {

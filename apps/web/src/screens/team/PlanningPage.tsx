@@ -39,6 +39,7 @@ import {
   rangeAt,
   readerZone,
   shortDay,
+  dayNumber,
   weekOf,
   zonedInstant,
 } from '@/scheduling/time';
@@ -716,7 +717,7 @@ function Grid({
             }}
           >
             <span className="sc-days__name">{shortDay(day).split(' ')[0]}</span>
-            <span className="sc-days__num nv-num">{shortDay(day).split(' ')[1]}</span>
+            <span className="sc-days__num nv-num">{dayNumber(day)}</span>
           </button>
         ))}
       </div>
@@ -750,7 +751,7 @@ function Grid({
               data-past={day < today ? 'true' : undefined}
             >
               <span className="sc-grid__dayname">{shortDay(day).split(' ')[0]}</span>
-              <span className="sc-grid__daynum nv-num">{shortDay(day).split(' ')[1]}</span>
+              <span className="sc-grid__daynum nv-num">{dayNumber(day)}</span>
             </span>
           ))}
         </div>

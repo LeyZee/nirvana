@@ -165,6 +165,12 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', {
   timeZone: 'UTC',
 });
 const MONTH_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const FULL_DAY = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'short',
@@ -173,15 +179,18 @@ const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
   timeZone: 'UTC',
 });
 
-/** « mar. 28 oct. »: a day further than this week. */
-export const dayMonth = (day: string): string => DAY_MONTH.format(utcMidnight(day));
+/** « mar. 28 oct. », « dim. 1er nov. »: a day further than this week. */
+export const dayMonth = (day: string): string => withFirstOfMonth(DAY_MONTH.formatToParts(utcMidnight(day)));
 
 /** Calendar days from `from` to `to`, `to` excluded. */
 export const daysFrom = (from: string, to: string): number =>
   Math.round((utcMidnight(to) - utcMidnight(from)) / DAY_MS);
 
-/** « mar. 28 ». */
-export const shortDay = (day: string): string => SHORT_DAY.format(utcMidnight(day));
+/** « mar. 28 », « dim. 1er ». */
+export const shortDay = (day: string): string => withFirstOfMonth(SHORT_DAY.formatToParts(utcMidnight(day)));
+
+/** « 28 », « 1 »: the day's number alone, as a calendar's column heads it. */
+export const dayNumber = (day: string): string => String(Number(day.slice(8)));
 
 /** A formatted date as French writes it: the first of a month is « 1er ». */
 export const withFirstOfMonth = (parts: readonly Intl.DateTimeFormatPart[]): string =>
@@ -190,16 +199,41 @@ export const withFirstOfMonth = (parts: readonly Intl.DateTimeFormatPart[]): str
 /** « mardi 28 octobre », « dimanche 1er novembre ». */
 export const longDay = (day: string): string => withFirstOfMonth(LONG_DAY.formatToParts(utcMidnight(day)));
 
-/** « 26 oct. – 1 nov. », the week that starts on `monday`. */
+/** « 17 octobre 2026 », « 1er novembre 2026 ». */
+export const fullDay = (day: string): string => withFirstOfMonth(FULL_DAY.formatToParts(utcMidnight(day)));
+
+/** « 26 oct. – 1er nov. », the week that starts on `monday` (PAIE-19: the first of a month is « 1er » everywhere). */
 export const weekLabel = (monday: string): string =>
-  `${MONTH_DAY.format(utcMidnight(monday))} – ${MONTH_DAY.format(utcMidnight(addDays(monday, 6)))}`;
+  `${withFirstOfMonth(MONTH_DAY.formatToParts(utcMidnight(monday)))} – ${withFirstOfMonth(
+    MONTH_DAY.formatToParts(utcMidnight(addDays(monday, 6))),
+  )}`;
 
 /** The zone the browser reads in: the reader's own time. */
 export const readerZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-/** « Paris », « Porto-Novo »: a zone named by its city. */
-export const cityOf = (timeZone: string): string =>
-  (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
+/** The cities French names otherwise than their zone does. */
+const FRENCH_CITIES: ReadonlyMap<string, string> = new Map([
+  ['Brussels', 'Bruxelles'],
+  ['Lome', 'Lomé'],
+  ['London', 'Londres'],
+  ['Lisbon', 'Lisbonne'],
+  ['Vienna', 'Vienne'],
+  ['Warsaw', 'Varsovie'],
+  ['Copenhagen', 'Copenhague'],
+  ['Athens', 'Athènes'],
+  ['Moscow', 'Moscou'],
+  ['Mexico City', 'Mexico'],
+  ['Sao Paulo', 'São Paulo'],
+]);
+
+/**
+ * « Paris », « Porto-Novo », « Bruxelles »: a zone named by its city, in French. The one name every screen gives a
+ * zone, the list that chooses it included (CREA-27).
+ */
+export const cityOf = (timeZone: string): string => {
+  const city = (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
+  return FRENCH_CITIES.get(city) ?? city;
+};
 
 /**
  * The minute of the day a time field holds, on 24 hours: « 23:30 », « 9:00 », « 21h30 », « 21 h », « 22 »,

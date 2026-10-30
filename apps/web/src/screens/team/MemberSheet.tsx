@@ -13,6 +13,7 @@ import {
   formatRate,
   invitationState,
   longDay,
+  noteDay,
   rateAhead,
   ROLE_LABELS,
 } from './model';
@@ -250,8 +251,6 @@ export function MemberSheet({
   );
 }
 
-const NOTE_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
-
 /** The internal notes: newest first, written by the owner and the active managers, never shown to the member. */
 function Notes({ memberId, name }: { memberId: string; name: string }): JSX.Element {
   const client = useQueryClient();
@@ -292,7 +291,7 @@ function Notes({ memberId, name }: { memberId: string; name: string }): JSX.Elem
             <li key={note.id} className="nv-enter" style={{ '--nv-i': i + 1 }}>
               <p>{note.body}</p>
               <span className="tm-note__by">
-                {note.authorName} · {NOTE_DAY.format(new Date(note.createdAt))}
+                {note.authorName} · {noteDay(note.createdAt)}
               </span>
             </li>
           ))}
