@@ -141,7 +141,7 @@ export function PlanningPage({
           ].toSorted(),
     [data],
   );
-  const reports = useReportsOf(periods);
+  const reports = useReportsOf(periods).list;
   const incidents = useMemo(
     () => (reports === null ? NO_INCIDENTS : incidentsOf(reports.reports)),
     [reports],

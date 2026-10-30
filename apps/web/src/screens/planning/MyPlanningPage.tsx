@@ -137,6 +137,14 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
             </button>
           </div>
         ) : null}
+        {reports.failed ? (
+          <div className="sc-inline-warn sc-unread nv-swap" role="alert">
+            <p className="tm-warn">Tes rapports n’ont pas pu être lus.</p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={reports.retry}>
+              Réessayer
+            </button>
+          </div>
+        ) : null}
         {me === null || swaps.data === undefined ? null : (
           <Answers
             swaps={swaps.data.swapRequests.filter(
@@ -184,7 +192,7 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
                 leave.lastDay >= monday,
             )}
             offers={offersOf(swaps.data, me)}
-            reports={reports}
+            reports={reports.list}
             onSwap={(shiftId) => {
               setOpen({ kind: 'swap', shiftId });
             }}
@@ -268,7 +276,7 @@ function Week({
   /** The reader's leaves that touch this week, approved or waiting. */
   away: readonly LeaveRequest[];
   offers: ReadonlyMap<string, readonly string[]>;
-  /** The reports of the week's periods, `null` until read (or when they cannot be: the rows then say nothing). */
+  /** The reports of the week's periods, `null` until read (when they cannot be, the page says so above the week). */
   reports: ShiftReportList | null;
   onSwap: (shiftId: string) => void;
   onReport: (shiftId: string) => void;
@@ -311,8 +319,13 @@ function Week({
     );
 
   // The week under way opens on today: the days gone by fold above it, their reports to make said on the fold (EQ-17).
-  const earlier = byDay.filter(({ day }) => day < today);
-  const ahead = byDay.filter(({ day }) => day >= today);
+  // Another week keeps its order. A day stays out of the fold while one of its shifts is not over: a night shift begun
+  // yesterday is still under way.
+  const thisWeek = days.includes(today);
+  const isGone = ({ day, shifts }: { day: string; shifts: Shift[] }): boolean =>
+    thisWeek && day < today && shifts.every((shift) => phaseOf(shift, now) === 'past');
+  const earlier = byDay.filter(isGone);
+  const ahead = byDay.filter((one) => !isGone(one));
   const earlierCount = earlier.reduce((sum, { shifts }) => sum + shifts.length, 0);
   const toDo = earlier
     .flatMap(({ shifts }) => shifts)

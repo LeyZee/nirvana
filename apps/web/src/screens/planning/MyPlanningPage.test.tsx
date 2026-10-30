@@ -129,6 +129,12 @@ interface Data {
   membersDown: number;
   /** Two shifts done earlier this week, Monday's without its report, Tuesday's validated. */
   earlier: boolean;
+  /** A night shift from 22 h on Wednesday to 4 h on Thursday, at the reader's hour. */
+  night: boolean;
+  /** Two shifts the week before, on Tuesday 20 and Wednesday 21. */
+  lastWeek: boolean;
+  /** The report reads that fail before one answers. */
+  reportsDown: number;
 }
 
 const TUESDAY = id(104);
@@ -170,6 +176,9 @@ function serve(
     candidates: data.candidates ?? { candidates: [], accounts: [] },
     membersDown: data.membersDown ?? 0,
     earlier: data.earlier ?? false,
+    night: data.night ?? false,
+    lastWeek: data.lastWeek ?? false,
+    reportsDown: data.reportsDown ?? 0,
   };
   const written: Written[] = [];
   vi.stubGlobal(
@@ -185,6 +194,7 @@ function serve(
       } else if (url.pathname === '/v1/scheduling/planning') {
         weeks.push(url.searchParams.get('from') ?? '');
         const thisWeek = url.searchParams.get('from') === '2026-10-25T21:00:00.000Z';
+        const lastWeek = state.lastWeek && url.searchParams.get('from') === '2026-10-18T21:00:00.000Z';
         reply = {
           status: 200,
           body: {
@@ -201,21 +211,31 @@ function serve(
                   ...(state.earlier ? EARLIER : []),
                   shift(101, '2026-10-27T22:00:00Z', '2026-10-28T04:00:00Z'),
                   shift(102, '2026-10-29T16:00:00Z', '2026-10-29T22:00:00Z'),
+                  ...(state.night ? [shift(105, '2026-10-28T19:00:00Z', '2026-10-29T01:00:00Z')] : []),
                 ]
-              : [],
+              : lastWeek
+                ? [
+                    shift(106, '2026-10-20T06:00:00Z', '2026-10-20T12:00:00Z'),
+                    shift(107, '2026-10-21T06:00:00Z', '2026-10-21T12:00:00Z'),
+                  ]
+                : [],
             conflicts: [],
           },
         };
       } else if (url.pathname === '/v1/scheduling/shift-reports') {
-        reply = {
-          status: 200,
-          body: {
-            reports: state.earlier ? [VALIDATED] : [],
-            shifts: state.earlier ? EARLIER : [],
-            accounts: [account],
-            members: [people[0]],
-          },
-        };
+        state.reportsDown -= 1;
+        reply =
+          state.reportsDown >= 0
+            ? { status: 500 }
+            : {
+                status: 200,
+                body: {
+                  reports: state.earlier ? [VALIDATED] : [],
+                  shifts: state.earlier ? EARLIER : [],
+                  accounts: [account],
+                  members: [people[0]],
+                },
+              };
       } else if (url.pathname === '/v1/team/members') {
         reply = state.membersDown > 0 ? { status: 503 } : { status: 200, body: { members: [me] } };
         state.membersDown -= 1;
@@ -322,6 +342,44 @@ describe('the chatter’s Planning', () => {
     );
     fireEvent.click(within(monday).getByRole('button', { name: /^Faire mon rapport du lundi 26 octobre/u }));
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  it('keeps a night shift begun yesterday out of the fold while it is under way', async () => {
+    // 23:00Z is 2 h on Thursday 29 in Antananarivo: Wednesday's night shift, begun at 22 h, runs until 4 h.
+    vi.setSystemTime(new Date('2026-10-28T23:00:00Z'));
+    serve({ earlier: true, night: true });
+    renderPage();
+    await screen.findByRole('region', { name: 'Aujourd’hui' });
+    const details = (await screen.findByText('Plus tôt cette semaine (2)')).closest('details');
+    const wednesday = screen.getByRole('region', { name: 'Mercredi 28 octobre' });
+    expect(details?.contains(wednesday)).toBe(false);
+    expect(text(wednesday)).toContain('22 h – 4 h');
+    expect(text(wednesday)).toContain('En poste');
+  });
+
+  it('keeps a week gone by in its order, with no fold', async () => {
+    serve({ lastWeek: true });
+    renderPage();
+    await screen.findByText('2 shifts · 12 h');
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine précédente' }));
+    expect(await screen.findByRole('region', { name: 'Mardi 20 octobre' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Mercredi 21 octobre' })).toBeTruthy();
+    expect(screen.queryByText(/^Plus tôt cette semaine/u)).toBe(null);
+  });
+
+  it('says when the reports cannot be read, and reads them again', async () => {
+    // The first read and its one retry fail; « Réessayer » reads them.
+    serve({ earlier: true, reportsDown: 2 });
+    renderPage();
+    const alert = await screen.findByText('Tes rapports n’ont pas pu être lus.', {}, { timeout: 3000 });
+    fireEvent.click(within(alert.parentElement ?? document.body).getByRole('button', { name: 'Réessayer' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Tes rapports n’ont pas pu être lus.')).toBe(null);
+    });
+    const fold = screen.getByText('Plus tôt cette semaine (2)').closest('summary');
+    await waitFor(() => {
+      expect(text(fold)).toContain('1 rapport à faire');
+    });
   });
 
   it('turns to the next week, says when it is empty, and comes back', async () => {
