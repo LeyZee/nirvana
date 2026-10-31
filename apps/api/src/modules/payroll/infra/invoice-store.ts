@@ -14,6 +14,7 @@ import {
   InvoiceLineKindSchema,
   InvoiceRegimeSchema,
   newId,
+  PaymentTermsSchema,
   PayPeriodSchema,
   type CommissionStatementId,
   type InvoiceRegime,
@@ -293,7 +294,11 @@ async function factsOf(
     settings:
       settings === undefined
         ? null
-        : { agency: InvoiceAgencySchema.parse(settings.agency), dueDays: settings.dueDays },
+        : {
+            agency: InvoiceAgencySchema.parse(settings.agency),
+            paymentTerms: PaymentTermsSchema.parse(settings.paymentTerms),
+            dueDays: settings.dueDays,
+          },
     invoices: await invoicesOf(tx, memberId),
     issuedKeys: new Set(keys.map((row) => row.key)),
   };

@@ -113,6 +113,9 @@ const firstHalf = (patch: Partial<StoredInvoice> = {}): StoredInvoice => ({
   ...patch,
 });
 
+/** The agency's payment terms, invented: its words, never the code's. */
+const TERMS =
+  'Aucun escompte. Pénalités de retard au triple du taux d’intérêt légal, indemnité de 40 € pour frais de recouvrement.';
 const ISSUED_AT = new Date('2026-11-02T09:30:00.000Z');
 
 const facts = (patch: Partial<InvoicingFacts> = {}): InvoicingFacts => ({
@@ -133,6 +136,7 @@ const facts = (patch: Partial<InvoicingFacts> = {}): InvoicingFacts => ({
       siren: '123456789',
       vatNumber: 'FR12123456789',
     },
+    paymentTerms: TERMS,
     dueDays: 7,
   },
   invoices: [firstHalf()],
@@ -162,7 +166,7 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
       contractor: facts().identity,
       agency: facts().settings?.agency,
       regime: ABROAD,
-      mentions: [...ABROAD.mentions, paymentTermsMention('2026-11-09')],
+      mentions: [...ABROAD.mentions, paymentTermsMention('2026-11-09', TERMS)],
       lines,
       totals: invoiceTotals(lines, ABROAD.vat),
       acceptanceDeadline: new Date('2026-11-17T09:30:00.000Z'),
@@ -186,15 +190,19 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
     ]);
   });
 
-  it('prints the payment terms the Code de commerce asks of an invoice, never on a credit note', () => {
+  it('prints its due date, then the agency’s payment terms as its settings word them, never on a credit note', () => {
     const plain = (text: string | undefined): string | undefined => text?.replace(/[\u00a0\u202f]/gu, ' ');
     const [invoice, note] = planInvoicing(facts()).documents;
-    expect(plain(invoice?.mentions.at(-1))).toBe(
-      'Échéance : 9 novembre 2026. Aucun escompte pour paiement anticipé. En cas de retard, pénalités au taux de ' +
-        'trois fois le taux d’intérêt légal et indemnité forfaitaire de 40 € pour frais de recouvrement ' +
-        '(art. L441-10 et D441-5 du Code de commerce).',
-    );
+    expect(plain(invoice?.mentions.at(-1))).toBe(`Échéance : 9 novembre 2026. ${TERMS}`);
     expect(note?.mentions.some((one) => one.startsWith('Échéance'))).toBe(false);
+
+    // Other terms in the settings, other words on the next invoice: the code writes only the date.
+    const later =
+      'Aucun escompte. Pénalités de retard au taux de la BCE majoré de 10 points, indemnité de 40 €.';
+    const settings = facts().settings;
+    if (settings === null) throw new Error('no settings');
+    const [next] = planInvoicing(facts({ settings: { ...settings, paymentTerms: later } })).documents;
+    expect(plain(next?.mentions.at(-1))).toBe(`Échéance : 9 novembre 2026. ${later}`);
   });
 
   it('keeps the regime of the invoice it cites on a credit note, under the parties of the day', () => {

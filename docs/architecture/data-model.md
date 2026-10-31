@@ -313,8 +313,9 @@ Une quinzaine bloquée (migration 0038, recette du 28/10, Équipe G1) : quand le
 Mêmes portées que la paie (migration 0041, ADR 0023 § Données et RLS) : un membre lit son dossier, ses pièces, ses acceptations et ses factures ; la portée `owner` | `agency` lit tout. L'écriture revient au propriétaire ou aux jobs (`nirvana_admin`) ; le prestataire n'écrit que son dossier, ses pièces, ses acceptations et sa réponse à une facture. Les fichiers (pièces, PDF) sont une `storage_key` du stockage objet avec leur empreinte SHA-256 (ADR 0028, ADR 0030), jamais des octets en base.
 
 ```
-billing_settings           id = 1, agency (jsonb : raison sociale, adresse, SIREN, TVA), due_days (60 au plus, 0042),
-                           document_reminder_days,
+billing_settings           id = 1, agency (jsonb : raison sociale, adresse, SIREN, TVA), payment_terms (texte de 1 à
+                           360 caractères imprimé après l'échéance : escompte, pénalités, indemnité ; 0042),
+                           due_days (60 au plus, 0042), document_reminder_days,
                            accounts (jsonb : comptes du journal des achats), updated_by, updated_at (propriétaire)
 billing_regimes            id, name, countries text[], vat_treatment (reverse_charge|exempt|charged), vat_rate_bps (null
                            si franchise), withholding, mentions text[], documents text[], tax_id_required, created_by,

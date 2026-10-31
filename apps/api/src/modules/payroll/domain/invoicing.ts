@@ -73,7 +73,12 @@ export interface InvoicingFacts {
   readonly prefix: string | null;
   readonly documents: readonly ContractorDocument[];
   /** The agency's billing settings, `null` before the owner writes them. */
-  readonly settings: { readonly agency: InvoiceAgency; readonly dueDays: number } | null;
+  readonly settings: {
+    readonly agency: InvoiceAgency;
+    /** What an invoice prints after its due date, the agency's words (a setting, never the code's). */
+    readonly paymentTerms: string;
+    readonly dueDays: number;
+  } | null;
   /** The contractor's issued invoices (never his credit notes), what their credit notes took off counted. */
   readonly invoices: readonly StoredInvoice[];
   /** The keys of this statement's documents already issued. */
@@ -177,7 +182,7 @@ export function planInvoicing(facts: InvoicingFacts): InvoicingPlan {
         contractor: facts.identity,
         agency: settings.agency,
         regime,
-        mentions: [...regime.mentions, paymentTermsMention(dueOn)],
+        mentions: [...regime.mentions, paymentTermsMention(dueOn, settings.paymentTerms)],
         lines,
         totals: invoiceTotals(lines, regime.vat),
         acceptanceDeadline: until,

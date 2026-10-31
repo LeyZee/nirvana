@@ -37,6 +37,13 @@ const AGENCY = {
   siren: '123456789',
   vatNumber: 'FR12123456789',
 };
+/** The agency's payment terms, a setting: an invoice prints them after its due date. */
+const TERMS =
+  'Aucun escompte. Pénalités de retard au triple du taux d’intérêt légal, indemnité de 40 € pour frais de recouvrement.';
+const LATER_TERMS =
+  'Aucun escompte. Pénalités de retard au taux de la BCE majoré de 10 points, indemnité de 40 €.';
+/** The mention of the due date, then the terms, whatever the day reads. */
+const DUE_THEN = /^Échéance\u00a0: [^.]+\. /u;
 
 describe('Équipe › Factures : l’émission à la validation d’un relevé (EQ-06 lot 3, ADR 0036)', () => {
   let team: PayrollTeam;
@@ -110,6 +117,7 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
     await admin.insert(schema.billingSettings).values({
       id: 1,
       agency: AGENCY,
+      paymentTerms: TERMS,
       dueDays: 15,
       documentReminderDays: 30,
       accounts: { expense: '622', supplierPrefix: '401', vatDeductible: '44566', vatSelfAssessed: '4452' },
@@ -204,13 +212,14 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
       agency: AGENCY,
       regimeId,
       regime: { id: regimeId, vat: { treatment: 'charged', rateBps: 2_000 }, validatedOn: '2025-01-01' },
-      // The regime's mentions, then the payment terms with the due date (art. L441-9 of the Code de commerce).
-      mentions: ['Autofacturation', expect.stringMatching(/^Échéance.+40.€ pour frais de recouvrement/u)],
+      // The regime's mentions, then the due date and the agency's payment terms (art. L441-9 of the Code de commerce).
+      mentions: ['Autofacturation', expect.stringMatching(DUE_THEN)],
       exclVatMinor: commissionMinor,
       vatMinor: commissionMinor / 5,
       inclVatMinor: commissionMinor * 1.2,
       selfAssessedVatMinor: 0,
     });
+    expect(invoice.mentions.at(-1)?.endsWith(`. ${TERMS}`)).toBe(true);
     expect(invoice.acceptanceDeadline.getTime() - invoice.issuedAt.getTime()).toBe(7 * DAY);
     const lines = await db()
       .select()
@@ -390,5 +399,21 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
       .from(schema.invoiceCounters)
       .orderBy(schema.invoiceCounters.memberId);
     expect(counters.map((one) => one.lastSequence)).toEqual([4, 4]);
+  });
+
+  it('prints the payment terms of the day, and an invoice issued keeps its own', async () => {
+    await db().update(schema.billingSettings).set({ paymentTerms: LATER_TERMS });
+    await team.recalculate(Q4);
+    expect((await team.validate(team.owner, theo, Q4)).statusCode).toBe(200);
+    await issue(await statementId(theo, Q4));
+    const invoices = (await documentsOf(theo)).filter((one) => one.kind === 'invoice');
+    const terms = invoices.map((one) => [one.period, one.mentions.at(-1)?.replace(DUE_THEN, '')]);
+    // Q1 to Q3 went out under the terms of their day, frozen in their copy; Q4 prints the new ones.
+    expect(terms).toEqual([
+      [Q1, TERMS],
+      [Q2, TERMS],
+      [Q3, TERMS],
+      [Q4, LATER_TERMS],
+    ]);
   });
 });

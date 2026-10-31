@@ -1,5 +1,5 @@
 {
-  "id": "f7cf4638-f781-464f-a59e-657552b187da",
+  "id": "38fdd6eb-7719-4a7f-9b23-2cb0eebdcf39",
   "prevId": "8d3d796d-aa12-4f8a-81a5-87a88407c8e3",
   "version": "7",
   "dialect": "postgresql",
@@ -2328,6 +2328,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "payment_terms": {
+          "name": "payment_terms",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "due_days": {
           "name": "due_days",
           "type": "smallint",
@@ -2406,6 +2412,10 @@
         "billing_settings_json_check": {
           "name": "billing_settings_json_check",
           "value": "jsonb_typeof(\"billing_settings\".\"agency\") = 'object' and jsonb_typeof(\"billing_settings\".\"accounts\") = 'object'"
+        },
+        "billing_settings_payment_terms_check": {
+          "name": "billing_settings_payment_terms_check",
+          "value": "char_length(\"billing_settings\".\"payment_terms\") between 1 and 360"
         },
         "billing_settings_delays_check": {
           "name": "billing_settings_delays_check",

@@ -359,15 +359,12 @@ export function invoiceDueOn(issuedOn: string, delayDays: number): string {
 }
 
 /**
- * The payment terms an invoice prints after its regime's mentions (art. L441-9 and L441-10, D441-5 of the Code de
- * commerce): its due date, no discount for an early payment, and what a late payment costs the agency, which owes it.
+ * The payment terms an invoice prints after its regime's mentions (art. L441-9 of the Code de commerce): its due date,
+ * the one fact the code writes, then the agency's terms as its settings word them (no discount, the late-payment
+ * penalties, the 40 € indemnity): a contractual choice its accountant validates, never written here.
  */
-export function paymentTermsMention(dueOn: string): string {
-  return (
-    `Échéance${COLON}${longDay(dueOn)}. Aucun escompte pour paiement anticipé. En cas de retard, pénalités au taux ` +
-    `de trois fois le taux d’intérêt légal et indemnité forfaitaire de 40\u00a0€ pour frais de recouvrement ` +
-    `(art.\u00a0L441-10 et D441-5 du Code de commerce).`
-  );
+export function paymentTermsMention(dueOn: string, terms: string): string {
+  return `Échéance${COLON}${longDay(dueOn)}. ${terms}`;
 }
 
 /** What a credit note cites of its invoice, printed as a mention of the credit note. */

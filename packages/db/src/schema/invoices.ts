@@ -16,6 +16,7 @@ import {
   INVOICE_REASON_MAX,
   LEGAL_NAME_MAX,
   PAY_AMOUNT_MAX_MINOR,
+  PAYMENT_TERMS_MAX,
   POSTAL_ADDRESS_MAX,
   REGIME_NAME_MAX,
   STORAGE_KEY_MAX,
@@ -83,12 +84,16 @@ const sha256Check = (column: PgColumn): SQL => sql`${column} ~ '^[0-9a-f]{64}$'`
 const kinds = (values: readonly string[]): SQL =>
   sql.raw(`array[${values.map((value) => `'${value}'`).join(', ')}]::text[]`);
 
-/** One row at most (`id = 1`): the agency's identity on each invoice, the delays, the journal's accounts. */
+/**
+ * One row at most (`id = 1`): the agency's identity and payment terms on each invoice, the delays, the journal's
+ * accounts.
+ */
 export const billingSettings = pgTable(
   'billing_settings',
   {
     id: smallint('id').primaryKey(),
     agency: jsonb('agency').notNull(),
+    paymentTerms: text('payment_terms').notNull(),
     dueDays: smallint('due_days').notNull(),
     documentReminderDays: smallint('document_reminder_days').notNull(),
     accounts: jsonb('accounts').notNull(),
@@ -103,6 +108,7 @@ export const billingSettings = pgTable(
       'billing_settings_json_check',
       sql`jsonb_typeof(${t.agency}) = 'object' and jsonb_typeof(${t.accounts}) = 'object'`,
     ),
+    check('billing_settings_payment_terms_check', textBetween(t.paymentTerms, PAYMENT_TERMS_MAX)),
     check(
       'billing_settings_delays_check',
       sql`${t.dueDays} between 1 and ${num(INVOICE_DUE_MAX_DAYS)} and ${t.documentReminderDays} between 1 and ${num(DOCUMENT_REMINDER_MAX_DAYS)}`,
