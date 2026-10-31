@@ -1,5 +1,5 @@
 {
-  "id": "e91421d5-9833-4ed4-af5b-878b8d78c99f",
+  "id": "8d3d796d-aa12-4f8a-81a5-87a88407c8e3",
   "prevId": "3be01c8e-9857-44af-8252-55cab119383b",
   "version": "7",
   "dialect": "postgresql",
@@ -2106,6 +2106,78 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.billing_regime_validations": {
+      "name": "billing_regime_validations",
+      "schema": "",
+      "columns": {
+        "regime_id": {
+          "name": "regime_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "validated_on": {
+          "name": "validated_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "billing_regime_validations_regime_id_billing_regimes_id_fk": {
+          "name": "billing_regime_validations_regime_id_billing_regimes_id_fk",
+          "tableFrom": "billing_regime_validations",
+          "tableTo": "billing_regimes",
+          "columnsFrom": ["regime_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "billing_regime_validations_recorded_by_user_id_fk": {
+          "name": "billing_regime_validations_recorded_by_user_id_fk",
+          "tableFrom": "billing_regime_validations",
+          "tableTo": "user",
+          "columnsFrom": ["recorded_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "team_read": {
+          "name": "team_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": ["public"],
+          "using": "nullif(current_setting('app.team_scope', true), '') is not null"
+        },
+        "owner_insert": {
+          "name": "owner_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": ["public"],
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"billing_regime_validations\".\"recorded_by\" = nullif(current_setting('app.user_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.billing_regimes": {
       "name": "billing_regimes",
       "schema": "",
@@ -2164,18 +2236,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "validated_on": {
-          "name": "validated_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "validated_by": {
-          "name": "validated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by": {
           "name": "created_by",
           "type": "text",
@@ -2192,15 +2252,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "billing_regimes_validated_by_user_id_fk": {
-          "name": "billing_regimes_validated_by_user_id_fk",
-          "tableFrom": "billing_regimes",
-          "tableTo": "user",
-          "columnsFrom": ["validated_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "billing_regimes_created_by_user_id_fk": {
           "name": "billing_regimes_created_by_user_id_fk",
           "tableFrom": "billing_regimes",
@@ -2226,15 +2277,7 @@
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"billing_regimes\".\"created_by\" = nullif(current_setting('app.user_id', true), '') and (\"billing_regimes\".\"validated_by\" is null or \"billing_regimes\".\"validated_by\" = nullif(current_setting('app.user_id', true), ''))"
-        },
-        "owner_validate": {
-          "name": "owner_validate",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": ["public"],
-          "using": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"billing_regimes\".\"validated_on\" is null",
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"billing_regimes\".\"validated_by\" = nullif(current_setting('app.user_id', true), '')"
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and \"billing_regimes\".\"created_by\" = nullif(current_setting('app.user_id', true), '')"
         }
       },
       "checkConstraints": {
@@ -2265,10 +2308,6 @@
         "billing_regimes_documents_check": {
           "name": "billing_regimes_documents_check",
           "value": "\"billing_regimes\".\"documents\" <@ array['tax_residence', 'urssaf_vigilance']::text[]"
-        },
-        "billing_regimes_validation_check": {
-          "name": "billing_regimes_validation_check",
-          "value": "(\"billing_regimes\".\"validated_on\" is null) = (\"billing_regimes\".\"validated_by\" is null)"
         }
       },
       "isRLSEnabled": false
@@ -2619,14 +2658,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "file_key": {
-          "name": "file_key",
+        "storage_key": {
+          "name": "storage_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "file_sha256": {
-          "name": "file_sha256",
+        "sha256": {
+          "name": "sha256",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2717,7 +2756,7 @@
         },
         "contractor_documents_file_check": {
           "name": "contractor_documents_file_check",
-          "value": "char_length(\"contractor_documents\".\"file_key\") between 1 and 512 and \"contractor_documents\".\"file_sha256\" ~ '^[0-9a-f]{64}$'"
+          "value": "char_length(\"contractor_documents\".\"storage_key\") between 1 and 512 and \"contractor_documents\".\"sha256\" ~ '^[0-9a-f]{64}$'"
         }
       },
       "isRLSEnabled": false
@@ -3022,20 +3061,20 @@
           "to": ["public"],
           "using": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency')"
         },
-        "agency_insert": {
-          "name": "agency_insert",
+        "owner_insert": {
+          "name": "owner_insert",
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"invoice_counters\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))"
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = \"invoice_counters\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))"
         },
-        "agency_next": {
-          "name": "agency_next",
+        "owner_next": {
+          "name": "owner_next",
           "as": "PERMISSIVE",
           "for": "UPDATE",
           "to": ["public"],
-          "using": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"invoice_counters\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))",
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"invoice_counters\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))"
+          "using": "nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = \"invoice_counters\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))",
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = \"invoice_counters\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))"
         }
       },
       "checkConstraints": {
@@ -3109,6 +3148,76 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "invoice_events_issued_unique": {
+          "name": "invoice_events_issued_unique",
+          "columns": [
+            {
+              "expression": "invoice_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"invoice_events\".\"kind\" = 'issued'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "invoice_events_answer_unique": {
+          "name": "invoice_events_answer_unique",
+          "columns": [
+            {
+              "expression": "invoice_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"invoice_events\".\"kind\" in ('accepted', 'contested', 'lapsed')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "invoice_events_contest_end_unique": {
+          "name": "invoice_events_contest_end_unique",
+          "columns": [
+            {
+              "expression": "invoice_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"invoice_events\".\"kind\" in ('credited', 'contest_refused')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "invoice_events_paid_unique": {
+          "name": "invoice_events_paid_unique",
+          "columns": [
+            {
+              "expression": "invoice_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "statement_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"invoice_events\".\"kind\" = 'paid'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3157,12 +3266,12 @@
           "to": ["public"],
           "withCheck": "\"invoice_events\".\"kind\" in ('accepted', 'contested') and \"invoice_events\".\"by\" = nullif(current_setting('app.user_id', true), '') and exists (select 1 from invoices i where i.id = \"invoice_events\".\"invoice_id\" and exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), '')))"
         },
-        "agency_step": {
-          "name": "agency_step",
+        "owner_step": {
+          "name": "owner_step",
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "\"invoice_events\".\"kind\" in ('issued', 'credited', 'contest_refused', 'paid') and \"invoice_events\".\"by\" = nullif(current_setting('app.user_id', true), '') and exists (select 1 from invoices i where i.id = \"invoice_events\".\"invoice_id\" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), '')))"
+          "withCheck": "\"invoice_events\".\"kind\" in ('issued', 'credited', 'contest_refused', 'paid') and \"invoice_events\".\"by\" = nullif(current_setting('app.user_id', true), '') and exists (select 1 from invoices i where i.id = \"invoice_events\".\"invoice_id\" and nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), '')))"
         }
       },
       "checkConstraints": {
@@ -3245,12 +3354,12 @@
           "to": ["public"],
           "using": "exists (select 1 from invoices i where i.id = \"invoice_lines\".\"invoice_id\" and true)"
         },
-        "agency_issue": {
-          "name": "agency_issue",
+        "owner_issue": {
+          "name": "owner_issue",
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "exists (select 1 from invoices i where i.id = \"invoice_lines\".\"invoice_id\" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), '')))"
+          "withCheck": "exists (select 1 from invoices i where i.id = \"invoice_lines\".\"invoice_id\" and nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), '')))"
         }
       },
       "checkConstraints": {
@@ -3261,6 +3370,67 @@
         "invoice_lines_values_check": {
           "name": "invoice_lines_values_check",
           "value": "\"invoice_lines\".\"position\" >= 1 and char_length(\"invoice_lines\".\"label\") between 1 and 200 and (\"invoice_lines\".\"detail\" is null or char_length(\"invoice_lines\".\"detail\") between 1 and 400) and \"invoice_lines\".\"amount_minor\" between -5000000 and 5000000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.invoice_pdfs": {
+      "name": "invoice_pdfs",
+      "schema": "",
+      "columns": {
+        "invoice_id": {
+          "name": "invoice_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "invoice_pdfs_invoice_id_invoices_id_fk": {
+          "name": "invoice_pdfs_invoice_id_invoices_id_fk",
+          "tableFrom": "invoice_pdfs",
+          "tableTo": "invoices",
+          "columnsFrom": ["invoice_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "member_read": {
+          "name": "member_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": ["public"],
+          "using": "exists (select 1 from invoices i where i.id = \"invoice_pdfs\".\"invoice_id\" and true)"
+        }
+      },
+      "checkConstraints": {
+        "invoice_pdfs_file_check": {
+          "name": "invoice_pdfs_file_check",
+          "value": "char_length(\"invoice_pdfs\".\"storage_key\") between 1 and 512 and \"invoice_pdfs\".\"sha256\" ~ '^[0-9a-f]{64}$'"
         }
       },
       "isRLSEnabled": false
@@ -3414,48 +3584,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "acceptance_state": {
-          "name": "acceptance_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
         "acceptance_deadline": {
           "name": "acceptance_deadline",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
-        },
-        "acceptance_reason": {
-          "name": "acceptance_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "answered_at": {
-          "name": "answered_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "answered_by": {
-          "name": "answered_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pdf_key": {
-          "name": "pdf_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pdf_sha256": {
-          "name": "pdf_sha256",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -3565,15 +3698,6 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "invoices_answered_by_user_id_fk": {
-          "name": "invoices_answered_by_user_id_fk",
-          "tableFrom": "invoices",
-          "tableTo": "user",
-          "columnsFrom": ["answered_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "invoices_credited_invoice_id_invoices_id_fk": {
           "name": "invoices_credited_invoice_id_invoices_id_fk",
           "tableFrom": "invoices",
@@ -3610,28 +3734,12 @@
           "to": ["public"],
           "using": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), ''))"
         },
-        "agency_issue": {
-          "name": "agency_issue",
+        "owner_issue": {
+          "name": "owner_issue",
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": ["public"],
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and \"invoices\".\"issued_by\" = nullif(current_setting('app.user_id', true), '')"
-        },
-        "member_answer": {
-          "name": "member_answer",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": ["public"],
-          "using": "exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and \"invoices\".\"acceptance_state\" = 'pending'",
-          "withCheck": "exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and \"invoices\".\"acceptance_state\" in ('accepted', 'contested') and \"invoices\".\"answered_by\" = nullif(current_setting('app.user_id', true), '')"
-        },
-        "agency_answer": {
-          "name": "agency_answer",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": ["public"],
-          "using": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and \"invoices\".\"acceptance_state\" = 'contested'",
-          "withCheck": "nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and \"invoices\".\"acceptance_state\" in ('credited', 'contest_refused') and \"invoices\".\"answered_by\" = nullif(current_setting('app.user_id', true), '')"
+          "withCheck": "nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = \"invoices\".\"member_id\" and m.user_id = nullif(current_setting('app.user_id', true), '')) and \"invoices\".\"issued_by\" = nullif(current_setting('app.user_id', true), '')"
         }
       },
       "checkConstraints": {
@@ -3662,18 +3770,6 @@
         "invoices_dates_check": {
           "name": "invoices_dates_check",
           "value": "\"invoices\".\"due_on\" >= \"invoices\".\"issued_on\" and \"invoices\".\"acceptance_deadline\" > \"invoices\".\"issued_at\""
-        },
-        "invoices_acceptance_state_check": {
-          "name": "invoices_acceptance_state_check",
-          "value": "\"invoices\".\"acceptance_state\" in ('pending', 'accepted', 'tacitly_accepted', 'contested', 'credited', 'contest_refused')"
-        },
-        "invoices_acceptance_check": {
-          "name": "invoices_acceptance_check",
-          "value": "(\"invoices\".\"answered_at\" is null) = (\"invoices\".\"answered_by\" is null) and (\"invoices\".\"acceptance_state\" in ('pending', 'tacitly_accepted')) = (\"invoices\".\"answered_at\" is null) and (\"invoices\".\"acceptance_reason\" is null or char_length(\"invoices\".\"acceptance_reason\") between 1 and 500) and (\"invoices\".\"acceptance_state\" in ('contested', 'contest_refused')) = (\"invoices\".\"acceptance_reason\" is not null)"
-        },
-        "invoices_pdf_check": {
-          "name": "invoices_pdf_check",
-          "value": "(\"invoices\".\"pdf_key\" is null) = (\"invoices\".\"pdf_sha256\" is null) and (\"invoices\".\"pdf_key\" is null or (char_length(\"invoices\".\"pdf_key\") between 1 and 512 and \"invoices\".\"pdf_sha256\" ~ '^[0-9a-f]{64}$'))"
         }
       },
       "isRLSEnabled": false

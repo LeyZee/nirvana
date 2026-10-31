@@ -1,3 +1,11 @@
+CREATE TABLE "billing_regime_validations" (
+	"regime_id" uuid PRIMARY KEY NOT NULL,
+	"validated_on" date NOT NULL,
+	"recorded_by" text NOT NULL,
+	"recorded_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "billing_regime_validations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "billing_regimes" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
@@ -8,8 +16,6 @@ CREATE TABLE "billing_regimes" (
 	"mentions" text[] NOT NULL,
 	"documents" text[] NOT NULL,
 	"tax_id_required" boolean NOT NULL,
-	"validated_on" date,
-	"validated_by" text,
 	"created_by" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "billing_regimes_name_check" CHECK (char_length("billing_regimes"."name") between 1 and 80),
@@ -18,8 +24,7 @@ CREATE TABLE "billing_regimes" (
 	CONSTRAINT "billing_regimes_vat_check" CHECK (("billing_regimes"."vat_treatment" = 'exempt') = ("billing_regimes"."vat_rate_bps" is null) and ("billing_regimes"."vat_rate_bps" is null or "billing_regimes"."vat_rate_bps" between 0 and 10000)),
 	CONSTRAINT "billing_regimes_withholding_check" CHECK ("billing_regimes"."withholding" in ('treaty_exempt', 'none')),
 	CONSTRAINT "billing_regimes_mentions_check" CHECK (cardinality("billing_regimes"."mentions") <= 24 and array_position("billing_regimes"."mentions", null) is null),
-	CONSTRAINT "billing_regimes_documents_check" CHECK ("billing_regimes"."documents" <@ array['tax_residence', 'urssaf_vigilance']::text[]),
-	CONSTRAINT "billing_regimes_validation_check" CHECK (("billing_regimes"."validated_on" is null) = ("billing_regimes"."validated_by" is null))
+	CONSTRAINT "billing_regimes_documents_check" CHECK ("billing_regimes"."documents" <@ array['tax_residence', 'urssaf_vigilance']::text[])
 );
 --> statement-breakpoint
 ALTER TABLE "billing_regimes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -71,13 +76,13 @@ CREATE TABLE "contractor_documents" (
 	"kind" text NOT NULL,
 	"issued_on" date NOT NULL,
 	"valid_until" date,
-	"file_key" text NOT NULL,
-	"file_sha256" text NOT NULL,
+	"storage_key" text NOT NULL,
+	"sha256" text NOT NULL,
 	"created_by" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "contractor_documents_kind_check" CHECK ("contractor_documents"."kind" in ('tax_residence', 'urssaf_vigilance')),
 	CONSTRAINT "contractor_documents_dates_check" CHECK ("contractor_documents"."valid_until" is null or "contractor_documents"."valid_until" > "contractor_documents"."issued_on"),
-	CONSTRAINT "contractor_documents_file_check" CHECK (char_length("contractor_documents"."file_key") between 1 and 512 and "contractor_documents"."file_sha256" ~ '^[0-9a-f]{64}$')
+	CONSTRAINT "contractor_documents_file_check" CHECK (char_length("contractor_documents"."storage_key") between 1 and 512 and "contractor_documents"."sha256" ~ '^[0-9a-f]{64}$')
 );
 --> statement-breakpoint
 ALTER TABLE "contractor_documents" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -146,6 +151,15 @@ CREATE TABLE "invoice_lines" (
 );
 --> statement-breakpoint
 ALTER TABLE "invoice_lines" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "invoice_pdfs" (
+	"invoice_id" uuid PRIMARY KEY NOT NULL,
+	"storage_key" text NOT NULL,
+	"sha256" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "invoice_pdfs_file_check" CHECK (char_length("invoice_pdfs"."storage_key") between 1 and 512 and "invoice_pdfs"."sha256" ~ '^[0-9a-f]{64}$')
+);
+--> statement-breakpoint
+ALTER TABLE "invoice_pdfs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "invoices" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"kind" text NOT NULL,
@@ -171,13 +185,7 @@ CREATE TABLE "invoices" (
 	"vat_minor" integer NOT NULL,
 	"incl_vat_minor" integer NOT NULL,
 	"self_assessed_vat_minor" integer NOT NULL,
-	"acceptance_state" text DEFAULT 'pending' NOT NULL,
 	"acceptance_deadline" timestamp with time zone NOT NULL,
-	"acceptance_reason" text,
-	"answered_at" timestamp with time zone,
-	"answered_by" text,
-	"pdf_key" text,
-	"pdf_sha256" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "invoices_number_unique" UNIQUE("number"),
 	CONSTRAINT "invoices_sequence_unique" UNIQUE("member_id","year","sequence"),
@@ -188,14 +196,12 @@ CREATE TABLE "invoices" (
 	CONSTRAINT "invoices_key_check" CHECK (char_length("invoices"."idempotency_key") between 1 and 200),
 	CONSTRAINT "invoices_totals_check" CHECK ("invoices"."incl_vat_minor" = "invoices"."excl_vat_minor" + "invoices"."vat_minor" and abs("invoices"."vat_minor") <= abs("invoices"."excl_vat_minor") and abs("invoices"."self_assessed_vat_minor") <= abs("invoices"."excl_vat_minor")),
 	CONSTRAINT "invoices_copies_check" CHECK (jsonb_typeof("invoices"."contractor") = 'object' and jsonb_typeof("invoices"."agency") = 'object' and jsonb_typeof("invoices"."regime") = 'object' and cardinality("invoices"."mentions") <= 24 and array_position("invoices"."mentions", null) is null),
-	CONSTRAINT "invoices_dates_check" CHECK ("invoices"."due_on" >= "invoices"."issued_on" and "invoices"."acceptance_deadline" > "invoices"."issued_at"),
-	CONSTRAINT "invoices_acceptance_state_check" CHECK ("invoices"."acceptance_state" in ('pending', 'accepted', 'tacitly_accepted', 'contested', 'credited', 'contest_refused')),
-	CONSTRAINT "invoices_acceptance_check" CHECK (("invoices"."answered_at" is null) = ("invoices"."answered_by" is null) and ("invoices"."acceptance_state" in ('pending', 'tacitly_accepted')) = ("invoices"."answered_at" is null) and ("invoices"."acceptance_reason" is null or char_length("invoices"."acceptance_reason") between 1 and 500) and ("invoices"."acceptance_state" in ('contested', 'contest_refused')) = ("invoices"."acceptance_reason" is not null)),
-	CONSTRAINT "invoices_pdf_check" CHECK (("invoices"."pdf_key" is null) = ("invoices"."pdf_sha256" is null) and ("invoices"."pdf_key" is null or (char_length("invoices"."pdf_key") between 1 and 512 and "invoices"."pdf_sha256" ~ '^[0-9a-f]{64}$')))
+	CONSTRAINT "invoices_dates_check" CHECK ("invoices"."due_on" >= "invoices"."issued_on" and "invoices"."acceptance_deadline" > "invoices"."issued_at")
 );
 --> statement-breakpoint
 ALTER TABLE "invoices" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "billing_regimes" ADD CONSTRAINT "billing_regimes_validated_by_user_id_fk" FOREIGN KEY ("validated_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_regime_validations" ADD CONSTRAINT "billing_regime_validations_regime_id_billing_regimes_id_fk" FOREIGN KEY ("regime_id") REFERENCES "public"."billing_regimes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_regime_validations" ADD CONSTRAINT "billing_regime_validations_recorded_by_user_id_fk" FOREIGN KEY ("recorded_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "billing_regimes" ADD CONSTRAINT "billing_regimes_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "billing_settings" ADD CONSTRAINT "billing_settings_updated_by_user_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contract_acceptances" ADD CONSTRAINT "contract_acceptances_member_id_team_members_id_fk" FOREIGN KEY ("member_id") REFERENCES "public"."team_members"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -215,21 +221,26 @@ ALTER TABLE "invoice_events" ADD CONSTRAINT "invoice_events_invoice_id_invoices_
 ALTER TABLE "invoice_events" ADD CONSTRAINT "invoice_events_statement_id_commission_statements_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."commission_statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoice_events" ADD CONSTRAINT "invoice_events_by_user_id_fk" FOREIGN KEY ("by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invoice_pdfs" ADD CONSTRAINT "invoice_pdfs_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_member_id_team_members_id_fk" FOREIGN KEY ("member_id") REFERENCES "public"."team_members"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_statement_id_commission_statements_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."commission_statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_period_pay_periods_period_fk" FOREIGN KEY ("period") REFERENCES "public"."pay_periods"("period") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_issued_by_user_id_fk" FOREIGN KEY ("issued_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_regime_id_billing_regimes_id_fk" FOREIGN KEY ("regime_id") REFERENCES "public"."billing_regimes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "invoices" ADD CONSTRAINT "invoices_answered_by_user_id_fk" FOREIGN KEY ("answered_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_credited_invoice_id_invoices_id_fk" FOREIGN KEY ("credited_invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "contractor_documents_member_idx" ON "contractor_documents" USING btree ("member_id","kind");--> statement-breakpoint
 CREATE INDEX "invoice_events_invoice_idx" ON "invoice_events" USING btree ("invoice_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "invoice_events_issued_unique" ON "invoice_events" USING btree ("invoice_id") WHERE "invoice_events"."kind" = 'issued';--> statement-breakpoint
+CREATE UNIQUE INDEX "invoice_events_answer_unique" ON "invoice_events" USING btree ("invoice_id") WHERE "invoice_events"."kind" in ('accepted', 'contested', 'lapsed');--> statement-breakpoint
+CREATE UNIQUE INDEX "invoice_events_contest_end_unique" ON "invoice_events" USING btree ("invoice_id") WHERE "invoice_events"."kind" in ('credited', 'contest_refused');--> statement-breakpoint
+CREATE UNIQUE INDEX "invoice_events_paid_unique" ON "invoice_events" USING btree ("invoice_id","statement_id") WHERE "invoice_events"."kind" = 'paid';--> statement-breakpoint
 CREATE UNIQUE INDEX "invoices_statement_unique" ON "invoices" USING btree ("statement_id") WHERE "invoices"."kind" = 'invoice';--> statement-breakpoint
 CREATE INDEX "invoices_member_period_idx" ON "invoices" USING btree ("member_id","period");--> statement-breakpoint
 CREATE INDEX "invoices_credited_idx" ON "invoices" USING btree ("credited_invoice_id");--> statement-breakpoint
+CREATE POLICY "team_read" ON "billing_regime_validations" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') is not null);--> statement-breakpoint
+CREATE POLICY "owner_insert" ON "billing_regime_validations" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_regime_validations"."recorded_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
 CREATE POLICY "team_read" ON "billing_regimes" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') is not null);--> statement-breakpoint
-CREATE POLICY "owner_insert" ON "billing_regimes" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_regimes"."created_by" = nullif(current_setting('app.user_id', true), '') and ("billing_regimes"."validated_by" is null or "billing_regimes"."validated_by" = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
-CREATE POLICY "owner_validate" ON "billing_regimes" AS PERMISSIVE FOR UPDATE TO public USING (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_regimes"."validated_on" is null) WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_regimes"."validated_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
+CREATE POLICY "owner_insert" ON "billing_regimes" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_regimes"."created_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
 CREATE POLICY "team_read" ON "billing_settings" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency'));--> statement-breakpoint
 CREATE POLICY "owner_insert" ON "billing_settings" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_settings"."updated_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
 CREATE POLICY "owner_update" ON "billing_settings" AS PERMISSIVE FOR UPDATE TO public USING (nullif(current_setting('app.team_scope', true), '') = 'owner') WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "billing_settings"."updated_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
@@ -245,20 +256,20 @@ CREATE POLICY "member_update" ON "contractor_profiles" AS PERMISSIVE FOR UPDATE 
 CREATE POLICY "member_read" ON "contractor_regimes" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = "contractor_regimes"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
 CREATE POLICY "owner_insert" ON "contractor_regimes" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and "contractor_regimes"."created_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
 CREATE POLICY "team_read" ON "invoice_counters" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency'));--> statement-breakpoint
-CREATE POLICY "agency_insert" ON "invoice_counters" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "invoice_counters"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
-CREATE POLICY "agency_next" ON "invoice_counters" AS PERMISSIVE FOR UPDATE TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "invoice_counters"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), ''))) WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "invoice_counters"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
+CREATE POLICY "owner_insert" ON "invoice_counters" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = "invoice_counters"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
+CREATE POLICY "owner_next" ON "invoice_counters" AS PERMISSIVE FOR UPDATE TO public USING (nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = "invoice_counters"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), ''))) WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = "invoice_counters"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
 CREATE POLICY "member_read" ON "invoice_events" AS PERMISSIVE FOR SELECT TO public USING (exists (select 1 from invoices i where i.id = "invoice_events"."invoice_id" and true));--> statement-breakpoint
 CREATE POLICY "member_answer" ON "invoice_events" AS PERMISSIVE FOR INSERT TO public WITH CHECK ("invoice_events"."kind" in ('accepted', 'contested') and "invoice_events"."by" = nullif(current_setting('app.user_id', true), '') and exists (select 1 from invoices i where i.id = "invoice_events"."invoice_id" and exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), ''))));--> statement-breakpoint
-CREATE POLICY "agency_step" ON "invoice_events" AS PERMISSIVE FOR INSERT TO public WITH CHECK ("invoice_events"."kind" in ('issued', 'credited', 'contest_refused', 'paid') and "invoice_events"."by" = nullif(current_setting('app.user_id', true), '') and exists (select 1 from invoices i where i.id = "invoice_events"."invoice_id" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), ''))));--> statement-breakpoint
+CREATE POLICY "owner_step" ON "invoice_events" AS PERMISSIVE FOR INSERT TO public WITH CHECK ("invoice_events"."kind" in ('issued', 'credited', 'contest_refused', 'paid') and "invoice_events"."by" = nullif(current_setting('app.user_id', true), '') and exists (select 1 from invoices i where i.id = "invoice_events"."invoice_id" and nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), ''))));--> statement-breakpoint
 CREATE POLICY "member_read" ON "invoice_lines" AS PERMISSIVE FOR SELECT TO public USING (exists (select 1 from invoices i where i.id = "invoice_lines"."invoice_id" and true));--> statement-breakpoint
-CREATE POLICY "agency_issue" ON "invoice_lines" AS PERMISSIVE FOR INSERT TO public WITH CHECK (exists (select 1 from invoices i where i.id = "invoice_lines"."invoice_id" and nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), ''))));--> statement-breakpoint
+CREATE POLICY "owner_issue" ON "invoice_lines" AS PERMISSIVE FOR INSERT TO public WITH CHECK (exists (select 1 from invoices i where i.id = "invoice_lines"."invoice_id" and nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = i.member_id and m.user_id = nullif(current_setting('app.user_id', true), ''))));--> statement-breakpoint
+CREATE POLICY "member_read" ON "invoice_pdfs" AS PERMISSIVE FOR SELECT TO public USING (exists (select 1 from invoices i where i.id = "invoice_pdfs"."invoice_id" and true));--> statement-breakpoint
 CREATE POLICY "member_read" ON "invoices" AS PERMISSIVE FOR SELECT TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') or exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')));--> statement-breakpoint
-CREATE POLICY "agency_issue" ON "invoices" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "invoices"."issued_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
-CREATE POLICY "member_answer" ON "invoices" AS PERMISSIVE FOR UPDATE TO public USING (exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "invoices"."acceptance_state" = 'pending') WITH CHECK (exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "invoices"."acceptance_state" in ('accepted', 'contested') and "invoices"."answered_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
-CREATE POLICY "agency_answer" ON "invoices" AS PERMISSIVE FOR UPDATE TO public USING (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "invoices"."acceptance_state" = 'contested') WITH CHECK (nullif(current_setting('app.team_scope', true), '') in ('owner', 'agency') and not exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "invoices"."acceptance_state" in ('credited', 'contest_refused') and "invoices"."answered_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
+CREATE POLICY "owner_issue" ON "invoices" AS PERMISSIVE FOR INSERT TO public WITH CHECK (nullif(current_setting('app.team_scope', true), '') = 'owner' and not exists (select 1 from team_members m where m.id = "invoices"."member_id" and m.user_id = nullif(current_setting('app.user_id', true), '')) and "invoices"."issued_by" = nullif(current_setting('app.user_id', true), ''));--> statement-breakpoint
 -- Written by hand (EQ-06 lot 2). Drizzle does not write what follows.
 ALTER TABLE "billing_settings" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "billing_regimes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "billing_regime_validations" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "contractor_regimes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "contractor_profiles" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "contractor_documents" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -268,6 +279,7 @@ ALTER TABLE "invoice_counters" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "invoices" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "invoice_lines" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "invoice_events" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "invoice_pdfs" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 -- Refused to every role, the migration's own included: what an invoice was built on stays as it was.
 CREATE FUNCTION "refuse_billing_change"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -275,7 +287,12 @@ BEGIN
     USING ERRCODE = 'restrict_violation';
 END;
 $$;--> statement-breakpoint
--- Added only: a regime's assignments, the documents, the contract texts, the acceptances, the lines, the events.
+-- Added only: the regimes and their validations, a contractor's regimes, the documents, the contract texts, the
+-- acceptances, and the invoices with their lines, their events and their PDF.
+CREATE TRIGGER "billing_regimes_append_only" BEFORE UPDATE OR DELETE ON "billing_regimes"
+  FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
+CREATE TRIGGER "billing_regime_validations_append_only" BEFORE UPDATE OR DELETE ON "billing_regime_validations"
+  FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "contractor_regimes_append_only" BEFORE UPDATE OR DELETE ON "contractor_regimes"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "contractor_documents_append_only" BEFORE UPDATE OR DELETE ON "contractor_documents"
@@ -284,36 +301,21 @@ CREATE TRIGGER "contract_texts_append_only" BEFORE UPDATE OR DELETE ON "contract
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "contract_acceptances_append_only" BEFORE UPDATE OR DELETE ON "contract_acceptances"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
+CREATE TRIGGER "invoices_append_only" BEFORE UPDATE OR DELETE ON "invoices"
+  FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "invoice_lines_append_only" BEFORE UPDATE OR DELETE ON "invoice_lines"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "invoice_events_append_only" BEFORE UPDATE OR DELETE ON "invoice_events"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
--- Never deleted: the settings, the regimes, the contractors' files (kept ten years with their invoices), the
--- counters and the invoices.
-CREATE TRIGGER "billing_settings_not_deleted" BEFORE DELETE ON "billing_settings"
+CREATE TRIGGER "invoice_pdfs_append_only" BEFORE UPDATE OR DELETE ON "invoice_pdfs"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
-CREATE TRIGGER "billing_regimes_not_deleted" BEFORE DELETE ON "billing_regimes"
+-- Never deleted: the settings, the contractors' files (kept ten years with their invoices) and the counters.
+CREATE TRIGGER "billing_settings_not_deleted" BEFORE DELETE ON "billing_settings"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "contractor_profiles_not_deleted" BEFORE DELETE ON "contractor_profiles"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
 CREATE TRIGGER "invoice_counters_not_deleted" BEFORE DELETE ON "invoice_counters"
   FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
-CREATE TRIGGER "invoices_not_deleted" BEFORE DELETE ON "invoices"
-  FOR EACH ROW EXECUTE FUNCTION "refuse_billing_change"();--> statement-breakpoint
--- A regime's text never changes: only its validation is recorded, once.
-CREATE FUNCTION "keep_billing_regime"() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF OLD."validated_on" IS NOT NULL
-     OR to_jsonb(NEW) - ARRAY['validated_on', 'validated_by'] IS DISTINCT FROM
-        to_jsonb(OLD) - ARRAY['validated_on', 'validated_by'] THEN
-    RAISE EXCEPTION 'regime % keeps its text, and its validation is recorded once (EQ-06)', OLD."id"
-      USING ERRCODE = 'restrict_violation';
-  END IF;
-  RETURN NEW;
-END;
-$$;--> statement-breakpoint
-CREATE TRIGGER "billing_regimes_kept" BEFORE UPDATE ON "billing_regimes"
-  FOR EACH ROW EXECUTE FUNCTION "keep_billing_regime"();--> statement-breakpoint
 -- A contractor's regime changes from a day after his last one: never backwards, never twice the same day.
 CREATE FUNCTION "keep_contractor_regime"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -423,106 +425,63 @@ END;
 $$;--> statement-breakpoint
 CREATE TRIGGER "invoice_counters_by_one" BEFORE INSERT OR UPDATE ON "invoice_counters"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice_counter"();--> statement-breakpoint
--- An invoice is issued pending, numbered by its contractor's prefix and counter (the number the counter holds now:
--- without hole nor repeat), for a validated statement of its contractor and period under a validated regime. A credit
--- note cites an invoice of the same contractor and keeps its period (the service it corrects) and its regime
--- (ADR 0036); its statement, when it has one, is the later one whose validation owes it; it never takes more than
--- what is left of the invoice. Afterwards only its acceptance moves, along the steps of `invoice-acceptance.ts`, and
--- its PDF is recorded once.
+-- An invoice is numbered by its contractor's prefix and counter (the number the counter holds now: without hole nor
+-- repeat), for a validated statement of its contractor and period, under a regime the accountant validated by its day
+-- of issue. A credit note cites an invoice of the same contractor and keeps its period (the service it corrects) and
+-- its regime (ADR 0036); its statement, when it has one, is the later one whose validation owes it; it never takes
+-- more than what is left of the invoice.
 CREATE FUNCTION "keep_invoice"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
-  moving CONSTANT text[] := ARRAY['acceptance_state', 'acceptance_reason', 'answered_at', 'answered_by', 'pdf_key',
-    'pdf_sha256'];
   cited "invoices"%ROWTYPE;
 BEGIN
-  IF TG_OP = 'INSERT' THEN
-    IF NEW."acceptance_state" <> 'pending' OR NEW."pdf_key" IS NOT NULL THEN
-      RAISE EXCEPTION 'an invoice is issued pending, before its PDF (EQ-06)' USING ERRCODE = 'restrict_violation';
-    END IF;
-    -- The instant of the transaction that issues it: its lines and its event `issued` are written in that one.
-    NEW."created_at" := now();
+  -- The instant of the transaction that issues it: its lines and its event `issued` are written in that one.
+  NEW."created_at" := now();
+  IF NOT EXISTS (
+    SELECT 1 FROM "contractor_profiles" p WHERE p."member_id" = NEW."member_id" AND p."invoice_prefix" = NEW."prefix"
+  ) OR NOT EXISTS (
+    SELECT 1 FROM "invoice_counters" c
+    WHERE c."member_id" = NEW."member_id" AND c."year" = NEW."year" AND c."last_sequence" = NEW."sequence"
+  ) THEN
+    RAISE EXCEPTION 'an invoice takes its contractor''s prefix and the number his counter holds (EQ-06)'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF NEW."statement_id" IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM "commission_statements" s
+    WHERE s."id" = NEW."statement_id" AND s."member_id" = NEW."member_id" AND s."status" IN ('validated', 'paid')
+      AND CASE NEW."kind" WHEN 'invoice' THEN s."period" = NEW."period" ELSE s."period" > NEW."period" END
+  ) THEN
+    RAISE EXCEPTION 'an invoice bills a validated statement of its contractor and period; a credit note is owed by a later one (EQ-06)'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF NEW."kind" = 'invoice' THEN
     IF NOT EXISTS (
-      SELECT 1 FROM "contractor_profiles" p WHERE p."member_id" = NEW."member_id" AND p."invoice_prefix" = NEW."prefix"
-    ) OR NOT EXISTS (
-      SELECT 1 FROM "invoice_counters" c
-      WHERE c."member_id" = NEW."member_id" AND c."year" = NEW."year" AND c."last_sequence" = NEW."sequence"
+      SELECT 1 FROM "billing_regime_validations" v
+      WHERE v."regime_id" = NEW."regime_id" AND v."validated_on" <= NEW."issued_on"
     ) THEN
-      RAISE EXCEPTION 'an invoice takes its contractor''s prefix and the number his counter holds (EQ-06)'
-        USING ERRCODE = 'restrict_violation';
-    END IF;
-    IF NEW."statement_id" IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM "commission_statements" s
-      WHERE s."id" = NEW."statement_id" AND s."member_id" = NEW."member_id" AND s."status" IN ('validated', 'paid')
-        AND CASE NEW."kind" WHEN 'invoice' THEN s."period" = NEW."period" ELSE s."period" > NEW."period" END
-    ) THEN
-      RAISE EXCEPTION 'an invoice bills a validated statement of its contractor and period, a credit note is owed by a later one (EQ-06)'
-        USING ERRCODE = 'restrict_violation';
-    END IF;
-    IF NEW."kind" = 'invoice' THEN
-      IF NOT EXISTS (
-        SELECT 1 FROM "billing_regimes" r WHERE r."id" = NEW."regime_id" AND r."validated_on" IS NOT NULL
-      ) THEN
-        RAISE EXCEPTION 'an invoice is issued under a regime the accountant validated (EQ-06)'
-          USING ERRCODE = 'restrict_violation';
-      END IF;
-      RETURN NEW;
-    END IF;
-    -- Two credit notes on one invoice at once are taken one after the other, each counting the one before. (A lock
-    -- of the row would ask the policies of an update, which the agency passes only on a contested invoice.)
-    PERFORM pg_advisory_xact_lock(hashtextextended('invoices:' || NEW."credited_invoice_id"::text, 0));
-    SELECT * INTO cited FROM "invoices" i WHERE i."id" = NEW."credited_invoice_id";
-    IF NOT FOUND OR cited."kind" <> 'invoice' OR cited."member_id" <> NEW."member_id"
-       OR cited."period" <> NEW."period" OR cited."regime_id" <> NEW."regime_id" OR cited."regime" <> NEW."regime" THEN
-      RAISE EXCEPTION 'a credit note cites an invoice of its contractor and keeps its period and regime (ADR 0036)'
-        USING ERRCODE = 'restrict_violation';
-    END IF;
-    IF cited."excl_vat_minor" + NEW."excl_vat_minor" + coalesce((
-      SELECT sum(n."excl_vat_minor") FROM "invoices" n
-      WHERE n."credited_invoice_id" = cited."id" AND n."kind" = 'credit_note'
-    ), 0) < 0 THEN
-      RAISE EXCEPTION 'a credit note never takes more than what is left of invoice % (EQ-06)', cited."number"
+      RAISE EXCEPTION 'an invoice is issued under a regime the accountant validated by its day of issue (EQ-06)'
         USING ERRCODE = 'restrict_violation';
     END IF;
     RETURN NEW;
   END IF;
-  IF to_jsonb(NEW) - moving IS DISTINCT FROM to_jsonb(OLD) - moving THEN
-    RAISE EXCEPTION 'invoice % keeps what it was issued with (EQ-06)', OLD."number" USING ERRCODE = 'restrict_violation';
+  -- Two credit notes on one invoice at once are taken one after the other, each counting the one before.
+  PERFORM pg_advisory_xact_lock(hashtextextended('invoices:' || NEW."credited_invoice_id"::text, 0));
+  SELECT * INTO cited FROM "invoices" i WHERE i."id" = NEW."credited_invoice_id";
+  IF NOT FOUND OR cited."kind" <> 'invoice' OR cited."member_id" <> NEW."member_id"
+     OR cited."period" <> NEW."period" OR cited."regime_id" <> NEW."regime_id" OR cited."regime" <> NEW."regime" THEN
+    RAISE EXCEPTION 'a credit note cites an invoice of its contractor and keeps its period and regime (ADR 0036)'
+      USING ERRCODE = 'restrict_violation';
   END IF;
-  IF (NEW."pdf_key", NEW."pdf_sha256") IS DISTINCT FROM (OLD."pdf_key", OLD."pdf_sha256") AND OLD."pdf_key" IS NOT NULL THEN
-    RAISE EXCEPTION 'the PDF of invoice % is recorded once (EQ-06)', OLD."number" USING ERRCODE = 'restrict_violation';
-  END IF;
-  IF NEW."acceptance_state" = OLD."acceptance_state" THEN
-    IF (NEW."acceptance_reason", NEW."answered_at", NEW."answered_by") IS DISTINCT FROM
-       (OLD."acceptance_reason", OLD."answered_at", OLD."answered_by") THEN
-      RAISE EXCEPTION 'an answer to invoice % comes with its step (EQ-06)', OLD."number"
-        USING ERRCODE = 'restrict_violation';
-    END IF;
-    RETURN NEW;
-  END IF;
-  IF OLD."acceptance_state" = 'pending' AND NEW."acceptance_state" IN ('accepted', 'contested') THEN
-    IF now() >= OLD."acceptance_deadline" THEN
-      RAISE EXCEPTION 'the delay to answer invoice % is over (EQ-06)', OLD."number" USING ERRCODE = 'restrict_violation';
-    END IF;
-  ELSIF OLD."acceptance_state" = 'pending' AND NEW."acceptance_state" = 'tacitly_accepted' THEN
-    IF now() < OLD."acceptance_deadline" THEN
-      RAISE EXCEPTION 'invoice % is accepted tacitly only once its delay is over (EQ-06)', OLD."number"
-        USING ERRCODE = 'restrict_violation';
-    END IF;
-  ELSIF OLD."acceptance_state" = 'contested' AND NEW."acceptance_state" = 'credited' THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM "invoices" n WHERE n."credited_invoice_id" = OLD."id" AND n."kind" = 'credit_note'
-    ) THEN
-      RAISE EXCEPTION 'a contest of invoice % is answered by a credit note that cites it (EQ-06)', OLD."number"
-        USING ERRCODE = 'restrict_violation';
-    END IF;
-  ELSIF NOT (OLD."acceptance_state" = 'contested' AND NEW."acceptance_state" = 'contest_refused') THEN
-    RAISE EXCEPTION 'invoice % does not go from % to % (EQ-06)', OLD."number", OLD."acceptance_state",
-      NEW."acceptance_state" USING ERRCODE = 'restrict_violation';
+  IF cited."excl_vat_minor" + NEW."excl_vat_minor" + coalesce((
+    SELECT sum(n."excl_vat_minor") FROM "invoices" n
+    WHERE n."credited_invoice_id" = cited."id" AND n."kind" = 'credit_note'
+  ), 0) < 0 THEN
+    RAISE EXCEPTION 'a credit note never takes more than what is left of invoice % (EQ-06)', cited."number"
+      USING ERRCODE = 'restrict_violation';
   END IF;
   RETURN NEW;
 END;
 $$;--> statement-breakpoint
-CREATE TRIGGER "invoices_kept" BEFORE INSERT OR UPDATE ON "invoices"
+CREATE TRIGGER "invoices_issued" BEFORE INSERT ON "invoices"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice"();--> statement-breakpoint
 -- At the commit of the transaction that issues it, an invoice has its lines and they add up to its total.
 CREATE FUNCTION "check_invoice_lines"() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -548,27 +507,43 @@ END;
 $$;--> statement-breakpoint
 CREATE TRIGGER "invoice_lines_with_invoice" BEFORE INSERT ON "invoice_lines"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice_line"();--> statement-breakpoint
--- An event says the step the invoice is at: issued in its transaction, an answer after the state it gives, a payment
--- by a paid statement of the same contractor.
+-- An invoice's acceptance is its events, along the steps of `invoice-acceptance.ts`: issued in its own transaction;
+-- then accepted or contested before the mandate's delay, or accepted tacitly (`lapsed`) once it is over; a contest
+-- ends credited, once a credit note written after it cites the invoice, or refused. The partial unique indexes keep
+-- one issue, one answer and one end of a contest; a payment names a paid statement of the same contractor.
 CREATE FUNCTION "keep_invoice_event"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   invoice "invoices"%ROWTYPE;
+  contested_at timestamptz;
 BEGIN
   SELECT * INTO invoice FROM "invoices" i WHERE i."id" = NEW."invoice_id";
-  IF NEW."kind" = 'issued' AND (invoice."created_at" <> now() OR EXISTS (
-       SELECT 1 FROM "invoice_events" e WHERE e."invoice_id" = NEW."invoice_id" AND e."kind" = 'issued'))
-     OR NEW."kind" = 'paid' AND NOT EXISTS (
-       SELECT 1 FROM "commission_statements" s
-       WHERE s."id" = NEW."statement_id" AND s."member_id" = invoice."member_id" AND s."status" = 'paid')
-     OR NEW."kind" NOT IN ('issued', 'paid')
-        AND invoice."acceptance_state" <> (CASE NEW."kind" WHEN 'lapsed' THEN 'tacitly_accepted' ELSE NEW."kind" END) THEN
-    RAISE EXCEPTION 'event % does not say where invoice % stands (EQ-06)', NEW."kind", invoice."number"
+  -- An invoice its author cannot read is the policy's to refuse, a missing one the foreign key's.
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+  SELECT e."created_at" INTO contested_at FROM "invoice_events" e
+  WHERE e."invoice_id" = NEW."invoice_id" AND e."kind" = 'contested';
+  -- In parentheses: PL/pgSQL would end the condition at the first THEN of the CASE.
+  IF (CASE NEW."kind"
+    WHEN 'issued' THEN invoice."created_at" = now()
+    WHEN 'accepted' THEN now() < invoice."acceptance_deadline"
+    WHEN 'contested' THEN now() < invoice."acceptance_deadline"
+    WHEN 'lapsed' THEN now() >= invoice."acceptance_deadline"
+    WHEN 'credited' THEN contested_at IS NOT NULL AND EXISTS (
+      SELECT 1 FROM "invoices" n
+      WHERE n."credited_invoice_id" = NEW."invoice_id" AND n."kind" = 'credit_note' AND n."created_at" >= contested_at)
+    WHEN 'contest_refused' THEN contested_at IS NOT NULL
+    WHEN 'paid' THEN EXISTS (
+      SELECT 1 FROM "commission_statements" s
+      WHERE s."id" = NEW."statement_id" AND s."member_id" = invoice."member_id" AND s."status" = 'paid')
+  END) IS NOT TRUE THEN
+    RAISE EXCEPTION 'event % does not follow where invoice % stands (EQ-06)', NEW."kind", invoice."number"
       USING ERRCODE = 'restrict_violation';
   END IF;
   RETURN NEW;
 END;
 $$;--> statement-breakpoint
-CREATE TRIGGER "invoice_events_said" BEFORE INSERT ON "invoice_events"
+CREATE TRIGGER "invoice_events_in_order" BEFORE INSERT ON "invoice_events"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice_event"();--> statement-breakpoint
 -- The period an adjustment corrects is that of the statement it cites (ADR 0036: its credit note goes on that
 -- period's invoice): a statement of the same member, validated or paid, of an earlier period.
@@ -588,18 +563,17 @@ $$;--> statement-breakpoint
 CREATE TRIGGER "pay_adjustments_corrected_statement" BEFORE INSERT ON "pay_adjustments"
   FOR EACH ROW EXECUTE FUNCTION "keep_corrected_statement"();--> statement-breakpoint
 -- From nothing, whatever the default privileges of the base gave (a TRUNCATE would pass the RLS and the triggers).
--- The application writes each table under its policies, and only the columns a step writes; the jobs
--- (`nirvana_admin`) record a tacit acceptance and a PDF.
-REVOKE ALL ON "billing_settings", "billing_regimes", "contractor_regimes", "contractor_profiles",
-  "contractor_documents", "contract_texts", "contract_acceptances", "invoice_counters", "invoices", "invoice_lines",
-  "invoice_events" FROM nirvana_app;--> statement-breakpoint
-GRANT SELECT, INSERT ON "billing_settings", "billing_regimes", "contractor_regimes", "contractor_profiles",
-  "contractor_documents", "contract_texts", "contract_acceptances", "invoice_counters", "invoices", "invoice_lines",
-  "invoice_events" TO nirvana_app;--> statement-breakpoint
+-- The application adds rows under the policies and changes only the settings, a contractor's file and a counter; the
+-- jobs (`nirvana_admin`) write a PDF and a tacit acceptance.
+REVOKE ALL ON "billing_settings", "billing_regimes", "billing_regime_validations", "contractor_regimes",
+  "contractor_profiles", "contractor_documents", "contract_texts", "contract_acceptances", "invoice_counters",
+  "invoices", "invoice_lines", "invoice_events", "invoice_pdfs" FROM nirvana_app;--> statement-breakpoint
+GRANT SELECT, INSERT ON "billing_settings", "billing_regimes", "billing_regime_validations", "contractor_regimes",
+  "contractor_profiles", "contractor_documents", "contract_texts", "contract_acceptances", "invoice_counters",
+  "invoices", "invoice_lines", "invoice_events" TO nirvana_app;--> statement-breakpoint
+GRANT SELECT ON "invoice_pdfs" TO nirvana_app;--> statement-breakpoint
 GRANT UPDATE ("agency", "due_days", "document_reminder_days", "accounts", "updated_by", "updated_at")
   ON "billing_settings" TO nirvana_app;--> statement-breakpoint
-GRANT UPDATE ("validated_on", "validated_by") ON "billing_regimes" TO nirvana_app;--> statement-breakpoint
 GRANT UPDATE ("legal_name", "address", "tax_id", "email", "invoice_prefix", "verified_at", "verified_by",
   "updated_by", "updated_at") ON "contractor_profiles" TO nirvana_app;--> statement-breakpoint
-GRANT UPDATE ("last_sequence") ON "invoice_counters" TO nirvana_app;--> statement-breakpoint
-GRANT UPDATE ("acceptance_state", "acceptance_reason", "answered_at", "answered_by") ON "invoices" TO nirvana_app;
+GRANT UPDATE ("last_sequence") ON "invoice_counters" TO nirvana_app;

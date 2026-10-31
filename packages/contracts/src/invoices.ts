@@ -113,9 +113,12 @@ export const InvoiceNumberSchema = z.string().regex(new RegExp(INVOICE_NUMBER_PA
 /** A SHA-256 in lowercase hexadecimal: a contract text, a document, a rendered PDF. */
 export const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/u);
 
-/** Where a file lies in the object storage (ADR 0028), never on the server's disk. */
-export const FILE_KEY_MAX = 512;
-export const FileKeySchema = z.string().min(1).max(FILE_KEY_MAX);
+/**
+ * Where a file lies in the object storage, never on the server's disk: the same `storage_key` as a medium (ADR 0030),
+ * in the bucket kept ten years with the invoices (ADR 0028), with the file's SHA-256 beside it.
+ */
+export const STORAGE_KEY_MAX = 512;
+export const StorageKeySchema = z.string().min(1).max(STORAGE_KEY_MAX);
 
 /** The longest texts the base keeps of a contractor and of a regime. */
 export const LEGAL_NAME_MAX = 160;
@@ -216,7 +219,7 @@ export const ContractorDocumentSchema = z.object({
   issuedOn: CalendarDaySchema,
   /** When the document bears its own end; otherwise its regime's duration gives it. */
   validUntil: CalendarDaySchema.nullable(),
-  fileSha256: Sha256Schema,
+  sha256: Sha256Schema,
   createdAt: z.iso.datetime(),
 });
 export type ContractorDocument = z.infer<typeof ContractorDocumentSchema>;
