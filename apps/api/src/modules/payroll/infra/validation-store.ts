@@ -1,6 +1,7 @@
 import {
   canonicalExchangeRates,
   CarryOverIdSchema,
+  carryOverRank,
   CommissionStatementStatusSchema,
   newId,
   nextPayPeriod,
@@ -341,6 +342,8 @@ export function createDrizzlePayrollValidationStore(
             fromPeriod: head.period,
             toPeriod: nextPayPeriod(head.period),
             amountMinor: carried,
+            // How many times in a row its amount has been carried (ADR 0038); the base checks it.
+            rank: carryOverRank(statement.content.counted.carryOversIn, carried),
             statementId,
           });
         }

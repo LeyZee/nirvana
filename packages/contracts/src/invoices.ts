@@ -166,9 +166,12 @@ export const DEFAULT_CONTEST_DELAY_DAYS = 7;
 export const CONTEST_DELAY_MAX_DAYS = 60;
 /**
  * An invoice falls due this many days after its issue (a setting), never more than 60: the most a payment term agreed
- * between professionals may run from the invoice's date (art. L441-10 of the Code de commerce).
+ * between professionals may run from the invoice's date (art. L441-10 of the Code de commerce). Never less than 45
+ * either: a positive amount is carried twice at most and paid by the third fortnight, which must fall before the due
+ * date of the first invoice (ADR 0038).
  */
-export const DEFAULT_INVOICE_DUE_DAYS = 15;
+export const DEFAULT_INVOICE_DUE_DAYS = 60;
+export const INVOICE_DUE_MIN_DAYS = 45;
 export const INVOICE_DUE_MAX_DAYS = 60;
 /** How long before a document's end the reminder goes out (a setting). */
 export const DEFAULT_DOCUMENT_REMINDER_DAYS = 30;
@@ -303,7 +306,7 @@ export type JournalAccounts = z.infer<typeof JournalAccountsSchema>;
 export const BillingSettingsSchema = z.object({
   agency: InvoiceAgencySchema,
   paymentTerms: PaymentTermsSchema,
-  dueDays: z.number().int().min(1).max(INVOICE_DUE_MAX_DAYS),
+  dueDays: z.number().int().min(INVOICE_DUE_MIN_DAYS).max(INVOICE_DUE_MAX_DAYS),
   documentReminderDays: z.number().int().min(1).max(DOCUMENT_REMINDER_MAX_DAYS),
   accounts: JournalAccountsSchema,
   updatedAt: z.iso.datetime(),

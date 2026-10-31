@@ -6,6 +6,7 @@ import {
   DOCUMENT_REMINDER_MAX_DAYS,
   INVOICE_DOCUMENT_MENTIONS_MAX,
   INVOICE_DUE_MAX_DAYS,
+  INVOICE_DUE_MIN_DAYS,
   INVOICE_EVENT_KINDS,
   INVOICE_KINDS,
   INVOICE_LINE_DETAIL_MAX,
@@ -111,7 +112,7 @@ export const billingSettings = pgTable(
     check('billing_settings_payment_terms_check', textBetween(t.paymentTerms, PAYMENT_TERMS_MAX)),
     check(
       'billing_settings_delays_check',
-      sql`${t.dueDays} between 1 and ${num(INVOICE_DUE_MAX_DAYS)} and ${t.documentReminderDays} between 1 and ${num(DOCUMENT_REMINDER_MAX_DAYS)}`,
+      sql`${t.dueDays} between ${num(INVOICE_DUE_MIN_DAYS)} and ${num(INVOICE_DUE_MAX_DAYS)} and ${t.documentReminderDays} between 1 and ${num(DOCUMENT_REMINDER_MAX_DAYS)}`,
     ),
     pgPolicy('team_read', { for: 'select', using: readsTeam }),
     pgPolicy('owner_insert', {

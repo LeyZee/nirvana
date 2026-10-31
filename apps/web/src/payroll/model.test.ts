@@ -1,5 +1,6 @@
 import {
   BonusIdSchema,
+  CarryOverIdSchema,
   CommissionStatementIdSchema,
   newId,
   PayAdjustmentIdSchema,
@@ -10,6 +11,7 @@ import {
   ShiftReportIdSchema,
   TeamMemberIdSchema,
   UserIdSchema,
+  type CarryOver,
   type CommissionStatement,
   type CommissionStatementLine,
   type PayPeriod,
@@ -745,6 +747,43 @@ describe('a member’s row', () => {
     expect(plain(carryLine(statement(negative), false) ?? '')).toBe(
       'Total sous zéro à ce jour : −8,00 € iraient sur la quinzaine suivante, si la quinzaine finit ainsi.',
     );
+  });
+
+  it('says a second carry-over in a row, then why the next period pays under the minimum (ADR 0038)', () => {
+    const carriedIn = (amountMinor: number, rank: number): CarryOver => ({
+      id: newId(CarryOverIdSchema),
+      memberId: newId(TeamMemberIdSchema),
+      fromPeriod: PayPeriodSchema.parse('2026-10-16'),
+      toPeriod: PERIOD,
+      amountMinor,
+      rank,
+      statementId: newId(CommissionStatementIdSchema),
+      createdAt: '2026-11-02T09:00:00.000Z',
+    });
+    const once = [carriedIn(900, 1)];
+    const second = { carryOversIn: once, totalMinor: 1_300, carryOverOutMinor: 1_300, payableMinor: 0 };
+    expect(plain(carryLine(statement({ ...second, status: 'validated' }), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 € : 13,00 € reportés sur la quinzaine suivante. Deuxième report de suite : la quinzaine suivante le verse, même sous le minimum.',
+    );
+    expect(plain(carryLine(statement(second), false) ?? '')).toBe(
+      'Sous le minimum de 15,00 € à ce jour : 13,00 € iraient sur la quinzaine suivante, si la quinzaine finit ainsi. Deuxième report de suite : la quinzaine suivante le verse, même sous le minimum.',
+    );
+    // After a negative carry-over, the count starts again: a first carry-over, said plainly.
+    const afterNegative = { ...second, carryOversIn: [carriedIn(-500, 1)] };
+    expect(plain(carryLine(statement({ ...afterNegative, status: 'validated' }), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 € : 13,00 € reportés sur la quinzaine suivante.',
+    );
+    // Carried twice: paid under the minimum, and said why.
+    const twice = [carriedIn(1_300, 2)];
+    const paid = { carryOversIn: twice, totalMinor: 1_400, carryOverOutMinor: 0, payableMinor: 1_400 };
+    expect(plain(carryLine(statement({ ...paid, status: 'validated' }), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 €, mais déjà reporté deux fois : la quinzaine le verse quand même, pour que la facture soit payée avant son échéance.',
+    );
+    expect(plain(carryLine(statement(paid), false) ?? '')).toBe(
+      'Sous le minimum de 15,00 € à ce jour, mais déjà reporté deux fois : la quinzaine le verse quand même, pour que la facture soit payée avant son échéance.',
+    );
+    // Over the minimum, the payment needs no word.
+    expect(carryLine(statement({ ...paid, totalMinor: 2_000, payableMinor: 2_000 }), true)).toBeNull();
   });
 });
 
