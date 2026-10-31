@@ -1,5 +1,5 @@
 # EQ-06 Factures des prestataires : autofacturation, avoirs, export comptable
-Statut : todo (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; le comptable de l'agence valide contrat, mandat, régimes et première facture avant la mise en service)
+Statut : in_progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; lot 1 sur 8, les règles pures, écrit et testé, en PR (#283) avec l'ADR 0036, acceptée par Charles le 31/10 ; le comptable de l'agence valide contrat, mandat, régimes et première facture avant la mise en service)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-04, EQ-05
 Branche : task/eq-06-self-billing-invoices
@@ -44,3 +44,38 @@ Branche : task/eq-06-self-billing-invoices
 Transmission à une plateforme agréée (e-reporting des achats aux prestataires étrangers et factures électroniques des prestataires français, à partir du 1er septembre 2027 pour une PME), coordonnées de paiement, facturation des créatrices, rapprochement bancaire, import des factures d'Imperium (EQ-07).
 
 ## Notes de session
+
+### 2026-10-28 — découpage en lots et règles pures (fil Équipe)
+
+La fiche est trop grande pour une PR. Huit lots, chacun sa PR, dans cet ordre ; seuls les lots 1 et 8 (maquettes) se font sans attendre la base.
+
+1. **Domaine pur, sans migration** : le régime d'un prestataire à une date, la durée des pièces, la garde d'émission et ses avertissements, le numéro, les lignes et les totaux depuis un relevé validé et ses saisies, l'échéance, l'avoir, l'état d'acceptation, le journal des achats et la DAS2. Rien n'est écrit en base. **Fait** (`payroll/domain/billing.ts`, `invoices.ts`, `invoice-acceptance.ts`, `accounting.ts`, leurs tests).
+2. **Base et contrats** (par Bilan, numéro de migration à attribuer) : les tables de la fiche, leurs politiques, le déclencheur qui refuse `UPDATE` et `DELETE` sur une facture émise, le compteur par (prestataire, année) ; les DTO dans `packages/contracts`.
+3. **Émission** dans la transaction de validation : compteur `FOR UPDATE`, une facture par relevé, refus motivé (le relevé reste validé). Test des séquences sous validations simultanées.
+4. **PDF et conservation** : une ADR d'abord (0037, la prochaine libre ; 0036 est prise par les avoirs dus) sur la bibliothèque de rendu et le lieu de conservation (stockage objet de l'ADR 0028, ou Postgres). Job idempotent, empreinte SHA-256, octet pour octet.
+5. **Dossier prestataire, contrat et mandat** : textes versionnés fournis par l'agence et validés par son comptable (jamais écrits par une session), acceptation avec version, date, empreinte et auteur ; pièces datées et rappels (EQ-12).
+6. **Acceptation, contestation, avoirs** : « J'accepte », « Je conteste » avec motif, acceptation tacite par un job daté, chaque étape dans `audit_log`.
+7. **Export comptable et DAS2** : journal des achats en CSV avec comptes réglables, archive des PDF, récapitulatif annuel.
+8. **Écrans** : Commissions › Mes factures (chatteur), Paie › Factures, Réglages › Facturation (coordonnées de l'agence, régimes, comptes, délais), le dossier dans Moi ; finition et captures.
+
+Défauts posés par le lot 1, à faire valider par Charles et le comptable avant la mise en service (EQ-17) :
+- **Identité incomplète** : un nom, une adresse ou un pays manquant, ou l'identifiant fiscal quand le régime l'imprime (SIREN ou SIRET en France), et aucune facture n'est émise : une facture émise ne change jamais, et il lui manquerait une mention obligatoire. Le relevé reste validé et le motif est dit au propriétaire. Les pièces manquantes ou échues et un mandat d'une version dépassée restent des avertissements en ambre, comme la fiche le prévoit. La fiche disait « dossier incomplet » en avertissement : seule l'identité passe en blocage.
+- **Régime** : celui du jour de la validation, copié dans la facture. Un régime que le comptable n'a pas validé, ou validé après ce jour, n'émet rien. Un changement part d'aujourd'hui au plus tôt et après le dernier (`billing_regime_backdated_unprocessable`).
+- **Pièces** : un an pour l'attestation de résidence, six mois pour l'attestation de vigilance, la veille du même quantième (le 31 août plus six mois finit le 27 février), sauf si la pièce porte sa fin. La plus récente d'une sorte compte. Le rappel commence le délai du propriétaire avant le dernier jour.
+- **Malus plafonné** : chaque malus est une ligne négative, au montant demandé ; quand le plafond joue, une ligne « Plafond des réfactions » rend la différence. Un malus en pourcentage prend sa part de l'arrondi unique du moteur (total arrondi courant moins le précédent) : les lignes tombent au centime sur le relevé.
+- **Reports** (ADR 0023) : un report, positif ou négatif, n'est jamais refacturé : il reste facturé dans sa période et ne retarde que le versement. Les lignes s'additionnent toujours au total du relevé, moins les reports entrants et moins ce que la quinzaine doit rendre, sinon le lot 3 a un bug et rien n'est émis.
+- **Ce qu'une quinzaine doit rendre** (ADR 0036, acceptée par Charles le 31/10 ; remarque de Bilan sur #283) : une régularisation en faveur de l'agence n'est jamais une ligne de facture, c'est un avoir sur la facture de la quinzaine qu'elle corrige. Une quinzaine dont les lignes finissent sous zéro (remboursements au-dessus des ventes) n'a pas de facture : son manque est un avoir sur la dernière facture d'une quinzaine antérieure qui a encore assez de reste. Un avoir n'est jamais coupé ; sans facture qui le reçoive entier, rien n'est émis et le propriétaire est alerté, pour régler le cas avec le comptable. Une régularisation en faveur du chatteur reste une ligne de la facture où elle est portée. Ainsi les factures moins les avoirs égalent les virements, au centime. Le lot 2 garde la quinzaine que corrige un ajustement, inconnue aujourd'hui.
+- **Prestataire redevable de la TVA** (France) : la commission est hors taxe, la TVA au taux du régime s'ajoute et le montant à verser devrait l'inclure. Question ouverte pour Charles et le comptable, puisque le moteur de paie ne connaît pas la TVA aujourd'hui. Sous autoliquidation, rien n'est facturé en plus et la TVA autoliquidée n'est qu'une ligne du journal des achats.
+- **Échéance** : quinze jours après l'émission (réglage). La fiche veut que la facture d'un montant reporté suive le versement attendu : le lot 3 lui donne l'échéance du relevé qui le versera.
+- **Numéro** : `PRÉFIXE-AAAA-NNNN`, préfixe de deux à huit majuscules ou chiffres, propre au prestataire et figé à sa première facture ; la séquence repart à 1 chaque année et dépasse quatre chiffres sans se couper.
+- **Avoir** : une annulation reprend chaque ligne en négatif, seulement sur une facture où rien n'a encore été crédité ; une réduction est une ligne motivée ; ce qu'une quinzaine doit rendre est une ligne « Régularisation » avec sa période, ou « Solde négatif » avec la quinzaine. Jamais plus que ce qui reste (`credit_note_amount_unprocessable`). Un avoir prend le régime de TVA et les mentions de la facture qu'il cite, jamais le régime du jour (ADR 0036).
+- **Acceptation** : `pending`, puis `accepted` ou `contested` avant la fin du délai, `tacitly_accepted` à partir d'elle ; une contestation finit en `credited` ou `contest_refused` avec un motif. Toute autre étape est refusée (`invoice_acceptance_conflict`). Un avoir suit la même acceptation, à partir de `pending`. Émis à l'initiative de l'agence (ce qu'une quinzaine doit rendre, une réduction), il ne change pas l'état de la facture qu'il cite : seul l'avoir qui répond à une contestation la fait passer en `credited` (`stateAfterCreditNote`).
+- **DAS2** : ce qui a été versé à chaque prestataire dans l'année civile, par date de paiement, au-dessus de 1 200 € seulement.
+
+### 2026-10-28 — relecture de Bilan sur #283 (fil Équipe)
+
+Bilan a relevé qu'une quinzaine sous zéro ne laissait aucune pièce : pas de facture, et son report négatif exclu de la facture suivante. Une ligne de déduction sur la facture suivante aurait déplacé la facturation avec le report, ce que l'ADR 0023 exclut ; le lot mettait aussi une régularisation en faveur de l'agence en ligne d'une facture suivante, alors que l'ADR la veut en avoir. Les deux deviennent des avoirs dus (`creditsDue`, `planCreditNotes`) selon l'ADR 0036 proposée, avec la question au comptable. Un avoir de l'agence ne change pas l'acceptation de la facture qu'il cite (`stateAfterCreditNote`). L'ADR du PDF (lot 4) prend 0037.
+
+### 2026-10-31 — ADR 0036 acceptée (fil Équipe)
+
+Charles a accepté l'ADR 0036 (« ok 0036 », 11 h 39) telle qu'écrite le 28/10 ; aucune règle ne change.
