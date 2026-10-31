@@ -358,6 +358,15 @@ export function invoiceDueOn(issuedOn: string, delayDays: number): string {
   return addDays(issuedOn, delayDays);
 }
 
+/**
+ * The payment terms an invoice prints after its regime's mentions (art. L441-9 of the Code de commerce): its due date,
+ * the one fact the code writes, then the agency's terms as its settings word them (no discount, the late-payment
+ * penalties, the 40 € indemnity): a contractual choice its accountant validates, never written here.
+ */
+export function paymentTermsMention(dueOn: string, terms: string): string {
+  return `Échéance${COLON}${longDay(dueOn)}. ${terms}`;
+}
+
 /** What a credit note cites of its invoice, printed as a mention of the credit note. */
 export function creditNoteMention(invoiceNumber: string, issuedOn: string): string {
   return `Avoir sur la facture ${invoiceNumber} du ${longDay(issuedOn)}`;

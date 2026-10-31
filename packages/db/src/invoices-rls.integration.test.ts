@@ -335,6 +335,8 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       const settings = {
         id: 1,
         agency: AGENCY,
+        paymentTerms:
+          'Aucun escompte. Pénalités de retard au triple du taux d’intérêt légal, indemnité de 40 €.',
         dueDays: 15,
         documentReminderDays: 30,
         accounts: { expense: '622', supplierPrefix: '401', vatDeductible: '44566', vatSelfAssessed: '4452' },
@@ -345,6 +347,12 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
           as(manager, (tx) => tx.insert(s.billingSettings).values({ ...settings, updatedBy: manager })),
         ),
       ).toMatch(RLS);
+      // The payment terms are the agency's words: an invoice never goes out without them.
+      expect(
+        await failure(
+          as(owner, (tx) => tx.insert(s.billingSettings).values({ ...settings, paymentTerms: '' })),
+        ),
+      ).toMatch(/billing_settings_payment_terms_check/u);
       await as(owner, (tx) => tx.insert(s.billingSettings).values(settings));
       expect(
         await failure(as(owner, (tx) => tx.insert(s.billingSettings).values({ ...settings, id: 2 }))),
@@ -360,6 +368,17 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       expect(await as(manager, (tx) => tx.select().from(s.billingSettings))).toHaveLength(1);
       expect(await as(kofi, (tx) => tx.select().from(s.billingSettings))).toHaveLength(0);
       await as(owner, (tx) => tx.update(s.billingSettings).set({ dueDays: 30, updatedBy: owner }));
+      // The owner changes the payment terms of an existing row, as every other setting (an UPDATE granted by column).
+      const later =
+        'Aucun escompte. Pénalités de retard au taux de la BCE majoré de 10 points, indemnité de 40 €.';
+      expect(
+        await as(owner, (tx) =>
+          tx
+            .update(s.billingSettings)
+            .set({ paymentTerms: later, updatedBy: owner })
+            .returning({ paymentTerms: s.billingSettings.paymentTerms }),
+        ),
+      ).toEqual([{ paymentTerms: later }]);
       expect(await failure(admin((tx) => tx.delete(s.billingSettings)))).toMatch(KEPT);
     });
 

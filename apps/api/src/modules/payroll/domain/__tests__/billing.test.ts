@@ -36,6 +36,13 @@ const facts = (patch: Partial<IssueFacts> = {}): IssueFacts => ({
   assignments: [{ regimeId: 'abroad', from: '2026-10-01' }],
   regimes: [ABROAD, FRANCHISE],
   identity: { legalName: 'Théo Martin', address: '12 rue des Lilas, Cotonou', country: 'BJ', taxId: null },
+  prefix: 'THEO',
+  agency: {
+    legalName: 'Agence Exemple SAS',
+    address: '1 place Inventée, 69000 Lyon',
+    siren: '123456789',
+    vatNumber: 'FR12123456789',
+  },
   documents: [{ kind: 'tax_residence', issuedOn: '2026-03-10', validUntil: null }],
   exclVatMinor: 32_515,
   ...patch,
@@ -144,9 +151,20 @@ describe('whether a validated statement issues its invoice (EQ-06)', () => {
     ).toMatchObject({ reason: 'identity_incomplete' });
   });
 
-  it('issues nothing for a period that brings nothing', () => {
+  it('issues nothing without the contractor’s prefix or the agency’s identity, both the owner’s settings', () => {
+    expect(issueDecision(facts({ prefix: null }))).toMatchObject({ kind: 'none', reason: 'prefix_missing' });
+    expect(issueDecision(facts({ agency: null }))).toMatchObject({ kind: 'none', reason: 'agency_missing' });
+  });
+
+  it('issues nothing for a period that brings nothing, and has nothing to tell the owner then', () => {
     expect(issueDecision(facts({ exclVatMinor: 0 }))).toMatchObject({ reason: 'nothing_to_invoice' });
     expect(issueDecision(facts({ exclVatMinor: -1_240 }))).toMatchObject({ reason: 'nothing_to_invoice' });
+    // Nothing to invoice comes first: a member without a mandate who earned nothing is not a reason to alert.
+    expect(
+      issueDecision(
+        facts({ exclVatMinor: 0, mandate: { acceptedVersion: null, currentVersion: 1 }, prefix: null }),
+      ),
+    ).toMatchObject({ reason: 'nothing_to_invoice' });
   });
 
   it('issues with amber warnings for documents missing or out of date, and an older mandate', () => {
