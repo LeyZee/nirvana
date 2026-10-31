@@ -1,5 +1,5 @@
 # EQ-05 Paie : écrans de validation, de paiement et commissions du chatteur
-Statut : in_progress : écrans codés et testés (28/10/2026), en PR (#281) avec la relecture d'Extension et de Bilan ; l'API qu'ils lisent est dans main (lots 3a à 3e d'EQ-04, #271 à #275, et les ajouts d'EQ-05, #279) (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
+Statut : done : écrans dans main (#281, 28/10/2026, relus par Extension et Bilan), avec le paiement par WorldRemit seul (migration 0033) ; l'API qu'ils lisent aussi (lots 3a à 3e d'EQ-04, #271 à #275, et les ajouts d'EQ-05, #279) (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-04 (lot 3 : validation, saisies, paiement, règles, taux) ; EQ-11 (fait)
 Branche : task/eq-05-payroll-screens
