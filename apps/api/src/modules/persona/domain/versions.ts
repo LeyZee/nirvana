@@ -7,8 +7,21 @@ import type {
   PersonaVersionSummary,
 } from '@nirvana/contracts';
 
+/** Her active version, the one the agent writes with (ADR 0010, 0022), and her name for a placeholder first name. */
+interface ActivePersonaVersion {
+  readonly id: PersonaVersionId;
+  readonly version: string;
+  readonly creatorName: string;
+  readonly persona: Persona;
+}
+
 /** A creator's persona versions (ADR 0010), read and written within her tenant. */
 export interface PersonaVersionStore {
+  /**
+   * Her only active version, read from the base at each call (ADR 0022: nothing kept in memory can be stale); `null`
+   * when she has none, or does not exist. A stored content that no longer reads as `Persona` throws: never a guess.
+   */
+  active(creatorId: CreatorId): Promise<ActivePersonaVersion | null>;
   overview(creatorId: CreatorId): Promise<PersonaOverview>;
   /** Stores a new version, never active; throws `PersonaVersionConflict` when `basedOn` is stale or the number is taken. */
   create(

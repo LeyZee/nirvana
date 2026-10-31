@@ -34,6 +34,7 @@ export function ModeControl({
   creatorName,
   tip,
   readOnly = null,
+  running = false,
   onChange,
 }: {
   mode: AgentMode;
@@ -45,6 +46,11 @@ export function ModeControl({
    * and the other options give this reason.
    */
   readOnly?: string | null;
+  /**
+   * Reveal is read and a voice answers: the agent acts, and the dot of Copilote breathes. Otherwise, or when nothing
+   * says so, the dot only marks the chosen mode (recette 28/10, M7), as the bar's pill does (`pillOf`).
+   */
+  running?: boolean;
   onChange: (mode: AgentMode) => void;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
@@ -153,7 +159,7 @@ export function ModeControl({
           }}
         >
           <span
-            className={`nv-dot db-mode__dot${mode === 'copilot' ? ' nv-tone--ok nv-dot--live' : ' db-mode__dot--rest'}`}
+            className={`nv-dot db-mode__dot${mode === 'copilot' ? ` nv-tone--ok${running ? ' nv-dot--live' : ''}` : ' db-mode__dot--rest'}`}
             aria-hidden="true"
           />
           Copilote

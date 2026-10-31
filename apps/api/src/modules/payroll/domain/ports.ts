@@ -8,6 +8,7 @@ import type {
   CreateBonusBody,
   CreateBonusTierSetBody,
   CreateCollectiveGoalBody,
+  CreatePayoutMinimumBody,
   CreatePenaltyBody,
   DomainError,
   ExchangeRate,
@@ -17,19 +18,23 @@ import type {
   PayAdjustmentId,
   PayCommissionStatementBody,
   PayPeriod,
+  PayPeriodBlock,
   PageQuery,
   PayPeriodClosing,
   PayPeriodSummary,
   PayPeriodWindow,
   PayrollEntries,
+  PayoutMinimum,
   PayrollSettings,
   Penalty,
   PenaltyId,
   TeamMemberId,
   TeamScope,
+  UpdatePayrollSettingsBody,
   UserId,
 } from '@nirvana/contracts';
 
+import type { PeriodBlockReason } from './period-blocks';
 import type { PeriodPlan, PeriodSnapshot, ReportForPay } from './recalculation';
 
 /** Who validates, for the policies (`withMember`) and the audit line. */
@@ -50,8 +55,13 @@ export interface JobLogger {
   error(object: object, message: string): void;
 }
 
-/** What a recalculation decided: a plan, or the business reason it could not compute the period (a missing rate). */
-export type PeriodDecision = PeriodPlan | { readonly kind: 'blocked'; readonly error: DomainError };
+/**
+ * What a recalculation decided: a plan, or the business reason it could not compute the period (a missing rate), with
+ * what the period records of it (`reason`, `null` for a refusal it does not record).
+ */
+export type PeriodDecision =
+  | PeriodPlan
+  | { readonly kind: 'blocked'; readonly error: DomainError; readonly reason: PeriodBlockReason | null };
 
 interface RecomputedPeriod {
   readonly decision: PeriodDecision;
@@ -70,7 +80,9 @@ export interface OpenPeriodFacts {
 export interface PayrollJobStore {
   /**
    * Under the lock `payroll.close`: writes pay's period `period` when it is missing, reads what its statements are
-   * made of, hands it to `decide`, and writes the drafts a plan gives.
+   * made of, hands it to `decide`, and writes the drafts a plan gives. In the same transaction, records why the period
+   * is blocked when the decision says so (`pay_period_blocks`, keeping `since` while the reason is the same), and
+   * lifts it otherwise.
    */
   recomputeUnscoped(
     period: PayPeriod,
@@ -138,8 +150,10 @@ export interface PayrollEntryStore {
 export interface PayrollRuleStore {
   createBonusTierSet(actor: Actor, body: CreateBonusTierSetBody): Promise<Recorded<BonusTierSet>>;
   createCollectiveGoal(actor: Actor, body: CreateCollectiveGoalBody): Promise<Recorded<CollectiveGoal>>;
-  /** The minimum as it stands once set; the same value again writes nothing. */
-  setSettings(actor: Actor, settings: PayrollSettings): Promise<PayrollSettings>;
+  /** PAIE-22: a payout minimum from a period that has not begun. */
+  createPayoutMinimum(actor: Actor, body: CreatePayoutMinimumBody): Promise<Recorded<PayoutMinimum>>;
+  /** PAIE-32: the payout delay announced; the settings as they stand for today's period. */
+  setSettings(actor: Actor, body: UpdatePayrollSettingsBody): Promise<PayrollSettings>;
 }
 
 /** A rate as the ECB writes it (ADR 0033): units of `currency` for one euro, in decimal text, on `day`. */
@@ -207,6 +221,8 @@ export interface PeriodView {
   /** The team's first closed period, `null` before any closing. */
   readonly firstClosed: PayPeriod | null;
   readonly closing: PayPeriodClosing | null;
+  /** Why pay could not compute the period at its last try, as recorded: every member, whoever reads. */
+  readonly blocked: PayPeriodBlock | null;
   readonly statements: readonly StoredStatement[];
   readonly bonusTierSets: readonly BonusTierSet[];
   readonly collectiveGoals: readonly CollectiveGoal[];

@@ -21,6 +21,7 @@ function message(n: number, patch: Partial<MessageView> = {}): MessageView {
     direction: 'inbound',
     author: 'fan',
     text: `Message ${String(n)}`,
+    media: [],
     priceMinor: null,
     currency: null,
     isPaid: false,
@@ -44,6 +45,44 @@ const apiError = (code: string, details: Record<string, unknown> = {}) => ({
 });
 
 describe('threadOf', () => {
+  it('says the agent stepped back because she has no active persona (recette G4)', () => {
+    const items = threadOf({
+      messages: [message(1)],
+      events: [
+        event(1, 1, {
+          type: 'handoff_requested',
+          payload: { conversationId: CONVERSATION, cause: 'persona_inactive' },
+        }),
+      ],
+    });
+    expect(items.flatMap((i) => (i.kind === 'note' ? [i.text] : []))).toEqual([
+      'L’agent passe la main (Pas de persona active pour cette créatrice)',
+    ]);
+  });
+
+  it('names each media by its kind, with what it shows once described (SUIVI-26)', () => {
+    const [item] = threadOf({
+      messages: [
+        message(1, {
+          text: '',
+          media: [
+            { kind: 'video', isLocked: true, description: 'Elle danse dans une chambre, lumière tamisée.' },
+            { kind: 'image', isLocked: true, description: null },
+          ],
+          priceMinor: 4990,
+          currency: 'EUR',
+        }),
+      ],
+      events: [],
+    });
+    expect(item).toMatchObject({
+      media: [
+        { label: 'Vidéo', description: 'Elle danse dans une chambre, lumière tamisée.' },
+        { label: 'Photo', description: null },
+      ],
+    });
+  });
+
   it('reads oldest first, and notes where the agent stepped back or a draft was refused', () => {
     const items = threadOf({
       // The API pages newest first.
@@ -78,6 +117,36 @@ describe('threadOf', () => {
     ]);
     expect(items[0]).toMatchObject({ ppv: { price: '15 €', isPaid: true } });
     expect(items[3]).toMatchObject({ byHuman: true });
+  });
+
+  it('notes an alert that let the agent go on, as calmly as the other notes', () => {
+    const alert = '0192f3a0-0000-7000-8000-0000000000a1';
+    const items = threadOf({
+      messages: [message(1)],
+      events: [
+        event(2, 2, {
+          type: 'alert_triggered',
+          payload: {
+            conversationId: CONVERSATION,
+            trigger: { alert: { kind: 'system', code: 'service_request' }, matchedBy: 'rule' },
+            notify: true,
+          },
+        }),
+        event(1, 1, {
+          type: 'alert_triggered',
+          payload: {
+            conversationId: CONVERSATION,
+            trigger: { alert: { kind: 'custom', id: alert }, matchedBy: 'keyword', keyword: 'anniversaire' },
+            notify: false,
+          },
+        }),
+      ],
+    });
+    expect(items.map((i) => (i.kind === 'note' ? `note: ${i.text}` : `${i.from}: ${i.text}`))).toEqual([
+      'fan: Message 1',
+      'note: Alerte personnalisée (mot « anniversaire ») : l’agent continue',
+      'note: Alerte « Demande de service » : l’agent continue',
+    ]);
   });
 
   it('gives the latest handoff, for the line above the thread', () => {
@@ -202,6 +271,12 @@ describe('draftsOf', () => {
 });
 
 describe('decisionError', () => {
+  it('says a creator without an active persona sends nothing, and where to activate one (recette G4)', () => {
+    expect(decisionError(422, apiError('persona_inactive_unprocessable', {}))).toBe(
+      'Ce message ne peut pas partir : cette créatrice n’a pas de persona active. Active une version dans Créatrices › Persona.',
+    );
+  });
+
   it('says which guard blocks a draft, in words', () => {
     expect(
       decisionError(422, apiError('draft_unprocessable', { guards: ['meeting_promise', 'contact_info'] })),

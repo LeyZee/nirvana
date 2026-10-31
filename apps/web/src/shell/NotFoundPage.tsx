@@ -10,7 +10,8 @@ import { railOf, sectionLabel } from './nav';
  */
 export function NotFoundPage(): JSX.Element {
   const { user } = useRouteContext({ from: '__root__' });
-  const home = railOf(user).home;
+  const rail = railOf(user);
+  const home = rail.home;
   return (
     <Page>
       <PageHeader title="Page introuvable" />
@@ -19,7 +20,7 @@ export function NotFoundPage(): JSX.Element {
           <h2>Cette page n’existe pas</h2>
           <p>L’adresse est peut-être mal écrite, ou la page a changé de place.</p>
           <Link to={home} className="nv-btn nv-btn--soft nv-btn--sm">
-            Revenir à {sectionLabel(home)}
+            Revenir à {sectionLabel(home, rail.kind)}
           </Link>
         </div>
       </Panel>

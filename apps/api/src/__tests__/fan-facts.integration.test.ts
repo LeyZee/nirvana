@@ -24,7 +24,9 @@ import {
 } from '../modules/conversations';
 import { createFansModule, type FansModule } from '../modules/fans';
 
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = newId(UserIdSchema);
 
@@ -132,9 +134,12 @@ describe('fan facts from the conversations', () => {
     queue = await createJobQueue(test.admin.pool);
     creatorId = newId(CreatorIdSchema);
     platformAccountId = newId(PlatformAccountIdSchema);
-    await test.admin.db
-      .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Créatrice inventée', timezone: 'Europe/Paris' });
+    await test.admin.db.insert(schema.creators).values({
+      id: creatorId,
+      nameKey: creatorId,
+      displayName: 'Créatrice inventée',
+      timezone: 'Europe/Paris',
+    });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'facts' });

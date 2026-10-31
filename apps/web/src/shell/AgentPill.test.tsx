@@ -53,10 +53,12 @@ afterEach(() => {
 });
 
 describe('AgentPill', () => {
-  it('says nothing about the mode until the server answers', async () => {
+  it('says nothing about the mode until the server answers, and « Agent » once (NAV-05)', async () => {
     serveDashboard(live('copilot'));
     const pill = await renderPill();
-    expect(pill.textContent).toBe('Agent');
+    // The pill writes « Agent » itself (CSS): while it waits, a dot and an ellipsis, never « Agent ● Agent ».
+    expect(pill.textContent).toBe('…');
+    expect(pill.getAttribute('aria-label')).toBe('Agent : lecture en cours.');
   });
 
   it('says the server’s mode and opens the Dashboard', async () => {
@@ -121,35 +123,36 @@ describe('AgentPill', () => {
     });
   });
 
-  it('turns red when the server says the agent is stopped', async () => {
+  it('turns amber, not red, when the server says the agent is stopped (NAV-06)', async () => {
     serveDashboard(live('stop'));
     const pill = await renderPill();
     await waitFor(() => {
       expect(pill.textContent).toBe('Arrêt');
     });
-    expect(pill.dataset['tone']).toBe('bad');
+    expect(pill.dataset['tone']).toBe('warn');
+    expect(pill.querySelector('.nv-tone--warn')).not.toBeNull();
   });
 
-  it('says « Inconnu » when the server does not answer, never the sample’s Copilote', async () => {
+  it('says « Injoignable » when the server does not answer, never the sample’s Copilote', async () => {
     serveDashboard({ status: 500 });
     const pill = await renderPill();
     await waitFor(() => {
-      expect(pill.textContent).toBe('Inconnu');
+      expect(pill.textContent).toBe('Injoignable');
     });
     expect(pill.dataset['tone']).toBe('unknown');
     expect(pill.getAttribute('title')).toContain('Le serveur ne répond pas');
   });
 
-  it('says « Inconnu » before any creator exists, never the sample’s mode', async () => {
+  it('says « Sans créatrice » before any creator exists, never the sample’s mode', async () => {
     serveDashboard(live('copilot'), []);
     const pill = await renderPill();
     await waitFor(() => {
-      expect(pill.textContent).toBe('Inconnu');
+      expect(pill.textContent).toBe('Sans créatrice');
     });
     expect(pill.getAttribute('title')).toContain('Aucune créatrice');
   });
 
-  it('follows the creator chosen on the Dashboard, not the first of the list (recette 28/10, G1)', async () => {
+  it('follows the creator chosen on the Dashboard, and names her among several (recette 28/10, G1; DASH-03)', async () => {
     const ana = { id: '0192f3a0-0000-7000-8000-0000000000c2', displayName: 'Ana', timezone: 'Europe/Paris' };
     localStorage.setItem('nirvana.followed-creator', CREATOR.id);
     try {
@@ -160,11 +163,19 @@ describe('AgentPill', () => {
       );
       const pill = await renderPill();
       await waitFor(() => {
-        expect(pill.textContent).toBe('Copilote');
+        expect(pill.textContent).toBe('Léa · Copilote');
       });
     } finally {
       localStorage.clear();
     }
+  });
+
+  it('names no creator when the account follows only one', async () => {
+    serveDashboard(live('copilot'));
+    const pill = await renderPill();
+    await waitFor(() => {
+      expect(pill.textContent).toBe('Copilote');
+    });
   });
 
   it('says Reveal is no longer read when the session holds but nothing reads it (recette 28/10, G8)', async () => {

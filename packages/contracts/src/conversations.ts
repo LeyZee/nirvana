@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ExternalMediaSchema } from './connector';
 import { DesireBandSchema, DesireScoreSchema, DesireSignalSchema, DESIRE_SIGNALS_MAX } from './desire';
 import {
   ConversationModeSchema,
@@ -68,12 +69,24 @@ export const ConversationDetailSchema = ConversationSummarySchema.extend({
 });
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
 
+/**
+ * One media of a message, as Suivi shows it (SUIVI-26): its kind and lock as the platform listed it, and what it shows
+ * (`MediaDescription.factualDescription`) once the `media` module described and kept it, `null` before. No thumbnail:
+ * Nirvana keeps no picture of a message's media.
+ */
+export const MessageMediaViewSchema = ExternalMediaSchema.pick({ kind: true, isLocked: true }).extend({
+  description: z.string().min(1).nullable(),
+});
+export type MessageMediaView = z.infer<typeof MessageMediaViewSchema>;
+
 export const MessageViewSchema = z.object({
   id: MessageIdSchema,
   direction: MessageDirectionSchema,
   author: MessageAuthorSchema,
   text: z.string(),
-  priceMinor: z.number().int().nullable(),
+  /** Its media, in the platform's order; none for a text. */
+  media: z.array(MessageMediaViewSchema),
+  priceMinor: z.number().int().min(0).nullable(),
   currency: CurrencySchema.nullable(),
   isPaid: z.boolean(),
   draftId: DraftIdSchema.nullable(),

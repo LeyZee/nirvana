@@ -73,6 +73,30 @@ export const backupRuns = pgTable(
 );
 
 /**
+ * A request to export now, out of the nightly hour (REG-24): the owner asks from Réglages › Sauvegardes, the `backup`
+ * service picks it up within a minute and runs the same export as each night (`ops/db-export/export.sh`), which writes
+ * its own `backup_runs` row. The application inserts and reads (migration 0039 grants), never runs the export
+ * (ADR 0028 § 1). `id` is made by the client, so a request sent twice is one. Out of RLS: no tenant data.
+ */
+export const backupRequests = pgTable(
+  'backup_requests',
+  {
+    id: uuid('id').primaryKey(),
+    requestedAt: timestampTz('requested_at').notNull().defaultNow(),
+    requestedByUserId: text('requested_by_user_id')
+      .notNull()
+      .references(() => user.id),
+    /** Set by the `backup` service when it starts the export; null while the request waits. */
+    pickedAt: timestampTz('picked_at'),
+  },
+  (t) => [
+    index('backup_requests_pending_idx')
+      .on(t.requestedAt)
+      .where(sql`${t.pickedAt} is null`),
+  ],
+);
+
+/**
  * A restore test of one export (ADR 0028 § 6), entered by the owner in the go-live state of the payroll (EQ-17): the
  * PC that ran it has no production credentials. The server matches the export by its SHA-256 to a succeeded
  * `backup_runs` row. Only the owner enters one: the route guarantees it (`requireRole('owner')`), not the database.

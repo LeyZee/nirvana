@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { AgeDisputeForbidden, AgeDisputeReasonInvalid } from '../errors';
 import {
+  mayConfirmDisputedAge,
   requestedChange,
   withAgeDisputed,
   withDeclaredAge,
@@ -70,6 +72,12 @@ describe('withoutFlag', () => {
     expect(withoutFlag({ fragile: true, noExplicit: true }, 'fragile')).toEqual({ noExplicit: true });
     expect(withoutFlag({ noExplicit: true }, 'fragile')).toBeNull();
   });
+
+  it('never lifts a disputed age alone: only a confirmation by the owner or a manager ends it (SUIVI-04)', () => {
+    const ageDisputed = { since: '2026-10-22T10:00:00.000Z', by: 'policy' } as const;
+    expect(() => withoutFlag({ ageDisputed }, 'ageDisputed')).toThrow(AgeDisputeForbidden);
+    expect(() => withoutFlag({}, 'ageDisputed')).toThrow(AgeDisputeForbidden);
+  });
 });
 
 describe('withFlagIfUnset', () => {
@@ -108,13 +116,38 @@ describe('his age taken back, and confirmed again', () => {
     expect(withDeclaredAge({ ageDisputed: { since: NOW.toISOString(), by: 'policy' } }, NOW)).toBeNull();
   });
 
-  it('lets a human confirm a disputed age, which settles the dispute', () => {
-    const change = { flag: 'ageConfirmedAt', value: NOW.toISOString() } as const;
-    expect(
-      withHumanConfirmation({ ageDisputed: { since: NOW.toISOString(), by: 'policy' } }, change),
-    ).toEqual({
+  const change = { flag: 'ageConfirmedAt', value: NOW.toISOString() } as const;
+  const disputed = { ageDisputed: { since: NOW.toISOString(), by: 'policy' } } as const;
+  const reason = 'Pièce d’identité vue en appel vidéo';
+
+  it('lets the owner or an active manager confirm a disputed age with a reason, which settles the dispute', () => {
+    for (const scope of ['owner', 'agency'] as const) {
+      expect(withHumanConfirmation(disputed, change, { scope, reason })).toEqual({
+        ageConfirmedAt: NOW.toISOString(),
+      });
+    }
+    // An undisputed age stays a chatter's call, with or without a reason.
+    expect(withHumanConfirmation({}, change, { scope: 'self' })).toEqual({
       ageConfirmedAt: NOW.toISOString(),
     });
-    expect(withHumanConfirmation({}, change)).toEqual({ ageConfirmedAt: NOW.toISOString() });
+  });
+
+  it('refuses a disputed age to a chatter or an unknown account, and to anyone without a written reason', () => {
+    for (const scope of ['self', null] as const) {
+      expect(() => withHumanConfirmation(disputed, change, { scope, reason })).toThrow(AgeDisputeForbidden);
+    }
+    expect(() => withHumanConfirmation(disputed, change, { scope: 'owner' })).toThrow(
+      AgeDisputeReasonInvalid,
+    );
+    expect(() => withHumanConfirmation(disputed, change, { scope: 'agency', reason: '  ' })).toThrow(
+      AgeDisputeReasonInvalid,
+    );
+  });
+
+  it('says who may lift a dispute', () => {
+    expect(mayConfirmDisputedAge('owner')).toBe(true);
+    expect(mayConfirmDisputedAge('agency')).toBe(true);
+    expect(mayConfirmDisputedAge('self')).toBe(false);
+    expect(mayConfirmDisputedAge(null)).toBe(false);
   });
 });

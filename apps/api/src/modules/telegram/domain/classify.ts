@@ -59,6 +59,7 @@ const CAUSE_TEXT: Readonly<Record<HandoffCause, string>> = {
   other: 'L’agent ne sait pas répondre.',
   custom_alert: 'Une alerte personnalisée a sonné.',
   identity_doubt: 'Le fan doute de parler vraiment à la créatrice.',
+  persona_inactive: 'La créatrice n’a pas de persona active : l’agent n’écrit rien.',
 };
 
 /**
@@ -108,6 +109,8 @@ const percent = (value: number, minimumFractionDigits: 0 | 1): string =>
 /** Why Automatique closed, in the owner's words; the figures are the server's, the thresholds too. */
 function missingText(missing: AutomaticMissing): string {
   switch (missing.kind) {
+    case 'active_persona':
+      return 'elle n’a pas de persona active';
     case 'live_rate':
       return missing.value === null
         ? `le taux en réel n’est pas encore mesuré (objectif : ${percent(missing.target, 0)})`

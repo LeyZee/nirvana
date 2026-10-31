@@ -11,6 +11,8 @@ import { z } from 'zod';
 export const HTTP_ERROR_CODES = [
   'request_invalid',
   'route_not_found',
+  /** 405: a known path asked with a method it does not answer; `Allow` lists the ones it does. */
+  'method_not_allowed',
   'session_unauthenticated',
   'role_forbidden',
   'origin_forbidden',

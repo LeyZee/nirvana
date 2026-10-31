@@ -24,10 +24,10 @@ import {
   telegramHeadLine,
   telegramLine,
   testBodyOf,
+  testCreatorOf,
   testHint,
   testCostLine,
   testVerdict,
-  watchLine,
 } from './model';
 
 /* Invented creators: no real person. */
@@ -90,9 +90,9 @@ describe('an alert of her own, before it is saved (P4-01)', () => {
     ).toEqual(['Vidéo', 'appel', 'Rendez-vous']);
   });
 
-  it('starts on the only creator, or on none when she has several', () => {
+  it('starts on every creator: an alert almost always watches them all (REG-18)', () => {
     expect(newDraft([NORA]).creatorIds).toEqual([NORA.id]);
-    expect(newDraft(ALL).creatorIds).toEqual([]);
+    expect(newDraft(ALL).creatorIds).toEqual(ALL.map((creator) => creator.id));
     expect(newDraft(ALL).notify).toBe(true);
     expect(newDraft(ALL).pausesAgent).toBe(false);
   });
@@ -155,14 +155,6 @@ describe('what goes to the server', () => {
 });
 
 describe('an alert on its line', () => {
-  it('says what it watches', () => {
-    expect(watchLine({ phrase: 'Le fan demande un appel', keywords: ['appel', 'cam', 'facetime'] })).toBe(
-      'Une phrase et 3 mots-clés',
-    );
-    expect(watchLine({ phrase: null, keywords: ['appel'] })).toBe('1 mot-clé');
-    expect(watchLine({ phrase: 'Le fan demande un appel', keywords: [] })).toBe('Une phrase');
-  });
-
   it('names its creators, or all of them', () => {
     expect(creatorsLine([NORA.id, LEA.id, IRIS.id, ZOE.id], ALL)).toBe('Toutes les créatrices');
     expect(creatorsLine([NORA.id], ALL)).toBe('Nora Vidal');
@@ -279,11 +271,16 @@ describe('a system alert', () => {
 });
 
 describe('« Tester »', () => {
-  const words = { phrase: '', keywords: ['Vidéo perso', ' custom '] };
-  const both = { phrase: ' Le fan demande une vidéo faite pour lui ', keywords: ['custom'] };
+  const words = { phrase: '', keywords: ['Vidéo perso', ' custom '], creatorIds: [NORA.id] };
+  const both = {
+    phrase: ' Le fan demande une vidéo faite pour lui ',
+    keywords: ['custom'],
+    creatorIds: [NORA.id],
+  };
 
   it('sends the alert as written, its phrase and words trimmed, once there is something to try', () => {
     expect(testBodyOf(both, ' tu me fais une vidéo ? ')).toEqual({
+      creatorId: NORA.id,
       alert: { phrase: 'Le fan demande une vidéo faite pour lui', keywords: ['custom'] },
       message: 'tu me fais une vidéo ?',
     });
@@ -291,16 +288,16 @@ describe('« Tester »', () => {
       phrase: null,
       keywords: ['Vidéo perso', 'custom'],
     });
-    expect(testBodyOf({ phrase: ' ', keywords: [] }, 'custom stp')).toBeNull();
+    expect(testBodyOf({ ...both, phrase: ' ', keywords: [] }, 'custom stp')).toBeNull();
     expect(testBodyOf(both, '  ')).toBeNull();
     expect(testBodyOf(both, 'x'.repeat(4_001))).toBeNull();
   });
 
   it('sends nothing the route would refuse for its words', () => {
-    expect(testBodyOf({ phrase: '', keywords: ['x'.repeat(101)] }, 'custom stp')).toBeNull();
-    expect(testBodyOf({ phrase: '', keywords: ['?!'] }, 'custom stp')).toBeNull();
+    expect(testBodyOf({ ...both, phrase: '', keywords: ['x'.repeat(101)] }, 'custom stp')).toBeNull();
+    expect(testBodyOf({ ...both, phrase: '', keywords: ['?!'] }, 'custom stp')).toBeNull();
     const many = Array.from({ length: 41 }, (_, index) => `mot${String(index)}`);
-    expect(testBodyOf({ phrase: '', keywords: many }, 'custom stp')).toBeNull();
+    expect(testBodyOf({ ...both, phrase: '', keywords: many }, 'custom stp')).toBeNull();
   });
 
   it('says why « Tester » waits once a message is written', () => {
@@ -309,20 +306,33 @@ describe('« Tester »', () => {
     expect(testHint(both, 'x'.repeat(4_001))).toBe(
       'Ce message est trop long pour un essai : 4\u202f000 caractères au plus.',
     );
-    expect(testHint({ phrase: ' ', keywords: ['!!!'] }, 'custom stp')).toBe(
+    expect(testHint({ ...both, phrase: ' ', keywords: ['!!!'] }, 'custom stp')).toBe(
       'Écris une phrase ou un mot-clé à tester.',
     );
     const many = Array.from({ length: 41 }, (_, index) => `mot${String(index)}`);
-    expect(testHint({ phrase: '', keywords: many }, 'custom stp')).toBe(
+    expect(testHint({ ...both, phrase: '', keywords: many }, 'custom stp')).toBe(
       'Corrige l’alerte au-dessus pour la tester.',
     );
   });
 
-  it('knows an answer for another phrase, other words or another message', () => {
+  it('names the creator whose persona reads the phrase: the one picked among the alert’s, or the first (M13)', () => {
+    const two = { ...both, creatorIds: [NORA.id, LEA.id] };
+    expect(testCreatorOf(two, null)).toBe(NORA.id);
+    expect(testCreatorOf(two, LEA.id)).toBe(LEA.id);
+    expect(testCreatorOf(both, LEA.id)).toBe(NORA.id);
+    expect(testBodyOf(two, 'bonjour', LEA.id)?.creatorId).toBe(LEA.id);
+    expect(testBodyOf({ ...both, creatorIds: [] }, 'bonjour')).toBeNull();
+    expect(testHint({ ...both, creatorIds: [] }, 'bonjour')).toBe(
+      'Choisis une créatrice au-dessus pour tester.',
+    );
+  });
+
+  it('knows an answer for another creator, phrase, other words or another message', () => {
     const sent = testBodyOf(both, 'tu me fais une vidéo ?');
     if (sent === null) throw new Error('nothing to try');
     expect(sameTest(sent, { ...sent })).toBe(true);
     expect(sameTest(sent, { ...sent, message: 'autre chose' })).toBe(false);
+    expect(sameTest(sent, { ...sent, creatorId: LEA.id })).toBe(false);
     expect(sameTest(sent, { ...sent, alert: { ...sent.alert, keywords: ['custom', 'perso'] } })).toBe(false);
     expect(sameTest(sent, { ...sent, alert: { ...sent.alert, phrase: null } })).toBe(false);
   });

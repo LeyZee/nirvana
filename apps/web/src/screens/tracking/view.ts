@@ -14,7 +14,8 @@ export const STATE_LABELS: Readonly<Record<ConversationState, string>> = {
   error: 'Erreur',
 };
 
-const MODE_LABELS: Readonly<Record<ConversationMode, string>> = {
+/** The mode in a word, said in the reader beside the state. */
+export const MODE_LABELS: Readonly<Record<ConversationMode, string>> = {
   copilot: 'Copilote',
   auto: 'Automatique',
 };
@@ -75,21 +76,22 @@ export const MODE_MEANINGS: Readonly<Record<ConversationMode, string>> = {
 };
 
 /**
- * The line under the fan's name: when he last wrote, after the mode when the lines do not share one, then the band of
- * his desire score in a word once he has one (P3-12). Never its number, never a colour: the list is no heat map. The
- * mode and the band come apart, so that a narrow line cuts the mode first and never when he wrote nor the band.
+ * The line under the fan's name, short enough never to be cut: when he last wrote (« Il y a 14 min »), then the band of
+ * his desire score in a word when it says something, « joueur » or « chaud » (P3-12); « neutre » goes without saying.
+ * Never its number, never a colour: the list is no heat map. The mode is said in the reader and above the list, the
+ * creator beside his pseudo.
  */
 export function subline(
   conversation: ConversationSummary,
   now: Date,
-  withMode: boolean,
-): { readonly mode: string | null; readonly text: string; readonly band: string | null } {
+): { readonly text: string; readonly band: string | null } {
   const ago = lastMessageAgo(conversation.lastInboundAt, now);
-  const wrote = ago === null ? 'N’a pas encore écrit' : `A écrit ${ago}`;
   return {
-    mode: withMode ? MODE_LABELS[conversation.mode] : null,
-    text: withMode ? `${wrote.charAt(0).toLowerCase()}${wrote.slice(1)}` : wrote,
-    band: conversation.desire === null ? null : DESIRE_BAND_LABELS[conversation.desire.band],
+    text: ago === null ? 'Pas encore écrit' : `${ago.charAt(0).toUpperCase()}${ago.slice(1)}`,
+    band:
+      conversation.desire === null || conversation.desire.band === 'neutral'
+        ? null
+        : DESIRE_BAND_LABELS[conversation.desire.band],
   };
 }
 

@@ -8,13 +8,17 @@ import {
   desireNow,
   DraftIdSchema,
   DraftStatusSchema,
+  ExternalMediaSchema,
   FanIdSchema,
+  MediaAssetIdSchema,
   MessageAuthorSchema,
   MessageDirectionSchema,
   MessageIdSchema,
   type ConversationDesire,
+  type ConversationId,
   type ConversationSummary,
   type DraftView,
+  type MessageMediaView,
 } from '@nirvana/contracts';
 import {
   and,
@@ -26,8 +30,9 @@ import {
   type Database,
   type Transaction,
 } from '@nirvana/db';
+import { z } from 'zod';
 
-import type { Clock, ConversationReader, PageRequest } from '../../domain/ports';
+import type { Clock, ConversationReader, MediaDescriptions, PageRequest } from '../../domain/ports';
 
 import { cursorInstant, decodeCursor, decodeSeqCursor, encodeCursor, toStoredEvent } from './rows';
 
@@ -116,8 +121,45 @@ function draftView(draft: typeof schema.drafts.$inferSelect): DraftView {
   };
 }
 
+/** Whether the creator has this conversation (RLS: another creator's is not there). */
+async function exists(tx: Transaction, id: ConversationId): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: schema.conversations.id })
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, id));
+  return row !== undefined;
+}
+
+/** Written by ingestion only, through the contract's schema: read back through it too (a column is a boundary). */
+const PlatformMediaSchema = z.array(ExternalMediaSchema);
+
+/**
+ * A message's media for Suivi (SUIVI-26): kind and lock from the platform's list, the description from the media the
+ * `media` module stored for it (`media_ids`, in the platform's order), only when both lists match one to one.
+ */
+function mediaOf(
+  platformMedia: unknown,
+  mediaIds: readonly string[],
+  descriptions: ReadonlyMap<string, string>,
+): MessageMediaView[] {
+  const listed = PlatformMediaSchema.parse(platformMedia);
+  const paired = mediaIds.length === listed.length;
+  return listed.map((media, index) => {
+    const stored = paired ? mediaIds[index] : undefined;
+    return {
+      kind: media.kind,
+      isLocked: media.isLocked,
+      description: stored === undefined ? null : (descriptions.get(stored) ?? null),
+    };
+  });
+}
+
 /** The inbox's queries, in tenant transactions like everything else (RLS). */
-export function createDrizzleConversationReader(db: Database, clock: Clock): ConversationReader {
+export function createDrizzleConversationReader(
+  db: Database,
+  clock: Clock,
+  mediaDescriptions: MediaDescriptions,
+): ConversationReader {
   return {
     list: (creatorId, page, routedTo) =>
       withTenant(db, creatorId, async (tx) => {
@@ -186,8 +228,9 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
         SNAPSHOT_READ,
       ),
 
-    messages: (creatorId, id, page) =>
-      withTenant(db, creatorId, async (tx) => {
+    messages: async (creatorId, id, page) => {
+      const read = await withTenant(db, creatorId, async (tx) => {
+        if (!(await exists(tx, id))) return null;
         const after = decodeCursor(page.cursor);
         const rows = await tx
           .select({ row: schema.messages, cursorAt: cursorInstant(schema.messages.platformCreatedAt) })
@@ -202,25 +245,33 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
           )
           .orderBy(sql`${schema.messages.platformCreatedAt} desc, ${schema.messages.id} desc`)
           .limit(page.limit + 1);
-        const { items, nextCursor } = paged(rows, page, (last) => encodeCursor(last.cursorAt, last.row.id));
-        return {
-          items: items.map(({ row }) => ({
-            id: MessageIdSchema.parse(row.id),
-            direction: MessageDirectionSchema.parse(row.direction),
-            author: MessageAuthorSchema.parse(row.author),
-            text: row.text,
-            priceMinor: row.priceMinor,
-            currency: row.currency === null ? null : CurrencySchema.parse(row.currency),
-            isPaid: row.isPaid,
-            draftId: row.draftId === null ? null : DraftIdSchema.parse(row.draftId),
-            platformCreatedAt: row.platformCreatedAt.toISOString(),
-          })),
-          nextCursor,
-        };
-      }),
+        return paged(rows, page, (last) => encodeCursor(last.cursorAt, last.row.id));
+      });
+      if (read === null) return null;
+      // Outside the read: the `media` module reads its own table, in its own transaction.
+      const stored = read.items.flatMap(({ row }) => row.mediaIds.map((m) => MediaAssetIdSchema.parse(m)));
+      const descriptions =
+        stored.length === 0 ? new Map<string, string>() : await mediaDescriptions.of(creatorId, stored);
+      return {
+        items: read.items.map(({ row }) => ({
+          id: MessageIdSchema.parse(row.id),
+          direction: MessageDirectionSchema.parse(row.direction),
+          author: MessageAuthorSchema.parse(row.author),
+          text: row.text,
+          media: mediaOf(row.platformMedia, row.mediaIds, descriptions),
+          priceMinor: row.priceMinor,
+          currency: row.currency === null ? null : CurrencySchema.parse(row.currency),
+          isPaid: row.isPaid,
+          draftId: row.draftId === null ? null : DraftIdSchema.parse(row.draftId),
+          platformCreatedAt: row.platformCreatedAt.toISOString(),
+        })),
+        nextCursor: read.nextCursor,
+      };
+    },
 
     events: (creatorId, id, page) =>
       withTenant(db, creatorId, async (tx) => {
+        if (!(await exists(tx, id))) return null;
         const before = decodeSeqCursor(page.cursor);
         const rows = await tx
           .select()
@@ -245,6 +296,7 @@ export function createDrizzleConversationReader(db: Database, clock: Clock): Con
 
     desireCurve: (creatorId, id) =>
       withTenant(db, creatorId, async (tx) => {
+        if (!(await exists(tx, id))) return null;
         const rows = await tx
           .select()
           .from(schema.conversationEvents)

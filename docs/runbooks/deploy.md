@@ -66,7 +66,7 @@ Toutes dans Coolify → Environment Variables, marquées « secret » quand c'es
 | `AUTH_BASE_URL`, `WEB_ORIGIN` | l'URL publique du dashboard, la même pour les deux (`https://app.<domaine>`) |
 | `EXTENSION_DEVICE_TOKEN` | `openssl rand -hex 24` (48 caractères) |
 | `TRUST_PROXY_HOPS` | `2` (le proxy de Coolify, puis le nginx de `web`) ; défaut du compose |
-| `PLAYGROUND_PERSONA_PATH` | chemin **dans le conteneur** de la persona réelle (§ 1.5) ; sans lui, aucun brouillon pour un vrai fan |
+| `PLAYGROUND_PERSONA_PATH` | facultatif : chemin **dans le conteneur** de la persona du playground (§ 1.5) ; démo sans lui. Les brouillons, les gardes et « À apprendre » ne le lisent pas |
 | `BACKUP_*` | § 4.1 ; sans elles, l'export de la nuit échoue et l'alerte le signale |
 | `SENTRY_DSN`, `LANGFUSE_*`, `S3_*`, `VAPID_*` | facultatifs, vides tant que le service n'existe pas |
 
@@ -89,7 +89,7 @@ Les clés des services IA (xAI, Google, Mistral, ElevenLabs) ne sont **pas** des
 
 ### 1.5 Persona réelle
 
-La persona réelle ne vit jamais dans le dépôt (ADR 0010). Coolify → service `api` → Storages → montage de fichier : chemin `/data/persona/persona.yaml`, contenu = le YAML. Même montage sur `worker` (c'est lui qui écrit les brouillons). Puis `PLAYGROUND_PERSONA_PATH=/data/persona/persona.yaml` et redéployer. Pour l'enregistrer comme version de la créatrice :
+La persona réelle ne vit jamais dans le dépôt (ADR 0010). L'agent écrit avec la version **active** de la persona de la créatrice, en base : ses brouillons, ses relances, les gardes rejouées à l'approbation et « À apprendre » la lisent à chaque appel. Sans version active, l'agent n'écrit rien (passage à un chatteur, cause « Pas de persona active ») et **aucun message ne peut être approuvé** pour elle. Activer une version dans Créatrices › Persona, ou depuis un fichier monté : Coolify → service `api` → Storages → montage de fichier : chemin `/data/persona/persona.yaml`, contenu = le YAML, puis, pour l'enregistrer comme version de la créatrice et l'activer :
 
 ```sh
 node dist/scripts/persona-validate.js /data/persona/persona.yaml
@@ -114,7 +114,7 @@ Une PR fusionnée dans `main` déclenche le déploiement. Rien à faire à la ma
 ## 4. Sauvegardes
 
 - **PITR Neon** (§ 1.1) : retour à n'importe quel instant des 7 derniers jours ; procédure dans `restore.md` § A.
-- **Export quotidien chiffré hors Neon** (ADR 0028, service `backup`) : chaque nuit à 3 h, heure de Paris, un dump complet, relu avant envoi, chiffré pour une clé publique, envoyé chez Hetzner. Chaque export laisse une ligne dans `backup_runs`. Restauration et essai trimestriel : `restore.md` § B et § C.
+- **Export quotidien chiffré hors Neon** (ADR 0028, service `backup`) : chaque nuit à 3 h, heure de Paris, un dump complet, relu avant envoi, chiffré pour une clé publique, envoyé chez Hetzner. Chaque export laisse une ligne dans `backup_runs`. Le propriétaire peut aussi demander un export tout de suite (Réglages › Sauvegardes, « Relancer la sauvegarde maintenant ») : l'API inscrit seulement la demande dans `backup_requests`, et le service `backup` la prend dans les 30 secondes pour lancer le même `export.sh` ; rien ne tourne dans l'API ni dans le worker. Restauration et essai trimestriel : `restore.md` § B et § C.
 - Les volumes du serveur ne contiennent rien d'irremplaçable : `training` (notes du playground) et la persona montée (dont l'original est hors serveur).
 
 ### 4.1 Mettre l'export en service

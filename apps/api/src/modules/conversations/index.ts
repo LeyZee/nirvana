@@ -18,6 +18,7 @@ import type {
   FanDirectory,
   FollowUpPlan,
   JobLogger,
+  MediaDescriptions,
   OutboundSender,
   ReplyHours,
 } from './domain/ports';
@@ -74,10 +75,14 @@ export interface ConversationsDeps {
   readonly replyHours?: ReplyHours;
   /** Her own alerts' names (P4-01, `alerts` module's adapter); without them the history says « Alerte personnalisée ». */
   readonly alertNames?: AlertNames;
+  /** What her media show (SUIVI-26, `media` module's adapter); without it, Suivi shows a media's kind only. */
+  readonly mediaDescriptions?: MediaDescriptions;
   readonly clock?: Clock;
 }
 
 const noAlertNames: AlertNames = { ofCreator: () => Promise.resolve(new Map()) };
+
+const noMediaDescriptions: MediaDescriptions = { of: () => Promise.resolve(new Map()) };
 
 const systemClock: Clock = { now: () => new Date() };
 
@@ -95,10 +100,14 @@ export function createConversationsModule(deps: ConversationsDeps): Conversation
     name: 'conversations',
     ...commands,
     routes: async (app, options) => {
-      await createConversationRoutes(createDrizzleConversationReader(deps.db, clock), commands, {
-        requireRole: deps.requireRole,
-        recentLogin: deps.recentLogin,
-      })(app, options);
+      await createConversationRoutes(
+        createDrizzleConversationReader(deps.db, clock, deps.mediaDescriptions ?? noMediaDescriptions),
+        commands,
+        {
+          requireRole: deps.requireRole,
+          recentLogin: deps.recentLogin,
+        },
+      )(app, options);
       await createAlertHistoryRoutes(
         createDrizzleAlertHistory(deps.db),
         deps.alertNames ?? noAlertNames,

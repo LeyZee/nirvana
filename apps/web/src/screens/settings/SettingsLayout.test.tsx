@@ -10,7 +10,6 @@ import { createAppRouter } from '@/router';
 /* Invented members: no real person. */
 const base = { id: 'u1', email: 'membre@example.test', name: 'Nora', creatorIds: [], routedCreatorIds: [] };
 const owner: Me = { ...base, role: 'owner', team: null, teamScope: 'owner' };
-const creator: Me = { ...base, role: 'creator', team: null, teamScope: 'self' };
 
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
@@ -40,7 +39,7 @@ afterEach(() => {
 async function settingsTabs(user: Me): Promise<string[]> {
   const router = createAppRouter(
     { user, onSignOut: () => undefined },
-    createMemoryHistory({ initialEntries: ['/reglages/apparence'] }),
+    createMemoryHistory({ initialEntries: ['/reglages/modeles-ia'] }),
   );
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -58,15 +57,15 @@ describe('Réglages tabs', () => {
     expect(await settingsTabs(owner)).toContain('Telegram');
   });
 
-  it('shows neither Telegram nor Modèles IA to a member the server would refuse', async () => {
-    const tabs = await settingsTabs(creator);
-    expect(tabs).not.toContain('Telegram');
-    expect(tabs).not.toContain('Modèles IA');
-    expect(tabs).toContain('Apparence');
+  it('keeps Apparence and « Se déconnecter » out of the tabs: both live in the account menu (NAV-03)', async () => {
+    const tabs = await settingsTabs(owner);
+    expect(tabs).not.toContain('Apparence');
+    expect(screen.queryByRole('button', { name: 'Se déconnecter' })).toBeNull();
   });
 
-  it('puts « Se déconnecter » under a class of its own, hidden on a wide screen by settings.css', async () => {
-    await settingsTabs(owner);
-    expect(screen.getByRole('button', { name: 'Se déconnecter' }).className).toContain('st-signout');
+  it('gives no tab to Appareils nor Mode de l’agent while their screens only say « à venir »', async () => {
+    const tabs = await settingsTabs(owner);
+    expect(tabs).not.toContain('Appareils');
+    expect(tabs).not.toContain('Mode de l’agent');
   });
 });

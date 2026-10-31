@@ -14,6 +14,7 @@ import { and, eq, schema, sql } from '@nirvana/db';
 import { createTestDb, type TestDb } from '@nirvana/db/testing';
 import { DEFAULT_LLM_CONFIG, loadPrompt } from '@nirvana/llm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { z } from 'zod';
 
 import { createOwner } from '../auth';
 import { createApp, type App } from '../composition-root';
@@ -36,6 +37,8 @@ describe('the server lock of Automatique (ADR 0019)', () => {
   let server: Server;
   let creatorId: CreatorId;
   let conversationId: ConversationId;
+  /** Her first active persona version: what the drafts below prove by default. */
+  let firstPersona: string;
   let ownerCookie: string;
   let operatorCookie: string;
   let decidedAt = Date.parse('2026-10-19T08:00:00.000Z');
@@ -69,12 +72,12 @@ describe('the server lock of Automatique (ADR 0019)', () => {
         and(eq(schema.domainEvents.creatorId, creatorId), eq(schema.domainEvents.type, 'automatic_closed')),
       );
 
-  /** Drafts a chatter decided, each newer than the last; `voice` defaults to the active version, without persona. */
+  /** Drafts a chatter decided, each newer than the last; by default the active voice and her first persona. */
   const decide = async (
     count: number,
     status: 'sent' | 'rejected',
     voice = VOICE,
-    personaVersionId: string | null = null,
+    personaVersionId: string | null = firstPersona,
   ) => {
     for (let i = 0; i < count; i += 1) {
       decidedAt += 1_000;
@@ -109,13 +112,25 @@ describe('the server lock of Automatique (ADR 0019)', () => {
     const platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Lina', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Lina', timezone: 'Europe/Paris' });
     await test.admin.db.insert(schema.platformAccounts).values({
       id: platformAccountId,
       creatorId,
       platform: 'reveal',
       handle: 'test-automatic-lock',
       sessionState: 'valid',
+    });
+    // Without an active persona nothing opens Automatique (recette 28/10, G4): she has one from the start here.
+    firstPersona = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: firstPersona,
+      creatorId,
+      version: 'test-0',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'test-0',
+      isActive: true,
+      activatedAt: new Date(),
     });
     ({ conversationId } = await app.modules.conversations.ingestMessage({
       creatorId,
@@ -245,6 +260,10 @@ describe('the server lock of Automatique (ADR 0019)', () => {
     expect((await setConversationMode('auto')).statusCode).toBe(204);
 
     const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db
+      .update(schema.personaVersions)
+      .set({ isActive: false })
+      .where(eq(schema.personaVersions.id, firstPersona));
     await test.admin.db.insert(schema.personaVersions).values({
       id: personaVersionId,
       creatorId,
@@ -277,5 +296,27 @@ describe('the server lock of Automatique (ADR 0019)', () => {
       .orderBy(sql`${schema.blindTests.recordedAt} desc`)
       .limit(1);
     expect(latest?.personaVersionId).toBe(personaVersionId);
+  });
+
+  it('closes when she no longer has an active persona, whatever her drafts proved (recette 28/10, G4)', async () => {
+    expect((await setConversationMode('auto')).statusCode).toBe(204);
+    await test.admin.db
+      .update(schema.personaVersions)
+      .set({ isActive: false })
+      .where(eq(schema.personaVersions.creatorId, creatorId));
+    const { missing } = (await dashboard()).automatic;
+    expect(missing[0]).toEqual({ kind: 'active_persona' });
+    for (const response of [await setAgentMode('auto'), await setConversationMode('auto')]) {
+      expect(response.statusCode).toBe(409);
+    }
+    await app.modules.conversations.jobs.respond(
+      { creatorId, conversationId, correlationId: 'no-persona' },
+      NO_LOG,
+    );
+    expect(await conversationMode()).toBe('copilot');
+    const events = await closedEvents();
+    expect(z.object({ missing: z.array(z.unknown()) }).parse(events.at(-1)?.payload).missing[0]).toEqual({
+      kind: 'active_persona',
+    });
   });
 });

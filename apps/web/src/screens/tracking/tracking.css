@@ -127,9 +127,40 @@
 .tr-back {
   align-self: flex-start;
 }
+/* Two classes: the button's own display must not win by load order. From 900 px the list is beside the reader. */
 @media (min-width: 900px) {
-  .tr-back {
+  .tr-reader .tr-back {
     display: none;
+  }
+}
+/* From 900 px Suivi fills the screen: the list scrolls in its column, the reader is as tall as the screen, with its
+ * thread scrolling between the fan's lines and the draft pinned at its foot. A screen too short scrolls the page. */
+@media (min-width: 900px) {
+  .nv-page.tr-page {
+    height: 100%;
+    min-height: 36rem;
+  }
+  .tr-page > .tr-layout {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  /* Its panels keep their height: the column scrolls, never a squeezed panel. */
+  .tr-page .tr-side > * {
+    flex: none;
+    max-height: none;
+  }
+  .tr-page .tr-side {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--nv-hairline) transparent;
+  }
+  .tr-page .tr-reader {
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 .tr-reader {
@@ -160,8 +191,11 @@
   line-height: 1.25;
 }
 /* The state is a pill under the name, as wide as its words. */
-.tr-reader__who .nv-status {
-  align-self: flex-start;
+.tr-reader__state {
+  display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  flex-wrap: wrap;
 }
 .tr-reader__body {
   display: flex;
@@ -169,13 +203,39 @@
   gap: var(--nv-space-2);
   min-width: 0;
 }
-/* From 900 px the thread scrolls on its own: opening a long conversation never moves the list beside it. */
+/* From 900 px the thread scrolls on its own, taking what the reader leaves: never the list beside it, never the draft. */
 @media (min-width: 900px) {
   .tr-reader__body {
-    max-height: min(40rem, 70vh);
+    flex: 1 1 8rem;
+    min-height: 8rem;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
+  .tr-reader__foot {
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .tr-reader__foot .tr-draft {
+    min-height: 0;
+    margin-top: 0;
+  }
+  /* A long draft scrolls in its own bubbles: its buttons stay in view. */
+  .tr-draft__bubbles {
+    flex: 0 1 auto;
+    min-height: 3rem;
+    overflow-y: auto;
+  }
+  /* The sheet opened keeps room for the thread: past that, it scrolls itself. */
+  .tr-sheet[open] .tr-sheet__body {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+}
+/* On a phone the page scrolls: the draft brought into view keeps the floating tab bar's room under it. */
+.tr-reader__foot {
+  scroll-margin-bottom: var(--nv-tabbar-room, var(--nv-space-4));
 }
 .tr-reader__empty {
   margin: 0;
@@ -193,11 +253,18 @@
   color: var(--nv-warning);
   font-weight: 600;
 }
+/* After .tr-warn, whose margin it overrides: « À traiter » unread keeps a gap above its Réessayer. */
+.tr-queue-error {
+  margin: 0 0 8px;
+}
 .tr-line {
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
 }
 .tr-hand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nv-space-3);
   margin: 0;
   padding: var(--nv-space-3);
   border-radius: var(--nv-radius-md);
@@ -205,6 +272,52 @@
   color: var(--nv-ink-muted);
   font-size: var(--nv-text-footnote);
   line-height: var(--nv-text-footnote-leading);
+}
+.tr-hand p {
+  margin: 0;
+}
+/* Giving the hand back: the note the agent keeps, then the button that sends it, side by side when there is room. */
+.tr-hand__give {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nv-space-2);
+  flex-wrap: wrap;
+}
+.tr-hand__give .nv-field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+/* The fan's sheet: one folded band, its line says what is inside; opened, his limits, what is left, his desire. */
+.tr-sheet {
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-glass-fill);
+}
+.tr-sheet > summary {
+  gap: var(--nv-space-3);
+  padding: 0 var(--nv-space-3);
+  font-size: var(--nv-text-footnote);
+  line-height: var(--nv-text-footnote-leading);
+}
+.tr-sheet__sum {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--nv-ink-muted);
+}
+.tr-sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 var(--nv-space-1) var(--nv-space-1);
+}
+/* Inside the sheet, its parts sit on the sheet's own tint, a hairline apart: no second layer. */
+.tr-sheet__body > :is(.tr-limits, .tr-learn) {
+  border-top: 1px solid var(--nv-hairline);
+  border-radius: 0;
+  background: none;
 }
 /* What she has still to learn: laid out like the folded limits line, never amber, since it stops nothing. */
 .tr-learn {
@@ -303,6 +416,11 @@
 .tr-limit__amount {
   width: 6.5rem;
 }
+/* Why a disputed age is confirmed (SUIVI-04): written before the second click, kept with the event. */
+.tr-limit__reason {
+  width: 100%;
+  resize: vertical;
+}
 /* The agent's notes in the thread: where it stopped, who took the hand, a draft refused. */
 .tr-note {
   align-self: center;
@@ -312,6 +430,14 @@
   line-height: var(--nv-text-caption-leading);
   color: var(--nv-ink-faint);
   text-align: center;
+}
+/* A media of the thread (SUIVI-26): its kind, and what it shows once described. The text is wrapped in
+   .tr-text so that a media after it is not the bubble's first element and keeps its gap. */
+.tr-media {
+  display: block;
+}
+.tr-media:not(:first-child) {
+  margin-top: 4px;
 }
 .tr-ppv {
   display: block;
@@ -337,32 +463,21 @@
   min-height: 72px;
 }
 
-/* The line under a fan's name: a narrow row cuts the creator and the time, never the band of his desire score.
- * The text keeps the nowrap of .nv-convo__preview, so it is cut with an ellipsis instead of wrapping. */
-.tr-preview {
+/* The pseudo is cut first; the creator's name beside it never is. */
+.tr-row__name {
   display: flex;
+  align-items: center;
+  gap: var(--nv-space-2);
   min-width: 0;
 }
-/* A narrow line cuts whose fan and the mode first, then when he wrote, never the band. */
-.tr-preview__lead {
-  flex: 0 1000 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tr-preview__sep {
-  flex: none;
-  white-space: pre;
-}
-.tr-preview__text {
-  flex: 0 1 auto;
+.tr-row__pseudo {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tr-preview__band {
+.tr-row__creator {
   flex: none;
-  white-space: pre;
 }
 
 /* « Récents · Chauds d'abord » (P3-12): above the list, quiet, the list's own width. */
@@ -431,4 +546,84 @@
 }
 .tr-desire__signals {
   white-space: normal;
+}
+
+/* The why of a line of « À traiter » says what to do: two lines rather than cut. */
+.nv-convo__preview.tr-why {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}
+.tr-more--action {
+  padding-block: var(--nv-space-1) var(--nv-space-2);
+}
+
+/* Nothing open: the reader's column says where a conversation opens. A phone shows the list alone. */
+.tr-reader--idle {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.tr-reader--idle .tr-reader__empty {
+  max-width: 22rem;
+  color: var(--nv-ink-faint);
+}
+@media (max-width: 899px) {
+  .tr-reader--idle {
+    display: none;
+  }
+}
+
+/* A failed send: its text copied, to paste in Reveal. */
+.tr-copy {
+  align-self: flex-end;
+}
+
+/* An empty state or a first read: one shape, the list's own width or a centred notice, as tall as its words. */
+.tr-page > .nv-coming {
+  align-self: start;
+  justify-self: center;
+  width: 100%;
+  max-width: 560px;
+}
+.tr-page > .tr-panel {
+  align-self: start;
+  max-width: 380px;
+}
+
+/* On a phone, reading takes the screen: the page's title and sub-tabs step aside, and the way back, the fan's name,
+ * his state and the hand stay at the top while the thread scrolls. */
+@media (max-width: 899px) {
+  .tr-is-reading > .nv-page__head {
+    display: none;
+  }
+  .tr-reader__top {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nv-space-1);
+    margin: calc(-1 * var(--nv-space-4)) calc(-1 * var(--nv-space-4)) 0;
+    padding: var(--nv-space-2) var(--nv-space-4) var(--nv-space-3);
+    border-radius: var(--nv-radius-lg) var(--nv-radius-lg) 0 0;
+    background: var(--nv-surface-raised);
+    box-shadow: 0 1px 0 var(--nv-hairline);
+  }
+  .tr-reader__top .tr-reader__head {
+    flex-wrap: nowrap;
+  }
+  .tr-reader__top .tr-reader__who h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* From 900 px the way back is hidden and the head is a plain row of the reader. */
+@media (min-width: 900px) {
+  .tr-reader__top {
+    display: contents;
+  }
 }

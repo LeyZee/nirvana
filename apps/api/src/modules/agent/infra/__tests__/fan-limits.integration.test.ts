@@ -24,7 +24,7 @@ describe('fan limits set by the policy, through the fans module', () => {
     await withAdmin(test.admin.db, async (tx) => {
       await tx
         .insert(schema.creators)
-        .values({ id: creatorId, displayName: 'Anna', timezone: 'Europe/Paris' });
+        .values({ id: creatorId, nameKey: creatorId, displayName: 'Anna', timezone: 'Europe/Paris' });
       await tx
         .insert(schema.platformAccounts)
         .values({ id: accountId, creatorId, platform: 'reveal', handle: 'anna-demo' });
@@ -119,12 +119,15 @@ describe('fan limits set by the policy, through the fans module', () => {
     await limits.confirmAge(creatorId, frozenFanId, 'correlation-9', AT);
     expect(await limits.flags(creatorId, frozenFanId)).toMatchObject({ ageDisputed: { by: 'human' } });
     expect((await limits.flags(creatorId, frozenFanId)).ageConfirmedAt).toBeUndefined();
-    // A human confirms it again: that settles the dispute.
+    // The owner confirms it again, saying why: that settles the dispute (SUIVI-04: an owner or a manager only).
+    await test.admin.db
+      .insert(schema.user)
+      .values({ id: 'owner-fan-limits', name: 'Owner', email: 'owner@example.test', role: 'owner' });
     await fans.setFlag(
       creatorId,
       frozenFanId,
       { flag: 'ageConfirmedAt', value: AT.toISOString() },
-      { author: 'human:owner', correlationId: 'correlation-10' },
+      { author: 'human:owner-fan-limits', reason: 'Vérifié en appel', correlationId: 'correlation-10' },
     );
     const settled = await limits.flags(creatorId, frozenFanId);
     expect(settled.ageConfirmedAt).toBe(AT.toISOString());

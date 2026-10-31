@@ -24,6 +24,10 @@ import {
 /** What an empty text field says, and what a placeholder of the example (`<à remplir>`) shows as. */
 const TO_FILL = 'À remplir';
 
+/** An example in an empty field reads as one, « Ex. : … », never as a value already typed (REG-17). */
+const placeholderOf = (placeholder: string | undefined, example: string | undefined): string =>
+  example === undefined ? (placeholder ?? TO_FILL) : `Ex. : ${example}`;
+
 /**
  * The controls of the persona form, all on the design-system classes: a field with its label and its errors,
  * text, numbers with their unit, chips, a segment, a switch row and a list of entries.
@@ -58,10 +62,13 @@ export function Field({
   path,
   children,
   id,
+  labelHidden = false,
 }: {
   label: string;
   hint?: ReactNode;
   code?: boolean;
+  /** The block's title already says it (« Infos en plus », « Mots-clés »): read aloud, not shown twice (CREA-17). */
+  labelHidden?: boolean;
   /** Where the field sits in the persona (`strategies.kyc.max_messages`): its errors and changes come from there. */
   path?: string;
   children: ReactNode;
@@ -78,7 +85,7 @@ export function Field({
       data-invalid={first === undefined ? undefined : 'true'}
       data-changed={changed ? 'true' : undefined}
     >
-      <div className="ps-field__head">
+      <div className={labelHidden ? 'sr-only' : 'ps-field__head'}>
         <span className="ps-changed" aria-hidden="true" />
         {id === undefined ? (
           <span className="nv-field__label">{label}</span>
@@ -109,25 +116,32 @@ export function TextInput({
   onChange,
   maxLength,
   placeholder,
+  example,
   type = 'text',
   list,
+  invalid = false,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   maxLength?: number;
   placeholder?: string;
+  /** What one could write, shown « Ex. : … » in the empty field. */
+  example?: string;
   type?: 'text' | 'date';
   list?: string;
+  /** Refused as it stands, so that a screen reader says so on the control itself. */
+  invalid?: boolean;
 }): JSX.Element {
   return (
     <input
       id={id}
       type={type}
+      aria-invalid={invalid ? true : undefined}
       className="nv-glass nv-field__control ps-input"
       value={isPlaceholder(value) ? '' : value}
       maxLength={maxLength}
-      placeholder={placeholder ?? TO_FILL}
+      placeholder={placeholderOf(placeholder, example)}
       list={list}
       onChange={(event) => {
         onChange(event.target.value);
@@ -143,6 +157,8 @@ export function TextArea({
   maxLength,
   rows = 3,
   placeholder,
+  example,
+  invalid = false,
 }: {
   id: string;
   value: string;
@@ -150,6 +166,10 @@ export function TextArea({
   maxLength: number;
   rows?: number;
   placeholder?: string;
+  /** What one could write, shown « Ex. : … » in the empty field. */
+  example?: string;
+  /** Refused as it stands, even when the message is said under another field. */
+  invalid?: boolean;
 }): JSX.Element {
   const shown = isPlaceholder(value) ? '' : value;
   return (
@@ -160,7 +180,8 @@ export function TextArea({
         value={shown}
         rows={rows}
         maxLength={maxLength}
-        placeholder={placeholder ?? TO_FILL}
+        aria-invalid={invalid ? true : undefined}
+        placeholder={placeholderOf(placeholder, example)}
         onChange={(event) => {
           onChange(event.target.value);
         }}

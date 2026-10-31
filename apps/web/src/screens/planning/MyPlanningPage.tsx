@@ -1,8 +1,11 @@
 import type {
   LeaveRequest,
+  PayPeriod,
   Planning,
   PlanningAccount,
   Shift,
+  ShiftReport,
+  ShiftReportList,
   ShiftSwapList,
   TeamMember,
 } from '@nirvana/contracts';
@@ -12,6 +15,11 @@ import { Answers, MyLeaves, MySwaps, namesOf } from './Exchanges';
 import { LeavePanel } from './LeavePanel';
 import { SwapPanel } from './SwapPanel';
 
+import { ReportPanel } from '@/reports/ReportPanel';
+import { useReportsOf } from '@/reports/api';
+import { MEMBER_STATUS, periodAt, reportOf, STATUS_TONES } from '@/reports/model';
+import { useReopening, type ReportDraft } from '@/reports/reopen';
+import '@/reports/reports.css';
 import { WeekNav } from '@/scheduling/WeekNav';
 import { useLeaves, usePlanning, useSwaps } from '@/scheduling/api';
 import '@/scheduling/exchanges.css';
@@ -34,9 +42,20 @@ import { useMembers } from '@/screens/team/api';
 import '@/screens/team/team.css';
 import { Page, PageHeader, Panel } from '@/shell/layout';
 
-const PHASE_LABELS: Readonly<Record<Phase, string>> = { later: 'À venir', live: 'En poste', past: 'Fini' };
+type Open =
+  | { readonly kind: 'leave' }
+  | { readonly kind: 'swap'; readonly shiftId: string }
+  | { readonly kind: 'report'; readonly shiftId: string; readonly draft: ReportDraft | null };
 
-type Open = { readonly kind: 'leave' } | { readonly kind: 'swap'; readonly shiftId: string };
+/** A finished shift's report as its row says it: to make, or its status; `null` when its period is not read. */
+type RowReport = { readonly kind: 'todo' } | { readonly kind: 'made'; readonly report: ShiftReport } | null;
+
+/** The periods a week's shifts fall in, at the agency's hour: one, or two across a 1st or a 16th. */
+function periodsOf(planning: Planning | undefined): PayPeriod[] {
+  if (planning === undefined) return [];
+  const zone = planning.settings.timeZone;
+  return [...new Set(planning.shifts.map((shift) => periodAt(new Date(shift.startsAt), zone)))].toSorted();
+}
 
 /** A leave read a month back and eleven ahead: what is under way, what is coming, what was just answered. */
 function leaveRangeOf(today: string, zone: string): { from: string; to: string } {
@@ -71,6 +90,11 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
   const swaps = useSwaps();
   const opened =
     open?.kind === 'swap' ? (planning.data?.shifts.find((shift) => shift.id === open.shiftId) ?? null) : null;
+  // A finished shift says where its report is, and makes it from here as Aujourd'hui does (EQ-19).
+  const reports = useReportsOf(periodsOf(planning.data));
+  useReopening('/planning', (what) => {
+    setOpen({ kind: 'report', shiftId: what.shiftId, draft: what.draft });
+  });
 
   return (
     <Page>
@@ -109,6 +133,14 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
                 void members.refetch();
               }}
             >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
+        {reports.failed ? (
+          <div className="sc-inline-warn sc-unread nv-swap" role="alert">
+            <p className="tm-warn">Tes rapports n’ont pas pu être lus.</p>
+            <button type="button" className="nv-btn nv-btn--soft nv-btn--sm" onClick={reports.retry}>
               Réessayer
             </button>
           </div>
@@ -160,8 +192,12 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
                 leave.lastDay >= monday,
             )}
             offers={offersOf(swaps.data, me)}
+            reports={reports.list}
             onSwap={(shiftId) => {
               setOpen({ kind: 'swap', shiftId });
+            }}
+            onReport={(shiftId) => {
+              setOpen({ kind: 'report', shiftId, draft: null });
             }}
           />
         )}
@@ -175,6 +211,17 @@ export function MyPlanningPage({ userId }: { userId: string }): JSX.Element {
           <LeavePanel
             today={dayOf(now, me.timeZone)}
             timeZone={me.timeZone}
+            onClose={() => {
+              setOpen(null);
+            }}
+          />
+        ) : null}
+        {open?.kind === 'report' ? (
+          <ReportPanel
+            key={open.shiftId + (open.draft?.id ?? '')}
+            shiftId={open.shiftId}
+            draft={open.draft}
+            from="/planning"
             onClose={() => {
               setOpen(null);
             }}
@@ -217,7 +264,9 @@ function Week({
   now,
   away,
   offers,
+  reports,
   onSwap,
+  onReport,
 }: {
   planning: Planning;
   days: readonly string[];
@@ -227,7 +276,10 @@ function Week({
   /** The reader's leaves that touch this week, approved or waiting. */
   away: readonly LeaveRequest[];
   offers: ReadonlyMap<string, readonly string[]>;
+  /** The reports of the week's periods, `null` until read (when they cannot be, the page says so above the week). */
+  reports: ShiftReportList | null;
   onSwap: (shiftId: string) => void;
+  onReport: (shiftId: string) => void;
 }): JSX.Element {
   const accounts = new Map(planning.accounts.map((account) => [account.id, account]));
   const agency = planning.settings.timeZone;
@@ -239,6 +291,11 @@ function Week({
         .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
     }))
     .filter(({ shifts }) => shifts.length > 0);
+  const reportFor = (shift: Shift): RowReport => {
+    if (!reports?.shifts.some((one) => one.id === shift.id)) return null;
+    const report = reportOf(reports.reports, shift.id);
+    return report === null ? { kind: 'todo' } : { kind: 'made', report };
+  };
   const total = planning.shifts.reduce(
     (sum, shift) => sum + new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime(),
     0,
@@ -260,6 +317,51 @@ function Week({
         ))}
       </ul>
     );
+
+  // The week under way opens on today: the days gone by fold above it, their reports to make said on the fold (EQ-17).
+  // Another week keeps its order. A day stays out of the fold while one of its shifts is not over: a night shift begun
+  // yesterday is still under way.
+  const thisWeek = days.includes(today);
+  const isGone = ({ day, shifts }: { day: string; shifts: Shift[] }): boolean =>
+    thisWeek && day < today && shifts.every((shift) => phaseOf(shift, now) === 'past');
+  const earlier = byDay.filter(isGone);
+  const ahead = byDay.filter((one) => !isGone(one));
+  const earlierCount = earlier.reduce((sum, { shifts }) => sum + shifts.length, 0);
+  const toDo = earlier
+    .flatMap(({ shifts }) => shifts)
+    .filter((shift) => phaseOf(shift, now) === 'past' && reportFor(shift)?.kind === 'todo').length;
+  const daySection = ({ day, shifts }: { day: string; shifts: Shift[] }, index: number): JSX.Element => (
+    <section
+      key={day}
+      className="sc-mine__day nv-enter"
+      style={{ '--nv-i': index }}
+      aria-labelledby={`sc-day-${day}`}
+      data-today={day === today ? 'true' : undefined}
+    >
+      <h2 id={`sc-day-${day}`} className="sc-mine__date">
+        {day === today ? 'Aujourd’hui' : longDay(day).replace(/^./u, (letter) => letter.toUpperCase())}
+      </h2>
+      <ul className="sc-mine__list">
+        {shifts.map((shift) => {
+          const phase = phaseOf(shift, now);
+          return (
+            <MyShiftRow
+              key={shift.id}
+              shift={shift}
+              account={accounts.get(shift.platformAccountId) ?? null}
+              zone={zone}
+              agency={agency}
+              phase={phase}
+              offeredTo={offers.get(shift.id) ?? []}
+              report={phase === 'past' ? reportFor(shift) : null}
+              onSwap={onSwap}
+              onReport={onReport}
+            />
+          );
+        })}
+      </ul>
+    </section>
+  );
 
   if (byDay.length === 0) {
     return (
@@ -284,33 +386,20 @@ function Week({
         {lengthOf(total)}
       </p>
       {leaves}
-      {byDay.map(({ day, shifts }, index) => (
-        <section
-          key={day}
-          className="sc-mine__day nv-enter"
-          style={{ '--nv-i': index }}
-          aria-labelledby={`sc-day-${day}`}
-          data-today={day === today ? 'true' : undefined}
-        >
-          <h2 id={`sc-day-${day}`} className="sc-mine__date">
-            {day === today ? 'Aujourd’hui' : longDay(day).replace(/^./u, (letter) => letter.toUpperCase())}
-          </h2>
-          <ul className="sc-mine__list">
-            {shifts.map((shift) => (
-              <MyShiftRow
-                key={shift.id}
-                shift={shift}
-                account={accounts.get(shift.platformAccountId) ?? null}
-                zone={zone}
-                agency={agency}
-                phase={phaseOf(shift, now)}
-                offeredTo={offers.get(shift.id) ?? []}
-                onSwap={onSwap}
-              />
-            ))}
-          </ul>
-        </section>
-      ))}
+      {earlier.length === 0 ? null : (
+        <details className="nv-disclosure nv-plate sc-fold sc-mine__earlier">
+          <summary>
+            <span className="nv-disclosure__title">Plus tôt cette semaine ({earlierCount})</span>
+            {toDo === 0 ? null : (
+              <span className="nv-disclosure__sum">
+                {toDo === 1 ? '1 rapport à faire' : `${String(toDo)} rapports à faire`}
+              </span>
+            )}
+          </summary>
+          <div className="nv-disclosure__body sc-mine">{earlier.map(daySection)}</div>
+        </details>
+      )}
+      {ahead.map(daySection)}
     </div>
   );
 }
@@ -322,7 +411,9 @@ function MyShiftRow({
   agency,
   phase,
   offeredTo,
+  report,
   onSwap,
+  onReport,
 }: {
   shift: Shift;
   account: PlanningAccount | null;
@@ -331,8 +422,11 @@ function MyShiftRow({
   phase: Phase;
   /** The colleagues an open proposal of this shift waits on. */
   offeredTo: readonly string[];
+  report: RowReport;
   onSwap: (shiftId: string) => void;
+  onReport: (shiftId: string) => void;
 }): JSX.Element {
+  const day = `${longDay(dayOf(shift.startsAt, zone))}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}`;
   const length = new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime();
   const sameHours =
     rangeAt(shift.startsAt, shift.endsAt, zone) === rangeAt(shift.startsAt, shift.endsAt, agency);
@@ -361,15 +455,43 @@ function MyShiftRow({
           <p className="sc-mine__offer">Proposé à {offeredTo.join(', ')} · en attente de réponse</p>
         )}
       </div>
-      <span className={`nv-status sc-phase sc-phase--${phase}`}>
-        <span className={`nv-dot${phase === 'live' ? ' nv-tone--ok nv-dot--live' : ''}`} />
-        {PHASE_LABELS[phase]}
-      </span>
+      {/* Only « En poste » says something the day and the row's place do not (EQ-18). */}
+      {phase === 'live' ? (
+        <span className="nv-status sc-phase sc-phase--live">
+          <span className="nv-dot nv-tone--ok nv-dot--live" />
+          En poste
+        </span>
+      ) : null}
+      {report === null ? null : report.kind === 'todo' ? (
+        <button
+          type="button"
+          className="nv-btn nv-btn--soft nv-btn--sm sc-mine__report"
+          aria-label={`Faire mon rapport du ${day}`}
+          onClick={() => {
+            onReport(shift.id);
+          }}
+        >
+          Faire mon rapport
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`rp-chip rp-chip--${STATUS_TONES[report.report.status]} nv-tap sc-mine__report`}
+          aria-label={`Rapport du ${day} : ${MEMBER_STATUS[report.report.status]}`}
+          onClick={() => {
+            onReport(shift.id);
+          }}
+        >
+          {report.report.status === 'rejected'
+            ? 'Renvoyé · Reprendre'
+            : `Rapport ${MEMBER_STATUS[report.report.status].toLowerCase()}`}
+        </button>
+      )}
       {phase === 'later' ? (
         <button
           type="button"
           className="sc-link sc-mine__swap"
-          aria-label={`Échanger ton shift du ${longDay(dayOf(shift.startsAt, zone))}, ${rangeAt(shift.startsAt, shift.endsAt, zone)}`}
+          aria-label={`Échanger ton shift du ${day}`}
           onClick={() => {
             onSwap(shift.id);
           }}

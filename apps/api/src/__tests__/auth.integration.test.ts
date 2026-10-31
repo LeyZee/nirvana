@@ -142,6 +142,67 @@ describe('dashboard authentication (P0-07a)', () => {
     await test.admin.db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, operatorId));
   });
 
+  it('closes the door to a member who left: no sign-in, and a session still open is refused at once (ADR 0023)', async () => {
+    // Invented member (ADR 0010).
+    await test.admin.db.insert(schema.teamMembers).values({
+      id: newId(TeamMemberIdSchema),
+      userId: operatorId,
+      teamRole: 'chatter',
+      firstName: 'Prénom',
+      lastName: 'Inventé',
+      displayName: 'Chatteur',
+      country: 'BJ',
+      timeZone: 'Africa/Porto-Novo',
+      joinedOn: '2026-10-01',
+    });
+    const owner = await signIn(server, OWNER.email, OWNER.password);
+    const operator = await signIn(server, OPERATOR.email, OPERATOR.password);
+    const me = (cookie: string) => server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } });
+    expect((await me(operator)).statusCode).toBe(200);
+
+    // Marked left without going through the route (a job, another instance): his session is not revoked yet.
+    await test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'left' })
+      .where(eq(schema.teamMembers.userId, operatorId));
+    const refused = await me(operator);
+    expect(refused.statusCode).toBe(401);
+    expect(refused.json<{ error: { code: string } }>().error.code).toBe('session_unauthenticated');
+    await expect(signIn(server, OPERATOR.email, OPERATOR.password)).rejects.toThrow(
+      /401.*sign_in_unauthenticated.*E-mail ou mot de passe incorrect/,
+    );
+    // The owner has no team row and is never cut off.
+    expect((await me(owner)).statusCode).toBe(200);
+
+    // Back to active (as an untouched member): signing in works again.
+    await test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'active' })
+      .where(eq(schema.teamMembers.userId, operatorId));
+    expect((await me(await signIn(server, OPERATOR.email, OPERATOR.password))).statusCode).toBe(200);
+    await test.admin.db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, operatorId));
+  });
+
+  it('refuses a wrong password and an unknown e-mail with one French answer', async () => {
+    for (const [email, password] of [
+      // On the operator: the owner's account already counts many sign-ins against its limit in this file.
+      [OPERATOR.email, 'not the password at all'],
+      ['nobody@example.test', 'not the password at all'],
+    ] as const) {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email, password },
+        headers: { origin: DASHBOARD_ORIGIN },
+      });
+      expect(response.statusCode).toBe(401);
+      expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({
+        code: 'sign_in_unauthenticated',
+        message: 'E-mail ou mot de passe incorrect',
+      });
+    }
+  });
+
   it('sets the session cookie HttpOnly and SameSite=Lax, and keeps the token out of the body', async () => {
     const response = await server.inject({
       method: 'POST',
@@ -199,6 +260,67 @@ describe('dashboard authentication (P0-07a)', () => {
     });
     expect(out.statusCode).toBe(200);
     expect((await server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } })).statusCode).toBe(401);
+  });
+
+  it("answers Better Auth's own refusals in the common format, in French (recette 28/10)", async () => {
+    // From an address of its own: the other tests of this file already spend most of the per-IP limit on `/auth`.
+    const post = (url: string, payload: object) =>
+      server.inject({
+        method: 'POST',
+        url,
+        payload,
+        headers: { origin: DASHBOARD_ORIGIN },
+        remoteAddress: '192.0.2.10',
+      });
+    for (const response of [
+      await post('/v1/auth/sign-in/email', { email: 'not-an-email', password: 'whatever it is' }),
+      await post('/v1/auth/sign-in/email', { email: 'nobody-else@example.test' }),
+      await post('/v1/auth/sign-out', { disableRedirect: 'yes' }),
+    ]) {
+      expect(response.statusCode).toBe(400);
+      expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({
+        code: 'request_invalid',
+        message: 'Requête invalide',
+      });
+    }
+    // Signing out without a session closes nothing and says so plainly.
+    expect((await post('/v1/auth/sign-out', {})).statusCode).toBe(200);
+  });
+
+  it("closes the session a new sign-in of the same account replaces, never another account's", async () => {
+    const SECOND = { email: 'second@example.test', name: 'Second', password: 'battery staple correct' };
+    const { userId } = await createOwner(app.auth, app.db.db, SECOND);
+    const sessions = async () =>
+      (
+        await test.admin.db
+          .select({ id: schema.session.id })
+          .from(schema.session)
+          .where(eq(schema.session.userId, userId))
+      ).length;
+    const me = (cookie: string) => server.inject({ method: 'GET', url: '/v1/me', headers: { cookie } });
+    const signInFrom = async (cookie: string, account: { email: string; password: string }) => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email: account.email, password: account.password },
+        headers: { cookie, origin: DASHBOARD_ORIGIN },
+        // An address of its own, like above: the per-IP limit on `/auth` is shared by the whole file.
+        remoteAddress: '192.0.2.11',
+      });
+      expect(response.statusCode).toBe(200);
+      return String(response.headers['set-cookie']).split(';')[0] ?? '';
+    };
+
+    const first = await signInFrom('', SECOND);
+    expect(await sessions()).toBe(1);
+    // The password confirmed again before a sensitive action (ADR 0016): one session still, the new one.
+    const confirmed = await signInFrom(first, SECOND);
+    expect(await sessions()).toBe(1);
+    expect((await me(first)).statusCode).toBe(401);
+    expect((await me(confirmed)).statusCode).toBe(200);
+    // Another account signing in from that browser leaves this one's session to its own sign-out.
+    await signInFrom(confirmed, OPERATOR);
+    expect(await sessions()).toBe(1);
   });
 
   it('asks for the password again before touching an AI key with a session older than 10 minutes', async () => {

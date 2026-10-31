@@ -4,17 +4,22 @@
  * a seen one fades a little; what asks for a hand is in « À traiter ».
  */
 
+/* One line: the chip and compact selects share the column. */
 .hi-filters {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--nv-space-2);
   padding: var(--nv-space-2) var(--nv-space-2) var(--nv-space-3);
 }
+.hi-filters .nv-chip {
+  flex: none;
+}
 .hi-filters .hi-select {
-  flex: 1 1 160px;
+  flex: 1 1 0;
   min-width: 0;
   max-width: 240px;
+  text-overflow: ellipsis;
   height: 32px;
   padding-block: 0;
   font-size: var(--nv-text-footnote);
@@ -118,7 +123,9 @@
   padding: 0;
   border: 0;
   border-radius: var(--nv-radius-full);
-  background: var(--nv-glass-fill);
+  /* Strong in both themes, with its ring: a button, never a decoration. */
+  background: var(--nv-glass-fill-strong);
+  box-shadow: inset 0 0 0 1px var(--nv-hairline);
   color: var(--nv-ink-muted);
   cursor: pointer;
   transition:
@@ -126,8 +133,35 @@
     color var(--nv-dur-fast) var(--nv-ease-out);
 }
 .hi-line__see:hover {
-  background: var(--nv-glass-fill-strong);
+  background: var(--nv-select-strong);
   color: var(--nv-ink);
+}
+/* The touch target around the 28 px check. */
+.hi-line__see::before {
+  content: '';
+  position: absolute;
+  inset: calc((var(--nv-target-min) - 28px) / -2);
+}
+/* Its word, beside it on hover or focus. */
+.hi-line__see::after {
+  content: 'Vu ?';
+  position: absolute;
+  right: calc(100% + 6px);
+  font-size: var(--nv-text-caption);
+  line-height: var(--nv-text-caption-leading);
+  color: var(--nv-ink-muted);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--nv-dur-fast) var(--nv-ease-out);
+}
+.hi-line__see:is(:hover, :focus-visible)::after {
+  opacity: 1;
+}
+.hi-lead-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .hi-line__see:focus-visible {
   outline: 2px solid var(--nv-focus);
@@ -146,7 +180,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hi-list[aria-busy='true'],
-  .hi-line__see {
+  .hi-line__see,
+  .hi-line__see::after {
     transition: none;
   }
 }

@@ -7,6 +7,7 @@ import {
   checkBackups,
   readBackupStatus,
   recordRestoreTest,
+  requestBackupRun,
   restoreTestFresh,
   type BackupCheck,
   type BackupsDeps,
@@ -14,6 +15,7 @@ import {
 import type { Clock } from './domain/ports';
 import {
   createPostgresBackupAlerts,
+  createPostgresBackupRequestsStore,
   createPostgresBackupRunsReader,
   createPostgresRestoreTestsStore,
 } from './infra/postgres';
@@ -29,7 +31,7 @@ export interface BackupsModule {
    * date: a test made after a past `at` would still count.
    */
   readonly restoreTestFresh: (at: Date) => Promise<boolean>;
-  /** `/v1/backups/status` and `/v1/backups/restore-tests`, behind the guards given here. */
+  /** `/v1/backups/status`, `/v1/backups/restore-tests` and `/v1/backups/runs`, behind the guards given here. */
   readonly routes: (options: BackupsRoutesOptions) => FastifyPluginAsyncZod;
 }
 
@@ -42,7 +44,11 @@ function createBackupsModule(deps: BackupsDeps): BackupsModule {
     restoreTestFresh: (at) => restoreTestFresh(deps, at),
     routes: (options) =>
       createBackupsRoutes(
-        { status, recordRestoreTest: (body, actor) => recordRestoreTest(deps, body, actor) },
+        {
+          status,
+          recordRestoreTest: (body, actor) => recordRestoreTest(deps, body, actor),
+          requestRun: (id, actor) => requestBackupRun(deps, id, actor),
+        },
         options,
       ),
   };
@@ -62,6 +68,7 @@ export function startBackupsModule(options: BackupsStartOptions): BackupsModule 
     runs: createPostgresBackupRunsReader(options.db),
     alerts: createPostgresBackupAlerts(options.adminDb),
     restoreTests: createPostgresRestoreTestsStore(options.db),
+    requests: createPostgresBackupRequestsStore(options.db),
     clock: options.clock ?? { now: () => new Date() },
   });
 }

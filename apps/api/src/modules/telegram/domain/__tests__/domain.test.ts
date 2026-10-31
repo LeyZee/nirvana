@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { nextBatch, type Pending } from '../batch';
 import { classify } from '../classify';
 import { chatsFor, computeCoverage } from '../coverage';
+import { mayRemoveChat } from '../membership';
 import { describeTelegramError } from '../messages';
 import { MAX_TEXT, escapeHtml, joinTexts, renderClosedBy, renderNotice } from '../render';
 import { morningDigestKey, nightOf, retryDelayMs, shouldRetry } from '../schedule';
@@ -198,6 +199,14 @@ describe('classification (ADR 0020 §2)', () => {
       conversations: 2,
     });
     expect(unmeasured?.kind === 'notice' ? unmeasured.body : '').toContain('pas encore mesuré');
+    const noPersona = classify({
+      kind: 'automatic_closed',
+      missing: [{ kind: 'active_persona' }],
+      conversations: 1,
+    });
+    expect(noPersona?.kind === 'notice' ? noPersona.body : '').toContain(
+      'Raison : elle n’a pas de persona active.',
+    );
   });
 
   it('opens a thread on an expired session and closes it with a reply when it comes back', () => {
@@ -373,5 +382,13 @@ describe('token and messages', () => {
       'Le bot ne peut plus écrire dans ce groupe. Rajoute-le au groupe, puis réessaie.',
     );
     expect(describeTelegramError('unreachable')).not.toMatch(/\d{3}/);
+  });
+});
+
+describe('mayRemoveChat (REG-28)', () => {
+  it('lets go of a group the bot left or was banned from, never of one it sits in', () => {
+    expect(mayRemoveChat('left')).toBe(true);
+    expect(mayRemoveChat('kicked')).toBe(true);
+    expect(mayRemoveChat('member')).toBe(false);
   });
 });

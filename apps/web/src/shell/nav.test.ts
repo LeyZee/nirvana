@@ -89,11 +89,12 @@ describe('railOf, with the screens of today', () => {
     ]);
     // An operator without a team row keeps today's rail: no Équipe.
     // Nor Entraîner: the server keeps the playground to the owner.
-    expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Créatrices', 'Réglages']);
+    // Nor Réglages: every page of it is the owner's (NAV-18).
+    expect(labels(operator)).toEqual(['Dashboard', 'Suivi', 'Créatrices']);
     expect(labels(manager)).toEqual(['Dashboard', 'Suivi', 'Équipe', 'Paie']);
     expect(labels(chatter)).toEqual(['Aujourd’hui', 'Suivi', 'Planning', 'Commissions']);
-    // A creator never sees a conversation (ADR 0023): no Suivi.
-    expect(labels(creator)).toEqual(['Dashboard', 'Créatrices', 'Réglages']);
+    // A creator never sees a conversation (ADR 0023): no Suivi. Her Créatrices is her own persona (NAV-18).
+    expect(labels(creator)).toEqual(['Dashboard', 'Persona']);
   });
 
   it('titles Chatting and Agence, and puts what the phone bar cannot hold under « Plus »', () => {

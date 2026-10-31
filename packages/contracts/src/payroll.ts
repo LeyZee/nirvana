@@ -9,6 +9,7 @@ import {
   CommissionStatementIdSchema,
   PayAdjustmentIdSchema,
   PenaltyIdSchema,
+  PayoutMinimumIdSchema,
   PlatformAccountIdSchema,
   ShiftReportIdSchema,
   TeamMemberIdSchema,
@@ -51,6 +52,9 @@ export const PAY_TARGET_MAX_MINOR = 100_000_000;
 
 /** The payout minimum until the owner sets one: 15 €, Imperium's `paie_report_seuil`. */
 export const DEFAULT_MINIMUM_PAYOUT_MINOR = 1_500;
+
+/** The longest payout delay the owner may announce to the team (PAIE-32), in business days. */
+export const PAYOUT_DELAY_MAX_BUSINESS_DAYS = 30;
 
 /** Exchange rates in millionths of a euro for one unit of the currency: 1 000 000 is one euro. */
 export const RATE_MICROS_SCALE = 1_000_000;
@@ -122,11 +126,85 @@ export function canonicalExchangeRates<R extends { readonly currency: string }>(
 export const ExchangeRatesSchema = z.object({ usd: ExchangeRateSchema.nullable() });
 export type ExchangeRates = z.infer<typeof ExchangeRatesSchema>;
 
-/** `GET` and `PUT /v1/payroll/settings` (owner writes): below the minimum, a statement's total is carried over. */
+const MinimumPayoutMinorSchema = z.number().int().min(0).max(PAY_AMOUNT_MAX_MINOR);
+
+/** Business days between a statement's validation and its payout, as the owner announces it (PAIE-32). */
+const PayoutDelaySchema = z.number().int().min(1).max(PAYOUT_DELAY_MAX_BUSINESS_DAYS);
+
+/**
+ * `GET /v1/payroll/settings` (the whole team reads it), and `settings` of a period's view. `minimumPayoutMinor`: the
+ * minimum in force for the period read (today's for `GET /settings`): below it, a statement's total is carried over.
+ * `nextMinimum`: the first change set after that period, `null` without one (PAIE-22: a minimum changes only from a
+ * period that has not begun). `payoutDelayBusinessDays`: the usual delay between validation and payout that Commissions
+ * shows each member (PAIE-32), `null` while the owner announces none; never written in the code.
+ */
 export const PayrollSettingsSchema = z.object({
-  minimumPayoutMinor: z.number().int().min(0).max(PAY_AMOUNT_MAX_MINOR),
+  minimumPayoutMinor: MinimumPayoutMinorSchema,
+  nextMinimum: z
+    .object({ fromPeriod: PayPeriodSchema, minimumPayoutMinor: MinimumPayoutMinorSchema })
+    .nullable(),
+  payoutDelayBusinessDays: PayoutDelaySchema.nullable(),
 });
 export type PayrollSettings = z.infer<typeof PayrollSettingsSchema>;
+
+/** `PUT /v1/payroll/settings` (owner): the payout delay announced to the team (PAIE-32); `null` announces none. */
+export const UpdatePayrollSettingsBodySchema = z.object({
+  payoutDelayBusinessDays: PayoutDelaySchema.nullable(),
+});
+export type UpdatePayrollSettingsBody = z.infer<typeof UpdatePayrollSettingsBodySchema>;
+
+/**
+ * The payout minimum from `fromPeriod` on (PAIE-22), for the whole team. Added only, from a period that has not begun
+ * (`pay_rule_started_invalid`): the drafts of a period already worked keep theirs. Before any, the minimum of
+ * `payroll_settings` (or `DEFAULT_MINIMUM_PAYOUT_MINOR`) is in force.
+ */
+export const PayoutMinimumSchema = z.object({
+  id: PayoutMinimumIdSchema,
+  fromPeriod: PayPeriodSchema,
+  minimumPayoutMinor: MinimumPayoutMinorSchema,
+  createdBy: UserIdSchema,
+  createdAt: z.iso.datetime(),
+});
+export type PayoutMinimum = z.infer<typeof PayoutMinimumSchema>;
+
+/** `POST /v1/payroll/payout-minimums` (owner) → 201 `PayoutMinimumSchema`, 200 for the same `id` and values. */
+export const CreatePayoutMinimumBodySchema = z.object({
+  id: PayoutMinimumIdSchema,
+  fromPeriod: PayPeriodSchema,
+  minimumPayoutMinor: MinimumPayoutMinorSchema,
+});
+export type CreatePayoutMinimumBody = z.infer<typeof CreatePayoutMinimumBodySchema>;
+
+/** The minimum in force for `period`: the latest `fromPeriod` at or before it, the newest of that period; `null` before. */
+export function payoutMinimumFor<M extends Pick<PayoutMinimum, 'id' | 'fromPeriod' | 'createdAt'>>(
+  minimums: readonly M[],
+  period: PayPeriod,
+): M | null {
+  let found: M | null = null;
+  for (const one of minimums) {
+    if (one.fromPeriod > period) continue;
+    if (found === null || newer(one, found, (minimum) => minimum.fromPeriod)) found = one;
+  }
+  return found;
+}
+
+/** The first change of minimum after `period`: the earliest `fromPeriod` after it, the newest of that period. */
+export function nextPayoutMinimum<M extends Pick<PayoutMinimum, 'id' | 'fromPeriod' | 'createdAt'>>(
+  minimums: readonly M[],
+  period: PayPeriod,
+): M | null {
+  let found: M | null = null;
+  for (const one of minimums) {
+    if (one.fromPeriod <= period) continue;
+    if (
+      found === null ||
+      one.fromPeriod < found.fromPeriod ||
+      (one.fromPeriod === found.fromPeriod && newer(one, found, (minimum) => minimum.fromPeriod))
+    )
+      found = one;
+  }
+  return found;
+}
 
 /**
  * One individual tier: a member's net of `thresholdMinor` or more in the period brings `bonusMinor`. Never at 0: a
@@ -622,13 +700,43 @@ export const PayPeriodClosingSchema = z.object({
 });
 export type PayPeriodClosing = z.infer<typeof PayPeriodClosingSchema>;
 
+/** The business reasons pay records when it cannot compute a period (EQ-04, recette du 28/10, Équipe G1). */
+export const PAY_PERIOD_BLOCK_CODES = [
+  'commission_rate_missing_conflict',
+  'exchange_rate_missing_conflict',
+] as const;
+export type PayPeriodBlockCode = (typeof PAY_PERIOD_BLOCK_CODES)[number];
+
+/**
+ * Why pay could not compute a period at its last try, and since when the same reason holds: its statements are those
+ * of the last computation that passed, out of date. `commission_rate_missing_conflict`: members it pays have no
+ * commission rate in force on the period's last day (`memberIds`, all of them; for a member, only themselves, so
+ * possibly none). `exchange_rate_missing_conflict`: no usable rate for `currency`. Gone at the next computation that
+ * passes: the ECB rate read, or the data corrected for a member without a rate. Only what is shown: a validation computes
+ * the period again under `payroll.close` and refuses with the same code.
+ */
+export const PayPeriodBlockSchema = z.discriminatedUnion('code', [
+  z.object({
+    code: z.literal('commission_rate_missing_conflict'),
+    memberIds: z.array(TeamMemberIdSchema),
+    since: z.iso.datetime(),
+  }),
+  z.object({
+    code: z.literal('exchange_rate_missing_conflict'),
+    currency: ForeignCurrencySchema,
+    since: z.iso.datetime(),
+  }),
+]);
+export type PayPeriodBlock = z.infer<typeof PayPeriodBlockSchema>;
+
 /**
  * `GET /v1/payroll/periods/:period`: the period's statements (every member's for the agency, one's own for a member),
  * with what made them. `window` is `null` while pay has not written the period; `ended` says whether it can be
  * validated (a period validates once it has ended in the agency's zone); `closing` is `null` until its first
  * validation closes it for the team. `beforeFirstClosing` says the period comes before the team's first closing: it is
  * closed for good without a closing of its own and has no statement, and a report of it counts late on the team's
- * first open period (ADR 0032).
+ * first open period (ADR 0032). `blocked` says pay could not compute the period at its last try
+ * (`PayPeriodBlockSchema`): its statements are out of date until it can. Absent (an older server) reads as `null`.
  */
 export const PayrollPeriodSchema = z.object({
   period: PayPeriodSchema,
@@ -636,6 +744,7 @@ export const PayrollPeriodSchema = z.object({
   ended: z.boolean(),
   closing: PayPeriodClosingSchema.nullable(),
   beforeFirstClosing: z.boolean(),
+  blocked: PayPeriodBlockSchema.nullable(),
   statements: z.array(CommissionStatementSchema),
   bonusTiers: BonusTierSetSchema.nullable(),
   collectiveGoal: CollectiveGoalSchema.nullable(),
@@ -650,15 +759,24 @@ const StatementCountSchema = z.number().int().min(0);
 /**
  * A period of `GET /v1/payroll/periods` (EQ-05): its window, whether it has ended, when the team closed it, and the
  * statements its reader reads there (`withMember`), counted by status and summed. The team's for the owner and an
- * active manager; one's own for a member, never the team's. `carried` counts the statements that carry their total
- * over (below the minimum payout, or below zero); `paidMinor` is what was sent. `closedBy` is `null` while the period
- * is open, and always for a member, who reads of a closing only its date (never the team's net nor its rates).
+ * active manager; one's own for a member, never the team's. `closedBy` is `null` while the period is open, and always
+ * for a member, who reads of a closing only its date (never the team's net nor its rates).
+ *
+ * Only a validation makes an amount owed or carried: `payableMinor` sums every statement, those still to validate
+ * included (what the period would pay); `validatedPayableMinor` sums the validated and paid ones only (what is owed),
+ * so that « reste à envoyer » is `validatedPayableMinor − paidMinor` on every screen. `carried` counts the validated
+ * and paid statements whose total was carried over (below the minimum payout, or below zero), never a statement still
+ * to validate, and `carriedMinor` sums what they carried with its sign: positive under the minimum, negative below
+ * zero. For one member it is what goes over to the next period; over the team it is a net of both kinds, never an
+ * amount to show as owed or taken back. `paidMinor` is what was sent. `blocked` says pay could not compute the period at
+ * its last try, as in `PayrollPeriodSchema`: its sums are out of date.
  */
 export const PayPeriodSummarySchema = z.object({
   window: PayPeriodWindowSchema,
   ended: z.boolean(),
   closedAt: z.iso.datetime().nullable(),
   closedBy: UserIdSchema.nullable(),
+  blocked: PayPeriodBlockSchema.nullable(),
   statements: z.object({
     draft: StatementCountSchema,
     validated: StatementCountSchema,
@@ -667,6 +785,8 @@ export const PayPeriodSummarySchema = z.object({
   }),
   netMinor: PeriodSumSchema,
   payableMinor: PeriodSumSchema,
+  validatedPayableMinor: PeriodSumSchema,
+  carriedMinor: PeriodSumSchema,
   paidMinor: PeriodSumSchema,
 });
 export type PayPeriodSummary = z.infer<typeof PayPeriodSummarySchema>;
@@ -753,7 +873,9 @@ export function mayValidateStatement(
  * member before they joined (`details.period`) ;
  * `penalty_cancel_conflict` 409, every period of the penalty is closed ;
  * `bonus_conflict`, `penalty_conflict`, `pay_adjustment_conflict`, `bonus_tier_set_conflict`,
- * `collective_goal_conflict` 409, the same `id` with other values ;
+ * `collective_goal_conflict`, `payout_minimum_conflict` 409, the same `id` with other values ;
+ * `pay_rule_started_invalid` 400, tiers or a payout minimum from a period that has begun (PAIE-22, `details.period`) ;
+ * `collective_goal_late_invalid` 400, a goal for a period past its 3rd day (PAIE-22, `details.period`) ;
  * `exchange_rate_missing_conflict` 409, a currency without a rate read ;
  * `commission_rate_missing_conflict` 409, a member to pay without a commission rate in force on the period's last day ;
  * `payment_in_future_unprocessable` 422, a payment dated after today in the agency's zone ;
@@ -785,6 +907,9 @@ export const PAYROLL_ERROR_CODES = [
   'pay_adjustment_conflict',
   'bonus_tier_set_conflict',
   'collective_goal_conflict',
+  'payout_minimum_conflict',
+  'pay_rule_started_invalid',
+  'collective_goal_late_invalid',
   'exchange_rate_missing_conflict',
   'commission_rate_missing_conflict',
   'payment_in_future_unprocessable',

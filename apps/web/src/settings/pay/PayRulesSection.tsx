@@ -13,6 +13,7 @@ import {
 import { useId, useState, type JSX } from 'react';
 
 import { MinimumPayout } from './MinimumPayout';
+import { PayoutDelay } from './PayoutDelay';
 
 import { addPayRules, usePayRules, useRefreshPayRules, type ReportRefusal } from '@/reports/api';
 import {
@@ -98,6 +99,7 @@ export function PayRulesSection(): JSX.Element {
         : de nouvelles prennent la suite à une quinzaine qui n’a pas commencé.
       </p>
       <MinimumPayout />
+      <PayoutDelay />
       {missing.length === 0 ? null : (
         <div className="rp-notice nv-enter" data-tone="warn" style={{ '--nv-i': 1 }}>
           <p className="rp-notice__title">
@@ -106,8 +108,8 @@ export function PayRulesSection(): JSX.Element {
               : `${String(missing.length)} comptes sans règles de paie`}
           </p>
           <p className="rp-notice__text">
-            Leurs rapports de fin de shift sont refusés tant qu’elles ne sont pas posées pour la quinzaine{' '}
-            {periodLine(currentPeriod)}.
+            {missing.length === 1 ? 'Ses' : 'Leurs'} rapports de fin de shift sont refusés tant qu’elles ne
+            sont pas posées pour la quinzaine {periodLine(currentPeriod)}.
           </p>
         </div>
       )}

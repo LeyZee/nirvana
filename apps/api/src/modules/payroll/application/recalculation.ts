@@ -1,5 +1,6 @@
 import { DomainError, nextPayPeriod, type PayPeriod } from '@nirvana/contracts';
 
+import { blockReasonOf } from '../domain/period-blocks';
 import type { JobLogger, OpenPeriodFacts, PayrollJobStore, PeriodDecision } from '../domain/ports';
 import { firstOpenPeriod, planPeriod, type PeriodSnapshot } from '../domain/recalculation';
 
@@ -10,12 +11,15 @@ export interface RecalculationOutcome {
   readonly written: number;
 }
 
-/** The plan, or the business reason the period cannot be computed yet: the job says it and tries again later. */
+/**
+ * The plan, or the business reason the period cannot be computed yet: the job says it, the period records it for the
+ * team to see (recette du 28/10, Équipe G1), and the job tries again later.
+ */
 function decide(snapshot: PeriodSnapshot): PeriodDecision {
   try {
     return planPeriod(snapshot);
   } catch (error) {
-    if (error instanceof DomainError) return { kind: 'blocked', error };
+    if (error instanceof DomainError) return { kind: 'blocked', error, reason: blockReasonOf(error) };
     throw error;
   }
 }

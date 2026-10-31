@@ -15,6 +15,7 @@ type AuditedAction =
   | 'pay_adjustment.create'
   | 'bonus_tier_set.create'
   | 'collective_goal.create'
+  | 'payout_minimum.create'
   | 'payroll_settings.update';
 
 /** Who did what (append-only, `audit_log`): never a name. */
@@ -31,6 +32,7 @@ export async function audit(
       | 'pay_adjustment'
       | 'bonus_tier_set'
       | 'collective_goal'
+      | 'payout_minimum'
       | 'payroll_settings';
     readonly id: string;
   },

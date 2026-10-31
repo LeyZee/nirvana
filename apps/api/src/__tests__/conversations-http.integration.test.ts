@@ -3,6 +3,7 @@ import {
   ConversationIdSchema,
   DesireCurveSchema,
   EventIdSchema,
+  MediaAssetIdSchema,
   MeSchema,
   CreatorIdSchema,
   MessageViewSchema,
@@ -26,6 +27,7 @@ import { buildServer, type Server } from '../server';
 
 import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
+import { activateDemoPersona } from './support/persona';
 import { DASHBOARD_ORIGIN, signIn } from './support/sign-in';
 
 const NO_LOG = { info: () => undefined, warn: () => undefined };
@@ -63,7 +65,8 @@ describe('/v1/conversations', () => {
     const platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+    await activateDemoPersona(app, creatorId);
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test-http' });
@@ -142,6 +145,7 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations/${id}/messages?creatorId=${creatorId}`, ownerCookie)).json(),
     );
     expect(messages.items.map((message) => message.text)).toEqual(["Salut, c'est Julien"]);
+    expect(messages.items[0]?.media).toEqual([]);
   });
 
   it('refuses bubbles a hard guard blocks, then approves an edited draft once; a second decision is a conflict', async () => {
@@ -372,6 +376,25 @@ describe('/v1/conversations', () => {
       (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
     );
     expect(all.items).toHaveLength(2);
+
+    // A suspended manager keeps his sign-in but drops to `self` (ADR 0024): no conversation is routed to him.
+    await test.admin.db
+      .update(schema.teamMembers)
+      .set({ status: 'suspended' })
+      .where(eq(schema.teamMembers.displayName, 'manager'));
+    expect(MeSchema.parse((await call('GET', '/v1/me', manager)).json())).toMatchObject({
+      creatorIds: [],
+      routedCreatorIds: [creatorId],
+      teamScope: 'self',
+    });
+    const suspended = pageOf(ConversationSummarySchema).parse(
+      (await call('GET', `/v1/conversations?creatorId=${creatorId}`, manager)).json(),
+    );
+    expect(suspended.items).toEqual([]);
+    for (const id of [routed, other]) {
+      const refused = await call('GET', `/v1/conversations/${id}/messages?creatorId=${creatorId}`, manager);
+      expect(refused.statusCode).toBe(403);
+    }
   });
 
   it('shows his desire score cooled to now with the band of that score, and none before a first score (P3-12)', async () => {
@@ -456,6 +479,26 @@ describe('/v1/conversations', () => {
       ownerCookie,
     );
     expect(missing.statusCode).toBe(404);
+    // Its messages, events and curve too, never an empty page (recette 28/10): an id that does not exist, or one of
+    // another creator, which her RLS does not show.
+    const other = newId(CreatorIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: other, nameKey: other, displayName: 'Autre', timezone: 'Europe/Paris' });
+    const ours = conversationIds[0]!;
+    for (const [id, creator] of [
+      [newId(ConversationIdSchema), creatorId],
+      [ours, other],
+    ] as const) {
+      for (const read of ['messages', 'events', 'desire']) {
+        const answer = await call('GET', `/v1/conversations/${id}/${read}?creatorId=${creator}`, ownerCookie);
+        expect([read, answer.statusCode, answer.json<{ error: { code: string } }>().error.code]).toEqual([
+          read,
+          404,
+          'conversation_not_found',
+        ]);
+      }
+    }
     const badCursor = await call('GET', `/v1/conversations?creatorId=${creatorId}&cursor=nope`, ownerCookie);
     expect(badCursor.statusCode).toBe(400);
   });
@@ -561,5 +604,123 @@ describe('/v1/conversations', () => {
     const conversations = await walk('/v1/conversations');
     expect(conversations).toHaveLength(3);
     expect(new Set(conversations).size).toBe(3);
+  });
+
+  it('says which media a message carries, and what it shows once the media module described it (SUIVI-26)', async () => {
+    const platformAccountId = (
+      await test.admin.db
+        .select({ id: schema.platformAccounts.id })
+        .from(schema.platformAccounts)
+        .where(eq(schema.platformAccounts.creatorId, creatorId))
+    )[0]!.id;
+    const { conversationId } = await app.modules.conversations.ingestMessage({
+      creatorId,
+      platformAccountId: PlatformAccountIdSchema.parse(platformAccountId),
+      platformConversationId: 'c-Leo',
+      platformFanId: 'f-Leo',
+      fanDisplayName: 'Léo',
+      message: {
+        ref: { platform: 'reveal', id: 'm-Leo' },
+        conversationRef: { platform: 'reveal', id: 'c-Leo' },
+        direction: 'inbound',
+        text: '',
+        media: [
+          { ref: { platform: 'reveal', id: 'media-1' }, kind: 'image', isLocked: false },
+          { ref: { platform: 'reveal', id: 'media-2' }, kind: 'video', isLocked: true },
+        ],
+        priceMinor: null,
+        currency: null,
+        isPaid: false,
+        createdAt: new Date().toISOString(),
+      },
+      correlationId: 'media',
+    });
+    const read = async () =>
+      pageOf(MessageViewSchema).parse(
+        (
+          await call(
+            'GET',
+            `/v1/conversations/${conversationId}/messages?creatorId=${creatorId}`,
+            ownerCookie,
+          )
+        ).json(),
+      ).items[0]?.media;
+    // Listed by the platform, not described yet: the kind and the lock only.
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: null },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
+    // Stored and described by the media module (invented content, ADR 0010): the latest description is shown.
+    const [photo, video] = [newId(MediaAssetIdSchema), newId(MediaAssetIdSchema)];
+    await test.admin.db.insert(schema.mediaAssets).values(
+      [photo, video].map((id, index) => ({
+        id,
+        creatorId,
+        kind: index === 0 ? 'image' : 'video',
+        origin: 'fan',
+        storageKey: `test/${id}`,
+        mime: index === 0 ? 'image/jpeg' : 'video/mp4',
+        bytes: 1000,
+        sha256: id,
+      })),
+    );
+    const description = (factualDescription: string, owner = creatorId, mediaAssetId = photo) => ({
+      id: newId(z.uuid()),
+      creatorId: owner,
+      mediaAssetId,
+      vocabularyVersion: '1',
+      content: { factualDescription },
+      model: 'test',
+      promptHash: 'test',
+    });
+    await test.admin.db.insert(schema.mediaDescriptions).values({
+      ...description('Une ancienne description.'),
+      createdAt: new Date(Date.now() - 60_000),
+    });
+    await test.admin.db.insert(schema.mediaDescriptions).values(description('Un chat sur un canapé.'));
+    await test.admin.db
+      .update(schema.messages)
+      .set({ mediaIds: [photo, video] })
+      .where(eq(schema.messages.conversationId, conversationId));
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: 'Un chat sur un canapé.' },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
+    // Lists that do not match one to one: no description rather than a wrong one.
+    await test.admin.db
+      .update(schema.messages)
+      .set({ mediaIds: [photo] })
+      .where(eq(schema.messages.conversationId, conversationId));
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: null },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
+    // Another creator's described media, even if cited, never shows: the reader reads under her RLS.
+    const other = newId(CreatorIdSchema);
+    const foreign = newId(MediaAssetIdSchema);
+    await test.admin.db
+      .insert(schema.creators)
+      .values({ id: other, nameKey: other, displayName: 'Autre', timezone: 'Europe/Paris' });
+    await test.admin.db.insert(schema.mediaAssets).values({
+      id: foreign,
+      creatorId: other,
+      kind: 'video',
+      origin: 'fan',
+      storageKey: `test/${foreign}`,
+      mime: 'video/mp4',
+      bytes: 1000,
+      sha256: foreign,
+    });
+    await test.admin.db
+      .insert(schema.mediaDescriptions)
+      .values(description('Une vidéo d’une autre créatrice.', other, foreign));
+    await test.admin.db
+      .update(schema.messages)
+      .set({ mediaIds: [photo, foreign] })
+      .where(eq(schema.messages.conversationId, conversationId));
+    expect(await read()).toEqual([
+      { kind: 'image', isLocked: false, description: 'Un chat sur un canapé.' },
+      { kind: 'video', isLocked: true, description: null },
+    ]);
   });
 });

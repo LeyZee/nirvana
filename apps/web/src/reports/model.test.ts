@@ -12,6 +12,8 @@ import {
   amountText,
   incidentsOf,
   currencyTyped,
+  lateFor,
+  MEMBER_STATUS,
   parseAmount,
   parsePercent,
   percentText,
@@ -212,5 +214,19 @@ describe('a rate', () => {
     expect(parsePercent('1000')).toBeNull();
     expect(parsePercent('120', 100_000)).toBe(12_000);
     expect(parsePercent('vingt')).toBeNull();
+  });
+});
+
+describe('a late report (EQ-14, EQ-21)', () => {
+  const now = new Date('2026-10-28T12:00:00Z');
+  it('says since when its shift ended, in minutes, hours, then days', () => {
+    expect(lateFor('2026-10-28T11:35:00Z', now)).toBe('depuis 25\u00a0min');
+    expect(lateFor('2026-10-28T04:00:00Z', now)).toBe('depuis 8\u00a0h');
+    expect(lateFor('2026-10-27T10:00:00Z', now)).toBe('depuis 1 jour');
+    expect(lateFor('2026-10-25T12:00:00Z', now)).toBe('depuis 3 jours');
+  });
+
+  it('calls a report sent and not yet read « En attente », as the figure above it does', () => {
+    expect(MEMBER_STATUS.submitted).toBe('En attente');
   });
 });

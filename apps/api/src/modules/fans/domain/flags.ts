@@ -1,4 +1,12 @@
-import { FanFlagsSchema, type FanFlagName, type FanFlags, type SetFanFlagBody } from '@nirvana/contracts';
+import {
+  FanFlagsSchema,
+  type FanFlagName,
+  type FanFlags,
+  type SetFanFlagBody,
+  type TeamScope,
+} from '@nirvana/contracts';
+
+import { AgeDisputeForbidden, AgeDisputeReasonInvalid } from './errors';
 
 /** Who may change a fan's limits: a human or the policy, never a model alone (P3-02). */
 export type FlagAuthor = 'system' | `human:${string}`;
@@ -42,10 +50,29 @@ export function withAgeDisputed(flags: FanFlags, by: 'policy' | 'human', now: Da
   });
 }
 
-/** A human confirms his age: that settles a dispute too. */
-export function withHumanConfirmation(flags: FanFlags, change: FlagChange): FanFlags | null {
+/** The owner and an active manager may lift a disputed age; anyone else, or an unknown account, may not. */
+export const mayConfirmDisputedAge = (scope: TeamScope | null): boolean =>
+  scope === 'owner' || scope === 'agency';
+
+/** Who confirms, as the database says (`withTenantMember`), and the reason they wrote, if any. */
+export interface Confirmer {
+  readonly scope: TeamScope | null;
+  readonly reason?: string;
+}
+
+/**
+ * A human confirms his age: that settles a dispute too. A disputed age (a sign of a minor) is confirmed only by the
+ * owner or an active manager, with a written reason (SUIVI-04); refused otherwise, under the row lock, nothing written.
+ */
+export function withHumanConfirmation(
+  flags: FanFlags,
+  change: FlagChange,
+  confirmer: Confirmer,
+): FanFlags | null {
   const confirmed = withFlag(flags, change);
   if (flags.ageDisputed === undefined) return confirmed;
+  if (!mayConfirmDisputedAge(confirmer.scope)) throw new AgeDisputeForbidden();
+  if (confirmer.reason === undefined || confirmer.reason.trim() === '') throw new AgeDisputeReasonInvalid();
   const rest = Object.fromEntries(
     Object.entries(confirmed ?? flags).filter(([name]) => name !== 'ageDisputed'),
   );
@@ -58,8 +85,12 @@ export function withDeclaredAge(flags: FanFlags, at: Date): FanFlags | null {
   return FanFlagsSchema.parse({ ...flags, ageConfirmedAt: at.toISOString() });
 }
 
-/** His limits without this one, or `null` when it was not set. */
+/**
+ * His limits without this one, or `null` when it was not set. Never `ageDisputed`: only a confirmation by the owner or
+ * a manager ends a dispute (`withHumanConfirmation`).
+ */
 export function withoutFlag(flags: FanFlags, flag: FanFlagName): FanFlags | null {
+  if (flag === 'ageDisputed') throw new AgeDisputeForbidden();
   if (flags[flag] === undefined) return null;
   return FanFlagsSchema.parse(Object.fromEntries(Object.entries(flags).filter(([name]) => name !== flag)));
 }

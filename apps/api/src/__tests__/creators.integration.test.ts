@@ -127,6 +127,71 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
     expect(kept?.displayName).toBe('Inès');
   });
 
+  it('refuses a second creator of the same name, case, accents and spaces aside (Charles, 28/10)', async () => {
+    const cookie = await signIn(server, OWNER.email, OWNER.password);
+    const post = (payload: object) =>
+      server.inject({
+        method: 'POST',
+        url: '/v1/creators',
+        headers: { cookie, origin: DASHBOARD_ORIGIN },
+        payload,
+      });
+    const code = (response: Awaited<ReturnType<typeof post>>) => [
+      response.statusCode,
+      response.json<{ error?: { code: string } }>().error?.code,
+    ];
+    const id = newId(CreatorIdSchema);
+    const first = await post({ id, displayName: 'Maëlle' });
+    expect(first.statusCode).toBe(201);
+    // The same form again is still a replay, not a twin.
+    const replay = await post({ id, displayName: 'Maëlle' });
+    expect([replay.statusCode, replay.json()]).toEqual([201, first.json()]);
+
+    for (const twin of ['maëlle', 'MAELLE', '  Maelle ', 'Mae\u0308lle', 'Maë\u200Blle']) {
+      expect(code(await post({ id: newId(CreatorIdSchema), displayName: twin }))).toEqual([
+        409,
+        'creator_name_conflict',
+      ]);
+    }
+    // From `pnpm creator:create` too.
+    await expect(app.modules.persona.creators.create({ displayName: 'maelle' })).rejects.toMatchObject({
+      code: 'creator_name_conflict',
+    });
+    // A name without a letter is no name.
+    for (const blank of ['\u200B', '...', '—']) {
+      expect((await post({ id: newId(CreatorIdSchema), displayName: blank })).statusCode).toBe(400);
+    }
+    const rows = await test.admin.db
+      .select({ id: schema.creators.id })
+      .from(schema.creators)
+      .where(eq(schema.creators.nameKey, 'maelle'));
+    expect(rows).toEqual([{ id }]);
+    const audit = await test.admin.db
+      .select({ entityId: schema.auditLog.entityId })
+      .from(schema.auditLog)
+      .where(
+        sql`${schema.auditLog.action} = 'creator.create' and ${schema.auditLog.details}->>'displayName' ilike 'ma%lle'`,
+      );
+    expect(audit).toEqual([{ entityId: id }]);
+  });
+
+  it('makes one creator of two forms sent at once under the same name', async () => {
+    const results = await Promise.allSettled([
+      app.modules.persona.creators.create({ id: newId(CreatorIdSchema), displayName: 'Solène' }),
+      app.modules.persona.creators.create({ id: newId(CreatorIdSchema), displayName: 'solene' }),
+      app.modules.persona.creators.create({ id: newId(CreatorIdSchema), displayName: 'SOLÈNE' }),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    for (const refused of results.filter((r) => r.status === 'rejected')) {
+      expect(refused.reason).toMatchObject({ code: 'creator_name_conflict' });
+    }
+    const rows = await test.admin.db
+      .select()
+      .from(schema.creators)
+      .where(eq(schema.creators.nameKey, 'solene'));
+    expect(rows).toHaveLength(1);
+  });
+
   it('lets the owner alone read and set her hours (P3-14), with a recent sign-in, back to the defaults on null', async () => {
     const nora = await app.modules.persona.creators.create({
       displayName: 'Nora',
@@ -221,6 +286,94 @@ describe('creators (GET /v1/creators, pnpm creator:create)', () => {
       'reauthentication_forbidden',
     ]);
     expect((await read()).isDefault).toBe(true);
+  });
+
+  it('lets the owner alone move her to another zone, with a recent sign-in and an audit line', async () => {
+    const lou = await app.modules.persona.creators.create({ displayName: 'Lou', timezone: 'Europe/Paris' });
+    // Her hours by slots: the opening moves with her clock.
+    const slots: AgentHours = {
+      ...DEFAULT_AGENT_HOURS,
+      reply: { mode: 'slots', slots: [...SUGGESTED_REPLY_SLOTS] },
+    };
+    await app.modules.persona.creators.setAgentHours(lou.id, slots, 'system');
+    const url = `/v1/creators/${lou.id}`;
+    const owner = { cookie: await signIn(server, OWNER.email, OWNER.password), origin: DASHBOARD_ORIGIN };
+    const operator = {
+      cookie: await signIn(server, OPERATOR.email, OPERATOR.password),
+      origin: DASHBOARD_ORIGIN,
+    };
+    const patch = (headers: Record<string, string>, payload: Record<string, string>, at = url) =>
+      server.inject({ method: 'PATCH', url: at, headers, payload });
+    const status = (response: Awaited<ReturnType<typeof patch>>) => [
+      response.statusCode,
+      response.json<{ error?: { code: string } }>().error?.code,
+    ];
+    const zone = async () =>
+      (await test.admin.db.select().from(schema.creators).where(eq(schema.creators.id, lou.id)))[0]?.timezone;
+    const audits = () =>
+      test.admin.db
+        .select({
+          action: schema.auditLog.action,
+          details: schema.auditLog.details,
+          userId: schema.auditLog.userId,
+        })
+        .from(schema.auditLog)
+        .where(
+          sql`${schema.auditLog.entityId} = ${lou.id} and ${schema.auditLog.action} = 'creator.timezone'`,
+        );
+
+    expect(status(await patch(operator, { timezone: 'America/New_York' }))).toEqual([403, 'role_forbidden']);
+    expect(status(await patch(owner, { timezone: 'Europe/Atlantis' }))).toEqual([400, 'request_invalid']);
+    // Her zone and nothing else: her name is not changed here.
+    expect((await patch(owner, { timezone: 'America/New_York', displayName: 'Louise' })).statusCode).toBe(
+      400,
+    );
+    expect(await zone()).toBe('Europe/Paris');
+
+    const moved = await patch(owner, { timezone: 'america/new_york' });
+    expect(moved.statusCode).toBe(200);
+    expect(moved.json()).toEqual({ id: lou.id, displayName: 'Lou', timezone: 'America/New_York' });
+    expect(await zone()).toBe('America/New_York');
+    const [owner_] = await test.admin.db
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(schema.user.email, OWNER.email));
+    expect(await audits()).toEqual([
+      {
+        action: 'creator.timezone',
+        details: { from: 'Europe/Paris', to: 'America/New_York' },
+        userId: owner_?.id,
+      },
+    ]);
+    // Those who wait are answered at her next opening on her new clock.
+    const [reopen] = await reopenJobs(lou.id);
+    expect(reopen?.run_at.getTime()).toBe(
+      nextReplyOpening(slots, 'America/New_York', reopen?.run_at ?? new Date()).getTime(),
+    );
+    // Her hours read on the new clock.
+    const hours = await server.inject({ method: 'GET', url: `${url}/agent-hours`, headers: owner });
+    expect(AgentHoursViewSchema.parse(hours.json()).timeZone).toBe('America/New_York');
+
+    // The same zone again: nothing written.
+    expect((await patch(owner, { timezone: 'America/New_York' })).statusCode).toBe(200);
+    expect(await audits()).toHaveLength(1);
+
+    const missing = '0199f2a0-0000-7000-8000-0000000000fe';
+    expect(status(await patch(owner, { timezone: 'Europe/Paris' }, `/v1/creators/${missing}`))).toEqual([
+      404,
+      'creator_not_found',
+    ]);
+
+    // A change asks for the password again after 10 minutes.
+    await test.admin.db.execute(
+      sql`update "session" set created_at = now() - interval '11 minutes' where user_id = (select id from "user" where email = ${OWNER.email})`,
+    );
+    expect(status(await patch(owner, { timezone: 'Asia/Tokyo' }))).toEqual([
+      403,
+      'reauthentication_forbidden',
+    ]);
+    expect(await zone()).toBe('America/New_York');
+    expect(await audits()).toHaveLength(1);
   });
 
   it('says when her stored hours no longer read, and follows the defaults', async () => {

@@ -202,9 +202,12 @@ describe('the closing of a pay period for the whole team (ADR 0032, migration 00
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
     await admin(async (tx) => {
-      await tx
-        .insert(s.creators)
-        .values({ id: nora.creatorId, displayName: 'Créatrice Nora', timezone: 'Europe/Paris' });
+      await tx.insert(s.creators).values({
+        id: nora.creatorId,
+        nameKey: nora.creatorId,
+        displayName: 'Créatrice Nora',
+        timezone: 'Europe/Paris',
+      });
       await tx
         .insert(s.platformAccounts)
         .values({ id: nora.accountId, creatorId: nora.creatorId, platform: 'reveal', handle: 'handle-nora' });

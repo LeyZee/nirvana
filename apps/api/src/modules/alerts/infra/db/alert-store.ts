@@ -5,6 +5,7 @@ import {
   CustomAlertGroupSchema,
   CustomAlertIdSchema,
   CustomAlertSchema,
+  customAlertNameKey,
   LOCKED_SYSTEM_ALERTS,
   newId,
   SYSTEM_ALERT_CODES,
@@ -134,6 +135,43 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
     });
   }
 
+  /**
+   * One writer of custom alerts at a time, until the transaction ends: the name check and the write it allows are
+   * never split by another one (two alerts of the same name posted at once), and a creation sent twice at once is
+   * written and audited once, the second one reading it back as a replay.
+   */
+  const lockNames = (tx: Transaction) =>
+    tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('alerts.custom_alert_names', 0))`);
+
+  /**
+   * The creators of the body where another group already has an active alert (enabled, not archived) of the same
+   * name: only where the body switches the alert on, since a switched-off one leaves the name free. Under `lockNames`.
+   */
+  async function nameTakenOn(
+    tx: Transaction,
+    groupId: string,
+    body: CustomAlertBody,
+    creators: readonly string[],
+  ): Promise<CreatorId[]> {
+    const key = customAlertNameKey(body.name);
+    const taken: CreatorId[] = [];
+    for (const { creatorId, enabled } of body.creators) {
+      if (!enabled) continue;
+      await enterCreator(tx, creatorId, creators);
+      const names = await tx
+        .select({ name: schema.customAlerts.name })
+        .from(schema.customAlerts)
+        .where(
+          and(
+            eq(schema.customAlerts.enabled, true),
+            sql`${schema.customAlerts.archivedAt} is null and ${schema.customAlerts.groupId} <> ${groupId}`,
+          ),
+        );
+      if (names.some((row) => customAlertNameKey(row.name) === key)) taken.push(creatorId);
+    }
+    return taken;
+  }
+
   /** Writes the body on its creators: an update where the group has a row (archived or not), an insert elsewhere. */
   async function write(
     tx: Transaction,
@@ -218,6 +256,7 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
 
     async create(body, userId) {
       return db.transaction(async (tx) => {
+        await lockNames(tx);
         const creators = await creatorIds(tx);
         const existing = await groupRows(tx, body.groupId, creators, true);
         if (existing.length > 0) {
@@ -229,6 +268,8 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
         }
         if (body.creators.some((c) => !creators.includes(c.creatorId)))
           return { kind: 'unknown_creator' as const };
+        const taken = await nameTakenOn(tx, body.groupId, body, creators);
+        if (taken.length > 0) return { kind: 'name_conflict' as const, creatorIds: taken };
         await write(tx, body.groupId, body, userId, creators);
         await audit(tx, 'custom_alert.create', body.groupId, userId, auditDetails(body));
         return {
@@ -240,10 +281,13 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
 
     async replace(groupId, body, userId) {
       return db.transaction(async (tx) => {
+        await lockNames(tx);
         const creators = await creatorIds(tx);
         const before = await groupRows(tx, groupId, creators, false);
         if (before.length === 0) return 'not_found' as const;
         if (body.creators.some((c) => !creators.includes(c.creatorId))) return 'unknown_creator' as const;
+        const taken = await nameTakenOn(tx, groupId, body, creators);
+        if (taken.length > 0) return { kind: 'name_conflict' as const, creatorIds: taken };
         await write(tx, groupId, body, userId, creators);
         const kept = new Set<string>(body.creators.map((c) => c.creatorId));
         for (const row of before) {
@@ -261,6 +305,9 @@ export function createDrizzleAlertStore(db: Database): AlertStore {
 
     async archive(groupId, userId) {
       return db.transaction(async (tx) => {
+        // Behind a change of the same alert, never between its read and its write: the change would bring the
+        // archived rows back, or leave active the ones it adds.
+        await lockNames(tx);
         const creators = await creatorIds(tx);
         const rows = await groupRows(tx, groupId, creators, false);
         if (rows.length === 0) return false;

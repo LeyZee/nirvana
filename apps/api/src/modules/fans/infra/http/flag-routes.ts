@@ -62,8 +62,8 @@ export function createFlagRoutes(
       },
       async (request) => {
         const { creatorId } = request.query;
-        actorFor(request, creatorId);
-        return { fanId: request.params.id, flags: await fans.flags(creatorId, request.params.id) };
+        const actor = actorFor(request, creatorId);
+        return { fanId: request.params.id, ...(await fans.flagsFor(creatorId, request.params.id, actor)) };
       },
     );
 
@@ -83,16 +83,18 @@ export function createFlagRoutes(
         const { creatorId } = request.query;
         const fanId = request.params.id;
         const { body } = request;
-        const author: FlagAuthor = `human:${actorFor(request, creatorId)}`;
+        const actor = actorFor(request, creatorId);
+        const author: FlagAuthor = `human:${actor}`;
         const command = {
           author,
           correlationId: request.id,
           ...(body.reason !== undefined && { reason: body.reason }),
         };
-        const flags = body.set
+        // His limits and the author's right, both from the transaction that wrote them.
+        const written = body.set
           ? await fans.setFlag(creatorId, fanId, requestedChange(body, now()), command)
           : await fans.clearFlag(creatorId, fanId, body.flag, command);
-        return { fanId, flags };
+        return { fanId, ...written };
       },
     );
     return Promise.resolve();
@@ -100,14 +102,14 @@ export function createFlagRoutes(
 }
 
 /**
- * `GET /v1/fans/:id/kyc` (P5-01): what she has still to learn about him, among the canvas lines `slots` (her
- * persona's, in her order), for the line « À apprendre » of the Suivi. Read like his limits, by the owner and the
- * chatters only; a fan unknown to this creator is 404 `fan_not_found`.
+ * `GET /v1/fans/:id/kyc` (P5-01): what she has still to learn about him, among the canvas lines `slotsOf` gives (her
+ * active persona's, in her order, read at each request), for the line « À apprendre » of the Suivi. Read like his
+ * limits, by the owner and the chatters only; a fan unknown to this creator is 404 `fan_not_found`.
  */
 export function createKycRoutes(
   fans: FansService,
   requireRole: RequireRole,
-  slots: readonly KycSlot[],
+  slotsOf: (creatorId: CreatorId) => Promise<readonly KycSlot[]>,
 ): FastifyPluginAsyncZod {
   return (app) => {
     app.get(
@@ -126,7 +128,7 @@ export function createKycRoutes(
         actorFor(request, creatorId);
         const fanId = request.params.id;
         if ((await fans.getFan(creatorId, fanId)) === null) throw new FanNotFound();
-        return { fanId, toLearn: await fans.kycToLearn(creatorId, fanId, slots) };
+        return { fanId, toLearn: await fans.kycToLearn(creatorId, fanId, await slotsOf(creatorId)) };
       },
     );
     return Promise.resolve();

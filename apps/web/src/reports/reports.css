@@ -487,7 +487,8 @@
 .rp-figures__row {
   display: flex;
   flex-wrap: wrap;
-  align-items: last baseline;
+  /* The labels on one line, whatever the size of the figure under each (DASH-24). */
+  align-items: flex-start;
   gap: var(--nv-space-3) var(--nv-space-8);
 }
 .rp-figures__one {
@@ -499,9 +500,7 @@
   color: var(--nv-ink-faint);
   font-size: var(--nv-text-caption);
   line-height: var(--nv-text-caption-leading);
-  letter-spacing: var(--nv-text-caption-tracking);
   font-weight: 600;
-  text-transform: uppercase;
 }
 .rp-figures__value {
   font-size: var(--nv-text-title-1);
@@ -592,6 +591,93 @@
   line-height: var(--nv-text-title-2-leading);
   font-weight: 650;
   color: var(--nv-ink-muted);
+}
+
+/* « N shifts sans rapport » under the count (EQ-14): who, on what, since when, and « Relancer » (EQ-15). */
+.rp-late .rp-late__title {
+  color: var(--nv-warning);
+}
+.rp-late__one {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nv-space-1) var(--nv-space-3);
+  min-height: var(--nv-target-min);
+  padding: 0 var(--nv-space-3);
+  border-radius: var(--nv-radius-md);
+  transition: background-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+.rp-late__one:hover {
+  background: var(--nv-plate-hover);
+}
+.rp-late__who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nv-space-2);
+  overflow: hidden;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rp-late__when,
+.rp-late__since {
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+}
+.rp-late__since {
+  color: var(--nv-warning);
+  white-space: nowrap;
+}
+.rp-nudge__text {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0 0 var(--nv-space-2);
+  padding: var(--nv-space-2) var(--nv-space-3);
+  border: 0;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-fill-track);
+  color: var(--nv-ink);
+  font: inherit;
+  font-size: var(--nv-text-footnote);
+  resize: none;
+}
+/* « Valider (N) » at the foot of its list, kept in sight while the list scrolls (EQ-26). */
+.rp-validate__bar {
+  position: sticky;
+  bottom: calc(var(--nv-space-3) + env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nv-space-3);
+  margin-top: var(--nv-space-3);
+  padding: var(--nv-space-2) var(--nv-space-2) var(--nv-space-2) var(--nv-space-4);
+  border-radius: var(--nv-radius-full);
+  box-shadow: var(--nv-shadow-lift);
+}
+.rp-validate__chosen {
+  color: var(--nv-ink-muted);
+  font-size: var(--nv-text-footnote);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .rp-late__one {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: var(--nv-space-2);
+  }
+  .rp-late__when {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .rp-late .rp-nudge {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  /* The count is enough on a phone; the oldest one is the first line. */
+  .rp-late summary .nv-disclosure__sum {
+    display: none;
+  }
 }
 
 /* A checkbox of the design: a soft square that fills with ink, its tick drawn. */
@@ -813,7 +899,8 @@
   gap: 2px;
   margin: 0 calc(-1 * var(--nv-space-2));
 }
-.rp-member .nv-disclosure__sum[data-warn='true'] {
+/* Only « N sans rapport » is amber in a member's line, not the money validated beside it (EQ-14). */
+.rp-member__late {
   color: var(--nv-warning);
 }
 .rp-pline {
@@ -830,7 +917,7 @@
   background: var(--nv-plate-hover);
 }
 .rp-pline[data-missing='true'] {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 .rp-pline__when {
   overflow: hidden;
@@ -1004,6 +1091,28 @@
 }
 .sc-sheet__report[data-warn='true'] {
   color: var(--nv-warning);
+}
+/* The report row and the member's name of a shift are links: Rapports, Membres (EQ-11, EQ-13). */
+a.sc-sheet__report,
+.sc-sheet__who {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--nv-dur-fast) var(--nv-ease-out);
+}
+a.sc-sheet__report[data-warn='true'] {
+  color: var(--nv-warning);
+}
+a.sc-sheet__report:hover,
+.sc-sheet__who:hover {
+  text-decoration-color: currentColor;
+}
+a.sc-sheet__report:focus-visible,
+.sc-sheet__who:focus-visible {
+  outline: 2px solid var(--nv-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .sc-sheet__incident {
   margin: 0;

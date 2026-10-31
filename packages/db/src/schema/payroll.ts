@@ -4,9 +4,11 @@ import {
   EARNINGS_SOURCES,
   ForeignCurrencySchema,
   PAY_AMOUNT_MAX_MINOR,
+  PAY_PERIOD_BLOCK_CODES,
   PAY_TARGET_MAX_MINOR,
   PAYMENT_METHODS,
   PAYMENT_REFERENCE_MAX,
+  PAYOUT_DELAY_MAX_BUSINESS_DAYS,
   PENALTY_KINDS,
 } from '@nirvana/contracts';
 import { sql, type SQL } from 'drizzle-orm';
@@ -58,6 +60,7 @@ const periodCheck = (name: string, period: PgColumn): ReturnType<typeof check> =
 const amountMax = sql.raw(String(PAY_AMOUNT_MAX_MINOR));
 const referenceMax = sql.raw(String(PAYMENT_REFERENCE_MAX));
 const targetMax = sql.raw(String(PAY_TARGET_MAX_MINOR));
+const payoutDelayMax = sql.raw(String(PAYOUT_DELAY_MAX_BUSINESS_DAYS));
 
 /**
  * An account's pay rules from `from_period` on (contracts `pay-rules.ts`, EQ-03): one per account and period at most,
@@ -157,6 +160,8 @@ export const payrollSettings = pgTable(
   {
     id: smallint('id').primaryKey(),
     minimumPayoutMinor: integer('minimum_payout_minor').notNull(),
+    /** PAIE-32: business days between validation and payout, as announced to the team; null announces none. */
+    payoutDelayBusinessDays: smallint('payout_delay_business_days'),
     updatedBy: text('updated_by')
       .notNull()
       .references(() => user.id),
@@ -165,6 +170,10 @@ export const payrollSettings = pgTable(
   (t) => [
     check('payroll_settings_single_check', sql`${t.id} = 1`),
     check('payroll_settings_minimum_check', sql`${t.minimumPayoutMinor} between 0 and ${amountMax}`),
+    check(
+      'payroll_settings_payout_delay_check',
+      sql`${t.payoutDelayBusinessDays} is null or ${t.payoutDelayBusinessDays} between 1 and ${payoutDelayMax}`,
+    ),
     pgPolicy('team_read', { for: 'select', using: anyMember }),
     pgPolicy('owner_insert', {
       for: 'insert',
@@ -174,6 +183,33 @@ export const payrollSettings = pgTable(
       for: 'update',
       using: isOwner,
       withCheck: sql`${isOwner} and ${t.updatedBy} = ${currentUser}`,
+    }),
+  ],
+);
+
+/**
+ * The payout minimum from a period on (PAIE-22), added only, from a period that has not begun; the newest of the latest
+ * period at or before a period is in force, `payroll_settings` before any.
+ */
+export const payoutMinimums = pgTable(
+  'payout_minimums',
+  {
+    id: id(),
+    fromPeriod: date('from_period').notNull(),
+    minimumPayoutMinor: integer('minimum_payout_minor').notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    periodCheck('payout_minimums_period_check', t.fromPeriod),
+    check('payout_minimums_minimum_check', sql`${t.minimumPayoutMinor} between 0 and ${amountMax}`),
+    index('payout_minimums_period_idx').on(t.fromPeriod),
+    pgPolicy('team_read', { for: 'select', using: anyMember }),
+    pgPolicy('owner_insert', {
+      for: 'insert',
+      withCheck: sql`${isOwner} and ${t.createdBy} = ${currentUser}`,
     }),
   ],
 );
@@ -574,5 +610,36 @@ export const payPeriodReports = pgTable(
     index('pay_period_reports_period_member_idx').on(t.period, t.memberId),
     memberRead(t.memberId),
     pgPolicy('agency_insert', { for: 'insert', withCheck: readsTeam }),
+  ],
+);
+
+/**
+ * Why pay's job could not compute a period at its last try (EQ-04, recette du 28/10, Équipe G1): a member it pays
+ * without a commission rate (`member_ids`, every one of them), or a currency without a usable rate (`currency`). One
+ * row per period at most, written by the job (`withAdmin`) under `payroll.close` in the transaction of the computation
+ * that failed, and deleted by the next one that passes: what it says is the state of the period now, not a history (the
+ * job's log keeps that). `since` stays while the same reason holds. Read like `pay_periods`, by any member; what a
+ * member reads of it is narrowed by the application (only themselves among `member_ids`).
+ */
+export const payPeriodBlocks = pgTable(
+  'pay_period_blocks',
+  {
+    period: date('period')
+      .primaryKey()
+      .references(() => payPeriods.period),
+    code: text('code').notNull(),
+    memberIds: uuid('member_ids').array(),
+    currency: text('currency'),
+    since: timestampTz('since').notNull(),
+  },
+  (t) => [
+    periodCheck('pay_period_blocks_period_check', t.period),
+    enumCheck('pay_period_blocks', t.code, PAY_PERIOD_BLOCK_CODES),
+    enumCheck('pay_period_blocks', t.currency, ForeignCurrencySchema.options),
+    check(
+      'pay_period_blocks_reason_check',
+      sql`(${t.code} = 'commission_rate_missing_conflict' and cardinality(${t.memberIds}) > 0 and ${t.currency} is null) or (${t.code} = 'exchange_rate_missing_conflict' and ${t.memberIds} is null and ${t.currency} is not null)`,
+    ),
+    pgPolicy('team_read', { for: 'select', using: anyMember }),
   ],
 );

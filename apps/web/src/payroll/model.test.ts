@@ -19,12 +19,19 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  amountWhat,
+  blockedText,
   carryLine,
+  carryWhat,
   changeBps,
+  computedText,
   countsLine,
+  dayMonthText,
+  dayShortMonth,
   draftPeriodsBefore,
   entryByText,
   entryRows,
+  fcfaText,
   firstOpenPeriod,
   flowOf,
   forecastNet,
@@ -37,10 +44,15 @@ import {
   memberFacts,
   memberPeriodAmount,
   memberPhaseChip,
+  missedRateDays,
+  rateOverdue,
+  myBlockedText,
   myStatementWords,
   parsePaySearch,
   parseTarget,
   payRefusalText,
+  payoutDelayText,
+  penaltyTaken,
   periodAmount,
   periodToOpen,
   phaseChip,
@@ -48,8 +60,11 @@ import {
   rateText,
   reachedBpsOf,
   roundAmountText,
+  rulePeriods,
+  rowChips,
   salesFor,
   salesSplit,
+  sameStageOf,
   signedPercentText,
   spanText,
   statementChips,
@@ -145,9 +160,12 @@ const summary = (
   ended: true,
   closedAt: null,
   closedBy: null,
+  blocked: null,
   statements: { draft: 0, validated: 0, paid: 0, carried: 0 },
   netMinor: 100_000,
   payableMinor: 30_000,
+  validatedPayableMinor: 0,
+  carriedMinor: 0,
   paidMinor: 0,
   ...patch,
 });
@@ -196,15 +214,57 @@ describe('the forecast of a period', () => {
 describe('a statement’s marks', () => {
   it('says its stage, and a carry-over as the one amber mark', () => {
     expect(statementChips(statement(), false)).toEqual([{ label: 'En cours', tone: 'neutral' }]);
-    expect(statementChips(statement(), true)).toEqual([{ label: 'Brouillon', tone: 'neutral' }]);
-    expect(statementChips(statement({ carryOverOutMinor: 1_200 }), true)).toEqual([
-      { label: 'Reporté', tone: 'warn' },
+    // Never « Brouillon », the word of the agent's replies.
+    expect(statementChips(statement(), true)).toEqual([{ label: 'À valider', tone: 'neutral' }]);
+    // Not carried before it is validated: only under the minimum, or under zero, so far.
+    expect(statementChips(statement({ carryOverOutMinor: 1_200, totalMinor: 1_200 }), true)).toEqual([
+      { label: 'À valider', tone: 'neutral' },
+      { label: 'Sous le minimum', tone: 'warn' },
     ]);
-    expect(statementChips(statement({ status: 'validated', carryOverOutMinor: 1_200 }), true)).toEqual([
+    expect(statementChips(statement({ carryOverOutMinor: -800, totalMinor: -800 }), false)).toEqual([
+      { label: 'En cours', tone: 'neutral' },
+      { label: 'Sous zéro', tone: 'warn' },
+    ]);
+    expect(
+      statementChips(statement({ status: 'validated', carryOverOutMinor: 1_200, payableMinor: 0 }), true),
+    ).toEqual([
       { label: 'Validé', tone: 'ok' },
       { label: 'Reporté', tone: 'warn' },
     ]);
+    // Validated with money to send waits; paid is done: two tones.
+    expect(statementChips(statement({ status: 'validated' }), true)).toEqual([
+      { label: 'Validé', tone: 'wait' },
+    ]);
     expect(statementChips(statement({ status: 'paid' }), true)).toEqual([{ label: 'Payé', tone: 'ok' }]);
+  });
+
+  it('leaves out of a row the stage every row shares, and says what its amount is', () => {
+    const draft = statement();
+    expect(sameStageOf([draft, statement()], true)).toBe(true);
+    expect(sameStageOf([draft, statement({ status: 'validated' })], true)).toBe(false);
+    expect(rowChips(draft, true, true)).toEqual([]);
+    expect(rowChips(draft, true, false)).toEqual([{ label: 'À valider', tone: 'neutral' }]);
+    expect(rowChips(statement({ status: 'paid' }), true, true)).toEqual([{ label: 'Payé', tone: 'ok' }]);
+    expect(amountWhat(draft, false)).toBe('à ce jour');
+    expect(amountWhat(draft, true)).toBe('à verser, une fois validé');
+    expect(amountWhat(draft, true, true)).toBe('à verser');
+    expect(amountWhat(statement({ status: 'validated' }), true)).toBe('à verser');
+    expect(amountWhat(statement({ status: 'validated', payableMinor: 0 }), true)).toBe('rien à verser');
+    expect(
+      amountWhat(
+        statement({
+          status: 'paid',
+          payment: { paidOn: '2026-11-01', method: 'worldremit', reference: null, sentMinor: 2_125 },
+        }),
+        true,
+      ),
+    ).toBe('versé le 1er nov.');
+    const under = { totalMinor: 900, carryOverOutMinor: 900, payableMinor: 0 };
+    expect(plain(carryWhat(statement(under)) ?? '')).toBe('total 9,00 € → irait en report');
+    expect(plain(carryWhat(statement({ ...under, status: 'validated' })) ?? '')).toBe(
+      'total 9,00 € → reporté',
+    );
+    expect(carryWhat(draft)).toBeNull();
   });
 });
 
@@ -217,15 +277,32 @@ describe('a period in the list', () => {
     ]);
     const ended = summary({ statements: { draft: 4, validated: 0, paid: 0, carried: 1 } });
     expect(phaseChip(ended)).toEqual({ label: 'Finie : à valider', tone: 'wait' });
+    // Half validated: what is left to send counts the validated statements only, as Quinzaine does (#295).
     const closed = summary({
       closedAt: '2026-11-02T09:41:00.000Z',
       statements: { draft: 1, validated: 2, paid: 1, carried: 1 },
+      validatedPayableMinor: 25_000,
       paidMinor: 10_000,
     });
     expect([phaseChip(closed).label, periodAmount(closed)]).toEqual([
       'Close : à valider',
-      { minor: 20_000, what: 'à verser' },
+      { minor: 15_000, what: 'reste à envoyer, validation en cours' },
     ]);
+    expect(periodAmount(ended).what).toBe('à verser une fois validé');
+    // Everything validated is paid, one statement still waits: what it would pay, never « 0,00 € reste à envoyer ».
+    const waiting = summary({
+      statements: { draft: 1, validated: 0, paid: 2, carried: 0 },
+      payableMinor: 30_000,
+      validatedPayableMinor: 20_000,
+      paidMinor: 20_000,
+    });
+    expect(periodAmount(waiting)).toEqual({ minor: 10_000, what: 'à verser une fois validé' });
+    const toPay = summary({
+      statements: { draft: 0, validated: 2, paid: 1, carried: 0 },
+      validatedPayableMinor: 30_000,
+      paidMinor: 10_000,
+    });
+    expect(periodAmount(toPay)).toEqual({ minor: 20_000, what: 'reste à envoyer' });
     const paid = summary({ statements: { draft: 0, validated: 1, paid: 3, carried: 1 }, paidMinor: 30_000 });
     expect([phaseChip(paid), periodAmount(paid)]).toEqual([
       { label: 'Payée', tone: 'ok' },
@@ -234,12 +311,24 @@ describe('a period in the list', () => {
     expect(countsLine(paid.statements)).toBe('3 payés, 1 validé · 1 reporté');
   });
 
+  it('says first that pay could not compute it, and that its amount is out of date', () => {
+    const blocked = summary({
+      statements: { draft: 4, validated: 0, paid: 0, carried: 0 },
+      blocked: { code: 'exchange_rate_missing_conflict', currency: 'USD', since: '2026-11-02T09:41:00.000Z' },
+    });
+    expect([phaseChip(blocked), periodAmount(blocked)]).toEqual([
+      { label: 'Calcul bloqué', tone: 'warn' },
+      { minor: 30_000, what: 'au dernier calcul, plus à jour' },
+    ]);
+  });
+
   it('sums a period read whole as the list does', () => {
     const period: PayrollPeriod = {
       period: PERIOD,
       window: WINDOW,
       ended: true,
       beforeFirstClosing: false,
+      blocked: null,
       closing: null,
       statements: [
         statement({
@@ -247,15 +336,19 @@ describe('a period in the list', () => {
           payment: { paidOn: '2026-11-02', method: 'worldremit', reference: null, sentMinor: 2_125 },
         }),
         statement({ carryOverOutMinor: 900, payableMinor: 0 }),
+        statement({ status: 'validated', carryOverOutMinor: 700, payableMinor: 0 }),
       ],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
+    // The draft under the minimum would carry its total, but only the validated one did.
     expect(summaryOf(period)).toMatchObject({
-      statements: { draft: 1, validated: 0, paid: 1, carried: 1 },
-      netMinor: 17_000,
+      statements: { draft: 1, validated: 1, paid: 1, carried: 1 },
+      netMinor: 25_500,
       payableMinor: 2_125,
+      validatedPayableMinor: 2_125,
+      carriedMinor: 700,
       paidMinor: 2_125,
     });
   });
@@ -312,7 +405,7 @@ describe('the money of a statement', () => {
       totalsOf(carried, true).map((row) => plain(`${row.label} | ${row.note ?? ''} | ${row.amount}`)),
     ).toEqual([
       'Commission |  | 21,25 €',
-      'Malus | « Retard. » · 30,00 € demandés, plafonnés à ta part plus tes primes | −21,25 €',
+      'Malus | « Retard. » · 30,00 € demandés, plafonnés à ta part plus tes primes : le reste (8,75 €) est abandonné, il n’est pas reporté | −21,25 €',
       'Ce que tu touches |  | 0,00 €',
     ]);
 
@@ -331,6 +424,14 @@ describe('the money of a statement', () => {
       'À verser |  | pay',
     ]);
     expect(totalsOf(statement({ status: 'paid' }), true).at(-1)?.label).toBe('Ce que tu as touché');
+    // Before its validation, a carry-over is only what would go on the next period.
+    expect(
+      totalsOf(statement({ totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 }), false).find(
+        (row) => row.kind === 'carry',
+      )?.label,
+    ).toBe('Irait sur la quinzaine suivante');
+    // The screen's own name for what is paid, so that one amount has one name.
+    expect(totalsOf(statement(), true, 'Ce que tu vas toucher').at(-1)?.label).toBe('Ce que tu vas toucher');
   });
 });
 
@@ -357,6 +458,20 @@ describe('words', () => {
 
   it('says each refusal with what it carries', () => {
     const names = { memberName: () => 'Basile' };
+    expect(
+      payRefusalText(
+        { kind: 'refused', code: 'pay_rule_started_invalid', details: { period: '2026-11-01' } },
+        names,
+      ),
+    ).toBe(
+      'La quinzaine du 1er au 15 novembre a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.',
+    );
+    expect(
+      payRefusalText(
+        { kind: 'refused', code: 'collective_goal_late_invalid', details: { period: '2026-11-16' } },
+        names,
+      ),
+    ).toBe('L’objectif de la quinzaine du 16 au 30 novembre se posait au plus tard le mercredi 18 novembre.');
     expect(
       payRefusalText(
         { kind: 'refused', code: 'pay_period_order_conflict', details: { period: '2026-10-16' } },
@@ -424,11 +539,12 @@ describe('the export of a period', () => {
       window: WINDOW,
       ended: true,
       beforeFirstClosing: false,
+      blocked: null,
       closing: null,
       statements: [statement()],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
     const csv = statementsCsv(
       period,
@@ -439,7 +555,7 @@ describe('the export of a period', () => {
     expect(head?.split(';').slice(0, 3)).toEqual(['Membre', 'Compte', 'Devise']);
     expect(account).toBe('Théo;"Nora Vidal; @nora";EUR;120,00;120,00;100,00;85,00;21,25;;;;;;;;');
     expect(total).toBe(
-      'Théo;Total du relevé;EUR;;;;85,00;21,25;0,00;0,00;0,00;0,00;21,25;0,00;21,25;Brouillon',
+      'Théo;Total du relevé;EUR;;;;85,00;21,25;0,00;0,00;0,00;0,00;21,25;0,00;21,25;À valider',
     );
   });
 
@@ -449,11 +565,12 @@ describe('the export of a period', () => {
       window: WINDOW,
       ended: true,
       beforeFirstClosing: false,
+      blocked: null,
       closing: null,
       statements: [statement({ penaltiesMinor: 500 })],
       bonusTiers: null,
       collectiveGoal: null,
-      settings: { minimumPayoutMinor: 1_500 },
+      settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     };
     const lines = (name: string) =>
       statementsCsv(
@@ -502,6 +619,10 @@ describe('what Quinzaine opens on, and what it lets validate', () => {
     expect(periodToOpen(unpaid, current, false)).toBe(current);
     expect(parsePaySearch({ quinzaine: '2026-10-16', autre: 1 })).toEqual({ quinzaine: '2026-10-16' });
     expect(parsePaySearch({ quinzaine: '2026-10-17' })).toEqual({});
+    // « Son relevé » from a member's record (EQ-11).
+    const theo = '0199f2a0-0000-7000-8000-0000000000a1';
+    expect(parsePaySearch({ membre: theo })).toEqual({ membre: theo });
+    expect(parsePaySearch({ membre: 'Théo' })).toEqual({});
   });
 
   it('lets the reader validate the drafts of an ended period that are not theirs', () => {
@@ -543,6 +664,7 @@ describe('the dollar’s rate before a closing', () => {
     window: { ...WINDOW, period: OCT2 },
     ended: true,
     beforeFirstClosing: false,
+    blocked: null,
     closing: null,
     statements: [
       statement({
@@ -552,7 +674,7 @@ describe('the dollar’s rate before a closing', () => {
     ],
     bonusTiers: null,
     collectiveGoal: null,
-    settings: { minimumPayoutMinor: 1_500 },
+    settings: { minimumPayoutMinor: 1_500, nextMinimum: null, payoutDelayBusinessDays: null },
     ...patch,
   });
 
@@ -600,17 +722,29 @@ describe('a member’s row', () => {
       memberFacts(statement({ teamShare: { baseNetMinor: 100_000, bps: 1_000, amountMinor: 10_000 } })).map(
         plain,
       ),
-    ).toEqual(['part d’équipe 10 %']);
+    ).toEqual(['commission 25 %', 'part d’équipe 10 %']);
   });
 
   it('says a carry-over in one sentence, under the minimum or under zero', () => {
-    expect(carryLine(statement())).toBeNull();
-    expect(
-      plain(carryLine(statement({ totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 })) ?? ''),
-    ).toBe('Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.');
-    expect(
-      plain(carryLine(statement({ totalMinor: -800, carryOverOutMinor: -800, payableMinor: 0 })) ?? ''),
-    ).toBe('Total sous zéro : −8,00 € reportés sur la quinzaine suivante.');
+    expect(carryLine(statement(), true)).toBeNull();
+    const under = { totalMinor: 1_200, carryOverOutMinor: 1_200, payableMinor: 0 };
+    const negative = { totalMinor: -800, carryOverOutMinor: -800, payableMinor: 0 };
+    expect(plain(carryLine(statement({ ...under, status: 'validated' }), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 € : 12,00 € reportés sur la quinzaine suivante.',
+    );
+    expect(plain(carryLine(statement({ ...negative, status: 'validated' }), true) ?? '')).toBe(
+      'Total sous zéro : −8,00 € reportés sur la quinzaine suivante.',
+    );
+    // Not carried yet before its validation: what would be, so far while it runs.
+    expect(plain(carryLine(statement(under), true) ?? '')).toBe(
+      'Sous le minimum de 15,00 € : 12,00 € iront sur la quinzaine suivante une fois le relevé validé.',
+    );
+    expect(plain(carryLine(statement(under), false) ?? '')).toBe(
+      'Sous le minimum de 15,00 € à ce jour : 12,00 € iraient sur la quinzaine suivante, si la quinzaine finit ainsi.',
+    );
+    expect(plain(carryLine(statement(negative), false) ?? '')).toBe(
+      'Total sous zéro à ce jour : −8,00 € iraient sur la quinzaine suivante, si la quinzaine finit ainsi.',
+    );
   });
 });
 
@@ -774,6 +908,13 @@ describe('Primes et malus', () => {
 });
 
 describe('goals and tiers', () => {
+  it('starts a pay rule with a period that has not begun (PAIE-22)', () => {
+    // The 1st itself has not begun yet as a rule's start: the period of that day is offered.
+    expect(rulePeriods('2026-11-01', 2)).toEqual(['2026-11-01', '2026-11-16']);
+    expect(rulePeriods('2026-11-02', 2)).toEqual(['2026-11-16', '2026-12-01']);
+    expect(rulePeriods('2026-12-31', 2)).toEqual(['2027-01-01', '2027-01-16']);
+  });
+
   it('reads a target up to its own ceiling, beyond an entry’s slip guard', () => {
     expect(parseTarget('150 000')).toBe(15_000_000);
     expect(parseTarget('1000000')).toBe(100_000_000);
@@ -826,7 +967,7 @@ describe('Commissions, as the member reads them', () => {
     });
     expect(chip({ statements: counts(0, 1, 0), payableMinor: 2_125 })).toEqual({
       label: 'Validé',
-      tone: 'ok',
+      tone: 'wait',
     });
     expect(chip({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })).toEqual({
       label: 'Payé',
@@ -843,13 +984,20 @@ describe('Commissions, as the member reads them', () => {
       minor: 2_125,
       what: 'à ce jour',
     });
+    // Not validated, so not owed yet (#295).
     expect(memberPeriodAmount(summary({ statements: counts(1, 0, 0), payableMinor: 2_125 }))).toEqual({
       minor: 2_125,
-      what: 'à toucher',
+      what: 'à toucher une fois validé',
     });
     expect(
       memberPeriodAmount(summary({ statements: counts(0, 0, 1), payableMinor: 2_125, paidMinor: 2_125 })),
     ).toEqual({ minor: 2_125, what: 'touché' });
+    // Validated, not sent yet: what is owed (#295).
+    expect(
+      memberPeriodAmount(
+        summary({ statements: counts(0, 1, 0), payableMinor: 2_125, validatedPayableMinor: 2_125 }),
+      ),
+    ).toEqual({ minor: 2_125, what: 'à toucher' });
   });
 
   it('opens on the money on its way, then on the period under way, else on what the last one brought', () => {
@@ -872,7 +1020,7 @@ describe('Commissions, as the member reads them', () => {
       return { since: plain(said.since), label: said.label, notes: said.notes.map(plain) };
     };
     expect(words(statement(), false)).toEqual({
-      since: 'se valide à partir du lun. 16 nov.',
+      since: 'validation par l’agence à partir du lun. 16 nov.',
       label: 'Ce que tu touches à ce jour',
       notes: ['Calculé à 10 h 07 sur tes rapports validés. Le versement suit la validation de la quinzaine.'],
     });
@@ -926,6 +1074,27 @@ describe('Commissions, as the member reads them', () => {
     expect(words(bare, true).notes).toEqual(['Payé le mardi 17 novembre par WorldRemit.']);
   });
 
+  it('says the payout delay the owner announced, never one of its own (PAIE-32)', () => {
+    const sameDay = new Date('2026-11-02T15:00:00Z');
+    const notes = (one: CommissionStatement, ended: boolean, delay: number | null) =>
+      myStatementWords(one, ended, sameDay, delay).notes.map(plain);
+    expect(notes(statement(), false, 3)).toEqual([
+      'Calculé à 10 h 07 sur tes rapports validés. En général, le versement part 3 jours ouvrés après la validation.',
+    ]);
+    expect(notes(statement(), true, 1)).toEqual([
+      'Calculé à 10 h 07 sur tes rapports validés. L’agence valide, puis le versement suit, en général 1 jour ouvré après la validation.',
+    ]);
+    const validated = statement({ status: 'validated', validatedAt: '2026-11-16T09:41:00.000Z' });
+    expect(notes(validated, true, 3)).toEqual([
+      'Validé le lundi 16 novembre à 10 h 41. En général, le versement part 3 jours ouvrés après la validation.',
+    ]);
+    // Nothing to pay: no delay to announce.
+    expect(notes(statement({ ...validated, payableMinor: 0 }), true, 3)).toEqual([
+      'Validé le lundi 16 novembre à 10 h 41.',
+    ]);
+    expect(payoutDelayText(2)).toBe('2 jours ouvrés après la validation');
+  });
+
   it('finds the tier reached, its threshold included, and the next one', () => {
     const tiers = [
       { label: 'Argent', thresholdMinor: 100_000, bonusMinor: 2_500 },
@@ -952,5 +1121,135 @@ describe('Commissions, as the member reads them', () => {
     expect(plain(roundAmountText(123_400, 'EUR'))).toBe('1 234 €');
     expect(plain(roundAmountText(21_250, 'EUR'))).toBe('212,50 €');
     expect(plain(roundAmountText(23_100, 'USD'))).toMatch(/^231 \$|^\$231$/u);
+  });
+});
+
+describe('the words of pay', () => {
+  it('writes the first of the month « 1er », and a computation’s day when it is not today', () => {
+    expect(plain(dayMonthText('2026-11-01'))).toBe('dim. 1er nov.');
+    expect(plain(dayMonthText('2026-11-11'))).toBe('mer. 11 nov.');
+    expect(plain(dayShortMonth('2026-11-01'))).toBe('1er nov.');
+    expect(plain(dayShortMonth('2026-11-15'))).toBe('15 nov.');
+    const at = '2026-10-16T06:12:00.000Z';
+    expect(plain(computedText(at, 'Europe/Paris', new Date('2026-10-16T15:00:00Z')))).toBe('à 8 h 12');
+    expect(plain(computedText(at, 'Europe/Paris', new Date('2026-10-29T15:00:00Z')))).toBe(
+      'le ven. 16 oct. à 8 h 12',
+    );
+  });
+
+  it('says an amount in CFA francs at the fixed parity, as a guide only', () => {
+    expect(plain(fcfaText(107_503))).toBe('≈ 705 173 FCFA, avant frais WorldRemit');
+  });
+
+  it('counts the working days a rate should have come since the last one read', () => {
+    // Thursday 8 October, today Thursday 29: the 14 working days in between.
+    expect(missedRateDays('2026-10-08', '2026-10-29')).toBe(14);
+    // Friday's rate, today Monday: the weekend has none, and Monday's may still come.
+    expect(missedRateDays('2026-10-23', '2026-10-26')).toBe(0);
+    expect(missedRateDays('2026-10-27', '2026-10-29')).toBe(1);
+  });
+
+  it('calls a rate overdue only past two working days without one, as the server does', () => {
+    // Thursday 25 March 2027, today Tuesday 30: Good Friday and Easter Monday shut the ECB, nothing is broken.
+    expect(rateOverdue('2027-03-25', '2027-03-30')).toBe(false);
+    // Today Wednesday 31: three working days without a rate.
+    expect(rateOverdue('2027-03-25', '2027-03-31')).toBe(true);
+  });
+
+  it('says what a penalty really takes, read in the member’s statement', () => {
+    const id = newId(PenaltyIdSchema);
+    const percent = { id, kind: 'percent', struck: false } as const;
+    const fixed = { ...percent, kind: 'fixed' } as const;
+    const taken = (requested: number, kept: number, ids: readonly string[] = [id]) => ({
+      penalties: ids.map((one) => ({ id: one })),
+      penaltiesRequestedMinor: requested,
+      penaltiesMinor: kept,
+    });
+    expect(plain(penaltyTaken(percent, taken(10_000, 10_000)) ?? '')).toBe('de son net, soit −100,00 €');
+    expect(plain(penaltyTaken(fixed, taken(6_000, 2_334)) ?? '')).toBe('retenu −23,34 € (plafonné)');
+    expect(penaltyTaken(fixed, taken(6_000, 6_000))).toBeNull();
+    // Two penalties in one statement: the amount of each is not known apart.
+    expect(plain(penaltyTaken(fixed, taken(6_000, 2_334, [id, newId(PenaltyIdSchema)])) ?? '')).toBe(
+      'malus plafonnés : −23,34 € retenus en tout',
+    );
+    expect(penaltyTaken(percent, undefined)).toBe('de son net');
+    expect(penaltyTaken({ ...percent, struck: true }, taken(10_000, 10_000))).toBeNull();
+    expect(penaltyTaken({ ...percent, kind: 'bonus' }, taken(10_000, 10_000))).toBeNull();
+  });
+});
+
+describe('a blocked period (recette du 28/10, Équipe G1)', () => {
+  const [theo, lea] = [newId(TeamMemberIdSchema), newId(TeamMemberIdSchema)];
+  const memberName = (id: string): string => (id === theo ? 'Théo' : id === lea ? 'Léa' : 'Un membre');
+  const since = '2025-05-02T08:30:00.000Z';
+  const rate = { code: 'commission_rate_missing_conflict' as const, memberIds: [theo], since };
+
+  it('says who lacks a rate, that no gesture of the screen lifts it, and that the figures are out of date', () => {
+    const owner = blockedText(rate, { owner: true, memberName }, 'Europe/Paris');
+    expect(owner.title).toBe('Le calcul est bloqué : Théo n’a pas de taux pour cette quinzaine.');
+    expect(plain(owner.text)).toBe(
+      'Un rapport validé de Théo tombe sur une quinzaine où son taux n’a pas encore commencé. C’est une donnée d’avant le correctif du 28/10, qui ne peut plus se produire. Aucun geste de l’écran ne la corrige, puisqu’un rapport validé ne change pas et qu’un taux ne part jamais en arrière : elle se corrige dans la base, puis le calcul reprend seul. D’ici là, les chiffres ci-dessous sont ceux du dernier calcul réussi : ils ne sont plus à jour. Bloqué depuis le vendredi 2 mai à 10 h 30.',
+    );
+    const two = blockedText({ ...rate, memberIds: [theo, lea] }, { owner: true, memberName }, null);
+    expect(two.title).toBe('Le calcul est bloqué : Théo et Léa n’ont pas de taux pour cette quinzaine.');
+    expect(two.text).toMatch(
+      /^Des rapports validés de Théo et Léa tombent sur une quinzaine où leur taux n’a pas encore commencé\./u,
+    );
+    expect(two.text).not.toMatch(/Ajoute/u);
+    expect(two.text).not.toMatch(/Bloqué depuis/u);
+  });
+
+  it('tells a manager the owner is told, and a member nobody’s name', () => {
+    expect(blockedText(rate, { owner: false, memberName }, null).text).toMatch(
+      /^Un rapport validé de Théo tombe .*\. Le propriétaire est prévenu ; le calcul reprendra seul une fois la donnée corrigée\./u,
+    );
+    expect(blockedText({ ...rate, memberIds: [] }, { owner: false, memberName }, null).title).toBe(
+      'Le calcul est bloqué : un membre de l’équipe n’a pas de taux pour cette quinzaine.',
+    );
+  });
+
+  it('says which rate of the ECB is missing', () => {
+    const block = { code: 'exchange_rate_missing_conflict' as const, currency: 'USD' as const, since };
+    const said = blockedText(block, { owner: true, memberName }, null);
+    expect(said.title).toBe(
+      'Le calcul est bloqué : le taux du dollar de la BCE manque pour cette quinzaine.',
+    );
+    expect(said.text).toMatch(/le calcul reprendra seul/u);
+  });
+});
+
+describe('a blocked period, as the member reads it', () => {
+  const since = '2025-05-02T08:30:00.000Z';
+
+  it('says their statement is out of date, who is told, and no colleague by name', () => {
+    const mine = myBlockedText({
+      code: 'commission_rate_missing_conflict',
+      memberIds: [newId(TeamMemberIdSchema)],
+      since,
+    });
+    expect(mine.title).toBe('Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.');
+    expect(mine.text).toMatch(
+      /^Un de tes rapports validés tombe sur une quinzaine où ton taux n’a pas encore commencé\. Le propriétaire est prévenu/u,
+    );
+    expect(myBlockedText({ code: 'commission_rate_missing_conflict', memberIds: [], since }).text).toMatch(
+      /^Il manque un taux de commission dans l’équipe/u,
+    );
+    expect(myBlockedText({ code: 'exchange_rate_missing_conflict', currency: 'USD', since }).text).toMatch(
+      /^Le taux du dollar de la BCE manque/u,
+    );
+    // Their own report blocks the period before any statement: no amount to call out of date.
+    const none = myBlockedText({ code: 'commission_rate_missing_conflict', memberIds: [], since }, false);
+    expect(none.title).toBe('Ton relevé n’est pas encore calculé : le calcul de la quinzaine est bloqué.');
+    expect(none.text).toBe(
+      'Il manque un taux de commission dans l’équipe pour cette quinzaine. Le propriétaire est prévenu dans sa paie ; le calcul reprendra seul une fois réglé.',
+    );
+  });
+
+  it('marks the period « Plus à jour » in the member’s list, its amount that of the last computation', () => {
+    const blocked = summary({
+      blocked: { code: 'exchange_rate_missing_conflict', currency: 'USD', since },
+    });
+    expect(memberPhaseChip(blocked)).toEqual({ label: 'Plus à jour', tone: 'warn' });
+    expect(memberPeriodAmount(blocked)).toEqual({ minor: 30_000, what: 'au dernier calcul' });
   });
 });

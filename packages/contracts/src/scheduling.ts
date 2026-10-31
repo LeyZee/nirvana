@@ -223,7 +223,7 @@ export const CreateShiftTemplateBodySchema = z
     validFrom: CalendarDaySchema,
   })
   .refine((body) => body.startMinute !== body.endMinute, {
-    message: 'Un modèle commence et finit à des heures différentes',
+    message: 'Un modèle doit commencer et finir à des heures différentes',
     path: ['endMinute'],
   })
   .refine((body) => templateLengthMinutes(body) <= SHIFT_TEMPLATE_MAX_MINUTES, {

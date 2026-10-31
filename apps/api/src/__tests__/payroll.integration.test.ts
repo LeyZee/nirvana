@@ -1,5 +1,7 @@
 import {
   AccountPayRulesIdSchema,
+  CommissionRateIdSchema,
+  PayPeriodPageSchema,
   BonusIdSchema,
   CollectiveGoalIdSchema,
   JOB_MAX_ATTEMPTS,
@@ -40,6 +42,8 @@ const P1 = PayPeriodSchema.parse('2025-03-01');
 const P2 = PayPeriodSchema.parse('2025-03-16');
 const P3 = PayPeriodSchema.parse('2025-04-01');
 const P4 = PayPeriodSchema.parse('2025-04-16');
+const P5 = PayPeriodSchema.parse('2025-05-01');
+const P6 = PayPeriodSchema.parse('2025-05-16');
 
 const quiet = { warn: () => undefined, error: () => undefined };
 
@@ -69,6 +73,7 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
   const addMember = async (
     email: string,
     displayName: string,
+    joinedOn = '2025-01-01',
   ): Promise<{ member: TeamMember; cookie: string }> => {
     const response = await call('POST', '/team/members', owner, {
       email,
@@ -79,7 +84,7 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
       lastName: 'Inventé',
       country: 'FR',
       timeZone: 'Europe/Paris',
-      joinedOn: '2025-01-01',
+      joinedOn,
       commission: { rateBps: 2_000 },
       teamShareBps: null,
     });
@@ -271,6 +276,12 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     await validated(theo, P3, 10_000, dollars);
     expect(await recalculate(P3)).toEqual([{ period: P3, outcome: 'blocked', written: 0 }]);
     expect(await statementsOf(P3)).toEqual([]);
+    // The period says it, to the agency and to a member alike (recette du 28/10, Équipe G1).
+    expect((await periodAs(owner, P3)).blocked).toMatchObject({
+      code: 'exchange_rate_missing_conflict',
+      currency: 'USD',
+    });
+    expect((await periodAs(theoCookie, P3)).blocked?.code).toBe('exchange_rate_missing_conflict');
     // Its period is written all the same, from midnight to midnight in the agency's zone (summer time from March 30).
     const [window] = await test.admin.db
       .select()
@@ -431,6 +442,21 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     expect((await call('GET', '/payroll/periods/2025-03-02', owner)).statusCode).toBe(400);
   });
 
+  it('shows a suspended manager his own statement only, like a chatter (ADR 0024)', async () => {
+    const leaCookie = await signIn(server, 'lea@example.test', PASSWORD);
+    const setLea = (values: { teamRole: 'chatter' | 'manager'; status: 'active' | 'suspended' }) =>
+      test.admin.db.update(schema.teamMembers).set(values).where(eq(schema.teamMembers.id, lea.id));
+    await setLea({ teamRole: 'manager', status: 'active' });
+    expect((await periodAs(leaCookie, P1)).statements.map((one) => one.memberId).sort()).toEqual(
+      [theo.id, lea.id].sort(),
+    );
+    await setLea({ teamRole: 'manager', status: 'suspended' });
+    const own = await periodAs(leaCookie, P1);
+    expect(own.statements.map((one) => one.memberId)).toEqual([lea.id]);
+    expect(own.statements[0]?.team).toBeNull();
+    await setLea({ teamRole: 'chatter', status: 'active' });
+  });
+
   /** A report `member` makes on a shift of `period`, submitted. */
   const madeReport = async (member: TeamMember, cookie: string, period: PayPeriod) => {
     const shift = await shiftIn(member, period);
@@ -522,5 +548,82 @@ describe('Équipe › Paie : le recalcul des brouillons et la lecture d’une qu
     });
     expect(await periodAs(theoCookie, P0)).toMatchObject({ beforeFirstClosing: true, statements: [] });
     expect((await periodAs(owner, P2)).beforeFirstClosing).toBe(false);
+  });
+
+  it('records a period blocked by a member without a rate, shows it, and lifts it once the data is corrected', async () => {
+    // Théo's draft is computed; then Basile, whose first rate starts at his arrival in June, has a report of May
+    // (Équipe B2: an old report from before his arrival). The whole period stops computing, Théo's draft with it.
+    await validated(theo, P5, 3_000);
+    expect(await recalculate(P5)).toEqual([{ period: P5, outcome: 'written', written: 1 }]);
+    const { member: basile } = await addMember('basile@example.test', 'Basile', '2025-06-01');
+    await validated(basile, P5, 1_000);
+    expect(await recalculate(P5)).toEqual([{ period: P5, outcome: 'blocked', written: 0 }]);
+
+    const blocked = await periodAs(owner, P5);
+    expect(blocked.blocked).toMatchObject({
+      code: 'commission_rate_missing_conflict',
+      memberIds: [basile.id],
+    });
+    // The stale draft is still there: the block is what says it is out of date.
+    expect(blocked.statements.map((one) => one.memberId)).toEqual([theo.id]);
+    // A colleague reads that the period is blocked, never who lacks a rate.
+    expect((await periodAs(theoCookie, P5)).blocked).toMatchObject({
+      code: 'commission_rate_missing_conflict',
+      memberIds: [],
+    });
+    const list = await call('GET', '/payroll/periods?limit=50', owner);
+    expect(list.statusCode, list.body).toBe(200);
+    const listed = PayPeriodPageSchema.parse(list.json()).items.find((item) => item.window.period === P5);
+    expect(listed?.blocked).toMatchObject({
+      code: 'commission_rate_missing_conflict',
+      memberIds: [basile.id],
+    });
+
+    // A replay keeps when the block began.
+    const since = blocked.blocked?.since;
+    expect(await recalculate(P5)).toEqual([{ period: P5, outcome: 'blocked', written: 0 }]);
+    expect((await periodAs(owner, P5)).blocked?.since).toBe(since);
+
+    // A data correction the product refuses (a rate never goes back, ADR 0031 and the card of 28/10), only possible on
+    // rows written before #290: a rate for Basile from May 1st. The next computation passes and lifts the block.
+    await test.admin.db.insert(schema.memberCommissionRates).values({
+      id: newId(CommissionRateIdSchema),
+      memberId: basile.id,
+      rateBps: 2_000,
+      effectiveFrom: P5,
+      createdBy: ownerId,
+    });
+    // Basile's first draft, and Théo's next revision: the team's net moved.
+    expect(await recalculate(P5)).toEqual([{ period: P5, outcome: 'written', written: 2 }]);
+    const lifted = await periodAs(owner, P5);
+    expect(lifted.blocked).toBeNull();
+    expect(lifted.statements.map((one) => one.memberId).sort()).toEqual([theo.id, basile.id].sort());
+    expect(
+      await test.admin.db.select().from(schema.payPeriodBlocks).where(eq(schema.payPeriodBlocks.period, P5)),
+    ).toEqual([]);
+  });
+
+  it('lists a blocked period without any statement: to the agency, and to the member it is about', async () => {
+    // Iris arrives in August; her only report is of May 16th: nobody has a statement there, the period is blocked.
+    const { member: iris, cookie: irisCookie } = await addMember('iris@example.test', 'Iris', '2025-08-01');
+    await validated(iris, P6, 1_500);
+    expect(await recalculate(P6)).toEqual([{ period: P6, outcome: 'blocked', written: 0 }]);
+    expect(await statementsOf(P6)).toEqual([]);
+
+    const listOf = async (cookie: string) => {
+      const response = await call('GET', '/payroll/periods?limit=50', cookie);
+      expect(response.statusCode, response.body).toBe(200);
+      return PayPeriodPageSchema.parse(response.json()).items.find((item) => item.window.period === P6);
+    };
+    expect(await listOf(owner)).toMatchObject({
+      blocked: { code: 'commission_rate_missing_conflict', memberIds: [iris.id] },
+      statements: { draft: 0, validated: 0, paid: 0, carried: 0 },
+      netMinor: 0,
+      payableMinor: 0,
+      paidMinor: 0,
+    });
+    expect((await listOf(irisCookie))?.blocked).toMatchObject({ memberIds: [iris.id] });
+    // A colleague with nothing there does not get the period in their list.
+    expect(await listOf(theoCookie)).toBeUndefined();
   });
 });

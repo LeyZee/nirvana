@@ -11,6 +11,7 @@ import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
 
+import { TimeField, useUnreadableTimes } from '@/scheduling/TimeField';
 import { createShift, createTemplate, useRefreshPlanning, type Refusal } from '@/scheduling/api';
 import { accountLine, ERROR_MESSAGES, type Fill } from '@/scheduling/model';
 import {
@@ -39,12 +40,14 @@ function firstSlotOf(
 }
 
 /**
- * Where the panel opens: from « Ajouter un shift », from the + of one day on one account, or from « Pourvoir » on a
- * shift a template could not place because its member is on leave (its hours, and someone else than that member).
+ * Where the panel opens: from « Ajouter un shift », from the + of one day on one account, from what is left of a
+ * créneau with nobody (« À pourvoir », its hours at the agency's), or from « Pourvoir » on a shift a template could not
+ * place because its member is on leave (its hours, and someone else than that member).
  */
 export interface ShiftStart {
   readonly accountId: string | null;
   readonly day: string;
+  readonly hours?: { readonly startMinute: number; readonly endMinute: number };
   readonly fill?: Fill;
 }
 
@@ -91,30 +94,34 @@ export function ShiftPanel({
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
   const [memberId, setMemberId] = useState('');
   const chosen = eligible.find((member) => member.id === memberId) ?? eligible[0] ?? null;
-  // The first slot still ahead: today's evening rather than a night already gone, else tomorrow's first. A shift to
-  // fill keeps its own day and hours: one of the slots when they match, else the hours typed in.
+  // The first slot still ahead: today's evening rather than a night already gone, else tomorrow's first. A stretch
+  // to fill, or a shift to fill, keeps its own day and hours: one of the slots when they match, else the hours typed.
+  const given = fill ?? start.hours;
   const [first] = useState(() =>
-    fill === undefined
+    given === undefined
       ? firstSlotOf(start.day < today ? today : start.day, today, slots, zone)
       : {
-          day: fill.day,
+          day: fill?.day ?? start.day,
           slot: slots.findIndex(
-            (one) => one.startMinute === fill.startMinute && one.endMinute === fill.endMinute,
+            (one) => one.startMinute === given.startMinute && one.endMinute === given.endMinute,
           ),
         },
   );
   const [day, setDay] = useState(first.day);
   const [slot, setSlot] = useState<number | 'other'>(first.slot === -1 ? 'other' : first.slot);
-  const [from, setFrom] = useState(inputOf(fill?.startMinute ?? slots[first.slot]?.startMinute ?? 0));
-  const [to, setTo] = useState(inputOf(fill?.endMinute ?? slots[first.slot]?.endMinute ?? 360));
+  const [from, setFrom] = useState(inputOf(given?.startMinute ?? slots[first.slot]?.startMinute ?? 0));
+  const [to, setTo] = useState(inputOf(given?.endMinute ?? slots[first.slot]?.endMinute ?? 360));
   const [weekly, setWeekly] = useState(false);
+  const times = useUnreadableTimes();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
   const picked = slot === 'other' ? null : (slots[slot] ?? null);
   const startMinute = picked === null ? minuteOfInput(from) : picked.startMinute;
   const endMinute = picked === null ? minuteOfInput(to) : picked.endMinute;
-  const hoursOk = startMinute !== null && endMinute !== null && startMinute !== endMinute;
+  // A field holding what is not an hour keeps the panel from saving: never another hour than the one on screen.
+  const unreadable = picked === null && times.unreadable;
+  const hoursOk = !unreadable && startMinute !== null && endMinute !== null && startMinute !== endMinute;
   const crosses = hoursOk && endMinute <= startMinute;
   const minutes = hoursOk ? templateLengthMinutes({ startMinute, endMinute }) : 0;
   // A template keeps an hour aside, so a change of time never stretches its shifts past a day (contracts).
@@ -294,65 +301,70 @@ export function ShiftPanel({
             <div className="sc-hours nv-swap">
               <label className="sc-hours__one">
                 <span className="tm-hint">De</span>
-                <input
-                  type="time"
-                  step={900}
-                  className="nv-field__control nv-glass nv-num"
-                  value={from}
-                  aria-label="Début"
-                  onChange={(event) => {
-                    setFrom(event.target.value);
+                <TimeField
+                  value={minuteOfInput(from) ?? 0}
+                  label="Début"
+                  onChange={(minute) => {
+                    setFrom(inputOf(minute));
                   }}
+                  onUnreadable={times.onUnreadable}
                 />
               </label>
               <label className="sc-hours__one">
                 <span className="tm-hint">à</span>
-                <input
-                  type="time"
-                  step={900}
-                  className="nv-field__control nv-glass nv-num"
-                  value={to}
-                  aria-label="Fin"
-                  onChange={(event) => {
-                    setTo(event.target.value);
+                <TimeField
+                  value={minuteOfInput(to) ?? 0}
+                  label="Fin"
+                  onChange={(minute) => {
+                    setTo(inputOf(minute));
                   }}
+                  onUnreadable={times.onUnreadable}
                 />
               </label>
             </div>
           ) : null}
           <span className={hoursFit && !tooLongOnce ? 'tm-hint' : 'tm-hint tm-hint--error'}>
-            {!hoursOk
-              ? 'Un début et une fin différents.'
-              : tooLong
-                ? 'Un modèle de shift dure 23 heures au plus.'
-                : tooLongOnce
-                  ? `${lengthOf(lasts)} cette nuit-là, à cause du changement d’heure : un shift dure 24 h au plus.`
-                  : `${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
+            {unreadable
+              ? 'Une heure sur 24 heures : 22, 2230 ou 22:30.'
+              : !hoursOk
+                ? 'Un début et une fin différents.'
+                : tooLong
+                  ? 'Un modèle de shift dure 23 heures au plus.'
+                  : tooLongOnce
+                    ? `${lengthOf(lasts)} cette nuit-là, à cause du changement d’heure : un shift dure 24 h au plus.`
+                    : // The hours and how long they last on one line (EQ-23): « 5 h – 11 h · 6 h ».
+                      `${clockOf(startMinute)} – ${clockOf(endMinute)} · ${lengthOf(lasts)}${crosses ? ', jusqu’au lendemain' : ''}.`}
           </span>
         </fieldset>
 
         {/* A shift filled for someone on leave is that one occurrence: their template stays theirs. */}
+        {/* Once or every week, a choice of two: no switch whose caption says the opposite of its title (EQ-23). */}
         {fill === undefined ? (
-          <div className="sc-repeat">
-            <label className="sc-repeat__text" htmlFor={`${id}-weekly`}>
-              <span className="sc-repeat__title">Chaque semaine</span>
-              <span className="tm-hint">
-                {weekly
-                  ? `Chaque ${longDay(day).split(' ')[0] ?? ''} à partir de ce jour, posé quatre semaines à l’avance.`
-                  : 'Un seul shift, ce jour-là.'}
+          <fieldset className="sc-fieldset">
+            <legend className="nv-field__label">Fréquence</legend>
+            <div className="tm-choices" role="radiogroup" aria-label="Fréquence">
+              {([false, true] as const).map((every) => (
+                <button
+                  key={String(every)}
+                  type="button"
+                  role="radio"
+                  className="nv-chip"
+                  aria-checked={weekly === every}
+                  onClick={() => {
+                    setWeekly(every);
+                  }}
+                >
+                  {every ? 'Chaque semaine' : 'Une fois'}
+                </button>
+              ))}
+            </div>
+            {weekly ? (
+              <span className="tm-hint nv-swap">
+                Chaque {longDay(day).split(' ')[0] ?? ''} à partir de ce jour, posé quatre semaines à
+                l’avance.
               </span>
-            </label>
-            <input
-              id={`${id}-weekly`}
-              type="checkbox"
-              role="switch"
-              className="nv-switch"
-              checked={weekly}
-              onChange={(event) => {
-                setWeekly(event.target.checked);
-              }}
-            />
-          </div>
+            ) : null}
+          </fieldset>
         ) : null}
 
         {refusal === null ? null : (

@@ -68,6 +68,32 @@ class SignInLimited extends DomainError {
   }
 }
 
+/**
+ * Any refused sign-in: a wrong e-mail, a wrong password, or a member who left the team (ADR 0023). One answer for all,
+ * so the page never tells whether the account exists or whether the password was right.
+ */
+class SignInRefused extends DomainError {
+  constructor() {
+    super('sign_in_unauthenticated', 'E-mail ou mot de passe incorrect');
+  }
+}
+
+/**
+ * Better Auth's own refusals on the two routes it still serves, in the common error format and in French (api.md
+ * § Erreurs): its body is English and of another shape. A 401 is the caller's to name (sign-in has its own); a status
+ * it has no reason to send is an internal error, logged by the central handler.
+ */
+function refusalOf(status: number, onUnauthorized: () => DomainError): Error {
+  if (status === 400) return new DomainError('request_invalid', 'Requête invalide');
+  if (status === 401) return onUnauthorized();
+  // Its origin and callback checks; ours has already refused a foreign origin.
+  if (status === 403) return new DomainError('origin_forbidden', 'Origine non autorisée');
+  return new Error(`Better Auth answered ${String(status)}`);
+}
+
+/** What a sign-in answers about its account, read to close the session it replaces. */
+const SignedInSchema = z.object({ user: z.object({ id: z.string() }) });
+
 class ReauthenticationRequired extends DomainError {
   constructor() {
     super(REAUTHENTICATION_ERROR_CODE, 'Mot de passe à confirmer pour cette action');
@@ -118,6 +144,9 @@ export function createAuth(config: Config, db: Database, logger: Logger) {
     databaseHooks: {
       session: {
         create: {
+          // A member who left opens no session (ADR 0023): Better Auth then answers 401, which the sign-in route turns
+          // into the same refusal as a wrong password.
+          before: async (session) => ((await hasLeftTeam(db, session.userId)) ? false : undefined),
           after: async (session, context) => {
             await db.insert(schema.auditLog).values({
               id: newId(AuditEntryIdSchema),
@@ -192,6 +221,8 @@ async function userOf(
   const user = parsed.data;
   if (user.role !== 'operator') return { user, membership: null };
   const member = await membership(db, user.id);
+  // A session still open when the member left is refused at its next request (ADR 0023), even before it is revoked.
+  if (member.team?.status === 'left') return null;
   if (member.team === null || member.teamScope !== 'self') return { user, membership: member };
   return { user: { ...user, creatorIds: [], routedCreatorIds: user.creatorIds }, membership: member };
 }
@@ -254,6 +285,12 @@ function membership(db: Database, userId: string): Promise<Membership> {
   });
 }
 
+/** Whether the account is a team member marked `left`; the owner and an account without a team row never are. */
+async function hasLeftTeam(db: Database, userId: string): Promise<boolean> {
+  const { team } = await membership(db, userId);
+  return team?.status === 'left';
+}
+
 /**
  * What `/v1/me` answers for an account, read without a request: the redeem of an invitation link (EQ-10) answers it for
  * the session it has just opened. `null` for a row that does not validate, as for a session.
@@ -286,7 +323,15 @@ export function createAuthRoutes(
       keyGenerator: signInAccountKey,
       skipOnError: false,
     });
-    const forward = async (request: FastifyRequest, reply: FastifyReply) => {
+    const forward = async (
+      request: FastifyRequest,
+      reply: FastifyReply,
+      options: {
+        readonly onUnauthorized: () => DomainError;
+        /** Run on success with Better Auth's JSON body, before the reply leaves. */
+        readonly onSuccess?: (json: unknown) => Promise<void>;
+      },
+    ) => {
       const body =
         request.body === undefined || request.body === null ? undefined : JSON.stringify(request.body);
       const response = await auth.handler(
@@ -296,6 +341,7 @@ export function createAuthRoutes(
           ...(body === undefined ? {} : { body }),
         }),
       );
+      if (response.status >= 400) throw refusalOf(response.status, options.onUnauthorized);
       reply.code(response.status);
       response.headers.forEach((value, key) => {
         if (!['set-cookie', 'content-length', 'content-encoding', 'transfer-encoding'].includes(key)) {
@@ -306,9 +352,35 @@ export function createAuthRoutes(
       if (cookies.length > 0) reply.header('set-cookie', cookies);
       if (response.body === null) return reply.send(null);
       const text = await response.text();
-      return reply.send(
-        response.headers.get('content-type')?.includes('json') === true ? withoutToken(text) : text,
-      );
+      const isJson = response.headers.get('content-type')?.includes('json') === true;
+      if (isJson && options.onSuccess !== undefined) await options.onSuccess(JSON.parse(text));
+      return reply.send(isJson ? withoutToken(text) : text);
+    };
+
+    /**
+     * A sign-in from a browser that already holds a session of the same account (the password confirmed again before
+     * a sensitive action, ADR 0016) closes that session: its cookie is replaced, it would otherwise stay open, unused,
+     * until it expires. Another account's session is left to its own sign-out. A cleanup, never a condition of the
+     * sign-in: if reading or closing the old session fails, it is logged and the sign-in still answers 200 with its
+     * cookie, so that the new session is never left in the base without its cookie.
+     */
+    const closeReplacedSession = async (request: FastifyRequest) => {
+      const previous = await auth.api
+        .getSession({ headers: authHeaders(request) })
+        .catch((error: unknown) => {
+          request.log.warn({ err: error }, 'sign-in: the session being replaced could not be read');
+          return null;
+        });
+      return async (json: unknown) => {
+        const signedIn = SignedInSchema.safeParse(json);
+        if (previous === null || !signedIn.success || signedIn.data.user.id !== previous.user.id) return;
+        try {
+          const context = await auth.$context;
+          await context.internalAdapter.deleteSession(previous.session.token);
+        } catch (error) {
+          request.log.warn({ err: error }, 'sign-in: the replaced session could not be closed');
+        }
+      };
     };
 
     // Sign-in has both limits: per IP like the rest of `/auth`, and per account (after the body is read).
@@ -322,11 +394,19 @@ export function createAuthRoutes(
         void reply.header('retry-after', attempt.ttlInSeconds);
         throw new SignInLimited();
       },
-      handler: forward,
+      // Better Auth's 401s (unknown e-mail, wrong password, a member who left) all become one French refusal.
+      handler: async (request, reply) =>
+        forward(request, reply, {
+          onUnauthorized: () => new SignInRefused(),
+          onSuccess: await closeReplacedSession(request),
+        }),
     });
     // Only what the dashboard calls: the rest of Better Auth (get-session and list-sessions with their tokens,
-    // update-user renaming an account) stays unreachable and answers 404 like any unknown route.
-    app.post('/auth/sign-out', { config: perIp }, forward);
+    // update-user renaming an account) stays unreachable and answers 404 like any unknown route. Signing out without
+    // a session succeeds: there is nothing to close.
+    app.post('/auth/sign-out', { config: perIp }, (request, reply) =>
+      forward(request, reply, { onUnauthorized: () => new SessionUnauthenticated() }),
+    );
 
     app.get(
       '/me',

@@ -4,6 +4,7 @@ import {
   CreatorIdSchema,
   DomainError,
   DraftIdSchema,
+  PersonaVersionIdSchema,
   newId,
   PlatformAccountIdSchema,
   UserIdSchema,
@@ -30,7 +31,9 @@ import { createTelegramModule, type TelegramModule } from '../modules/telegram';
 import { FAKE_TOKEN, FakeTelegram, joined } from '../modules/telegram/__tests__/support/fake-telegram';
 import { createPostgresTelegramStore } from '../modules/telegram/infra/postgres.store';
 
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-0000000000e2');
 const VOICE = { voicePrompt: 'voice@e2e', voiceModel: 'model-e2e' };
@@ -136,7 +139,7 @@ describe('Telegram alerts from the conversations module', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Démo', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test' });
@@ -248,6 +251,18 @@ describe('Telegram alerts from the conversations module', () => {
 
   it('tells the group once when Automatique closes on its own, without the voice', async () => {
     const conversationId = await ingest();
+    // Automatique opens only with an active persona version, proved by her drafts (recette 28/10, G4).
+    const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: personaVersionId,
+      creatorId,
+      version: 'e2e',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'e2e',
+      isActive: true,
+      activatedAt: new Date(),
+    });
     const decided = (count: number, status: 'sent' | 'rejected', offset: number) =>
       test.admin.db.insert(schema.drafts).values(
         Array.from({ length: count }, (_, i) => ({
@@ -256,6 +271,7 @@ describe('Telegram alerts from the conversations module', () => {
           conversationId,
           status,
           promptHashes: VOICE,
+          personaVersionId,
           decidedAt: new Date(Date.now() - (offset + i + 1) * 1_000),
           idempotencyKey: `e2e:${status}:${String(offset + i)}`,
         })),

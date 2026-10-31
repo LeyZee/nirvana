@@ -1,5 +1,6 @@
 import {
   BonusIdSchema,
+  CommissionRateIdSchema,
   CommissionStatementSchema,
   newId,
   payPeriodAt,
@@ -36,6 +37,8 @@ const Q10 = PayPeriodSchema.parse('2025-09-16');
 const Q11 = PayPeriodSchema.parse('2025-10-01');
 const Q12 = PayPeriodSchema.parse('2025-10-16');
 const Q13 = PayPeriodSchema.parse('2025-11-01');
+const Q14 = PayPeriodSchema.parse('2025-11-16');
+const Q15 = PayPeriodSchema.parse('2025-12-01');
 
 describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR 0032)', () => {
   let team: PayrollTeam;
@@ -358,6 +361,59 @@ describe('Équipe › Paie : la validation qui clôture la quinzaine (EQ-04, ADR
     expect((await statementOf(zoe, Q12)).bonusesMinor).toBe(2_000);
     expect((await validate(owner, zoe, Q12)).statusCode).toBe(200);
     expect((await validate(owner, zoe, Q13)).statusCode).toBe(200);
+  });
+
+  it('validates nothing of a period that does not compute: the ECB rate missing, then read', async () => {
+    // A period that does not compute does not validate (recette du 28/10, G1): the validation computes it again under
+    // `payroll.close` and refuses with the same code, writing nothing. `pay_period_blocks` is only what is shown.
+    // Ugo's draft is computed; then a sale in dollars without a rate read stops the period.
+    const { member: ugo } = await addMember('ugo@example.test', 'Ugo');
+    await report(ugo, Q14, 4_000);
+    await recalculate(Q14);
+    await report(ugo, Q14, 1_000, { currency: 'USD' });
+    expect(await recalculate(Q14)).toEqual([{ period: Q14, outcome: 'blocked', written: 0 }]);
+    expect(refusal(await validate(owner, ugo, Q14)).code).toBe('exchange_rate_missing_conflict');
+    expect(await closingOf(Q14)).toBeUndefined();
+    expect((await statementOf(ugo, Q14)).status).toBe('draft');
+
+    // The rate of the period's last working day: the next computation passes, lifts the block, and the new revision
+    // validates.
+    await test.admin.db.insert(schema.exchangeRates).values({
+      currency: 'USD',
+      day: '2025-11-28',
+      rateMicros: 920_000,
+      source: 'BCE, taux de référence',
+      fetchedAt: new Date('2025-11-28T15:07:00Z'),
+    });
+    expect(await recalculate(Q14)).toEqual([{ period: Q14, outcome: 'written', written: 1 }]);
+    const passed = await validate(owner, ugo, Q14);
+    expect(passed.statusCode, passed.body).toBe(200);
+  });
+
+  it('validates nothing of a period that does not compute: a member without a rate, then the data corrected', async () => {
+    // Vic arrives on December 16th, his first rate with him; a report of his on December 1st is a row written before
+    // #290 (the planning refuses it since). The whole period stops computing, Wren's draft with it.
+    const { member: wren } = await addMember('wren@example.test', 'Wren');
+    await report(wren, Q15, 3_000);
+    await recalculate(Q15);
+    const { member: vic } = await addMember('vic@example.test', 'Vic', 'chatter', '2025-12-16');
+    await report(vic, Q15, 1_000);
+    expect(await recalculate(Q15)).toEqual([{ period: Q15, outcome: 'blocked', written: 0 }]);
+    expect(refusal(await validate(owner, wren, Q15)).code).toBe('commission_rate_missing_conflict');
+    expect(await closingOf(Q15)).toBeUndefined();
+    expect((await statementOf(wren, Q15)).status).toBe('draft');
+
+    // A data correction the product refuses (a rate never goes back): a rate for Vic from December 1st.
+    await test.admin.db.insert(schema.memberCommissionRates).values({
+      id: newId(CommissionRateIdSchema),
+      memberId: vic.id,
+      rateBps: 2_000,
+      effectiveFrom: Q15,
+      createdBy: ownerId,
+    });
+    expect(await recalculate(Q15)).toMatchObject([{ period: Q15, outcome: 'written' }]);
+    const passed = await validate(owner, wren, Q15);
+    expect(passed.statusCode, passed.body).toBe(200);
   });
 
   it('refuses a period that has not ended in the agency’s zone', async () => {

@@ -1,6 +1,9 @@
 import {
+  collectiveGoalLastDay,
+  nextPayPeriod,
   PAY_TARGET_MAX_MINOR,
   payPeriodLastDay,
+  payPeriodNotBegun,
   payPeriodOfDay,
   PayPeriodSchema,
   penaltyApplies,
@@ -11,7 +14,9 @@ import {
   type CommissionStatementLine,
   type Currency,
   type ExchangeRate,
+  type ForeignCurrency,
   type PaymentMethod,
+  type PayPeriodBlock,
   type PayPeriod,
   type PayPeriodSummary,
   type PayPeriodWindow,
@@ -23,6 +28,7 @@ import {
 
 import type { PayRefusal, PayRefusalCode } from './api';
 
+import { memberOf } from '@/lib/utils';
 import {
   amountText,
   followingPeriod,
@@ -32,7 +38,7 @@ import {
   signedAmountText,
 } from '@/reports/model';
 import { platformName } from '@/scheduling/model';
-import { clockAt, dayMonth, dayOf, daysFrom, longDay } from '@/scheduling/time';
+import { clockAt, dayOf, daysFrom, longDay, withFirstOfMonth } from '@/scheduling/time';
 
 /**
  * Pay without React (EQ-05): what a statement and a period say, how the money runs from the sales to what is paid,
@@ -46,6 +52,13 @@ const DAY_MS = 86_400_000;
 export const signedPercentText = (bps: number): string =>
   `${bps > 0 ? '+' : bps < 0 ? '−' : ''}${percentText(Math.abs(bps))}`;
 
+const DAY_SHORT_MONTH = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const WEEKDAY_DAY_SHORT_MONTH = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
 const RATE = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const CURRENCY_UNITS: Readonly<Record<Currency, string>> = { EUR: '€', USD: '$' };
 
@@ -59,19 +72,70 @@ export function changeBps(now: number, before: number | null): number | null {
   return Math.round(((now - before) * 10_000) / before);
 }
 
-/** A statement's marks: what stage it is at, and a carry-over, the one amber mark. */
+/** A statement's marks: what stage it is at, and a carry-over, the one amber mark; red for a period pay cannot compute. */
 export type PayTone = 'neutral' | 'wait' | 'ok' | 'warn';
 export interface PayChip {
   readonly label: string;
   readonly tone: PayTone;
 }
 
+/**
+ * Where a statement is: running, to validate, validated with money still to send (waiting), or done — paid, or
+ * validated with nothing to send. Never « Brouillon », the word of the agent's replies (glossary).
+ */
+export function statementStage(statement: CommissionStatement, ended: boolean): PayChip {
+  if (!ended) return { label: 'En cours', tone: 'neutral' };
+  if (statement.status === 'paid') return { label: 'Payé', tone: 'ok' };
+  if (statement.status === 'validated')
+    return { label: 'Validé', tone: statement.payableMinor > 0 ? 'wait' : 'ok' };
+  return { label: 'À valider', tone: 'neutral' };
+}
+
+/**
+ * A carry-over, the one amber mark: « Reporté » once the statement is validated, never before — until then it is only
+ * under the minimum (or under zero), and its total may still change.
+ */
+function carryChip(statement: CommissionStatement): PayChip | null {
+  if (statement.carryOverOutMinor === 0) return null;
+  if (statement.status !== 'draft') return { label: 'Reporté', tone: 'warn' };
+  return { label: statement.totalMinor < 0 ? 'Sous zéro' : 'Sous le minimum', tone: 'warn' };
+}
+
 export function statementChips(statement: CommissionStatement, ended: boolean): PayChip[] {
-  const carried: PayChip[] = statement.carryOverOutMinor === 0 ? [] : [{ label: 'Reporté', tone: 'warn' }];
-  if (!ended) return [{ label: 'En cours', tone: 'neutral' }];
-  if (statement.status === 'paid') return [{ label: 'Payé', tone: 'ok' }];
-  if (statement.status === 'validated') return [{ label: 'Validé', tone: 'ok' }, ...carried];
-  return carried.length === 0 ? [{ label: 'Brouillon', tone: 'neutral' }] : carried;
+  const carry = carryChip(statement);
+  return [statementStage(statement, ended), ...(carry === null ? [] : [carry])];
+}
+
+/**
+ * A row's marks in a list of the period: its stage is left out when every row shares it and it says nothing the
+ * period does not (« En cours », « À valider »); what differs stays (Validé, Payé, Sous le minimum, Reporté).
+ */
+export function rowChips(statement: CommissionStatement, ended: boolean, sameStage: boolean): PayChip[] {
+  const chips = statementChips(statement, ended);
+  const stage = statementStage(statement, ended).label;
+  return sameStage && (stage === 'En cours' || stage === 'À valider') ? chips.slice(1) : chips;
+}
+
+/** Whether every statement of a period is at the same stage. */
+export const sameStageOf = (statements: readonly CommissionStatement[], ended: boolean): boolean =>
+  new Set(statements.map((one) => statementStage(one, ended).label)).size <= 1;
+
+/**
+ * What a statement's amount is, under it in its row: so far, to pay, paid on a day, or nothing to pay. A draft's says it
+ * waits for its validation, unless every row is a draft and the period's head says it once.
+ */
+export function amountWhat(statement: CommissionStatement, ended: boolean, sameStage = false): string {
+  if (!ended) return 'à ce jour';
+  if (statement.payment !== null) return `versé le ${dayShortMonth(statement.payment.paidOn)}`;
+  if (statement.payableMinor === 0) return 'rien à verser';
+  return statement.status === 'draft' && !sameStage ? 'à verser, une fois validé' : 'à verser';
+}
+
+/** A carry-over under a row's amount: its total and where it goes, conditional until the statement is validated. */
+export function carryWhat(statement: CommissionStatement): string | null {
+  if (statement.carryOverOutMinor === 0) return null;
+  const total = `total ${amountText(statement.totalMinor, 'EUR')}`;
+  return statement.status === 'draft' ? `${total} → irait en report` : `${total} → reporté`;
 }
 
 /** A period as the list of periods sums it, read from the period itself. */
@@ -84,14 +148,17 @@ export function summaryOf(period: PayrollPeriod): Omit<PayPeriodSummary, 'window
     ended: period.ended,
     closedAt: period.closing?.closedAt ?? null,
     closedBy: period.closing?.closedBy ?? null,
+    blocked: period.blocked,
     statements: {
       draft: count((one) => one.status === 'draft'),
       validated: count((one) => one.status === 'validated'),
       paid: count((one) => one.status === 'paid'),
-      carried: count((one) => one.carryOverOutMinor !== 0),
+      carried: count((one) => one.carryOverOutMinor !== 0 && one.status !== 'draft'),
     },
     netMinor: sum((one) => one.netMinor),
     payableMinor: sum((one) => one.payableMinor),
+    validatedPayableMinor: sum((one) => (one.status === 'draft' ? 0 : one.payableMinor)),
+    carriedMinor: sum((one) => (one.status === 'draft' ? 0 : one.carryOverOutMinor)),
     paidMinor: sum((one) => one.payment?.sentMinor ?? 0),
   };
 }
@@ -106,6 +173,8 @@ export function phaseOf(summary: Omit<PayPeriodSummary, 'window'>): PeriodPhase 
 }
 
 export function phaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
+  // Whatever its stage, a period pay could not compute says that first: its figures are out of date.
+  if (summary.blocked !== null) return { label: 'Calcul bloqué', tone: 'warn' };
   switch (phaseOf(summary)) {
     case 'running':
       return { label: 'En cours', tone: 'neutral' };
@@ -118,14 +187,26 @@ export function phaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
   }
 }
 
-/** The one amount a period shows in the list: what is paid, or what is left to pay. */
+/**
+ * The one amount a period shows in the list: what is paid, or what is left to pay. Only a validation makes an amount
+ * owed: once one is, « reste à envoyer » is `validatedPayableMinor − paidMinor`, the figure Quinzaine shows (#295).
+ */
 export function periodAmount(summary: Omit<PayPeriodSummary, 'window'>): { minor: number; what: string } {
+  if (summary.blocked !== null)
+    return { minor: summary.payableMinor - summary.paidMinor, what: 'au dernier calcul, plus à jour' };
   switch (phaseOf(summary)) {
     case 'running':
       return { minor: summary.payableMinor, what: 'à verser à ce jour' };
-    case 'to_validate':
+    case 'to_validate': {
+      // What is owed and what waits for a validation stay apart, never added: when nothing owed is left to send, the
+      // row says what the statements still to validate would pay rather than « 0,00 € ».
+      const owed = summary.validatedPayableMinor - summary.paidMinor;
+      return summary.statements.validated + summary.statements.paid === 0 || owed === 0
+        ? { minor: summary.payableMinor - summary.validatedPayableMinor, what: 'à verser une fois validé' }
+        : { minor: owed, what: 'reste à envoyer, validation en cours' };
+    }
     case 'to_pay':
-      return { minor: summary.payableMinor - summary.paidMinor, what: 'à verser' };
+      return { minor: summary.validatedPayableMinor - summary.paidMinor, what: 'reste à envoyer' };
     case 'paid':
       return { minor: summary.paidMinor, what: 'versé' };
   }
@@ -148,8 +229,42 @@ export function countsLine(statements: PayPeriodSummary['statements']): string {
 /** The day a period's validation opens: its end, the first day of the next one, in the agency's zone. */
 export const opensOn = (window: PayPeriodWindow): string => dayOf(window.endsAt, window.timeZone);
 
+/** « dim. 1er nov. », « lun. 2 nov. »: a day, short, the first of the month written as French writes it. */
+export const dayMonthText = (day: string): string =>
+  withFirstOfMonth(WEEKDAY_DAY_SHORT_MONTH.formatToParts(new Date(`${day}T12:00:00Z`)));
+
 /** « lun. 2 nov. », the day of an instant in the agency's zone, short. */
-export const dayAt = (instant: string, timeZone: string): string => dayMonth(dayOf(instant, timeZone));
+export const dayAt = (instant: string, timeZone: string): string => dayMonthText(dayOf(instant, timeZone));
+
+/** « à 8 h 12 » today, « le ven. 16 oct. à 8 h 12 » another day: when a statement was computed. */
+export function computedText(instant: string, timeZone: string, now: Date): string {
+  const at = `à ${clockAt(instant, timeZone)}`;
+  return dayOf(instant, timeZone) === dayOf(now, timeZone) ? at : `le ${dayAt(instant, timeZone)} ${at}`;
+}
+
+/**
+ * The countries of the CFA franc, West (UEMOA) and Central (CEMAC): both are pegged at the same parity. Only there does
+ * an amount in FCFA say what a member receives.
+ */
+const CFA_FRANC_COUNTRIES: ReadonlySet<string> = new Set([
+  ...'BJ BF CI GW ML NE SN TG'.split(' '), // UEMOA
+  ...'CM CF CG GA GQ TD'.split(' '), // CEMAC
+]);
+
+/** Whether a member living in `country` is paid in CFA francs, so that the FCFA guide is worth showing them. */
+export const inCfaFrancZone = (country: string): boolean => CFA_FRANC_COUNTRIES.has(country);
+
+/** The fixed parity of the CFA franc: 1 € = 655,957 FCFA. */
+const FCFA_PER_EURO = 655.957;
+const WHOLE = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+
+/**
+ * « ≈ 705 173 FCFA, avant frais WorldRemit »: an amount in euros at the CFA franc's fixed parity. A guide for a member
+ * of the CFA franc zone (`inCfaFrancZone`), never an amount to pay: the euro stays the one currency pay computes in
+ * (ADR 0011).
+ */
+export const fcfaText = (minor: number): string =>
+  `≈${NBSP}${WHOLE.format(Math.round((minor * FCFA_PER_EURO) / 100))}${NBSP}FCFA, avant frais WorldRemit`;
 
 /** « lundi 2 novembre à 10 h 41 ». */
 export const momentAt = (instant: string, timeZone: string): string =>
@@ -258,7 +373,7 @@ export interface TotalRow {
  * carry-overs, adjustments, the total, what is carried to the next period, and what is paid. `you` speaks to the
  * member; a paid statement speaks in the past.
  */
-export function totalsOf(statement: CommissionStatement, you: boolean): TotalRow[] {
+export function totalsOf(statement: CommissionStatement, you: boolean, payLabelOf?: string): TotalRow[] {
   const rows: TotalRow[] = [
     { label: 'Commission', note: null, amount: amountText(statement.commissionMinor, 'EUR'), kind: 'line' },
   ];
@@ -300,7 +415,7 @@ export function totalsOf(statement: CommissionStatement, you: boolean): TotalRow
     const reasons = statement.penalties.map((penalty) => `« ${penalty.reason} »`).join(' · ');
     const capped =
       statement.penaltiesMinor < statement.penaltiesRequestedMinor
-        ? `${amountText(statement.penaltiesRequestedMinor, 'EUR')} demandés, plafonnés à ${you ? 'ta' : 'sa'} part plus ${you ? 'tes' : 'ses'} primes`
+        ? `${amountText(statement.penaltiesRequestedMinor, 'EUR')} demandés, plafonnés à ${you ? 'ta' : 'sa'} part plus ${you ? 'tes' : 'ses'} primes : le reste (${amountText(statement.penaltiesRequestedMinor - statement.penaltiesMinor, 'EUR')}) est abandonné, il n’est pas reporté`
         : null;
     const note = [reasons, capped].filter((part) => part !== null && part !== '').join(' · ');
     rows.push({
@@ -326,7 +441,8 @@ export function totalsOf(statement: CommissionStatement, you: boolean): TotalRow
     });
 
   const paid = statement.status === 'paid';
-  const payLabel = you ? (paid ? 'Ce que tu as touché' : 'Ce que tu touches') : paid ? 'Versé' : 'À verser';
+  const payLabel =
+    payLabelOf ?? (you ? (paid ? 'Ce que tu as touché' : 'Ce que tu touches') : paid ? 'Versé' : 'À verser');
   if (statement.carryOverOutMinor === 0) {
     rows.push({
       label: payLabel,
@@ -338,7 +454,9 @@ export function totalsOf(statement: CommissionStatement, you: boolean): TotalRow
   }
   rows.push({ label: 'Total', note: null, amount: amountText(statement.totalMinor, 'EUR'), kind: 'total' });
   rows.push({
-    label: 'Reporté sur la quinzaine suivante',
+    // Carried only once validated: until then, what would go on the next period if it were validated as it is.
+    label:
+      statement.status === 'draft' ? 'Irait sur la quinzaine suivante' : 'Reporté sur la quinzaine suivante',
     note:
       statement.totalMinor < 0
         ? 'un total sous zéro se reporte'
@@ -412,7 +530,16 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
     case 'pay_adjustment_conflict':
     case 'bonus_tier_set_conflict':
     case 'collective_goal_conflict':
+    case 'payout_minimum_conflict':
       return 'Cette saisie existe déjà avec d’autres valeurs : recharge la page.';
+    case 'pay_rule_started_invalid':
+      return period === null
+        ? 'Cette quinzaine a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.'
+        : `La quinzaine ${period} a commencé : une règle de paie part d’une quinzaine qui n’a pas commencé.`;
+    case 'collective_goal_late_invalid':
+      return named.success
+        ? `L’objectif de la quinzaine ${periodLine(named.data)} se posait au plus tard le ${longDay(collectiveGoalLastDay(named.data))}.`
+        : 'L’objectif d’une quinzaine se pose au plus tard son 3e jour.';
     case 'payment_in_future_unprocessable':
       return 'Le paiement ne peut pas être daté après aujourd’hui.';
     case 'payment_before_period_unprocessable':
@@ -439,6 +566,80 @@ export function payRefusalText(refusal: PayRefusal, names: RefusalNames): string
     case 'request_invalid':
       return 'Ces valeurs ne conviennent pas : vérifie le formulaire.';
   }
+}
+
+const CURRENCY_OF: Readonly<Record<ForeignCurrency, string>> = { USD: 'du dollar' };
+
+/** « Théo », « Théo et Léa », « Théo, Léa et Iris ». */
+const namesText = (names: readonly string[]): string =>
+  names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} et ${names.at(-1) ?? ''}`;
+
+/**
+ * What a blocked period says (recette du 28/10, Équipe G1): what stops pay from computing it, what lifts it, and that
+ * the figures shown are those of its last computation that passed, out of date. Only the owner sets a rate: anyone
+ * else is told who does. `since` in the agency's zone, when it is known.
+ */
+export function blockedText(
+  block: PayPeriodBlock,
+  reader: { readonly owner: boolean; readonly memberName: (memberId: string) => string },
+  zone: string | null,
+): { readonly title: string; readonly text: string } {
+  const since = zone === null ? '' : ` Bloqué depuis le ${momentAt(block.since, zone)}.`;
+  const stale =
+    'D’ici là, les chiffres ci-dessous sont ceux du dernier calcul réussi : ils ne sont plus à jour.';
+  if (block.code === 'exchange_rate_missing_conflict')
+    return {
+      title: `Le calcul est bloqué : le taux ${CURRENCY_OF[block.currency]} de la BCE manque pour cette quinzaine.`,
+      text: `Il arrive chaque jour ouvré vers 16 h, et le calcul reprendra seul ; s’il tarde plus de deux jours ouvrés, une alerte le dit. ${stale}${since}`,
+    };
+  // Since #290 a member's first rate starts on arrival and nothing is planned before it: only rows written before that
+  // fix land here. No gesture of the screen lifts them (a validated report never changes, a rate never goes back).
+  const names = block.memberIds.map((id) => reader.memberName(id));
+  const many = names.length > 1;
+  const who =
+    names.length === 0 ? 'un membre de l’équipe n’a' : `${namesText(names)} ${many ? 'n’ont' : 'n’a'}`;
+  const reports =
+    names.length === 0
+      ? 'Un rapport validé d’un membre tombe sur une quinzaine où son taux n’a pas encore commencé.'
+      : many
+        ? `Des rapports validés de ${namesText(names)} tombent sur une quinzaine où leur taux n’a pas encore commencé.`
+        : `Un rapport validé de ${names[0] ?? ''} tombe sur une quinzaine où son taux n’a pas encore commencé.`;
+  return {
+    title: `Le calcul est bloqué : ${who} pas de taux pour cette quinzaine.`,
+    text: `${reports} ${
+      reader.owner
+        ? 'C’est une donnée d’avant le correctif du 28/10, qui ne peut plus se produire. Aucun geste de l’écran ne la corrige, puisqu’un rapport validé ne change pas et qu’un taux ne part jamais en arrière : elle se corrige dans la base, puis le calcul reprend seul.'
+        : 'Le propriétaire est prévenu ; le calcul reprendra seul une fois la donnée corrigée.'
+    } ${stale}${since}`,
+  };
+}
+
+/**
+ * What a member reads of a blocked period on Commissions, in the second person: their statement is out of date, the
+ * owner is told, and what lifts it. Never a colleague's name: the server gives a member only themselves among the
+ * members without a rate, so a list that is not empty is theirs.
+ */
+export function myBlockedText(
+  block: PayPeriodBlock,
+  hasStatement = true,
+): { readonly title: string; readonly text: string } {
+  const stale = hasStatement ? 'Le montant ci-dessous est celui du dernier calcul réussi.' : '';
+  const title = hasStatement
+    ? 'Ton relevé n’est plus à jour : le calcul de la quinzaine est bloqué.'
+    : 'Ton relevé n’est pas encore calculé : le calcul de la quinzaine est bloqué.';
+  if (block.code === 'exchange_rate_missing_conflict')
+    return {
+      title,
+      text: `Le taux ${CURRENCY_OF[block.currency]} de la BCE manque pour cette quinzaine ; le calcul reprendra seul dès qu’il arrive. ${stale}`.trimEnd(),
+    };
+  const who =
+    block.memberIds.length > 0
+      ? 'Un de tes rapports validés tombe sur une quinzaine où ton taux n’a pas encore commencé.'
+      : 'Il manque un taux de commission dans l’équipe pour cette quinzaine.';
+  return {
+    title,
+    text: `${who} Le propriétaire est prévenu dans sa paie ; le calcul reprendra seul une fois réglé. ${stale}`.trimEnd(),
+  };
 }
 
 const countOf = (count: number | undefined, one: string, many: string): string =>
@@ -475,7 +676,7 @@ export function statementsCsv(
       'Statut',
     ],
   ];
-  const STATUS = { draft: 'Brouillon', validated: 'Validé', paid: 'Payé' } as const;
+  const STATUS = { draft: 'À valider', validated: 'Validé', paid: 'Payé' } as const;
   for (const statement of period.statements) {
     const name = words(memberName(statement.memberId));
     for (const line of statement.lines)
@@ -519,16 +720,19 @@ export function statementsCsv(
   return `${rows.map((row) => row.map(cell).join(';')).join('\r\n')}\r\n`;
 }
 
-/** Paie's address: the period Quinzaine shows when one was chosen, from Relevés or its arrows. */
+/**
+ * Paie's address: the period Quinzaine shows when one was chosen, from Historique or its arrows, and the member whose
+ * statement opens on it, from his record in Équipe (EQ-11).
+ */
 export interface PaySearch {
   readonly quinzaine?: PayPeriod;
+  readonly membre?: string;
 }
 
 /** Anything else in the address is ignored: a broken link opens the period to validate, or the one under way. */
 export function parsePaySearch(search: Record<string, unknown>): PaySearch {
-  const { quinzaine } = search;
-  const parsed = PayPeriodSchema.safeParse(quinzaine);
-  return parsed.success ? { quinzaine: parsed.data } : {};
+  const parsed = PayPeriodSchema.safeParse(search['quinzaine']);
+  return { ...(parsed.success ? { quinzaine: parsed.data } : {}), ...memberOf(search) };
 }
 
 /**
@@ -577,6 +781,25 @@ export function rateMissing(period: PayrollPeriod, latest: ExchangeRate | null):
   return freshest === null || daysFrom(freshest, lastDay) > RATE_MAX_AGE_DAYS;
 }
 
+/**
+ * The working days (Monday to Friday) strictly between the day of the last rate read and `today`: the rates that should
+ * have come since and did not. Today's is not counted, it may come at 16 h.
+ */
+export function missedRateDays(lastRead: string, today: string): number {
+  let missed = 0;
+  for (let day = new Date(`${lastRead}T12:00:00Z`); ;) {
+    day = new Date(day.getTime() + DAY_MS);
+    if (day.toISOString().slice(0, 10) >= today) return missed;
+    if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6) missed += 1;
+  }
+}
+
+/**
+ * The rate is overdue after more than two working days without one, as the server says (`isRateOverdue`, payroll
+ * domain, `exchange_rate_overdue`): the ECB may stay shut two working days in a row (Good Friday, Easter Monday).
+ */
+export const rateOverdue = (lastRead: string, today: string): boolean => missedRateDays(lastRead, today) > 2;
+
 /** The refusals that concern the whole period: the validation of the others stops there, the notice says it. */
 const PERIOD_REFUSALS: ReadonlySet<PayRefusalCode> = new Set<PayRefusalCode>([
   'pay_period_reports_pending_conflict',
@@ -601,19 +824,28 @@ export const validatable = (period: Pick<PayrollPeriod, 'ended' | 'statements'>)
 
 /** What a member's row says after their net: their rate or team share, their tier, their penalty. */
 export function memberFacts(statement: CommissionStatement): string[] {
-  const facts = [
-    statement.teamShare === null
-      ? `commission ${percentText(statement.rules.commissionRateBps)}`
-      : `part d’équipe ${percentText(statement.teamShare.bps)}`,
-  ];
+  const facts = [`commission ${percentText(statement.rules.commissionRateBps)}`];
+  if (statement.teamShare !== null) facts.push(`part d’équipe ${percentText(statement.teamShare.bps)}`);
   if (statement.tierBonus !== null) facts.push(`palier ${statement.tierBonus.label}`);
   if (statement.penaltiesMinor > 0) facts.push(`malus ${signedAmountText(-statement.penaltiesMinor, 'EUR')}`);
   return facts;
 }
 
-/** The sentence of a statement that carries its total over, or `null`. */
-export function carryLine(statement: CommissionStatement): string | null {
+/**
+ * The sentence of a statement that carries its total over, or `null`: said as done once validated, as what would
+ * happen before — so far while the period runs, at its validation once it has ended.
+ */
+export function carryLine(statement: CommissionStatement, ended: boolean): string | null {
   if (statement.carryOverOutMinor === 0) return null;
+  if (statement.status === 'draft') {
+    const soFar = ended ? '' : ' à ce jour';
+    const when = ended
+      ? 'iront sur la quinzaine suivante une fois le relevé validé'
+      : 'iraient sur la quinzaine suivante, si la quinzaine finit ainsi';
+    return statement.totalMinor < 0
+      ? `Total sous zéro${soFar} : ${signedAmountText(statement.carryOverOutMinor, 'EUR')} ${when}.`
+      : `Sous le minimum de ${amountText(statement.rules.minimumPayoutMinor, 'EUR')}${soFar} : ${amountText(statement.carryOverOutMinor, 'EUR')} ${when}.`;
+  }
   if (statement.totalMinor < 0)
     return `Total sous zéro : ${signedAmountText(statement.carryOverOutMinor, 'EUR')} reportés sur la quinzaine suivante.`;
   return `Sous le minimum de ${amountText(statement.rules.minimumPayoutMinor, 'EUR')} : ${amountText(statement.carryOverOutMinor, 'EUR')} reportés sur la quinzaine suivante.`;
@@ -776,13 +1008,41 @@ export function entryRows(entries: PayrollEntries): EntryRow[] {
   );
 }
 
-const DAY_SHORT_MONTH = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+/**
+ * What a penalty really takes in the period, read in the member's statement of it: « de son net, soit −100,00 € » for
+ * a percent, « retenu −23,34 € (plafonné) » when the cap let less through. A statement sums its penalties: an amount
+ * is said for one only when it is the statement's only penalty; `null` when there is nothing more to say.
+ */
+export function penaltyTaken(
+  row: Pick<EntryRow, 'id' | 'kind' | 'struck'>,
+  statement:
+    | {
+        readonly penalties: readonly { readonly id: string }[];
+        readonly penaltiesMinor: number;
+        readonly penaltiesRequestedMinor: number;
+      }
+    | undefined,
+): string | null {
+  if ((row.kind !== 'fixed' && row.kind !== 'percent') || row.struck) return null;
+  const only = statement?.penalties.length === 1 && statement.penalties[0]?.id === row.id;
+  const parts: string[] = [];
+  if (row.kind === 'percent')
+    parts.push(
+      only ? `de son net, soit ${signedAmountText(-statement.penaltiesRequestedMinor, 'EUR')}` : 'de son net',
+    );
+  if (statement !== undefined && statement.penaltiesMinor < statement.penaltiesRequestedMinor)
+    parts.push(
+      only
+        ? `retenu ${signedAmountText(-statement.penaltiesMinor, 'EUR')} (plafonné)`
+        : `malus plafonnés : ${signedAmountText(-statement.penaltiesMinor, 'EUR')} retenus en tout`,
+    );
+  return parts.length === 0 ? null : parts.join(' · ');
+}
 
 /** « 1er nov. », « 15 déc. »: a day of a span of periods. */
-const dayShortMonth = (day: string): string => {
-  const text = DAY_SHORT_MONTH.format(new Date(`${day}T12:00:00Z`));
-  return day.endsWith('-01') ? text.replace(/^1(?=\s)/u, '1er') : text;
-};
+export function dayShortMonth(day: string): string {
+  return withFirstOfMonth(DAY_SHORT_MONTH.formatToParts(new Date(`${day}T12:00:00Z`)));
+}
 
 /** The periods from `from` to `to`, both included. */
 export function periodsBetween(from: PayPeriod, to: PayPeriod): PayPeriod[] {
@@ -903,13 +1163,15 @@ export const tickAmountText = (minor: number): string =>
 
 /** A period as its member reads it in Commissions: their words, never the agency's « à valider ». */
 export function memberPhaseChip(summary: Omit<PayPeriodSummary, 'window'>): PayChip {
+  if (summary.blocked !== null) return { label: 'Plus à jour', tone: 'warn' };
   switch (phaseOf(summary)) {
     case 'running':
       return { label: 'En cours', tone: 'neutral' };
     case 'to_validate':
       return { label: 'En validation', tone: 'wait' };
     case 'to_pay':
-      return { label: 'Validé', tone: 'ok' };
+      // Validated, the money not sent yet: the tone of waiting, as on Quinzaine's rows (statementStage).
+      return { label: 'Validé', tone: 'wait' };
     case 'paid':
       // Validated with nothing to send: the total went on the next period.
       return summary.paidMinor === 0 && summary.statements.carried > 0
@@ -923,12 +1185,19 @@ export function memberPeriodAmount(summary: Omit<PayPeriodSummary, 'window'>): {
   minor: number;
   what: string;
 } {
+  if (summary.blocked !== null)
+    return { minor: summary.payableMinor - summary.paidMinor, what: 'au dernier calcul' };
   switch (phaseOf(summary)) {
     case 'running':
       return { minor: summary.payableMinor, what: 'à ce jour' };
     case 'to_validate':
+      // Not validated yet, so not owed: what the period would pay, as Quinzaine says it (« à verser une fois validé »).
+      return {
+        minor: summary.payableMinor - summary.validatedPayableMinor,
+        what: 'à toucher une fois validé',
+      };
     case 'to_pay':
-      return { minor: summary.payableMinor - summary.paidMinor, what: 'à toucher' };
+      return { minor: summary.validatedPayableMinor - summary.paidMinor, what: 'à toucher' };
     case 'paid':
       return { minor: summary.paidMinor, what: 'touché' };
   }
@@ -973,14 +1242,20 @@ export function myStatementWords(
   statement: CommissionStatement,
   ended: boolean,
   now: Date,
+  /** PAIE-32: the usual delay the owner announced, `null` when none. */
+  payoutDelayBusinessDays: number | null = null,
 ): MyStatementWords {
   const zone = statement.window.timeZone;
+  const delay =
+    payoutDelayBusinessDays === null
+      ? null
+      : `En général, le versement part ${payoutDelayText(payoutDelayBusinessDays)}.`;
   const carry = myCarryLine(statement, ended);
   const withCarry = (notes: string[]): string[] => (carry === null ? notes : [...notes, carry]);
   const { payment } = statement;
   if (payment !== null)
     return {
-      since: `le ${dayMonth(payment.paidOn)}`,
+      since: `le ${dayMonthText(payment.paidOn)}`,
       label: 'Ce que tu as touché',
       notes: withCarry([
         `Payé le ${longDay(payment.paidOn)}${PAID_BY[payment.method]}${payment.reference === null ? '' : `, référence ${payment.reference}`}.`,
@@ -993,33 +1268,32 @@ export function myStatementWords(
       notes: withCarry([
         statement.payableMinor === 0
           ? `Validé le ${momentAt(statement.validatedAt, zone)}.`
-          : `Validé le ${momentAt(statement.validatedAt, zone)}. Le versement suit.`,
+          : `Validé le ${momentAt(statement.validatedAt, zone)}. ${delay ?? 'Le versement suit.'}`,
       ]),
     };
-  const computed =
-    dayOf(statement.computedAt, zone) === dayOf(now, zone)
-      ? `à ${clockAt(statement.computedAt, zone)}`
-      : `le ${dayAt(statement.computedAt, zone)} à ${clockAt(statement.computedAt, zone)}`;
+  const computed = computedText(statement.computedAt, zone, now);
   if (!ended)
     return {
-      since: `se valide à partir du ${dayMonth(opensOn(statement.window))}`,
+      since: `validation par l’agence à partir du ${dayMonthText(opensOn(statement.window))}`,
       label: 'Ce que tu touches à ce jour',
       notes: withCarry([
-        `Calculé ${computed} sur tes rapports validés. Le versement suit la validation de la quinzaine.`,
+        `Calculé ${computed} sur tes rapports validés. ${delay ?? 'Le versement suit la validation de la quinzaine.'}`,
       ]),
     };
   return {
-    since: `depuis le ${dayMonth(opensOn(statement.window))}`,
+    since: `depuis le ${dayMonthText(opensOn(statement.window))}`,
     label: 'Ce que tu vas toucher',
     notes: withCarry([
-      `Calculé ${computed} sur tes rapports validés. L’agence valide, puis le versement suit.`,
+      `Calculé ${computed} sur tes rapports validés. L’agence valide, puis le versement suit${
+        payoutDelayBusinessDays === null ? '' : `, en général ${payoutDelayText(payoutDelayBusinessDays)}`
+      }.`,
     ]),
   };
 }
 
 /** A member's carry-over, said as what it is while the period runs: what would go on the next one if it ended now. */
 function myCarryLine(statement: CommissionStatement, ended: boolean): string | null {
-  if (ended || statement.carryOverOutMinor === 0) return carryLine(statement);
+  if (ended || statement.carryOverOutMinor === 0) return carryLine(statement, ended);
   if (statement.totalMinor < 0)
     return `Ton total est sous zéro à ce jour : si la quinzaine finit ainsi, ${signedAmountText(statement.carryOverOutMinor, 'EUR')} iront sur la suivante.`;
   return `Sous le minimum de ${amountText(statement.rules.minimumPayoutMinor, 'EUR')} à ce jour : si la quinzaine finit ainsi, ${amountText(statement.carryOverOutMinor, 'EUR')} iront sur la suivante.`;
@@ -1061,3 +1335,24 @@ export function salesFor(
 /** « 330 € », « 1 234,50 € »: an amount without its cents when it has none. */
 export const roundAmountText = (minor: number, currency: Currency): string =>
   minor % 100 === 0 ? amountText(minor, currency).replace(/,00(?=\s)/u, '') : amountText(minor, currency);
+
+/**
+ * The periods a team rule (tiers, the payout minimum) may start with (PAIE-22): not begun on `today` in the agency's
+ * zone, today's own only on its first day, as a commission rate; `count` of them in order.
+ */
+export function rulePeriods(today: string, count: number): PayPeriod[] {
+  const current = payPeriodOfDay(today);
+  const periods: PayPeriod[] = [];
+  for (
+    let one = payPeriodNotBegun(current, today) ? current : nextPayPeriod(current);
+    periods.length < count;
+    one = nextPayPeriod(one)
+  )
+    periods.push(one);
+  return periods;
+}
+
+/** « 3 jours ouvrés après la validation » (PAIE-32): the delay the owner announced, in words. */
+export function payoutDelayText(businessDays: number): string {
+  return `${String(businessDays)} jour${businessDays > 1 ? 's' : ''} ouvré${businessDays > 1 ? 's' : ''} après la validation`;
+}

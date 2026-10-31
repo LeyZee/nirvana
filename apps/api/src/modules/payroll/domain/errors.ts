@@ -4,19 +4,25 @@ import { DomainError, type PayPeriod } from '@nirvana/contracts';
 
 /** No usable rate for a currency the period was paid in: pay never guesses a rate (ADR 0023 § Paie). */
 export class MissingExchangeRate extends DomainError {
-  constructor(currency: string) {
+  constructor(readonly currency: string) {
     super('exchange_rate_missing_conflict', 'Aucun taux de change utilisable pour cette devise', {
       details: { currency },
     });
   }
 }
 
-/** A member to pay without a commission rate in force on the period's last day: pay never guesses a rate (EQ-01). */
+/**
+ * A member to pay without a commission rate in force on the period's last day: pay never guesses a rate (EQ-01).
+ * `details.memberId` is the first; `memberIds`, every member of the period without one, for the period's block.
+ */
 export class CommissionRateMissing extends DomainError {
-  constructor(memberId: string) {
+  readonly memberIds: readonly [string, ...string[]];
+
+  constructor(memberId: string, ...others: readonly string[]) {
     super('commission_rate_missing_conflict', 'Aucun taux de commission en vigueur pour ce membre', {
       details: { memberId },
     });
+    this.memberIds = [memberId, ...others];
   }
 }
 
@@ -179,7 +185,8 @@ export class PayEntryConflict extends DomainError {
       | 'penalty_conflict'
       | 'pay_adjustment_conflict'
       | 'bonus_tier_set_conflict'
-      | 'collective_goal_conflict',
+      | 'collective_goal_conflict'
+      | 'payout_minimum_conflict',
   ) {
     super(code, 'Cet identifiant est déjà pris par une autre saisie');
   }
@@ -246,6 +253,18 @@ export class BillingRegimeBackdated extends DomainError {
   }
 }
 
+/**
+ * PAIE-22: tiers or a payout minimum from a period that has begun (400). A pay rule starts with a fortnight not worked
+ * yet, as a commission rate does: it never changes under a chatter's feet.
+ */
+export class PayRuleStarted extends DomainError {
+  constructor(period: PayPeriod) {
+    super('pay_rule_started_invalid', 'Une règle de paie part d’une quinzaine qui n’a pas commencé', {
+      details: { period },
+    });
+  }
+}
+
 /** A credit note for more than what is left of its invoice (EQ-06): an invoice is never credited below zero. */
 export class CreditNoteExceedsInvoice extends DomainError {
   constructor(leftMinor: number) {
@@ -260,6 +279,15 @@ export class InvoiceAcceptanceConflict extends DomainError {
   constructor(state: string) {
     super('invoice_acceptance_conflict', 'Cette étape n’est plus possible pour cette facture', {
       details: { state },
+    });
+  }
+}
+
+/** PAIE-22: a collective goal set after the 3rd day of its period (400). */
+export class CollectiveGoalLate extends DomainError {
+  constructor(period: PayPeriod) {
+    super('collective_goal_late_invalid', 'L’objectif d’une quinzaine se pose au plus tard son 3e jour', {
+      details: { period },
     });
   }
 }

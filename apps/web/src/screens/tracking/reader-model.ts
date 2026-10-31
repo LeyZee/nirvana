@@ -1,6 +1,8 @@
 import {
   ApiErrorSchema,
+  type AlertTrigger,
   GuardCodeSchema,
+  SYSTEM_ALERT_LABELS,
   type ConnectorErrorCode,
   type ConversationDetail,
   type ConversationEventView,
@@ -37,10 +39,19 @@ export type ThreadItem =
       /** Outbound only: written by a person (in Reveal), not by the agent. */
       readonly byHuman: boolean;
       readonly text: string;
+      /** Its media: what kind, and what it shows once the media module described it (SUIVI-26). */
+      readonly media: readonly { readonly label: string; readonly description: string | null }[];
       /** A paid media: its price, and whether he bought it. */
       readonly ppv: { readonly price: string; readonly isPaid: boolean } | null;
     }
   | { readonly kind: 'note'; readonly id: string; readonly text: string };
+
+/** A media named by its kind in the thread: « Photo », not « Média ». */
+const MEDIA_LABELS: Readonly<Record<MessageView['media'][number]['kind'], string>> = {
+  image: 'Photo',
+  video: 'Vidéo',
+  audio: 'Audio',
+};
 
 const withReason = (text: string, reason: string | undefined): string =>
   reason === undefined ? text : `${text} : ${reason}`;
@@ -77,11 +88,25 @@ const SEND_FAILURES: Readonly<Record<SendFailureCode, string>> = {
 
 const isSendFailureCode = (code: string): code is SendFailureCode => Object.hasOwn(SEND_FAILURES, code);
 
+/**
+ * An alert that went off and let the agent go on: which one, and her word when a word set it off. The event names her
+ * own alert by its id only: the thread calls it « Alerte personnalisée », the history gives its name.
+ */
+function alertNote(trigger: AlertTrigger): string {
+  const name =
+    trigger.alert.kind === 'custom'
+      ? 'Alerte personnalisée'
+      : `Alerte « ${SYSTEM_ALERT_LABELS[trigger.alert.code]} »`;
+  const word = trigger.keyword === undefined ? '' : ` (mot « ${trigger.keyword} »)`;
+  return `${name}${word} : l’agent continue`;
+}
+
 /** The note an event leaves in the thread, or null for the events the messages already show. */
 function noteOf(event: ConversationEventView, timeZone: string): string | null {
   if (event.type === 'handoff_requested')
     return withReason(`L’agent passe la main (${CAUSE_LABELS[event.payload.cause]})`, event.payload.reason);
   if (event.type === 'takeover_started') return withReason('Un humain reprend la main', event.payload.reason);
+  if (event.type === 'alert_triggered') return alertNote(event.payload.trigger);
   if (event.type === 'takeover_ended') return 'La main revient à l’agent';
   if (event.type === 'draft_rejected') return withReason('Brouillon refusé', event.payload.reason);
   if (event.type === 'draft_expired') return withReason('Brouillon abandonné', event.payload.reason);
@@ -125,6 +150,7 @@ export function threadOf(
         from: message.direction === 'inbound' ? 'fan' : 'creator',
         byHuman: message.direction === 'outbound' && message.author === 'human',
         text: message.text,
+        media: message.media.map((m) => ({ label: MEDIA_LABELS[m.kind], description: m.description })),
         ppv:
           message.priceMinor === null ? null : { price: euros(message.priceMinor), isPaid: message.isPaid },
       },
@@ -214,6 +240,8 @@ export function decisionError(status: number, body: unknown): string {
       ? 'Ce message ne peut pas partir : une garde le bloque. Retouche-le ou refuse-le.'
       : `Ce message ne peut pas partir : ${[...new Set(found)].join(', ')}. Retouche-le ou refuse-le.`;
   }
+  if (code === 'persona_inactive_unprocessable')
+    return 'Ce message ne peut pas partir : cette créatrice n’a pas de persona active. Active une version dans Créatrices › Persona.';
   if (code === 'kill_switch_conflict')
     return 'L’arrêt est actif : rien ne part tant qu’il n’est pas levé sur le Dashboard.';
   if (code === 'session_expired_conflict')

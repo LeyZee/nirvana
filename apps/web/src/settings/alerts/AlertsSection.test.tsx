@@ -115,10 +115,13 @@ function renderSection(): void {
   );
 }
 
+/** An alert's line, opened: one line by alert, the rest shown on a tap (REG-16). */
 const line = async (name: string): Promise<HTMLElement> => {
   const title = await screen.findByText(name, { selector: '.al-line__name' });
   const item = title.closest('li');
   if (item === null) throw new Error(`no line for ${name}`);
+  const open = item.querySelector('.al-line__open');
+  if (open?.getAttribute('aria-expanded') === 'false') fireEvent.click(open);
   return item;
 };
 
@@ -142,7 +145,9 @@ describe('Réglages › Alertes when it cannot load (P4-01)', () => {
   it('says the server does not answer, and tries again on demand', async () => {
     const calls = serve({ ...BASE, 'GET /v1/alerts': () => ({ status: 503 }) });
     renderSection();
-    expect(await screen.findByText('Le serveur ne répond pas. Réessaie dans un instant.')).toBeTruthy();
+    // The one wording of Réglages for a silent server, then what could not be read (REG-21).
+    expect(await screen.findByText('Le serveur ne répond pas')).toBeTruthy();
+    expect(screen.getByText('Les alertes n’ont pas pu être lues.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
     await waitFor(() => {
       expect(calls.filter((call) => call.url === '/v1/alerts')).toHaveLength(2);
@@ -152,16 +157,22 @@ describe('Réglages › Alertes when it cannot load (P4-01)', () => {
   it('reads a shape it does not expect as the server not answering, never as a guess', async () => {
     serve({ ...BASE, 'GET /v1/alerts': ok({ custom: [{ name: 'x' }], system: [] }) });
     renderSection();
-    expect(await screen.findByText('Le serveur ne répond pas. Réessaie dans un instant.')).toBeTruthy();
+    expect(await screen.findByText('Le serveur ne répond pas')).toBeTruthy();
   });
 });
 
 describe('her own alerts', () => {
-  it('shows what each one watches, on whom, what it does and where it goes on Telegram', async () => {
+  it('shows one line by alert, then what it watches, what it does and where it does not go on Telegram', async () => {
     serve(BASE);
     renderSection();
-    const item = await line('Vidéo perso');
-    expect(within(item).getByText('Une phrase et 2 mots-clés · Toutes les créatrices')).toBeTruthy();
+    const title = await screen.findByText('Vidéo perso', { selector: '.al-line__name' });
+    const item = title.closest('li') ?? document.body;
+    // Closed: its name, its creators, « Pause », the switch; the phrase and the buttons wait for a tap.
+    const open = within(item).getByRole('button', { name: /^Vidéo perso/u, expanded: false });
+    expect(within(item).getByText('Pause')).toBeTruthy();
+    expect(within(item).queryByRole('button', { name: 'Modifier' })).toBeNull();
+    fireEvent.click(open);
+    expect(within(item).getByText('Toutes les créatrices')).toBeTruthy();
     expect(within(item).getByText('« Le fan demande une vidéo faite pour lui »')).toBeTruthy();
     expect(
       within(item).getByText('Met l’agent en pause sur ce fan et passe la main à un humain'),
@@ -228,7 +239,10 @@ describe('her own alerts', () => {
     expect(
       within(form).getByText('Une phrase, des mots-clés, ou les deux : sinon elle ne surveille rien.'),
     ).toBeTruthy();
-    expect(within(form).getByText('Choisis au moins une créatrice.')).toBeTruthy();
+    // Every creator is ticked at first; « a phrase, words, or both » marks the phrase too (REG-18).
+    expect(within(form).queryByText('Choisis au moins une créatrice.')).toBeNull();
+    expect(within(form).getByLabelText('Ce qu’elle repère').getAttribute('aria-invalid')).toBe('true');
+    expect(within(form).getByLabelText('Nom').getAttribute('placeholder')).toBe('Ex. : Vidéo perso');
     expect(calls.some((call) => call.method === 'POST')).toBe(false);
 
     fireEvent.change(within(form).getByLabelText('Nom'), { target: { value: ' Appel ' } });
@@ -237,7 +251,7 @@ describe('her own alerts', () => {
       fireEvent.change(words, { target: { value: word } });
       fireEvent.keyDown(words, { key: 'Enter' });
     }
-    fireEvent.click(within(form).getByRole('checkbox', { name: 'Léa' }));
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Nora Vidal' }));
     fireEvent.click(within(form).getByRole('button', { name: 'Créer l’alerte' }));
     expect(await within(form).findByText('Le serveur ne répond pas. Réessaie dans un instant.')).toBeTruthy();
 
@@ -256,6 +270,35 @@ describe('her own alerts', () => {
       notify: true,
       creators: [{ creatorId: LEA, enabled: true }],
     });
+  });
+
+  it('says another active alert already has the name, and keeps the form open to rename it', async () => {
+    serve({
+      ...BASE,
+      'POST /v1/alerts': () => ({ status: 409, body: apiError('custom_alert_name_conflict') }),
+    });
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Nouvelle alerte' }));
+    const form = screen.getByRole('form', { name: 'Nouvelle alerte' });
+    fireEvent.change(within(form).getByLabelText('Nom'), { target: { value: 'vidéo PERSO' } });
+    const words = within(form).getByLabelText('Mots-clés');
+    fireEvent.change(words, { target: { value: 'custom' } });
+    fireEvent.keyDown(words, { key: 'Enter' });
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Nora Vidal' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Créer l’alerte' }));
+    expect(await within(form).findByText('Une alerte active porte déjà ce nom.')).toBeTruthy();
+    expect(screen.getByRole('form', { name: 'Nouvelle alerte' })).toBeTruthy();
+    const name = within(form).getByLabelText('Nom');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(name);
+    });
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.closest('[data-invalid="true"]')).not.toBeNull();
+
+    // Renamed: the field is no longer refused.
+    fireEvent.change(name, { target: { value: 'Vidéo perso 2' } });
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+    expect(within(form).queryByText('Une alerte active porte déjà ce nom.')).toBeNull();
   });
 
   it('edits one in place and sends it whole', async () => {
@@ -359,6 +402,19 @@ describe('her own alerts', () => {
 });
 
 describe('the system’s alerts', () => {
+  it('leads to each creator’s persona for her words, and names the bot question plainly', async () => {
+    serve(BASE);
+    renderSection();
+    const lede = await screen.findByText(
+      'Le code les lève lui-même. Sauf les mots-clés, chacune se coupe créatrice par créatrice.',
+    );
+    expect(lede).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Persona de Léa' }).getAttribute('href')).toBe(
+      `/creatrices?creatrice=${LEA}`,
+    );
+    expect(screen.getByText('Le fan demande si c’est un bot', { selector: '.al-line__name' })).toBeTruthy();
+  });
+
   it('keeps her persona’s words always on, with no switch', async () => {
     serve(BASE);
     renderSection();
@@ -419,6 +475,7 @@ describe('the system’s alerts', () => {
     expect(status.textContent).toContain('Mot-clé trouvé : « custom ».');
     expect(status.textContent).toContain('L’IA ne reconnaît pas la situation de la phrase.');
     expect(calls.find((call) => call.url === '/v1/alerts/test')?.body).toEqual({
+      creatorId: NORA,
       alert: { phrase: 'Le fan demande une vidéo faite pour lui', keywords: ['vidéo perso', 'custom'] },
       message: 'une custom stp',
     });
@@ -429,6 +486,41 @@ describe('the system’s alerts', () => {
       target: { value: 'Le fan veut un appel' },
     });
     expect(status.textContent).toBe('');
+  });
+
+  it('reads the phrase with the persona of the creator chosen among the alert’s (recette M13)', async () => {
+    const calls = serve({
+      ...BASE,
+      'POST /v1/alerts/test': () => ({
+        status: 200,
+        body: { keywords: [], phraseMatched: true, reason: null },
+      }),
+    });
+    renderSection();
+    fireEvent.click(within(await line('Vidéo perso')).getByRole('button', { name: 'Modifier' }));
+    const form = screen.getByRole('form', { name: 'Modifier « Vidéo perso »' });
+    const readers = within(form).getByRole('radiogroup', { name: 'Avec la persona active de' });
+    expect(within(readers).getByRole('radio', { name: 'Nora Vidal' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    fireEvent.click(within(readers).getByRole('radio', { name: 'Léa' }));
+    fireEvent.change(within(form).getByLabelText('Message d’un fan'), { target: { value: 'bonjour' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Tester' }));
+    await waitFor(() => {
+      expect(calls.filter((call) => call.url === '/v1/alerts/test')).toHaveLength(1);
+    });
+    expect(calls.find((call) => call.url === '/v1/alerts/test')?.body).toMatchObject({ creatorId: LEA });
+
+    // Léa taken off the alert: one creator left, no choice to make, and the test reads Nora's persona.
+    fireEvent.click(within(within(form).getByRole('group', { name: 'Créatrices' })).getByText('Léa'));
+    expect(within(form).queryByRole('radiogroup', { name: 'Avec la persona active de' })).toBeNull();
+    fireEvent.click(within(form).getByRole('button', { name: 'Tester' }));
+    await waitFor(() => {
+      expect(calls.filter((call) => call.url === '/v1/alerts/test')).toHaveLength(2);
+    });
+    expect(calls.filter((call) => call.url === '/v1/alerts/test')[1]?.body).toMatchObject({
+      creatorId: NORA,
+    });
   });
 
   it('says in amber why the phrase could not be read, and when the server does not answer', async () => {

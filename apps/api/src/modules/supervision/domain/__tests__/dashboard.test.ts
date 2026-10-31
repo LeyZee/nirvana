@@ -7,8 +7,16 @@ import {
 } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { assembleDashboard, revealLate, todos, unansweredSince, type VoiceHealth } from '../dashboard';
-import type { DashboardFacts, TelegramReading } from '../dashboard-ports';
+import {
+  assembleDashboard,
+  creatorQueue,
+  queueAcross,
+  revealLate,
+  todos,
+  unansweredSince,
+  type VoiceHealth,
+} from '../dashboard';
+import type { DashboardFacts, TelegramReading, WaitingConversation } from '../dashboard-ports';
 
 const NOW = new Date('2026-10-17T21:30:00.000Z');
 const CONVERSATION = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
@@ -43,6 +51,7 @@ const FACTS: DashboardFacts = {
       alert: undefined,
     },
   ],
+  usdSales: { seen: false, rateDay: null },
 };
 
 const assemble = (
@@ -79,6 +88,18 @@ describe('dashboard', () => {
     expect(dashboard.guards.today.minor).toBe(0);
     expect(dashboard.guards.telegramAlertsTonight).toBe(3);
     expect(dashboard.telegramCoverage).toEqual({ urgentReachable: false });
+  });
+
+  it('says how the dollar sales were counted: at which ECB day, or not at all (choix de Charles, 28/10)', () => {
+    expect(assemble().usdSales).toEqual({ seen: false, rate: null });
+    expect(assemble({ usdSales: { seen: true, rateDay: '2026-10-16' } }).usdSales).toEqual({
+      seen: true,
+      rate: { day: '2026-10-16' },
+    });
+    expect(DashboardSchema.parse(assemble({ usdSales: { seen: true, rateDay: null } })).usdSales).toEqual({
+      seen: true,
+      rate: null,
+    });
   });
 
   it('names a fan without a pseudonym rather than failing the whole page (recette 28/10)', () => {
@@ -238,6 +259,52 @@ describe('à traiter', () => {
   });
 });
 
+describe('à traiter sur Arrêt (choix de Charles, 28/10)', () => {
+  const line = (
+    fanName: string,
+    kind: WaitingConversation['kind'],
+    minutes: number,
+  ): WaitingConversation => ({
+    conversationId: CONVERSATION,
+    fanId: FAN,
+    fanName,
+    kind,
+    since: minutesAgo(minutes),
+  });
+  const waiting = [
+    line('A', 'awaiting_approval', 40),
+    line('B', 'meeting', 30),
+    line('C', 'distress', 20),
+    line('D', 'send_failed', 15),
+    line('E', 'non_consent', 10),
+    line('F', 'unanswered', 45),
+    line('G', 'minor', 5),
+  ];
+
+  it('keeps a possible minor, consent and distress only, the longest waiting first', () => {
+    const list = todos(waiting, NOW, { stopped: true });
+    expect(list.map((t) => [t.title, t.kind, t.tone])).toEqual([
+      ['C', 'distress', 'bad'],
+      ['E', 'non_consent', 'bad'],
+      ['G', 'minor', 'bad'],
+    ]);
+  });
+
+  it('keeps every line while the agent runs', () => {
+    expect(todos(waiting, NOW, { stopped: false })).toHaveLength(waiting.length);
+    expect(todos(waiting, NOW)).toHaveLength(waiting.length);
+  });
+
+  it('applies on her switch and on the global one, from the facts', () => {
+    const facts = { waiting };
+    const kinds = (switches: DashboardFacts['switches']) =>
+      assemble({ ...facts, switches }).todos.map((t) => t.kind);
+    expect(kinds({ global: false, creator: true })).toEqual(['distress', 'non_consent', 'minor']);
+    expect(kinds({ global: true, creator: false })).toEqual(['distress', 'non_consent', 'minor']);
+    expect(kinds({ global: false, creator: false })).toHaveLength(waiting.length);
+  });
+});
+
 describe('unansweredSince (P3-14)', () => {
   const PARIS = 'Europe/Paris';
   // Tuesday 27 October 2026, winter time in Paris (UTC+1); her slot from 9:00 to 18:00 on Tuesdays.
@@ -270,5 +337,65 @@ describe('unansweredSince (P3-14)', () => {
     expect(unansweredSince(at('10:00'), at('10:30'), her)).toEqual(at('10:00'));
     // Her slot closed at 18:00: silent again.
     expect(unansweredSince(at('10:00'), at('18:30'), her)).toBeNull();
+  });
+});
+
+describe('à traiter, every creator followed (SUIVI-09, DASH-03)', () => {
+  const LEA = '0192f3a0-0000-7000-8000-00000000c001';
+  const INES = '0192f3a0-0000-7000-8000-00000000c002';
+  const waiting = (fanName: string, kind: 'awaiting_approval' | 'minor' | 'meeting', minutes: number) => ({
+    conversationId: CONVERSATION,
+    fanId: FAN,
+    fanName,
+    kind,
+    since: minutesAgo(minutes),
+  });
+
+  it('names each line’s creator, the gravest first across them all, then the longest waiting', () => {
+    const merged = queueAcross([
+      {
+        creatorId: CreatorIdSchema.parse(LEA),
+        name: 'Léa',
+        todos: todos([waiting('Hugo', 'meeting', 20), waiting('Théo', 'awaiting_approval', 50)], NOW),
+      },
+      {
+        creatorId: CreatorIdSchema.parse(INES),
+        name: 'Inès',
+        todos: todos([waiting('Arthur', 'awaiting_approval', 35), waiting('Kévin', 'minor', 2)], NOW),
+      },
+    ]);
+    expect(merged.items.map((t) => [t.creatorName, t.title])).toEqual([
+      ['Inès', 'Kévin'],
+      ['Léa', 'Théo'],
+      ['Inès', 'Arthur'],
+      ['Léa', 'Hugo'],
+    ]);
+    expect(merged.items[0]).toMatchObject({ creatorId: INES, tone: 'bad' });
+  });
+
+  it('counts each creator’s lines and grave ones, in her order, none when nothing waits', () => {
+    const merged = queueAcross([
+      { creatorId: CreatorIdSchema.parse(LEA), name: 'Léa', todos: [] },
+      {
+        creatorId: CreatorIdSchema.parse(INES),
+        name: 'Inès',
+        todos: todos([waiting('Kévin', 'minor', 2), waiting('Arthur', 'awaiting_approval', 35)], NOW),
+      },
+    ]);
+    expect(merged.creators).toEqual([
+      { creatorId: LEA, name: 'Léa', todos: 0, grave: 0 },
+      { creatorId: INES, name: 'Inès', todos: 2, grave: 1 },
+    ]);
+  });
+
+  it('keeps the grave lines only of a creator on Arrêt, as her Dashboard does', () => {
+    const facts: DashboardFacts = {
+      ...FACTS,
+      switches: { global: false, creator: true },
+      waiting: [waiting('Kévin', 'minor', 2), waiting('Arthur', 'awaiting_approval', 35)],
+    };
+    const queue = creatorQueue(CreatorIdSchema.parse(INES), facts, NOW);
+    expect(queue.todos.map((t) => t.title)).toEqual(['Kévin']);
+    expect(queue.name).toBe(FACTS.creator.name);
   });
 });

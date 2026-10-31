@@ -14,6 +14,7 @@ import {
   type DashboardPeriod,
   type DashboardTodo,
   type HandoffCause,
+  type TodosAcrossCreators,
 } from '@nirvana/contracts';
 
 import type {
@@ -46,6 +47,8 @@ const WHY: Readonly<Record<WaitingConversation['kind'], string>> = {
   other: 'L’agent a passé la main. Un humain doit lui répondre.',
   custom_alert: 'Une de ses alertes personnalisées a sonné. L’agent attend un humain.',
   identity_doubt: 'Le fan doute que ce soit vraiment elle. Un chatteur en poste lui répond.',
+  persona_inactive:
+    'Elle n’a pas de persona active : l’agent n’écrit rien. Active une version dans Créatrices › Persona.',
   awaiting_approval: 'Un brouillon attend d’être validé depuis plus de 10 minutes.',
   send_failed: 'Un message n’a pas pu partir. L’agent ne réessaie plus, un humain doit le renvoyer.',
   unanswered: 'Son dernier message attend depuis plus de 30 minutes, sans brouillon ni réponse en cours.',
@@ -99,12 +102,24 @@ export function revealLate(
   return now.getTime() - from > allowedMs;
 }
 
-/** Safety first: a possible minor, consent or distress before everything else. */
+/**
+ * Safety first: a possible minor, consent or distress before everything else. These handoff causes are the grave
+ * ones: red in « À traiter », and the only lines it keeps while the agent is on Arrêt.
+ */
 const GRAVE: ReadonlySet<WaitingConversation['kind']> = new Set(['minor', 'non_consent', 'distress']);
 
-/** « À traiter », the gravest first, then the longest waiting. */
-export function todos(waiting: readonly WaitingConversation[], now: Date): DashboardTodo[] {
-  return [...waiting]
+/**
+ * « À traiter », the gravest first, then the longest waiting. On Arrêt (choix de Charles, 28/10) it keeps the grave
+ * lines only: nothing leaves in her name, the chatters hold the hand in Reveal, but a possible minor, a question of
+ * consent or a fan in distress still waits for a human. The other lines come back with the agent.
+ */
+export function todos(
+  waiting: readonly WaitingConversation[],
+  now: Date,
+  agent: { readonly stopped: boolean } = { stopped: false },
+): DashboardTodo[] {
+  return waiting
+    .filter((w) => !agent.stopped || GRAVE.has(w.kind))
     .sort(
       (a, b) =>
         Number(GRAVE.has(b.kind)) - Number(GRAVE.has(a.kind)) || a.since.getTime() - b.since.getTime(),
@@ -120,6 +135,45 @@ export function todos(waiting: readonly WaitingConversation[], now: Date): Dashb
       conversationId: ConversationIdSchema.parse(w.conversationId),
       fanId: FanIdSchema.parse(w.fanId),
     }));
+}
+
+/** One creator's « À traiter », as `todos` gave it. */
+export interface CreatorQueue {
+  readonly creatorId: CreatorId;
+  readonly name: string;
+  readonly todos: readonly DashboardTodo[];
+}
+
+/** Her « À traiter » as the Dashboard shows it: on Arrêt, the grave lines only (#296). */
+export function creatorQueue(creatorId: CreatorId, facts: DashboardFacts, now: Date): CreatorQueue {
+  return {
+    creatorId,
+    name: facts.creator.name,
+    todos: todos(facts.waiting, now, { stopped: mode(facts) === 'stop' }),
+  };
+}
+
+/**
+ * « À traiter » of several creators in one list (SUIVI-09): each line names its creator, the gravest first across
+ * them all, then the longest waiting; and each creator's count, in the order given (DASH-03).
+ */
+export function queueAcross(queues: readonly CreatorQueue[]): TodosAcrossCreators {
+  const items = queues
+    .flatMap((queue) =>
+      queue.todos.map((todo) => ({ ...todo, creatorId: queue.creatorId, creatorName: queue.name })),
+    )
+    .sort(
+      (a, b) => Number(b.tone === 'bad') - Number(a.tone === 'bad') || Date.parse(a.at) - Date.parse(b.at),
+    );
+  return {
+    items,
+    creators: queues.map((queue) => ({
+      creatorId: queue.creatorId,
+      name: queue.name,
+      todos: queue.todos.length,
+      grave: queue.todos.filter((todo) => todo.tone === 'bad').length,
+    })),
+  };
 }
 
 /** Arrêt wins; otherwise Automatique as soon as one conversation runs on its own. */
@@ -145,6 +199,7 @@ function guardsToday(handoffs: DashboardFacts['handoffsToday']): Record<HandoffC
     other: 0,
     custom_alert: 0,
     identity_doubt: 0,
+    persona_inactive: 0,
   };
   for (const { cause, count } of handoffs) counts[cause] += count;
   return counts;
@@ -226,7 +281,7 @@ export function assembleDashboard(input: {
       alertAt: input.budget.alertAtEur,
       costPerEuroSold: null,
     },
-    todos: todos(facts.waiting, window.now),
+    todos: todos(facts.waiting, window.now, { stopped: mode(facts) === 'stop' }),
     fans: facts.fans.map((fan) => ({
       id: FanIdSchema.parse(fan.id),
       name: fanNameOf(fan.name),
@@ -237,5 +292,9 @@ export function assembleDashboard(input: {
       notes: [...fan.notes],
       ...(fan.alert !== undefined && { alert: fan.alert }),
     })),
+    usdSales: {
+      seen: facts.usdSales.seen,
+      rate: facts.usdSales.rateDay === null ? null : { day: facts.usdSales.rateDay },
+    },
   };
 }

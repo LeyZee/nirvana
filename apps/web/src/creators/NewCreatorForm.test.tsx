@@ -51,6 +51,15 @@ describe('NewCreatorForm', () => {
     expect(body).toMatchObject({ displayName: 'Léa', timezone: 'Europe/Paris' });
   });
 
+  it('offers her zone by city, the zone kept behind it (CREA-27)', () => {
+    show(201, LEA);
+    const zone = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Fuseau horaire' });
+    expect(zone.selectedOptions[0]?.textContent).toBe('Paris');
+    const montreal = screen.getByRole<HTMLOptionElement>('option', { name: 'Toronto (Montréal)' });
+    expect(montreal.value).toBe('America/Toronto');
+    expect(screen.getByRole('option', { name: 'Tokyo · Asia' })).toBeDefined();
+  });
+
   it('sends once when the form is submitted again before the answer', async () => {
     const { fetch, onCreated } = show(201, LEA);
     // Submitting the form itself skips the disabled button: only the guard stops a second request.
@@ -84,7 +93,7 @@ describe('NewCreatorForm', () => {
     const { onCreated } = show(400, refused([{ path: '/timezone', message: 'Fuseau horaire IANA inconnu' }]));
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      'Ce fuseau n’existe pas. Choisis-en un dans la liste, par exemple Europe/Paris.',
+      'Ce fuseau n’existe pas. Choisis une ville dans la liste.',
     );
     expect(onCreated).not.toHaveBeenCalled();
   });
@@ -98,12 +107,57 @@ describe('NewCreatorForm', () => {
     expect(onCreated).not.toHaveBeenCalled();
   });
 
+  it('says when another creator has this name, and forgets it once the name is typed again', async () => {
+    const { fetch, onCreated } = show(409, {
+      error: { code: 'creator_name_conflict', message: 'x', details: {}, requestId: 'r' },
+    });
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Une créatrice porte déjà ce nom. Ajoute une initiale ou choisis un autre pseudo.',
+    );
+    expect(onCreated).not.toHaveBeenCalled();
+    const field = screen.getByLabelText('Prénom ou pseudo');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id);
+    fireEvent.change(field, { target: { value: 'Léa B.' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    // Nothing was created: the same form's id goes again with the new name.
+    fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...LEA, displayName: 'Léa B.' }), { status: 201 }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    await waitFor(() => {
+      expect(onCreated).toHaveBeenCalled();
+    });
+    const id = (call: number) => z.object({ id: z.string() }).parse(sentBody(fetch, call)).id;
+    expect(id(1)).toBe(id(0));
+  });
+
+  it('will not send a name without a letter', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <NewCreatorForm onCreated={vi.fn()} onCancel={null} />
+      </QueryClientProvider>,
+    );
+    for (const value of ['...', '\u200B', '2024']) {
+      fireEvent.change(screen.getByLabelText('Prénom ou pseudo'), { target: { value } });
+      expect(screen.getByRole('button', { name: 'Créer' })).toHaveProperty('disabled', true);
+      const message = screen.getByText('Le nom doit contenir au moins une lettre.');
+      const field = screen.getByLabelText('Prénom ou pseudo');
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      expect(field.getAttribute('aria-describedby')).toBe(message.id);
+    }
+  });
+
   it('blames the zone only when the server refused the zone, and a lost session is not a silent server', async () => {
     show(400, refused([{ path: '/displayName', message: 'Too big' }]));
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      'Ce nom n’est pas accepté. Vérifie-le, puis réessaie.',
+      'Ce nom n’est pas accepté : il lui faut au moins une lettre.',
     );
+    const field = screen.getByLabelText('Prénom ou pseudo');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id);
     cleanup();
     show(401, { error: { code: 'session_unauthenticated', message: 'x', details: {}, requestId: 'r' } });
     expect(await screen.findByRole('alert')).toHaveProperty(

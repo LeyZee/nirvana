@@ -6,6 +6,7 @@ import {
   ShiftSwapRequestSchema,
   ShiftTemplateSchema,
   type MyShift,
+  type SchedulingSettings,
   type Shift,
   type ShiftSwapRequest,
 } from '@nirvana/contracts';
@@ -16,6 +17,7 @@ import {
   accessOpen,
   accountLine,
   conflictLines,
+  conflictTitle,
   dayStateOf,
   gridOf,
   inTheWayLine,
@@ -24,6 +26,7 @@ import {
   leaveLength,
   phaseOf,
   progressOf,
+  slotRowOf,
   swapRefusalText,
   swapViewOf,
   templateLine,
@@ -90,6 +93,75 @@ describe('the week grid', () => {
   });
 });
 
+describe('the créneaux of a row (EQ-01)', () => {
+  const week = weekOf('2026-10-26');
+  const SIX_HOURS: Pick<SchedulingSettings, 'timeZone' | 'slotStartMinute' | 'slotLengthMinutes'> = {
+    timeZone: PARIS,
+    slotStartMinute: 0,
+    slotLengthMinutes: 360,
+  };
+  const BEFORE = new Date('2026-10-20T00:00:00Z');
+  const cellsOf = (
+    shifts: Shift[],
+    now: Date,
+    settings = SIX_HOURS,
+    days: readonly string[] = week,
+  ): ReturnType<typeof slotRowOf> => {
+    const row = gridOf(planning(shifts), days, PARIS)[1];
+    if (row === undefined) throw new Error('no row');
+    return slotRowOf(row, shifts, days, settings, now);
+  };
+  const iso = (date: Date | undefined): string | undefined => date?.toISOString();
+
+  it('puts a shift that starts before the day’s first créneau in the night before', () => {
+    // Créneaux from 5 h; Tuesday 2 h – 4 h in Paris belongs to Monday's 23 h – 5 h.
+    const early = shift(1, { startsAt: '2026-10-27T01:00:00Z', endsAt: '2026-10-27T03:00:00Z' });
+    const cells = cellsOf([early], BEFORE, { ...SIX_HOURS, slotStartMinute: 300 });
+    expect(cells?.get('2026-10-26')?.[3]?.chips.map((chip) => chip.shift.id)).toEqual([early.id]);
+    expect(cells?.get('2026-10-27')?.[3]?.chips).toEqual([]);
+    // Tuesday's own night stays to fill.
+    expect(iso(cells?.get('2026-10-27')?.[3]?.open?.from)).toBe('2026-10-27T22:00:00.000Z');
+  });
+
+  it('says the créneau under way with nobody, from now at the minute', () => {
+    const cells = cellsOf([], new Date('2026-10-27T07:30:20Z'));
+    const tuesday = cells?.get('2026-10-27');
+    expect(tuesday?.[0]?.open).toBe(null);
+    expect(iso(tuesday?.[1]?.open?.from)).toBe('2026-10-27T07:31:00.000Z');
+    expect(iso(tuesday?.[1]?.open?.to)).toBe('2026-10-27T11:00:00.000Z');
+  });
+
+  it('says the rest of a créneau a shift left, and nothing for two shifts end to end', () => {
+    const stopped = shift(1, {
+      startsAt: '2026-10-26T23:00:00Z',
+      endsAt: '2026-10-27T02:00:00Z',
+      stoppedAt: '2026-10-27T02:00:00Z',
+    });
+    const morning = shift(2, { startsAt: '2026-10-27T05:00:00Z', endsAt: '2026-10-27T08:00:00Z' });
+    const noon = shift(3, { startsAt: '2026-10-27T08:00:00Z', endsAt: '2026-10-27T11:00:00Z' });
+    const tuesday = cellsOf([stopped, morning, noon], new Date('2026-10-27T00:00:00Z'))?.get('2026-10-27');
+    expect(iso(tuesday?.[0]?.open?.from)).toBe('2026-10-27T02:00:00.000Z');
+    expect(iso(tuesday?.[0]?.open?.to)).toBe('2026-10-27T05:00:00.000Z');
+    expect(tuesday?.[1]?.open).toBe(null);
+    expect(tuesday?.[1]?.chips).toHaveLength(2);
+  });
+
+  it('cuts the créneaux at the agency’s hours over a change of time', () => {
+    // 29 March 2026: 0 h – 6 h lasts five hours, and a shift from 6 h does not cover it.
+    const spring = weekOf('2026-03-23');
+    const six = shift(1, { startsAt: '2026-03-29T04:00:00Z', endsAt: '2026-03-29T10:00:00Z' });
+    const night = cellsOf([six], new Date('2026-03-01T00:00:00Z'), SIX_HOURS, spring)?.get('2026-03-29')?.[0];
+    expect(iso(night?.to)).toBe('2026-03-29T04:00:00.000Z');
+    expect(night?.covered).toBe(false);
+    // 25 October 2026: 0 h – 6 h lasts seven hours, and its last hour is looked at.
+    const autumn = weekOf('2026-10-19');
+    const five = shift(2, { startsAt: '2026-10-24T22:00:00Z', endsAt: '2026-10-25T04:00:00Z' });
+    const long = cellsOf([five], new Date('2026-10-01T00:00:00Z'), SIX_HOURS, autumn)?.get('2026-10-25')?.[0];
+    expect(iso(long?.open?.from)).toBe('2026-10-25T04:00:00.000Z');
+    expect(iso(long?.open?.to)).toBe('2026-10-25T05:00:00.000Z');
+  });
+});
+
 describe('a shift in time', () => {
   const one = shift(1, {});
   it('is to come, under way or over, and says how far it has gone', () => {
@@ -135,12 +207,32 @@ describe('conflicts', () => {
     expect(lines).toEqual([
       {
         key: `${id(31)}-2026-10-27T22:00:00Z`,
-        when: 'mar. 27 · 23 h – 5 h sur Nora Vidal',
+        when: 'mar. 27 · 23 h – 5 h · Nora Vidal',
         what: 'Théo est déjà sur un autre shift',
+        toFill: true,
         shiftId: id(101),
         fill: null,
       },
     ]);
+  });
+
+  it('counts only an account left with nobody as « à pourvoir », a double apart', () => {
+    expect(conflictTitle([{ toFill: true }])).toBe('1 shift à pourvoir');
+    expect(conflictTitle([{ toFill: true }, { toFill: false }])).toBe('1 shift à pourvoir · 1 en double');
+    expect(conflictTitle([{ toFill: false }, { toFill: false }])).toBe('2 shifts en double');
+    const week = planning(
+      [],
+      [
+        {
+          templateId: id(31),
+          startsAt: '2026-10-27T22:00:00Z',
+          endsAt: '2026-10-28T04:00:00Z',
+          reason: 'account_taken',
+          shiftId: id(101),
+        },
+      ],
+    );
+    expect(conflictLines(week.conflicts, [template], week, PARIS)[0]?.toFill).toBe(false);
   });
 
   it('says a member on leave, with no shift to open (ADR 0031)', () => {
@@ -157,7 +249,7 @@ describe('conflicts', () => {
       ],
     );
     const [line] = conflictLines(week.conflicts, [template], week, PARIS);
-    expect(line?.what).toBe('Théo est en congé : ce shift est à pourvoir');
+    expect(line?.what).toBe('Théo est en congé');
     expect(line?.shiftId).toBe(null);
     const fill = {
       accountId: NORA_REVEAL,
@@ -170,7 +262,7 @@ describe('conflicts', () => {
     expect(line?.fill).toEqual(fill);
     // Read from Antananarivo, the line says its hours; the shift to fill keeps the agency's.
     const [far] = conflictLines(week.conflicts, [template], week, 'Indian/Antananarivo');
-    expect(far?.when.replaceAll('\u00a0', ' ')).toBe('mer. 28 · 1 h – 7 h sur Nora Vidal');
+    expect(far?.when.replaceAll('\u00a0', ' ')).toBe('mer. 28 · 1 h – 7 h · Nora Vidal');
     expect(far?.fill).toEqual(fill);
   });
 });

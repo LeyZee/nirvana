@@ -6,12 +6,14 @@ import type {
   TeamMember,
   UpdateShiftBody,
 } from '@nirvana/contracts';
+import { Link } from '@tanstack/react-router';
 import { useId, useState, type JSX } from 'react';
 
 import { Dialog } from './Dialog';
 
-import { AGENCY_STATUS, amountText, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
+import { AGENCY_STATUS, amountText, periodAt, reportOf, STATUS_TONES, validatedTotal } from '@/reports/model';
 import '@/reports/reports.css';
+import { TimeField, useUnreadableTimes } from '@/scheduling/TimeField';
 import {
   cancelShift,
   endTemplate,
@@ -93,6 +95,7 @@ export function ShiftSheet({
   const [from, setFrom] = useState(inputOf(minuteOf(shift.startsAt, agency)));
   const [to, setTo] = useState(inputOf(minuteOf(shift.endsAt, agency)));
   const [arming, setArming] = useState<Arming>(null);
+  const times = useUnreadableTimes();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
@@ -111,8 +114,12 @@ export function ShiftSheet({
     if (outcome.kind === 'refused' && outcome.code.endsWith('_not_found')) void refresh();
   };
 
-  /** The hours typed, on the shift's day in the agency's time; the end the next day when it comes before the start. */
+  /**
+   * The hours typed, on the shift's day in the agency's time; the end the next day when it comes before the start. Null
+   * while a field holds what is not an hour: the sheet never saves an hour other than the one on screen.
+   */
   const typed = (): { startsAt: string; endsAt: string } | null => {
+    if (times.unreadable) return null;
     const start = minuteOfInput(from);
     const end = minuteOfInput(to);
     if (start === null || end === null || start === end) return null;
@@ -124,13 +131,15 @@ export function ShiftSheet({
 
   const save = (): void => {
     const hours = typed();
+    // Enter submits the form even while « Enregistrer » is off.
+    if (hours === null) return;
     const body: UpdateShiftBody = {};
     if (memberId !== shift.memberId) body.memberId = memberId;
-    if (phase === 'later' && hours !== null) {
+    if (phase === 'later') {
       if (hours.startsAt !== shift.startsAt) body.startsAt = hours.startsAt;
       if (hours.endsAt !== shift.endsAt) body.endsAt = hours.endsAt;
     }
-    if (phase === 'live' && hours !== null && hours.endsAt !== shift.endsAt) body.endsAt = hours.endsAt;
+    if (phase === 'live' && hours.endsAt !== shift.endsAt) body.endsAt = hours.endsAt;
     if (Object.keys(body).length === 0) {
       onClose();
       return;
@@ -139,6 +148,8 @@ export function ShiftSheet({
   };
 
   const hours = typed();
+  // Its report, said where the member's reports of its period are: Rapports opens on his fold (EQ-13).
+  const toReports = { quinzaine: periodAt(new Date(shift.startsAt), agency), membre: shift.memberId };
   // Another zone is shown only where its hours differ from those above: Porto-Novo and Paris share them in winter.
   const shownRange = rangeAt(shift.startsAt, shift.endsAt, zone);
   const differs = rangeAt(shift.startsAt, shift.endsAt, agency) !== shownRange;
@@ -147,7 +158,12 @@ export function ShiftSheet({
 
   return (
     <Dialog
-      title={shown?.displayName ?? 'Un membre'}
+      title={
+        // His name opens his record in Membres (EQ-11).
+        <Link to="/equipe/membres" search={{ membre: shift.memberId }} className="sc-sheet__who">
+          {shown?.displayName ?? 'Un membre'}
+        </Link>
+      }
       lead={account === null ? undefined : `${account.creatorName} · ${accountLine(account)}`}
       busy={busy}
       onClose={onClose}
@@ -219,21 +235,21 @@ export function ShiftSheet({
           {report !== null ? (
             <li>
               <span>Rapport</span>
-              <span className="sc-sheet__report">
+              <Link to="/equipe/rapports" search={toReports} className="sc-sheet__report">
                 <span className="nv-num">
                   {amountText(report.amount.amountMinor, report.amount.currency)}
                 </span>
                 <span className={`rp-chip rp-chip--${STATUS_TONES[report.status]}`}>
                   {AGENCY_STATUS[report.status]}
                 </span>
-              </span>
+              </Link>
             </li>
           ) : reports !== null && phase === 'past' ? (
             <li>
               <span>Rapport</span>
-              <span className="sc-sheet__report" data-warn="true">
+              <Link to="/equipe/rapports" search={toReports} className="sc-sheet__report" data-warn="true">
                 Sans rapport
-              </span>
+              </Link>
             </li>
           ) : null}
           {report === null || reports === null || !corrected ? null : (
@@ -253,9 +269,7 @@ export function ShiftSheet({
           ),
         )}
 
-        {phase === 'past' ? (
-          <p className="tm-hint">Ce shift est fini : il reste au planning tel qu’il a eu lieu.</p>
-        ) : (
+        {phase === 'past' ? null : (
           <form
             className="sc-sheet__edit"
             noValidate
@@ -297,34 +311,34 @@ export function ShiftSheet({
                 {phase === 'later' ? (
                   <label className="sc-hours__one">
                     <span className="tm-hint">De</span>
-                    <input
-                      type="time"
-                      step={900}
-                      className="nv-field__control nv-glass nv-num"
-                      value={from}
-                      aria-label="Début"
-                      onChange={(event) => {
-                        setFrom(event.target.value);
+                    <TimeField
+                      value={minuteOfInput(from) ?? 0}
+                      label="Début"
+                      onChange={(minute) => {
+                        setFrom(inputOf(minute));
                       }}
+                      onUnreadable={times.onUnreadable}
                     />
                   </label>
                 ) : null}
                 <label className="sc-hours__one">
                   <span className="tm-hint">{phase === 'later' ? 'à' : 'Fin à'}</span>
-                  <input
-                    type="time"
-                    step={900}
-                    className="nv-field__control nv-glass nv-num"
-                    value={to}
-                    aria-label="Fin"
-                    onChange={(event) => {
-                      setTo(event.target.value);
+                  <TimeField
+                    value={minuteOfInput(to) ?? 0}
+                    label="Fin"
+                    onChange={(minute) => {
+                      setTo(inputOf(minute));
                     }}
+                    onUnreadable={times.onUnreadable}
                   />
                 </label>
               </div>
               {hours === null ? (
-                <span className="tm-hint tm-hint--error">Un début et une fin différents.</span>
+                <span className="tm-hint tm-hint--error">
+                  {times.unreadable
+                    ? 'Une heure sur 24 heures : 22, 2230 ou 22:30.'
+                    : 'Un début et une fin différents.'}
+                </span>
               ) : null}
             </fieldset>
             <div className="tm-dialog__foot sc-sheet__foot">

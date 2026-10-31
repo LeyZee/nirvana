@@ -40,7 +40,7 @@ export class AutomaticLocked extends DomainError {
   constructor(missing: readonly AutomaticMissing[]) {
     super(
       'agent_mode_conflict',
-      'Le mode Automatique reste fermé tant que le taux en réel et le test à l’aveugle ne sont pas validés',
+      'Le mode Automatique reste fermé tant qu’il manque une persona active, le taux en réel ou le test à l’aveugle',
       { details: { missing: [...missing] } },
     );
   }
@@ -53,6 +53,19 @@ export class DraftGuarded extends DomainError {
       'draft_unprocessable',
       'Ce message ne peut pas partir : une garde le bloque (identité, rencontre, contact ou limite de la créatrice)',
       { details: { guards: [...codes] } },
+    );
+  }
+}
+
+/**
+ * Her guards cannot be read without an active persona version (recette 28/10, G4): nothing is approved, the draft
+ * stays as it was, until a version is active in Créatrices › Persona.
+ */
+export class PersonaInactive extends DomainError {
+  constructor() {
+    super(
+      'persona_inactive_unprocessable',
+      'Ce message ne peut pas partir : cette créatrice n’a pas de persona active, ses gardes ne se lisent pas',
     );
   }
 }

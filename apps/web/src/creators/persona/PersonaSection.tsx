@@ -5,14 +5,35 @@ import {
   type PersonaVersionSummary,
 } from '@nirvana/contracts';
 import { placeTabBarLens } from '@nirvana/design-system';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+  type RefObject,
+} from 'react';
 
-import { IntimateTab, LifestyleTab, SampleRepliesTab, TastesTab, WritingStyleTab } from './blocks';
+import { SaveBar, useOnScreen } from '../SaveBar';
+
+import {
+  InDepthTab,
+  IntimateTab,
+  LifestyleTab,
+  SampleRepliesTab,
+  TastesTab,
+  WritingStyleTab,
+} from './blocks';
 import { FormContext } from './fields';
 import {
+  blockOf,
   changedFields,
   draftCompletion,
+  withIssues,
   hasChange,
+  IN_DEPTH_BLOCKS,
   issueCountByTab,
   isPlaceholder,
   localDay,
@@ -21,8 +42,10 @@ import {
   refusedReplyIssues,
   stillRefused,
   TABS,
+  tabOf,
   validate,
   withoutPlaceholders,
+  type BlockId,
   type FieldIssue,
   type RefusedReplies,
   type TabId,
@@ -37,6 +60,8 @@ import {
   NotificationsTab,
   StrategiesTab,
 } from './tabs';
+
+import { fullDay } from '@/scheduling/time';
 import './persona.css';
 
 /**
@@ -47,18 +72,24 @@ import './persona.css';
 export function PersonaSection({
   creatorId,
   canSave,
+  isOwner = false,
   timezone,
+  creatorName = null,
   onDirty = ignore,
 }: {
   /** Null while no creator is known: the example shows, nothing can be saved. */
   creatorId: string | null;
   /** The owner and the creator herself save versions; chatters read. */
   canSave: boolean;
+  /** Only the owner reaches Heures d'activité and Réglages: the others read where a setting lives, without a link. */
+  isOwner?: boolean;
   timezone: string | null;
+  /** Her name in Nirvana, which a persona not written yet takes as its first name. */
+  creatorName?: string | null;
   /** Told whether the draft holds changes not saved, so that leaving the page can ask first. Must be stable. */
   onDirty?: (dirty: boolean) => void;
 }): JSX.Element {
-  const { load, reload } = usePersona(creatorId);
+  const { load, reload } = usePersona(creatorId, creatorName);
   /** Said once a save went through, until the next edit. */
   const [notice, setNotice] = useState<string | null>(null);
   /** Kept here, so that a save, which starts the editor again from the new version, stays on the same tab. */
@@ -90,6 +121,7 @@ export function PersonaSection({
       ready={load}
       creatorId={creatorId}
       canSave={canSave}
+      isOwner={isOwner}
       timezone={timezone}
       notice={notice}
       tab={tab}
@@ -127,6 +159,7 @@ function Editor({
   ready,
   creatorId,
   canSave,
+  isOwner,
   timezone,
   notice,
   tab,
@@ -140,6 +173,7 @@ function Editor({
   ready: PersonaReady;
   creatorId: string | null;
   canSave: boolean;
+  isOwner: boolean;
   timezone: string | null;
   notice: string | null;
   tab: TabId;
@@ -162,11 +196,15 @@ function Editor({
   /** The sample replies the server refused at the last save (422), shown on their field until their text changes. */
   const [refused, setRefused] = useState<RefusedReplies>(NOTHING_REFUSED);
   const panelRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
 
   const issues = useMemo(() => [...validate(draft), ...stillRefused(refused, draft)], [draft, refused]);
-  const completion = useMemo(() => draftCompletion(draft), [draft]);
+  const completion = useMemo(() => withIssues(draftCompletion(draft), issues), [draft, issues]);
   const changed = useMemo(() => changedFields(saved, draft), [saved, draft]);
-  const form = useMemo(() => ({ issues, changed }), [issues, changed]);
+  // A persona never written, nothing typed yet: what is still to fill reads as a step, not as faults in amber (CREA-13).
+  const quiet = ready.source === 'example' && changed.length === 0;
+  const flagged = useMemo(() => (quiet ? [] : issues), [quiet, issues]);
+  const form = useMemo(() => ({ issues: flagged, changed }), [flagged, changed]);
 
   const dirty = changed.length > 0;
   useEffect(() => {
@@ -202,7 +240,7 @@ function Editor({
     setFocusField(null);
   }, [focusField, tab]);
 
-  const set = <K extends TabId>(key: K, value: Persona[K]): void => {
+  const set = <K extends BlockId>(key: K, value: Persona[K]): void => {
     setDraft((current) => ({ ...current, [key]: value }));
     setProblem(null);
     onEdit();
@@ -287,23 +325,38 @@ function Editor({
         : changed.length === 0
           ? 'Rien à enregistrer pour l’instant.'
           : null;
-  const props = <K extends TabId>(key: K) => ({
+  const props = <K extends BlockId>(key: K) => ({
     value: draft[key],
     onChange: (value: Persona[K]) => {
       set(key, value);
     },
-    issues,
+    issues: flagged,
   });
+  const reset = (): void => {
+    setDraft(saved);
+    setProblem(null);
+    setRefused(NOTHING_REFUSED);
+  };
+  /** A block of the persona: its tab, then its folded section opened and brought into view. */
+  const show = (field: string): void => {
+    const block = blockOf(field);
+    if (block === undefined) return;
+    select(tabOf(block));
+    setFocusField(field);
+  };
+  const headOnScreen = useOnScreen(headRef);
 
   return (
     <FormContext.Provider value={form}>
       <section className="ps-page">
         <Head
+          headRef={headRef}
           draft={draft}
           ready={ready}
           known={creatorId !== null}
           readOnly={!canSave}
           issues={issues}
+          quiet={quiet}
           completion={completion}
           changes={changed.length}
           saving={saving}
@@ -318,27 +371,21 @@ function Editor({
             void activate();
           }}
           onReload={onReload}
-          onReset={() => {
-            setDraft(saved);
-            setProblem(null);
-            setRefused(NOTHING_REFUSED);
-          }}
-          onShowBlock={(block) => {
-            select(block);
-          }}
+          onReset={reset}
+          onShowBlock={show}
           onShowIssue={(issue) => {
-            const first = issue.field.split('.')[0];
-            const target = TABS.find((t) => t.id === first);
-            if (target === undefined) return;
-            select(target.id);
-            setFocusField(issue.field);
+            show(issue.field);
           }}
         />
 
         <Tabs
           active={tab}
-          errors={issueCountByTab(issues)}
-          edited={(id) => hasChange(changed, id)}
+          errors={issueCountByTab(flagged)}
+          edited={(id) =>
+            id === 'in_depth'
+              ? IN_DEPTH_BLOCKS.some((block) => hasChange(changed, block))
+              : hasChange(changed, id)
+          }
           onSelect={select}
         />
 
@@ -353,20 +400,48 @@ function Editor({
         >
           {/* A chatter reads her persona: every field shows, none takes a change. */}
           <fieldset className="ps-fieldset" disabled={!canSave}>
-            {tab === 'details' ? <DetailsTab {...props('details')} timezone={timezone} /> : null}
-            {tab === 'lifestyle' ? <LifestyleTab {...props('lifestyle')} /> : null}
-            {tab === 'tastes' ? <TastesTab {...props('tastes')} /> : null}
-            {tab === 'intimate' ? <IntimateTab {...props('intimate')} /> : null}
-            {tab === 'writing_style' ? <WritingStyleTab {...props('writing_style')} /> : null}
-            {tab === 'sample_replies' ? <SampleRepliesTab {...props('sample_replies')} /> : null}
+            {tab === 'details' ? (
+              <DetailsTab {...props('details')} timezone={timezone} isOwner={isOwner} />
+            ) : null}
             {tab === 'additional_info' ? <AdditionalInfoTab {...props('additional_info')} /> : null}
+            {tab === 'in_depth' ? (
+              <InDepthTab
+                issues={flagged}
+                missing={completion.missing}
+                sections={{
+                  lifestyle: <LifestyleTab {...props('lifestyle')} />,
+                  tastes: <TastesTab {...props('tastes')} />,
+                  intimate: <IntimateTab {...props('intimate')} />,
+                  writing_style: <WritingStyleTab {...props('writing_style')} />,
+                  sample_replies: <SampleRepliesTab {...props('sample_replies')} />,
+                }}
+              />
+            ) : null}
             {tab === 'behavior' ? <BehaviorTab {...props('behavior')} /> : null}
             {tab === 'strategies' ? <StrategiesTab {...props('strategies')} /> : null}
             {tab === 'follow_ups' ? <FollowUpsTab {...props('follow_ups')} /> : null}
-            {tab === 'notifications' ? <NotificationsTab {...props('notifications')} /> : null}
+            {tab === 'notifications' ? (
+              <NotificationsTab {...props('notifications')} isOwner={isOwner} />
+            ) : null}
             {tab === 'limits' ? <LimitsTab {...props('limits')} /> : null}
           </fieldset>
         </div>
+        <SaveBar
+          show={canSave && changed.length > 0 && !headOnScreen}
+          warn={issues.length > 0}
+          text={
+            issues.length > 0
+              ? `${plural(issues.length, 'champ', 'champs')} à corriger`
+              : plural(changed.length, 'modification', 'modifications')
+          }
+          saveLabel="Enregistrer une version"
+          saving={saving}
+          blocked={blocked}
+          onReset={reset}
+          onSave={() => {
+            void save();
+          }}
+        />
       </section>
     </FormContext.Provider>
   );
@@ -381,24 +456,29 @@ const plural = (n: number, one: string, many: string): string => `${String(n)} $
 function noteOf(ready: PersonaReady, known: boolean): string {
   if (!known) return 'Ceci est un exemple : tu peux tout modifier pour essayer, rien ne sera enregistré.';
   if (ready.source === 'example') {
-    return 'Elle n’a pas encore de persona enregistrée. Pars de cet exemple : ton premier enregistrement deviendra sa version 0.0.1.';
+    return 'Pars de cet exemple : ton premier enregistrement deviendra sa version 0.0.1.';
   }
   const active = ready.versions.find((v) => v.isActive);
-  // The agent still reads the persona set on the server (its file), not these versions: say so (recette 28/10, G4).
+  // The agent reads her active version at each draft; without one he writes nothing (recette 28/10, G4).
   return `Chaque enregistrement crée une nouvelle version, inactive, et tu actives la nouvelle quand elle est prête. ${
     active === undefined
-      ? 'Aucune version n’est active pour l’instant.'
-      : `Version active : ${active.version}.`
-  } L’agent n’écrit pas encore avec ces versions : il lit toujours la persona fixée sur le serveur.`;
+      ? 'Aucune version n’est active pour l’instant : l’agent n’écrit rien pour elle, et aucun message ne peut partir avant l’activation d’une version.'
+      : `Version active : ${active.version}. C’est avec elle que l’agent écrit ses brouillons.`
+  }`;
 }
 
-/** The first thing read: whose persona, which version, whether the draft holds, and the one action. */
+/**
+ * The first thing read: whose persona, which version, what waits in the draft, and the one action. A line says the
+ * state only when it has something to say (CREA-05): changes, fields to fix, a save done, a problem.
+ */
 function Head({
+  headRef,
   draft,
   ready,
   known,
   readOnly,
   issues,
+  quiet,
   completion,
   changes,
   saving,
@@ -413,12 +493,15 @@ function Head({
   onShowIssue,
   onShowBlock,
 }: {
+  headRef: RefObject<HTMLDivElement | null>;
   draft: Persona;
   ready: PersonaReady;
   known: boolean;
   /** Nothing can change here (a chatter): the state says so instead of what is still to fix. */
   readOnly: boolean;
   issues: readonly FieldIssue[];
+  /** Her first version, nothing typed yet: what is missing is a step to take, not a fault (CREA-13). */
+  quiet: boolean;
   completion: PersonaCompletion;
   changes: number;
   saving: boolean;
@@ -433,7 +516,7 @@ function Head({
   onReload: () => void;
   onReset: () => void;
   onShowIssue: (issue: FieldIssue) => void;
-  onShowBlock: (block: TabId) => void;
+  onShowBlock: (block: BlockId) => void;
 }): JSX.Element {
   const name = draft.details.first_name.trim();
   /** Activating changes what the agent writes: a second click confirms it. */
@@ -455,7 +538,12 @@ function Head({
       : readOnly
         ? { dot: 'idle', text: READ_ONLY }
         : first !== undefined
-          ? { dot: 'warn', text: `${plural(issues.length, 'champ', 'champs')} à corriger` }
+          ? quiet
+            ? {
+                dot: 'idle',
+                text: `${plural(issues.length, 'champ', 'champs')} à remplir avant d’enregistrer`,
+              }
+            : { dot: 'warn', text: `${plural(issues.length, 'champ', 'champs')} à corriger` }
           : changes > 0
             ? blocked === null
               ? {
@@ -465,40 +553,34 @@ function Head({
               : { dot: 'idle', text: `${plural(changes, 'modification', 'modifications')} : ${blocked}` }
             : notice !== null
               ? { dot: 'ok', text: notice }
-              : { dot: 'idle', text: 'Aucune modification' };
-  const created = new Date(`${draft.meta.created_at}T12:00:00Z`).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+              : null;
+  const created = fullDay(draft.meta.created_at);
 
   return (
-    <div className="nv-plate ps-head">
+    <div className="nv-plate ps-head" ref={headRef}>
       <div className="ps-head__top">
         <div className="ps-head__who">
+          <h2 className="ps-title" data-placeholder={name === '' || isPlaceholder(name) ? 'true' : undefined}>
+            {name === '' || isPlaceholder(name) ? 'Prénom à remplir' : name}
+          </h2>
           <p className="ps-head__meta">
-            {ready.source === 'example' ? (
-              <span className="nv-tag nv-tag--inferred ps-example">Exemple</span>
-            ) : (
-              <span
-                className="nv-tag nv-tag--declared"
-                data-active={current?.isActive === true ? 'true' : undefined}
-              >
-                {current?.isActive === true ? 'Active' : 'Pas encore active'}
-              </span>
-            )}
             {/* The example's own number and date are not hers: nothing is stored yet. */}
-            {ready.source === 'example' ? null : (
+            {ready.source === 'example' ? (
+              <span className="nv-tag nv-tag--inferred ps-example">Jamais enregistrée</span>
+            ) : (
               <>
+                <span
+                  className="nv-tag nv-tag--declared"
+                  data-active={current?.isActive === true ? 'true' : undefined}
+                >
+                  {current?.isActive === true ? 'Active' : 'Pas encore active'}
+                </span>
                 <span>Version {draft.meta.version}</span>
                 <span aria-hidden="true">·</span>
                 <span>{created}</span>
               </>
             )}
           </p>
-          <h2 className="ps-title" data-placeholder={name === '' || isPlaceholder(name) ? 'true' : undefined}>
-            {name === '' || isPlaceholder(name) ? 'Prénom à remplir' : name}
-          </h2>
         </div>
         <div className="ps-head__actions">
           {changes > 0 && !saving ? (
@@ -536,10 +618,14 @@ function Head({
         </div>
       </div>
       <div className="ps-head__state" aria-live="polite">
-        <span className="ps-dot" data-dot={state.dot} />
-        <span className="ps-head__text" key={state.text}>
-          {state.text}
-        </span>
+        {state === null ? null : (
+          <>
+            <span className="ps-dot" data-dot={state.dot} />
+            <span className="ps-head__text" key={state.text}>
+              {state.text}
+            </span>
+          </>
+        )}
         {problem?.reload === true ? (
           <button type="button" className="nv-btn nv-btn--plain nv-btn--sm ps-pop" onClick={onReload}>
             Recharger
@@ -565,36 +651,35 @@ function Head({
 }
 
 /**
- * How much of her the agent can read (`personaCompletion`): a neutral gauge, the percent in ink, and the blocks still
- * to write, each opening its tab. Nothing is required: it says what is missing, never that a save is blocked.
+ * How much of her the agent can read (`personaCompletion`): the percent in ink beside a neutral gauge, on one line,
+ * then the blocks still to write, each opening its place. Nothing is required: it says what is missing, never that a
+ * save is blocked, and says nothing more once all is written.
  */
 function Completion({
   completion: { percent, missing },
   onShowBlock,
 }: {
   completion: PersonaCompletion;
-  onShowBlock: (block: TabId) => void;
+  onShowBlock: (block: BlockId) => void;
 }): JSX.Element {
   return (
     <div className="ps-completion">
       <p className="ps-completion__line">
-        <span className="ps-completion__label">Complète à</span>{' '}
+        <span className="ps-completion__label">Complète à</span>
         <span className="ps-completion__percent">{percent} %</span>
+        <span
+          className="nv-gauge ps-completion__gauge"
+          role="progressbar"
+          aria-label="Complétude de la persona"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          style={{ '--nv-gauge-value': `${String(percent)}%` }}
+        >
+          <span className="nv-gauge__fill" />
+        </span>
       </p>
-      <div
-        className="nv-gauge ps-completion__gauge"
-        role="progressbar"
-        aria-label="Complétude de la persona"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        style={{ '--nv-gauge-value': `${String(percent)}%` }}
-      >
-        <span className="nv-gauge__fill" />
-      </div>
-      {missing.length === 0 ? (
-        <p className="ps-muted">Tout est décrit : l’agent a tout ce qu’il lui faut pour écrire comme elle.</p>
-      ) : (
+      {missing.length === 0 ? null : (
         <p className="ps-completion__missing">
           <span className="ps-muted">À compléter :</span>
           {missing.map(({ block, label }, index) => (
@@ -617,6 +702,42 @@ function Completion({
   );
 }
 
+/** How far into a faded edge a tab may reach and still count as seen: past that, its count would be under the fade. */
+const EDGE = 48;
+
+/** The tabs out of the bar's view on each side, from its scroll and the places of its tabs. */
+export function tabsOutOfView(bar: HTMLElement): TabsHidden {
+  const from = bar.scrollLeft;
+  const to = from + bar.clientWidth;
+  const start: TabId[] = [];
+  const end: TabId[] = [];
+  if (bar.scrollWidth - bar.clientWidth <= 1) return { start, end };
+  const fadeStart = from > 1 ? EDGE : 0;
+  const fadeEnd = to < bar.scrollWidth - 1 ? EDGE : 0;
+  for (const item of bar.querySelectorAll<HTMLElement>('[data-tab]')) {
+    const id = TABS.find((t) => t.id === item.dataset['tab'])?.id;
+    if (id === undefined) continue;
+    if (item.offsetLeft < from + fadeStart - 1) start.push(id);
+    else if (item.offsetLeft + item.offsetWidth > to - fadeEnd + 1) end.push(id);
+  }
+  return { start, end };
+}
+
+interface TabsHidden {
+  readonly start: readonly TabId[];
+  readonly end: readonly TabId[];
+}
+
+const NONE_HIDDEN: TabsHidden = { start: [], end: [] };
+
+const reducedMotion = (): boolean =>
+  typeof window.matchMedia !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * The eight tabs of the persona on one line that scrolls (recette 28/10, CREA-01). What is past an edge is never
+ * silent: that edge fades, a chevron brings the next tabs in, and it carries the amber count of the fields to fix in
+ * the tabs it hides. The tab picked comes to the middle of the bar, its neighbours showing on both sides.
+ */
 function Tabs({
   active,
   errors,
@@ -631,18 +752,59 @@ function Tabs({
   const navRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLSpanElement>(null);
   const placed = useRef(false);
+  const [hidden, setHidden] = useState<TabsHidden>(NONE_HIDDEN);
+
+  const measure = useCallback((): void => {
+    const bar = navRef.current;
+    if (bar === null) return;
+    const next = tabsOutOfView(bar);
+    setHidden((current) =>
+      current.start.join() === next.start.join() && current.end.join() === next.end.join() ? current : next,
+    );
+  }, []);
 
   useLayoutEffect(() => {
     const nav = navRef.current;
     const item = nav?.querySelector('[aria-selected="true"]');
     if (nav === null || !(item instanceof HTMLElement)) return;
     placeTabBarLens(nav, item, placed.current ? (thumbRef.current ?? undefined) : undefined);
-    if (placed.current) item.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    const left = Math.max(0, item.offsetLeft - (nav.clientWidth - item.offsetWidth) / 2);
+    if (typeof nav.scrollTo === 'function') {
+      nav.scrollTo({ left, behavior: placed.current && !reducedMotion() ? 'smooth' : 'auto' });
+    }
     placed.current = true;
-  }, [active]);
+    measure();
+  }, [active, measure]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (nav === null) return;
+    nav.addEventListener('scroll', measure, { passive: true });
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    resize?.observe(nav);
+    return () => {
+      nav.removeEventListener('scroll', measure);
+      resize?.disconnect();
+    };
+  }, [measure]);
+
+  const page = (side: 'start' | 'end'): void => {
+    const nav = navRef.current;
+    if (nav === null || typeof nav.scrollBy !== 'function') return;
+    const step = Math.max(120, nav.clientWidth * 0.7);
+    nav.scrollBy({ left: side === 'end' ? step : -step, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  };
+  const more =
+    hidden.start.length > 0 && hidden.end.length > 0
+      ? 'both'
+      : hidden.start.length > 0
+        ? 'start'
+        : hidden.end.length > 0
+          ? 'end'
+          : undefined;
 
   return (
-    <div className="ps-tabs">
+    <div className="ps-tabs" data-more={more}>
       <div className="nv-subnav ps-tabs__bar" role="tablist" aria-label="Sections de la persona" ref={navRef}>
         <span className="nv-subnav__thumb" ref={thumbRef} aria-hidden="true" />
         {TABS.map((tab) => (
@@ -651,6 +813,7 @@ function Tabs({
             type="button"
             role="tab"
             id={`ps-tab-${tab.id}`}
+            data-tab={tab.id}
             aria-controls={`ps-panel-${tab.id}`}
             aria-selected={tab.id === active}
             className="nv-subnav__item ps-tabs__item"
@@ -669,6 +832,49 @@ function Tabs({
           </button>
         ))}
       </div>
+      <MoreTabs side="start" tabs={hidden.start} errors={errors} onPage={page} />
+      <MoreTabs side="end" tabs={hidden.end} errors={errors} onPage={page} />
     </div>
+  );
+}
+
+/** The chevron over a faded edge: it names the tabs it hides, and counts in amber the fields to fix there. */
+function MoreTabs({
+  side,
+  tabs,
+  errors,
+  onPage,
+}: {
+  side: 'start' | 'end';
+  tabs: readonly TabId[];
+  errors: Record<TabId, number>;
+  onPage: (side: 'start' | 'end') => void;
+}): JSX.Element | null {
+  if (tabs.length === 0) return null;
+  const toFix = tabs.reduce((sum, id) => sum + errors[id], 0);
+  const names = tabs.map((id) => TABS.find((t) => t.id === id)?.label ?? id).join(', ');
+  const label = `${side === 'end' ? 'Onglets suivants' : 'Onglets précédents'} : ${names}${
+    toFix > 0 ? `, ${plural(toFix, 'champ', 'champs')} à corriger` : ''
+  }`;
+  return (
+    <button
+      type="button"
+      className="nv-glass nv-glass--thin ps-tabs__more ps-pop"
+      data-side={side}
+      aria-label={label}
+      title={label}
+      // Every tab is in the tab order already: the chevron is a shortcut for the pointer and the finger.
+      tabIndex={-1}
+      onClick={() => {
+        onPage(side);
+      }}
+    >
+      <span className="ps-tabs__chevron" aria-hidden="true" />
+      {toFix > 0 ? (
+        <span className="nv-subnav__count ps-tabs__alert" aria-hidden="true">
+          {toFix}
+        </span>
+      ) : null}
+    </button>
   );
 }

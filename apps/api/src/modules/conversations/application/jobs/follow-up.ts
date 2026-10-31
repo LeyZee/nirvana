@@ -163,6 +163,7 @@ export function createFollowUpJob({ uow, clock, fans, composer, followUps, reply
           bubbles: result.bubbles,
           softViolations: result.softViolations,
           ...(result.voice !== undefined && { voice: result.voice }),
+          ...(result.personaVersionId !== undefined && { personaVersionId: result.personaVersionId }),
           facts: readProposedFacts(result.factsProposed ?? [], source, now),
         });
         await appendEvent(

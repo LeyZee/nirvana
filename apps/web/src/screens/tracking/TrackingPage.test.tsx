@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import {
   ConversationDetailSchema,
+  ConversationIdSchema,
   ConversationSummarySchema,
+  DashboardSchema,
   DraftIdSchema,
   MessageViewSchema,
   type ConversationDetail,
@@ -69,6 +71,7 @@ const FAN_MESSAGE = MessageViewSchema.parse({
   direction: 'inbound',
   author: 'fan',
   text: 'Salut, ça va ?',
+  media: [],
   priceMinor: null,
   currency: null,
   isPaid: false,
@@ -99,6 +102,8 @@ function serve(routes: {
   command?: (action: string) => Reply;
   /** The fan's limits read first, and after a `PUT` (the same when not given). */
   flags?: { before?: FanFlags; after?: FanFlags };
+  /** Whether this person may confirm a disputed age (the owner or a manager); not by default. */
+  mayConfirmDisputedAge?: boolean;
   /** His desire curve (`/desire`), no point when not given. */
   desire?: Reply;
   /** The canvas lines left to learn about him (`/kyc`), none when not given; `down` answers 500. */
@@ -107,6 +112,10 @@ function serve(routes: {
   events?: unknown[];
   /** `GET` of his limits answers 403: the server will not show them to this person. */
   flagsRefused?: boolean;
+  /** The thread's messages, newest first; one message of his when not given. */
+  messages?: unknown[];
+  /** « À traiter » across creators; the Dashboard's todos, named after its creator, when not given. */
+  todos?: Reply | (() => Reply);
 }): Posted[] {
   const posted: Posted[] = [];
   vi.stubGlobal(
@@ -117,7 +126,11 @@ function serve(routes: {
       let reply: Reply;
       const flagsView = (flags: FanFlags = {}): Reply => ({
         status: 200,
-        body: { fanId: path.split('/')[3], flags },
+        body: {
+          fanId: path.split('/')[3],
+          flags,
+          mayConfirmDisputedAge: routes.mayConfirmDisputedAge ?? false,
+        },
       });
       if (init?.method === 'POST' || init?.method === 'PUT') {
         const action = path.split('/').at(-1) ?? '';
@@ -136,10 +149,25 @@ function serve(routes: {
         reply = typeof routes.creators === 'function' ? routes.creators() : routes.creators;
       } else if (path === '/v1/conversations') {
         reply = { status: 200, body: routes.conversations?.[url.searchParams.get('creatorId') ?? ''] };
+      } else if (path === '/v1/dashboard/todos') {
+        const dashboard = DashboardSchema.parse(
+          (routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) }).body,
+        );
+        reply = (typeof routes.todos === 'function' ? routes.todos() : routes.todos) ?? {
+          status: 200,
+          body: {
+            items: dashboard.todos.map((todo) => ({
+              ...todo,
+              creatorId: dashboard.creator.id,
+              creatorName: dashboard.creator.name,
+            })),
+            creators: [],
+          },
+        };
       } else if (path === '/v1/dashboard') {
         reply = routes.dashboard ?? { status: 200, body: apiDashboard({ todos: [] }) };
       } else if (path.endsWith('/messages')) {
-        reply = { status: 200, body: { items: [FAN_MESSAGE], nextCursor: null } };
+        reply = { status: 200, body: { items: routes.messages ?? [FAN_MESSAGE], nextCursor: null } };
       } else if (path.endsWith('/events')) {
         reply = { status: 200, body: { items: routes.events ?? [], nextCursor: null } };
       } else if (path.endsWith('/desire')) {
@@ -243,10 +271,34 @@ describe('TrackingPage', () => {
     expect(document.querySelector('a[href="/creatrices"]')).toBeNull();
   });
 
-  it('says the server does not answer, and Réessayer reads again', async () => {
+  it('says « À traiter » could not be read, in amber, and Réessayer reads it again', async () => {
+    const [kevin] = apiDashboard().todos;
+    if (kevin === undefined) throw new Error('no todo');
     let calls = 0;
     serve({
-      creators: () => (++calls === 1 ? { status: 500 } : { status: 200, body: { creators: [LEA] } }),
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      todos: () =>
+        ++calls === 1
+          ? { status: 500 }
+          : {
+              status: 200,
+              body: { items: [{ ...kevin, creatorId: LEA.id, creatorName: 'Léa' }], creators: [] },
+            },
+    });
+    renderPage();
+    const warning = await screen.findByText(/« À traiter » n’a pas pu être lu/u);
+    expect(warning.classList.contains('tr-warn')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByRole('list', { name: 'À traiter' })).toBeDefined();
+    expect(screen.queryByText(/« À traiter » n’a pas pu être lu/u)).toBeNull();
+  });
+
+  it('says the server does not answer, and Réessayer reads again', async () => {
+    // The read and its one retry fail (CREA-30); « Réessayer » reads again.
+    let calls = 0;
+    serve({
+      creators: () => (++calls <= 2 ? { status: 500 } : { status: 200, body: { creators: [LEA] } }),
       conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
     });
     renderPage();
@@ -298,11 +350,12 @@ describe('TrackingPage', () => {
     });
     renderPage();
     const list = await screen.findByRole('list', { name: 'Conversations' });
-    const text = within(list)
+    // Beside his pseudo, apart from the line a narrow row cuts.
+    const names = within(list)
       .getAllByRole('listitem')
-      .map((row) => row.textContent);
-    expect(text.some((line) => line.includes('Léa · '))).toBe(true);
-    expect(text.some((line) => line.includes('Nina · '))).toBe(true);
+      .map((row) => row.querySelector('.tr-row__creator')?.textContent);
+    expect(names).toContain('Léa');
+    expect(names).toContain('Nina');
   });
 
   it('opens a conversation outside every list when the link names its creator (Dashboard, fan reader)', async () => {
@@ -326,6 +379,62 @@ describe('TrackingPage', () => {
     expect(await screen.findByText('Cette conversation n’est pas dans la liste.')).toBeDefined();
   });
 
+  it('gathers what waits for a human for every creator followed, each line naming hers (SUIVI-09)', async () => {
+    const INES = {
+      id: '0192f3a0-0000-7000-8000-0000000000c2',
+      displayName: 'Inès',
+      timezone: 'Europe/Paris',
+    };
+    const arthur = '0192f3a0-0000-7000-8000-0000000000a9';
+    const [kevin] = apiDashboard().todos;
+    if (kevin === undefined) throw new Error('no todo');
+    serve({
+      creators: { status: 200, body: { creators: [LEA, INES] } },
+      conversations: {
+        [LEA.id]: { items: [conversation('1')], nextCursor: null },
+        [INES.id]: { items: [], nextCursor: null },
+      },
+      todos: {
+        status: 200,
+        body: {
+          items: [
+            { ...kevin, creatorId: LEA.id, creatorName: 'Léa' },
+            {
+              ...kevin,
+              id: 'todo-2',
+              tone: 'warn',
+              kind: 'awaiting_approval',
+              title: 'Arthur',
+              conversationId: arthur,
+              creatorId: INES.id,
+              creatorName: 'Inès',
+            },
+          ],
+          creators: [],
+        },
+      },
+      detail: () => ({ status: 200, body: { ...waiting(), id: arthur, fanDisplayName: 'Arthur' } }),
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    const rows = within(queue).getAllByRole('button');
+    expect(rows.map((row) => row.querySelector('.nv-convo__name')?.textContent)).toEqual([
+      'Léa · Mineur possible · Kévin',
+      'Inès · Brouillon à valider · Arthur',
+    ]);
+    // Inès's conversation is not in the loaded list: it opens with her id, from the queue's line.
+    const second = rows[1];
+    if (second === undefined) throw new Error('no second line');
+    fireEvent.click(second);
+    await waitFor(() => {
+      const details = vi
+        .mocked(fetch)
+        .mock.calls.flatMap(([input]) => (typeof input === 'string' ? [input] : []))
+        .filter((url) => url.startsWith(`/v1/conversations/${arthur}?`));
+      expect(details[0]).toContain(`creatorId=${INES.id}`);
+    });
+  });
+
   it('puts first what waits for a human, as the server computed it, and opens it', async () => {
     serve({
       ...ONE,
@@ -341,6 +450,33 @@ describe('TrackingPage', () => {
     fireEvent.click(within(queue).getByRole('button'));
     expect(await screen.findByText('Salut, ça va ?')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Rendre la main à l’agent' })).toBeDefined();
+  });
+
+  it('shows the three gravest of « À traiter », and the others on demand', async () => {
+    const [first] = apiDashboard().todos;
+    if (first === undefined) throw new Error('the fake dashboard has a todo');
+    const todo = (n: number) => ({
+      ...first,
+      id: `todo-${String(n)}`,
+      title: `Fan ${String(n)}`,
+      conversationId: ConversationIdSchema.parse(`0192f3a0-0000-7000-8000-00000000010${String(n)}`),
+    });
+    serve({
+      ...ONE,
+      conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } },
+      dashboard: { status: 200, body: apiDashboard({ todos: [1, 2, 3, 4, 5].map(todo) }) },
+    });
+    renderPage();
+    const queue = await screen.findByRole('list', { name: 'À traiter' });
+    expect(within(queue).getAllByRole('listitem')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les 2 autres' }));
+    expect(within(queue).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  it('says where a conversation opens while none is', async () => {
+    serve({ ...ONE, conversations: { [LEA.id]: { items: [conversation('1')], nextCursor: null } } });
+    renderPage();
+    expect(await screen.findByText(/Choisis une conversation à gauche/u)).toBeDefined();
   });
 });
 
@@ -369,6 +505,21 @@ describe('the list of Suivi', () => {
     ).toEqual([expect.stringContaining('Jérôme')]);
     fireEvent.change(search, { target: { value: 'Paul' } });
     expect(screen.getByText('Aucun fan ne porte ce pseudo dans la liste.')).toBeDefined();
+  });
+
+  it('puts a whole emoji in the avatar when the pseudo starts with one, in the list and the reader', async () => {
+    serve({
+      ...ONE,
+      conversations: {
+        [LEA.id]: { items: [conversation('1', { fanDisplayName: '💋 Max' })], nextCursor: null },
+      },
+      detail: () => ({ status: 200, body: waiting({ fanDisplayName: '💋 Max' }) }),
+    });
+    renderPage(OPEN);
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    expect(list.querySelector('.nv-avatar')?.textContent).toBe('💋');
+    await screen.findByRole('heading', { name: '💋 Max' });
+    expect(document.querySelector('.tr-reader__head .nv-avatar')?.textContent).toBe('💋');
   });
 
   it('says a long wait of « À traiter » in days, as the list does', async () => {
@@ -415,11 +566,18 @@ describe('the reader of Suivi', () => {
       },
     });
     renderPage(OPEN);
+    const queueReads = (): number =>
+      vi.mocked(fetch).mock.calls.filter(([input]) => input === '/v1/dashboard/todos').length;
     fireEvent.click(await screen.findByRole('button', { name: 'Valider' }));
+    const before = queueReads();
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Brouillon à valider' })).toBeNull();
     });
     expect(posted).toEqual([{ action: 'approve', body: {} }]);
+    // « À traiter » is read again at once: the line just decided leaves it.
+    await waitFor(() => {
+      expect(queueReads()).toBeGreaterThan(before);
+    });
   });
 
   it('sends the retouched bubbles, one per line', async () => {
@@ -487,10 +645,11 @@ describe('the reader of Suivi', () => {
       detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
     });
     renderPage(OPEN);
-    fireEvent.change(await screen.findByLabelText(/À retenir sur ce fan/u), {
+    fireEvent.change(await screen.findByLabelText(/Note pour l’agent/u), {
       target: { value: '  Il fête son anniversaire le 12 mars  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Rendre la main à l’agent' }));
+    // The button beside the note says it goes with it.
+    fireEvent.click(screen.getByRole('button', { name: 'Rendre la main (avec la note)' }));
     await waitFor(() => {
       expect(posted).toEqual([{ action: 'release', body: { note: 'Il fête son anniversaire le 12 mars' } }]);
     });
@@ -502,7 +661,7 @@ describe('the reader of Suivi', () => {
       detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
     });
     renderPage(OPEN);
-    expect((await screen.findByLabelText(/À retenir sur ce fan/u)).getAttribute('maxlength')).toBe('300');
+    expect((await screen.findByLabelText(/Note pour l’agent/u)).getAttribute('maxlength')).toBe('300');
     fireEvent.click(screen.getByRole('button', { name: 'Rendre la main à l’agent' }));
     await waitFor(() => {
       expect(posted).toEqual([{ action: 'release', body: {} }]);
@@ -556,7 +715,7 @@ describe('the reader of Suivi', () => {
     expect(document.querySelector('.tr-learn')).toBeNull();
   });
 
-  it('opens when a limit blocks, and stays open once it is lifted', async () => {
+  it('stays folded when a limit blocks: the amber line says it, the thread comes first', async () => {
     const posted = serve({
       ...withDraft,
       detail: () => ({ status: 200, body: waiting() }),
@@ -565,11 +724,11 @@ describe('the reader of Suivi', () => {
     renderPage(OPEN);
     const lift = await screen.findByRole('switch', { name: /Ne plus lui écrire/u });
     const section = lift.closest('details');
-    expect(section).toHaveProperty('open', true);
+    expect(section).toHaveProperty('open', false);
+    expect(screen.getByText('Ne plus lui écrire', { selector: '.tr-sheet__sum .tr-warn' })).toBeDefined();
     fireEvent.click(lift);
     expect(await screen.findByText('Aucune', { selector: '.tr-limits__sum' })).toBeDefined();
     expect(posted).toEqual([{ action: 'flags', body: { flag: 'doNotContact', set: false } }]);
-    expect(section).toHaveProperty('open', true);
   });
 
   it('freezes sales as a human’s call, and shows the limits the server answers', async () => {
@@ -595,6 +754,8 @@ describe('the reader of Suivi', () => {
     renderPage(OPEN);
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
     expect(posted).toEqual([]);
+    // The button clicked is gone: the keyboard lands on the answer.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Oui, il est majeur' }));
     fireEvent.click(screen.getByRole('button', { name: 'Oui, il est majeur' }));
     expect(await screen.findByText('Majeur, confirmé le 23 octobre.')).toBeDefined();
     expect(posted).toEqual([{ action: 'flags', body: { flag: 'ageConfirmedAt', set: true } }]);
@@ -713,6 +874,12 @@ describe('the reader of Suivi', () => {
       screen.getByText('L’envoi a échoué, rien n’est parti : l’envoi est désactivé pour ce compte Reveal'),
     ).toBeDefined();
     expect(screen.queryByText('Envoi en cours')).toBeNull();
+    // What did not leave, ready to paste in Reveal.
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Copier le texte' }));
+    expect(await screen.findByRole('button', { name: 'Copié' })).toBeDefined();
+    expect(writeText).toHaveBeenCalledWith('Coucou toi, tu es là ?');
   });
 
   it('says a ceiling of 0 € or past 100 000 € cannot be saved, and why', async () => {
@@ -728,6 +895,95 @@ describe('the reader of Suivi', () => {
     expect(posted).toEqual([]);
   });
 
+  it('says which media was sent and what it shows, under its price (SUIVI-26)', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      messages: [
+        {
+          ...FAN_MESSAGE,
+          id: '0192f3a0-0000-7000-8000-000000000102',
+          direction: 'outbound',
+          author: 'human',
+          text: '',
+          media: [{ kind: 'video', isLocked: true, description: 'Elle danse, lumière tamisée.' }],
+          priceMinor: 4990,
+          currency: 'EUR',
+        },
+      ],
+    });
+    renderPage(OPEN);
+    expect(
+      await screen.findByText(
+        (_, element) => element?.textContent === 'Vidéo · Elle danse, lumière tamisée.',
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText('Média')).toBeNull();
+    expect(screen.getByText(/Média payant · 49,90/u)).toBeDefined();
+  });
+
+  it('keeps the gap between a text and the media sent with it (SUIVI-26)', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      messages: [
+        {
+          ...FAN_MESSAGE,
+          id: '0192f3a0-0000-7000-8000-000000000103',
+          text: 'Regarde ça',
+          media: [{ kind: 'image', isLocked: false, description: null }],
+        },
+      ],
+    });
+    renderPage(OPEN);
+    const text = await screen.findByText('Regarde ça');
+    const media = screen.getByText('Photo').closest('.tr-media');
+    // The text is an element, so the media after it is not the bubble's first one: `:not(:first-child)` spaces it.
+    expect(text.matches('.nv-bubble > .tr-text:first-child')).toBe(true);
+    expect(media?.matches('.tr-media:not(:first-child)')).toBe(true);
+  });
+
+  it('keeps a disputed age to the owner or a manager, who writes why before confirming (SUIVI-04)', async () => {
+    const ageDisputed = { since: '2026-10-22T10:00:00.000Z', by: 'policy' } as const;
+    const posted = serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { ageDisputed }, after: { ageConfirmedAt: '2026-10-23T10:00:00.000Z' } },
+      mayConfirmDisputedAge: true,
+    });
+    renderPage(OPEN);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmer son âge' }));
+    const yes = screen.getByRole('button', { name: 'Oui, il est majeur' });
+    expect(yes).toHaveProperty('disabled', true);
+    // The button clicked is gone: the keyboard lands on the reason to write.
+    expect(document.activeElement).toBe(screen.getByLabelText('Pourquoi tu confirmes son âge'));
+    fireEvent.change(screen.getByLabelText('Pourquoi tu confirmes son âge'), {
+      target: { value: ' Pièce d’identité vue en appel vidéo ' },
+    });
+    expect(yes).toHaveProperty('disabled', false);
+    fireEvent.click(yes);
+    expect(await screen.findByText('Majeur, confirmé le 23 octobre.')).toBeDefined();
+    expect(posted).toEqual([
+      {
+        action: 'flags',
+        body: { flag: 'ageConfirmedAt', set: true, reason: 'Pièce d’identité vue en appel vidéo' },
+      },
+    ]);
+  });
+
+  it('tells a chatter who may confirm a disputed age, with nothing to click', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting() }),
+      flags: { before: { ageDisputed: { since: '2026-10-22T10:00:00.000Z', by: 'policy' } } },
+    });
+    renderPage(OPEN);
+    expect(
+      await screen.findByText(/Seuls le propriétaire et les managers peuvent le confirmer/u),
+    ).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Confirmer son âge' })).toBeNull();
+  });
+
   it('says the limits are not for this person, without blaming the server nor asking again', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }), flagsRefused: true });
     renderPage(OPEN);
@@ -739,10 +995,35 @@ describe('the reader of Suivi', () => {
     expect(flagCalls).toHaveLength(1);
   });
 
+  it('reads a disputed age as a suspected minor, in amber, and says confirming lifts the dispute', async () => {
+    serve({
+      ...withDraft,
+      detail: () => ({ status: 200, body: waiting({ state: 'human', openDrafts: [] }) }),
+      flags: { before: { ageDisputed: { since: '2026-10-28T10:00:00.000Z', by: 'policy' } } },
+      mayConfirmDisputedAge: true,
+    });
+    renderPage(OPEN);
+    expect(await screen.findByText('Âge contesté', { selector: '.tr-sheet__sum .tr-warn' })).toBeDefined();
+    expect(screen.getByText('Âge contesté', { selector: '.tr-limit__label' }).className).toContain('tr-warn');
+    expect(screen.getByText(/l’agent a relevé un signe de minorité/u)).toBeDefined();
+    expect(screen.queryByText(/Pas encore confirmé/u)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer son âge' }));
+    expect(screen.getByText(/Ça lève la contestation/u)).toBeDefined();
+  });
+
+  it('says a draft waits for the hand to come back, not for a role, while a human has it', async () => {
+    serve({ ...withDraft, detail: () => ({ status: 200, body: waiting({ state: 'human' }) }) });
+    renderPage(OPEN);
+    expect(
+      await screen.findByText('Un humain a la main : rends-la à l’agent pour décider de ce brouillon.'),
+    ).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
+  });
+
   it('lets a creator read, never decide', async () => {
     serve({ ...withDraft, detail: () => ({ status: 200, body: waiting() }) });
     renderPage(OPEN, false);
-    expect(await screen.findByText(/Seuls le propriétaire et les chatteurs/u)).toBeDefined();
+    expect(await screen.findByText('Tu lis seulement : l’équipe décide.')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reprendre la main' })).toBeNull();
     // Her fan's limits: read, never changed.
@@ -777,11 +1058,9 @@ describe('his desire score in Suivi (P3-12)', () => {
     renderPage();
     const list = await screen.findByRole('list', { name: 'Conversations' });
     const [first, second] = within(list).getAllByRole('listitem');
-    expect(second?.querySelector('.nv-convo__preview')?.textContent).toBe('N’a pas encore écrit · chaud');
-    // Apart from the rest of the line, which a narrow row cuts first: the band is never the part cut off.
-    expect(second?.querySelector('.tr-preview__band')?.textContent).toBe(' · chaud');
+    expect(second?.querySelector('.nv-convo__preview')?.textContent).toBe('Pas encore écrit · chaud');
     expect(second?.textContent).not.toContain('82');
-    expect(first?.querySelector('.nv-convo__preview')?.textContent).toBe('N’a pas encore écrit');
+    expect(first?.querySelector('.nv-convo__preview')?.textContent).toBe('Pas encore écrit');
     expect(list.querySelector('[class*="neon"], [class*="danger"], [class*="amber"]')).toBeNull();
   });
 

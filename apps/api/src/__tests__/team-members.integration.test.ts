@@ -556,6 +556,30 @@ describe('Équipe › Membres (/v1/team, EQ-01)', () => {
       rows.filter((row) => JSON.stringify(row.details).includes('"left"')),
     );
     expect(left?.details).toEqual({ from: 'active', to: 'left', sessionsEnded: 1 });
+
+    // Signing in again is refused like a wrong password: the page does not learn the account exists (ADR 0023).
+    const signInAs = (password: string) =>
+      server.inject({
+        method: 'POST',
+        url: '/v1/auth/sign-in/email',
+        payload: { email: 'theo@example.test', password },
+        headers: { origin: DASHBOARD_ORIGIN },
+      });
+    const refused = await signInAs(THEO_PASSWORD);
+    const wrong = await signInAs('not the password at all');
+    expect(refused.statusCode).toBe(401);
+    expect(refused.headers['set-cookie']).toBeUndefined();
+    expect(ApiErrorSchema.parse(refused.json()).error).toMatchObject({
+      code: 'sign_in_unauthenticated',
+      message: 'E-mail ou mot de passe incorrect',
+    });
+    expect(ApiErrorSchema.parse(wrong.json()).error).toMatchObject({
+      code: 'sign_in_unauthenticated',
+      message: 'E-mail ou mot de passe incorrect',
+    });
+    expect(
+      await test.admin.db.select().from(schema.session).where(eq(schema.session.userId, theo.userId)),
+    ).toEqual([]);
   });
 
   it('shows when a member’s link stops working: none, live, expired, used, then a new password link', async () => {

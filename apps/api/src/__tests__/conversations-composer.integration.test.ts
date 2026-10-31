@@ -21,7 +21,9 @@ import {
 import { createFansModule } from '../modules/fans';
 
 /** Lets every bubble through: the guards themselves are tested in `agent` and `approval-guard`. */
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 
 type ComposeInput = Parameters<DraftComposer['compose']>[0];
@@ -108,7 +110,7 @@ describe('conversation.respond with the engine (DraftComposer)', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'composer' });

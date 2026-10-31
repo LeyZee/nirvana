@@ -34,7 +34,7 @@ describe('ops:check-keys', () => {
     await withAdmin(test.admin.db, async (tx) => {
       await tx
         .insert(schema.creators)
-        .values({ id: creatorId, displayName: 'Nora Vidal', timezone: 'Europe/Paris' });
+        .values({ id: creatorId, nameKey: creatorId, displayName: 'Nora Vidal', timezone: 'Europe/Paris' });
       await tx.insert(schema.platformAccounts).values({
         id: accountId,
         creatorId,

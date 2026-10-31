@@ -26,6 +26,7 @@ import type {
   FactKind,
   FanId,
   GuardCode,
+  MediaAssetId,
   HandoffCause,
   JobName,
   JobPayload,
@@ -150,6 +151,11 @@ interface DraftRepository {
     softViolations?: readonly string[];
     /** The voice that wrote it, for the live rate (ADR 0019). */
     voice?: DraftVoice;
+    /**
+     * Her persona version it was written with, read by the composer with her persona. Absent, the version active
+     * when it is saved: a composer that reads no version per creator (tests, the terminal).
+     */
+    personaVersionId?: string;
     /** Facts the brief proposed, confirmed when a human approves the draft (P3-02). */
     facts?: readonly DraftFact[];
   }): Promise<void>;
@@ -221,6 +227,8 @@ interface KillSwitches {
  * (ADR 0022): the repository reads that persona itself, in the same statement.
  */
 interface AutomaticEvidence {
+  /** Whether she has an active persona version now: without one, nothing opens Automatique (recette 28/10, G4). */
+  personaActive(): Promise<boolean>;
   /** Her decided drafts of this version, newest first, at most `LIVE_WINDOW`: approved as is, edited or rejected. */
   decided(voice: DraftVoice): Promise<readonly DecidedDraft[]>;
   /** The rate of the latest blind test of this version, in tenths of a percent; null before the first. */
@@ -261,9 +269,19 @@ export interface UnitOfWork {
 
 /**
  * The hard guards of the agent's output (ADR 0012: never an AI, no meeting, no contact; her hard limits), read
- * again on the bubbles a chatter approves, rewritten or not (revue 09, G5). Implemented by the `agent` module.
+ * again on the bubbles a chatter approves, rewritten or not (revue 09, G5). Implemented by the `agent` module, with
+ * the limits of her active persona version, read before each approval (recette 28/10, G4).
  */
 export interface BubbleGuard {
+  /**
+   * Her guards; `null` when she has no active persona version: nothing is approved (fail closed). A failed read
+   * throws, and nothing is approved either.
+   */
+  forCreator(creatorId: CreatorId): Promise<CreatorBubbleGuard | null>;
+}
+
+/** The hard guards of one creator, read on the bubbles of one approval. */
+interface CreatorBubbleGuard {
   check(
     bubbles: readonly string[],
     context: GuardReadContext,
@@ -433,6 +451,8 @@ export type ComposeResult =
       readonly softViolations: readonly string[];
       readonly costUsd: number;
       readonly voice?: DraftVoice;
+      /** Her persona version it was written with (ADR 0019): never the one active when it is saved. */
+      readonly personaVersionId?: string;
       /** What the brief read about the fan in his messages. */
       readonly factsProposed?: readonly ProposedFact[];
       readonly desire?: ComposedDesire;
@@ -498,6 +518,14 @@ export interface PageRequest {
   readonly cursor?: string | undefined;
 }
 
+/**
+ * What her media show, as the `media` module described and kept them (SUIVI-26; the composition root's adapter): the
+ * latest description of each of these media that has one. Without it, a message's media are shown undescribed.
+ */
+export interface MediaDescriptions {
+  of(creatorId: CreatorId, mediaAssetIds: readonly MediaAssetId[]): Promise<ReadonlyMap<string, string>>;
+}
+
 /** Read side of the dashboard (no lock, no event): implemented in `infra/db`. */
 export interface ConversationReader {
   /** Every conversation of the creator, or with `routedTo` only those routed to that account (ADR 0024). */
@@ -505,10 +533,18 @@ export interface ConversationReader {
   /** Whether the conversation is routed to that account: the only way a member whose scope is `self` reaches it. */
   isRoutedTo(creatorId: CreatorId, id: ConversationId, userId: UserId): Promise<boolean>;
   get(creatorId: CreatorId, id: ConversationId): Promise<ConversationDetail | null>;
-  messages(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<MessageView>>;
-  events(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<ConversationEventView>>;
-  /** Its `desire_scored` events as the reader's curve: the most recent `DESIRE_POINTS_MAX`, oldest first. */
-  desireCurve(creatorId: CreatorId, id: ConversationId): Promise<DesireCurve>;
+  /** `null` when the creator has no such conversation, as for `get`: never an empty page that hides it. */
+  messages(creatorId: CreatorId, id: ConversationId, page: PageRequest): Promise<Page<MessageView> | null>;
+  events(
+    creatorId: CreatorId,
+    id: ConversationId,
+    page: PageRequest,
+  ): Promise<Page<ConversationEventView> | null>;
+  /**
+   * Its `desire_scored` events as the reader's curve: the most recent `DESIRE_POINTS_MAX`, oldest first; `null`
+   * without such a conversation.
+   */
+  desireCurve(creatorId: CreatorId, id: ConversationId): Promise<DesireCurve | null>;
 }
 
 /** Her own alerts' names, archived ones too (`alerts` module's adapter): the history names an alert as it was. */

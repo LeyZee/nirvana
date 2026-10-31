@@ -1,4 +1,5 @@
 import {
+  collectiveGoalWindow,
   payPeriodLastDay,
   type BonusTierSet,
   type CollectiveGoal,
@@ -10,13 +11,12 @@ import { useState, type JSX } from 'react';
 
 import { GoalDialog, TiersDialog } from './GoalForms';
 import { PayNav } from './PayNav';
-import { useCurrentPeriod, usePayNames } from './data';
-import { Gauge, GoalTicks, Loading, LockIcon, PeriodArrows, Unreachable } from './parts';
+import { useAgencyToday, useCurrentPeriod, usePayNames } from './data';
+import { Gauge, GoalTicks, Loading, LockIcon, PeriodArrows, PeriodHeading, Unreachable } from './parts';
 
-import { usePayPeriod, usePayPeriods } from '@/payroll/api';
+import { usePayPeriod } from '@/payroll/api';
 import {
   bonusTiersInOrder,
-  draftPeriodsBefore,
   forecastNet,
   gaugePercent,
   goalReachedBps,
@@ -25,6 +25,7 @@ import {
   lateNetOf,
   momentAt,
   reachedBpsOf,
+  rulePeriods,
   teamNetOf,
   tierAt,
   whoName,
@@ -59,10 +60,10 @@ export function GoalsPage({
   const me = { id: user.id, name: user.name };
   const now = useNow();
   const current = useCurrentPeriod();
+  const today = useAgencyToday();
   const period = chosen ?? current;
   const read = usePayPeriod(period);
   const after = usePayPeriod(period === null ? null : followingPeriod(period));
-  const index = usePayPeriods();
   const names = usePayNames(period, true);
   const [editing, setEditing] = useState<
     | { readonly kind: 'goal'; readonly period: PayPeriod; readonly goal: CollectiveGoal | null }
@@ -73,24 +74,23 @@ export function GoalsPage({
   const data = read.data?.period === period ? read.data : undefined;
   const next = period !== null && after.data?.period === followingPeriod(period) ? after.data : undefined;
   const who = (userId: string): string => whoName(userId, me, names.members);
-  // The first period not validated yet: tiers and goals may change from there on (ADR 0032).
-  const known = current !== null && (index.data !== undefined || index.isError);
-  const tierPeriods: PayPeriod[] = [];
-  if (known) {
-    const from = draftPeriodsBefore(index.data?.pages[0]?.items ?? [], current).teamFirstOpen;
-    for (let one = from; tierPeriods.length < TIER_PERIODS; one = followingPeriod(one)) tierPeriods.push(one);
-  }
+  // PAIE-22: tiers start with a period that has not begun, as a rate; a goal is set until its period's 3rd day.
+  const tierPeriods: PayPeriod[] = today === null ? [] : rulePeriods(today, TIER_PERIODS);
+  const goalWindow = (one: PayPeriod) => (today === null ? 'closed' : collectiveGoalWindow(one, today));
 
   const head = (
     <PageHeader
-      eyebrow="Objectifs"
-      title="Paie"
+      eyebrow="Paie"
+      title={period === null ? 'Objectifs' : <PeriodHeading period={period} />}
       lead="Ce que l’équipe vise ensemble, et ce que chacun débloque seul."
-      actions={<PayNav />}
+      actions={
+        <>
+          {period === null ? null : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />}
+          <PayNav />
+        </>
+      }
     />
   );
-  const arrows =
-    period === null ? undefined : <PeriodArrows period={period} current={current} onPeriod={onPeriod} />;
 
   if (period === null || (data === undefined && !read.isError))
     return (
@@ -111,7 +111,7 @@ export function GoalsPage({
       <Page>
         {head}
         <div className="py-board">
-          <Panel eyebrow="Objectif collectif" actions={arrows}>
+          <Panel eyebrow="Objectif collectif">
             <Unreachable
               what="la quinzaine"
               onRetry={() => {
@@ -140,7 +140,6 @@ export function GoalsPage({
               ? 'Pas d’objectif collectif'
               : `${amountText(goal.targetMinor, 'EUR')} de net pour l’équipe`
           }
-          actions={arrows}
         >
           <div className="rp-sec">
             {goal === null ? (
@@ -151,11 +150,13 @@ export function GoalsPage({
                 <p className="py-empty__text">
                   {!open
                     ? 'La quinzaine est close : son objectif ne change plus.'
-                    : owner
-                      ? 'Une cible de net pour l’équipe et ses paliers : chaque chatteur touche la prime du plus haut palier atteint.'
-                      : 'Le propriétaire pose l’objectif d’une quinzaine.'}
+                    : goalWindow(data.period) === 'closed'
+                      ? 'L’objectif d’une quinzaine se pose au plus tard son 3e jour : celle-ci n’en aura pas.'
+                      : owner
+                        ? 'Une cible de net pour l’équipe et ses paliers : chaque chatteur touche la prime du plus haut palier atteint.'
+                        : 'Le propriétaire pose l’objectif d’une quinzaine.'}
                 </p>
-                {owner && open ? (
+                {owner && open && goalWindow(data.period) !== 'closed' ? (
                   <button
                     type="button"
                     className="nv-btn nv-btn--soft"
@@ -192,7 +193,7 @@ export function GoalsPage({
                     </span>
                   </p>
                 )}
-                {owner && open ? (
+                {owner && open && goalWindow(data.period) !== 'closed' ? (
                   <button
                     type="button"
                     className="nv-btn nv-btn--soft nv-btn--sm"
@@ -247,6 +248,7 @@ export function GoalsPage({
       {editing?.kind === 'goal' ? (
         <GoalDialog
           period={editing.period}
+          started={goalWindow(editing.period) === 'started'}
           goal={editing.goal}
           onClose={() => {
             setEditing(null);

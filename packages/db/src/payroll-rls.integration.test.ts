@@ -3,6 +3,7 @@ import {
   BonusTierSetIdSchema,
   CarryOverIdSchema,
   CollectiveGoalIdSchema,
+  PayoutMinimumIdSchema,
   CommissionStatementIdSchema,
   CreatorIdSchema,
   newId,
@@ -223,9 +224,12 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
   beforeAll(async () => {
     test = await createTestDb(inject('pgSuperuserUrl'));
     await admin(async (tx) => {
-      await tx
-        .insert(s.creators)
-        .values({ id: nora.creatorId, displayName: 'Créatrice Nora', timezone: 'Europe/Paris' });
+      await tx.insert(s.creators).values({
+        id: nora.creatorId,
+        nameKey: nora.creatorId,
+        displayName: 'Créatrice Nora',
+        timezone: 'Europe/Paris',
+      });
       await tx
         .insert(s.platformAccounts)
         .values({ id: nora.accountId, creatorId: nora.creatorId, platform: 'reveal', handle: 'handle-nora' });
@@ -618,6 +622,48 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
       expect(await as(theo, (tx) => tx.select().from(s.bonusTierSets))).toHaveLength(1);
     });
 
+    it('the owner alone dates a payout minimum, never on a period validated, and it never changes (PAIE-22)', async () => {
+      const minimum = (fromPeriod: string, by = owner) => ({
+        id: newId(PayoutMinimumIdSchema),
+        fromPeriod,
+        minimumPayoutMinor: 2_000,
+        createdBy: by,
+      });
+      expect(
+        await failure(
+          as(manager, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-12-01', manager))),
+        ),
+      ).toMatch(RLS);
+      expect(
+        await failure(as(owner, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-11-01')))),
+      ).toMatch(KEPT);
+      await as(owner, (tx) => tx.insert(s.payoutMinimums).values(minimum('2025-12-16')));
+      expect(
+        await failure(as(owner, (tx) => tx.update(s.payoutMinimums).set({ minimumPayoutMinor: 0 }))),
+      ).toMatch(/permission denied/u);
+      expect(
+        await failure(admin((tx) => tx.update(s.payoutMinimums).set({ minimumPayoutMinor: 0 }))),
+      ).toMatch(KEPT);
+      // The single minimum no longer changes from the application; the delay does.
+      await admin((tx) =>
+        tx
+          .insert(s.payrollSettings)
+          .values({ id: 1, minimumPayoutMinor: 1_500, updatedBy: owner })
+          .onConflictDoNothing(),
+      );
+      expect(
+        await failure(
+          as(owner, (tx) => tx.update(s.payrollSettings).set({ minimumPayoutMinor: 0, updatedBy: owner })),
+        ),
+      ).toMatch(/permission denied/u);
+      await as(owner, (tx) =>
+        tx
+          .update(s.payrollSettings)
+          .set({ payoutDelayBusinessDays: 3, updatedBy: owner, updatedAt: new Date() }),
+      );
+      expect(await as(theo, (tx) => tx.select().from(s.payoutMinimums))).toHaveLength(1);
+    });
+
     it('rates are read by every member, written by the job alone, and never change', async () => {
       const rate = {
         currency: 'USD',
@@ -639,6 +685,44 @@ describe('commission statements (EQ-04): who reads and writes, and a past that n
           admin((tx) => tx.insert(s.exchangeRates).values({ ...rate, currency: 'EUR', day: '2025-11-01' })),
         ),
       ).toMatch(/exchange_rates_currency_check/u);
+    });
+
+    it('a blocked period is read by every member, written and lifted by the job alone, with its reason', async () => {
+      const block = {
+        period: '2025-11-16',
+        code: 'commission_rate_missing_conflict',
+        memberIds: [member(theo)],
+        since: new Date(),
+      };
+      expect(await failure(as(owner, (tx) => tx.insert(s.payPeriodBlocks).values(block)))).toMatch(
+        /permission denied/u,
+      );
+      await admin((tx) => tx.insert(s.payPeriodBlocks).values(block));
+      expect(await as(lea, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(1);
+      expect(await as(owner, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(1);
+      // Outside a member's context, nothing.
+      expect(await test.app.db.select().from(s.payPeriodBlocks)).toHaveLength(0);
+      expect(
+        await failure(
+          as(owner, (tx) => tx.delete(s.payPeriodBlocks).where(eq(s.payPeriodBlocks.period, '2025-11-16'))),
+        ),
+      ).toMatch(/permission denied/u);
+      // A reason says what it is about: members without a rate, or a currency, never both nor neither.
+      const refused = async (values: Partial<typeof s.payPeriodBlocks.$inferInsert>) =>
+        failure(
+          admin((tx) => tx.insert(s.payPeriodBlocks).values({ ...block, period: '2025-11-01', ...values })),
+        );
+      expect(await refused({ memberIds: [] })).toMatch(/pay_period_blocks_reason_check/u);
+      expect(await refused({ currency: 'USD' })).toMatch(/pay_period_blocks_reason_check/u);
+      expect(await refused({ code: 'exchange_rate_missing_conflict' })).toMatch(
+        /pay_period_blocks_reason_check/u,
+      );
+      expect(
+        await refused({ code: 'exchange_rate_missing_conflict', memberIds: null, currency: 'EUR' }),
+      ).toMatch(/pay_period_blocks_currency_check/u);
+      expect(await refused({ code: 'pay_period_order_conflict' })).toMatch(/pay_period_blocks_code_check/u);
+      await admin((tx) => tx.delete(s.payPeriodBlocks).where(eq(s.payPeriodBlocks.period, '2025-11-16')));
+      expect(await as(lea, (tx) => tx.select().from(s.payPeriodBlocks))).toHaveLength(0);
     });
   });
 });

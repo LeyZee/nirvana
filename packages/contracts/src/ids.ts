@@ -126,6 +126,10 @@ export type CarryOverId = z.infer<typeof CarryOverIdSchema>;
 export const BonusTierSetIdSchema = uuid.brand<'BonusTierSetId'>();
 export type BonusTierSetId = z.infer<typeof BonusTierSetIdSchema>;
 
+/** A payout minimum from a pay period on (PAIE-22). */
+export const PayoutMinimumIdSchema = uuid.brand<'PayoutMinimumId'>();
+export type PayoutMinimumId = z.infer<typeof PayoutMinimumIdSchema>;
+
 /** The team's collective goal for a pay period, with its tiers (EQ-04). */
 export const CollectiveGoalIdSchema = uuid.brand<'CollectiveGoalId'>();
 export type CollectiveGoalId = z.infer<typeof CollectiveGoalIdSchema>;

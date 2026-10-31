@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+import { PasswordStep, SignInAgain } from './PasswordStep';
 import { recordRestoreTest, type Outcome } from './api';
 import {
   bodyOf,
@@ -11,13 +12,13 @@ import {
   problemsOf,
   readReport,
   REFUSALS,
+  testedDay,
   withReport,
   type DraftField,
   type RestoreDraft,
 } from './model';
 
 import { backupStatusQuery } from '@/screens/dashboard/backups';
-import { confirmPassword, type ConfirmResult } from '@/settings/services/api';
 
 const STEP_TITLES = ['Compte rendu', 'Vérifier'] as const;
 
@@ -26,13 +27,6 @@ const SAMPLE = [
   'restored in 252 s, worker queue emptied',
   'row counts: all 31 tables match',
 ].join('\n');
-
-const PASSWORD_MESSAGES: Record<Exclude<ConfirmResult, 'ok'>, string> = {
-  wrong_credentials: 'Ce n’est pas le bon mot de passe.',
-  too_many_attempts: 'Trop d’essais. Attends une minute avant de réessayer.',
-  unavailable: 'Le serveur ne répond pas. Réessaie dans un instant.',
-  session_expired: 'Ta session a expiré. Reconnecte-toi.',
-};
 
 /** Why the test was not recorded, when the server did not refuse it: each answer in its own words. */
 const NOT_RECORDED: Record<Exclude<Outcome['kind'], 'ok' | 'refused' | 'reauth'>, string> = {
@@ -213,7 +207,7 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
               </ol>
             )}
           </div>
-          <button type="button" className="bk-close" aria-label="Fermer" disabled={busy} onClick={close}>
+          <button type="button" className="nv-close" aria-label="Fermer" disabled={busy} onClick={close}>
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="m4 4 8 8M12 4l-8 8" />
             </svg>
@@ -295,6 +289,7 @@ export function RestoreTestDialog({ onClose }: { onClose: () => void }): JSX.Ele
             {failure?.signIn === true ? <SignInAgain /> : null}
             {phase.kind === 'password' ? (
               <PasswordStep
+                hint="Pour noter un essai, confirme ton mot de passe."
                 onConfirmed={() => {
                   void send();
                 }}
@@ -484,9 +479,7 @@ function CheckFields({
 }
 
 function Done({ test, onClose }: { test: RestoreTest; onClose: () => void }): JSX.Element {
-  const day = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(
-    new Date(test.testedAt),
-  );
+  const day = testedDay(test.testedAt);
   return (
     <div className="bk-dialog__body nv-swap" key="done">
       <p className="bk-done">
@@ -505,100 +498,5 @@ function Done({ test, onClose }: { test: RestoreTest; onClose: () => void }): JS
         </button>
       </div>
     </div>
-  );
-}
-
-/** The sign-in is older than 10 minutes: the password again, then the test is sent again, with the same id. */
-function PasswordStep({
-  onConfirmed,
-  onCancel,
-}: {
-  onConfirmed: () => void;
-  onCancel: () => void;
-}): JSX.Element {
-  const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<Exclude<ConfirmResult, 'ok'> | null>(null);
-
-  useEffect(() => {
-    input.current?.focus();
-  }, []);
-
-  const confirm = async (): Promise<void> => {
-    const password = input.current?.value ?? '';
-    if (password === '') return;
-    setBusy(true);
-    const result = await confirmPassword(password).catch(() => 'unavailable' as const);
-    setBusy(false);
-    if (result === 'ok') {
-      onConfirmed();
-      return;
-    }
-    if (input.current !== null) input.current.value = '';
-    setFailure(result);
-  };
-
-  return (
-    <div
-      className="bk-password nv-swap"
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return;
-        // Leaves the prompt only, not the dialog around it.
-        event.stopPropagation();
-        if (!busy) onCancel();
-      }}
-    >
-      <p className="bk-hint">Pour noter un essai, confirme ton mot de passe.</p>
-      <div className="bk-inline">
-        <input
-          ref={input}
-          className="nv-field__control nv-glass"
-          type="password"
-          autoComplete="current-password"
-          aria-label="Mot de passe"
-          aria-invalid={failure !== null}
-          disabled={busy}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return;
-            // Inside the form of the fields: Enter confirms the password, it does not send the test.
-            event.preventDefault();
-            void confirm();
-          }}
-        />
-        <button
-          type="button"
-          className="nv-btn nv-btn--neon nv-btn--sm"
-          disabled={busy}
-          aria-busy={busy}
-          onClick={() => void confirm()}
-        >
-          Confirmer
-        </button>
-        <button type="button" className="nv-btn nv-btn--plain nv-btn--sm" disabled={busy} onClick={onCancel}>
-          Annuler
-        </button>
-      </div>
-      {failure === null ? null : (
-        <p className="bk-warn nv-swap" role="alert">
-          {PASSWORD_MESSAGES[failure]}
-        </p>
-      )}
-      {failure === 'session_expired' ? <SignInAgain /> : null}
-    </div>
-  );
-}
-
-/** The session has ended: reloading the app shows the sign-in. */
-function SignInAgain(): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="nv-btn nv-btn--soft nv-btn--sm bk-self-start"
-      onClick={() => {
-        window.location.reload();
-      }}
-    >
-      Se reconnecter
-    </button>
   );
 }

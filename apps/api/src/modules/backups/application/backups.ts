@@ -1,8 +1,14 @@
-import type { BackupStatus, RecordRestoreTestBodySchema, RestoreTest } from '@nirvana/contracts';
+import type {
+  BackupRunRequest,
+  BackupStatus,
+  RecordRestoreTestBodySchema,
+  RestoreTest,
+} from '@nirvana/contracts';
 import type { z } from 'zod';
 
 import type {
   BackupAlerts,
+  BackupRequestsStore,
   BackupRunsReader,
   Clock,
   RestoreTestActor,
@@ -17,23 +23,26 @@ import {
   type RestoreTestEntry,
   type StoredRestoreTest,
 } from '../domain/restore-tests';
+import { decideRequest, type StoredBackupRequest } from '../domain/run-requests';
 import { BACKUP_OVERDUE_HOURS, backupDay, backupState, needsAlert } from '../domain/status';
 
 export interface BackupsDeps {
   readonly runs: BackupRunsReader;
   readonly alerts: BackupAlerts;
   readonly restoreTests: RestoreTestsStore;
+  readonly requests: BackupRequestsStore;
   readonly clock: Clock;
 }
 
 /** `GET /v1/backups/status`: where the daily export stands, for the owner's Dashboard. */
 export async function readBackupStatus(
-  deps: Pick<BackupsDeps, 'runs' | 'restoreTests' | 'clock'>,
+  deps: Pick<BackupsDeps, 'runs' | 'restoreTests' | 'requests' | 'clock'>,
 ): Promise<BackupStatus> {
-  const [lastSucceededAt, lastRun, lastTest] = await Promise.all([
+  const [lastSucceededAt, lastRun, lastTest, pending] = await Promise.all([
     deps.runs.lastSucceededAt(),
     deps.runs.latestRun(),
     deps.restoreTests.latest(),
+    deps.requests.pending(),
   ]);
   const now = deps.clock.now();
   return {
@@ -60,7 +69,31 @@ export async function readBackupStatus(
             rowCountMismatches: lastTest.rowCountMismatches,
           },
     restoreTestFresh: isRestoreTestFresh(lastTest, now),
+    ...(pending !== null && { runRequestedAt: pending.requestedAt.toISOString() }),
   };
+}
+
+const toRunRequest = (request: StoredBackupRequest): BackupRunRequest => ({
+  id: request.id,
+  requestedAt: request.requestedAt.toISOString(),
+  pickedAt: request.pickedAt?.toISOString() ?? null,
+});
+
+/**
+ * `POST /v1/backups/runs` (REG-24): the owner asks for an export now. Recorded for the `backup` service, which runs
+ * the same export as each night (ADR 0028 § 1): one at a time, the same `id` twice is one request.
+ */
+export async function requestBackupRun(
+  deps: Pick<BackupsDeps, 'requests' | 'clock'>,
+  id: string,
+  actor: RestoreTestActor,
+): Promise<{ readonly created: boolean; readonly request: BackupRunRequest }> {
+  const { created, request } = await deps.requests.request(
+    { id, requestedByUserId: actor.userId },
+    actor,
+    (context) => decideRequest(context, deps.clock.now()),
+  );
+  return { created, request: toRunRequest(request) };
 }
 
 /** EQ-17's pay guard, through the composition root: is the restore proven for an action made now, at `at`? */

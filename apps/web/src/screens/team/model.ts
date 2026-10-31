@@ -1,7 +1,10 @@
 import {
   COUNTRY_CODES,
+  PayPeriodSchema,
   type CommissionPreset,
+  type CommissionRate,
   type CreatorSummary,
+  type PayPeriod,
   type TeamMember,
   type TeamMemberErrorCode,
   type TeamMemberStatus,
@@ -9,6 +12,7 @@ import {
 } from '@nirvana/contracts';
 
 import { countryName } from '@/lib/country';
+import { memberOf } from '@/lib/utils';
 import { mondayOf, withFirstOfMonth } from '@/scheduling/time';
 
 /**
@@ -92,15 +96,19 @@ export function listMembers(members: readonly TeamMember[], tab: TeamRole, query
 }
 
 /** The sentence under the title: how many are at work, away, and still to sign in. */
-export function teamSummary(members: readonly TeamMember[]): string | null {
+export function teamSummary(members: readonly TeamMember[], now: Date): string | null {
   const here = members.filter((member) => member.status !== 'left');
   if (here.length === 0) return null;
   const active = here.filter((member) => member.status === 'active').length;
   const away = here.filter((member) => STATUS_TONES[member.status] === 'away').length;
-  const pending = here.filter((member) => member.invitationPending).length;
+  // A dead link is no invitation waiting: it is counted apart, since it asks for a new link (EQ-06).
+  const expired = here.filter((member) => invitationState(member, now).kind === 'expired').length;
+  const pending = here.filter((member) => member.invitationPending).length - expired;
   const parts = [`${String(active)} actif${active > 1 ? 's' : ''}`];
   if (away > 0) parts.push(`${String(away)} absent${away > 1 ? 's' : ''}`);
   if (pending > 0) parts.push(`${String(pending)} invitation${pending > 1 ? 's' : ''} en attente`);
+  if (expired > 0)
+    parts.push(`${String(expired)} lien${expired > 1 ? 's' : ''} expiré${expired > 1 ? 's' : ''}`);
   return parts.join(' · ');
 }
 
@@ -254,8 +262,26 @@ const LONG_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long
 export const longDay = (day: string): string =>
   withFirstOfMonth(LONG_DAY.formatToParts(new Date(`${day}T12:00:00`)));
 
-/** The initial of a name, for the avatar. */
-export const initialOf = (name: string): string => name.trim().slice(0, 1).toUpperCase() || '?';
+const NOTE_DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+
+/** « 27 oct. », « 1er nov. »: the day an internal note was written, in the reader's zone. */
+export const noteDay = (iso: string): string => withFirstOfMonth(NOTE_DAY.formatToParts(new Date(iso)));
+
+/** The rate set to start after `day`, the nearest one: `member.commission` stays the one in force until then. */
+export const rateAhead = (rates: readonly CommissionRate[], day: string): CommissionRate | null =>
+  rates
+    .filter((rate) => rate.effectiveFrom > day)
+    .reduce<CommissionRate | null>(
+      (near, rate) => (near === null || rate.effectiveFrom < near.effectiveFrom ? rate : near),
+      null,
+    );
+
+/** The rate set last, ahead or in force: a manager's share is offered from it. */
+export const lastRate = (rates: readonly CommissionRate[]): CommissionRate | null =>
+  rates.reduce<CommissionRate | null>(
+    (last, rate) => (last === null || rate.effectiveFrom > last.effectiveFrom ? rate : last),
+    null,
+  );
 
 /** The creators of a member, by name, in the order of the list. */
 export const creatorNames = (member: TeamMember, creators: readonly CreatorSummary[]): string[] =>
@@ -269,23 +295,61 @@ export interface TeamSearch {
 
 /** Anything else in the address is ignored: a broken link opens the list, never an error. */
 export function parseTeamSearch(search: Record<string, unknown>): TeamSearch {
-  const { onglet, membre } = search;
-  return {
-    ...(onglet === 'managers' ? { onglet } : {}),
-    ...(typeof membre === 'string' && /^[0-9a-f-]{36}$/iu.test(membre) ? { membre } : {}),
-  };
+  const { onglet } = search;
+  return { ...(onglet === 'managers' ? { onglet } : {}), ...memberOf(search) };
 }
 
-/** `/equipe/planning?semaine=2026-10-26`: the week shown survives a reload and a back. */
+/**
+ * `/equipe/planning?semaine=2026-10-26&membre=<id>`: the week shown, and the member whose shifts stand out (EQ-11),
+ * survive a reload and a back.
+ */
 export interface PlanningSearch {
   readonly semaine?: string | undefined;
+  readonly membre?: string | undefined;
 }
 
 /** A real day, said as its week's Monday; anything else opens this week. */
 export function parsePlanningSearch(search: Record<string, unknown>): PlanningSearch {
   const { semaine } = search;
-  if (typeof semaine !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(semaine)) return {};
+  const member = memberOf(search);
+  if (typeof semaine !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(semaine)) return member;
   const day = new Date(`${semaine}T12:00:00Z`);
-  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== semaine) return {};
-  return { semaine: mondayOf(semaine) };
+  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== semaine) return member;
+  return { semaine: mondayOf(semaine), ...member };
+}
+
+/** `/equipe/rapports?quinzaine=2026-10-16&membre=<id>`: the period shown and the member's fold open (EQ-11, EQ-13). */
+export interface ReportsSearch {
+  readonly quinzaine?: PayPeriod | undefined;
+  readonly membre?: string | undefined;
+}
+
+export function parseReportsSearch(search: Record<string, unknown>): ReportsSearch {
+  const period = PayPeriodSchema.safeParse(search['quinzaine']);
+  return { ...(period.success ? { quinzaine: period.data } : {}), ...memberOf(search) };
+}
+
+/**
+ * The days a new rate may start from (EQ-10): the 1st and the 16th of the months ahead, today included when it is
+ * one; the server checks the same rule (`commission_date_invalid`).
+ */
+export function periodStartsFrom(from: string, count: number): string[] {
+  const starts: string[] = [];
+  const [year = 0, month = 1, day = 1] = from.split('-').map(Number);
+  let y = year;
+  let m = month;
+  let d = day <= 1 ? 1 : day <= 16 ? 16 : 32;
+  while (starts.length < count) {
+    if (d > 16) {
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+      d = 1;
+    }
+    starts.push(`${String(y)}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    d = d === 1 ? 16 : 32;
+  }
+  return starts;
 }

@@ -24,6 +24,7 @@ import { buildServer, type Server } from '../server';
 import { fixedComposer } from './support/composer';
 import { testConfig } from './support/config';
 import { LogSink } from './support/log-sink';
+import { activateDemoPersona } from './support/persona';
 
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-000000000001');
@@ -110,7 +111,8 @@ describe('connectors module (P0-06)', () => {
     creatorId = newId(CreatorIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+    await activateDemoPersona(app, creatorId);
   });
 
   afterAll(async () => {
@@ -282,6 +284,19 @@ describe('connectors module (P0-06)', () => {
     });
     expect(refused.statusCode).toBe(401);
     expect(refused.json()).toMatchObject({ error: { code: 'device_unauthenticated' } });
+    // The token before the body (recette 28/10): without it, a body that does not validate, or is not even JSON,
+    // gets the same 401, never a 400 listing the fields.
+    for (const attempt of [
+      { headers: {}, payload: { platformAccountId: 'nope' } },
+      { headers: { 'x-extension-token': 'wrong' }, payload: {} },
+      { headers: { 'content-type': 'application/json' }, payload: '{"session":' },
+    ]) {
+      const early = await server.inject({ method: 'POST', url: '/v1/connector/sessions', ...attempt });
+      expect([early.statusCode, early.json<{ error: { code: string } }>().error.code]).toEqual([
+        401,
+        'device_unauthenticated',
+      ]);
+    }
 
     const stored = await server.inject({
       method: 'POST',

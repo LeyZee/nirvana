@@ -5,6 +5,7 @@ import {
   type CommissionStatement,
   type Me,
   type PayPeriod,
+  type PayPeriodBlock,
   type PayPeriodSummary,
   type PayrollPeriod,
   type PlanningAccount,
@@ -13,11 +14,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState, type JSX } from 'react';
 
-import { useCurrentPeriod, usePayNames } from './data';
+import { useCfaFrancs, useCurrentPeriod, usePayNames } from './data';
 import { Chip, Empty, Gauge, GoalTicks, Loading, MoneyPath, Unreachable } from './parts';
 
-import { PAYROLL_KEY, PeriodCursorInvalid, usePayPeriod, usePayPeriods } from '@/payroll/api';
 import {
+  PAYROLL_KEY,
+  PeriodCursorInvalid,
+  usePayPeriod,
+  usePayPeriods,
+  usePayrollSettings,
+} from '@/payroll/api';
+import {
+  fcfaText,
   forecastNet,
   gaugePercent,
   goalSpanBps,
@@ -26,6 +34,7 @@ import {
   memberPeriodAmount,
   memberPhaseChip,
   momentAt,
+  myBlockedText,
   myStatementWords,
   roundAmountText,
   salesFor,
@@ -34,7 +43,14 @@ import {
 } from '@/payroll/model';
 import '@/payroll/pay.css';
 import '@/reports/reports.css';
-import { amountText, percentText, periodLine, periodTitle, signedAmountText } from '@/reports/model';
+import {
+  amountText,
+  followingPeriod,
+  percentText,
+  periodLine,
+  periodTitle,
+  signedAmountText,
+} from '@/reports/model';
 import { platformName } from '@/scheduling/model';
 import '@/scheduling/scheduling.css';
 import { longDay } from '@/scheduling/time';
@@ -53,6 +69,8 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
   const now = useNow();
   const current = useCurrentPeriod();
   const periods = usePayPeriods();
+  // PAIE-32: the usual payout delay the owner announced, read by every member; never a figure of the code.
+  const delay = usePayrollSettings().data?.payoutDelayBusinessDays ?? null;
   const client = useQueryClient();
   const [opened, setOpened] = useState<PayPeriod | null>(null);
 
@@ -76,6 +94,7 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
     <PageHeader
       eyebrow={period === null ? 'Quinzaine' : `Quinzaine ${periodLine(period)}`}
       title="Commissions"
+      lead="Ce que tu as gagné sur la quinzaine, et comment ta commission se construit."
     />
   );
 
@@ -168,18 +187,29 @@ export function CommissionsPage({ user }: { user: Me }): JSX.Element {
               </>
             )
           ) : statement === undefined ? (
-            <Panel className="nv-enter">
-              <Empty
-                whisper="Pas encore de relevé sur cette quinzaine."
-                text="Il se calcule dès que l’agence valide un de tes rapports de fin de shift."
-              />
-            </Panel>
+            heroData.blocked ? (
+              // Their own report blocks the period before any statement: why, never an empty period.
+              <MyBlockNotice block={heroData.blocked} hasStatement={false} />
+            ) : (
+              <Panel className="nv-enter">
+                <Empty
+                  whisper="Pas encore de relevé sur cette quinzaine."
+                  text="Il se calcule dès que l’agence valide un de tes rapports de fin de shift."
+                />
+              </Panel>
+            )
           ) : (
             <>
+              {heroData.blocked ? <MyBlockNotice block={heroData.blocked} /> : null}
               <Hero statement={statement} period={heroData} now={now} />
               <Panel className="nv-enter" eyebrow="Le parcours de ton argent">
                 <div className="rp-sec">
-                  <MoneyPath statement={statement} names={heroNames} you />
+                  <MoneyPath
+                    statement={statement}
+                    names={heroNames}
+                    you
+                    payLabel={myStatementWords(statement, heroData.ended, now, delay).label}
+                  />
                 </div>
               </Panel>
             </>
@@ -278,10 +308,17 @@ function Hero({
   period: PayrollPeriod;
   now: Date;
 }): JSX.Element {
-  const words = myStatementWords(statement, period.ended, now);
+  const delay = usePayrollSettings().data?.payoutDelayBusinessDays ?? null;
+  const words = myStatementWords(statement, period.ended, now, delay);
+  const cfa = useCfaFrancs(statement.memberId);
   return (
-    <section className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter" aria-label={words.label}>
+    <section
+      className="nv-plate nv-panel nv-stat--hero py-mehero nv-enter"
+      aria-label={words.label}
+      data-stale={period.blocked === null ? undefined : 'true'}
+    >
       <div className="py-mehero__top">
+        <span className="py-mehero__period nv-num">{periodTitle(period.period, false)}</span>
         <Chip chip={memberPhaseChip(summaryOf(period))} />
         <span className="py-quiet nv-num">{words.since}</span>
       </div>
@@ -289,6 +326,9 @@ function Hero({
       <p className="py-hero__value nv-num nv-swap" key={statement.revision}>
         {amountText(statement.payableMinor, 'EUR')}
       </p>
+      {statement.payableMinor === 0 || !cfa ? null : (
+        <p className="py-hero__note nv-num">{fcfaText(statement.payableMinor)}</p>
+      )}
       {words.notes.map((note) => (
         <p key={note} className="py-hero__note nv-num">
           {note}
@@ -463,10 +503,35 @@ function GoalShare({
   );
 }
 
+/** A period pay could not compute, said to the member in amber: their statement is out of date, never whose rate lacks. */
+function MyBlockNotice({
+  block,
+  hasStatement = true,
+}: {
+  block: PayPeriodBlock;
+  hasStatement?: boolean;
+}): JSX.Element {
+  const { title, text } = myBlockedText(block, hasStatement);
+  return (
+    <div className="rp-notice nv-enter" data-tone="warn" role="status">
+      <p className="rp-notice__title">{title}</p>
+      <p className="rp-notice__text">{text}</p>
+    </div>
+  );
+}
+
 /** One of the member's past periods: its state, its net and closing beneath, and one amount. */
 function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: () => void }): JSX.Element {
   const { window } = summary;
-  const amount = memberPeriodAmount(summary);
+  const chip = memberPhaseChip(summary);
+  // A period carried over pays nothing: its row says what went on the next one, the member's `carriedMinor` (#295).
+  const amount =
+    chip.label === 'Reporté'
+      ? {
+          minor: summary.carriedMinor,
+          what: `reporté sur le ${periodTitle(followingPeriod(window.period), false)}`,
+        }
+      : memberPeriodAmount(summary);
   const sub = `${amountText(summary.netMinor, 'EUR')} de net${summary.ended ? '' : ' à ce jour'}`;
   return (
     <button type="button" className="py-period nv-tap" onClick={onOpen}>
@@ -474,7 +539,7 @@ function MyPeriodRow({ summary, onOpen }: { summary: PayPeriodSummary; onOpen: (
         <span className="py-period__name nv-num">{periodTitle(window.period, false)}</span>
         <span className="py-period__sub nv-num">{sub}</span>
       </span>
-      <Chip chip={memberPhaseChip(summary)} />
+      <Chip chip={chip} />
       <span className="py-period__amount nv-num">
         {amountText(amount.minor, 'EUR')}
         <small>{amount.what}</small>
@@ -498,8 +563,12 @@ function MyStatementDialog({
   const names = usePayNames(period, false);
   const data = read.data?.period === period ? read.data : undefined;
   const statement = data?.statements[0];
+  const cfa = useCfaFrancs(statement?.memberId);
+  const delay = usePayrollSettings().data?.payoutDelayBusinessDays ?? null;
   const words =
-    data === undefined || statement === undefined ? null : myStatementWords(statement, data.ended, now);
+    data === undefined || statement === undefined
+      ? null
+      : myStatementWords(statement, data.ended, now, delay);
   return (
     <Dialog
       className="py-dialog"
@@ -525,13 +594,21 @@ function MyStatementDialog({
             <Loading rows={2} />
           )
         ) : statement === undefined || words === null ? (
-          <p className="py-quiet">Pas de relevé à ton nom sur cette quinzaine.</p>
+          data.blocked ? (
+            <MyBlockNotice block={data.blocked} hasStatement={false} />
+          ) : (
+            <p className="py-quiet">Pas de relevé à ton nom sur cette quinzaine.</p>
+          )
         ) : (
           <>
-            <div className="py-dialog__hero">
+            {data.blocked ? <MyBlockNotice block={data.blocked} /> : null}
+            <div className="py-dialog__hero" data-stale={data.blocked ? 'true' : undefined}>
               <div className="py-hero">
                 <p className="py-hero__label">{words.label}</p>
                 <p className="py-hero__value nv-num">{amountText(statement.payableMinor, 'EUR')}</p>
+                {statement.payableMinor === 0 || !cfa ? null : (
+                  <p className="py-hero__note nv-num">{fcfaText(statement.payableMinor)}</p>
+                )}
               </div>
               {words.notes.map((note) => (
                 <p key={note} className="py-hero__note nv-num">
@@ -539,7 +616,7 @@ function MyStatementDialog({
                 </p>
               ))}
             </div>
-            <MoneyPath statement={statement} names={names} you />
+            <MoneyPath statement={statement} names={names} you payLabel={words.label} />
           </>
         )}
         <div className="py-dialog__foot">

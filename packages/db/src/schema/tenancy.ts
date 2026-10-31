@@ -1,6 +1,17 @@
 import { PlatformSchema, SessionStateSchema } from '@nirvana/contracts';
 import { sql } from 'drizzle-orm';
-import { check, customType, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  customType,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { createdAt, enumCheck, enumText, id, tenantPolicy, timestampTz } from './columns';
 
@@ -12,6 +23,11 @@ export const creators = pgTable(
   {
     id: id(),
     displayName: text('display_name').notNull(),
+    /**
+     * `creatorNameKey(displayName)` (packages/contracts): her name without case, accents, invisible characters or
+     * surrounding spaces. Unique: two creators never share a name (Charles, 28/10/2026), even when created at once.
+     */
+    nameKey: text('name_key').notNull(),
     timezone: text('timezone').notNull(),
     /** `CreatorSettings` (packages/contracts), camelCase keys. */
     settings: jsonb('settings').notNull().default({}),
@@ -20,6 +36,7 @@ export const creators = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
+    uniqueIndex('creators_name_key_unique').on(t.nameKey),
     check(
       'creators_agent_hours_object_check',
       sql`${t.agentHours} is null or jsonb_typeof(${t.agentHours}) = 'object'`,

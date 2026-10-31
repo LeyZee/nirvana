@@ -4,6 +4,7 @@ import {
   CreatorIdSchema,
   DomainError,
   DraftIdSchema,
+  PersonaVersionIdSchema,
   JOB_PAYLOADS,
   newId,
   PlatformAccountIdSchema,
@@ -34,7 +35,9 @@ import { createFansModule } from '../modules/fans';
 
 const T0 = new Date('2026-10-17T20:00:00.000Z');
 /** Lets every bubble through: the guards themselves are tested in `agent` and `approval-guard`. */
-const PASS_GUARD = { check: () => ({ isBlocked: false, codes: [] }) };
+const PASS_GUARD = {
+  forCreator: () => Promise.resolve({ check: () => ({ isBlocked: false, codes: [] }) }),
+};
 const NO_LOG = { info: () => undefined, warn: () => undefined };
 const USER = UserIdSchema.parse('0199f2a0-0000-7000-8000-000000000001');
 
@@ -182,7 +185,7 @@ describe('conversations module (P0-05)', () => {
     platformAccountId = newId(PlatformAccountIdSchema);
     await test.admin.db
       .insert(schema.creators)
-      .values({ id: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
+      .values({ id: creatorId, nameKey: creatorId, displayName: 'Test', timezone: 'Europe/Paris' });
     await test.admin.db
       .insert(schema.platformAccounts)
       .values({ id: platformAccountId, creatorId, platform: 'reveal', handle: 'test' });
@@ -307,6 +310,7 @@ describe('conversations module (P0-05)', () => {
 
   it('reads the approved bubbles against the conversation so far, his messages and hers (P3-13)', async () => {
     const seen: { bubbles: readonly string[]; context: GuardReadContext }[] = [];
+    const creators: string[] = [];
     conversations = createConversationsModule({
       db: test.app.db,
       fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
@@ -315,9 +319,14 @@ describe('conversations module (P0-05)', () => {
       recentLogin: () => Promise.resolve(),
       voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
       guard: {
-        check: (bubbles, context) => {
-          seen.push({ bubbles, context });
-          return { isBlocked: false, codes: [] };
+        forCreator: (asked) => {
+          creators.push(asked);
+          return Promise.resolve({
+            check: (bubbles: readonly string[], context: GuardReadContext) => {
+              seen.push({ bubbles, context });
+              return { isBlocked: false, codes: [] };
+            },
+          });
         },
       },
       clock,
@@ -326,12 +335,43 @@ describe('conversations module (P0-05)', () => {
     const draftId = await respond(conversationId);
     await conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Je pense à toi'] });
 
+    expect(creators).toEqual([creatorId]);
     expect(seen).toEqual([
       {
         bubbles: ['Je pense à toi'],
         context: { history: [{ from: 'fan', text: 'Tu fais quoi ce soir ?' }] },
       },
     ]);
+  });
+
+  it('approves nothing for a creator without an active persona: her guards cannot be read (fail closed)', async () => {
+    conversations = createConversationsModule({
+      db: test.app.db,
+      fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
+      sender,
+      requireRole: () => () => Promise.resolve(),
+      recentLogin: () => Promise.resolve(),
+      voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+      guard: { forCreator: () => Promise.resolve(null) },
+      clock,
+    });
+    const { conversationId } = await ingest('c-no-persona', fanMessage('c-no-persona', 'Coucou'));
+    const draftId = await respond(conversationId);
+    await expect(
+      conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Coucou'] }),
+    ).rejects.toMatchObject({ code: 'persona_inactive_unprocessable' });
+    const [draft] = await test.admin.db.select().from(schema.drafts).where(eq(schema.drafts.id, draftId));
+    expect(draft).toMatchObject({ status: 'pending', finalBubbles: null });
+    conversations = createConversationsModule({
+      db: test.app.db,
+      fans: createFansModule({ db: test.app.db, adminDb: test.admin.db }),
+      sender,
+      requireRole: () => () => Promise.resolve(),
+      recentLogin: () => Promise.resolve(),
+      voice: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+      guard: PASS_GUARD,
+      clock,
+    });
   });
 
   it('sends approved bubbles once each, resumes after a failure, and goes back to idle', async () => {
@@ -419,6 +459,18 @@ describe('conversations module (P0-05)', () => {
     draftId = await respond(conversationId);
     await conversations.approveDraft({ ...command(conversationId), draftId, bubbles: ['Un', 'Deux'] });
     await conversations.jobs.send({ creatorId, conversationId, draftId, correlationId: 'test' }, NO_LOG, 1);
+    // Automatique opens only with an active persona version, proved by her drafts (recette 28/10, G4).
+    const personaVersionId = newId(PersonaVersionIdSchema);
+    await test.admin.db.insert(schema.personaVersions).values({
+      id: personaVersionId,
+      creatorId,
+      version: 'rebuild',
+      sourcePath: 'personas/example.yaml',
+      content: {},
+      contentHash: 'rebuild',
+      isActive: true,
+      activatedAt: new Date(),
+    });
     // Automatique opens behind its lock (ADR 0019): 100 drafts sent as is and a passed blind test.
     await test.admin.db.insert(schema.drafts).values(
       Array.from({ length: 100 }, (_, i) => ({
@@ -427,6 +479,7 @@ describe('conversations module (P0-05)', () => {
         conversationId,
         status: 'sent',
         promptHashes: { voicePrompt: 'voice@test', voiceModel: 'model-test' },
+        personaVersionId,
         decidedAt: new Date(T0.getTime() - (i + 1) * 1_000),
         idempotencyKey: `rebuild:${String(i)}`,
       })),

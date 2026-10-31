@@ -3,7 +3,9 @@ import { countUp } from '@nirvana/design-system';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, type JSX } from 'react';
 
-import { euros, percent, rateTone } from './logic';
+import { euros, FICTIONAL, percent, rateTone } from './logic';
+
+const plural = (n: number, one: string, many: string): string => `${String(n)} ${n > 1 ? many : one}`;
 
 /**
  * The one number of the screen, and nothing that competes with it: what wrote the answers and what the
@@ -11,7 +13,9 @@ import { euros, percent, rateTone } from './logic';
  * This is the playground rate (ADR 0019): it calibrates a voice version and never opens the automatic mode.
  */
 export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boolean }): JSX.Element {
-  const { rate, target, rated, trendPoints, previousVersion } = state.rate;
+  const { target, rated, trendPoints, previousVersion } = state.rate;
+  // In the demo nothing is rated for real: its rate is made up, so the screen's one number stays empty.
+  const rate = isDemo ? null : state.rate.rate;
   const tone = rateTone(rate, target);
   const valueRef = useRef<HTMLSpanElement>(null);
   const shown = useRef(0);
@@ -31,12 +35,9 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
 
   return (
     <div className="pg-bar nv-plate">
-      <div
-        className={`pg-rate pg-rate--${tone}`}
-        title={`Réponses gardées telles quelles sur les ${String(rated)} dernières notées de cette version.`}
-      >
+      <div className={`pg-rate pg-rate--${tone}`}>
         {/* Written by the effect only: React never owns this text, so the count is never overwritten. */}
-        <span className="pg-rate__v" ref={valueRef} />
+        <span className={`pg-rate__v ${rate === null ? 'is-empty' : ''}`} ref={valueRef} />
         <span className="pg-rate__t">
           <span className="pg-rate__n">Validées sans retouche</span>
           <span
@@ -48,21 +49,36 @@ export function RateBar({ state, isDemo }: { state: PlaygroundState; isDemo: boo
             <b style={{ left: `${String(target * 100)}%` }} />
           </span>
           <span className="pg-rate__d">
-            Objectif {percent(target)}
-            {trendPoints === null || previousVersion === null ? null : (
+            {isDemo ? (
+              'Démo : rien n’est noté pour de vrai'
+            ) : rate === null ? (
+              'Note ta première réponse pour lancer le taux'
+            ) : (
               <>
-                {' · '}
-                <b className={trendPoints < 0 ? 'is-down' : undefined}>
-                  {trendPoints >= 0 ? '+' : ''}
-                  {Math.round(trendPoints)} pts
-                </b>{' '}
-                depuis la voix {previousVersion.voicePrompt}
+                Sur {plural(rated, 'réponse notée', 'réponses notées')} · objectif {percent(target)}
+                {trendPoints === null || previousVersion === null ? null : (
+                  <>
+                    {' · '}
+                    <b className={trendPoints < 0 ? 'is-down' : undefined}>
+                      {trendPoints >= 0 ? '+' : ''}
+                      {Math.round(trendPoints)} pts
+                    </b>{' '}
+                    depuis la voix {previousVersion.voicePrompt}
+                  </>
+                )}
               </>
             )}
           </span>
         </span>
       </div>
       <span className="pg-bar__sp" />
+      {/*
+        Whom the answers speak as: the playground's own fictional persona (ADR 0010), never a creator's. Its rate
+        calibrates the voice on it, not on the persona she writes with (M13).
+      */}
+      <span className="pg-bar__meta" title={FICTIONAL}>
+        Persona fictive : {state.persona.name}
+      </span>
       {isDemo ? (
         <span
           className="pg-demo"

@@ -7,6 +7,7 @@ import { countryFlag, countryName } from '@/lib/country';
 const COPY: LinkPageCopy = {
   eyebrow: (preview) => `${countryFlag(preview.country)} ${countryName(preview.country)}`,
   title: (preview) => `Bienvenue, ${preview.displayName}`,
+  page: 'Bienvenue',
   lead: 'Choisis ton mot de passe. Avec ton e-mail, il t’ouvre ton espace, sur ton téléphone comme sur un ordinateur.',
   passwordLabel: 'Mot de passe',
   submit: 'Entrer',
