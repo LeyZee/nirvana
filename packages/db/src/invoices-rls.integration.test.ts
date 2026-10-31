@@ -337,7 +337,7 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
         agency: AGENCY,
         paymentTerms:
           'Aucun escompte. Pénalités de retard au triple du taux d’intérêt légal, indemnité de 40 €.',
-        dueDays: 15,
+        dueDays: 60,
         documentReminderDays: 30,
         accounts: { expense: '622', supplierPrefix: '401', vatDeductible: '44566', vatSelfAssessed: '4452' },
         updatedBy: owner,
@@ -361,13 +361,13 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
         await as(manager, (tx) =>
           tx
             .update(s.billingSettings)
-            .set({ dueDays: 30, updatedBy: manager })
+            .set({ dueDays: 45, updatedBy: manager })
             .returning({ id: s.billingSettings.id }),
         ),
       ).toEqual([]);
       expect(await as(manager, (tx) => tx.select().from(s.billingSettings))).toHaveLength(1);
       expect(await as(kofi, (tx) => tx.select().from(s.billingSettings))).toHaveLength(0);
-      await as(owner, (tx) => tx.update(s.billingSettings).set({ dueDays: 30, updatedBy: owner }));
+      await as(owner, (tx) => tx.update(s.billingSettings).set({ dueDays: 45, updatedBy: owner }));
       // The owner changes the payment terms of an existing row, as every other setting (an UPDATE granted by column).
       const later =
         'Aucun escompte. Pénalités de retard au taux de la BCE majoré de 10 points, indemnité de 40 €.';

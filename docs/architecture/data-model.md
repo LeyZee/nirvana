@@ -276,7 +276,9 @@ pay_adjustments            id, member_id, period (première quinzaine ouverte du
                            corrects_statement_id (un relevé validé ou payé du même membre, d'une quinzaine antérieure :
                            la quinzaine qu'il corrige, migration 0041), created_by, created_at (agence, jamais pour soi ;
                            ajout seul)
-carry_overs                id, member_id, from_period, to_period (la suivante), amount_minor (≠ 0), statement_id
+carry_overs                id, member_id, from_period, to_period (la suivante), amount_minor (≠ 0), rank smallint
+                           (1 ou 2 : combien de fois de suite un montant positif est reporté, 1 pour un négatif ; le
+                           déclencheur veut celui qui suit le report d'avant, ADR 0038, migration 0043), statement_id
                            (unique), created_at (écrit à la validation ; un par membre et quinzaine d'origine ; ajout seul)
 pay_period_closings        period (clé) → pay_periods, team_net_minor bigint, collective (jsonb, l'objectif tel
                            qu'atteint), exchange_rates (jsonb, les taux figés), closed_by, closed_at (migration 0029,
@@ -315,7 +317,7 @@ Mêmes portées que la paie (migration 0041, ADR 0023 § Données et RLS) : un m
 ```
 billing_settings           id = 1, agency (jsonb : raison sociale, adresse, SIREN, TVA), payment_terms (texte de 1 à
                            360 caractères imprimé après l'échéance : escompte, pénalités, indemnité ; 0042),
-                           due_days (60 au plus, 0042), document_reminder_days,
+                           due_days (de 45 à 60, ADR 0038, 0043), document_reminder_days,
                            accounts (jsonb : comptes du journal des achats), updated_by, updated_at (propriétaire)
 billing_regimes            id, name, countries text[], vat_treatment (reverse_charge|exempt|charged), vat_rate_bps (null
                            si franchise), withholding, mentions text[], documents text[], tax_id_required, created_by,

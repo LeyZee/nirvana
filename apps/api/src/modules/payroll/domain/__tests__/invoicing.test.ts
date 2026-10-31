@@ -137,7 +137,7 @@ const facts = (patch: Partial<InvoicingFacts> = {}): InvoicingFacts => ({
       vatNumber: 'FR12123456789',
     },
     paymentTerms: TERMS,
-    dueDays: 7,
+    dueDays: 60,
   },
   invoices: [firstHalf()],
   issuedKeys: new Set(),
@@ -162,11 +162,11 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
       creditedInvoiceId: null,
       period: '2026-10-16',
       issuedOn: '2026-11-02',
-      dueOn: '2026-11-09',
+      dueOn: '2027-01-01',
       contractor: facts().identity,
       agency: facts().settings?.agency,
       regime: ABROAD,
-      mentions: [...ABROAD.mentions, paymentTermsMention('2026-11-09', TERMS)],
+      mentions: [...ABROAD.mentions, paymentTermsMention('2027-01-01', TERMS)],
       lines,
       totals: invoiceTotals(lines, ABROAD.vat),
       acceptanceDeadline: new Date('2026-11-17T09:30:00.000Z'),
@@ -193,7 +193,7 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
   it('prints its due date, then the agency’s payment terms as its settings word them, never on a credit note', () => {
     const plain = (text: string | undefined): string | undefined => text?.replace(/[\u00a0\u202f]/gu, ' ');
     const [invoice, note] = planInvoicing(facts()).documents;
-    expect(plain(invoice?.mentions.at(-1))).toBe(`Échéance : 9 novembre 2026. ${TERMS}`);
+    expect(plain(invoice?.mentions.at(-1))).toBe(`Échéance : 1er janvier 2027. ${TERMS}`);
     expect(note?.mentions.some((one) => one.startsWith('Échéance'))).toBe(false);
 
     // Other terms in the settings, other words on the next invoice: the code writes only the date.
@@ -202,7 +202,7 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
     const settings = facts().settings;
     if (settings === null) throw new Error('no settings');
     const [next] = planInvoicing(facts({ settings: { ...settings, paymentTerms: later } })).documents;
-    expect(plain(next?.mentions.at(-1))).toBe(`Échéance : 9 novembre 2026. ${later}`);
+    expect(plain(next?.mentions.at(-1))).toBe(`Échéance : 1er janvier 2027. ${later}`);
   });
 
   it('keeps the regime of the invoice it cites on a credit note, under the parties of the day', () => {

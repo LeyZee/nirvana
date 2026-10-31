@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BillingRegimeSchema,
+  BillingSettingsSchema,
+  DEFAULT_INVOICE_DUE_DAYS,
   INVOICE_ERROR_CODES,
   InvoiceNumberSchema,
   InvoicePrefixSchema,
@@ -94,5 +96,21 @@ describe('invoices', () => {
     };
     expect(InvoiceSchema.safeParse(note).success).toBe(true);
     expect(InvoiceSchema.safeParse({ ...note, creditedInvoiceId: null }).success).toBe(false);
+  });
+
+  it('fall due 45 to 60 days after their issue, 60 by default (art. L441-10, ADR 0038)', () => {
+    const settings = (dueDays: number) => ({
+      agency: invoice.agency,
+      paymentTerms:
+        'Aucun escompte. Pénalités de retard au triple du taux d’intérêt légal, indemnité de 40 €.',
+      dueDays,
+      documentReminderDays: 30,
+      accounts: { expense: '622', supplierPrefix: '401', vatDeductible: '44566', vatSelfAssessed: '4452' },
+      updatedAt: '2026-10-31T09:00:00.000Z',
+    });
+    expect(DEFAULT_INVOICE_DUE_DAYS).toBe(60);
+    for (const ok of [45, 60]) expect(BillingSettingsSchema.safeParse(settings(ok)).success).toBe(true);
+    for (const wrong of [15, 44, 61, 90])
+      expect(BillingSettingsSchema.safeParse(settings(wrong)).success).toBe(false);
   });
 });

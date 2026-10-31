@@ -118,7 +118,7 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
       id: 1,
       agency: AGENCY,
       paymentTerms: TERMS,
-      dueDays: 15,
+      dueDays: 60,
       documentReminderDays: 30,
       accounts: { expense: '622', supplierPrefix: '401', vatDeductible: '44566', vatSelfAssessed: '4452' },
       updatedBy: team.ownerId,
@@ -202,7 +202,7 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
       sequence: 1,
       idempotencyKey: `invoice:${id}`,
       issuedBy: null,
-      dueOn: plusDays(invoice.issuedOn, 15),
+      dueOn: plusDays(invoice.issuedOn, 60),
       contractor: {
         legalName: 'Théo Inventé',
         address: '3 rue Imaginaire, 69001 Lyon',
