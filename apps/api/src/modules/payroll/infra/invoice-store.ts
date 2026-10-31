@@ -19,10 +19,11 @@ import {
   type InvoiceRegime,
 } from '@nirvana/contracts';
 import { and, eq, inArray, schema, sql, withAdmin, type Database, type Transaction } from '@nirvana/db';
+import { z } from 'zod';
 
 import type { IssueWarning } from '../domain/billing';
 import type { InvoiceSource } from '../domain/invoices';
-import type { DocumentToIssue, InvoicingFacts, StoredInvoice } from '../domain/invoicing';
+import type { DocumentNotIssued, DocumentToIssue, InvoicingFacts, StoredInvoice } from '../domain/invoicing';
 import type { PayrollInvoiceStore } from '../domain/ports';
 
 import { CountedSchema } from './read-store';
@@ -50,6 +51,9 @@ const {
 } = schema;
 
 type Statement = typeof commissionStatements.$inferSelect;
+
+/** What an invoice's credit notes took off, summed by Postgres as a `bigint` text: a whole amount, never negative. */
+const CreditedSchema = z.coerce.number().int().nonnegative();
 
 /**
  * What the invoice reads of a validated statement (`InvoiceSource`): its lines summed per account (an invoice bills a
@@ -179,7 +183,7 @@ async function invoicesOf(tx: Transaction, memberId: string): Promise<StoredInvo
     period: PayPeriodSchema.parse(row.period),
     issuedOn: row.issuedOn,
     exclVatMinor: row.exclVatMinor,
-    creditedMinor: Number(row.creditedMinor),
+    creditedMinor: CreditedSchema.parse(row.creditedMinor),
     regime: InvoiceRegimeSchema.parse(row.regime),
     mentions: row.mentions,
     lines: lines
@@ -378,6 +382,69 @@ async function writeDocument(
 }
 
 /**
+ * Tells the owner of each document the plan could not issue (`invoice_not_issued`, and its line of `audit_log`), once:
+ * a rerun (a retry, or lot 5's enqueue once a regime is validated) republishes nothing already said for this statement,
+ * document, reason and amount, and a new reason is said. Two equal refusals of one run (two credit notes of the same
+ * amount without an invoice) are two alerts: what was published is counted, never only looked for. Read in the job's
+ * transaction, under the contractor's lock.
+ */
+async function publishNotIssued(
+  tx: Transaction,
+  statement: Statement,
+  notIssued: readonly DocumentNotIssued[],
+  at: Date,
+): Promise<void> {
+  const said = await tx
+    .select({ payload: domainEvents.payload })
+    .from(domainEvents)
+    .where(
+      and(
+        eq(domainEvents.type, 'invoice_not_issued'),
+        sql`${domainEvents.payload}->>'statementId' = ${statement.id}`,
+      ),
+    );
+  const sayOf = (one: Pick<DocumentNotIssued, 'document' | 'reason' | 'amountMinor'>): string =>
+    `${one.document}:${one.reason}:${String(one.amountMinor)}`;
+  const left = new Map<string, number>();
+  for (const row of said) {
+    const key = sayOf(EVENT_PAYLOADS.invoice_not_issued.parse(row.payload));
+    left.set(key, (left.get(key) ?? 0) + 1);
+  }
+  for (const one of notIssued) {
+    const key = sayOf(one);
+    const already = left.get(key) ?? 0;
+    if (already > 0) {
+      left.set(key, already - 1);
+      continue;
+    }
+    const payload = EVENT_PAYLOADS.invoice_not_issued.parse({
+      memberId: statement.memberId,
+      statementId: statement.id,
+      period: statement.period,
+      ...one,
+    });
+    await tx.insert(domainEvents).values({
+      id: newId(EventIdSchema),
+      creatorId: null,
+      type: 'invoice_not_issued',
+      payload,
+      actor: 'system',
+      correlationId: `payroll.issue_invoices:${statement.id}`,
+      createdAt: at,
+    });
+    await tx.insert(auditLog).values({
+      id: newId(AuditEntryIdSchema),
+      userId: null,
+      action: 'invoice.not_issued',
+      entity: 'commission_statement',
+      entityId: statement.id,
+      details: { ...one },
+      ip: null,
+    });
+  }
+}
+
+/**
  * `payroll.issue_invoices` as the jobs (`withAdmin`, which reads every member and creator). One transaction per
  * statement, under the contractor's advisory lock: two statements of one contractor issue one after the other, so
  * that a credit note counts the one written before it.
@@ -416,32 +483,7 @@ export function createDrizzlePayrollInvoiceStore(
             number: await writeDocument(tx, statement, facts.prefix, issuedAt, document, planned.warnings),
           });
         }
-        for (const one of planned.notIssued) {
-          const payload = EVENT_PAYLOADS.invoice_not_issued.parse({
-            memberId: statement.memberId,
-            statementId: statement.id,
-            period: statement.period,
-            ...one,
-          });
-          await tx.insert(domainEvents).values({
-            id: newId(EventIdSchema),
-            creatorId: null,
-            type: 'invoice_not_issued',
-            payload,
-            actor: 'system',
-            correlationId: `payroll.issue_invoices:${statement.id}`,
-            createdAt: issuedAt,
-          });
-          await tx.insert(auditLog).values({
-            id: newId(AuditEntryIdSchema),
-            userId: null,
-            action: 'invoice.not_issued',
-            entity: 'commission_statement',
-            entityId: statement.id,
-            details: { ...one },
-            ip: null,
-          });
-        }
+        await publishNotIssued(tx, statement, planned.notIssued, issuedAt);
         return { kind: 'planned', issued, notIssued: planned.notIssued, warnings: planned.warnings };
       }),
   };

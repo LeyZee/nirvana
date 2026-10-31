@@ -245,7 +245,7 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
     expect(await documentsOf(theo)).toHaveLength(1);
   });
 
-  it('tells the owner of an invoice it cannot issue, the statement staying validated, and issues it later', async () => {
+  it('tells the owner once of an invoice it cannot issue, the statement staying validated', async () => {
     expect((await team.validate(team.owner, lea, Q1)).statusCode).toBe(200);
     const id = await statementId(lea, Q1);
     const outcome = await issue(id);
@@ -272,11 +272,17 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
       },
     ]);
     expect(await team.audited('invoice.not_issued')).toBe(1);
+
+    // Run again (a retry, or lot 5's enqueue): the same refusal is not said twice.
+    expect(await issue(id)).toMatchObject({ issued: [], notIssued: [{ reason: 'no_mandate' }] });
+    expect(await notIssued(id)).toHaveLength(1);
+    expect(await team.audited('invoice.not_issued')).toBe(1);
   });
 
   it('issues the credit note an adjustment owes on the invoice of the period it corrects, in its regime', async () => {
     expect(await adjust(theo, -100, Q1, 'Vente remboursée par la plateforme')).toMatchObject({ period: Q2 });
     expect(await adjust(theo, -5_000, Q1, 'Pack remboursé deux fois')).toMatchObject({ period: Q2 });
+    expect(await adjust(theo, -5_000, Q1, 'Second pack remboursé deux fois')).toMatchObject({ period: Q2 });
     await team.recalculate(Q2);
     expect((await team.validate(team.owner, theo, Q2)).statusCode).toBe(200);
     const id = await statementId(theo, Q2);
@@ -293,8 +299,12 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
         { kind: 'invoice', number: `THEO-${year}-0002` },
         { kind: 'credit_note', number: `THEO-${year}-0003` },
       ],
-      // The second adjustment is more than what the first half's invoice has left: never split, said to the owner.
-      notIssued: [{ document: 'credit_note', reason: 'no_invoice_to_credit', amountMinor: 5_000 }],
+      // The two others are each more than what the first half's invoice has left: never split, each said to the
+      // owner, though their amounts are equal.
+      notIssued: [
+        { document: 'credit_note', reason: 'no_invoice_to_credit', amountMinor: 5_000 },
+        { document: 'credit_note', reason: 'no_invoice_to_credit', amountMinor: 5_000 },
+      ],
     });
     expect(note).toMatchObject({
       kind: 'credit_note',
@@ -319,17 +329,20 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
     expect(lines).toEqual([
       expect.objectContaining({ kind: 'adjustment', label: 'Régularisation', amountMinor: -100 }),
     ]);
-    expect((await notIssued(id)).map((one) => one.payload)).toEqual([
-      expect.objectContaining({
-        document: 'credit_note',
-        reason: 'no_invoice_to_credit',
-        amountMinor: 5_000,
-      }),
-    ]);
+    const unplaced: unknown = expect.objectContaining({
+      document: 'credit_note',
+      reason: 'no_invoice_to_credit',
+      amountMinor: 5_000,
+    });
+    expect((await notIssued(id)).map((one) => one.payload)).toEqual([unplaced, unplaced]);
 
-    // A rerun finds the same credit notes under the same keys: nothing new, the unplaced one said again.
-    expect(await issue(id)).toMatchObject({ issued: [], notIssued: [{ reason: 'no_invoice_to_credit' }] });
+    // A rerun finds the same credit notes under the same keys: nothing new, and nothing said again.
+    expect(await issue(id)).toMatchObject({
+      issued: [],
+      notIssued: [{ reason: 'no_invoice_to_credit' }, { reason: 'no_invoice_to_credit' }],
+    });
     expect(await documentsOf(theo)).toHaveLength(3);
+    expect(await notIssued(id)).toHaveLength(2);
   });
 
   it('after a partial issue, a rerun issues the very credit note that was missing, once', async () => {
@@ -350,6 +363,8 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
     expect(await issue(q1)).toMatchObject({ issued: [{ kind: 'invoice' }], notIssued: [] });
     expect(await issue(q2)).toMatchObject({ issued: [{ kind: 'credit_note' }], notIssued: [] });
     expect(await issue(q2)).toMatchObject({ issued: [], notIssued: [] });
+    // The missing credit note was said once, when it could not go out.
+    expect(await notIssued(q2)).toHaveLength(1);
     const documents = await documentsOf(lea);
     expect(documents.map((one) => [one.kind, one.sequence, one.period, one.idempotencyKey])).toEqual([
       ['invoice', 1, Q2, `invoice:${q2}`],
