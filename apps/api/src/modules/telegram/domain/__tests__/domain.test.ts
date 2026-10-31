@@ -2,6 +2,8 @@ import {
   ConversationIdSchema,
   CreatorIdSchema,
   CustomAlertIdSchema,
+  INVOICE_NOT_ISSUED_REASONS,
+  PayPeriodSchema,
   TelegramChatIdSchema,
   newId,
 } from '@nirvana/contracts';
@@ -162,6 +164,34 @@ describe('classification (ADR 0020 §2)', () => {
       topic: 'important',
       body: 'Aucun taux USD de la BCE n’est encore arrivé : une quinzaine payée en USD ne peut pas être clôturée.',
     });
+  });
+
+  it('says a document of a validated statement was not issued, by period and reason, without the member nor the amount', () => {
+    const period = PayPeriodSchema.parse('2026-10-16');
+    expect(
+      classify({ kind: 'invoice_not_issued', period, document: 'invoice', reason: 'no_mandate' }),
+    ).toEqual({
+      kind: 'notice',
+      topic: 'important',
+      threadKey: null,
+      title: 'Important',
+      body: 'La facture d’un relevé validé de la quinzaine du 16 au 31 oct. n’a pas été émise : le prestataire n’a pas accepté de mandat de facturation. Le relevé reste validé.',
+      link: { label: 'Ouvrir la quinzaine', path: '/paie/quinzaine?quinzaine=2026-10-16' },
+    });
+    const credit = classify({
+      kind: 'invoice_not_issued',
+      period: PayPeriodSchema.parse('2027-02-01'),
+      document: 'credit_note',
+      reason: 'no_invoice_to_credit',
+    });
+    expect(credit?.kind === 'notice' ? credit.body : '').toBe(
+      'Un avoir dû par la quinzaine du 1er au 15 févr. n’a pas été émis : aucune facture ne peut prendre l’avoir entier, à voir avec le comptable. Le relevé reste validé.',
+    );
+    // Every reason of the contract has its sentence.
+    for (const reason of INVOICE_NOT_ISSUED_REASONS) {
+      const notice = classify({ kind: 'invoice_not_issued', period, document: 'invoice', reason });
+      expect(notice?.kind === 'notice' ? notice.body : '').not.toContain('undefined');
+    }
   });
 
   it('says a message could not leave, as important, in the conversation’s thread', () => {
