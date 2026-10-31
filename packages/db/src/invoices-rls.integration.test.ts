@@ -368,6 +368,17 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       expect(await as(manager, (tx) => tx.select().from(s.billingSettings))).toHaveLength(1);
       expect(await as(kofi, (tx) => tx.select().from(s.billingSettings))).toHaveLength(0);
       await as(owner, (tx) => tx.update(s.billingSettings).set({ dueDays: 30, updatedBy: owner }));
+      // The owner changes the payment terms of an existing row, as every other setting (an UPDATE granted by column).
+      const later =
+        'Aucun escompte. Pénalités de retard au taux de la BCE majoré de 10 points, indemnité de 40 €.';
+      expect(
+        await as(owner, (tx) =>
+          tx
+            .update(s.billingSettings)
+            .set({ paymentTerms: later, updatedBy: owner })
+            .returning({ paymentTerms: s.billingSettings.paymentTerms }),
+        ),
+      ).toEqual([{ paymentTerms: later }]);
       expect(await failure(admin((tx) => tx.delete(s.billingSettings)))).toMatch(KEPT);
     });
 
