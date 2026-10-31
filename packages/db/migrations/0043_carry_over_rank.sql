@@ -3,8 +3,9 @@
 -- `carry_overs.rank`: how many times in a row a positive amount has been carried, this one included (1, then 2); always
 -- 1 for a negative one, which starts the count again. Added with a default of 1: a carry-over written before is a
 -- first one, as the ADR says.
--- `keep_carry_over` checks the rank against the member's carry-over into `from_period`: the one before plus one when
--- both are positive, otherwise 1. A third positive carry-over in a row would be rank 3, which the CHECK refuses: the
+-- `keep_carry_over` checks the rank against the member's carry-over into `from_period` (one at most: unique on
+-- `(member_id, from_period)`, and `to_period` is the next period): the one before plus one when both are positive,
+-- otherwise 1. A third positive carry-over in a row would be rank 3, which the CHECK refuses: the
 -- base, not only the engine, keeps the third period paying.
 -- A positive carry-over taken over from Imperium (EQ-07, nothing imported yet) is to be paid by the first period of
 -- Nirvana (ADR 0038: Imperium did not count its carry-overs in a row), so it goes in at rank 2. This trigger refuses
@@ -28,7 +29,7 @@ BEGIN
       USING ERRCODE = 'restrict_violation';
   END IF;
   IF NEW."rank" <> (CASE WHEN NEW."amount_minor" > 0 THEN coalesce((
-    SELECT max(p."rank") + 1 FROM "carry_overs" p
+    SELECT p."rank" + 1 FROM "carry_overs" p
     WHERE p."member_id" = NEW."member_id" AND p."to_period" = NEW."from_period" AND p."amount_minor" > 0
   ), 1) ELSE 1 END) THEN
     RAISE EXCEPTION 'a carry-over is what its member''s validated statement carried, at the rank that follows (ADR 0038)'
