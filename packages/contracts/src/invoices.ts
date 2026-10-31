@@ -100,6 +100,24 @@ export const INVOICE_EVENT_KINDS = [
 export const InvoiceEventKindSchema = z.enum(INVOICE_EVENT_KINDS);
 export type InvoiceEventKind = z.infer<typeof InvoiceEventKindSchema>;
 
+/**
+ * Why a document a validated statement makes due is not issued (EQ-06): its invoice, for want of an accepted mandate,
+ * of a regime the accountant validated, of a full identity, of a prefix or of the agency's identity; a credit note the
+ * period owes, when no invoice can take it whole (ADR 0036). The statement stays validated and the owner is told
+ * (`invoice_not_issued`).
+ */
+export const INVOICE_NOT_ISSUED_REASONS = [
+  'no_mandate',
+  'no_regime',
+  'regime_not_validated',
+  'identity_incomplete',
+  'prefix_missing',
+  'agency_missing',
+  'no_invoice_to_credit',
+] as const;
+export const InvoiceNotIssuedReasonSchema = z.enum(INVOICE_NOT_ISSUED_REASONS);
+export type InvoiceNotIssuedReason = z.infer<typeof InvoiceNotIssuedReasonSchema>;
+
 /** A contractor's prefix: two to eight capitals or digits, his own, frozen at his first invoice. */
 export const INVOICE_PREFIX_PATTERN = '^[A-Z0-9]{2,8}$';
 export const InvoicePrefixSchema = z
@@ -128,6 +146,8 @@ export const BILLING_EMAIL_MAX = 254;
 export const REGIME_NAME_MAX = 80;
 export const INVOICE_MENTION_MAX = 400;
 export const INVOICE_MENTIONS_MAX = 24;
+/** A document prints its regime's mentions, and a credit note the invoice it cites before them (ADR 0036). */
+export const INVOICE_DOCUMENT_MENTIONS_MAX = INVOICE_MENTIONS_MAX + 1;
 export const INVOICE_LINE_LABEL_MAX = 200;
 export const INVOICE_LINE_DETAIL_MAX = 400;
 export const INVOICE_REASON_MAX = 500;
@@ -314,7 +334,7 @@ export const InvoiceSchema = z
     contractor: InvoiceContractorSchema,
     agency: InvoiceAgencySchema,
     regime: InvoiceRegimeSchema,
-    mentions: z.array(InvoiceMentionSchema).max(INVOICE_MENTIONS_MAX),
+    mentions: z.array(InvoiceMentionSchema).max(INVOICE_DOCUMENT_MENTIONS_MAX),
     lines: z.array(InvoiceLineSchema).min(1),
     totals: InvoiceTotalsSchema,
     acceptance: z.object({

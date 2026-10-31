@@ -1,4 +1,9 @@
-import type { ContractorDocumentKind, RegimeVat } from '@nirvana/contracts';
+import type {
+  ContractorDocumentKind,
+  InvoiceAgency,
+  InvoiceNotIssuedReason,
+  RegimeVat,
+} from '@nirvana/contracts';
 
 import { BillingRegimeBackdated } from './errors';
 
@@ -120,7 +125,7 @@ function newestOf(
 }
 
 /** The identity an invoice prints for the contractor: its mentions, required. */
-interface ContractorIdentity {
+export interface ContractorIdentity {
   readonly legalName: string;
   readonly address: string;
   readonly country: string;
@@ -134,14 +139,16 @@ interface MandateFacts {
 }
 
 /** Said in amber at the validation; the invoice goes out all the same. */
-type IssueWarning =
+export type IssueWarning =
   | { readonly code: 'document_missing'; readonly kind: ContractorDocumentKind }
   | { readonly code: 'document_expired'; readonly kind: ContractorDocumentKind; readonly until: string }
   | { readonly code: 'mandate_outdated'; readonly accepted: number; readonly current: number };
 
-/** Why a validated statement has no invoice: the statement stays validated, the reason is said to the owner. */
-type NoInvoiceReason =
-  'no_mandate' | 'no_regime' | 'regime_not_validated' | 'identity_incomplete' | 'nothing_to_invoice';
+/**
+ * Why a validated statement has no invoice: the statement stays validated, the reason is said to the owner
+ * (`invoice_not_issued`), except when the period brings nothing to invoice.
+ */
+type NoInvoiceReason = Exclude<InvoiceNotIssuedReason, 'no_invoice_to_credit'> | 'nothing_to_invoice';
 
 export type IssueDecision =
   | {
@@ -161,6 +168,10 @@ export interface IssueFacts {
   readonly assignments: readonly RegimeAssignment[];
   readonly regimes: readonly BillingRegime[];
   readonly identity: ContractorIdentity | null;
+  /** The contractor's prefix, which the owner sets: his sequence's. */
+  readonly prefix: string | null;
+  /** The agency's identity on each invoice, a setting of the owner's. */
+  readonly agency: InvoiceAgency | null;
   readonly documents: readonly ContractorDocument[];
   /** What the invoice would total before tax: a statement that brings nothing of its period issues nothing. */
   readonly exclVatMinor: number;
@@ -169,10 +180,26 @@ export interface IssueFacts {
 const filled = (text: string | null | undefined): boolean =>
   text !== null && text !== undefined && text.trim() !== '';
 
+/** Whether `identity` prints every mention of the contractor `regime` asks for: never an invoice without one. */
+export function identityComplete(
+  identity: ContractorIdentity | null,
+  regime: Pick<BillingRegime, 'taxIdRequired'>,
+): identity is ContractorIdentity {
+  return (
+    identity !== null &&
+    filled(identity.legalName) &&
+    filled(identity.address) &&
+    filled(identity.country) &&
+    (!regime.taxIdRequired || filled(identity.taxId))
+  );
+}
+
 /**
- * Whether the validation of a statement issues its invoice. No accepted mandate, no regime, a regime the accountant
- * has not validated, or an identity that lacks a mention the regime prints: no invoice, since an issued invoice never
- * changes. Documents missing or out of date, or a mandate of an older version: the invoice goes out, with a warning.
+ * Whether the validation of a statement issues its invoice. A period that brings nothing to invoice issues none, and
+ * nothing is said to the owner. Otherwise no accepted mandate, no regime, a regime the accountant has not validated,
+ * an identity that lacks a mention the regime prints, no prefix or no identity of the agency: no invoice, since an
+ * issued invoice never changes. Documents missing or out of date, or a mandate of an older version: the invoice goes
+ * out, with a warning.
  */
 export function issueDecision(facts: IssueFacts): IssueDecision {
   const assignment = regimeOn(facts.assignments, facts.day);
@@ -191,19 +218,12 @@ export function issueDecision(facts: IssueFacts): IssueDecision {
     warnings.push({ code: 'mandate_outdated', accepted: acceptedVersion, current: currentVersion });
   }
   const none = (reason: NoInvoiceReason): IssueDecision => ({ kind: 'none', reason, warnings });
+  if (facts.exclVatMinor <= 0) return none('nothing_to_invoice');
   if (acceptedVersion === null) return none('no_mandate');
   if (regime === null) return none('no_regime');
   if (regime.validatedOn === null || regime.validatedOn > facts.day) return none('regime_not_validated');
-  const identity = facts.identity;
-  if (
-    identity === null ||
-    !filled(identity.legalName) ||
-    !filled(identity.address) ||
-    !filled(identity.country) ||
-    (regime.taxIdRequired && !filled(identity.taxId))
-  ) {
-    return none('identity_incomplete');
-  }
-  if (facts.exclVatMinor <= 0) return none('nothing_to_invoice');
+  if (!identityComplete(facts.identity, regime)) return none('identity_incomplete');
+  if (facts.prefix === null) return none('prefix_missing');
+  if (facts.agency === null) return none('agency_missing');
   return { kind: 'issue', regime, warnings };
 }

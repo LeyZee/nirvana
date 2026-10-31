@@ -52,6 +52,7 @@ import {
   type StatementHead,
 } from '../domain/validation';
 
+import { enqueueInvoiceIssue } from './invoice-queue';
 import { enqueuePayRecalculation } from './recalculation-queue';
 import { closingsSpan, readSnapshot, registeredAmong, type PayInputReads } from './snapshot';
 import { audit } from './writes';
@@ -353,6 +354,8 @@ export function createDrizzlePayrollValidationStore(
         // The period's other drafts on its closing, then the team's first open period, where the carry-over and the
         // reports that came late go.
         await enqueuePayRecalculation(tx, head.period);
+        // Its invoice and the credit notes its period owes (EQ-06 lot 3), once this validation commits.
+        await enqueueInvoiceIssue(tx, statementId);
         return { period: head.period };
       }),
 

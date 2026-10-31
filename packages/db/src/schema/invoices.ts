@@ -4,6 +4,7 @@ import {
   CONTEST_DELAY_MAX_DAYS,
   CONTRACTOR_DOCUMENT_KINDS,
   DOCUMENT_REMINDER_MAX_DAYS,
+  INVOICE_DOCUMENT_MENTIONS_MAX,
   INVOICE_DUE_MAX_DAYS,
   INVOICE_EVENT_KINDS,
   INVOICE_KINDS,
@@ -466,7 +467,7 @@ export const invoices = pgTable(
     ),
     check(
       'invoices_copies_check',
-      sql`jsonb_typeof(${t.contractor}) = 'object' and jsonb_typeof(${t.agency}) = 'object' and jsonb_typeof(${t.regime}) = 'object' and cardinality(${t.mentions}) <= ${num(INVOICE_MENTIONS_MAX)} and array_position(${t.mentions}, null) is null`,
+      sql`jsonb_typeof(${t.contractor}) = 'object' and jsonb_typeof(${t.agency}) = 'object' and jsonb_typeof(${t.regime}) = 'object' and cardinality(${t.mentions}) <= ${num(INVOICE_DOCUMENT_MENTIONS_MAX)} and array_position(${t.mentions}, null) is null`,
     ),
     check(
       'invoices_dates_check',
