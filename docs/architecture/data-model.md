@@ -273,7 +273,9 @@ commission_statement_lines id, statement_id, revision, platform_account_id, curr
                            rate_micros, gross, gross_eur, excl_vat, net, commission (unités mineures), shift_report_ids,
                            late_reports (jsonb), created_at (ajout seul ; une par compte et règles d'une révision)
 pay_adjustments            id, member_id, period (première quinzaine ouverte du membre), amount_minor (≠ 0), reason,
-                           corrects_statement_id, created_by, created_at (agence, jamais pour soi ; ajout seul)
+                           corrects_statement_id (un relevé validé ou payé du même membre, d'une quinzaine antérieure :
+                           la quinzaine qu'il corrige, migration 0041), created_by, created_at (agence, jamais pour soi ;
+                           ajout seul)
 carry_overs                id, member_id, from_period, to_period (la suivante), amount_minor (≠ 0), statement_id
                            (unique), created_at (écrit à la validation ; un par membre et quinzaine d'origine ; ajout seul)
 pay_period_closings        period (clé) → pay_periods, team_net_minor bigint, collective (jsonb, l'objectif tel
@@ -305,6 +307,48 @@ La clôture d'une quinzaine pour toute l'équipe (migration 0029, ADR 0032) ajou
 Les droits par colonne tiennent en plus le rôle de l'application, qui part de `REVOKE ALL` : il ne touche à un relevé que par son statut, qui l'a validé et qui l'a payé.
 
 Une quinzaine bloquée (migration 0038, recette du 28/10, Équipe G1) : quand le recalcul d'une quinzaine échoue sur un membre payé sans taux de commission ou sur une devise sans taux, le job écrit `pay_period_blocks` dans la même transaction, sous `payroll.close` (ADR 0032), et le calcul suivant qui passe la supprime. `since` reste tant que la raison est la même, et un rejeu n'écrit rien. Seul le job écrit (`REVOKE ALL`, puis `SELECT` pour l'application) ; tout membre la lit, comme `pay_periods`, et l'application ne montre à un membre que lui-même parmi `member_ids`. La ligne n'est pas en ajout seul : elle dit l'état présent, le journal du job garde l'historique.
+
+## Factures (module `payroll`, ADR 0023, ADR 0036, EQ-06)
+
+Mêmes portées que la paie (migration 0041) : un membre lit son dossier, ses pièces, ses acceptations et ses factures ; la portée `owner` | `agency` lit tout. Les fichiers (pièces, PDF) sont des clés du stockage objet (ADR 0028), jamais des octets en base.
+
+```
+billing_settings           id = 1, agency (jsonb : raison sociale, adresse, SIREN, TVA), due_days, document_reminder_days,
+                           accounts (jsonb : comptes du journal des achats), updated_by, updated_at (propriétaire)
+billing_regimes            id, name, countries text[], vat_treatment (reverse_charge|exempt|charged), vat_rate_bps (null
+                           si franchise), withholding, mentions text[], documents text[], tax_id_required, validated_on,
+                           validated_by, created_by, created_at (propriétaire ; texte figé, validation notée une fois)
+contractor_regimes         id, member_id, regime_id, effective_from, created_by, created_at (propriétaire, ajout seul ;
+                           chacune après la dernière du membre, jamais en arrière)
+contractor_profiles        member_id (clé), legal_name, address, tax_id, email, invoice_prefix (unique), verified_at,
+                           verified_by, updated_by, created_at, updated_at (le membre ou le propriétaire ; vérifié et
+                           préfixé par le propriétaire seul ; jamais supprimé)
+contractor_documents       id, member_id, kind (tax_residence|urssaf_vigilance), issued_on, valid_until, file_key,
+                           file_sha256, created_by, created_at (le membre ou le propriétaire, ajout seul)
+contract_texts             id, kind (service_contract|billing_mandate), version, body, sha256, contest_delay_days (mandat
+                           seul), created_by, created_at (propriétaire, ajout seul ; version suivante de sa sorte)
+contract_acceptances       id, member_id, text_id, text_sha256, accepted_by, accepted_at (le membre lui-même, ajout seul ;
+                           une par texte)
+invoice_counters           (member_id, year) clé, last_sequence (agence ; part de 1 et avance d'un)
+invoices                   id, kind (invoice|credit_note), member_id, statement_id, credited_invoice_id, period, prefix,
+                           year, sequence, number (unique), idempotency_key (unique), issued_at, issued_on, issued_by,
+                           due_on, contractor, agency, regime (jsonb, copiés), regime_id, mentions text[],
+                           excl_vat_minor (> 0 facture, < 0 avoir), vat_minor, incl_vat_minor, self_assessed_vat_minor,
+                           acceptance_state, acceptance_deadline, acceptance_reason, answered_at, answered_by, pdf_key,
+                           pdf_sha256, created_at (agence, jamais pour soi ; une facture par relevé ; jamais supprimée)
+invoice_lines              (invoice_id, position) clé, kind, label, detail, amount_minor (écrites avec leur facture, ajout
+                           seul)
+invoice_events             id, invoice_id, kind (issued|accepted|contested|lapsed|credited|contest_refused|paid), reason,
+                           statement_id (paid seul), by, at (ajout seul)
+```
+
+Une facture émise ne change plus, pour tous les rôles, les jobs compris (déclencheurs `keep_invoice`, `refuse_billing_change`) :
+- elle est émise `pending`, sans PDF, dans la transaction qui l'écrit avec ses lignes et son événement `issued` ; à la fin de cette transaction, ses lignes existent et s'additionnent à son total hors taxe (`check_invoice_lines`, reporté), et aucune ligne n'arrive plus ensuite ;
+- son numéro est `PRÉFIXE-AAAA-NNNN` : le préfixe du dossier de son prestataire, et le numéro que son compteur porte à cet instant, que la transaction a pris en l'avançant d'un. Ni trou ni doublon, factures et avoirs dans la même séquence ; le préfixe est figé par la première facture ;
+- une facture porte un relevé validé ou payé de son prestataire et de sa quinzaine, sous un régime validé par le comptable. Un avoir cite une facture du même prestataire, garde sa quinzaine (la prestation qu'il corrige), son régime et sa copie du régime (ADR 0036), et ne prend jamais plus que ce qui reste : deux avoirs simultanés sur une facture passent l'un après l'autre. Son relevé, s'il en a un, est le relevé plus récent dont la validation le doit ;
+- ensuite seuls bougent l'acceptation, dans les étapes de `invoice-acceptance.ts` (`pending` vers `accepted` ou `contested` avant le délai, vers `tacitly_accepted` après lui ; `contested` vers `credited`, seulement si un avoir la cite, ou vers `contest_refused`), et le PDF, noté une fois. Un événement dit l'étape où la facture se trouve, et un paiement nomme un relevé payé de son prestataire.
+
+Le texte d'un régime ne change pas, seule sa validation se note, une fois. Un dossier garde son membre ; changer d'identité efface la vérification, et seul le propriétaire vérifie et pose le préfixe. Un texte de contrat porte l'empreinte SHA-256 de son texte exact, calculée par la base ; une acceptation la recopie. Les droits par colonne partent de `REVOKE ALL` : l'application ne touche à une facture que par son acceptation ; le PDF et l'acceptation tacite sont écrits par les jobs.
 
 ## Système (hors RLS, sans `creator_id`)
 

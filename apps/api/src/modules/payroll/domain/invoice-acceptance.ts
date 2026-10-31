@@ -1,3 +1,5 @@
+import type { InvoiceAcceptanceState } from '@nirvana/contracts';
+
 import { InvoiceAcceptanceConflict } from './errors';
 
 /**
@@ -9,8 +11,7 @@ import { InvoiceAcceptanceConflict } from './errors';
  * dated in `audit_log` by the caller.
  */
 
-export type AcceptanceState =
-  'pending' | 'accepted' | 'tacitly_accepted' | 'contested' | 'credited' | 'contest_refused';
+export type AcceptanceState = InvoiceAcceptanceState;
 
 export type AcceptanceStep =
   | { readonly kind: 'accept' }

@@ -1,5 +1,5 @@
 # EQ-06 Factures des prestataires : autofacturation, avoirs, export comptable
-Statut : in_progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; lot 1 sur 8, les règles pures, écrit et testé, en PR (#283) avec l'ADR 0036, acceptée par Charles le 31/10 ; le comptable de l'agence valide contrat, mandat, régimes et première facture avant la mise en service)
+Statut : in_progress (lot 3 de l'ADR 0023, ID validé par Charles le 27/10/2026 ; lots 1 et 2 sur 8 : les règles pures dans `main` (#283, avec l'ADR 0036 acceptée par Charles le 31/10), la base et les contrats en PR ; reste l'émission (lot 3) et la suite ; le comptable de l'agence valide contrat, mandat, régimes et première facture avant la mise en service)
 Phase : équipe (ADR 0023)
 Dépend de : EQ-04, EQ-05
 Branche : task/eq-06-self-billing-invoices
@@ -29,7 +29,7 @@ Branche : task/eq-06-self-billing-invoices
 - [ ] **Paiement** : « payé » (EQ-05) rattache le transfert à la ou aux factures qu'il solde.
 - [ ] **Avertissements** à la validation, en ambre : attestation de résidence manquante ou de plus d'un an, attestation de vigilance de plus de six mois, dossier incomplet, mandat d'une version dépassée.
 - [ ] **Export comptable** de la période pour le propriétaire : journal des achats en CSV (date, numéro, prestataire, compte fournisseur, compte de charge, base hors taxe, TVA autoliquidée collectée et déductible au taux du régime, échéance, date et référence du paiement) avec des comptes paramétrables, et une archive des PDF de factures et d'avoirs. Les données structurées de chaque facture suffisent à l'e-reporting de la réforme (date, numéro, identifiant du prestataire, nature, montants, taux) ; aucun envoi à une plateforme agréée dans ce lot. Récapitulatif annuel par bénéficiaire pour la DAS2 (sommes de plus de 1 200 € par an et par bénéficiaire, non-résidents compris, avec adresse, pays et dispense conventionnelle de retenue).
-- [ ] Base (via le propriétaire de `packages/db`) : `contractor_profiles`, `contract_acceptances`, `billing_regimes`, `invoice_counters`, `invoices`, `invoice_lines`, `credit_notes`, `invoice_events` (émission, acceptation, contestation, avoir, paiement), politique par utilisateur (un membre lit ses factures, scope `agency` lit tout), PDF et pièces dans le stockage objet (`docs/architecture/own-platform.md` § Fichiers), jamais sur le disque du serveur, gardés dix ans.
+- [x] Base (via le propriétaire de `packages/db`) : `contractor_profiles`, `contract_acceptances`, `billing_regimes`, `invoice_counters`, `invoices`, `invoice_lines`, `credit_notes`, `invoice_events` (émission, acceptation, contestation, avoir, paiement), politique par utilisateur (un membre lit ses factures, scope `agency` lit tout), PDF et pièces dans le stockage objet (`docs/architecture/own-platform.md` § Fichiers), jamais sur le disque du serveur, gardés dix ans. Migration 0041 : un avoir est une ligne de `invoices` (`kind` = `credit_note`), pour que factures et avoirs partagent la séquence ; s'y ajoutent `billing_settings`, `contractor_regimes`, `contractor_documents` et `contract_texts` (lot 2, notes du 31/10).
 
 ## Critères d'acceptation
 - Deux validations simultanées pour deux prestataires différents et pour le même prestataire : chaque séquence reste continue, sans trou ni doublon (test d'intégration).
@@ -79,3 +79,15 @@ Bilan a relevé qu'une quinzaine sous zéro ne laissait aucune pièce : pas de f
 ### 2026-10-31 — ADR 0036 acceptée (fil Équipe)
 
 Charles a accepté l'ADR 0036 (« ok 0036 », 11 h 39) telle qu'écrite le 28/10 ; aucune règle ne change.
+
+### 2026-10-31 — lot 2 : base et contrats (fil Équipe)
+
+Migration 0041 (onze tables, leurs politiques, leurs déclencheurs et leurs droits par colonne), contrats dans `packages/contracts/src/invoices.ts`, domaine du lot 1 aligné sur ces contrats. Choix du lot, à relire par Bilan :
+- **Une seule table pour les factures et les avoirs** (`invoices.kind`), au lieu de `credit_notes` à part : la contrainte unique (prestataire, année, numéro d'ordre) tient alors les deux dans la même séquence, sans trou ni doublon, et un avoir cite sa facture par une clé étrangère sur la même table. Une facture a un total hors taxe positif et porte son relevé ; un avoir, un total négatif et la facture qu'il cite.
+- **La quinzaine d'un avoir est celle de la facture qu'il cite** (la prestation qu'il corrige, imprimée sur l'avoir comme le veut l'ADR 0036). Son relevé, quand il en a un, est le relevé plus récent dont la validation le doit (régularisation ou solde négatif) ; l'avoir qui répond à une contestation n'en a pas.
+- **La quinzaine que corrige un ajustement** est celle du relevé qu'il cite (`corrects_statement_id`, en base depuis 0028) : la phrase « inconnue aujourd'hui » des défauts du lot 1 ne demande donc pas de colonne. 0041 garantit que ce relevé est celui du même membre, validé ou payé, d'une quinzaine antérieure (`keep_corrected_statement`), et le lot 3 la lira par cette jointure.
+- **Le numéro** est pris sur `invoice_counters`, verrouillé `FOR UPDATE` et avancé d'un dans la transaction qui émet ; la base refuse un compteur qui saute, une facture qui ne prend pas le numéro du compteur ou pas le préfixe de son dossier, et un préfixe changé après la première facture.
+- **Ce que la base garde seule** : une facture émise ne change plus que par son acceptation et son PDF (noté une fois, par le job) ; ses lignes s'écrivent dans sa transaction et s'additionnent à son total à la fin de celle-ci ; un avoir ne prend jamais plus que ce qui reste, et deux avoirs sur une facture passent l'un après l'autre ; l'acceptation suit les étapes de `invoice-acceptance.ts`, le délai compris ; l'empreinte d'un texte de contrat est calculée par la base, et une acceptation la recopie.
+- **Codes d'erreur** : `INVOICE_ERROR_CODES` reste à part de `PAYROLL_ERROR_CODES` jusqu'aux écrans (lot 8), parce que l'écran de paie traduit chaque code de paie dans un `switch` exhaustif ; les corps des routes viennent avec les routes (lots 3 à 8).
+
+Pour le lot 3 : dans la transaction de validation, lire le compteur `FOR UPDATE`, l'écrire (1 ou le suivant), puis la facture, ses lignes et son événement `issued`, par une clé d'idempotence qui nomme le relevé. Les tests de `packages/db/src/invoices-rls.integration.test.ts` font déjà ce chemin.
