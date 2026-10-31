@@ -295,6 +295,20 @@
       "when": 1793446381813,
       "tag": "0041_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793452953248,
+      "tag": "0042_invoice_not_issued",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793454555366,
+      "tag": "0043_carry_over_rank",
+      "breakpoints": true
     }
   ]
 }

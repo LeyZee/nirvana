@@ -100,6 +100,24 @@ export const INVOICE_EVENT_KINDS = [
 export const InvoiceEventKindSchema = z.enum(INVOICE_EVENT_KINDS);
 export type InvoiceEventKind = z.infer<typeof InvoiceEventKindSchema>;
 
+/**
+ * Why a document a validated statement makes due is not issued (EQ-06): its invoice, for want of an accepted mandate,
+ * of a regime the accountant validated, of a full identity, of a prefix or of the agency's identity; a credit note the
+ * period owes, when no invoice can take it whole (ADR 0036). The statement stays validated and the owner is told
+ * (`invoice_not_issued`).
+ */
+export const INVOICE_NOT_ISSUED_REASONS = [
+  'no_mandate',
+  'no_regime',
+  'regime_not_validated',
+  'identity_incomplete',
+  'prefix_missing',
+  'agency_missing',
+  'no_invoice_to_credit',
+] as const;
+export const InvoiceNotIssuedReasonSchema = z.enum(INVOICE_NOT_ISSUED_REASONS);
+export type InvoiceNotIssuedReason = z.infer<typeof InvoiceNotIssuedReasonSchema>;
+
 /** A contractor's prefix: two to eight capitals or digits, his own, frozen at his first invoice. */
 export const INVOICE_PREFIX_PATTERN = '^[A-Z0-9]{2,8}$';
 export const InvoicePrefixSchema = z
@@ -128,6 +146,16 @@ export const BILLING_EMAIL_MAX = 254;
 export const REGIME_NAME_MAX = 80;
 export const INVOICE_MENTION_MAX = 400;
 export const INVOICE_MENTIONS_MAX = 24;
+/**
+ * A document prints its regime's mentions and one of its own: an invoice its payment terms after them (art. L441-9 of
+ * the Code de commerce), a credit note the invoice it cites before them (ADR 0036).
+ */
+export const INVOICE_DOCUMENT_MENTIONS_MAX = INVOICE_MENTIONS_MAX + 1;
+/**
+ * The agency's payment terms, a setting: an invoice prints them after its due date, in one mention (« Échéance : » and
+ * the longest date take 30 characters of its 400).
+ */
+export const PAYMENT_TERMS_MAX = 360;
 export const INVOICE_LINE_LABEL_MAX = 200;
 export const INVOICE_LINE_DETAIL_MAX = 400;
 export const INVOICE_REASON_MAX = 500;
@@ -136,9 +164,15 @@ export const CONTRACT_TEXT_MAX = 100_000;
 /** The mandate's delay to contest, in whole days (7 by default, ADR 0023 § Factures). */
 export const DEFAULT_CONTEST_DELAY_DAYS = 7;
 export const CONTEST_DELAY_MAX_DAYS = 60;
-/** An invoice falls due this many days after its issue (a setting). */
-export const DEFAULT_INVOICE_DUE_DAYS = 15;
-export const INVOICE_DUE_MAX_DAYS = 90;
+/**
+ * An invoice falls due this many days after its issue (a setting), never more than 60: the most a payment term agreed
+ * between professionals may run from the invoice's date (art. L441-10 of the Code de commerce). Never less than 45
+ * either: a positive amount is carried twice at most and paid by the third fortnight, which must fall before the due
+ * date of the first invoice (ADR 0038).
+ */
+export const DEFAULT_INVOICE_DUE_DAYS = 60;
+export const INVOICE_DUE_MIN_DAYS = 45;
+export const INVOICE_DUE_MAX_DAYS = 60;
 /** How long before a document's end the reminder goes out (a setting). */
 export const DEFAULT_DOCUMENT_REMINDER_DAYS = 30;
 export const DOCUMENT_REMINDER_MAX_DAYS = 120;
@@ -147,6 +181,13 @@ const trimmed = (max: number) => z.string().trim().min(1).max(max);
 
 /** One text a regime prints on each invoice, in its order: the regime's own words, never the code's. */
 export const InvoiceMentionSchema = trimmed(INVOICE_MENTION_MAX);
+
+/**
+ * What an invoice prints after its due date, the agency's words validated by its accountant, never the code's: no
+ * discount for an early payment, the late-payment penalty rate the contract sets (three times the legal interest rate
+ * at the least), the 40 € indemnity (art. L441-9, L441-10 and D441-5 of the Code de commerce).
+ */
+export const PaymentTermsSchema = trimmed(PAYMENT_TERMS_MAX);
 
 /**
  * A billing regime, as the owner sets it and the accountant validates it, for one or more countries (Benin and
@@ -261,10 +302,11 @@ export const JournalAccountsSchema = z.object({
 });
 export type JournalAccounts = z.infer<typeof JournalAccountsSchema>;
 
-/** The agency's billing settings: its identity on each invoice, the delays, the journal's accounts. */
+/** The agency's billing settings: its identity and payment terms on each invoice, the delays, the journal's accounts. */
 export const BillingSettingsSchema = z.object({
   agency: InvoiceAgencySchema,
-  dueDays: z.number().int().min(1).max(INVOICE_DUE_MAX_DAYS),
+  paymentTerms: PaymentTermsSchema,
+  dueDays: z.number().int().min(INVOICE_DUE_MIN_DAYS).max(INVOICE_DUE_MAX_DAYS),
   documentReminderDays: z.number().int().min(1).max(DOCUMENT_REMINDER_MAX_DAYS),
   accounts: JournalAccountsSchema,
   updatedAt: z.iso.datetime(),
@@ -314,7 +356,7 @@ export const InvoiceSchema = z
     contractor: InvoiceContractorSchema,
     agency: InvoiceAgencySchema,
     regime: InvoiceRegimeSchema,
-    mentions: z.array(InvoiceMentionSchema).max(INVOICE_MENTIONS_MAX),
+    mentions: z.array(InvoiceMentionSchema).max(INVOICE_DOCUMENT_MENTIONS_MAX),
     lines: z.array(InvoiceLineSchema).min(1),
     totals: InvoiceTotalsSchema,
     acceptance: z.object({
