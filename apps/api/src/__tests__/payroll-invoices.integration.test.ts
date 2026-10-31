@@ -204,7 +204,8 @@ describe('Équipe › Factures : l’émission à la validation d’un relevé (
       agency: AGENCY,
       regimeId,
       regime: { id: regimeId, vat: { treatment: 'charged', rateBps: 2_000 }, validatedOn: '2025-01-01' },
-      mentions: ['Autofacturation'],
+      // The regime's mentions, then the payment terms with the due date (art. L441-9 of the Code de commerce).
+      mentions: ['Autofacturation', expect.stringMatching(/^Échéance.+40.€ pour frais de recouvrement/u)],
       exclVatMinor: commissionMinor,
       vatMinor: commissionMinor / 5,
       inclVatMinor: commissionMinor * 1.2,

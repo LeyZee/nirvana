@@ -1,7 +1,7 @@
 import { BillingRegimeIdSchema, newId, PayPeriodSchema, type InvoiceRegime } from '@nirvana/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { invoiceLines, invoiceTotals, type InvoiceSource } from '../invoices';
+import { invoiceLines, invoiceTotals, paymentTermsMention, type InvoiceSource } from '../invoices';
 import {
   creditNoteKey,
   invoiceKey,
@@ -102,7 +102,6 @@ const firstHalf = (patch: Partial<StoredInvoice> = {}): StoredInvoice => ({
   exclVatMinor: 20_000,
   creditedMinor: 0,
   regime: ABROAD,
-  mentions: ABROAD.mentions,
   lines: [
     {
       kind: 'commission',
@@ -163,7 +162,7 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
       contractor: facts().identity,
       agency: facts().settings?.agency,
       regime: ABROAD,
-      mentions: ABROAD.mentions,
+      mentions: [...ABROAD.mentions, paymentTermsMention('2026-11-09')],
       lines,
       totals: invoiceTotals(lines, ABROAD.vat),
       acceptanceDeadline: new Date('2026-11-17T09:30:00.000Z'),
@@ -185,6 +184,17 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
     expect(note?.lines).toEqual([
       expect.objectContaining({ kind: 'adjustment', label: 'Régularisation', amountMinor: -3_000 }),
     ]);
+  });
+
+  it('prints the payment terms the Code de commerce asks of an invoice, never on a credit note', () => {
+    const plain = (text: string | undefined): string | undefined => text?.replace(/[\u00a0\u202f]/gu, ' ');
+    const [invoice, note] = planInvoicing(facts()).documents;
+    expect(plain(invoice?.mentions.at(-1))).toBe(
+      'Échéance : 9 novembre 2026. Aucun escompte pour paiement anticipé. En cas de retard, pénalités au taux de ' +
+        'trois fois le taux d’intérêt légal et indemnité forfaitaire de 40 € pour frais de recouvrement ' +
+        '(art. L441-10 et D441-5 du Code de commerce).',
+    );
+    expect(note?.mentions.some((one) => one.startsWith('Échéance'))).toBe(false);
   });
 
   it('keeps the regime of the invoice it cites on a credit note, under the parties of the day', () => {
@@ -260,9 +270,7 @@ describe('what a validated statement issues (EQ-06 lot 3)', () => {
 
   it('asks the identity of the regime the credit note keeps', () => {
     // The first half was issued under the French franchise, which prints a SIRET; Nora left it and has none now.
-    const plan = planInvoicing(
-      facts({ invoices: [firstHalf({ regime: FRANCHISE, mentions: FRANCHISE.mentions })] }),
-    );
+    const plan = planInvoicing(facts({ invoices: [firstHalf({ regime: FRANCHISE })] }));
     expect(plan.documents.map((one) => one.kind)).toEqual(['invoice']);
     expect(plan.notIssued).toEqual([
       { document: 'credit_note', reason: 'identity_incomplete', amountMinor: 3_000 },

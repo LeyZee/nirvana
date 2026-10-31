@@ -22,6 +22,7 @@ import {
   invoiceDueOn,
   invoiceLines,
   invoiceTotals,
+  paymentTermsMention,
   planCreditNotes,
   type CreditDue,
   type InvoiceLine,
@@ -45,8 +46,8 @@ export interface StoredInvoice {
   readonly exclVatMinor: number;
   /** What its credit notes took off so far, a positive amount. */
   readonly creditedMinor: number;
+  /** Its copy of its regime, mentions included, which a credit note keeps. */
   readonly regime: InvoiceRegime;
-  readonly mentions: readonly string[];
   readonly lines: readonly InvoiceLine[];
 }
 
@@ -126,8 +127,9 @@ const sum = (amounts: readonly number[]): number => amounts.reduce((total, one) 
 /**
  * The plan of a validated statement's documents. Its invoice, when its period brings something and nothing stops it
  * (`issueDecision`), under the contractor's regime of the day, his accepted mandate's delay and the agency's due delay.
- * Then each credit note the period owes (`creditsDue`), on the invoice `planCreditNotes` finds for it: it keeps that
- * invoice's period, regime and mentions (ADR 0036), and prints the parties of the day and the invoice it cites. A due
+ * Its mentions are its regime's, then its payment terms (art. L441-9 of the Code de commerce). Then each credit note
+ * the period owes (`creditsDue`), on the invoice `planCreditNotes` finds for it: it keeps that invoice's period, regime
+ * and the regime's mentions (ADR 0036), and prints the parties of the day and the invoice it cites. A due
  * no invoice can take whole is not issued, and neither is one without the agency's identity, the contractor's or a
  * mandate: each is said to the owner.
  */
@@ -164,17 +166,18 @@ export function planInvoicing(facts: InvoicingFacts): InvoicingPlan {
       ) {
         throw new Error('An invoice to issue without what its decision read');
       }
+      const dueOn = invoiceDueOn(issuedOn, settings.dueDays);
       documents.push({
         key: invoiceKey(statementId),
         kind: 'invoice',
         creditedInvoiceId: null,
         period: source.period,
         issuedOn,
-        dueOn: invoiceDueOn(issuedOn, settings.dueDays),
+        dueOn,
         contractor: facts.identity,
         agency: settings.agency,
         regime,
-        mentions: regime.mentions,
+        mentions: [...regime.mentions, paymentTermsMention(dueOn)],
         lines,
         totals: invoiceTotals(lines, regime.vat),
         acceptanceDeadline: until,
@@ -234,7 +237,9 @@ export function planInvoicing(facts: InvoicingFacts): InvoicingPlan {
       contractor: identity,
       agency: settings.agency,
       regime: cited.regime,
-      mentions: [creditNoteMention(cited.number, cited.issuedOn), ...cited.mentions],
+      // The mentions of the regime it keeps, never the invoice's payment terms: a credit note is set off against a
+      // payout, nothing falls due on it.
+      mentions: [creditNoteMention(cited.number, cited.issuedOn), ...cited.regime.mentions],
       lines: noteLines,
       totals: invoiceTotals(noteLines, cited.regime.vat),
       acceptanceDeadline: until,

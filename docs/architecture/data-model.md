@@ -313,7 +313,8 @@ Une quinzaine bloquée (migration 0038, recette du 28/10, Équipe G1) : quand le
 Mêmes portées que la paie (migration 0041, ADR 0023 § Données et RLS) : un membre lit son dossier, ses pièces, ses acceptations et ses factures ; la portée `owner` | `agency` lit tout. L'écriture revient au propriétaire ou aux jobs (`nirvana_admin`) ; le prestataire n'écrit que son dossier, ses pièces, ses acceptations et sa réponse à une facture. Les fichiers (pièces, PDF) sont une `storage_key` du stockage objet avec leur empreinte SHA-256 (ADR 0028, ADR 0030), jamais des octets en base.
 
 ```
-billing_settings           id = 1, agency (jsonb : raison sociale, adresse, SIREN, TVA), due_days, document_reminder_days,
+billing_settings           id = 1, agency (jsonb : raison sociale, adresse, SIREN, TVA), due_days (60 au plus, 0042),
+                           document_reminder_days,
                            accounts (jsonb : comptes du journal des achats), updated_by, updated_at (propriétaire)
 billing_regimes            id, name, countries text[], vat_treatment (reverse_charge|exempt|charged), vat_rate_bps (null
                            si franchise), withholding, mentions text[], documents text[], tax_id_required, created_by,
@@ -335,8 +336,8 @@ invoice_counters           (member_id, year) clé, last_sequence (propriétaire 
 invoices                   id, kind (invoice|credit_note), member_id, statement_id, credited_invoice_id, period, prefix,
                            year, sequence, number (unique), idempotency_key (unique), issued_at, issued_on, issued_by
                            (null pour un job), due_on, contractor, agency, regime (jsonb, copiés), regime_id, mentions
-                           text[] (celles du régime, la facture citée en tête pour un avoir : 25 au plus, migration
-                           0042), excl_vat_minor (> 0 facture, < 0 avoir), vat_minor, incl_vat_minor,
+                           text[] (celles du régime, puis les conditions de paiement d'une facture, ou la facture citée
+                           en tête d'un avoir : 25 au plus, migration 0042), excl_vat_minor (> 0 facture, < 0 avoir), vat_minor, incl_vat_minor,
                            self_assessed_vat_minor, acceptance_deadline, created_at (propriétaire ou job, jamais pour soi ;
                            une facture par relevé ; ajout seul)
 invoice_lines              (invoice_id, position) clé, kind, label, detail, amount_minor (écrites avec leur facture, ajout

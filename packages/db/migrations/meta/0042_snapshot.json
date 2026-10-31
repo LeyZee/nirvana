@@ -1,5 +1,5 @@
 {
-  "id": "c0bbeae4-3f8b-4870-a0dd-57b49a5bb80f",
+  "id": "f7cf4638-f781-464f-a59e-657552b187da",
   "prevId": "8d3d796d-aa12-4f8a-81a5-87a88407c8e3",
   "version": "7",
   "dialect": "postgresql",
@@ -2409,7 +2409,7 @@
         },
         "billing_settings_delays_check": {
           "name": "billing_settings_delays_check",
-          "value": "\"billing_settings\".\"due_days\" between 1 and 90 and \"billing_settings\".\"document_reminder_days\" between 1 and 120"
+          "value": "\"billing_settings\".\"due_days\" between 1 and 60 and \"billing_settings\".\"document_reminder_days\" between 1 and 120"
         }
       },
       "isRLSEnabled": false

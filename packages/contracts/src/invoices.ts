@@ -146,7 +146,10 @@ export const BILLING_EMAIL_MAX = 254;
 export const REGIME_NAME_MAX = 80;
 export const INVOICE_MENTION_MAX = 400;
 export const INVOICE_MENTIONS_MAX = 24;
-/** A document prints its regime's mentions, and a credit note the invoice it cites before them (ADR 0036). */
+/**
+ * A document prints its regime's mentions and one of its own: an invoice its payment terms after them (art. L441-9 of
+ * the Code de commerce), a credit note the invoice it cites before them (ADR 0036).
+ */
 export const INVOICE_DOCUMENT_MENTIONS_MAX = INVOICE_MENTIONS_MAX + 1;
 export const INVOICE_LINE_LABEL_MAX = 200;
 export const INVOICE_LINE_DETAIL_MAX = 400;
@@ -156,9 +159,12 @@ export const CONTRACT_TEXT_MAX = 100_000;
 /** The mandate's delay to contest, in whole days (7 by default, ADR 0023 § Factures). */
 export const DEFAULT_CONTEST_DELAY_DAYS = 7;
 export const CONTEST_DELAY_MAX_DAYS = 60;
-/** An invoice falls due this many days after its issue (a setting). */
+/**
+ * An invoice falls due this many days after its issue (a setting), never more than 60: the most a payment term agreed
+ * between professionals may run from the invoice's date (art. L441-10 of the Code de commerce).
+ */
 export const DEFAULT_INVOICE_DUE_DAYS = 15;
-export const INVOICE_DUE_MAX_DAYS = 90;
+export const INVOICE_DUE_MAX_DAYS = 60;
 /** How long before a document's end the reminder goes out (a setting). */
 export const DEFAULT_DOCUMENT_REMINDER_DAYS = 30;
 export const DOCUMENT_REMINDER_MAX_DAYS = 120;

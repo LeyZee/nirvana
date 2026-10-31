@@ -156,7 +156,6 @@ async function invoicesOf(tx: Transaction, memberId: string): Promise<StoredInvo
       issuedOn: invoices.issuedOn,
       exclVatMinor: invoices.exclVatMinor,
       regime: invoices.regime,
-      mentions: invoices.mentions,
       creditedMinor: sql<string>`coalesce((
         select -sum(n.excl_vat_minor) from invoices n
         where n.credited_invoice_id = ${invoices.id} and n.kind = 'credit_note'
@@ -185,7 +184,6 @@ async function invoicesOf(tx: Transaction, memberId: string): Promise<StoredInvo
     exclVatMinor: row.exclVatMinor,
     creditedMinor: CreditedSchema.parse(row.creditedMinor),
     regime: InvoiceRegimeSchema.parse(row.regime),
-    mentions: row.mentions,
     lines: lines
       .filter((line) => line.invoiceId === row.id)
       .map((line) => ({
