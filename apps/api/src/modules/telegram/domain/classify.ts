@@ -155,11 +155,12 @@ const periodText = (period: PayPeriod): string => {
 /** Why a document was not issued, as the owner settles it; the contractor is never named in Telegram. */
 const INVOICE_NOT_ISSUED_TEXT: Record<InvoiceNotIssuedReason, string> = {
   no_mandate: 'le prestataire n’a pas accepté de mandat de facturation',
-  no_regime: 'aucun régime de facturation n’est attribué au prestataire',
-  regime_not_validated: 'le régime du prestataire n’est pas validé par le comptable',
-  identity_incomplete: 'l’identité du prestataire est incomplète pour son régime',
+  no_regime: 'aucun régime de facturation n’était attribué au prestataire à la date de la facture',
+  regime_not_validated:
+    'le régime de facturation du prestataire n’était pas validé par le comptable à la date de la facture',
+  identity_incomplete: 'le dossier prestataire est incomplet pour son régime de facturation',
   prefix_missing: 'le prestataire n’a pas de préfixe de facture',
-  agency_missing: 'les coordonnées de facturation de l’agence manquent',
+  agency_missing: 'les réglages de facturation de l’agence ne sont pas remplis',
   no_invoice_to_credit: 'aucune facture ne peut prendre l’avoir entier, à voir avec le comptable',
 };
 
