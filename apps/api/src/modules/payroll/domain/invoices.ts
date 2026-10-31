@@ -1,6 +1,12 @@
-import { payPeriodLastDay, type PayPeriod } from '@nirvana/contracts';
+import {
+  INVOICE_PREFIX_PATTERN,
+  payPeriodLastDay,
+  type InvoiceLineKind,
+  type PayPeriod,
+  type RegimeVat,
+} from '@nirvana/contracts';
 
-import { addDays, type RegimeVat } from './billing';
+import { addDays } from './billing';
 import { CreditNoteExceedsInvoice } from './errors';
 import { BPS, mulDivRound } from './rounding';
 
@@ -10,18 +16,6 @@ import { BPS, mulDivRound } from './rounding';
  * the invoice each one cites, and the lines of a credit note. The invoice is frozen at its issue: every text here is
  * computed once and copied, never recomputed for an issued invoice.
  */
-
-type InvoiceLineKind =
-  | 'commission'
-  | 'team_share'
-  | 'tier_bonus'
-  | 'collective_bonus'
-  | 'bonus'
-  | 'penalty'
-  | 'penalty_cap'
-  | 'adjustment'
-  | 'reduction'
-  | 'negative_period';
 
 /** A line as the invoice prints it: what it is, its detail, its amount excluding VAT (negative for a deduction). */
 export interface InvoiceLine {
@@ -341,7 +335,7 @@ export function invoiceTotals(lines: readonly InvoiceLine[], vat: RegimeVat): In
   return { exclVatMinor, vatMinor, inclVatMinor: exclVatMinor + vatMinor, selfAssessedVatMinor };
 }
 
-const PREFIX = /^[A-Z0-9]{2,8}$/u;
+const PREFIX = new RegExp(INVOICE_PREFIX_PATTERN, 'u');
 
 /** The contractor's own prefix: two to eight capitals or digits, frozen with the first invoice. */
 export function isInvoicePrefix(prefix: string): boolean {

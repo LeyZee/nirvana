@@ -1,23 +1,13 @@
+import type { ContractorDocumentKind, RegimeVat } from '@nirvana/contracts';
+
 import { BillingRegimeBackdated } from './errors';
 
 /**
  * What a contractor's invoice needs before it is issued (EQ-06, ADR 0023 § Factures), the pure rules: the billing regime
  * of a contractor on a day, how long a document of the regime holds, and whether the validation of a statement issues an
- * invoice, with what warnings. Nothing here reads the database nor writes an invoice.
+ * invoice, with what warnings. Nothing here reads the database nor writes an invoice. How VAT goes on an invoice
+ * (`RegimeVat`) and the documents a regime asks for are the contracts' (`invoices.ts`), shared with the base's checks.
  */
-
-/**
- * How VAT goes on an invoice of the regime. `reverse_charge`: the agency self-assesses the VAT (art. 283-2 of the CGI),
- * nothing is invoiced and the rate serves the purchase journal only. `exempt`: the contractor is under the franchise
- * (art. 293 B of the CGI). `charged`: the contractor charges VAT at the rate.
- */
-export type RegimeVat =
-  | { readonly treatment: 'reverse_charge'; readonly rateBps: number }
-  | { readonly treatment: 'exempt' }
-  | { readonly treatment: 'charged'; readonly rateBps: number };
-
-/** A document a regime asks of the contractor: the tax residence certificate, or the URSSAF one (vigilance). */
-type ContractorDocumentKind = 'tax_residence' | 'urssaf_vigilance';
 
 /**
  * A billing regime, as the owner sets it and the accountant validates it: copied into each invoice it covers. Its
