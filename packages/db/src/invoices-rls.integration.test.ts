@@ -89,6 +89,8 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
   const unvalidated = regime('Autre pays', ['CI']);
   /** Validated tomorrow: after today's issue. */
   const later = regime('Pays validé demain', ['TG']);
+  /** Validated on October 30th, Kofi's from tomorrow only. */
+  const france = regime('France', ['FR']);
   const regimeCopy = (one: ReturnType<typeof regime>, validatedOn: string | null) => ({
     id: one.id,
     name: one.name,
@@ -191,6 +193,8 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
     readonly lines?: readonly number[];
     /** Takes the number after the counter's: a hole. */
     readonly skip?: boolean;
+    /** Leaves out the event `issued`. */
+    readonly withoutIssued?: boolean;
     readonly invoice?: Partial<typeof s.invoices.$inferInsert>;
   }
 
@@ -253,9 +257,11 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
           })),
         );
       }
-      await tx
-        .insert(s.invoiceEvents)
-        .values({ id: newId(InvoiceEventIdSchema), invoiceId: id, kind: 'issued', by: o.by });
+      if (o.withoutIssued !== true) {
+        await tx
+          .insert(s.invoiceEvents)
+          .values({ id: newId(InvoiceEventIdSchema), invoiceId: id, kind: 'issued', by: o.by });
+      }
       return { id, number };
     };
     return o.by === null ? admin(write) : as(o.by, write);
@@ -311,9 +317,10 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
           timeZone: 'Europe/Paris',
         });
       }
-      await tx.insert(s.billingRegimes).values([benin, unvalidated, later]);
+      await tx.insert(s.billingRegimes).values([benin, unvalidated, later, france]);
       await tx.insert(s.billingRegimeValidations).values([
         { regimeId: benin.id, validatedOn: '2026-10-30', recordedBy: owner },
+        { regimeId: france.id, validatedOn: '2026-10-30', recordedBy: owner },
         { regimeId: later.id, validatedOn: tomorrow, recordedBy: owner },
       ]);
     });
@@ -399,8 +406,8 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
           admin((tx) => tx.update(s.billingRegimeValidations).set({ validatedOn: '2026-11-02' })),
         ),
       ).toMatch(KEPT);
-      expect(await as(kofi, (tx) => tx.select().from(s.billingRegimes))).toHaveLength(4);
-      expect(await as(kofi, (tx) => tx.select().from(s.billingRegimeValidations))).toHaveLength(3);
+      expect(await as(kofi, (tx) => tx.select().from(s.billingRegimes))).toHaveLength(5);
+      expect(await as(kofi, (tx) => tx.select().from(s.billingRegimeValidations))).toHaveLength(4);
     });
   });
 
@@ -416,14 +423,16 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
             createdBy: by,
           }),
         );
-      expect(await failure(assign(manager, '2026-09-01'))).toMatch(RLS);
+      expect(await failure(assign(manager, '2026-08-01', unvalidated.id))).toMatch(RLS);
+      await assign(owner, '2026-08-01', unvalidated.id);
       await assign(owner, '2026-09-01');
       expect(await failure(assign(owner, '2026-09-01'))).toMatch(KEPT);
-      expect(await failure(assign(owner, '2026-08-01'))).toMatch(KEPT);
-      await assign(owner, '2026-10-01', unvalidated.id);
-      expect(await as(kofi, (tx) => tx.select().from(s.contractorRegimes))).toHaveLength(2);
+      expect(await failure(assign(owner, '2026-08-15'))).toMatch(KEPT);
+      // Assigned ahead: today's invoices keep today's regime.
+      await assign(owner, tomorrow, france.id);
+      expect(await as(kofi, (tx) => tx.select().from(s.contractorRegimes))).toHaveLength(3);
       expect(await as(ama, (tx) => tx.select().from(s.contractorRegimes))).toHaveLength(0);
-      expect(await as(manager, (tx) => tx.select().from(s.contractorRegimes))).toHaveLength(2);
+      expect(await as(manager, (tx) => tx.select().from(s.contractorRegimes))).toHaveLength(3);
       expect(
         await failure(admin((tx) => tx.update(s.contractorRegimes).set({ effectiveFrom: '2026-07-01' }))),
       ).toMatch(KEPT);
@@ -603,6 +612,62 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       }
       statements.set(`${kofi}:2026-09-16`, await draft(kofi, '2026-09-16'));
       statements.set(`${ama}:2026-08-01`, await validated(ama, '2026-08-01'));
+      await as(owner, (tx) =>
+        tx.insert(s.contractorRegimes).values({
+          id: newId(ContractorRegimeIdSchema),
+          memberId: member(ama),
+          regimeId: benin.id,
+          effectiveFrom: '2026-07-01',
+          createdBy: owner,
+        }),
+      );
+    });
+
+    it('no invoice before the contractor accepts a billing mandate; a service contract is not one', async () => {
+      const mandateFirst = /accepted a billing mandate/u;
+      const amas = () =>
+        failure(
+          issue({
+            by: owner,
+            userId: ama,
+            statementId: statement(ama, '2026-08-01'),
+            period: '2026-08-01',
+            amountMinor: 12_000,
+          }),
+        );
+      const accept = (text: { id: string; sha256: string }) =>
+        as(ama, (tx) =>
+          tx.insert(s.contractAcceptances).values({
+            id: newId(ContractAcceptanceIdSchema),
+            memberId: member(ama),
+            textId: text.id,
+            textSha256: text.sha256,
+            acceptedBy: ama,
+          }),
+        );
+      expect(await amas()).toMatch(mandateFirst);
+      const body = 'Contrat de prestation (texte inventé pour le test).';
+      const contract = {
+        id: newId(ContractTextIdSchema),
+        kind: 'service_contract',
+        version: 1,
+        body,
+        sha256: sha256(body),
+        contestDelayDays: null,
+        createdBy: owner,
+      };
+      await as(owner, (tx) => tx.insert(s.contractTexts).values(contract));
+      await accept(contract);
+      expect(await amas()).toMatch(mandateFirst);
+      // Any version of the mandate will do for the base: an older one is the application's warning.
+      const [mandate] = await admin((tx) =>
+        tx
+          .select({ id: s.contractTexts.id, sha256: s.contractTexts.sha256 })
+          .from(s.contractTexts)
+          .where(eq(s.contractTexts.kind, 'billing_mandate')),
+      );
+      if (mandate === undefined) throw new Error('no mandate');
+      await accept(mandate);
     });
 
     it('the owner or the job issues for a validated statement, in the contractor’s sequence without hole; he reads his own', async () => {
@@ -672,6 +737,10 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       expect(await refused({ invoice: { regimeId: later.id, regime: regimeCopy(later, tomorrow) } })).toMatch(
         KEPT,
       );
+      // A validated regime that is not the contractor's on the day of issue: France is his from tomorrow.
+      expect(
+        await refused({ invoice: { regimeId: france.id, regime: regimeCopy(france, '2026-10-30') } }),
+      ).toMatch(/regime of its day of issue/u);
       // Another contractor's prefix.
       expect(await refused({ invoice: { prefix: 'AMA' } })).toMatch(KEPT);
       // Never two invoices for one statement.
@@ -692,7 +761,7 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       ).toEqual([{ last: 2 }]);
     });
 
-    it('at its commit, an invoice has lines that add up to its total; none is added afterwards', async () => {
+    it('at its commit, an invoice has lines that add up to its total and its event issued; no line comes after', async () => {
       const sep1 = {
         by: owner,
         userId: kofi,
@@ -701,6 +770,9 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       };
       expect(await failure(issue({ ...sep1, amountMinor: 12_000, lines: [10_000, 1_000] }))).toMatch(KEPT);
       expect(await failure(issue({ ...sep1, amountMinor: 12_000, lines: [] }))).toMatch(KEPT);
+      expect(await failure(issue({ ...sep1, amountMinor: 12_000, withoutIssued: true }))).toMatch(
+        /with its event issued/u,
+      );
       expect(
         await failure(
           as(owner, (tx) =>
@@ -852,7 +924,7 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       );
 
       // What a later period owes goes on an earlier invoice, accepted or not (ADR 0036): no event of it changes.
-      await issue({
+      const owed = await issue({
         by: null,
         userId: kofi,
         statementId: statement(kofi, '2026-09-01'),
@@ -868,6 +940,14 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
             .where(eq(s.invoiceEvents.invoiceId, invoice('kofi-aug1'))),
         ),
       ).toEqual(expect.arrayContaining([{ kind: 'issued' }, { kind: 'accepted' }]));
+      invoices.set('kofi-aug1-credit', owed);
+
+      // The credit note follows its own acceptance; no credit note cites it, so its contest ends refused.
+      await event(kofi, owed.id, 'contested', { reason: 'Ce remboursement n’est pas le mien' });
+      expect(await failure(event(owner, owed.id, 'credited'))).toMatch(KEPT);
+      await event(owner, owed.id, 'contest_refused', {
+        reason: 'Remboursement du 2 septembre, sur ton compte',
+      });
     });
 
     it('a contest is refused with a reason; a credit note written before it does not answer it', async () => {
@@ -887,22 +967,24 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
       await event(owner, id, 'contest_refused', { reason: 'La prime est sur la quinzaine suivante' });
     });
 
-    it('a payment names a paid statement of the contractor, once', async () => {
+    it('a payment is an invoice’s, by a paid statement of its contractor, of its period or a later one, once', async () => {
+      const pay = (id: string, paidOn: string, paymentReference: string) =>
+        as(owner, (tx) =>
+          tx
+            .update(s.commissionStatements)
+            .set({
+              status: 'paid',
+              paidAt: new Date(),
+              paidBy: owner,
+              paidOn,
+              paymentMethod: 'worldremit',
+              paymentReference,
+              sentMinor: 12_000,
+            })
+            .where(eq(s.commissionStatements.id, id)),
+        );
       const paid = statement(kofi, '2026-08-01');
-      await as(owner, (tx) =>
-        tx
-          .update(s.commissionStatements)
-          .set({
-            status: 'paid',
-            paidAt: new Date(),
-            paidBy: owner,
-            paidOn: '2026-08-20',
-            paymentMethod: 'worldremit',
-            paymentReference: 'WR-0001',
-            sentMinor: 12_000,
-          })
-          .where(eq(s.commissionStatements.id, paid)),
-      );
+      await pay(paid, '2026-08-20', 'WR-0001');
       expect(await failure(event(owner, invoice('kofi-aug1'), 'paid'))).toMatch(KEPT);
       expect(
         await failure(
@@ -910,13 +992,23 @@ describe('contractors’ invoices (EQ-06): who reads and writes, and an issued i
         ),
       ).toMatch(KEPT);
       expect(await failure(event(owner, invoice('ama-aug1'), 'paid', { statementId: paid }))).toMatch(KEPT);
+      // Never a credit note's (the reconciliation imputes it), never by a statement before the invoice's period.
+      expect(await failure(event(owner, invoice('kofi-aug1-credit'), 'paid', { statementId: paid }))).toMatch(
+        KEPT,
+      );
+      expect(await failure(event(owner, invoice('kofi-aug16'), 'paid', { statementId: paid }))).toMatch(KEPT);
       expect(await failure(event(kofi, invoice('kofi-aug1'), 'paid', { statementId: paid }))).toMatch(RLS);
       await event(owner, invoice('kofi-aug1'), 'paid', { statementId: paid });
       expect(await failure(event(owner, invoice('kofi-aug1'), 'paid', { statementId: paid }))).toMatch(
         /invoice_events_paid_unique/u,
       );
-      // Issued, accepted, paid; issued, contested, credited; issued, lapsed; and the three credit notes issued.
-      expect(await as(kofi, (tx) => tx.select().from(s.invoiceEvents))).toHaveLength(11);
+      // A later statement pays what was carried over.
+      const later16 = statement(kofi, '2026-08-16');
+      await pay(later16, '2026-09-04', 'WR-0002');
+      await event(owner, invoice('kofi-aug1'), 'paid', { statementId: later16 });
+      // Issued, accepted, paid twice; issued, contested, credited; issued, lapsed; the three credit notes issued, the
+      // last one contested and its contest refused.
+      expect(await as(kofi, (tx) => tx.select().from(s.invoiceEvents))).toHaveLength(14);
     });
 
     it('an adjustment corrects a validated statement of its member, of an earlier period', async () => {

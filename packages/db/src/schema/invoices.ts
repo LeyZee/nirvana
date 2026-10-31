@@ -394,7 +394,8 @@ const amountMax = num(PAY_AMOUNT_MAX_MINOR);
 /**
  * A self-billed invoice or a credit note, frozen at its issue: the parties, the regime, the mentions and the lines are
  * copied in, and its number follows the contractor's counter, without hole nor repeat. An invoice bills one validated
- * statement of its period, at most one per statement. A credit note cites an invoice of the same contractor, keeps
+ * statement of its period, at most one per statement, under the contractor's regime of its day of issue and once he
+ * has accepted a billing mandate; it is written with its lines and its event `issued`. A credit note cites an invoice of the same contractor, keeps
  * its period (the service it corrects) and its regime, and never takes more than what is left of it; its statement,
  * when it has one, is the later one whose validation owes it (ADR 0036). The row never changes afterwards: its
  * acceptance is its events (`invoice_events`), its PDF a row of `invoice_pdfs` (lot 4).
@@ -515,7 +516,8 @@ export const invoiceLines = pgTable(
  * A dated step of an invoice or a credit note, added only: its acceptance is its events (Bilan, lot 2). The contractor
  * accepts or contests his own; the owner credits, refuses a contest, records a payment and issues; the jobs issue and
  * record a tacit acceptance (`lapsed`). One answer and one end of a contest at most, one `issued`, one payment per
- * statement (the migration's trigger checks each step against the ones before it).
+ * statement (the migration's trigger checks each step against the ones before it). A credit note is never credited
+ * nor paid; a payment names a paid statement of the invoice's period or of a later one.
  */
 export const invoiceEvents = pgTable(
   'invoice_events',

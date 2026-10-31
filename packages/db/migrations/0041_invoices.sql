@@ -426,8 +426,10 @@ $$;--> statement-breakpoint
 CREATE TRIGGER "invoice_counters_by_one" BEFORE INSERT OR UPDATE ON "invoice_counters"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice_counter"();--> statement-breakpoint
 -- An invoice is numbered by its contractor's prefix and counter (the number the counter holds now: without hole nor
--- repeat), for a validated statement of its contractor and period, under a regime the accountant validated by its day
--- of issue. A credit note cites an invoice of the same contractor and keeps its period (the service it corrects) and
+-- repeat), for a validated statement of its contractor and period, under his regime of its day of issue, which the
+-- accountant validated by that day, and once he has accepted a billing mandate (ADR 0023: without one, the statement
+-- is validated and no invoice is issued; any version of the mandate will do here, an older one is a warning of the
+-- application). A credit note cites an invoice of the same contractor and keeps its period (the service it corrects) and
 -- its regime (ADR 0036); its statement, when it has one, is the later one whose validation owes it; it never takes
 -- more than what is left of the invoice.
 CREATE FUNCTION "keep_invoice"() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -461,6 +463,24 @@ BEGIN
       RAISE EXCEPTION 'an invoice is issued under a regime the accountant validated by its day of issue (EQ-06)'
         USING ERRCODE = 'restrict_violation';
     END IF;
+    -- None assigned by that day: no regime, no invoice.
+    IF NEW."regime_id" IS DISTINCT FROM (
+      SELECT r."regime_id" FROM "contractor_regimes" r
+      WHERE r."member_id" = NEW."member_id" AND r."effective_from" <= NEW."issued_on"
+      ORDER BY r."effective_from" DESC
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION 'an invoice is issued under its contractor''s regime of its day of issue (EQ-06)'
+        USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM "contract_acceptances" a
+      JOIN "contract_texts" t ON t."id" = a."text_id"
+      WHERE a."member_id" = NEW."member_id" AND t."kind" = 'billing_mandate'
+    ) THEN
+      RAISE EXCEPTION 'an invoice is issued once its contractor has accepted a billing mandate (EQ-06)'
+        USING ERRCODE = 'restrict_violation';
+    END IF;
     RETURN NEW;
   END IF;
   -- Two credit notes on one invoice at once are taken one after the other, each counting the one before.
@@ -483,19 +503,24 @@ END;
 $$;--> statement-breakpoint
 CREATE TRIGGER "invoices_issued" BEFORE INSERT ON "invoices"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice"();--> statement-breakpoint
--- At the commit of the transaction that issues it, an invoice has its lines and they add up to its total.
-CREATE FUNCTION "check_invoice_lines"() RETURNS trigger LANGUAGE plpgsql AS $$
+-- At the commit of the transaction that issues it, an invoice has its lines, they add up to its total, and its event
+-- `issued` is written: without it, it would have no state to stand in.
+CREATE FUNCTION "check_invoice_at_commit"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "invoice_lines" l WHERE l."invoice_id" = NEW."id")
      OR (SELECT sum(l."amount_minor") FROM "invoice_lines" l WHERE l."invoice_id" = NEW."id") <> NEW."excl_vat_minor" THEN
     RAISE EXCEPTION 'the lines of invoice % add up to its total (EQ-06)', NEW."number"
       USING ERRCODE = 'restrict_violation';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM "invoice_events" e WHERE e."invoice_id" = NEW."id" AND e."kind" = 'issued') THEN
+    RAISE EXCEPTION 'invoice % is written with its event issued (EQ-06)', NEW."number"
+      USING ERRCODE = 'restrict_violation';
+  END IF;
   RETURN NULL;
 END;
 $$;--> statement-breakpoint
-CREATE CONSTRAINT TRIGGER "invoices_lines_total" AFTER INSERT ON "invoices"
-  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "check_invoice_lines"();--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "invoices_whole_at_commit" AFTER INSERT ON "invoices"
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "check_invoice_at_commit"();--> statement-breakpoint
 -- A line is written in the transaction that issues its invoice (`now()` is the transaction's instant), never after.
 CREATE FUNCTION "keep_invoice_line"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -509,8 +534,11 @@ CREATE TRIGGER "invoice_lines_with_invoice" BEFORE INSERT ON "invoice_lines"
   FOR EACH ROW EXECUTE FUNCTION "keep_invoice_line"();--> statement-breakpoint
 -- An invoice's acceptance is its events, along the steps of `invoice-acceptance.ts`: issued in its own transaction;
 -- then accepted or contested before the mandate's delay, or accepted tacitly (`lapsed`) once it is over; a contest
--- ends credited, once a credit note written after it cites the invoice, or refused. The partial unique indexes keep
--- one issue, one answer and one end of a contest; a payment names a paid statement of the same contractor.
+-- ends credited, once a credit note written after it cites the invoice, or refused. A credit note follows the same
+-- steps (ADR 0036), except that no credit note cites it: its contest ends refused, never credited. The partial unique
+-- indexes keep one issue, one answer and one end of a contest. A payment is an invoice's, never a credit note's (the
+-- reconciliation imputes those, ADR 0036), and names a paid statement of the same contractor, of the invoice's period
+-- or of a later one that pays what was carried over.
 CREATE FUNCTION "keep_invoice_event"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   invoice "invoices"%ROWTYPE;
@@ -529,13 +557,14 @@ BEGIN
     WHEN 'accepted' THEN now() < invoice."acceptance_deadline"
     WHEN 'contested' THEN now() < invoice."acceptance_deadline"
     WHEN 'lapsed' THEN now() >= invoice."acceptance_deadline"
-    WHEN 'credited' THEN contested_at IS NOT NULL AND EXISTS (
+    WHEN 'credited' THEN invoice."kind" = 'invoice' AND contested_at IS NOT NULL AND EXISTS (
       SELECT 1 FROM "invoices" n
       WHERE n."credited_invoice_id" = NEW."invoice_id" AND n."kind" = 'credit_note' AND n."created_at" >= contested_at)
     WHEN 'contest_refused' THEN contested_at IS NOT NULL
-    WHEN 'paid' THEN EXISTS (
+    WHEN 'paid' THEN invoice."kind" = 'invoice' AND EXISTS (
       SELECT 1 FROM "commission_statements" s
-      WHERE s."id" = NEW."statement_id" AND s."member_id" = invoice."member_id" AND s."status" = 'paid')
+      WHERE s."id" = NEW."statement_id" AND s."member_id" = invoice."member_id" AND s."status" = 'paid'
+        AND s."period" >= invoice."period")
   END) IS NOT TRUE THEN
     RAISE EXCEPTION 'event % does not follow where invoice % stands (EQ-06)', NEW."kind", invoice."number"
       USING ERRCODE = 'restrict_violation';

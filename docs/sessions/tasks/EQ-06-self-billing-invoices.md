@@ -94,3 +94,14 @@ Migration 0041 (treize tables, leurs politiques, leurs déclencheurs et leurs dr
 - **Codes d'erreur** : `INVOICE_ERROR_CODES` reste à part de `PAYROLL_ERROR_CODES` jusqu'aux écrans (lot 8), parce que l'écran de paie traduit chaque code de paie dans un `switch` exhaustif ; les corps des routes viennent avec les routes.
 
 Pour le lot 3 : un manager valide aussi, et l'écriture des factures revient au propriétaire ou aux jobs. L'émission se fera donc dans un job que la transaction de validation met en file, idempotent par relevé (clé d'idempotence qui nomme le relevé), et non dans la transaction de validation elle-même comme la fiche le disait ; le relevé reste validé quoi qu'il arrive à la facture. Le job lit le compteur `FOR UPDATE`, l'écrit (1 ou le suivant), puis la facture, ses lignes et son événement `issued`. Les tests de `packages/db/src/invoices-rls.integration.test.ts` font déjà ce chemin, pour le propriétaire et pour le job.
+
+Relecture de Bilan sur #327 : quatre trous en base, bouchés dans 0041 avec un test chacun.
+
+- **Le régime d'une facture est celui de son prestataire au jour de l'émission** : la dernière ligne de `contractor_regimes` dont `effective_from` est au plus tard ce jour-là. Sans régime attribué, aucune facture.
+- **Un mandat de facturation accepté est exigé** (ADR 0023) : une acceptation du prestataire sur un texte `billing_mandate`, de n'importe quelle version ; une version dépassée reste un avertissement de l'application (`mandate_outdated`). Accepter le seul contrat de prestation ne suffit pas.
+- **Une facture a son événement `issued` au commit** de la transaction qui l'écrit (`check_invoice_at_commit`, reporté, avec ses lignes).
+- **Un paiement est celui d'une facture**, jamais d'un avoir (le rapprochement du lot 7 impute les avoirs, ADR 0036), et son relevé payé est de la quinzaine de la facture ou d'une plus récente, qui verse un report. `credited` n'est jamais posé sur un avoir.
+
+Un écart avec la proposition de Bilan : `contest_refused` reste permis sur un avoir. Un avoir suit sa propre acceptation (ADR 0036, `nextAcceptance` du lot 1) : le prestataire peut le contester, et aucun avoir ne cite un avoir, donc le refus est la seule fin possible de cette contestation. Le fermer laisserait un avoir contesté pour toujours.
+
+Question ouverte pour le lot 6 : la contestation d'un avoir que l'agence juge fondée (l'avoir était faux) n'a pas d'étape de fin. La correction elle-même existe déjà : une ligne de régularisation en faveur du prestataire sur sa facture suivante (ADR 0023). Mais l'état de l'avoir reste « contesté ». Le lot 6 propose l'étape, avec Charles s'il faut une règle de métier.
