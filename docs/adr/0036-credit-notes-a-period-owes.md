@@ -1,6 +1,6 @@
 # 0036. Factures : ce qu'une quinzaine doit rendre devient un avoir sur une facture déjà émise
 
-Statut : proposed
+Statut : accepted (Charles, 31/10/2026 11h39, « ok 0036 »)
 Date : 2026-10-28
 Précise : ADR 0023 § Factures (le report, l'erreur corrigée par un avoir)
 

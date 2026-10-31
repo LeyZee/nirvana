@@ -16,7 +16,7 @@ Décisions (défauts à faire valider par Charles et le comptable, détaillés d
 - Un report entrant n'est jamais refacturé ; un total nul ou négatif n'émet rien.
 - Échéance à quinze jours de l'émission (réglage) ; le lot 3 donne à la facture d'un montant reporté l'échéance du relevé qui le versera.
 - Numéro `PRÉFIXE-AAAA-NNNN`, séquence remise à 1 chaque année.
-- ADR 0036 proposée, à faire accepter par Charles : une régularisation en faveur de l'agence et une quinzaine sous zéro deviennent des avoirs sur des factures déjà émises, jamais une ligne de déduction sur la facture suivante (l'ADR 0023 garde chaque montant facturé dans sa période). Un avoir n'est jamais coupé ; sans facture qui le reçoive entier, alerte et rien d'émis. Question notée pour le comptable.
+- ADR 0036, acceptée par Charles le 31/10 (« ok 0036 ») : une régularisation en faveur de l'agence et une quinzaine sous zéro deviennent des avoirs sur des factures déjà émises, jamais une ligne de déduction sur la facture suivante (l'ADR 0023 garde chaque montant facturé dans sa période). Un avoir n'est jamais coupé ; sans facture qui le reçoive entier, alerte et rien d'émis. Question notée pour le comptable.
 
 Découvertes :
 - L'ajustement ne garde pas la quinzaine du relevé qu'il corrige : le lot 2 doit l'ajouter, sinon son avoir n'a pas de facture où aller (déjà vu par EQ-05).
